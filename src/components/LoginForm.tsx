@@ -1,7 +1,8 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
-import { Chrome, Discord, Loader2, Lock, Mail } from "lucide-react";
+import { Gem, Loader2, Lock, Mail } from "lucide-react";
+import { FaDiscord, FaGoogle } from "react-icons/fa6";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import styles from "./LoginForm.module.css";
 
@@ -11,8 +12,8 @@ type MessageState =
   | { type: "error"; text: string };
 
 const providers = [
-  { id: "google" as const, label: "Google", icon: Chrome },
-  { id: "discord" as const, label: "Discord", icon: Discord },
+  { id: "google" as const, label: "Google", icon: FaGoogle, color: "#EA4335" },
+  { id: "discord" as const, label: "Discord", icon: FaDiscord, color: "#5865F2" },
 ];
 
 export default function LoginForm() {
@@ -105,98 +106,121 @@ export default function LoginForm() {
 
   return (
     <div className={styles.card}>
-      <header className={styles.header}>
-        <h2>Welcome back</h2>
-        <p>Authenticate to continue building your noir workspace.</p>
-      </header>
+      <div className={styles.content}>
+        <header className={styles.header}>
+          <h1>Welcome back</h1>
+          <p>Sign in to continue crafting your black noir experience.</p>
+        </header>
 
-      <div className={styles.oauthGroup}>
-        {providers.map(({ id, label, icon: Icon }) => (
+        <div className={styles.oauthRow}>
+          {providers.map(({ id, label, icon: Icon, color }) => (
+            <button
+              key={id}
+              type="button"
+              className={styles.oauthButton}
+              onClick={() => handleOAuth(id)}
+              disabled={loading}
+            >
+              <span className={styles.brandIcon} style={{ color }}>
+                <Icon size={18} />
+              </span>
+              Continue with {label}
+            </button>
+          ))}
+        </div>
+
+        <p className={styles.divider}>or sign in with email</p>
+
+        <form className={styles.form} onSubmit={handleEmailLogin}>
+          <div className={styles.field}>
+            <label className={styles.fieldLabel} htmlFor="email">
+              Email
+            </label>
+            <div className={styles.inputWrapper}>
+              <Mail size={18} className={styles.inputIcon} />
+              <input
+                id="email"
+                type="email"
+                placeholder="your@email.com"
+                autoComplete="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className={styles.field}>
+            <label className={styles.fieldLabel} htmlFor="password">
+              Password
+            </label>
+            <div className={styles.inputWrapper}>
+              <Lock size={18} className={styles.inputIcon} />
+              <input
+                id="password"
+                type="password"
+                placeholder="••••••••"
+                autoComplete="current-password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className={styles.row}>
+            <label className={styles.remember}>
+              <input
+                type="checkbox"
+                className={styles.checkbox}
+                checked={remember}
+                onChange={(event) => setRemember(event.target.checked)}
+              />
+              Remember me
+            </label>
+            <a
+              className={styles.forgot}
+              href="https://app.supabase.com/"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Forgot password?
+            </a>
+          </div>
+
+          {message.type !== "idle" && (
+            <div
+              className={`${styles.message} ${
+                message.type === "success"
+                  ? styles.messageSuccess
+                  : styles.messageError
+              }`}
+            >
+              {message.text}
+            </div>
+          )}
+
           <button
-            key={id}
-            type="button"
-            className={styles.oauthButton}
-            onClick={() => handleOAuth(id)}
+            type="submit"
+            className={styles.submitButton}
             disabled={loading}
           >
-            <Icon size={18} />
-            Continue with {label}
+            {loading ? (
+              <Loader2 size={18} className={styles.loader} />
+            ) : (
+              "Sign In"
+            )}
           </button>
-        ))}
+        </form>
+
+        <footer className={styles.footer}>
+          <span>Don&apos;t have an account?</span>
+          <a href="#signup">Sign Up</a>
+        </footer>
       </div>
 
-      <p className={styles.divider}>or</p>
-
-      <form className={styles.form} onSubmit={handleEmailLogin}>
-        <div className={styles.field}>
-          <label className={styles.fieldLabel} htmlFor="email">
-            Email
-          </label>
-          <div className={styles.inputWrapper}>
-            <Mail size={18} className={styles.inputIcon} />
-            <input
-              id="email"
-              type="email"
-              placeholder="your@email.com"
-              autoComplete="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-            />
-          </div>
-        </div>
-
-        <div className={styles.field}>
-          <label className={styles.fieldLabel} htmlFor="password">
-            Password
-          </label>
-          <div className={styles.inputWrapper}>
-            <Lock size={18} className={styles.inputIcon} />
-            <input
-              id="password"
-              type="password"
-              placeholder="••••••••"
-              autoComplete="current-password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-            />
-          </div>
-        </div>
-
-        <div className={styles.row}>
-          <label className={styles.remember}>
-            <input
-              type="checkbox"
-              className={styles.checkbox}
-              checked={remember}
-              onChange={(event) => setRemember(event.target.checked)}
-            />
-            Remember me
-          </label>
-          <a className={styles.forgot} href="https://app.supabase.com/" target="_blank" rel="noreferrer">
-            Forgot password?
-          </a>
-        </div>
-
-        {message.type !== "idle" && (
-          <div
-            className={`${styles.message} ${
-              message.type === "success"
-                ? styles.messageSuccess
-                : styles.messageError
-            }`}
-          >
-            {message.text}
-          </div>
-        )}
-
-        <button type="submit" className={styles.submitButton} disabled={loading}>
-          {loading ? <Loader2 size={18} className={styles.loader} /> : "Sign In"}
-        </button>
-      </form>
-
-      <p className={styles.supporting}>
-        New here? Invite-only access opens soon. Request access from the team.
-      </p>
+      <aside className={styles.accent}>
+        <div className={styles.glow} />
+        <Gem size={120} strokeWidth={1.4} className={styles.accentIcon} />
+      </aside>
     </div>
   );
 }

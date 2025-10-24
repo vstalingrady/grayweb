@@ -58,8 +58,8 @@ Visit [http://localhost:8000/docs](http://localhost:8000/docs) for the automatic
 
 ## Supabase quick start
 
-- Update your Supabase project to expose any tables you want to query with the anon key (or adjust the code to use a service role key on the backend).
-- The Next.js page uses the helper in `src/lib/supabaseClient.ts` to perform server-side queries.
+- Configure your Supabase project OAuth providers for Google and Discord to match the login buttons.
+- The Next.js login form uses the helper in `src/lib/supabaseClient.ts` to create a browser client.
 - The FastAPI service uses `supabase-py` to expose lightweight data previews without shipping database credentials to the client.
 
 ## Learn More
