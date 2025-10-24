@@ -16,11 +16,7 @@ pnpm dev
 bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Open [http://localhost:3000](http://localhost:3000) with your browser to see the result. The home page runs an SSR Supabase query against a `todos` table using the anon key defined in your `.env`. Update the query or create that table in Supabase to see live data.
 
 ## Python API
 
@@ -41,9 +37,23 @@ password=<db password>
 host=<db host>
 port=<db port>
 dbname=<db name>
+SUPABASE_URL=<https://your-project.supabase.co>
+SUPABASE_ANON_KEY=<anon key>
+NEXT_PUBLIC_SUPABASE_URL=<https://your-project.supabase.co>
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key>
 ```
 
 Visit [http://localhost:8000/docs](http://localhost:8000/docs) for the automatically generated FastAPI docs once the server is running.
+
+- `GET /time` hits `SELECT NOW()` using the direct PostgreSQL connection.
+- `GET /supabase/health` verifies the Supabase client can be instantiated.
+- `GET /supabase/table/{table_name}?limit=5` previews rows from a Supabase table (RLS must allow anon access).
+
+## Supabase quick start
+
+- Update your Supabase project to expose any tables you want to query with the anon key (or adjust the code to use a service role key on the backend).
+- The Next.js page uses the helper in `src/lib/supabaseClient.ts` to perform server-side queries.
+- The FastAPI service uses `supabase-py` to expose lightweight data previews without shipping database credentials to the client.
 
 ## Learn More
 
