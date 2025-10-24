@@ -22,6 +22,29 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Python API
+
+Install the FastAPI backend dependencies and start the server:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn main:app --reload
+```
+
+Create a `.env` file in the repository root and set the following variables so the API can connect to PostgreSQL:
+
+```
+user=<db user>
+password=<db password>
+host=<db host>
+port=<db port>
+dbname=<db name>
+```
+
+Visit [http://localhost:8000/docs](http://localhost:8000/docs) for the automatically generated FastAPI docs once the server is running.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:
