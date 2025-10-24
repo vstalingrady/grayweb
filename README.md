@@ -16,7 +16,14 @@ pnpm dev
 bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result. The home page runs an SSR Supabase query against a `todos` table using the anon key defined in your `.env`. Update the query or create that table in Supabase to see live data.
+Open [http://localhost:3000](http://localhost:3000) with your browser to see the noir-themed sign-in experience. The interface uses Supabase auth to support Google, Discord, and email/password flows out of the box.
+
+## Auth experience
+
+- OAuth buttons call `supabase.auth.signInWithOAuth` for Google and Discord.
+- Email/password form is backed by `supabase.auth.signInWithPassword`, with inline validation and status messages.
+- Fonts: Plus Jakarta Sans for primary typography and IBM Plex Mono for supporting details.
+- Styling lives in `src/components/LoginForm.module.css` and `src/app/page.module.css`.
 
 ## Python API
 
