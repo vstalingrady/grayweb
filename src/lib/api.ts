@@ -38,6 +38,7 @@ export interface ChatRequest {
   message: string;
   conversation_id?: string;
   user_id: number;
+  system_prompt?: string;
 }
 
 export interface ChatResponse {

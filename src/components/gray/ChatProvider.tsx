@@ -44,6 +44,9 @@ const STORAGE_KEY = "gray-chat-sessions-v1";
 
 const INITIAL_SESSIONS: ChatSession[] = [];
 
+export const SYSTEM_PROMPT =
+  "You are Gray the proactive companion by Alignment built to cut through distractions and turn intent to momentum.";
+
 const makeMessage = (role: ChatRole, content: string): ChatMessage => ({
   id: typeof crypto !== "undefined" && "randomUUID" in crypto
     ? crypto.randomUUID()
@@ -62,7 +65,7 @@ const deriveTitle = (content: string) => {
 };
 
 export const buildAssistantReply = (prompt: string) =>
-  `Here is a quick thought:\n\n${prompt}\n\nI can expand on any part—just let me know.`;
+  `${SYSTEM_PROMPT}\n\nHere is a quick follow-up:\n\n${prompt}\n\nI can expand on any part—just let me know.`;
 
 const cloneSession = (session: ChatSession): ChatSession => ({
   ...session,
@@ -190,6 +193,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         try {
           const response = await apiService.sendMessage({
             message: initialMessage,
+            system_prompt: SYSTEM_PROMPT,
             user_id: user.id,
           });
 

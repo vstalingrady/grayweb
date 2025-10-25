@@ -889,6 +889,12 @@
   color: rgba(235, 235, 235, 0.45);
 }
 
+.chatHeaderMeta {
+  font-size: 0.6rem;
+  letter-spacing: 0.2em;
+  color: rgba(235, 235, 235, 0.32);
+}
+
 .chatViewport {
   position: relative;
   flex: 1;
@@ -971,6 +977,90 @@
 
 .chatBubble p {
   margin: 0;
+}
+
+.chatMarkdown {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  font-size: inherit;
+}
+
+.chatMarkdown :global(h1),
+.chatMarkdown :global(h2),
+.chatMarkdown :global(h3),
+.chatMarkdown :global(h4),
+.chatMarkdown :global(h5),
+.chatMarkdown :global(h6) {
+  margin: 0;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.chatMarkdown :global(h1) {
+  font-size: 1.32em;
+}
+
+.chatMarkdown :global(h2) {
+  font-size: 1.2em;
+}
+
+.chatMarkdown :global(h3) {
+  font-size: 1.1em;
+}
+
+.chatMarkdown :global(p),
+.chatMarkdown :global(li) {
+  color: inherit;
+  line-height: 1.6;
+}
+
+.chatMarkdown :global(ul),
+.chatMarkdown :global(ol) {
+  margin: 0;
+  padding-left: 1.2em;
+  display: grid;
+  gap: 6px;
+}
+
+.chatMarkdown :global(code) {
+  background: rgba(0, 0, 0, 0.4);
+  padding: 0.1em 0.4em;
+  border-radius: 6px;
+  font-size: 0.82em;
+}
+
+.chatMarkdown :global(pre) {
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 14px;
+  padding: 16px;
+  overflow-x: auto;
+}
+
+.chatMarkdown :global(table) {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9em;
+}
+
+.chatMarkdown :global(th),
+.chatMarkdown :global(td) {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 8px 12px;
+}
+
+.chatMarkdown :global(a) {
+  color: rgba(135, 178, 255, 0.9);
+  text-decoration: none;
+}
+
+.chatMarkdown :global(a:hover) {
+  text-decoration: underline;
+}
+
+.chatMarkdown :global(.katex-display) {
+  overflow-x: auto;
+  padding-bottom: 8px;
 }
 
 .chatMessageFooter {
@@ -1088,8 +1178,10 @@
   color: rgba(250, 250, 250, 0.94);
   font-size: 0.95rem;
   line-height: 1.6;
-  max-height: 160px;
+  max-height: 240px;
   padding: 4px 0;
+  overflow: hidden;
+  min-height: 28px;
 }
 
 .chatComposerInput:focus {

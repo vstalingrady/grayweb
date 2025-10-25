@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowUp,
   Loader2,
@@ -12,16 +12,20 @@ import {
   ThumbsUp,
   Paperclip,
 } from "lucide-react";
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
 import styles from "@/app/gray/GrayPageClient.module.css";
-import { useChatStore, buildAssistantReply } from "./ChatProvider";
+import { SYSTEM_PROMPT, useChatStore, buildAssistantReply } from "./ChatProvider";
 import { useUser } from "@/contexts/UserContext";
 import { apiService } from "@/lib/api";
 
 type GrayChatViewProps = {
   sessionId: string | null;
 };
+
+const MAX_COMPOSER_HEIGHT = 240;
 
 const formatRelativeTime = (timestamp: number) => {
   const now = Date.now();
@@ -56,6 +60,7 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
   const [draft, setDraft] = useState("");
   const replyTimeout = useRef<number | null>(null);
   const scrollAnchorRef = useRef<HTMLDivElement | null>(null);
+  const composerRef = useRef<HTMLTextAreaElement | null>(null);
   const isLoadingHistoryRef = useRef<string | null>(null);
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const activeSessionId = session?.id ?? null;
@@ -68,6 +73,17 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
   const subtitle = session
     ? `Updated ${formatRelativeTime(session.updatedAt)}`
     : "Chat not found";
+
+  const resizeComposer = useCallback((target?: HTMLTextAreaElement | null) => {
+    const element = target ?? composerRef.current;
+    if (!element) {
+      return;
+    }
+    element.style.height = "auto";
+    const nextHeight = Math.min(element.scrollHeight, MAX_COMPOSER_HEIGHT);
+    element.style.height = `${nextHeight}px`;
+    element.style.overflowY = element.scrollHeight > MAX_COMPOSER_HEIGHT ? "auto" : "hidden";
+  }, []);
 
   useEffect(() => {
     if (!scrollAnchorRef.current) {
@@ -92,6 +108,14 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
       replyTimeout.current = null;
     }
   }, [session?.id]);
+
+  useEffect(() => {
+    resizeComposer();
+  }, [resizeComposer, draft]);
+
+  useEffect(() => {
+    resizeComposer();
+  }, [messages.length, resizeComposer]);
 
   useEffect(() => {
     if (!activeSessionId || !activeConversationId) {
@@ -147,6 +171,11 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
     };
   }, [activeConversationId, activeSessionId, updateSession]);
 
+  const handleDraftChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
+    setDraft(event.target.value);
+    resizeComposer(event.currentTarget);
+  };
+
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const content = draft.trim();
@@ -156,6 +185,7 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
 
     appendMessage(session.id, "user", content);
     setDraft("");
+    resizeComposer();
     if (replyTimeout.current !== null) {
       window.clearTimeout(replyTimeout.current);
     }
@@ -167,6 +197,7 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
           const response = await apiService.sendMessage({
             message: content,
             conversation_id: conversationId,
+            system_prompt: SYSTEM_PROMPT,
             user_id: user.id,
           });
           updateSession(session.id, { conversationId: response.conversation_id });
@@ -208,8 +239,9 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
       <header className={styles.chatHeader}>
         <div className={styles.chatHeaderTitle}>
           <span>{session.title || "Casual exchange"}</span>
-          <small>{subtitle}</small>
+          <small>{SYSTEM_PROMPT}</small>
         </div>
+        <span className={styles.chatHeaderMeta}>{subtitle}</span>
       </header>
       <div className={styles.chatViewport}>
         <div className={styles.chatFade} aria-hidden="true" />
@@ -239,19 +271,14 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
                 data-role={isUser ? "user" : "assistant"}
               >
                 <div className={styles.chatBubble}>
-                  {isUser ? (
-                    // User messages - plain text
-                    message.content.split("\n").map((paragraph, index) => (
-                      <p key={index}>{paragraph}</p>
-                    ))
-                  ) : (
-                    // AI assistant messages - markdown rendering
-                    <div className="prose prose-invert prose-p:text-gray-300 prose-li:text-gray-300 prose-headings:text-gray-100 prose-strong:text-gray-100 prose-code:text-sm prose-code:bg-black/50 prose-code:rounded prose-code:px-1.5 prose-code:py-1 prose-pre:bg-black/50 prose-pre:p-4 rounded-xl max-w-full">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                        {message.content}
-                      </ReactMarkdown>
-                    </div>
-                  )}
+                  <div className={styles.chatMarkdown}>
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm, remarkMath]}
+                      rehypePlugins={[rehypeKatex]}
+                    >
+                      {message.content}
+                    </ReactMarkdown>
+                  </div>
                 </div>
                 {isAssistant && (
                   <div className={styles.chatMessageFooter}>
@@ -308,10 +335,11 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
       <form className={styles.chatComposer} onSubmit={handleSubmit}>
         <textarea
           value={draft}
-          onChange={(event) => setDraft(event.target.value)}
+          onChange={handleDraftChange}
           placeholder="Message Gray"
           className={styles.chatComposerInput}
           rows={1}
+          ref={composerRef}
         />
         <div className={styles.chatComposerActions}>
           <button type="button" className={styles.chatComposerSecondary} aria-label="Open attachments">

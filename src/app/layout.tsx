@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { IBM_Plex_Mono, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
+import "katex/dist/katex.min.css";
 
 const plusJakarta = Plus_Jakarta_Sans({
   variable: "--font-sans",
