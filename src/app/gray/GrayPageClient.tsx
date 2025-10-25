@@ -127,7 +127,7 @@ const DAY_EVENTS_SEED: DayEvent[] = [
 const HOURS = Array.from({ length: 24 }, (_, index) => index);
 
 const MINUTES_IN_DAY = 24 * 60;
-const CALENDAR_HOUR_HEIGHT = 56;
+const CALENDAR_HOUR_HEIGHT = 52;
 const DEFAULT_EVENT_DURATION_MINUTES = 60;
 const MIN_EVENT_DURATION_MINUTES = 45;
 
@@ -395,19 +395,6 @@ export default function GrayPageClient({
               <div className={styles.sidebarRailFooter}>
                 <button
                   type="button"
-                  className={styles.sidebarRailAvatar}
-                  aria-label="View operator profile"
-                  onClick={() => setIsSidebarExpanded(true)}
-                >
-                  <Image
-                    src="/astronauttest.jpg"
-                    alt="Operator avatar"
-                    width={32}
-                    height={32}
-                  />
-                </button>
-                <button
-                  type="button"
                   className={styles.sidebarRailToggle}
                   aria-label={
                     isSidebarExpanded ? "Collapse sidebar" : "Expand sidebar"
@@ -420,6 +407,14 @@ export default function GrayPageClient({
                     size={18}
                     data-rotated={isSidebarExpanded ? "true" : "false"}
                   />
+                </button>
+                <button
+                  type="button"
+                  className={styles.sidebarRailAvatar}
+                  aria-label="View operator profile"
+                  onClick={() => setIsSidebarExpanded(true)}
+                >
+                  <span>{viewerInitials}</span>
                 </button>
               </div>
             </div>
