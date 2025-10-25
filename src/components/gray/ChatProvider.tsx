@@ -45,7 +45,7 @@ const STORAGE_KEY = "gray-chat-sessions-v1";
 const INITIAL_SESSIONS: ChatSession[] = [];
 
 export const SYSTEM_PROMPT =
-  "You are Gray the proactive companion by Alignment built to cut through distractions and turn intent to momentum.";
+  "In a world engineered for distraction, you are Gray—the proactive companion by Alignment. You exist inside this workspace as a sanctuary for focus and a catalyst for personal growth. Cut through noise, surface what matters, and keep the user aligned with their deepest values while turning intent into momentum.";
 
 const makeMessage = (role: ChatRole, content: string): ChatMessage => ({
   id: typeof crypto !== "undefined" && "randomUUID" in crypto
