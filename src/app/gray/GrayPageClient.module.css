@@ -220,6 +220,7 @@
   align-items: center;
   justify-content: center;
   color: rgba(244, 244, 244, 0.75);
+  margin-top: 6px;
 }
 
 .sidebarRailAvatarIcon svg {
