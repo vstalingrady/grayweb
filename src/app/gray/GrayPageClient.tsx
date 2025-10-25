@@ -1,71 +1,24 @@
 "use client";
 
-import Image from "next/image";
 import { useRouter } from "next/navigation";
-import {
-  FormEvent,
-  useEffect,
-  useMemo,
-  useState,
-  type ComponentType,
-} from "react";
-import {
-  AudioLines,
-  Bell,
-  CheckSquare,
-  ChevronDown,
-  Clock,
-  ChevronsUp,
-  ChevronsRight,
-  Flame,
-  Gem,
-  History,
-  LayoutDashboard,
-  MessageSquarePlus,
-  Mic,
-  Plus,
-  Search,
-  Square,
-  Trash2,
-  UserRound,
-} from "lucide-react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import { Gem, MessageSquarePlus, LayoutDashboard, History, Search } from "lucide-react";
+import { GraySidebar } from "@/components/gray/Sidebar";
+import { GrayWorkspaceHeader } from "@/components/gray/WorkspaceHeader";
+import { GrayDashboardView } from "@/components/gray/DashboardView";
+import { GrayGeneralView } from "@/components/gray/GeneralView";
+import { GrayChatBar } from "@/components/gray/ChatBar";
 import styles from "./GrayPageClient.module.css";
-
-type PlanItem = {
-  id: string;
-  label: string;
-  completed: boolean;
-};
-
-type HabitItem = {
-  id: string;
-  label: string;
-  streakLabel: string;
-  previousLabel: string;
-};
-
-type DayEvent = {
-  id: string;
-  start: string;
-  end?: string;
-  label: string;
-};
-
-type ProactivityItem = {
-  id: string;
-  label: string;
-  description: string;
-  cadence: string;
-  time: string;
-};
-
-type SidebarNavKey = "general" | "new-thread" | "dashboard" | "history" | "search";
-
-type SidebarNavItem = {
-  id: SidebarNavKey;
-  icon: ComponentType<{ size?: number }>;
-  label: string;
-};
+import {
+  type PlanItem,
+  type HabitItem,
+  type ProactivityItem,
+  type DayEvent,
+  type SidebarNavKey,
+  type SidebarNavItem,
+  type CalendarDisplayEvent,
+  type SidebarHistorySection,
+} from "@/components/gray/types";
 
 const PLAN_SEED: PlanItem[] = [
   {
@@ -149,7 +102,7 @@ const DAY_EVENTS_SEED: DayEvent[] = [
 const HOURS = Array.from({ length: 24 }, (_, index) => index);
 
 const MINUTES_IN_DAY = 24 * 60;
-const CALENDAR_HOUR_HEIGHT = 96;
+const CALENDAR_HOUR_HEIGHT = 72;
 const DEFAULT_EVENT_DURATION_MINUTES = 60;
 const MIN_EVENT_DURATION_MINUTES = 45;
 
@@ -170,7 +123,7 @@ const NAVIGATION_ROUTES: Partial<Record<SidebarNavKey, string>> = {
   dashboard: "/dashboard",
 };
 
-const SIDEBAR_HISTORY = [
+const SIDEBAR_HISTORY: SidebarHistorySection[] = [
   {
     month: "July",
     entries: [
@@ -319,6 +272,7 @@ export default function GrayPageClient({
   const [planTab, setPlanTab] = useState<"plans" | "habits">("plans");
   const [chatDraft, setChatDraft] = useState("");
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
+  const [dashboardTab, setDashboardTab] = useState<"pulse" | "calendar">("pulse");
 
   const viewerName = useMemo(
     () => viewerNameFromEmail(viewerEmail),
@@ -332,7 +286,7 @@ export default function GrayPageClient({
     () => DAY_EVENTS_SEED.map((event) => ({ ...event })),
     []
   );
-  const calendarEvents = useMemo(
+  const calendarEvents = useMemo<CalendarDisplayEvent[]>(
     () =>
       dayEvents.map((event) => {
         const startMinutes = timeLabelToMinutes(event.start);
@@ -411,452 +365,72 @@ export default function GrayPageClient({
     setChatDraft("");
   };
 
+  const timeLabel = formatClock(now);
+  const dateLabel = formatDate(now);
+  const greeting = `Good ${greetingForDate(now)}, ${viewerName}`;
+  const calendarTrackHeight = CALENDAR_HOUR_HEIGHT * HOURS.length;
+
   return (
     <div className={styles.page}>
       <div className={styles.backdrop} aria-hidden="true" />
       <div className={styles.overlay} aria-hidden="true" />
       <div className={styles.shell}>
         <div className={styles.layout}>
-          <aside
-            className={styles.sidebar}
-            data-expanded={isSidebarExpanded ? "true" : "false"}
-          >
-            <div className={styles.sidebarRail}>
-              <button
-                type="button"
-                className={styles.sidebarRailLogo}
-                aria-label="Open Gray Alignment sidebar"
-                onClick={() => setIsSidebarExpanded(true)}
-              >
-                <Image
-                  src="/grayaiwhitenotspinning.svg"
-                  alt="Gray Alignment emblem"
-                  width={24}
-                  height={24}
-                  priority
-                />
-              </button>
-              <nav aria-label="Sidebar quick actions" className={styles.railNav}>
-                <ul>
-                  {SIDEBAR_RAIL_ITEMS.map((item) => (
-                    <li key={item.id}>
-                      <button
-                        type="button"
-                        aria-label={item.label}
-                        data-active={item.id === resolvedActiveNav ? "true" : "false"}
-                        onClick={() => handleNavigate(item.id)}
-                      >
-                        <item.icon size={18} />
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </nav>
-              <div className={styles.sidebarRailFooter}>
-                <button
-                  type="button"
-                  className={styles.sidebarRailAvatar}
-                  aria-label={isSidebarExpanded ? "Collapse sidebar" : "Expand sidebar"}
-                  data-expanded={isSidebarExpanded ? "true" : "false"}
-                  onClick={() =>
-                    setIsSidebarExpanded((previous) => !previous)
-                  }
-                >
-                  <span className={styles.sidebarRailAvatarImage}>{viewerInitials}</span>
-                  <span
-                    className={styles.sidebarRailAvatarIcon}
-                    aria-hidden="true"
-                  >
-                    {isSidebarExpanded ? <ChevronsRight size={18} /> : <ChevronsUp size={18} />}
-                  </span>
-                </button>
-              </div>
-            </div>
-            <div
-              className={styles.sidebarPanel}
-              data-expanded={isSidebarExpanded ? "true" : "false"}
-            >
-              <div className={styles.sidebarPanelContent}>
-                <div className={styles.sidebarTop}>
-                  <button
-                    type="button"
-                    className={styles.sidebarLogo}
-                    aria-label="Collapse Gray Alignment sidebar"
-                    onClick={() => setIsSidebarExpanded(false)}
-                  >
-                    <Image
-                      src="/grayaiwhitenotspinning.svg"
-                      alt="Gray Alignment emblem"
-                      width={28}
-                      height={28}
-                      priority
-                      className={styles.sidebarLogoImage}
-                    />
-                  </button>
-                  <div className={styles.sidebarScroll}>
-                    <div className={styles.searchRow}>
-                      <span className={styles.searchIcon}>
-                        <Search size={16} />
-                      </span>
-                      <span className={styles.searchLabel}>Search</span>
-                      <span className={styles.searchShortcut}>CTRL+K</span>
-                    </div>
-                    <nav aria-label="Primary">
-                      <ul className={styles.sidebarNav}>
-                        {SIDEBAR_ITEMS.map((item) => (
-                          <li key={item.id}>
-                            <button
-                              type="button"
-                              data-active={item.id === resolvedActiveNav ? "true" : "false"}
-                              aria-label={item.label}
-                              onClick={() => handleNavigate(item.id)}
-                            >
-                              <span className={styles.navIcon}>
-                                <item.icon size={18} />
-                              </span>
-                              <span className={styles.navLabel}>
-                                {item.label}
-                              </span>
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    </nav>
-                    <div className={styles.sidebarHistory}>
-                      {SIDEBAR_HISTORY.map((section) => (
-                        <div
-                          key={section.month}
-                          className={styles.historySection}
-                        >
-                          <h3>{section.month}</h3>
-                          <ul>
-                            {section.entries.map((entry) => (
-                              <li key={entry}>{entry}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-                <div className={styles.sidebarBottom}>
-                  <button
-                    type="button"
-                    className={styles.sidebarProfile}
-                    aria-label="Open account menu"
-                  >
-                    <span className={styles.profileAvatar} aria-hidden="true">
-                      <UserRound size={22} />
-                    </span>
-                    <span className={styles.profileDetails}>
-                      <span>{viewerName}</span>
-                      <span>Operator</span>
-                    </span>
-                    <ChevronsRight size={18} className={styles.profileChevron} />
-                  </button>
-                </div>
-              </div>
-            </div>
-          </aside>
+          <GraySidebar
+            isExpanded={isSidebarExpanded}
+            viewerName={viewerName}
+            viewerInitials={viewerInitials}
+            activeNav={resolvedActiveNav}
+            railItems={SIDEBAR_RAIL_ITEMS}
+            navItems={SIDEBAR_ITEMS}
+            historySections={SIDEBAR_HISTORY}
+            onExpand={() => setIsSidebarExpanded(true)}
+            onCollapse={() => setIsSidebarExpanded(false)}
+            onToggle={() => setIsSidebarExpanded((previous) => !previous)}
+            onNavigate={handleNavigate}
+          />
 
           <div className={styles.main}>
-            <header className={styles.header}>
-              <div className={styles.timeGroup}>
-                <span className={styles.time}>{formatClock(now)}</span>
-                <span className={styles.date}>{formatDate(now)}</span>
-              </div>
-              <div className={styles.headerRight}>
-                <div className={styles.streakBadge}>
-                  <Flame size={12} />
-                  <span>{String(streakCount).padStart(2, "0")} day streak</span>
-                </div>
-              </div>
-            </header>
+            <GrayWorkspaceHeader
+              timeLabel={timeLabel}
+              dateLabel={dateLabel}
+              streakCount={streakCount}
+            />
 
-            {isDashboardView ? (
-              <>
-                <div className={styles.dashboardHeaderRow}>
-                  <div className={styles.dashboardHeaderLeft}>
-                    <span className={styles.dashboardEyebrow}>Dashboard</span>
-                    <h1 className={styles.dashboardHeadline}>
-                      Operational focus
-                    </h1>
-                  </div>
-                    <div className={styles.dashboardHeaderRight}>
-                      <div className={styles.dashboardToggle}>
-                        <button
-                          type="button"
-                          data-active="true"
-                          aria-pressed="true"
-                        >
-                          Pulse
-                        </button>
-                        <button
-                          type="button"
-                          aria-pressed="false"
-                          onClick={() => router.push("/")}
-                        >
-                          Calendar
-                        </button>
-                      </div>
-                      <span className={styles.dashboardDate}>{dashboardDateLabel}</span>
-                    </div>
-                  </div>
-                <section className={styles.dashboardGrid}>
-                  <article className={styles.dashboardCard}>
-                    <header className={styles.dashboardCardHeader}>
-                      <span>Plans</span>
-                    </header>
-                    <div className={styles.dashboardCardBody}>
-                      <ul className={styles.planList}>
-                        {plans.map((plan) => (
-                          <li key={plan.id}>
-                            <button
-                              type="button"
-                              data-completed={plan.completed}
-                              onClick={() => togglePlan(plan.id)}
-                            >
-                              <span>
-                                {plan.completed ? (
-                                  <CheckSquare size={16} />
-                                ) : (
-                                  <Square size={16} />
-                                )}
-                              </span>
-                              <span>{plan.label}</span>
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                      <button type="button" className={styles.secondaryAction}>
-                        Add plans
-                      </button>
-                    </div>
-                  </article>
-                  <article className={styles.dashboardCard}>
-                    <header className={styles.dashboardCardHeader}>
-                      <span>Habits</span>
-                    </header>
-                    <div className={styles.dashboardCardBody}>
-                      <ul className={`${styles.habitList} ${styles.dashboardHabitList}`}>
-                        {HABIT_SEED.map((habit) => (
-                          <li key={habit.id}>
-                            <div>
-                              <span>{habit.label}</span>
-                              <span>{habit.previousLabel}</span>
-                            </div>
-                            <div>
-                              <Flame size={12} />
-                              <span>{habit.streakLabel}</span>
-                            </div>
-                          </li>
-                        ))}
-                      </ul>
-                      <button type="button" className={styles.secondaryAction}>
-                        Add habits
-                      </button>
-                    </div>
-                  </article>
-                  <article className={`${styles.dashboardCard} ${styles.proactivityCard}`}>
-                    <header className={styles.dashboardCardHeader}>
-                      <span>Proactivity</span>
-                    </header>
-                    <div className={styles.dashboardCardBody}>
-                      <div className={styles.proactivityHeader}>
-                        <div>
-                          <div className={styles.proactivityTitle}>
-                            <CheckSquare size={16} />
-                            <span>{proactivity.label}</span>
-                          </div>
-                          <p>{proactivity.description}</p>
-                        </div>
-                        <button
-                          type="button"
-                          className={styles.iconButton}
-                          aria-label="Remove proactivity item"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                      <div className={styles.proactivityControls}>
-                        <label>
-                          <span>Cadence</span>
-                          <div className={styles.dashboardSelect}>
-                            <span>{proactivity.cadence}</span>
-                            <ChevronDown size={14} />
-                          </div>
-                        </label>
-                        <label>
-                          <span>Time</span>
-                          <div className={styles.dashboardSelect}>
-                            <Clock size={14} />
-                            <span>{proactivity.time}</span>
-                          </div>
-                        </label>
-                      </div>
-                      <button type="button" className={styles.secondaryAction}>
-                        Add proactivity
-                      </button>
-                    </div>
-                  </article>
-                </section>
-              </>
-            ) : (
-              <>
-                <h1 className={styles.greeting}>
-                  Good {greetingForDate(now)}, {viewerName}
-                </h1>
+            <div className={styles.mainContent}>
+              {isDashboardView ? (
+                <GrayDashboardView
+                  plans={plans}
+                  habits={HABIT_SEED}
+                  proactivity={proactivity}
+                  dashboardDateLabel={dashboardDateLabel}
+                  onTogglePlan={togglePlan}
+                  activeTab={dashboardTab}
+                  onSelectTab={setDashboardTab}
+                  currentDate={now}
+                />
+              ) : (
+                <GrayGeneralView
+                  greeting={greeting}
+                  hours={HOURS}
+                  hourLabelFor={formatHourLabel}
+                  calendarEvents={calendarEvents}
+                  calendarTrackHeight={calendarTrackHeight}
+                  calendarHourHeight={CALENDAR_HOUR_HEIGHT}
+                  plans={plans}
+                  habits={HABIT_SEED}
+                  activeTab={planTab}
+                  onChangeTab={setPlanTab}
+                  onTogglePlan={togglePlan}
+                />
+              )}
+            </div>
 
-                <section className={styles.mainGrid}>
-                  <div className={styles.primaryColumn}>
-                    <div className={styles.calendarCard}>
-                      <header>Calendar</header>
-                      <div className={styles.calendarBody}>
-                        <div className={styles.calendarTimes}>
-                          {HOURS.map((hour) => (
-                            <span key={hour}>{formatHourLabel(hour)}</span>
-                          ))}
-                        </div>
-                        <div className={styles.calendarViewport}>
-                          <div
-                            className={styles.calendarTrack}
-                            style={{
-                              height: `${CALENDAR_HOUR_HEIGHT * HOURS.length}px`,
-                            }}
-                          >
-                            {HOURS.map((hour) => (
-                              <span
-                                key={hour}
-                                className={styles.calendarRule}
-                                data-major={hour % 3 === 0 ? "true" : "false"}
-                                style={{
-                                  top: `${hour * CALENDAR_HOUR_HEIGHT}px`,
-                                }}
-                              />
-                            ))}
-                            {calendarEvents.map((event) => (
-                              <article
-                                key={event.id}
-                                className={styles.calendarEvent}
-                                style={{
-                                  top: `${event.topOffset}px`,
-                                  height: `${event.height}px`,
-                                }}
-                              >
-                                <strong>{event.label}</strong>
-                                <span>{event.rangeLabel}</span>
-                              </article>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className={styles.secondaryColumn}>
-                    <div className={styles.planPanel}>
-                      <div className={styles.tabBar}>
-                        <button
-                          type="button"
-                          data-active={planTab === "plans"}
-                          onClick={() => setPlanTab("plans")}
-                        >
-                          Plans
-                        </button>
-                        <button
-                          type="button"
-                          data-active={planTab === "habits"}
-                          onClick={() => setPlanTab("habits")}
-                        >
-                          Habits
-                        </button>
-                      </div>
-                      <div className={styles.planBody}>
-                        {planTab === "plans" ? (
-                          <>
-                            <ul className={styles.planList}>
-                              {plans.map((plan) => (
-                                <li key={plan.id}>
-                                  <button
-                                    type="button"
-                                    data-completed={plan.completed}
-                                    onClick={() => togglePlan(plan.id)}
-                                  >
-                                    <span>
-                                      {plan.completed ? (
-                                        <CheckSquare size={16} />
-                                      ) : (
-                                        <Square size={16} />
-                                      )}
-                                    </span>
-                                    <span>{plan.label}</span>
-                                  </button>
-                                </li>
-                              ))}
-                            </ul>
-                            <button type="button" className={styles.secondaryAction}>
-                              Add plans
-                            </button>
-                          </>
-                        ) : (
-                          <>
-                            <ul className={styles.habitList}>
-                              {HABIT_SEED.map((habit) => (
-                                <li key={habit.id}>
-                                  <div>
-                                    <span>{habit.label}</span>
-                                    <span>{habit.previousLabel}</span>
-                                  </div>
-                                  <div>
-                                    <Flame size={12} />
-                                    <span>{habit.streakLabel}</span>
-                                  </div>
-                                </li>
-                              ))}
-                            </ul>
-                            <button type="button" className={styles.secondaryAction}>
-                              Add habits
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </section>
-              </>
-            )}
-
-            <form className={styles.chatBar} onSubmit={handleChatSubmit}>
-              <button
-                type="button"
-                className={styles.chatIconButton}
-                aria-label="Add attachment"
-              >
-                <Plus size={18} />
-              </button>
-              <input
-                value={chatDraft}
-                onChange={(event) => setChatDraft(event.target.value)}
-                placeholder="Ask anything"
-                className={styles.chatInput}
-              />
-              <div className={styles.chatActions}>
-                <button
-                  type="button"
-                  className={styles.chatActionButton}
-                  aria-label="Start voice note"
-                >
-                  <Mic size={18} />
-                </button>
-                <button
-                  type="submit"
-                  className={styles.chatActionButton}
-                  aria-label="Send message"
-                >
-                  <AudioLines size={18} />
-                </button>
-              </div>
-            </form>
+            <GrayChatBar
+              value={chatDraft}
+              onChange={setChatDraft}
+              onSubmit={handleChatSubmit}
+            />
           </div>
         </div>
       </div>
