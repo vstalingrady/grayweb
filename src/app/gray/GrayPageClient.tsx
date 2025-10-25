@@ -548,10 +548,6 @@ export default function GrayPageClient({
                   <Flame size={12} />
                   <span>{String(streakCount).padStart(2, "0")} day streak</span>
                 </div>
-                <span className={styles.notificationChip}>
-                  <Bell size={12} />
-                  12
-                </span>
               </div>
             </header>
 
