@@ -14,9 +14,11 @@
       sans-serif
     );
   display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: clamp(24px, 5vh, 40px) clamp(24px, 4vw, 48px);
+  justify-content: flex-start;
+  padding-top: clamp(24px, 5vh, 36px);
+  padding-right: clamp(16px, 4vw, 36px);
+  padding-bottom: clamp(24px, 5vh, 36px);
+  padding-left: 0;
   overflow: hidden;
 }
 
@@ -34,9 +36,9 @@
   position: fixed;
   inset: 0;
   background: linear-gradient(
-    135deg,
-    rgba(5, 5, 5, 0.8),
-    rgba(5, 5, 5, 0.92)
+    160deg,
+    rgba(5, 5, 5, 0.82),
+    rgba(5, 5, 5, 0.94)
   );
   pointer-events: none;
 }
@@ -44,132 +46,162 @@
 .shell {
   position: relative;
   z-index: 1;
-  width: min(1200px, 100%);
-  height: min(760px, calc(100vh - clamp(48px, 10vh, 80px)));
-  max-height: calc(100vh - clamp(48px, 10vh, 80px));
-  display: flex;
-  flex-direction: column;
-  gap: clamp(24px, 5vw, 40px);
+  width: 100%;
 }
 
-.viewport {
-  display: flex;
-  flex: 1;
-  min-height: 0;
-  gap: clamp(18px, 3vw, 28px);
+.layout {
+  display: grid;
+  grid-template-columns: minmax(252px, 280px) 1fr;
+  gap: clamp(24px, 4vw, 40px);
+  align-items: stretch;
 }
 
 .sidebar {
-  width: clamp(232px, 20vw, 260px);
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  padding: 22px clamp(14px, 2vw, 18px);
-  border-radius: 26px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(6, 6, 6, 0.82);
-  backdrop-filter: blur(16px);
-  box-shadow:
-    0 26px 48px rgba(2, 2, 2, 0.5),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.03);
-  transition: width 0.3s ease;
-}
-
-.sidebar[data-expanded="false"] {
-  width: 92px;
+  padding: clamp(24px, 4vh, 34px) clamp(20px, 3.5vw, 30px);
+  border-radius: 0 30px 30px 0;
+  background: rgba(7, 7, 7, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-left: none;
+  box-shadow: none;
+  backdrop-filter: none;
 }
 
 .sidebarTop {
   display: flex;
   flex-direction: column;
-  gap: clamp(18px, 3vw, 28px);
+  gap: clamp(24px, 6vh, 36px);
+}
+
+.sidebarScroll {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
   flex: 1;
   min-height: 0;
-  overflow: hidden;
+  overflow-y: auto;
+  padding-right: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
 }
 
-.logoButton {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 8px 6px;
-  border: none;
-  background: transparent;
-  color: inherit;
-  cursor: default;
+.sidebarScroll::-webkit-scrollbar {
+  width: 6px;
 }
 
-.logoMark {
-  width: 34px;
-  height: 34px;
+.sidebarScroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
   border-radius: 999px;
-  background: linear-gradient(
-    135deg,
-    rgba(255, 255, 255, 0.08),
-    rgba(255, 255, 255, 0.02)
-  );
+}
+
+.sidebarLogo {
+  width: 48px;
+  height: 48px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(18, 18, 18, 0.94);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: rgba(255, 255, 255, 0.86);
-}
-
-.logoWordmark {
-  font-size: 0.82rem;
-  letter-spacing: 0.24em;
-  text-transform: uppercase;
-  color: rgba(245, 245, 245, 0.85);
-  white-space: nowrap;
-  overflow: hidden;
+  padding: 10px;
+  cursor: pointer;
   transition:
-    opacity 0.2s ease,
-    max-width 0.2s ease,
-    margin 0.2s ease;
+    border-color 0.2s ease,
+    background 0.2s ease,
+    transform 0.2s ease;
 }
 
-.logoButton[data-expanded="false"] .logoWordmark {
-  opacity: 0;
-  max-width: 0;
-  margin-left: 0;
+.sidebarLogo:hover {
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(26, 26, 26, 0.94);
+  transform: translateX(2px);
 }
 
-.logoButton[data-expanded="true"] .logoWordmark {
-  opacity: 1;
-  max-width: 120px;
-  margin-left: 4px;
+.sidebarLogoImage {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
-.sidebarNav ul {
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin: 12px 0 0;
-  padding: 0;
-}
-
-.navItem {
+.searchRow {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 14px;
-  border-radius: 14px;
-  background: transparent;
-  color: rgba(235, 235, 235, 0.58);
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(32, 32, 32, 0.72);
+  font-family: var(
+      --font-mono,
+      "IBM Plex Mono",
+      "IBM Plex Mono",
+      SFMono-Regular,
+      Consolas,
+      "Liberation Mono",
+      Menlo,
+      monospace
+    );
+  font-size: 0.7rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(235, 235, 235, 0.72);
+}
+
+.searchIcon {
+  color: rgba(235, 235, 235, 0.6);
+}
+
+.searchLabel {
+  flex: 1;
+  text-align: left;
+}
+
+.searchShortcut {
+  font-size: 0.64rem;
+  letter-spacing: 0.18em;
+  color: rgba(235, 235, 235, 0.52);
+}
+
+.sidebarNav {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sidebarNav button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: none;
+  background: rgba(20, 20, 20, 0.55);
+  color: rgba(235, 235, 235, 0.78);
+  font-size: 0.82rem;
+  letter-spacing: 0.04em;
   cursor: pointer;
   transition:
     background 0.2s ease,
-    color 0.2s ease;
+    color 0.2s ease,
+    transform 0.2s ease;
 }
 
-.navItem:hover {
-  background: rgba(255, 255, 255, 0.08);
+.sidebarNav button:hover {
+  background: rgba(60, 60, 60, 0.6);
   color: rgba(255, 255, 255, 0.95);
+  transform: translateX(2px);
 }
 
-.navItem[data-active="true"] {
-  background: rgba(255, 255, 255, 0.2);
-  color: #060606;
+.sidebarNav button[data-active="true"] {
+  background: rgba(255, 255, 255, 0.88);
+  color: #050505;
+  box-shadow: 0 16px 28px rgba(0, 0, 0, 0.4);
 }
 
 .navIcon {
@@ -177,83 +209,47 @@
   align-items: center;
   justify-content: center;
   width: 18px;
+  color: inherit;
 }
 
 .navLabel {
-  font-size: 0.74rem;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  white-space: nowrap;
-  overflow: hidden;
-  transition:
-    opacity 0.2s ease,
-    max-width 0.2s ease,
-    margin 0.2s ease;
-}
-
-.navLabel[data-expanded="false"] {
-  opacity: 0;
-  max-width: 0;
-  margin-left: 0;
-}
-
-.navLabel[data-expanded="true"] {
-  opacity: 1;
-  max-width: 160px;
-  margin-left: 4px;
-}
-
-.navShortcut {
-  margin-left: auto;
-  padding: 4px 8px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
-  font-size: 0.68rem;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: rgba(235, 235, 235, 0.7);
+  flex: 1;
+  text-align: left;
 }
 
 .sidebarHistory {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  transition:
-    opacity 0.2s ease,
-    max-height 0.2s ease;
-}
-
-.sidebarHistory[data-expanded="false"] {
-  opacity: 0;
-  max-height: 0;
-  pointer-events: none;
+  gap: 14px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .historySection {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
 
-.historyHeading {
-  font-size: 0.68rem;
-  letter-spacing: 0.22em;
+.historySection h3 {
+  font-size: 0.62rem;
+  letter-spacing: 0.24em;
   text-transform: uppercase;
-  color: rgba(235, 235, 235, 0.38);
+  color: rgba(235, 235, 235, 0.45);
 }
 
 .historySection ul {
   list-style: none;
+  margin: 0;
+  padding: 0;
   display: flex;
   flex-direction: column;
   gap: 6px;
-  margin: 0;
-  padding: 0;
 }
 
-.historyItem {
-  font-size: 0.76rem;
-  color: rgba(235, 235, 235, 0.58);
+.historySection li {
+  font-size: 0.74rem;
+  color: rgba(235, 235, 235, 0.62);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -261,22 +257,19 @@
   transition: color 0.2s ease;
 }
 
-.historyItem:hover {
-  color: rgba(255, 255, 255, 0.86);
+.historySection li:hover {
+  color: rgba(255, 255, 255, 0.88);
 }
 
 .sidebarProfile {
-  margin-top: 16px;
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px;
-  border-radius: 16px;
+  padding: 14px 16px;
+  border-radius: 18px;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(18, 18, 18, 0.78);
-  color: rgba(245, 245, 245, 0.88);
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
+  background: rgba(18, 18, 18, 0.75);
+  margin-top: clamp(24px, 5vh, 36px);
   cursor: pointer;
   transition:
     background 0.2s ease,
@@ -284,175 +277,59 @@
 }
 
 .sidebarProfile:hover {
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.sidebarProfile[data-expanded="false"] {
-  justify-content: center;
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .profileAvatar {
-  width: 36px;
-  height: 36px;
+  width: 42px;
+  height: 42px;
   border-radius: 999px;
+  background: rgba(15, 15, 15, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: rgba(10, 10, 10, 0.92);
   font-weight: 600;
+  font-size: 0.78rem;
   letter-spacing: 0.08em;
 }
 
-.profileMeta {
+.profileDetails {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  font-size: 0.7rem;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  transition:
-    opacity 0.2s ease,
-    max-width 0.2s ease,
-    margin 0.2s ease;
 }
 
-.profileMeta span:first-child {
-  font-size: 0.82rem;
+.profileDetails span:first-child {
+  font-size: 0.8rem;
   letter-spacing: 0.08em;
-  text-transform: none;
 }
 
-.profileMeta span:last-child {
+.profileDetails span:last-child {
   font-size: 0.68rem;
-  color: rgba(235, 235, 235, 0.6);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(235, 235, 235, 0.54);
 }
 
-.sidebarProfile[data-expanded="false"] .profileMeta {
-  opacity: 0;
-  max-width: 0;
-  margin-left: 0;
-}
-
-.profileChevron {
-  margin-left: auto;
-  transition: opacity 0.2s ease;
-}
-
-.sidebarProfile[data-expanded="false"] .profileChevron {
-  opacity: 0;
-}
-
-.content {
-  flex: 1;
-  min-height: 0;
+.main {
   display: flex;
   flex-direction: column;
-  gap: clamp(18px, 3vw, 28px);
-  padding: clamp(22px, 4vh, 34px) clamp(26px, 4vw, 40px);
-  border-radius: 32px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(5, 5, 5, 0.68);
-  backdrop-filter: blur(24px);
-  box-shadow:
-    0 32px 48px rgba(0, 0, 0, 0.45),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+  gap: clamp(16px, 3vw, 26px);
+  min-height: 0;
 }
 
 .header {
   display: flex;
-  flex-direction: column;
-  gap: clamp(12px, 3vw, 24px);
-  text-align: center;
-}
-
-.headerTop {
-  display: flex;
   justify-content: space-between;
-  align-items: center;
-  gap: 16px;
-  padding: 0 clamp(8px, 2vw, 16px);
+  align-items: flex-start;
+  gap: 18px;
 }
 
-.streakBadge {
-  display: inline-flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 18px;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: linear-gradient(
-    135deg,
-    rgba(40, 40, 40, 0.7),
-    rgba(10, 10, 10, 0.9)
-  );
-  font-size: 0.75rem;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-}
-
-.streakValue {
-  font-size: 1rem;
-  letter-spacing: 0.2em;
-}
-
-.streakLabel {
-  font-size: 0.68rem;
-  letter-spacing: 0.32em;
-  color: rgba(240, 240, 240, 0.58);
-}
-
-.headerTopRight {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.notificationChip {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 14px;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(15, 15, 15, 0.75);
-  font-size: 0.68rem;
-  letter-spacing: 0.24em;
-  text-transform: uppercase;
-  color: rgba(240, 240, 240, 0.7);
-}
-
-.avatar {
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(30, 30, 30, 0.9);
-  display: inline-flex;
-  justify-content: center;
-  align-items: center;
-  font-size: 0.85rem;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-}
-
-.headerContent {
+.timeGroup {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: clamp(6px, 1.8vw, 14px);
-}
-
-.clock {
-  font-size: clamp(3rem, 7vw, 5.5rem);
-  font-weight: 300;
-  letter-spacing: 0.08em;
-}
-
-.date {
-  font-size: clamp(0.66rem, 1.3vw, 0.88rem);
-  letter-spacing: 0.36em;
-  text-transform: uppercase;
-  color: rgba(230, 230, 230, 0.75);
+  gap: 6px;
   font-family: var(
       --font-mono,
       "IBM Plex Mono",
@@ -465,61 +342,119 @@
     );
 }
 
+.time {
+  font-size: clamp(1rem, 2vw, 1.2rem);
+  letter-spacing: 0.18em;
+}
+
+.date {
+  font-size: clamp(0.58rem, 1.4vw, 0.72rem);
+  letter-spacing: 0.32em;
+  color: rgba(230, 230, 230, 0.6);
+}
+
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.streakBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(12, 12, 12, 0.7);
+  font-size: 0.62rem;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+}
+
+.notificationChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(12, 12, 12, 0.6);
+  font-size: 0.6rem;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: rgba(235, 235, 235, 0.7);
+}
+
 .greeting {
-  font-size: clamp(1.6rem, 3.2vw, 2.4rem);
+  font-size: clamp(1.6rem, 3vw, 2.1rem);
   font-weight: 500;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.04em;
   color: rgba(245, 245, 245, 0.92);
 }
 
-.main {
+.mainGrid {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(0, 0.75fr) minmax(0, 0.65fr);
-  gap: clamp(18px, 3vw, 28px);
+  grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr);
+  gap: clamp(18px, 3vw, 32px);
 }
 
-.calendarPanel,
-.plannerPanel {
-  background: rgba(10, 10, 10, 0.85);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow:
-    0 24px 48px rgba(0, 0, 0, 0.45),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.04);
-  border-radius: 28px;
-}
-
-.calendarPanel {
+.primaryColumn,
+.secondaryColumn {
   display: flex;
   flex-direction: column;
-  padding: clamp(16px, 2.8vw, 24px);
-  gap: 18px;
-  overflow: hidden;
+  gap: clamp(18px, 3vw, 28px);
   min-height: 0;
 }
 
-.panelHeader {
-  font-size: 0.76rem;
-  letter-spacing: 0.32em;
-  text-transform: uppercase;
-  color: rgba(235, 235, 235, 0.64);
+.cardSurface {
+  background: linear-gradient(
+    135deg,
+    rgba(18, 18, 18, 0.82),
+    rgba(8, 8, 8, 0.74)
+  );
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: 26px;
+  box-shadow:
+    0 28px 46px rgba(0, 0, 0, 0.35),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.02);
 }
 
-.calendarContent {
+.calendarCard {
+  composes: cardSurface;
+  padding: clamp(18px, 2.5vw, 26px);
   display: flex;
-  gap: clamp(16px, 3vw, 28px);
+  flex-direction: column;
+  gap: 18px;
+  min-height: 0;
+}
+
+.calendarCard header {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.28em;
+  color: rgba(235, 235, 235, 0.7);
+}
+
+.calendarBody {
+  display: flex;
+  gap: clamp(16px, 2vw, 24px);
   flex: 1;
   min-height: 0;
 }
 
 .calendarHours {
   list-style: none;
+  margin: 0;
+  padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  margin: 0;
-  padding: 4px 0 0;
+  gap: 14px;
+  font-size: 0.64rem;
+  letter-spacing: 0.18em;
+  color: rgba(235, 235, 235, 0.4);
   font-family: var(
       --font-mono,
       "IBM Plex Mono",
@@ -530,21 +465,17 @@
       Menlo,
       monospace
     );
-  color: rgba(235, 235, 235, 0.38);
-  letter-spacing: 0.2em;
-  font-size: 0.68rem;
 }
 
 .calendarHour {
   display: flex;
   align-items: flex-start;
-  gap: 16px;
-  min-height: 40px;
+  gap: 12px;
+  min-height: 36px;
 }
 
 .calendarHourLabel {
-  display: inline-block;
-  width: 62px;
+  width: 52px;
   text-align: right;
   padding-top: 6px;
 }
@@ -555,7 +486,7 @@
   background: linear-gradient(
     to right,
     transparent 0%,
-    rgba(255, 255, 255, 0.12) 45%,
+    rgba(255, 255, 255, 0.14) 45%,
     transparent 100%
   );
   margin-top: 14px;
@@ -569,72 +500,155 @@
   overflow-y: auto;
   padding-right: 4px;
   scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
 }
 
 .eventList::-webkit-scrollbar {
-  width: 4px;
+  width: 6px;
+}
+
+.eventList::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .eventList::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.14);
   border-radius: 999px;
 }
 
 .eventItem {
-  background: linear-gradient(
-      135deg,
-      rgba(40, 40, 40, 0.58),
-      rgba(12, 12, 12, 0.9)
-    )
-    border-box;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 20px;
-  padding: 16px 20px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: rgba(20, 20, 20, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.05);
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
 .eventTime {
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   letter-spacing: 0.22em;
   text-transform: uppercase;
   color: rgba(235, 235, 235, 0.58);
 }
 
 .eventLabel {
-  font-size: 0.95rem;
-  line-height: 1.45;
+  font-size: 0.92rem;
+  line-height: 1.4;
   color: rgba(245, 245, 245, 0.92);
 }
 
-.plannerPanel {
+.pulseCard {
+  composes: cardSurface;
+  padding: clamp(18px, 2.5vw, 24px);
   display: flex;
   flex-direction: column;
-  padding: clamp(16px, 2.8vw, 24px);
+  gap: 16px;
+  min-height: 0;
+}
+
+.pulseCard header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  text-transform: uppercase;
+  letter-spacing: 0.28em;
+  font-size: 0.72rem;
+  color: rgba(235, 235, 235, 0.7);
+}
+
+.pulseList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+  padding-right: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
+}
+
+.pulseList::-webkit-scrollbar {
+  width: 6px;
+}
+
+.pulseList::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+}
+
+.pulseList article {
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: rgba(20, 20, 20, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pulseHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.74rem;
+  letter-spacing: 0.12em;
+  color: rgba(235, 235, 235, 0.7);
+}
+
+.pulseStatus {
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+}
+
+.pulseStatus[data-status="up"] {
+  color: #8cffc1;
+}
+
+.pulseStatus[data-status="down"] {
+  color: #ff7878;
+}
+
+.pulseList article p {
+  font-size: 0.9rem;
+  line-height: 1.35;
+  color: rgba(245, 245, 245, 0.92);
+}
+
+.pulseList article span:last-child {
+  font-size: 0.74rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(235, 235, 235, 0.62);
+}
+
+.planPanel {
+  composes: cardSurface;
+  padding: clamp(18px, 2.4vw, 24px);
+  display: flex;
+  flex-direction: column;
   gap: 18px;
-  overflow: hidden;
   min-height: 0;
 }
 
 .tabBar {
   display: inline-flex;
-  align-self: flex-start;
+  gap: 8px;
   padding: 6px;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(12, 12, 12, 0.7);
-  gap: 8px;
+  background: rgba(15, 15, 15, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  align-self: flex-start;
 }
 
 .tabBar button {
   border: none;
   border-radius: 999px;
-  padding: 10px 20px;
+  padding: 8px 16px;
   font-size: 0.72rem;
   letter-spacing: 0.2em;
   text-transform: uppercase;
-  color: rgba(240, 240, 240, 0.55);
+  color: rgba(235, 235, 235, 0.6);
   background: transparent;
   cursor: pointer;
   transition:
@@ -643,167 +657,147 @@
 }
 
 .tabBar button[data-active="true"] {
-  background: rgba(245, 245, 245, 0.9);
-  color: #060606;
-  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.45);
+  background: rgba(255, 255, 255, 0.92);
+  color: #040404;
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.4);
 }
 
-.plannerBody {
+.planBody {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 16px;
   flex: 1;
   min-height: 0;
-}
-
-.sectionTitle {
-  font-size: 0.76rem;
-  letter-spacing: 0.32em;
-  text-transform: uppercase;
-  color: rgba(235, 235, 235, 0.7);
 }
 
 .planList,
 .habitList {
   list-style: none;
+  margin: 0;
+  padding: 0;
   display: flex;
   flex-direction: column;
   gap: 10px;
   overflow-y: auto;
-  margin: 0;
-  padding: 0 6px 0 0;
+  padding-right: 4px;
   scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
 }
 
 .planList::-webkit-scrollbar,
 .habitList::-webkit-scrollbar {
-  width: 4px;
+  width: 6px;
 }
 
 .planList::-webkit-scrollbar-thumb,
 .habitList::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.14);
   border-radius: 999px;
 }
 
-.planButton {
+.planList li button {
   width: 100%;
   display: flex;
   align-items: flex-start;
-  gap: 16px;
-  padding: 14px 16px;
-  border-radius: 18px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: linear-gradient(
-    135deg,
-    rgba(35, 35, 35, 0.6),
-    rgba(12, 12, 12, 0.88)
-  );
+  gap: 14px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(20, 20, 20, 0.75);
+  color: rgba(245, 245, 245, 0.9);
   text-align: left;
   cursor: pointer;
-  color: rgba(245, 245, 245, 0.92);
-  transition: transform 0.2s ease;
+  transition:
+    transform 0.2s ease,
+    background 0.2s ease,
+    color 0.2s ease;
 }
 
-.planButton:hover {
+.planList li button:hover {
   transform: translateY(-2px);
+  background: rgba(28, 28, 28, 0.8);
 }
 
-.planButton[data-completed="true"] {
-  opacity: 0.55;
+.planList li button[data-completed="true"] {
+  color: rgba(235, 235, 235, 0.55);
   text-decoration: line-through;
 }
 
-.planIcon {
+.planList li button span:first-child {
   display: inline-flex;
-  padding-top: 2px;
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(235, 235, 235, 0.7);
 }
 
-.planButton[data-completed="true"] .planIcon {
+.planList li button[data-completed="true"] span:first-child {
   color: rgba(94, 188, 255, 0.85);
 }
 
-.planText {
-  font-size: 0.95rem;
-  line-height: 1.5;
+.habitList li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(20, 20, 20, 0.75);
+  color: rgba(245, 245, 245, 0.9);
+}
+
+.habitList li div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.habitList li div:first-child span:last-child {
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  color: rgba(235, 235, 235, 0.55);
+}
+
+.habitList li div:last-child {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(235, 235, 235, 0.68);
 }
 
 .secondaryAction {
   align-self: flex-start;
-  margin-top: auto;
-  padding: 12px 22px;
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(15, 15, 15, 0.86);
-  color: rgba(240, 240, 240, 0.88);
-  font-size: 0.72rem;
-  letter-spacing: 0.22em;
+  padding: 10px 18px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(12, 12, 12, 0.7);
+  color: rgba(235, 235, 235, 0.8);
+  font-size: 0.68rem;
+  letter-spacing: 0.2em;
   text-transform: uppercase;
   cursor: pointer;
 }
 
-.habitItem {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 14px 16px;
-  border-radius: 18px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: linear-gradient(
-    135deg,
-    rgba(35, 35, 35, 0.54),
-    rgba(12, 12, 12, 0.88)
-  );
-}
-
-.habitTexts {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  color: rgba(245, 245, 245, 0.9);
-}
-
-.habitLabel {
-  font-size: 0.95rem;
-}
-
-.habitPrevious {
-  font-size: 0.75rem;
-  letter-spacing: 0.08em;
-  color: rgba(235, 235, 235, 0.55);
-}
-
-.habitMeta {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 0.78rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: rgba(235, 235, 235, 0.75);
-}
-
 .chatBar {
-  align-self: center;
   margin-top: auto;
+  align-self: center;
   width: min(520px, 100%);
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 14px 18px;
+  gap: 10px;
+  padding: 12px 16px;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(15, 15, 15, 0.7);
-  backdrop-filter: blur(18px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(12, 12, 12, 0.72);
+  backdrop-filter: blur(16px);
 }
 
 .chatIconButton,
 .chatActionButton {
   border: none;
   background: transparent;
-  padding: 8px;
   border-radius: 999px;
+  padding: 8px;
   color: rgba(235, 235, 235, 0.7);
   cursor: pointer;
   transition:
@@ -819,12 +813,11 @@
 
 .chatInput {
   flex: 1;
-  background: transparent;
   border: none;
-  outline: none;
-  font-size: 0.95rem;
+  background: transparent;
   color: rgba(245, 245, 245, 0.86);
-  font-family: inherit;
+  font-size: 0.92rem;
+  outline: none;
 }
 
 .chatInput::placeholder {
@@ -837,75 +830,63 @@
   gap: 4px;
 }
 
-@media (max-width: 960px) {
-  .shell {
-    min-height: auto;
-  }
-
-  .viewport {
-    flex-direction: column;
-  }
-
-  .sidebar {
-    display: none;
-  }
-
-  .main {
+@media (max-width: 1080px) {
+  .mainGrid {
     grid-template-columns: 1fr;
-  }
-
-  .calendarPanel,
-  .plannerPanel {
-    padding: 20px;
-  }
-
-  .chatBar {
-    width: 100%;
-  }
-
-  .content {
-    padding: 24px 20px;
   }
 }
 
-@media (max-width: 640px) {
-  .headerTop {
-    flex-direction: column;
-    align-items: center;
+@media (max-width: 720px) {
+  .layout {
+    grid-template-columns: 1fr;
   }
 
-  .headerTopRight {
+  .sidebar {
+    flex-direction: column;
     width: 100%;
-    justify-content: center;
+    border-radius: 22px;
+    padding: 16px 18px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-left: 1px solid rgba(255, 255, 255, 0.08);
   }
 
-  .notificationChip {
-    letter-spacing: 0.16em;
-  }
-
-  .calendarContent {
+  .sidebarTop {
     flex-direction: column;
+    gap: 16px;
   }
 
-  .calendarHours {
+  .sidebarScroll {
     flex-direction: row;
-    flex-wrap: wrap;
-    gap: 8px;
-    justify-content: center;
-  }
-
-  .calendarHour {
-    min-height: 0;
     align-items: center;
+    gap: 12px;
+    overflow-x: auto;
+    overflow-y: hidden;
   }
 
-  .calendarHourLabel {
-    width: auto;
-    text-align: center;
-    padding-top: 0;
+  .searchRow {
+    flex: 0 0 auto;
+    width: 200px;
   }
 
-  .calendarHourLine {
+  .sidebarNav {
+    flex-direction: row;
+    margin: 0;
+    gap: 12px;
+  }
+
+  .sidebarHistory {
     display: none;
+  }
+
+  .sidebarProfile {
+    margin-top: 18px;
+  }
+
+  .main {
+    margin-top: clamp(12px, 3vh, 18px);
+  }
+
+  .greeting {
+    font-size: 1.6rem;
   }
 }

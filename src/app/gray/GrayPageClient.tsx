@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import {
   FormEvent,
   useEffect,
@@ -11,7 +12,6 @@ import {
   AudioLines,
   Bell,
   CheckSquare,
-  ChevronDown,
   Flame,
   Gem,
   History,
@@ -46,10 +46,17 @@ type DayEvent = {
 
 type SidebarNavItem = {
   id: string;
-  label: string;
   icon: ComponentType<{ size?: number }>;
-  shortcut?: string;
+  label: string;
   active?: boolean;
+};
+
+type PulseEntry = {
+  id: string;
+  time: string;
+  status: "stable" | "up" | "down";
+  summary: string;
+  focus: string;
 };
 
 const PLAN_SEED: PlanItem[] = [
@@ -126,15 +133,9 @@ const DAY_EVENTS_SEED: DayEvent[] = [
 const HOURS = Array.from({ length: 24 }, (_, index) => index);
 
 const SIDEBAR_ITEMS: SidebarNavItem[] = [
-  { id: "search", label: "Search", icon: Search, shortcut: "CTRL+K" },
   { id: "general", label: "General", icon: Gem },
-  { id: "new-thread", label: "New thread", icon: MessageSquarePlus },
-  {
-    id: "dashboard",
-    label: "Dashboard",
-    icon: LayoutDashboard,
-    active: true,
-  },
+  { id: "new-thread", label: "New Thread", icon: MessageSquarePlus },
+  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, active: true },
   { id: "history", label: "History", icon: History },
 ];
 
@@ -156,6 +157,30 @@ const SIDEBAR_HISTORY = [
       "Chat Log Analysis Techniques",
       "Debate on Content Creation Ethics",
     ],
+  },
+];
+
+const PULSE_SEED: PulseEntry[] = [
+  {
+    id: "pulse-1",
+    time: "08:03",
+    status: "stable",
+    summary: "Daily stand-up cleared blockers in 11m.",
+    focus: "Keep async channel velocity high.",
+  },
+  {
+    id: "pulse-2",
+    time: "12:17",
+    status: "up",
+    summary: "Momentum spike: proactivity +12% vs. yesterday.",
+    focus: "Double-down on outbound builder outreach.",
+  },
+  {
+    id: "pulse-3",
+    time: "16:42",
+    status: "down",
+    summary: "Two tasks at risk; builder cohort waiting on guidance.",
+    focus: "Reprioritize checklist items to protect streak.",
   },
 ];
 
@@ -248,12 +273,14 @@ export default function GrayPageClient({
   viewerEmail,
 }: GrayPageClientProps) {
   const [now, setNow] = useState(() => new Date(initialTimestamp));
+  const [pulseEntries] = useState<PulseEntry[]>(() =>
+    PULSE_SEED.map((entry) => ({ ...entry }))
+  );
   const [plans, setPlans] = useState<PlanItem[]>(() =>
     PLAN_SEED.map((plan) => ({ ...plan }))
   );
   const [planTab, setPlanTab] = useState<"plans" | "habits">("plans");
   const [chatDraft, setChatDraft] = useState("");
-  const [sidebarExpanded, setSidebarExpanded] = useState(true);
 
   const viewerName = useMemo(
     () => viewerNameFromEmail(viewerEmail),
@@ -303,203 +330,209 @@ export default function GrayPageClient({
       <div className={styles.backdrop} aria-hidden="true" />
       <div className={styles.overlay} aria-hidden="true" />
       <div className={styles.shell}>
-        <div className={styles.viewport}>
-          <aside
-            className={styles.sidebar}
-            data-expanded={sidebarExpanded ? "true" : "false"}
-          >
+        <div className={styles.layout}>
+          <aside className={styles.sidebar}>
             <div className={styles.sidebarTop}>
               <button
                 type="button"
-                className={styles.logoButton}
-                data-expanded={sidebarExpanded ? "true" : "false"}
-                aria-label="Zenith dashboard"
+                className={styles.sidebarLogo}
+                aria-label="Gray Alignment dashboard"
               >
-                <span className={styles.logoMark}>
-                  <Gem size={16} />
-                </span>
-                <span className={styles.logoWordmark}>Zenith</span>
+                <Image
+                  src="/grayaiwhitenotspinning.svg"
+                  alt="Gray Alignment emblem"
+                  width={28}
+                  height={28}
+                  priority
+                  className={styles.sidebarLogoImage}
+                />
               </button>
-
-              <nav className={styles.sidebarNav}>
-                <ul>
-                  {SIDEBAR_ITEMS.map((item) => (
-                    <SidebarNavButton
-                      key={item.id}
-                      icon={item.icon}
-                      label={item.label}
-                      shortcut={item.shortcut}
-                      active={item.active}
-                      expanded={sidebarExpanded}
-                    />
-                  ))}
-                </ul>
-              </nav>
-
-              <div
-                className={styles.sidebarHistory}
-                data-expanded={sidebarExpanded ? "true" : "false"}
-              >
-                {SIDEBAR_HISTORY.map((section) => (
-                  <div key={section.month} className={styles.historySection}>
-                    <h3 className={styles.historyHeading}>{section.month}</h3>
-                    <ul>
-                      {section.entries.map((entry) => (
-                        <li key={entry} className={styles.historyItem}>
-                          {entry}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <button
-              type="button"
-              className={styles.sidebarProfile}
-              data-expanded={sidebarExpanded ? "true" : "false"}
-              onClick={() => setSidebarExpanded((value) => !value)}
-              aria-label="Toggle sidebar"
-            >
-              <span className={styles.profileAvatar}>{viewerInitials}</span>
-              <span className={styles.profileMeta}>
-                <span>V. Stalingrady</span>
-                <span>Operator</span>
-              </span>
-              <ChevronDown size={16} className={styles.profileChevron} />
-            </button>
-          </aside>
-
-          <div className={styles.content}>
-            <header className={styles.header}>
-              <div className={styles.headerTop}>
-                <div className={styles.streakBadge}>
-                  <Flame size={14} />
-                  <span className={styles.streakValue}>
-                    {String(streakCount).padStart(2, "0")}
+              <div className={styles.sidebarScroll}>
+                <div className={styles.searchRow}>
+                  <span className={styles.searchIcon}>
+                    <Search size={16} />
                   </span>
-                  <span className={styles.streakLabel}>Day streak</span>
+                  <span className={styles.searchLabel}>Search</span>
+                  <span className={styles.searchShortcut}>CTRL+K</span>
                 </div>
-                <div className={styles.headerTopRight}>
-                  <span className={styles.notificationChip}>
-                    <Bell size={14} />
-                    12
-                  </span>
-                  <span className={styles.avatar}>{viewerInitials}</span>
-                </div>
-              </div>
-              <div className={styles.headerContent}>
-                <div className={styles.clock}>{formatClock(now)}</div>
-                <div className={styles.date}>{formatDate(now)}</div>
-                <h1 className={styles.greeting}>
-                  Good {greetingForDate(now)}, {viewerName}
-                </h1>
-              </div>
-            </header>
-
-            <section className={styles.main}>
-              <div className={styles.calendarPanel}>
-                <div className={styles.panelHeader}>Calendar</div>
-                <div className={styles.calendarContent}>
-                  <ul className={styles.calendarHours}>
-                    {HOURS.map((hour) => (
-                      <li key={hour} className={styles.calendarHour}>
-                        <span className={styles.calendarHourLabel}>
-                          {formatHourLabel(hour)}
-                        </span>
-                        <span className={styles.calendarHourLine} />
+                <nav aria-label="Primary">
+                  <ul className={styles.sidebarNav}>
+                    {SIDEBAR_ITEMS.map((item) => (
+                      <li key={item.id}>
+                        <button
+                          type="button"
+                          data-active={item.active ? "true" : "false"}
+                          aria-label={item.label}
+                        >
+                          <span className={styles.navIcon}>
+                            <item.icon size={18} />
+                          </span>
+                          <span className={styles.navLabel}>{item.label}</span>
+                        </button>
                       </li>
                     ))}
                   </ul>
-                  <div className={styles.eventList}>
-                    {dayEvents.map((event) => (
-                      <article key={event.id} className={styles.eventItem}>
-                        <span className={styles.eventTime}>
-                          {event.start}
-                          {event.end ? ` — ${event.end}` : ""}
-                        </span>
-                        <p className={styles.eventLabel}>{event.label}</p>
+                </nav>
+                <div className={styles.sidebarHistory}>
+                  {SIDEBAR_HISTORY.map((section) => (
+                    <div key={section.month} className={styles.historySection}>
+                      <h3>{section.month}</h3>
+                      <ul>
+                        {section.entries.map((entry) => (
+                          <li key={entry}>{entry}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <button type="button" className={styles.sidebarProfile}>
+              <span className={styles.profileAvatar}>{viewerInitials}</span>
+              <span className={styles.profileDetails}>
+                <span>V. Stalingrady</span>
+                <span>Operator</span>
+              </span>
+            </button>
+          </aside>
+
+          <div className={styles.main}>
+            <header className={styles.header}>
+              <div className={styles.timeGroup}>
+                <span className={styles.time}>{formatClock(now)}</span>
+                <span className={styles.date}>{formatDate(now)}</span>
+              </div>
+              <div className={styles.headerRight}>
+                <div className={styles.streakBadge}>
+                  <Flame size={12} />
+                  <span>{String(streakCount).padStart(2, "0")} day streak</span>
+                </div>
+                <span className={styles.notificationChip}>
+                  <Bell size={12} />
+                  12
+                </span>
+              </div>
+            </header>
+
+            <h1 className={styles.greeting}>
+              Good {greetingForDate(now)}, {viewerName}
+            </h1>
+
+            <section className={styles.mainGrid}>
+              <div className={styles.primaryColumn}>
+                <div className={styles.calendarCard}>
+                  <header>Calendar</header>
+                  <div className={styles.calendarBody}>
+                    <ul className={styles.calendarHours}>
+                      {HOURS.map((hour) => (
+                        <li key={hour} className={styles.calendarHour}>
+                          <span className={styles.calendarHourLabel}>
+                            {formatHourLabel(hour)}
+                          </span>
+                          <span className={styles.calendarHourLine} />
+                        </li>
+                      ))}
+                    </ul>
+                    <div className={styles.eventList}>
+                      {dayEvents.map((event) => (
+                        <article key={event.id} className={styles.eventItem}>
+                          <span className={styles.eventTime}>
+                            {event.start}
+                            {event.end ? ` — ${event.end}` : ""}
+                          </span>
+                          <p className={styles.eventLabel}>{event.label}</p>
+                        </article>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className={styles.pulseCard}>
+                  <header>
+                    <h2>Pulse</h2>
+                  </header>
+                  <div className={styles.pulseList}>
+                    {pulseEntries.map((entry) => (
+                      <article key={entry.id}>
+                        <div className={styles.pulseHeader}>
+                          <span>{entry.time}</span>
+                          <PulseStatus status={entry.status} />
+                        </div>
+                        <p>{entry.summary}</p>
+                        <span>{entry.focus}</span>
                       </article>
                     ))}
                   </div>
                 </div>
               </div>
 
-              <div className={styles.plannerPanel}>
-                <div className={styles.tabBar}>
-                  <button
-                    type="button"
-                    data-active={planTab === "plans"}
-                    onClick={() => setPlanTab("plans")}
-                  >
-                    Plans
-                  </button>
-                  <button
-                    type="button"
-                    data-active={planTab === "habits"}
-                    onClick={() => setPlanTab("habits")}
-                  >
-                    Habits
-                  </button>
-                </div>
-                <div className={styles.plannerBody}>
-                  {planTab === "plans" ? (
-                    <>
-                      <h2 className={styles.sectionTitle}>Plans</h2>
-                      <ul className={styles.planList}>
-                        {plans.map((plan) => (
-                          <li key={plan.id}>
-                            <button
-                              type="button"
-                              className={styles.planButton}
-                              data-completed={plan.completed}
-                              onClick={() => togglePlan(plan.id)}
-                            >
-                              <span className={styles.planIcon}>
-                                {plan.completed ? (
-                                  <CheckSquare size={18} />
-                                ) : (
-                                  <Square size={18} />
-                                )}
-                              </span>
-                              <span className={styles.planText}>
-                                {plan.label}
-                              </span>
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                      <button type="button" className={styles.secondaryAction}>
-                        Add plans
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <h2 className={styles.sectionTitle}>Habits</h2>
-                      <ul className={styles.habitList}>
-                        {HABIT_SEED.map((habit) => (
-                          <li key={habit.id} className={styles.habitItem}>
-                            <div className={styles.habitTexts}>
-                              <span className={styles.habitLabel}>
-                                {habit.label}
-                              </span>
-                              <span className={styles.habitPrevious}>
-                                {habit.previousLabel}
-                              </span>
-                            </div>
-                            <div className={styles.habitMeta}>
-                              <Flame size={14} />
-                              <span>{habit.streakLabel}</span>
-                            </div>
-                          </li>
-                        ))}
-                      </ul>
-                      <button type="button" className={styles.secondaryAction}>
-                        Add habits
-                      </button>
-                    </>
-                  )}
+              <div className={styles.secondaryColumn}>
+                <div className={styles.planPanel}>
+                  <div className={styles.tabBar}>
+                    <button
+                      type="button"
+                      data-active={planTab === "plans"}
+                      onClick={() => setPlanTab("plans")}
+                    >
+                      Plans
+                    </button>
+                    <button
+                      type="button"
+                      data-active={planTab === "habits"}
+                      onClick={() => setPlanTab("habits")}
+                    >
+                      Habits
+                    </button>
+                  </div>
+                  <div className={styles.planBody}>
+                    {planTab === "plans" ? (
+                      <>
+                        <ul className={styles.planList}>
+                          {plans.map((plan) => (
+                            <li key={plan.id}>
+                              <button
+                                type="button"
+                                data-completed={plan.completed}
+                                onClick={() => togglePlan(plan.id)}
+                              >
+                                <span>
+                                  {plan.completed ? (
+                                    <CheckSquare size={16} />
+                                  ) : (
+                                    <Square size={16} />
+                                  )}
+                                </span>
+                                <span>{plan.label}</span>
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                        <button type="button" className={styles.secondaryAction}>
+                          Add plans
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <ul className={styles.habitList}>
+                          {HABIT_SEED.map((habit) => (
+                            <li key={habit.id}>
+                              <div>
+                                <span>{habit.label}</span>
+                                <span>{habit.previousLabel}</span>
+                              </div>
+                              <div>
+                                <Flame size={12} />
+                                <span>{habit.streakLabel}</span>
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                        <button type="button" className={styles.secondaryAction}>
+                          Add habits
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
             </section>
@@ -542,32 +575,10 @@ export default function GrayPageClient({
   );
 }
 
-type SidebarNavButtonProps = {
-  icon: ComponentType<{ size?: number }>;
-  label: string;
-  shortcut?: string;
-  active?: boolean;
-  expanded: boolean;
-};
-
-function SidebarNavButton({
-  icon: Icon,
-  label,
-  shortcut,
-  active,
-  expanded,
-}: SidebarNavButtonProps) {
+function PulseStatus({ status }: { status: PulseEntry["status"] }) {
   return (
-    <li className={styles.navItem} data-active={active ? "true" : "false"}>
-      <span className={styles.navIcon}>
-        <Icon size={16} />
-      </span>
-      <span className={styles.navLabel} data-expanded={expanded ? "true" : "false"}>
-        {label}
-      </span>
-      {shortcut && expanded ? (
-        <span className={styles.navShortcut}>{shortcut}</span>
-      ) : null}
-    </li>
+    <span className={styles.pulseStatus} data-status={status}>
+      {status === "up" ? "▲" : status === "down" ? "▼" : "◆"}
+    </span>
   );
 }
