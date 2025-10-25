@@ -41,6 +41,15 @@ const resolveRedirectTarget = (): string => {
     return envRedirect;
   }
 
+  if (typeof window !== "undefined") {
+    const url = new URL(window.location.href);
+    const requested = url.searchParams.get("redirect")?.trim();
+    if (requested) {
+      const encodedRedirect = encodeURIComponent(requested);
+      return `${DEFAULT_APP_PATH}?redirect=${encodedRedirect}`;
+    }
+  }
+
   return DEFAULT_APP_PATH;
 };
 
