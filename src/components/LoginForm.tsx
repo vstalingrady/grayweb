@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useState } from "react";
 import { Loader2, Lock, Mail } from "lucide-react";
 import { FaDiscord, FaGoogle } from "react-icons/fa6";
 import { getSupabaseClient } from "@/lib/supabaseClient";
@@ -69,7 +69,6 @@ const resolveRedirectTarget = (): string => {
 
 export default function LoginForm() {
   const router = useRouter();
-  const supabase = useMemo(() => getSupabaseClient(), []);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(true);
@@ -77,6 +76,15 @@ export default function LoginForm() {
   const [message, setMessage] = useState<MessageState>({ type: "idle" });
 
   const handleOAuth = async (provider: "google" | "discord") => {
+    const supabase = getSupabaseClient();
+    if (!supabase) {
+      setMessage({
+        type: "error",
+        text: "Supabase client is not configured. Check environment variables.",
+      });
+      return;
+    }
+
     setLoading(true);
     setMessage({ type: "idle" });
 
@@ -107,11 +115,20 @@ export default function LoginForm() {
   const handleEmailLogin = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setMessage({ type: "idle" });
+    const supabase = getSupabaseClient();
 
     if (!email || !password) {
       setMessage({
         type: "error",
         text: "Please enter both email and password to continue.",
+      });
+      return;
+    }
+
+    if (!supabase) {
+      setMessage({
+        type: "error",
+        text: "Supabase client is not configured. Check environment variables.",
       });
       return;
     }

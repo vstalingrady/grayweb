@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import styles from "./page.module.css";
@@ -10,14 +10,22 @@ type Status = "processing" | "success" | "error";
 export default function AlignmentGrayLanding() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const supabase = useMemo(() => getSupabaseClient(), []);
   const [status, setStatus] = useState<Status>("processing");
   const [message, setMessage] = useState<string>("Finalizing your login…");
 
   useEffect(() => {
     let isMounted = true;
-
     const processSession = async () => {
+      const supabase = getSupabaseClient();
+      if (!supabase) {
+        if (!isMounted) {
+          return;
+        }
+        setStatus("error");
+        setMessage("Supabase client is not configured. Check environment.");
+        return;
+      }
+
       const redirectTarget = searchParams.get("redirect")?.trim() || "/";
 
       try {
@@ -85,7 +93,7 @@ export default function AlignmentGrayLanding() {
     return () => {
       isMounted = false;
     };
-  }, [router, searchParams, supabase]);
+  }, [router, searchParams]);
 
   return (
     <main className={styles.wrapper}>
