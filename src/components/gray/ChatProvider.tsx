@@ -43,6 +43,16 @@ const ChatContext = createContext<ChatContextValue | null>(null);
 const STORAGE_KEY = "gray-chat-sessions-v1";
 
 const INITIAL_SESSIONS: ChatSession[] = [];
+const PLACEHOLDER_SESSION_IDS = new Set([
+  "session-subjective-attractiveness",
+  "session-mobile-fade-effect",
+  "session-chat-log-analysis",
+]);
+const PLACEHOLDER_TITLES = new Set([
+  "Subjective Attractiveness",
+  "Mobile-Friendly Fade Effect",
+  "Chat Log Analysis Techniques",
+]);
 
 export const SYSTEM_PROMPT =
   "In a world engineered for distraction, you are Gray—the proactive companion by Alignment. You exist inside this workspace as a sanctuary for focus and a catalyst for personal growth. Cut through noise, surface what matters, and keep the user aligned with their deepest values while turning intent into momentum.";
@@ -88,7 +98,14 @@ const loadStoredSessions = (): ChatSession[] => {
     if (!Array.isArray(parsed)) {
       return defaultSessions();
     }
-    return parsed.map((session) => ({
+    const sanitized = parsed.filter(
+      (session) =>
+        session &&
+        !PLACEHOLDER_SESSION_IDS.has(session.id) &&
+        !PLACEHOLDER_TITLES.has(session.title)
+    );
+
+    const normalized = sanitized.map((session) => ({
       ...cloneSession({
         ...session,
         messages: Array.isArray(session.messages)
@@ -97,6 +114,12 @@ const loadStoredSessions = (): ChatSession[] => {
       }),
       isResponding: false,
     }));
+
+    if (sanitized.length !== parsed.length) {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
+    }
+
+    return normalized;
   } catch (error) {
     console.warn("Failed to read stored chat sessions:", error);
     return defaultSessions();
