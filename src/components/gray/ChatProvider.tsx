@@ -42,74 +42,7 @@ type ChatContextValue = {
 const ChatContext = createContext<ChatContextValue | null>(null);
 const STORAGE_KEY = "gray-chat-sessions-v1";
 
-const INITIAL_SESSIONS: ChatSession[] = [
-  {
-    id: "session-subjective-attractiveness",
-    title: "Subjective Attractiveness",
-    createdAt: Date.UTC(2024, 6, 12),
-    updatedAt: Date.UTC(2024, 6, 12),
-    messages: [
-      {
-        id: "msg-1",
-        role: "user",
-        content: "How can I evaluate subjective attractiveness in user research?",
-        createdAt: Date.UTC(2024, 6, 12),
-      },
-      {
-        id: "msg-2",
-        role: "assistant",
-        content:
-          "Subjective attractiveness is best captured through qualitative prompts and relative rankings rather than hard scoring. Try asking participants to describe which options they gravitate toward and why, then summarize recurring descriptors.",
-        createdAt: Date.UTC(2024, 6, 12),
-      },
-    ],
-    isResponding: false,
-  },
-  {
-    id: "session-mobile-fade-effect",
-    title: "Mobile-Friendly Fade Effect",
-    createdAt: Date.UTC(2024, 6, 4),
-    updatedAt: Date.UTC(2024, 6, 4),
-    messages: [
-      {
-        id: "msg-3",
-        role: "user",
-        content: "Can you help me build a mobile fade effect without jank?",
-        createdAt: Date.UTC(2024, 6, 4),
-      },
-      {
-        id: "msg-4",
-        role: "assistant",
-        content:
-          "Use an absolutely positioned gradient overlay that transitions its opacity while keeping the underlying content static. This avoids layout thrashing and keeps 60fps on mobile.",
-        createdAt: Date.UTC(2024, 6, 4),
-      },
-    ],
-    isResponding: false,
-  },
-  {
-    id: "session-chat-log-analysis",
-    title: "Chat Log Analysis Techniques",
-    createdAt: Date.UTC(2024, 5, 21),
-    updatedAt: Date.UTC(2024, 5, 21),
-    messages: [
-      {
-        id: "msg-5",
-        role: "user",
-        content: "What approach should I use to summarize multi-agent chat logs?",
-        createdAt: Date.UTC(2024, 5, 21),
-      },
-      {
-        id: "msg-6",
-        role: "assistant",
-        content:
-          "Cluster messages by topic with embeddings, then generate summaries per cluster. Feed those summaries into a final pass for the overall narrative.",
-        createdAt: Date.UTC(2024, 5, 21),
-      },
-    ],
-    isResponding: false,
-  },
-];
+const INITIAL_SESSIONS: ChatSession[] = [];
 
 const makeMessage = (role: ChatRole, content: string): ChatMessage => ({
   id: typeof crypto !== "undefined" && "randomUUID" in crypto
