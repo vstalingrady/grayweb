@@ -4,12 +4,13 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
   type ReactNode,
 } from "react";
 import { useUser } from "@/contexts/UserContext";
-import { apiService, ChatMessage as ApiChatMessage } from "@/lib/api";
+import { apiService } from "@/lib/api";
 
 export type ChatRole = "user" | "assistant";
 
@@ -39,6 +40,7 @@ type ChatContextValue = {
 };
 
 const ChatContext = createContext<ChatContextValue | null>(null);
+const STORAGE_KEY = "gray-chat-sessions-v1";
 
 const INITIAL_SESSIONS: ChatSession[] = [
   {
@@ -129,14 +131,61 @@ const deriveTitle = (content: string) => {
 export const buildAssistantReply = (prompt: string) =>
   `Here is a quick thought:\n\n${prompt}\n\nI can expand on any part—just let me know.`;
 
+const cloneSession = (session: ChatSession): ChatSession => ({
+  ...session,
+  messages: session.messages.map((message) => ({ ...message })),
+});
+
+const defaultSessions = () => INITIAL_SESSIONS.map(cloneSession);
+
+const loadStoredSessions = (): ChatSession[] => {
+  if (typeof window === "undefined") {
+    return defaultSessions();
+  }
+
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (!raw) {
+      return defaultSessions();
+    }
+    const parsed = JSON.parse(raw) as ChatSession[];
+    if (!Array.isArray(parsed)) {
+      return defaultSessions();
+    }
+    return parsed.map((session) => ({
+      ...cloneSession({
+        ...session,
+        messages: Array.isArray(session.messages)
+          ? session.messages
+          : [],
+      }),
+      isResponding: false,
+    }));
+  } catch (error) {
+    console.warn("Failed to read stored chat sessions:", error);
+    return defaultSessions();
+  }
+};
+
 export function ChatProvider({ children }: { children: ReactNode }) {
   const { user } = useUser();
-  const [sessions, setSessions] = useState<ChatSession[]>(() => INITIAL_SESSIONS);
+  const [sessions, setSessions] = useState<ChatSession[]>(loadStoredSessions);
+
+  const persistSessions = useCallback((next: ChatSession[]) => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    } catch (error) {
+      console.warn("Failed to persist chat sessions:", error);
+    }
+  }, []);
 
   const appendMessage = useCallback(
     (sessionId: string, role: ChatRole, content: string) => {
-      setSessions((prev) =>
-        prev.map((session) => {
+      setSessions((prev) => {
+        const next = prev.map((session) => {
           if (session.id !== sessionId) {
             return session;
           }
@@ -151,107 +200,81 @@ export function ChatProvider({ children }: { children: ReactNode }) {
                 ? deriveTitle(content)
                 : session.title,
           };
-        })
-      );
-    },
-    []
-  );
-
-  const createSession = useCallback(
-    async (initialMessage: string): Promise<ChatSession> => {
-      if (!user) {
-        // Fallback to mock session if no user
-        const now = Date.now();
-        const message = makeMessage("user", initialMessage);
-        const session: ChatSession = {
-          id: typeof crypto !== "undefined" && "randomUUID" in crypto
-            ? crypto.randomUUID()
-            : Math.random().toString(36).slice(2),
-          title: deriveTitle(initialMessage),
-          createdAt: now,
-          updatedAt: message.createdAt,
-          messages: [message],
-          isResponding: true,
-        };
-
-        setSessions((prev) => [session, ...prev]);
-        if (typeof window !== "undefined") {
-          window.setTimeout(() => {
-            appendMessage(session.id, "assistant", buildAssistantReply(initialMessage));
-          }, 700);
-        }
-        return session;
-      }
-
-      try {
-        // Create conversation first
-        const conversation = await apiService.createConversation(deriveTitle(initialMessage), user.id);
-
-        const now = Date.now();
-        const message = makeMessage("user", initialMessage);
-        const session: ChatSession = {
-          id: typeof crypto !== "undefined" && "randomUUID" in crypto
-            ? crypto.randomUUID()
-            : Math.random().toString(36).slice(2),
-          title: deriveTitle(initialMessage),
-          createdAt: now,
-          updatedAt: message.createdAt,
-          messages: [message],
-          isResponding: true,
-          conversationId: conversation.id,
-        };
-
-        setSessions((prev) => [session, ...prev]);
-
-        // Send message to AI and get response
-        const response = await apiService.sendMessage({
-          message: initialMessage,
-          conversation_id: conversation.id,
-          user_id: user.id,
         });
-
-        // Add AI response
-        appendMessage(session.id, "assistant", response.response);
-
-        return session;
-      } catch (error) {
-        console.error('Failed to create AI chat session:', error);
-
-        // Fallback to mock session
-        const now = Date.now();
-        const message = makeMessage("user", initialMessage);
-        const session: ChatSession = {
-          id: typeof crypto !== "undefined" && "randomUUID" in crypto
-            ? crypto.randomUUID()
-            : Math.random().toString(36).slice(2),
-          title: deriveTitle(initialMessage),
-          createdAt: now,
-          updatedAt: message.createdAt,
-          messages: [message],
-          isResponding: true,
-        };
-
-        setSessions((prev) => [session, ...prev]);
-        if (typeof window !== "undefined") {
-          window.setTimeout(() => {
-            appendMessage(session.id, "assistant", buildAssistantReply(initialMessage));
-          }, 700);
-        }
-        return session;
-      }
+        persistSessions(next);
+        return next;
+      });
     },
-    [appendMessage, user]
+    [persistSessions]
   );
 
   const updateSession = useCallback(
     (sessionId: string, partial: Partial<ChatSession>) => {
-      setSessions((prev) =>
-        prev.map((session) =>
+      setSessions((prev) => {
+        const next = prev.map((session) =>
           session.id === sessionId ? { ...session, ...partial } : session
-        )
-      );
+        );
+        persistSessions(next);
+        return next;
+      });
     },
-    []
+    [persistSessions]
+  );
+
+  const createSession = useCallback(
+    async (initialMessage: string): Promise<ChatSession> => {
+      const now = Date.now();
+      const userMessage = makeMessage("user", initialMessage);
+      const baseSession: ChatSession = {
+        id:
+          typeof crypto !== "undefined" && "randomUUID" in crypto
+            ? crypto.randomUUID()
+            : Math.random().toString(36).slice(2),
+        title: deriveTitle(initialMessage),
+        createdAt: now,
+        updatedAt: userMessage.createdAt,
+        messages: [userMessage],
+        isResponding: true,
+      };
+
+      setSessions((prev) => {
+        const next = [baseSession, ...prev];
+        persistSessions(next);
+        return next;
+      });
+
+      if (!user) {
+        if (typeof window !== "undefined") {
+          window.setTimeout(() => {
+            appendMessage(baseSession.id, "assistant", buildAssistantReply(initialMessage));
+            updateSession(baseSession.id, { isResponding: false });
+          }, 700);
+        }
+        return baseSession;
+      }
+
+      (async () => {
+        try {
+          const response = await apiService.sendMessage({
+            message: initialMessage,
+            user_id: user.id,
+          });
+
+          updateSession(baseSession.id, {
+            conversationId: response.conversation_id,
+          });
+          appendMessage(baseSession.id, "assistant", response.response);
+        } catch (error) {
+          console.error("Failed to create AI chat session:", error);
+          appendMessage(baseSession.id, "assistant", buildAssistantReply(initialMessage));
+        } finally {
+          updateSession(baseSession.id, { isResponding: false });
+        }
+      })();
+
+      return baseSession;
+    },
+    [appendMessage, persistSessions, updateSession, user]
   );
 
   const getSession = useCallback(
@@ -269,6 +292,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     }),
     [appendMessage, createSession, getSession, sessions, updateSession]
   );
+
+  useEffect(() => {
+    persistSessions(sessions);
+  }, [persistSessions, sessions]);
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;
 }
