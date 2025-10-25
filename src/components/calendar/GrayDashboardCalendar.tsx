@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 
 import styles from "./GrayDashboardCalendar.module.css";
 import { CalendarSidebar } from "./CalendarSidebar";
@@ -105,6 +105,7 @@ export function GrayDashboardCalendar({
   const [composerOpen, setComposerOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
   const [draftPreview, setDraftPreview] = useState<EventDraft | null>(null);
+  const [nowReference, setNowReference] = useState(() => new Date());
 
   const calendars = externalCalendars ?? calendarsState;
   const events = externalEvents ?? eventsState;
@@ -185,6 +186,34 @@ export function GrayDashboardCalendar({
       });
     });
   }, [hourHeight, visibleEvents, weekDays]);
+
+  useEffect(() => {
+    setNowReference(new Date());
+    const interval = window.setInterval(() => {
+      setNowReference(new Date());
+    }, 60000);
+    return () => window.clearInterval(interval);
+  }, []);
+
+  const getNowOffset = useCallback(
+    (reference: Date) => {
+      const minutes = reference.getHours() * 60 + reference.getMinutes() + reference.getSeconds() / 60;
+      const offset = (minutes / 60) * hourHeight;
+      const maxOffset = hourHeight * 24;
+      return Math.min(Math.max(offset, 0), maxOffset);
+    },
+    [hourHeight]
+  );
+
+  const showDayNowIndicator = useMemo(
+    () => isSameDay(nowReference, selectedDate),
+    [nowReference, selectedDate]
+  );
+
+  const dayIndicatorOffset = useMemo(
+    () => (showDayNowIndicator ? getNowOffset(nowReference) : null),
+    [showDayNowIndicator, nowReference, getNowOffset]
+  );
 
   const dayColumnRef = useRef<HTMLDivElement | null>(null);
 
@@ -299,6 +328,14 @@ export function GrayDashboardCalendar({
                       onClick={() => handleEditEvent(event)}
                     />
                   ))}
+                  {isSameDay(day, nowReference) && (
+                    <div
+                      className={styles.nowIndicator}
+                      style={{ top: `${getNowOffset(nowReference)}px` }}
+                    >
+                      <span className={styles.nowIndicatorDot} />
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
@@ -335,6 +372,14 @@ export function GrayDashboardCalendar({
                   isDragging={draftPreview?.id === event.id}
                 />
               ))}
+              {dayIndicatorOffset !== null && (
+                <div
+                  className={styles.nowIndicator}
+                  style={{ top: `${dayIndicatorOffset}px` }}
+                >
+                  <span className={styles.nowIndicatorDot} />
+                </div>
+              )}
             </div>
           </div>
         </div>
