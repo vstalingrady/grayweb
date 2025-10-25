@@ -37,13 +37,20 @@
   max-height: 760px;
 }
 
+
 .header {
+  width: 100%;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 24px;
-  text-align: center;
+  gap: 32px;
   flex-shrink: 0;
+}
+
+.headerRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
 }
 
 .streakBadge {
@@ -64,6 +71,14 @@
   text-transform: uppercase;
 }
 
+.timeBlock {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  text-align: right;
+}
+
 .streakValue {
   font-size: 1rem;
   letter-spacing: 0.18em;
@@ -72,13 +87,6 @@
 .streakLabel {
   font-size: 0.68rem;
   letter-spacing: 0.3em;
-}
-
-.timeRow {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
 }
 
 .clock {
@@ -101,6 +109,7 @@
   font-weight: 500;
   letter-spacing: 0.08em;
   text-shadow: 0 12px 24px rgba(0, 0, 0, 0.45);
+  text-align: center;
 }
 
 .main {
@@ -528,30 +537,6 @@
   cursor: pointer;
 }
 
-.chatBubble {
-  position: fixed;
-  bottom: 104px;
-  left: 50%;
-  transform: translateX(-50%);
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 18px;
-  border-radius: 18px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(12, 12, 12, 0.85);
-  box-shadow: 0 18px 32px rgba(0, 0, 0, 0.35);
-  backdrop-filter: blur(12px);
-  font-size: 0.85rem;
-  letter-spacing: 0.06em;
-  color: rgba(235, 235, 235, 0.75);
-  z-index: 2;
-}
-
-.chatBubble span {
-  display: inline-block;
-}
-
 @media (max-width: 1024px) {
   .container {
     width: min(900px, calc(100% - 64px));
@@ -567,10 +552,6 @@
   .sideColumn {
     width: 100%;
     grid-template-rows: auto auto;
-  }
-
-  .chatBubble {
-    bottom: 96px;
   }
 }
 
@@ -607,7 +588,4 @@
     bottom: 24px;
   }
 
-  .chatBubble {
-    bottom: 90px;
-  }
 }

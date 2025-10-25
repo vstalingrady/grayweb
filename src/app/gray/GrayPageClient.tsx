@@ -1,14 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import {
-  AudioLines,
-  Flame,
-  MessageCircle,
-  Mic,
-  Plus,
-  RefreshCw,
-} from "lucide-react";
+import { AudioLines, Flame, Mic, Plus, RefreshCw } from "lucide-react";
 import styles from "./GrayPageClient.module.css";
 
 type PlanItem = {
@@ -255,16 +248,18 @@ export default function GrayPageClient({
       <div className={styles.backdrop} aria-hidden="true" />
       <div className={styles.container}>
         <section className={styles.header}>
-          <div className={styles.streakBadge}>
-            <Flame size={14} />
-            <span className={styles.streakValue}>
-              {String(streakCount).padStart(2, "0")}
-            </span>
-            <span className={styles.streakLabel}>Day streak</span>
-          </div>
-          <div className={styles.timeRow}>
-            <div className={styles.clock}>{formatClock(now)}</div>
-            <div className={styles.date}>{formatDate(now).toUpperCase()}</div>
+          <div className={styles.headerRow}>
+            <div className={styles.streakBadge}>
+              <Flame size={14} />
+              <span className={styles.streakValue}>
+                {String(streakCount).padStart(2, "0")}
+              </span>
+              <span className={styles.streakLabel}>Day streak</span>
+            </div>
+            <div className={styles.timeBlock}>
+              <div className={styles.clock}>{formatClock(now)}</div>
+              <div className={styles.date}>{formatDate(now).toUpperCase()}</div>
+            </div>
           </div>
           <h1 className={styles.greeting}>
             Good {greetingForDate(now)}, {viewerName}
@@ -389,11 +384,6 @@ export default function GrayPageClient({
             </div>
           </div>
         </section>
-      </div>
-
-      <div className={styles.chatBubble}>
-        <MessageCircle size={16} />
-        <span>Ask anything</span>
       </div>
 
       <form className={styles.chatBar} onSubmit={handleChatSubmit}>
