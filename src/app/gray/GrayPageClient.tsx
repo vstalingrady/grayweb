@@ -1,7 +1,15 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { AudioLines, Flame, Mic, Plus, RefreshCw } from "lucide-react";
+import {
+  AudioLines,
+  Bell,
+  CheckSquare,
+  Flame,
+  Mic,
+  Plus,
+  Square,
+} from "lucide-react";
 import styles from "./GrayPageClient.module.css";
 
 type PlanItem = {
@@ -15,14 +23,6 @@ type HabitItem = {
   label: string;
   streakLabel: string;
   previousLabel: string;
-};
-
-type PulseEntry = {
-  id: string;
-  time: string;
-  status: "stable" | "up" | "down";
-  summary: string;
-  focus: string;
 };
 
 type DayEvent = {
@@ -76,30 +76,6 @@ const HABIT_SEED: HabitItem[] = [
   },
 ];
 
-const PULSE_SEED: PulseEntry[] = [
-  {
-    id: "pulse-1",
-    time: "08:03",
-    status: "stable",
-    summary: "Daily stand-up aligned, blockers cleared in 11m.",
-    focus: "Keep async channel velocity high.",
-  },
-  {
-    id: "pulse-2",
-    time: "12:17",
-    status: "up",
-    summary: "Momentum spike: proactivity score +12% vs. yesterday.",
-    focus: "Double-down on outbound builder outreach.",
-  },
-  {
-    id: "pulse-3",
-    time: "16:42",
-    status: "down",
-    summary: "Two tasks at risk; builder cohort waiting on guidance.",
-    focus: "Reprioritize checklist items to protect streak.",
-  },
-];
-
 const DAY_EVENTS_SEED: DayEvent[] = [
   {
     id: "event-1",
@@ -127,15 +103,36 @@ const DAY_EVENTS_SEED: DayEvent[] = [
   },
 ];
 
+const HOURS = Array.from({ length: 24 }, (_, index) => index);
+
 const formatClock = (date: Date) =>
-  date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  date.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
 
 const formatDate = (date: Date) =>
-  date.toLocaleDateString([], {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-  });
+  date
+    .toLocaleDateString([], {
+      weekday: "long",
+      month: "long",
+      day: "numeric",
+    })
+    .toUpperCase();
+
+const formatHourLabel = (hour: number) => {
+  if (hour === 0) {
+    return "12 AM";
+  }
+  if (hour < 12) {
+    return `${hour} AM`;
+  }
+  if (hour === 12) {
+    return "12 PM";
+  }
+  return `${hour - 12} PM`;
+};
 
 const greetingForDate = (date: Date) => {
   const hour = date.getHours();
@@ -176,6 +173,17 @@ const viewerNameFromEmail = (email: string | null): string => {
   return parts.join(" ");
 };
 
+const viewerInitialsFromName = (name: string) => {
+  const parts = name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((segment) => segment[0]?.toUpperCase() ?? "");
+
+  const initials = parts.join("");
+  return initials || "VG";
+};
+
 type GrayPageClientProps = {
   initialTimestamp: number;
   viewerEmail: string | null;
@@ -190,17 +198,19 @@ export default function GrayPageClient({
     PLAN_SEED.map((plan) => ({ ...plan }))
   );
   const [planTab, setPlanTab] = useState<"plans" | "habits">("plans");
-  const [pulseEntries, setPulseEntries] = useState<PulseEntry[]>(() =>
-    PULSE_SEED.map((pulse) => ({ ...pulse }))
-  );
-  const [dayEvents] = useState<DayEvent[]>(() =>
-    DAY_EVENTS_SEED.map((event) => ({ ...event }))
-  );
   const [chatDraft, setChatDraft] = useState("");
 
   const viewerName = useMemo(
     () => viewerNameFromEmail(viewerEmail),
     [viewerEmail]
+  );
+  const viewerInitials = useMemo(
+    () => viewerInitialsFromName(viewerName),
+    [viewerName]
+  );
+  const dayEvents = useMemo(
+    () => DAY_EVENTS_SEED.map((event) => ({ ...event })),
+    []
   );
 
   useEffect(() => {
@@ -224,16 +234,6 @@ export default function GrayPageClient({
     );
   };
 
-  const rotatePulse = () => {
-    setPulseEntries((prev) => {
-      if (prev.length < 2) {
-        return prev;
-      }
-      const [first, ...rest] = prev;
-      return [...rest, first];
-    });
-  };
-
   const handleChatSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const draft = chatDraft.trim();
@@ -246,9 +246,10 @@ export default function GrayPageClient({
   return (
     <div className={styles.page}>
       <div className={styles.backdrop} aria-hidden="true" />
-      <div className={styles.container}>
-        <section className={styles.header}>
-          <div className={styles.headerRow}>
+      <div className={styles.overlay} aria-hidden="true" />
+      <div className={styles.shell}>
+        <header className={styles.header}>
+          <div className={styles.headerTop}>
             <div className={styles.streakBadge}>
               <Flame size={14} />
               <span className={styles.streakValue}>
@@ -256,96 +257,108 @@ export default function GrayPageClient({
               </span>
               <span className={styles.streakLabel}>Day streak</span>
             </div>
-            <div className={styles.timeBlock}>
-              <div className={styles.clock}>{formatClock(now)}</div>
-              <div className={styles.date}>{formatDate(now).toUpperCase()}</div>
+            <div className={styles.headerTopRight}>
+              <span className={styles.notificationChip}>
+                <Bell size={14} />
+                12
+              </span>
+              <span className={styles.avatar}>{viewerInitials}</span>
             </div>
           </div>
-          <h1 className={styles.greeting}>
-            Good {greetingForDate(now)}, {viewerName}
-          </h1>
-        </section>
+          <div className={styles.headerContent}>
+            <div className={styles.clock}>{formatClock(now)}</div>
+            <div className={styles.date}>{formatDate(now)}</div>
+            <h1 className={styles.greeting}>
+              Good {greetingForDate(now)}, {viewerName}
+            </h1>
+          </div>
+        </header>
 
         <section className={styles.main}>
-          <div className={styles.calendarCard}>
-            <header>Calendar</header>
-            <div className={styles.calendarBody}>
-              <ul className={styles.timeColumn}>
-                {Array.from({ length: 13 }).map((_, index) => {
-                  const hour = index + 7;
-                  const label =
-                    hour <= 12
-                      ? `${hour} ${hour === 12 ? "PM" : "AM"}`
-                      : `${hour - 12} PM`;
-                  return (
-                    <li key={label}>
-                      <span>{label}</span>
-                    </li>
-                  );
-                })}
+          <div className={styles.calendarPanel}>
+            <div className={styles.panelHeader}>Calendar</div>
+            <div className={styles.calendarContent}>
+              <ul className={styles.calendarHours}>
+                {HOURS.map((hour) => (
+                  <li key={hour} className={styles.calendarHour}>
+                    <span className={styles.calendarHourLabel}>
+                      {formatHourLabel(hour)}
+                    </span>
+                    <span className={styles.calendarHourLine} />
+                  </li>
+                ))}
               </ul>
-              <div className={styles.eventColumn}>
+              <div className={styles.eventList}>
                 {dayEvents.map((event) => (
-                  <div key={event.id} className={styles.eventBlock}>
+                  <article key={event.id} className={styles.eventItem}>
                     <span className={styles.eventTime}>
                       {event.start}
                       {event.end ? ` — ${event.end}` : ""}
                     </span>
-                    <p>{event.label}</p>
-                  </div>
+                    <p className={styles.eventLabel}>{event.label}</p>
+                  </article>
                 ))}
               </div>
             </div>
           </div>
 
-          <div className={styles.sideColumn}>
-            <div className={styles.planCard}>
-              <div className={styles.planTabs}>
-                <button
-                  type="button"
-                  data-active={planTab === "plans"}
-                  onClick={() => setPlanTab("plans")}
-                >
-                  Plans
-                </button>
-                <button
-                  type="button"
-                  data-active={planTab === "habits"}
-                  onClick={() => setPlanTab("habits")}
-                >
-                  Habits
-                </button>
-              </div>
+          <div className={styles.plannerPanel}>
+            <div className={styles.tabBar}>
+              <button
+                type="button"
+                data-active={planTab === "plans"}
+                onClick={() => setPlanTab("plans")}
+              >
+                Plans
+              </button>
+              <button
+                type="button"
+                data-active={planTab === "habits"}
+                onClick={() => setPlanTab("habits")}
+              >
+                Habits
+              </button>
+            </div>
+            <div className={styles.plannerBody}>
               {planTab === "plans" ? (
-                <div className={styles.planBody}>
-                  <h2>Plans</h2>
-                  <ul>
+                <>
+                  <h2 className={styles.sectionTitle}>Plans</h2>
+                  <ul className={styles.planList}>
                     {plans.map((plan) => (
-                      <li key={plan.id} data-completed={plan.completed}>
-                        <label>
-                          <input
-                            type="checkbox"
-                            checked={plan.completed}
-                            onChange={() => togglePlan(plan.id)}
-                          />
-                          <span>{plan.label}</span>
-                        </label>
+                      <li key={plan.id}>
+                        <button
+                          type="button"
+                          className={styles.planButton}
+                          data-completed={plan.completed}
+                          onClick={() => togglePlan(plan.id)}
+                        >
+                          <span className={styles.planIcon}>
+                            {plan.completed ? (
+                              <CheckSquare size={18} />
+                            ) : (
+                              <Square size={18} />
+                            )}
+                          </span>
+                          <span className={styles.planText}>{plan.label}</span>
+                        </button>
                       </li>
                     ))}
                   </ul>
-                  <button type="button" className={styles.secondaryButton}>
+                  <button type="button" className={styles.secondaryAction}>
                     Add plans
                   </button>
-                </div>
+                </>
               ) : (
-                <div className={styles.habitBody}>
-                  <h2>Habits</h2>
-                  <ul>
+                <>
+                  <h2 className={styles.sectionTitle}>Habits</h2>
+                  <ul className={styles.habitList}>
                     {HABIT_SEED.map((habit) => (
-                      <li key={habit.id}>
-                        <div>
-                          <span>{habit.label}</span>
-                          <span>{habit.previousLabel}</span>
+                      <li key={habit.id} className={styles.habitItem}>
+                        <div className={styles.habitTexts}>
+                          <span className={styles.habitLabel}>{habit.label}</span>
+                          <span className={styles.habitPrevious}>
+                            {habit.previousLabel}
+                          </span>
                         </div>
                         <div className={styles.habitMeta}>
                           <Flame size={14} />
@@ -354,68 +367,47 @@ export default function GrayPageClient({
                       </li>
                     ))}
                   </ul>
-                  <button type="button" className={styles.secondaryButton}>
+                  <button type="button" className={styles.secondaryAction}>
                     Add habits
                   </button>
-                </div>
+                </>
               )}
-            </div>
-
-            <div className={styles.pulseCard}>
-              <header>
-                <h2>Pulse</h2>
-                <button type="button" onClick={rotatePulse}>
-                  <RefreshCw size={14} />
-                  Rotate
-                </button>
-              </header>
-              <div className={styles.pulseBody}>
-                {pulseEntries.map((pulse) => (
-                  <article key={pulse.id}>
-                    <div className={styles.pulseMeta}>
-                      <span className={styles.pulseTime}>{pulse.time}</span>
-                      <PulseStatus status={pulse.status} />
-                    </div>
-                    <p>{pulse.summary}</p>
-                    <span>{pulse.focus}</span>
-                  </article>
-                ))}
-              </div>
             </div>
           </div>
         </section>
+
+        <form className={styles.chatBar} onSubmit={handleChatSubmit}>
+          <button
+            type="button"
+            className={styles.chatIconButton}
+            aria-label="Add attachment"
+          >
+            <Plus size={18} />
+          </button>
+          <input
+            value={chatDraft}
+            onChange={(event) => setChatDraft(event.target.value)}
+            placeholder="Ask anything"
+            className={styles.chatInput}
+          />
+          <div className={styles.chatActions}>
+            <button
+              type="button"
+              className={styles.chatActionButton}
+              aria-label="Start voice note"
+            >
+              <Mic size={18} />
+            </button>
+            <button
+              type="submit"
+              className={styles.chatActionButton}
+              aria-label="Send message"
+            >
+              <AudioLines size={18} />
+            </button>
+          </div>
+        </form>
       </div>
-
-      <form className={styles.chatBar} onSubmit={handleChatSubmit}>
-        <button
-          type="button"
-          className={styles.chatIconButton}
-          aria-label="Add attachment"
-        >
-          <Plus size={18} />
-        </button>
-        <input
-          value={chatDraft}
-          onChange={(event) => setChatDraft(event.target.value)}
-          placeholder="Ask anything"
-        />
-        <div className={styles.chatActions}>
-          <button type="button" aria-label="Start voice note">
-            <Mic size={18} />
-          </button>
-          <button type="submit" aria-label="Send message">
-            <AudioLines size={18} />
-          </button>
-        </div>
-      </form>
     </div>
-  );
-}
-
-function PulseStatus({ status }: { status: PulseEntry["status"] }) {
-  return (
-    <span className={styles.pulseStatus} data-status={status}>
-      {status === "up" ? "▲" : status === "down" ? "▼" : "◆"}
-    </span>
   );
 }

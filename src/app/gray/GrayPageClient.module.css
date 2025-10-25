@@ -1,591 +1,588 @@
 .page {
   position: relative;
   min-height: 100vh;
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--background, #050505);
+  color: var(--foreground, #f5f5f5);
+  font-family: var(
+      --font-sans,
+      "Plus Jakarta Sans",
+      "Plus Jakarta Sans",
+      system-ui,
+      -apple-system,
+      BlinkMacSystemFont,
+      "Segoe UI",
+      sans-serif
+    );
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 48px 0 0;
+  padding: clamp(24px, 4vw, 48px);
   overflow: hidden;
 }
 
 .backdrop {
   position: fixed;
   inset: 0;
-  background: linear-gradient(
-      to bottom,
-      rgba(5, 5, 5, 0.76),
-      rgba(5, 5, 5, 0.72),
-      rgba(5, 5, 5, 0.86)
-    ),
-    url("/astronauttest.jpg") center / cover no-repeat;
-  opacity: 0.55;
-  filter: saturate(0.7);
+  background: url("https://upload.wikimedia.org/wikipedia/commons/a/a5/Tsunami_by_hokusai_19th_century.jpg")
+    center / cover no-repeat;
+  transform: scale(1.05);
+  filter: saturate(0.85) brightness(0.65);
   pointer-events: none;
 }
 
-.container {
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: linear-gradient(
+    135deg,
+    rgba(5, 5, 5, 0.8),
+    rgba(5, 5, 5, 0.92)
+  );
+  pointer-events: none;
+}
+
+.shell {
   position: relative;
   z-index: 1;
-  width: min(940px, calc(100% - 96px));
+  width: min(1200px, 100%);
+  min-height: clamp(640px, 90vh, 860px);
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 36px;
-  height: calc(100vh - 188px);
-  max-height: 760px;
+  gap: clamp(24px, 5vw, 40px);
 }
-
 
 .header {
-  width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 32px;
-  flex-shrink: 0;
+  gap: clamp(16px, 4vw, 28px);
+  text-align: center;
 }
 
-.headerRow {
+.headerTop {
   display: flex;
-  align-items: flex-start;
   justify-content: space-between;
-  gap: 24px;
+  align-items: center;
+  gap: 16px;
+  padding: 0 clamp(8px, 2vw, 16px);
 }
 
 .streakBadge {
   display: inline-flex;
   align-items: center;
   gap: 12px;
-  padding: 8px 20px;
+  padding: 10px 18px;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   background: linear-gradient(
     135deg,
-    rgba(48, 48, 48, 0.6),
-    rgba(16, 16, 16, 0.78)
+    rgba(40, 40, 40, 0.7),
+    rgba(10, 10, 10, 0.9)
   );
-  box-shadow: 0 18px 36px rgba(0, 0, 0, 0.4);
-  font-size: 0.78rem;
+  font-size: 0.75rem;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-}
-
-.timeBlock {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 8px;
-  text-align: right;
 }
 
 .streakValue {
   font-size: 1rem;
-  letter-spacing: 0.18em;
+  letter-spacing: 0.2em;
 }
 
 .streakLabel {
   font-size: 0.68rem;
-  letter-spacing: 0.3em;
+  letter-spacing: 0.32em;
+  color: rgba(240, 240, 240, 0.58);
+}
+
+.headerTopRight {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.notificationChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(15, 15, 15, 0.75);
+  font-size: 0.68rem;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: rgba(240, 240, 240, 0.7);
+}
+
+.avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(30, 30, 30, 0.9);
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+
+.headerContent {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(8px, 2vw, 16px);
 }
 
 .clock {
-  font-size: clamp(3.2rem, 4.5vw, 4rem);
-  font-weight: 500;
-  letter-spacing: 0.14em;
-  text-shadow: 0 12px 24px rgba(0, 0, 0, 0.45);
+  font-size: clamp(3.5rem, 8vw, 6.5rem);
+  font-weight: 300;
+  letter-spacing: 0.08em;
 }
 
 .date {
-  font-size: 0.88rem;
-  letter-spacing: 0.34em;
+  font-size: clamp(0.7rem, 1.5vw, 0.9rem);
+  letter-spacing: 0.42em;
   text-transform: uppercase;
-  color: rgba(235, 235, 235, 0.72);
-  text-shadow: 0 12px 24px rgba(0, 0, 0, 0.35);
+  color: rgba(230, 230, 230, 0.75);
+  font-family: var(
+      --font-mono,
+      "IBM Plex Mono",
+      "IBM Plex Mono",
+      SFMono-Regular,
+      Consolas,
+      "Liberation Mono",
+      Menlo,
+      monospace
+    );
 }
 
 .greeting {
-  font-size: clamp(2.2rem, 3.4vw, 2.8rem);
+  font-size: clamp(1.8rem, 4vw, 2.6rem);
   font-weight: 500;
   letter-spacing: 0.08em;
-  text-shadow: 0 12px 24px rgba(0, 0, 0, 0.45);
-  text-align: center;
+  color: rgba(245, 245, 245, 0.92);
 }
 
 .main {
-  width: 100%;
+  flex: 1;
+  min-height: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.85fr);
-  gap: 36px;
-  flex: 1;
-  min-height: 0;
+  grid-template-columns: minmax(0, 0.75fr) minmax(0, 0.65fr);
+  gap: clamp(20px, 4vw, 32px);
 }
 
-.calendarCard {
-  flex: 1;
-  min-height: 0;
-  height: 100%;
-  background: rgba(12, 12, 12, 0.82);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+.panelSurface {
+  background: rgba(10, 10, 10, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow:
-    0 32px 64px rgba(0, 0, 0, 0.45),
+    0 24px 48px rgba(0, 0, 0, 0.45),
     inset 0 0 0 1px rgba(255, 255, 255, 0.04);
-  border-radius: 32px;
-  padding: 28px 32px;
+  border-radius: 28px;
+}
+
+.calendarPanel {
+  composes: panelSurface;
   display: flex;
   flex-direction: column;
-  gap: 28px;
-}
-
-.calendarCard header {
-  font-size: 0.9rem;
-  letter-spacing: 0.34em;
-  text-transform: uppercase;
-  color: rgba(230, 230, 230, 0.75);
-}
-
-.calendarBody {
-  display: flex;
-  gap: 24px;
+  padding: clamp(18px, 3vw, 28px);
+  gap: 20px;
   overflow: hidden;
+}
+
+.panelHeader {
+  font-size: 0.76rem;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: rgba(235, 235, 235, 0.64);
+}
+
+.calendarContent {
+  display: flex;
+  gap: clamp(16px, 3vw, 28px);
   flex: 1;
   min-height: 0;
 }
 
-.timeColumn {
+.calendarHours {
   list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-  font-size: 0.74rem;
-  letter-spacing: 0.2em;
-  color: rgba(220, 220, 220, 0.4);
-  padding-top: 8px;
-}
-
-.timeColumn li {
-  height: 48px;
-  display: flex;
-  align-items: flex-start;
-}
-
-.timeColumn span {
-  pointer-events: none;
-}
-
-.eventColumn {
-  flex: 1;
   display: flex;
   flex-direction: column;
   gap: 16px;
-  position: relative;
-  padding-right: 6px;
-  overflow-y: auto;
-  scrollbar-width: thin;
-  min-height: 0;
-}
-
-.eventColumn::-webkit-scrollbar {
-  width: 4px;
-}
-
-.eventColumn::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.14);
-  border-radius: 16px;
-}
-
-.eventBlock {
-  background: linear-gradient(
-    135deg,
-    rgba(50, 50, 50, 0.5),
-    rgba(18, 18, 18, 0.88)
-  );
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
-  border-radius: 22px;
-  padding: 16px 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.eventTime {
-  font-size: 0.78rem;
+  padding-top: 4px;
+  font-family: var(
+      --font-mono,
+      "IBM Plex Mono",
+      "IBM Plex Mono",
+      SFMono-Regular,
+      Consolas,
+      "Liberation Mono",
+      Menlo,
+      monospace
+    );
+  color: rgba(235, 235, 235, 0.38);
   letter-spacing: 0.2em;
-  color: rgba(235, 235, 235, 0.6);
+  font-size: 0.68rem;
 }
 
-.eventBlock p {
-  font-size: 0.98rem;
-  line-height: 1.45;
-}
-
-.sideColumn {
-  display: grid;
-  grid-template-rows: minmax(0, 1.2fr) minmax(0, 0.9fr);
-  gap: 28px;
-  min-height: 0;
-}
-
-.planCard,
-.pulseCard {
-  min-height: 0;
-  height: 100%;
-  background: rgba(12, 12, 12, 0.82);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  box-shadow:
-    0 32px 64px rgba(0, 0, 0, 0.45),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.04);
-  border-radius: 32px;
-  padding: 26px 28px;
+.calendarHour {
   display: flex;
-  flex-direction: column;
-  gap: 20px;
-  overflow: hidden;
+  align-items: flex-start;
+  gap: 16px;
+  min-height: 40px;
 }
 
-.planTabs {
-  display: inline-flex;
-  gap: 10px;
-  padding: 4px;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(18, 18, 18, 0.82);
+.calendarHourLabel {
+  display: inline-block;
+  width: 62px;
+  text-align: right;
+  padding-top: 6px;
 }
 
-.planTabs button {
-  border: none;
-  border-radius: 999px;
-  padding: 10px 20px;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  font-size: 0.8rem;
-  color: rgba(230, 230, 230, 0.55);
-  background: transparent;
-  cursor: pointer;
-  transition: background 0.2s ease, color 0.2s ease;
-}
-
-.planTabs button[data-active="true"] {
-  background: rgba(60, 60, 60, 0.82);
-  color: var(--foreground);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
-}
-
-.planBody,
-.habitBody {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
+.calendarHourLine {
   flex: 1;
-  min-height: 0;
+  height: 1px;
+  background: linear-gradient(
+    to right,
+    transparent 0%,
+    rgba(255, 255, 255, 0.12) 45%,
+    transparent 100%
+  );
+  margin-top: 14px;
 }
 
-.planBody h2,
-.habitBody h2 {
-  font-size: 0.82rem;
-  letter-spacing: 0.34em;
-  text-transform: uppercase;
-  color: rgba(235, 235, 235, 0.7);
-}
-
-.planBody ul,
-.habitBody ul {
-  list-style: none;
+.eventList {
+  flex: 1;
   display: flex;
   flex-direction: column;
   gap: 14px;
   overflow-y: auto;
   padding-right: 4px;
+  scrollbar-width: thin;
 }
 
-.planBody li {
-  padding: 14px 16px;
+.eventList::-webkit-scrollbar {
+  width: 4px;
+}
+
+.eventList::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+}
+
+.eventItem {
+  background: linear-gradient(
+      135deg,
+      rgba(40, 40, 40, 0.58),
+      rgba(12, 12, 12, 0.9)
+    )
+    border-box;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.eventTime {
+  font-size: 0.72rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(235, 235, 235, 0.58);
+}
+
+.eventLabel {
+  font-size: 0.95rem;
+  line-height: 1.45;
+  color: rgba(245, 245, 245, 0.92);
+}
+
+.plannerPanel {
+  composes: panelSurface;
+  display: flex;
+  flex-direction: column;
+  padding: clamp(18px, 3vw, 28px);
+  gap: 20px;
+  overflow: hidden;
+}
+
+.tabBar {
+  display: inline-flex;
+  align-self: flex-start;
+  padding: 6px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(12, 12, 12, 0.7);
+  gap: 8px;
+}
+
+.tabBar button {
+  border: none;
+  border-radius: 999px;
+  padding: 10px 20px;
+  font-size: 0.72rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(240, 240, 240, 0.55);
+  background: transparent;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease;
+}
+
+.tabBar button[data-active="true"] {
+  background: rgba(245, 245, 245, 0.9);
+  color: #060606;
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.45);
+}
+
+.plannerBody {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  flex: 1;
+  min-height: 0;
+}
+
+.sectionTitle {
+  font-size: 0.76rem;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: rgba(235, 235, 235, 0.7);
+}
+
+.planList,
+.habitList {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+  padding-right: 6px;
+  scrollbar-width: thin;
+}
+
+.planList::-webkit-scrollbar,
+.habitList::-webkit-scrollbar {
+  width: 4px;
+}
+
+.planList::-webkit-scrollbar-thumb,
+.habitList::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+}
+
+.planButton {
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 16px 18px;
   border-radius: 18px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   background: linear-gradient(
     135deg,
-    rgba(45, 45, 45, 0.42),
-    rgba(18, 18, 18, 0.82)
+    rgba(35, 35, 35, 0.6),
+    rgba(12, 12, 12, 0.88)
   );
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
+  text-align: left;
+  cursor: pointer;
+  color: rgba(245, 245, 245, 0.92);
+  transition: transform 0.2s ease;
 }
 
-.planBody li[data-completed="true"] {
+.planButton:hover {
+  transform: translateY(-2px);
+}
+
+.planButton[data-completed="true"] {
   opacity: 0.55;
   text-decoration: line-through;
 }
 
-.planBody label {
+.planIcon {
   display: inline-flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
+  padding-top: 2px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.planButton[data-completed="true"] .planIcon {
+  color: rgba(94, 188, 255, 0.85);
+}
+
+.planText {
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.secondaryAction {
+  align-self: flex-start;
+  margin-top: auto;
+  padding: 12px 22px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(15, 15, 15, 0.86);
+  color: rgba(240, 240, 240, 0.88);
+  font-size: 0.72rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
   cursor: pointer;
 }
 
-.planBody input {
-  width: 18px;
-  height: 18px;
-  border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.4);
-  background: transparent;
-  accent-color: var(--foreground);
-}
-
-.habitBody li {
+.habitItem {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  gap: 18px;
-  padding: 14px 16px;
+  gap: 16px;
+  padding: 16px 18px;
   border-radius: 18px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(18, 18, 18, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   background: linear-gradient(
     135deg,
-    rgba(45, 45, 45, 0.38),
-    rgba(18, 18, 18, 0.8)
+    rgba(35, 35, 35, 0.54),
+    rgba(12, 12, 12, 0.88)
   );
 }
 
-.habitBody li div:first-child {
+.habitTexts {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  color: rgba(245, 245, 245, 0.9);
 }
 
-.habitBody li span:nth-child(2) {
-  font-size: 0.78rem;
-  color: rgba(230, 230, 230, 0.58);
+.habitLabel {
+  font-size: 0.95rem;
+}
+
+.habitPrevious {
+  font-size: 0.75rem;
   letter-spacing: 0.08em;
+  color: rgba(235, 235, 235, 0.55);
 }
 
 .habitMeta {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   letter-spacing: 0.12em;
+  text-transform: uppercase;
   color: rgba(235, 235, 235, 0.75);
 }
 
-.secondaryButton {
-  align-self: flex-start;
-  padding: 10px 20px;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(18, 18, 18, 0.78);
-  color: rgba(235, 235, 235, 0.85);
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  font-size: 0.7rem;
-  cursor: pointer;
-}
-
-.pulseCard header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.pulseCard header h2 {
-  font-size: 0.82rem;
-  letter-spacing: 0.34em;
-  text-transform: uppercase;
-  color: rgba(235, 235, 235, 0.7);
-}
-
-.pulseCard header button {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  border: none;
-  background: none;
-  color: rgba(235, 235, 235, 0.65);
-  font-size: 0.8rem;
-  cursor: pointer;
-}
-
-.pulseBody {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  overflow-y: auto;
-  padding-right: 4px;
-}
-
-.pulseBody article {
-  border-radius: 18px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  background: linear-gradient(
-    135deg,
-    rgba(45, 45, 45, 0.38),
-    rgba(18, 18, 18, 0.8)
-  );
-  padding: 16px 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.pulseMeta {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.pulseTime {
-  font-family: var(--font-mono, "IBM Plex Mono", monospace);
-  letter-spacing: 0.22em;
-  font-size: 0.78rem;
-  color: rgba(235, 235, 235, 0.65);
-}
-
-.pulseStatus {
-  font-size: 1.1rem;
-}
-
-.pulseStatus[data-status="up"] {
-  color: #69ffb1;
-}
-
-.pulseStatus[data-status="down"] {
-  color: #ff8c8c;
-}
-
-.pulseStatus[data-status="stable"] {
-  color: rgba(240, 240, 240, 0.85);
-}
-
-.pulseBody span {
-  font-size: 0.86rem;
-  color: rgba(235, 235, 235, 0.6);
-}
-
 .chatBar {
-  position: fixed;
-  bottom: 32px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: min(720px, calc(100% - 72px));
+  align-self: center;
+  width: min(560px, 100%);
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
   padding: 14px 18px;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(12, 12, 12, 0.88);
-  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.4);
-  backdrop-filter: blur(14px);
-  z-index: 2;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(15, 15, 15, 0.7);
+  backdrop-filter: blur(18px);
 }
 
-.chatBar input {
-  flex: 1;
+.chatIconButton,
+.chatActionButton {
   border: none;
   background: transparent;
-  color: var(--foreground);
-  font-size: 0.95rem;
-  letter-spacing: 0.02em;
-}
-
-.chatBar input:focus {
-  outline: none;
-}
-
-.chatBar input::placeholder {
-  color: rgba(235, 235, 235, 0.55);
-}
-
-.chatIconButton {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(25, 25, 25, 0.82);
-  color: rgba(235, 235, 235, 0.8);
+  padding: 8px;
+  border-radius: 999px;
+  color: rgba(235, 235, 235, 0.7);
   cursor: pointer;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease;
 }
 
 .chatIconButton:hover,
-.chatActions button:hover {
-  border-color: rgba(255, 255, 255, 0.24);
-  color: rgba(255, 255, 255, 0.92);
+.chatActionButton:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.chatInput {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: 0.95rem;
+  color: rgba(245, 245, 245, 0.86);
+  font-family: inherit;
+}
+
+.chatInput::placeholder {
+  color: rgba(235, 235, 235, 0.45);
+  letter-spacing: 0.08em;
 }
 
 .chatActions {
   display: inline-flex;
-  gap: 10px;
+  gap: 4px;
 }
 
-.chatActions button {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(25, 25, 25, 0.82);
-  color: rgba(235, 235, 235, 0.8);
-  cursor: pointer;
-}
-
-@media (max-width: 1024px) {
-  .container {
-    width: min(900px, calc(100% - 64px));
-    height: calc(100vh - 200px);
-    max-height: none;
-    gap: 28px;
+@media (max-width: 960px) {
+  .shell {
+    min-height: auto;
   }
 
   .main {
     grid-template-columns: 1fr;
   }
 
-  .sideColumn {
-    width: 100%;
-    grid-template-rows: auto auto;
-  }
-}
-
-@media (max-width: 720px) {
-  .page {
-    padding-top: 32px;
-    align-items: flex-start;
-  }
-
-  .container {
-    width: calc(100% - 32px);
-    height: auto;
-    min-height: 0;
-    max-height: none;
-    gap: 24px;
-  }
-
-  .timeRow {
-    flex-direction: column;
-    align-items: center;
-    gap: 12px;
-  }
-
-  .date {
-    text-align: center;
-  }
-
-  .clock {
-    font-size: 2.8rem;
+  .calendarPanel,
+  .plannerPanel {
+    padding: 20px;
   }
 
   .chatBar {
-    width: calc(100% - 40px);
-    bottom: 24px;
+    width: 100%;
+  }
+}
+
+@media (max-width: 640px) {
+  .headerTop {
+    flex-direction: column;
+    align-items: center;
   }
 
+  .headerTopRight {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .notificationChip {
+    letter-spacing: 0.16em;
+  }
+
+  .calendarContent {
+    flex-direction: column;
+  }
+
+  .calendarHours {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+  }
+
+  .calendarHour {
+    min-height: 0;
+    align-items: center;
+  }
+
+  .calendarHourLabel {
+    width: auto;
+    text-align: center;
+    padding-top: 0;
+  }
+
+  .calendarHourLine {
+    display: none;
+  }
 }
