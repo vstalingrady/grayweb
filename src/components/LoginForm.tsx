@@ -20,9 +20,23 @@ const providers = [
 
 const envRedirect = process.env.NEXT_PUBLIC_AUTH_REDIRECT?.trim();
 const envSiteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
 
 const DEFAULT_APP_PATH = "/alignmentid/gray";
 const FALLBACK_BASE = envSiteUrl || "http://localhost:3000";
+const SUPABASE_STORAGE_KEY = (() => {
+  if (!supabaseUrl) {
+    return undefined;
+  }
+
+  try {
+    const hostname = new URL(supabaseUrl).hostname;
+    const projectRef = hostname.split(".")[0];
+    return `sb-${projectRef}-auth-token`;
+  } catch {
+    return undefined;
+  }
+})();
 
 const ensureAbsoluteUrl = (target: string): string => {
   if (target.startsWith("http://") || target.startsWith("https://")) {
@@ -113,11 +127,15 @@ export default function LoginForm() {
         throw error;
       }
 
-      if (!remember && data.session && typeof window !== "undefined") {
-        const { storageKey } = supabase.auth as { storageKey?: string };
-        if (storageKey) {
-          window.localStorage.removeItem(storageKey);
-        }
+      if (
+        !remember &&
+        data.session &&
+        typeof window !== "undefined" &&
+        SUPABASE_STORAGE_KEY
+      ) {
+        window.localStorage.removeItem(SUPABASE_STORAGE_KEY);
+        window.localStorage.removeItem(`${SUPABASE_STORAGE_KEY}-code-verifier`);
+        window.localStorage.removeItem(`${SUPABASE_STORAGE_KEY}-user`);
       }
 
       const destination = resolveRedirectTarget();
