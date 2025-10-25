@@ -251,7 +251,7 @@ export default function LoginForm() {
 
         <footer className={styles.footer}>
           <span>Don&apos;t have an account?</span>
-          <a href="#signup">Sign Up</a>
+          <a href="/signup">Sign Up</a>
         </footer>
       </div>
 
