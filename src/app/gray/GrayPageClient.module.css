@@ -780,8 +780,8 @@
   width: 100%;
   align-items: stretch;
   justify-items: center;
-  padding: clamp(24px, 6vh, 56px) clamp(18px, 5vw, 48px)
-    clamp(20px, 5vh, 48px);
+  padding: clamp(24px, 6vh, 56px) clamp(12px, 3vw, 28px)
+    clamp(32px, 8vh, 80px);
 }
 
 .main[data-view="chat"] {
@@ -794,7 +794,7 @@
   grid-template-rows: auto 1fr;
   row-gap: clamp(14px, 2.4vw, 26px);
   padding-top: clamp(16px, 4vh, 32px);
-  padding-bottom: clamp(18px, 4vh, 32px);
+  padding-bottom: clamp(32px, 8vh, 80px);
 }
 
 .mainContent {
@@ -809,7 +809,7 @@
 }
 
 .mainContent > * {
-  width: min(1160px, 100%);
+  width: min(1360px, 100%);
 }
 
 .mainContent[data-view="chat"] {
@@ -1531,7 +1531,7 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: clamp(18px, 2.5vw, 28px);
   align-items: stretch;
-  width: min(1200px, 100%);
+  width: min(1380px, 100%);
   justify-content: center;
   margin: 0 auto;
   margin-bottom: clamp(18px, 4vh, 32px);
@@ -2346,7 +2346,7 @@
 
 .chatBar {
   justify-self: center;
-  width: min(1160px, 100%);
+  width: min(900px, 100%);
   display: flex;
   align-items: center;
   gap: 10px;
