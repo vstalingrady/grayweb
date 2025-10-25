@@ -11,7 +11,7 @@ import { GrayHistoryView } from "@/components/gray/HistoryView";
 import { GrayChatBar } from "@/components/gray/ChatBar";
 import { GrayChatView } from "@/components/gray/ChatView";
 import { UserProvider, useUser } from "@/contexts/UserContext";
-import { apiService, CalendarEvent as ApiCalendarEvent } from "@/lib/api";
+import { apiService } from "@/lib/api";
 import styles from "./GrayPageClient.module.css";
 import {
   type PlanItem,
@@ -25,52 +25,6 @@ import {
 import type { CalendarEvent, CalendarInfo } from "@/components/calendar/types";
 import { ChatProvider, useChatStore } from "@/components/gray/ChatProvider";
 import { DEFAULT_HISTORY_SECTIONS } from "@/components/gray/historySeed";
-import { createSeedCalendars, createSeedEvents } from "@/components/calendar/calendarSeed";
-
-const PLAN_SEED: PlanItem[] = [
-  {
-    id: "plan-1",
-    label: "Restore proactive cadence for the builder cohort.",
-    completed: false,
-  },
-  {
-    id: "plan-2",
-    label: "Draft mitigation follow-up checklist.",
-    completed: false,
-  },
-  {
-    id: "plan-3",
-    label: "Lock launch checklist scope for the revamp.",
-    completed: true,
-  },
-  {
-    id: "plan-4",
-    label: "Draft async sync for builder cohort.",
-    completed: false,
-  },
-];
-
-const HABIT_SEED: HabitItem[] = [
-  {
-    id: "habit-1",
-    label: "Coaching loop deferred until services stabilize.",
-    streakLabel: "4 days",
-    previousLabel: "Prev: Yesterday — 3 days",
-  },
-  {
-    id: "habit-2",
-    label: "No YouTube.",
-    streakLabel: "6 days",
-    previousLabel: "Prev: Yesterday — 5 days",
-  },
-  {
-    id: "habit-3",
-    label: "Movement break.",
-    streakLabel: "2 days",
-    previousLabel: "Prev: Yesterday — 1 day",
-  },
-];
-
 const PROACTIVITY_SEED: ProactivityItem = {
   id: "proactivity-1",
   label: "Check-ins",
@@ -78,6 +32,8 @@ const PROACTIVITY_SEED: ProactivityItem = {
   cadence: "Daily",
   time: "09:00 AM",
 };
+
+const DEFAULT_EVENT_COLOR = "linear-gradient(135deg, rgba(91, 141, 239, 0.85), rgba(48, 79, 254, 0.9))";
 
 const SIDEBAR_ITEMS: SidebarNavItem[] = [
   { id: "general", label: "General", icon: Gem },
@@ -172,15 +128,15 @@ function GrayPageClientInner({
   const { user, loading } = useUser();
   const router = useRouter();
   const [now, setNow] = useState(() => new Date(initialTimestamp));
-  const [plans, setPlans] = useState<PlanItem[]>(() =>
-    PLAN_SEED.map((plan) => ({ ...plan }))
-  );
+  const [plans, setPlans] = useState<PlanItem[]>([]);
+  const [habits, setHabits] = useState<HabitItem[]>([]);
   const [planTab, setPlanTab] = useState<"plans" | "habits">("plans");
   const [chatDraft, setChatDraft] = useState("");
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
   const [dashboardTab, setDashboardTab] = useState<"pulse" | "calendar">("pulse");
-  const [calendarCalendars, setCalendarCalendars] = useState<CalendarInfo[]>(createSeedCalendars);
-  const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>(createSeedEvents);
+  const [calendarCalendars, setCalendarCalendars] = useState<CalendarInfo[]>([]);
+  const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
+  const [streakCount, setStreakCount] = useState(0);
   const { sessions, createSession } = useChatStore();
   const supportsInlineChat = variant !== "chat";
   const [currentChatId, setCurrentChatId] = useState<string | null>(() => activeChatId ?? null);
@@ -204,50 +160,93 @@ function GrayPageClientInner({
       ? "chat"
       : manualViewMode ?? (activeNav === "history" ? "history" : baseViewMode);
 
-  // Fetch calendar events from API when user is available
+  useEffect(() => {
+    if (user) {
+      return;
+    }
+    setPlans([]);
+    setHabits([]);
+    setCalendarCalendars([]);
+    setCalendarEvents([]);
+    setStreakCount(0);
+  }, [user]);
+
   useEffect(() => {
     if (!user) {
       return;
     }
 
-    apiService
-      .getUserCalendarEvents(user.id)
-      .then((apiEvents: ApiCalendarEvent[]) => {
-        if (!apiEvents.length) {
+    let isMounted = true;
+
+    const loadWorkspaceData = async () => {
+      try {
+        const [calendarResponse, eventResponse, planResponse, habitResponse] = await Promise.all([
+          apiService.getUserCalendars(user.id),
+          apiService.getUserCalendarEvents(user.id),
+          apiService.getUserPlans(user.id),
+          apiService.getUserHabits(user.id),
+        ]);
+
+        if (!isMounted) {
           return;
         }
 
-        const mapped = apiEvents.map((apiEvent) => ({
-          id: apiEvent.id.toString(),
-          calendarId: apiEvent.calendar_id?.toString() ?? "default",
-          title: apiEvent.title,
-          start: new Date(apiEvent.start_time),
-          end: new Date(apiEvent.end_time),
-          color: "linear-gradient(135deg, rgba(91, 141, 239, 0.85), rgba(48, 79, 254, 0.9))",
-          entryType: "event",
+        const mappedCalendars: CalendarInfo[] = calendarResponse.map((calendar) => ({
+          id: calendar.id.toString(),
+          label: calendar.label,
+          color: calendar.color,
+          isVisible: Boolean(calendar.is_visible),
         }));
 
-        setCalendarEvents(mapped);
+        const calendarColorMap = new Map<string, string>(
+          mappedCalendars.map((calendar) => [calendar.id, calendar.color])
+        );
 
-        const knownIds = new Set(mapped.map((event) => event.calendarId));
-        setCalendarCalendars((previous) => {
-          const next = [...previous];
-          knownIds.forEach((id) => {
-            if (!next.some((calendar) => calendar.id === id)) {
-              next.push({
-                id,
-                label: id === "default" ? "Operations" : id,
-                color: "linear-gradient(135deg, #5b8def, #304ffe)",
-                isVisible: true,
-              });
-            }
-          });
-          return next;
+        const fallbackCalendarId = mappedCalendars[0]?.id ?? "default";
+        const fallbackEventColor =
+          calendarColorMap.get(fallbackCalendarId) ?? DEFAULT_EVENT_COLOR;
+
+        const mappedEvents: CalendarEvent[] = eventResponse.map((event) => {
+          const associatedCalendarId = event.calendar_id ? event.calendar_id.toString() : fallbackCalendarId;
+          return {
+            id: event.id.toString(),
+            calendarId: associatedCalendarId,
+            title: event.title,
+            start: new Date(event.start_time),
+            end: new Date(event.end_time),
+            color: calendarColorMap.get(associatedCalendarId) ?? fallbackEventColor,
+            entryType: "event",
+            description: event.description ?? undefined,
+          };
         });
-      })
-      .catch((error) => {
-        console.error("Failed to fetch calendar events:", error);
-      });
+
+        const mappedPlans: PlanItem[] = planResponse.map((plan) => ({
+          id: plan.id.toString(),
+          label: plan.label,
+          completed: Boolean(plan.completed),
+        }));
+
+        const mappedHabits: HabitItem[] = habitResponse.map((habit) => ({
+          id: habit.id.toString(),
+          label: habit.label,
+          streakLabel: habit.streak_label,
+          previousLabel: habit.previous_label,
+        }));
+
+        setCalendarCalendars(mappedCalendars);
+        setCalendarEvents(mappedEvents);
+        setPlans(mappedPlans);
+        setHabits(mappedHabits);
+      } catch (error) {
+        console.error("Failed to load workspace data:", error);
+      }
+    };
+
+    void loadWorkspaceData();
+
+    return () => {
+      isMounted = false;
+    };
   }, [user]);
 
   const viewerName = useMemo(() => {
@@ -256,6 +255,29 @@ function GrayPageClientInner({
     }
     return user?.full_name || "Operator";
   }, [user, loading]);
+
+  useEffect(() => {
+    if (!user) {
+      return;
+    }
+
+    let isMounted = true;
+    apiService
+      .touchUserStreak(user.id)
+      .then((streak) => {
+        if (!isMounted) {
+          return;
+        }
+        setStreakCount(streak.current_streak ?? 0);
+      })
+      .catch((error) => {
+        console.error("Failed to update streak:", error);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user]);
 
   const viewerAvatarUrl = user?.profile_picture_url ?? null;
 
@@ -387,14 +409,78 @@ function GrayPageClientInner({
     return () => window.clearInterval(interval);
   }, [initialTimestamp]);
 
-  const streakCount = 12;
+  const derivedPlans = user ? plans : [];
+  const derivedHabits = user ? habits : [];
+  const derivedCalendars = user ? calendarCalendars : [];
+  const derivedEvents = user ? calendarEvents : [];
 
   const togglePlan = (id: string) => {
-    setPlans((prev) =>
-      prev.map((item) =>
-        item.id === id ? { ...item, completed: !item.completed } : item
-      )
+    if (!user) {
+      return;
+    }
+
+    const planId = Number(id);
+    if (Number.isNaN(planId)) {
+      return;
+    }
+
+    const previousPlans = plans;
+    const targetPlan = previousPlans.find((plan) => plan.id === id);
+    if (!targetPlan) {
+      return;
+    }
+
+    const nextCompleted = !targetPlan.completed;
+    const updatedPlans = previousPlans.map((plan) =>
+      plan.id === id ? { ...plan, completed: nextCompleted } : plan
     );
+
+    setPlans(updatedPlans);
+
+    apiService
+      .updatePlan(user.id, planId, { completed: nextCompleted })
+      .catch((error) => {
+        console.error("Failed to update plan:", error);
+        setPlans(previousPlans);
+      });
+  };
+
+  const handleCalendarsChange = (nextCalendars: CalendarInfo[]) => {
+    const previousCalendars = new Map(calendarCalendars.map((calendar) => [calendar.id, calendar]));
+    setCalendarCalendars(nextCalendars);
+
+    if (!user) {
+      return;
+    }
+
+    nextCalendars.forEach((calendar) => {
+      const previous = previousCalendars.get(calendar.id);
+      if (
+        !previous ||
+        previous.label !== calendar.label ||
+        previous.color !== calendar.color ||
+        previous.isVisible !== calendar.isVisible
+      ) {
+        const calendarId = Number(calendar.id);
+        if (Number.isNaN(calendarId)) {
+          return;
+        }
+
+        apiService
+          .updateCalendar(user.id, calendarId, {
+            label: calendar.label,
+            color: calendar.color,
+            is_visible: calendar.isVisible,
+          })
+          .catch((error) => {
+            console.error("Failed to update calendar:", error);
+          });
+      }
+    });
+  };
+
+  const handleEventsChange = (nextEvents: CalendarEvent[]) => {
+    setCalendarEvents(nextEvents);
   };
 
   const handleChatSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -479,18 +565,18 @@ function GrayPageClientInner({
             >
               {isDashboardView ? (
                 <GrayDashboardView
-                  plans={plans}
-                  habits={HABIT_SEED}
+                  plans={derivedPlans}
+                  habits={derivedHabits}
                   proactivity={proactivity}
                   dashboardDateLabel={dashboardDateLabel}
                   onTogglePlan={togglePlan}
                   activeTab={dashboardTab}
                   onSelectTab={setDashboardTab}
                   currentDate={now}
-                  calendars={calendarCalendars}
-                  onCalendarsChange={setCalendarCalendars}
-                  calendarEvents={calendarEvents}
-                  onCalendarEventsChange={setCalendarEvents}
+                  calendars={derivedCalendars}
+                  onCalendarsChange={handleCalendarsChange}
+                  calendarEvents={derivedEvents}
+                  onCalendarEventsChange={handleEventsChange}
                 />
               ) : isChatView ? (
                 <GrayChatView sessionId={currentChatId ?? null} />
@@ -503,16 +589,16 @@ function GrayPageClientInner({
               ) : (
                 <GrayGeneralView
                   greeting={greeting}
-                  calendarEvents={calendarEvents}
-                  plans={plans}
-                  habits={HABIT_SEED}
+                  calendarEvents={derivedEvents}
+                  plans={derivedPlans}
+                  habits={derivedHabits}
                   activeTab={planTab}
                   onChangeTab={setPlanTab}
                   onTogglePlan={togglePlan}
                   currentDate={now}
-                  calendars={calendarCalendars}
-                  onCalendarsChange={setCalendarCalendars}
-                  onCalendarEventsChange={setCalendarEvents}
+                  calendars={derivedCalendars}
+                  onCalendarsChange={handleCalendarsChange}
+                  onCalendarEventsChange={handleEventsChange}
                 />
               )}
             </div>

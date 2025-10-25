@@ -12,6 +12,9 @@ export function GrayWorkspaceHeader({
   dateLabel,
   streakCount,
 }: GrayWorkspaceHeaderProps) {
+  const normalizedStreak = Number.isFinite(streakCount)
+    ? Math.max(0, Math.trunc(streakCount))
+    : 0;
   return (
     <header className={styles.header}>
       <div className={styles.timeGroup}>
@@ -21,7 +24,7 @@ export function GrayWorkspaceHeader({
       <div className={styles.headerRight}>
         <div className={styles.streakBadge}>
           <Flame size={12} />
-          <span>{String(streakCount).padStart(2, "0")} day streak</span>
+          <span>{String(normalizedStreak).padStart(2, "0")} day streak</span>
         </div>
       </div>
     </header>
