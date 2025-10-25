@@ -47,6 +47,7 @@ export function GrayGeneralView({
             events={calendarEvents}
             onCalendarsChange={onCalendarsChange}
             onEventsChange={onCalendarEventsChange}
+            hourHeight={36}
           />
         </div>
 

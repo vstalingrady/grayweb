@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 
 import styles from "./GrayDashboardCalendar.module.css";
 import { CalendarSidebar } from "./CalendarSidebar";
@@ -17,7 +17,7 @@ import {
 import { createSeedCalendars, createSeedEvents } from "./calendarSeed";
 
 const HOURS = Array.from({ length: 24 }, (_, index) => index);
-const HOUR_HEIGHT = 64;
+const DEFAULT_HOUR_HEIGHT = 64;
 const SNAP_MINUTES = 15;
 
 type CalendarViewMode = "week" | "day";
@@ -79,6 +79,7 @@ type GrayDashboardCalendarProps = {
   calendars?: CalendarInfo[];
   onEventsChange?: (events: CalendarEvent[]) => void;
   onCalendarsChange?: (calendars: CalendarInfo[]) => void;
+  hourHeight?: number;
 };
 
 export function GrayDashboardCalendar({
@@ -89,7 +90,9 @@ export function GrayDashboardCalendar({
   calendars: externalCalendars,
   onEventsChange,
   onCalendarsChange,
+  hourHeight: hourHeightProp,
 }: GrayDashboardCalendarProps) {
+  const hourHeight = hourHeightProp ?? DEFAULT_HOUR_HEIGHT;
   const [viewMode, setViewMode] = useState<CalendarViewMode>(viewModeLocked ?? "week");
   const initial = initialDate ? new Date(initialDate) : new Date();
   const [selectedDate, setSelectedDate] = useState(() => initial);
@@ -163,23 +166,23 @@ export function GrayDashboardCalendar({
   const dayLayouts = useMemo<PositionedEvent[]>(
     () =>
       layoutDayEvents(dayEvents, {
-        hourHeight: HOUR_HEIGHT,
+        hourHeight,
         minimumHeight: 36,
         dayStart: dayAnchor,
       }),
-    [dayAnchor, dayEvents]
+    [dayAnchor, dayEvents, hourHeight]
   );
 
   const weekLayouts = useMemo(() => {
     return weekDays.map((day) => {
       const dayEventsForWeek = visibleEvents.filter((event) => isSameDay(event.start, day));
       return layoutDayEvents(dayEventsForWeek, {
-        hourHeight: HOUR_HEIGHT,
+        hourHeight,
         minimumHeight: 32,
         dayStart: startOfDay(day),
       });
     });
-  }, [visibleEvents, weekDays]);
+  }, [hourHeight, visibleEvents, weekDays]);
 
   const dayColumnRef = useRef<HTMLDivElement | null>(null);
 
@@ -197,16 +200,16 @@ export function GrayDashboardCalendar({
     }
 
     const earliestTop = dayLayouts.reduce((min, event) => Math.min(min, event.top), Number.POSITIVE_INFINITY);
-    const target = Math.max(earliestTop - HOUR_HEIGHT, 0);
+    const target = Math.max(earliestTop - hourHeight, 0);
     if (Math.abs(container.scrollTop - target) > 4) {
       container.scrollTo({ top: target });
     }
-  }, [dayLayouts, viewMode]);
+  }, [dayLayouts, hourHeight, viewMode]);
 
   const dragControls = useEventDrag({
     containerRef: dayColumnRef,
     dayAnchor,
-    hourHeight: HOUR_HEIGHT,
+    hourHeight,
     snapMinutes: SNAP_MINUTES,
     onPreview: setDraftPreview,
     onCommit: (draft) => {
@@ -356,7 +359,10 @@ export function GrayDashboardCalendar({
   ].join(" ");
 
   return (
-    <div className={calendarRootClassName}>
+    <div
+      className={calendarRootClassName}
+      style={{ "--calendar-hour-height": `${hourHeight}px` } as CSSProperties}
+    >
       {showSidebar && (
         <CalendarSidebar
           monthDate={monthDate}
