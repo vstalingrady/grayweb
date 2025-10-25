@@ -25,7 +25,7 @@ type GrayChatViewProps = {
   sessionId: string | null;
 };
 
-const MAX_COMPOSER_HEIGHT = 240;
+const MAX_COMPOSER_HEIGHT = 160;
 
 const formatRelativeTime = (timestamp: number) => {
   const now = Date.now();

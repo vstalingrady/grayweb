@@ -907,7 +907,7 @@
 }
 
 .chatMessages::-webkit-scrollbar {
-  width: 8px;
+  width: 6px;
 }
 
 .chatMessages::-webkit-scrollbar-track {
@@ -915,16 +915,25 @@
 }
 
 .chatMessages::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
+  background: transparent;
   border-radius: 999px;
+  transition: background 0.2s ease;
 }
 
-.chatMessages::-webkit-scrollbar-thumb:hover {
+.chatMessages:hover::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.chatMessages:hover::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.2);
 }
 
 .chatMessages {
   scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.chatMessages:hover {
   scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
 }
 
@@ -1127,8 +1136,8 @@
 .chatComposer {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 16px 24px;
+  gap: 12px;
+  padding: 12px 20px;
   border-radius: 999px;
   background: rgba(26, 27, 32, 0.85);
   border: 1px solid rgba(255, 255, 255, 0.06);
@@ -1147,8 +1156,8 @@
   color: rgba(250, 250, 250, 0.94);
   font-size: 0.95rem;
   line-height: 1.6;
-  max-height: 240px;
-  padding: 4px 0;
+  max-height: 160px;
+  padding: 2px 0;
   overflow: hidden;
   min-height: 28px;
 }
@@ -1171,8 +1180,8 @@
   border: none;
   background: rgba(255, 255, 255, 0.08);
   color: rgba(235, 235, 235, 0.78);
-  width: 34px;
-  height: 34px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   display: inline-flex;
   align-items: center;
@@ -1191,8 +1200,8 @@
 }
 
 .chatComposerSend {
-  width: 36px;
-  height: 36px;
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
   display: flex;
   align-items: center;
