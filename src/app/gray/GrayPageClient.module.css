@@ -52,6 +52,312 @@
   gap: clamp(24px, 5vw, 40px);
 }
 
+.viewport {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  gap: clamp(18px, 3vw, 28px);
+}
+
+.sidebar {
+  width: clamp(232px, 20vw, 260px);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 22px clamp(14px, 2vw, 18px);
+  border-radius: 26px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(6, 6, 6, 0.82);
+  backdrop-filter: blur(16px);
+  box-shadow:
+    0 26px 48px rgba(2, 2, 2, 0.5),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+  transition: width 0.3s ease;
+}
+
+.sidebar[data-expanded="false"] {
+  width: 92px;
+}
+
+.sidebarTop {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(18px, 3vw, 28px);
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.logoButton {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 6px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: default;
+}
+
+.logoMark {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.08),
+    rgba(255, 255, 255, 0.02)
+  );
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.86);
+}
+
+.logoWordmark {
+  font-size: 0.82rem;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: rgba(245, 245, 245, 0.85);
+  white-space: nowrap;
+  overflow: hidden;
+  transition:
+    opacity 0.2s ease,
+    max-width 0.2s ease,
+    margin 0.2s ease;
+}
+
+.logoButton[data-expanded="false"] .logoWordmark {
+  opacity: 0;
+  max-width: 0;
+  margin-left: 0;
+}
+
+.logoButton[data-expanded="true"] .logoWordmark {
+  opacity: 1;
+  max-width: 120px;
+  margin-left: 4px;
+}
+
+.sidebarNav ul {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 12px 0 0;
+  padding: 0;
+}
+
+.navItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: transparent;
+  color: rgba(235, 235, 235, 0.58);
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease;
+}
+
+.navItem:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.navItem[data-active="true"] {
+  background: rgba(255, 255, 255, 0.2);
+  color: #060606;
+}
+
+.navIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+}
+
+.navLabel {
+  font-size: 0.74rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  transition:
+    opacity 0.2s ease,
+    max-width 0.2s ease,
+    margin 0.2s ease;
+}
+
+.navLabel[data-expanded="false"] {
+  opacity: 0;
+  max-width: 0;
+  margin-left: 0;
+}
+
+.navLabel[data-expanded="true"] {
+  opacity: 1;
+  max-width: 160px;
+  margin-left: 4px;
+}
+
+.navShortcut {
+  margin-left: auto;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(235, 235, 235, 0.7);
+}
+
+.sidebarHistory {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  transition:
+    opacity 0.2s ease,
+    max-height 0.2s ease;
+}
+
+.sidebarHistory[data-expanded="false"] {
+  opacity: 0;
+  max-height: 0;
+  pointer-events: none;
+}
+
+.historySection {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.historyHeading {
+  font-size: 0.68rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(235, 235, 235, 0.38);
+}
+
+.historySection ul {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+}
+
+.historyItem {
+  font-size: 0.76rem;
+  color: rgba(235, 235, 235, 0.58);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.historyItem:hover {
+  color: rgba(255, 255, 255, 0.86);
+}
+
+.sidebarProfile {
+  margin-top: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(18, 18, 18, 0.78);
+  color: rgba(245, 245, 245, 0.88);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    border 0.2s ease;
+}
+
+.sidebarProfile:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.sidebarProfile[data-expanded="false"] {
+  justify-content: center;
+}
+
+.profileAvatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 10, 10, 0.92);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+
+.profileMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.7rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  transition:
+    opacity 0.2s ease,
+    max-width 0.2s ease,
+    margin 0.2s ease;
+}
+
+.profileMeta span:first-child {
+  font-size: 0.82rem;
+  letter-spacing: 0.08em;
+  text-transform: none;
+}
+
+.profileMeta span:last-child {
+  font-size: 0.68rem;
+  color: rgba(235, 235, 235, 0.6);
+}
+
+.sidebarProfile[data-expanded="false"] .profileMeta {
+  opacity: 0;
+  max-width: 0;
+  margin-left: 0;
+}
+
+.profileChevron {
+  margin-left: auto;
+  transition: opacity 0.2s ease;
+}
+
+.sidebarProfile[data-expanded="false"] .profileChevron {
+  opacity: 0;
+}
+
+.content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(18px, 3vw, 28px);
+  padding: clamp(22px, 4vh, 34px) clamp(26px, 4vw, 40px);
+  border-radius: 32px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(5, 5, 5, 0.68);
+  backdrop-filter: blur(24px);
+  box-shadow:
+    0 32px 48px rgba(0, 0, 0, 0.45),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+}
+
 .header {
   display: flex;
   flex-direction: column;
@@ -480,7 +786,8 @@
 
 .chatBar {
   align-self: center;
-  width: min(560px, 100%);
+  margin-top: auto;
+  width: min(520px, 100%);
   display: flex;
   align-items: center;
   gap: 12px;
@@ -535,6 +842,14 @@
     min-height: auto;
   }
 
+  .viewport {
+    flex-direction: column;
+  }
+
+  .sidebar {
+    display: none;
+  }
+
   .main {
     grid-template-columns: 1fr;
   }
@@ -546,6 +861,10 @@
 
   .chatBar {
     width: 100%;
+  }
+
+  .content {
+    padding: 24px 20px;
   }
 }
 
