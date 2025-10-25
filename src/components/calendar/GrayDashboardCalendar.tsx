@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent } from "react";
 
 import styles from "./GrayDashboardCalendar.module.css";
 import { CalendarSidebar } from "./CalendarSidebar";
@@ -106,6 +106,7 @@ export function GrayDashboardCalendar({
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
   const [draftPreview, setDraftPreview] = useState<EventDraft | null>(null);
   const [nowReference, setNowReference] = useState(() => new Date());
+  const [composerRange, setComposerRange] = useState<{ start: Date; end: Date } | null>(null);
 
   const calendars = externalCalendars ?? calendarsState;
   const events = externalEvents ?? eventsState;
@@ -266,14 +267,28 @@ export function GrayDashboardCalendar({
     );
   };
 
+  const openComposerAt = useCallback(
+    (startDate: Date) => {
+      const alignedStart = new Date(startDate);
+      alignedStart.setMinutes(Math.floor(alignedStart.getMinutes() / SNAP_MINUTES) * SNAP_MINUTES, 0, 0);
+      const alignedEnd = new Date(alignedStart.getTime() + 30 * 60000);
+      setComposerRange({ start: alignedStart, end: alignedEnd });
+      setEditingEvent(null);
+      setComposerOpen(true);
+    },
+    []
+  );
+
   const handleCreateEvent = () => {
-    setEditingEvent(null);
-    setComposerOpen(true);
+    const defaultStart = new Date(selectedDate);
+    defaultStart.setHours(9, 0, 0, 0);
+    openComposerAt(defaultStart);
   };
 
   const handleEditEvent = (event: CalendarEvent) => {
     setEditingEvent(event);
     setComposerOpen(true);
+    setComposerRange(null);
   };
 
   const handleComposerSubmit = ({ id, ...payload }: EventComposerPayload) => {
@@ -297,6 +312,17 @@ export function GrayDashboardCalendar({
     });
     setComposerOpen(false);
     setEditingEvent(null);
+    setComposerRange(null);
+  };
+
+  const handleColumnDoubleClick = (event: MouseEvent<HTMLDivElement>, day: Date) => {
+    const target = event.currentTarget;
+    const bounds = target.getBoundingClientRect();
+    const offsetY = event.clientY - bounds.top;
+    const minutes = Math.max(0, Math.min(24 * 60, Math.round((offsetY / hourHeight) * 60 / SNAP_MINUTES) * SNAP_MINUTES));
+    const start = new Date(day);
+    start.setHours(0, minutes, 0, 0);
+    openComposerAt(start);
   };
 
   const renderWeekView = () => (
@@ -320,7 +346,10 @@ export function GrayDashboardCalendar({
           <div className={styles.calendarWeekColumns}>
             {weekDays.map((day, columnIndex) => (
               <div key={day.toISOString()} className={styles.calendarWeekColumn}>
-                <div className={styles.calendarColumnScroller}>
+                <div
+                  className={styles.calendarColumnScroller}
+                  onDoubleClick={(event) => handleColumnDoubleClick(event, day)}
+                >
                   {weekLayouts[columnIndex]?.map((event) => (
                     <EventCard
                       key={event.id}
@@ -362,7 +391,10 @@ export function GrayDashboardCalendar({
             ))}
           </div>
           <div className={styles.calendarDayColumn}>
-            <div className={styles.calendarColumnScroller}>
+            <div
+              className={styles.calendarColumnScroller}
+              onDoubleClick={(event) => handleColumnDoubleClick(event, selectedDate)}
+            >
               {dayLayouts.map((event) => (
                 <EventCard
                   key={event.id}
@@ -470,10 +502,12 @@ export function GrayDashboardCalendar({
         isOpen={composerOpen}
         referenceDate={selectedDate}
         activeEvent={editingEvent}
+        initialRange={composerRange}
         calendars={calendars}
         onRequestClose={() => {
           setComposerOpen(false);
           setEditingEvent(null);
+          setComposerRange(null);
         }}
         onSubmit={handleComposerSubmit}
       />

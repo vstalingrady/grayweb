@@ -22,6 +22,7 @@ type EventComposerProps = {
   isOpen: boolean;
   referenceDate: Date;
   activeEvent?: CalendarEvent | null;
+  initialRange?: { start: Date; end: Date } | null;
   calendars: CalendarInfo[];
   onRequestClose: () => void;
   onSubmit: (payload: EventComposerPayload) => void;
@@ -92,6 +93,7 @@ export function EventComposer({
   isOpen,
   referenceDate,
   activeEvent,
+  initialRange = null,
   calendars,
   onRequestClose,
   onSubmit,
@@ -113,16 +115,30 @@ export function EventComposer({
 
     if (activeEvent) {
       dispatch({ type: "reset", payload: resolveStateFromEvent(activeEvent, calendarFallbackId) });
-    } else {
+      return;
+    }
+
+    if (initialRange) {
       dispatch({
         type: "reset",
         payload: {
           ...DEFAULT_STATE,
           calendarId: calendarFallbackId,
+          startTime: formatTimeInput(initialRange.start),
+          endTime: formatTimeInput(initialRange.end),
         },
       });
+      return;
     }
-  }, [activeEvent, calendarFallbackId, isOpen]);
+
+    dispatch({
+      type: "reset",
+      payload: {
+        ...DEFAULT_STATE,
+        calendarId: calendarFallbackId,
+      },
+    });
+  }, [activeEvent, calendarFallbackId, initialRange, isOpen]);
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
