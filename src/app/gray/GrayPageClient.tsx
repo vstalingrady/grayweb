@@ -1,7 +1,14 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { AudioLines, Flame, Mic, Plus, RefreshCw } from "lucide-react";
+import {
+  AudioLines,
+  Flame,
+  MessageCircle,
+  Mic,
+  Plus,
+  RefreshCw,
+} from "lucide-react";
 import styles from "./GrayPageClient.module.css";
 
 type PlanItem = {
@@ -382,6 +389,11 @@ export default function GrayPageClient({
             </div>
           </div>
         </section>
+      </div>
+
+      <div className={styles.chatBubble}>
+        <MessageCircle size={16} />
+        <span>Ask anything</span>
       </div>
 
       <form className={styles.chatBar} onSubmit={handleChatSubmit}>
