@@ -22,7 +22,8 @@ const envRedirect = process.env.NEXT_PUBLIC_AUTH_REDIRECT?.trim();
 const envSiteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim();
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
 
-const DEFAULT_APP_PATH = "/alignmentid/gray";
+const DEFAULT_APP_PATH = "/";
+const CALLBACK_PATH = "/callback";
 const FALLBACK_BASE = envSiteUrl || "http://localhost:3000";
 const SUPABASE_STORAGE_KEY = (() => {
   if (!supabaseUrl) {
@@ -50,21 +51,75 @@ const ensureAbsoluteUrl = (target: string): string => {
   return new URL(target, FALLBACK_BASE).toString();
 };
 
-const resolveRedirectTarget = (): string => {
+const sanitizeRedirect = (target: string | null | undefined): string | null => {
+  if (!target) {
+    return null;
+  }
+
+  try {
+    const trimmed = target.trim();
+    if (!trimmed) {
+      return null;
+    }
+
+    const url = new URL(trimmed, "http://localhost");
+    if (url.origin !== "http://localhost") {
+      return null;
+    }
+
+    return `${url.pathname}${url.search}${url.hash}`;
+  } catch {
+    return null;
+  }
+};
+
+const resolvePostAuthDestination = (): string => {
   if (envRedirect) {
     return envRedirect;
   }
 
   if (typeof window !== "undefined") {
     const url = new URL(window.location.href);
-    const requested = url.searchParams.get("redirect")?.trim();
-    if (requested) {
-      const encodedRedirect = encodeURIComponent(requested);
-      return `${DEFAULT_APP_PATH}?redirect=${encodedRedirect}`;
+    const sanitized = sanitizeRedirect(url.searchParams.get("redirect"));
+    if (sanitized) {
+      return sanitized;
     }
   }
 
   return DEFAULT_APP_PATH;
+};
+
+const buildCallbackDestination = (): string => {
+  const target = resolvePostAuthDestination();
+  const encoded = encodeURIComponent(target);
+  return `${CALLBACK_PATH}?redirect=${encoded}`;
+};
+
+const persistAuthCookies = (email?: string | null) => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const expiration = new Date();
+  expiration.setDate(expiration.getDate() + 30);
+
+  const baseAttributes = [
+    "path=/",
+    "sameSite=Lax",
+    `expires=${expiration.toUTCString()}`,
+  ];
+  if (window.location.protocol === "https:") {
+    baseAttributes.push("secure");
+  }
+
+  document.cookie = ["gray-auth=1", ...baseAttributes].join("; ");
+
+  if (email) {
+    document.cookie = [
+      `gray-auth-email=${encodeURIComponent(email)}`,
+      ...baseAttributes,
+    ].join("; ");
+  }
 };
 
 export default function LoginForm() {
@@ -89,7 +144,7 @@ export default function LoginForm() {
     setMessage({ type: "idle" });
 
     try {
-      const redirectTo = ensureAbsoluteUrl(resolveRedirectTarget());
+      const redirectTo = ensureAbsoluteUrl(buildCallbackDestination());
       const { error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
@@ -155,7 +210,9 @@ export default function LoginForm() {
         window.localStorage.removeItem(`${SUPABASE_STORAGE_KEY}-user`);
       }
 
-      const destination = resolveRedirectTarget();
+      persistAuthCookies(data.session?.user?.email ?? data.user?.email ?? email);
+
+      const destination = resolvePostAuthDestination();
       if (typeof window !== "undefined") {
         const absoluteDestination = ensureAbsoluteUrl(destination);
         if (
