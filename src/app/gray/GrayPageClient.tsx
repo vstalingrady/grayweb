@@ -148,13 +148,15 @@ const greetingForDate = (date: Date) => {
   return "evening";
 };
 
+const DEFAULT_VIEWER_NAME = "Vstalin Grady";
+
 const viewerNameFromEmail = (email: string | null): string => {
   if (!email) {
-    return "Vstalin Grady";
+    return DEFAULT_VIEWER_NAME;
   }
   const [username] = email.split("@");
   if (!username) {
-    return "Vstalin Grady";
+    return DEFAULT_VIEWER_NAME;
   }
 
   const parts = username
@@ -164,11 +166,11 @@ const viewerNameFromEmail = (email: string | null): string => {
     .map((segment) => segment[0].toUpperCase() + segment.slice(1));
 
   if (!parts.length) {
-    return "Vstalin Grady";
+    return DEFAULT_VIEWER_NAME;
   }
 
   if (parts.length === 1) {
-    return `${parts[0]} Grady`;
+    return DEFAULT_VIEWER_NAME;
   }
 
   return parts.join(" ");
