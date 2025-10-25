@@ -1,7 +1,17 @@
 "use client";
 
-import { FormEvent, useEffect, useRef, useState } from "react";
-import { ArrowUp, Bot, Loader2, UserRound } from "lucide-react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import {
+  ArrowUp,
+  Loader2,
+  RefreshCw,
+  Volume2,
+  Copy,
+  Share2,
+  ThumbsDown,
+  ThumbsUp,
+  Paperclip,
+} from "lucide-react";
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import styles from "@/app/gray/GrayPageClient.module.css";
@@ -51,7 +61,10 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
   const activeSessionId = session?.id ?? null;
   const activeConversationId = session?.conversationId ?? null;
 
-  const messages = session?.messages ?? [];
+  const messages = useMemo(
+    () => session?.messages ?? [],
+    [session?.messages]
+  );
   const subtitle = session
     ? `Updated ${formatRelativeTime(session.updatedAt)}`
     : "Chat not found";
@@ -172,6 +185,11 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
     }, 700);
   };
 
+  const firstAssistantIndex = useMemo(
+    () => messages.findIndex((message) => message.role === "assistant"),
+    [messages]
+  );
+
   if (!session) {
     return (
       <div className={styles.chatViewEmpty}>
@@ -186,24 +204,18 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
   const isResponding = session.isResponding;
 
   return (
-    <div className={styles.chatView}>
-      <div className={styles.chatViewport}>
-        <div className={styles.chatIntro}>
-          <div className={styles.chatIntroAvatar} aria-hidden="true">
-            <Bot size={24} />
-          </div>
-          <div>
-            <h2>{session.title || "New Chat"}</h2>
-            <p>{subtitle}</p>
-          </div>
+    <div className={styles.chatView} aria-live="polite">
+      <header className={styles.chatHeader}>
+        <div className={styles.chatHeaderTitle}>
+          <span>{session.title || "Casual exchange"}</span>
+          <small>{subtitle}</small>
         </div>
-
+      </header>
+      <div className={styles.chatViewport}>
+        <div className={styles.chatFade} aria-hidden="true" />
         <div className={styles.chatMessages}>
           {isHistoryLoading && (
-            <div className={`${styles.chatMessage} ${styles.chatMessageAssistant}`}>
-              <div className={styles.chatMessageAvatar} aria-hidden="true">
-                <Bot size={18} />
-              </div>
+            <div className={styles.chatMessage} data-role="assistant">
               <div className={styles.chatBubble}>
                 <div className={styles.chatTyping}>
                   <span />
@@ -213,18 +225,19 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
               </div>
             </div>
           )}
-          {messages.map((message) => {
+          {messages.map((message, index) => {
             const isUser = message.role === "user";
+            const isAssistant = !isUser;
+            const isPrimaryAssistant = isAssistant && index === firstAssistantIndex;
+            const quickReplies = isPrimaryAssistant
+              ? ["Share a fun fact about AI", "Discuss latest xAI updates"]
+              : [];
             return (
               <div
                 key={message.id}
-                className={`${styles.chatMessage} ${
-                  isUser ? styles.chatMessageUser : styles.chatMessageAssistant
-                }`}
+                className={styles.chatMessage}
+                data-role={isUser ? "user" : "assistant"}
               >
-                <div className={styles.chatMessageAvatar} aria-hidden="true">
-                  {isUser ? <UserRound size={18} /> : <Bot size={18} />}
-                </div>
                 <div className={styles.chatBubble}>
                   {isUser ? (
                     // User messages - plain text
@@ -240,14 +253,45 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
                     </div>
                   )}
                 </div>
+                {isAssistant && (
+                  <div className={styles.chatMessageFooter}>
+                    <div className={styles.chatActionRow}>
+                      <button type="button" aria-label="Regenerate response">
+                        <RefreshCw size={15} />
+                      </button>
+                      <button type="button" aria-label="Listen to response">
+                        <Volume2 size={15} />
+                      </button>
+                      <button type="button" aria-label="Copy response">
+                        <Copy size={15} />
+                      </button>
+                      <button type="button" aria-label="Share response">
+                        <Share2 size={15} />
+                      </button>
+                      <button type="button" aria-label="Thumbs up">
+                        <ThumbsUp size={15} />
+                      </button>
+                      <button type="button" aria-label="Thumbs down">
+                        <ThumbsDown size={15} />
+                      </button>
+                      <span aria-hidden="true">1.6s</span>
+                    </div>
+                    {quickReplies.length > 0 && (
+                      <div className={styles.chatQuickReplies}>
+                        {quickReplies.map((reply) => (
+                          <button key={reply} type="button">
+                            {reply}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             );
           })}
           {isResponding && (
-            <div className={`${styles.chatMessage} ${styles.chatMessageAssistant}`}>
-              <div className={styles.chatMessageAvatar} aria-hidden="true">
-                <Bot size={18} />
-              </div>
+            <div className={styles.chatMessage} data-role="assistant">
               <div className={styles.chatBubble}>
                 <div className={styles.chatTyping}>
                   <span />
@@ -270,6 +314,9 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
           rows={1}
         />
         <div className={styles.chatComposerActions}>
+          <button type="button" className={styles.chatComposerSecondary} aria-label="Open attachments">
+            <Paperclip size={16} />
+          </button>
           <button
             type="submit"
             aria-label="Send message"
