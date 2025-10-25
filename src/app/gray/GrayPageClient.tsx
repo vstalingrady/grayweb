@@ -182,6 +182,8 @@ function GrayPageClientInner({
   const [calendarCalendars, setCalendarCalendars] = useState<CalendarInfo[]>(createSeedCalendars);
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>(createSeedEvents);
   const { sessions, createSession } = useChatStore();
+  const supportsInlineChat = variant !== "chat";
+  const [currentChatId, setCurrentChatId] = useState<string | null>(() => activeChatId ?? null);
 
   const baseViewMode: ViewMode =
     variant === "chat"
@@ -190,9 +192,12 @@ function GrayPageClientInner({
         ? "dashboard"
         : "general";
 
-  const [manualViewMode, setManualViewMode] = useState<ViewMode | null>(() =>
-    activeNav === "history" && baseViewMode !== "chat" ? "history" : null
-  );
+  const [manualViewMode, setManualViewMode] = useState<ViewMode | null>(() => {
+    if (supportsInlineChat && (activeChatId ?? null)) {
+      return "chat";
+    }
+    return activeNav === "history" && baseViewMode !== "chat" ? "history" : null;
+  });
 
   const viewMode: ViewMode =
     baseViewMode === "chat"
@@ -401,7 +406,13 @@ function GrayPageClientInner({
     setChatDraft("");
     try {
       const session = await createSession(draft);
-      router.push(`/chat/${session.id}`);
+      if (supportsInlineChat) {
+        setCurrentChatId(session.id);
+        setManualViewMode("chat");
+        setIsSidebarExpanded(false);
+      } else {
+        router.push(`/chat/${session.id}`);
+      }
     } catch (error) {
       console.error("Failed to start chat session:", error);
       setChatDraft(draft);
@@ -410,6 +421,12 @@ function GrayPageClientInner({
 
   const handleOpenHistoryEntry = (entry: SidebarHistoryEntry) => {
     if (!entry.href || entry.href === "#") {
+      return;
+    }
+    if (supportsInlineChat) {
+      setCurrentChatId(entry.id);
+      setManualViewMode("chat");
+      setIsSidebarExpanded(false);
       return;
     }
     setIsSidebarExpanded(false);
@@ -439,7 +456,7 @@ function GrayPageClientInner({
             onCollapse={() => setIsSidebarExpanded(false)}
             onToggle={() => setIsSidebarExpanded((previous) => !previous)}
             onNavigate={handleNavigate}
-            activeChatId={activeChatId}
+            activeChatId={currentChatId}
           />
 
           <div
@@ -472,12 +489,12 @@ function GrayPageClientInner({
                   onCalendarEventsChange={setCalendarEvents}
                 />
               ) : isChatView ? (
-                <GrayChatView sessionId={activeChatId ?? null} />
+                <GrayChatView sessionId={currentChatId ?? null} />
               ) : isHistoryView ? (
                 <GrayHistoryView
                   sections={historySections}
                   onOpenEntry={handleOpenHistoryEntry}
-                  activeEntryId={activeChatId ?? null}
+                  activeEntryId={currentChatId ?? null}
                 />
               ) : (
                 <GrayGeneralView
@@ -522,6 +539,7 @@ export default function GrayPageClient({
     <UserProvider userEmail={viewerEmail}>
       <ChatProvider>
         <GrayPageClientInner
+          key={variant === "chat" ? `chat-${activeChatId ?? "new"}` : "gray-root"}
           initialTimestamp={initialTimestamp}
           activeNav={activeNav}
           variant={variant}

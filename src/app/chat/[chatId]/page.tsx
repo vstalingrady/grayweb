@@ -3,13 +3,13 @@ import GrayPageClient from "@/app/gray/GrayPageClient";
 import { readServerSession } from "@/lib/auth/server";
 
 type ChatPageProps = {
-  params: {
+  params: Promise<{
     chatId: string;
-  };
+  }>;
 };
 
 export default async function ChatPage({ params }: ChatPageProps) {
-  const { chatId } = params;
+  const { chatId } = await params;
   const session = await readServerSession();
 
   if (!session) {
