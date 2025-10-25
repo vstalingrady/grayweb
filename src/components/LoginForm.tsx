@@ -114,7 +114,7 @@ export default function LoginForm() {
       }
 
       if (!remember && data.session && typeof window !== "undefined") {
-        const storageKey = supabase.auth.storageKey;
+        const { storageKey } = supabase.auth as { storageKey?: string };
         if (storageKey) {
           window.localStorage.removeItem(storageKey);
         }
