@@ -80,6 +80,7 @@ type GrayDashboardCalendarProps = {
   onEventsChange?: (events: CalendarEvent[]) => void;
   onCalendarsChange?: (calendars: CalendarInfo[]) => void;
   hourHeight?: number;
+  maxHeight?: number | string;
 };
 
 export function GrayDashboardCalendar({
@@ -91,6 +92,7 @@ export function GrayDashboardCalendar({
   onEventsChange,
   onCalendarsChange,
   hourHeight: hourHeightProp,
+  maxHeight,
 }: GrayDashboardCalendarProps) {
   const hourHeight = hourHeightProp ?? DEFAULT_HOUR_HEIGHT;
   const [viewMode, setViewMode] = useState<CalendarViewMode>(viewModeLocked ?? "week");
@@ -358,10 +360,19 @@ export function GrayDashboardCalendar({
     showSidebar ? styles.dashboardCalendarWithSidebar : styles.dashboardCalendarStandalone,
   ].join(" ");
 
+  const calendarStyle: CSSProperties = {
+    "--calendar-hour-height": `${hourHeight}px`,
+  };
+
+  if (maxHeight !== undefined) {
+    calendarStyle["--calendar-max-height"] =
+      typeof maxHeight === "number" ? `${maxHeight}px` : maxHeight;
+  }
+
   return (
     <div
       className={calendarRootClassName}
-      style={{ "--calendar-hour-height": `${hourHeight}px` } as CSSProperties}
+      style={calendarStyle}
     >
       {showSidebar && (
         <CalendarSidebar
