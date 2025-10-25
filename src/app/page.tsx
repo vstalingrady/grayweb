@@ -4,8 +4,8 @@ import { readServerSession } from "@/lib/auth/server";
 
 const DEFAULT_REDIRECT = "/login?redirect=/";
 
-export default function GrayWorkspaceHome() {
-  const session = readServerSession();
+export default async function GrayWorkspaceHome() {
+  const session = await readServerSession();
 
   if (!session) {
     redirect(DEFAULT_REDIRECT);

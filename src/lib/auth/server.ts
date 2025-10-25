@@ -4,8 +4,8 @@ export type ServerSession = {
   email?: string;
 };
 
-export const readServerSession = (): ServerSession | null => {
-  const cookieStore = cookies();
+export const readServerSession = async (): Promise<ServerSession | null> => {
+  const cookieStore = await cookies();
   const authCookie = cookieStore.get("gray-auth");
 
   if (!authCookie) {
