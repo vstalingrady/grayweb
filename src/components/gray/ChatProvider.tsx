@@ -36,6 +36,8 @@ type ChatContextValue = {
   createSession: (initialMessage: string) => Promise<ChatSession>;
   appendMessage: (sessionId: string, role: ChatRole, content: string) => void;
   updateSession: (sessionId: string, partial: Partial<ChatSession>) => void;
+  renameSession: (sessionId: string, title: string) => void;
+  deleteSession: (sessionId: string) => void;
   getSession: (sessionId: string) => ChatSession | undefined;
 };
 
@@ -180,6 +182,28 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     [persistSessions]
   );
 
+  const renameSession = useCallback(
+    (sessionId: string, title: string) => {
+      const trimmed = title.trim();
+      if (!trimmed) {
+        return;
+      }
+      updateSession(sessionId, { title: trimmed });
+    },
+    [updateSession]
+  );
+
+  const deleteSession = useCallback(
+    (sessionId: string) => {
+      setSessions((prev) => {
+        const next = prev.filter((session) => session.id !== sessionId);
+        persistSessions(next);
+        return next;
+      });
+    },
+    [persistSessions]
+  );
+
   const createSession = useCallback(
     async (initialMessage: string): Promise<ChatSession> => {
       const now = Date.now();
@@ -248,9 +272,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       createSession,
       appendMessage,
       updateSession,
+      renameSession,
+      deleteSession,
       getSession,
     }),
-    [appendMessage, createSession, getSession, sessions, updateSession]
+    [appendMessage, createSession, deleteSession, getSession, renameSession, sessions, updateSession]
   );
 
   useEffect(() => {

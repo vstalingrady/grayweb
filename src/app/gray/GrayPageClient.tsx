@@ -137,7 +137,7 @@ function GrayPageClientInner({
   const [calendarCalendars, setCalendarCalendars] = useState<CalendarInfo[]>([]);
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
   const [streakCount, setStreakCount] = useState(0);
-  const { sessions, createSession } = useChatStore();
+  const { sessions, createSession, renameSession, deleteSession } = useChatStore();
   const supportsInlineChat = variant !== "chat";
   const [currentChatId, setCurrentChatId] = useState<string | null>(() => activeChatId ?? null);
 
@@ -520,6 +520,32 @@ function GrayPageClientInner({
     router.push(entry.href);
   };
 
+  const handleOpenHistoryEntryExternal = (entry: SidebarHistoryEntry) => {
+    if (!entry.href || entry.href === "#") {
+      return;
+    }
+    window.open(entry.href, "_blank", "noopener,noreferrer");
+  };
+
+  const handleRenameHistoryEntry = (entry: SidebarHistoryEntry) => {
+    const nextTitle = window.prompt("Rename conversation", entry.title);
+    if (!nextTitle) {
+      return;
+    }
+    renameSession(entry.id, nextTitle);
+  };
+
+  const handleDeleteHistoryEntry = (entry: SidebarHistoryEntry) => {
+    const confirmed = window.confirm("Delete this conversation? This cannot be undone.");
+    if (!confirmed) {
+      return;
+    }
+    deleteSession(entry.id);
+    if (currentChatId === entry.id) {
+      setCurrentChatId(null);
+    }
+  };
+
   const timeLabel = formatClock(now);
   const dateLabel = formatDate(now);
   const greeting = `Good ${greetingForDate(now)}, ${viewerName}`;
@@ -585,6 +611,9 @@ function GrayPageClientInner({
                   sections={historySections}
                   onOpenEntry={handleOpenHistoryEntry}
                   activeEntryId={currentChatId ?? null}
+                  onOpenEntryExternal={handleOpenHistoryEntryExternal}
+                  onRenameEntry={handleRenameHistoryEntry}
+                  onDeleteEntry={handleDeleteHistoryEntry}
                 />
               ) : (
                 <GrayGeneralView

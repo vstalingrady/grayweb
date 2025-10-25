@@ -558,9 +558,13 @@
 
 .historyListShell li {
   border-radius: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .historyListButton {
+  flex: 1;
   width: 100%;
   display: flex;
   align-items: center;
@@ -596,6 +600,43 @@
 
 .historyListButtonStatic {
   cursor: default;
+}
+
+.historyRowActions {
+  display: inline-flex;
+  gap: 8px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.historyListShell li:hover .historyRowActions,
+.historyListShell li:focus-within .historyRowActions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.historyRowActions button {
+  border: none;
+  background: transparent;
+  color: rgba(225, 225, 235, 0.78);
+  padding: 6px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease;
+}
+
+.historyRowActions button:hover,
+.historyRowActions button:focus-visible {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.95);
+  outline: none;
+}
+
+.historyRowDelete {
+  color: #ff7b7b;
 }
 
 .historyRowTitle {

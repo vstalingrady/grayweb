@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Search } from "lucide-react";
+import { Search, ExternalLink, Pencil, Trash2 } from "lucide-react";
 import styles from "@/app/gray/GrayPageClient.module.css";
 import {
   type SidebarHistoryEntry,
@@ -12,6 +12,9 @@ type GrayHistoryViewProps = {
   sections: SidebarHistorySection[];
   onOpenEntry?: (entry: SidebarHistoryEntry) => void;
   activeEntryId?: string | null;
+  onOpenEntryExternal?: (entry: SidebarHistoryEntry) => void;
+  onRenameEntry?: (entry: SidebarHistoryEntry) => void;
+  onDeleteEntry?: (entry: SidebarHistoryEntry) => void;
 };
 
 type HistoryListEntry = SidebarHistoryEntry & {
@@ -30,7 +33,14 @@ const formatHistoryDate = (timestamp: number) => {
   });
 };
 
-export function GrayHistoryView({ sections, onOpenEntry, activeEntryId }: GrayHistoryViewProps) {
+export function GrayHistoryView({
+  sections,
+  onOpenEntry,
+  activeEntryId,
+  onOpenEntryExternal,
+  onRenameEntry,
+  onDeleteEntry,
+}: GrayHistoryViewProps) {
   const [query, setQuery] = useState("");
 
   const entries = useMemo<HistoryListEntry[]>(() => {
@@ -105,6 +115,45 @@ export function GrayHistoryView({ sections, onOpenEntry, activeEntryId }: GrayHi
                       {content}
                     </div>
                   )}
+                  <div className={styles.historyRowActions}>
+                    {hasLink && onOpenEntryExternal && (
+                      <button
+                        type="button"
+                        aria-label="Open in new tab"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onOpenEntryExternal(entry);
+                        }}
+                      >
+                        <ExternalLink size={14} />
+                      </button>
+                    )}
+                    {onRenameEntry && (
+                      <button
+                        type="button"
+                        aria-label="Rename conversation"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onRenameEntry(entry);
+                        }}
+                      >
+                        <Pencil size={14} />
+                      </button>
+                    )}
+                    {onDeleteEntry && (
+                      <button
+                        type="button"
+                        aria-label="Delete conversation"
+                        className={styles.historyRowDelete}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onDeleteEntry(entry);
+                        }}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </div>
                 </li>
               );
             })}
