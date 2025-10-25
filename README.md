@@ -48,6 +48,9 @@ SUPABASE_URL=<https://your-project.supabase.co>
 SUPABASE_ANON_KEY=<anon key>
 NEXT_PUBLIC_SUPABASE_URL=<https://your-project.supabase.co>
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key>
+# Optional overrides for auth redirect targets (defaults to /alignmentid/gray)
+# NEXT_PUBLIC_AUTH_REDIRECT=<https://gray.alignment.id>
+# NEXT_PUBLIC_SITE_URL=<https://gray.alignment.id>
 ```
 
 Visit [http://localhost:8000/docs](http://localhost:8000/docs) for the automatically generated FastAPI docs once the server is running.

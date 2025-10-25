@@ -1,7 +1,9 @@
 "use client";
 
+import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { FormEvent, useMemo, useState } from "react";
-import { Gem, Loader2, Lock, Mail } from "lucide-react";
+import { Loader2, Lock, Mail } from "lucide-react";
 import { FaDiscord, FaGoogle } from "react-icons/fa6";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import styles from "./LoginForm.module.css";
@@ -12,11 +14,38 @@ type MessageState =
   | { type: "error"; text: string };
 
 const providers = [
-  { id: "google" as const, label: "Google", icon: FaGoogle, color: "#EA4335" },
-  { id: "discord" as const, label: "Discord", icon: FaDiscord, color: "#5865F2" },
+  { id: "google" as const, label: "Google", icon: FaGoogle },
+  { id: "discord" as const, label: "Discord", icon: FaDiscord },
 ];
 
+const envRedirect = process.env.NEXT_PUBLIC_AUTH_REDIRECT?.trim();
+const envSiteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+
+const DEFAULT_APP_PATH = "/alignmentid/gray";
+const FALLBACK_BASE = envSiteUrl || "http://localhost:3000";
+
+const ensureAbsoluteUrl = (target: string): string => {
+  if (target.startsWith("http://") || target.startsWith("https://")) {
+    return target;
+  }
+
+  if (typeof window !== "undefined") {
+    return new URL(target, window.location.origin).toString();
+  }
+
+  return new URL(target, FALLBACK_BASE).toString();
+};
+
+const resolveRedirectTarget = (): string => {
+  if (envRedirect) {
+    return envRedirect;
+  }
+
+  return DEFAULT_APP_PATH;
+};
+
 export default function LoginForm() {
+  const router = useRouter();
   const supabase = useMemo(() => getSupabaseClient(), []);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -29,8 +58,7 @@ export default function LoginForm() {
     setMessage({ type: "idle" });
 
     try {
-      const redirectTo =
-        typeof window !== "undefined" ? window.location.origin : undefined;
+      const redirectTo = ensureAbsoluteUrl(resolveRedirectTarget());
       const { error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
@@ -95,6 +123,20 @@ export default function LoginForm() {
         type: "success",
         text: "Signed in successfully. Redirecting…",
       });
+
+      const destination = resolveRedirectTarget();
+      if (typeof window !== "undefined") {
+        const absoluteDestination = ensureAbsoluteUrl(destination);
+        if (
+          absoluteDestination.startsWith("http://") ||
+          absoluteDestination.startsWith("https://")
+        ) {
+          window.location.href = absoluteDestination;
+        } else {
+          router.replace(destination);
+          router.refresh();
+        }
+      }
     } catch (error) {
       const text =
         error instanceof Error ? error.message : "Unable to sign in.";
@@ -113,7 +155,7 @@ export default function LoginForm() {
         </header>
 
         <div className={styles.oauthRow}>
-          {providers.map(({ id, label, icon: Icon, color }) => (
+          {providers.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
               type="button"
@@ -121,7 +163,7 @@ export default function LoginForm() {
               onClick={() => handleOAuth(id)}
               disabled={loading}
             >
-              <span className={styles.brandIcon} style={{ color }}>
+              <span className={styles.brandIcon}>
                 <Icon size={18} />
               </span>
               Continue with {label}
@@ -219,7 +261,14 @@ export default function LoginForm() {
 
       <aside className={styles.accent}>
         <div className={styles.glow} />
-        <Gem size={120} strokeWidth={1.4} className={styles.accentIcon} />
+        <Image
+          src="/grayaiwhite.svg"
+          alt="Gray AI emblem"
+          width={140}
+          height={140}
+          priority
+          className={styles.accentImage}
+        />
       </aside>
     </div>
   );

@@ -11,14 +11,14 @@
 .panel {
   width: min(980px, 100%);
   border-radius: 48px;
-  padding: 72px;
-  background: linear-gradient(160deg, rgba(10, 10, 10, 0.92), rgba(4, 4, 4, 0.98));
+  background: linear-gradient(160deg, rgba(10, 10, 10, 0.95), rgba(4, 4, 4, 0.99));
   border: 1px solid rgba(255, 255, 255, 0.04);
   box-shadow:
     0 30px 80px rgba(0, 0, 0, 0.45),
     inset 0 0 0 1px rgba(255, 255, 255, 0.02);
   display: flex;
   justify-content: center;
+  overflow: hidden;
 }
 
 @media (max-width: 768px) {
@@ -27,7 +27,6 @@
   }
 
   .panel {
-    padding: 48px 32px;
     border-radius: 36px;
   }
 }
