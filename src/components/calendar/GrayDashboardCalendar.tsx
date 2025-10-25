@@ -135,10 +135,12 @@ const ensureDateZone = (value: Date) => new Date(value.getTime());
 
 type GrayDashboardCalendarProps = {
   initialDate?: Date;
+  viewModeLocked?: CalendarViewMode;
+  showSidebar?: boolean;
 };
 
-export function GrayDashboardCalendar({ initialDate }: GrayDashboardCalendarProps) {
-  const [viewMode, setViewMode] = useState<CalendarViewMode>("week");
+export function GrayDashboardCalendar({ initialDate, viewModeLocked, showSidebar = true }: GrayDashboardCalendarProps) {
+  const [viewMode, setViewMode] = useState<CalendarViewMode>(viewModeLocked ?? "week");
   const initial = initialDate ? new Date(initialDate) : new Date();
   const [selectedDate, setSelectedDate] = useState(() => initial);
   const [monthDate, setMonthDate] = useState(() => initial);
@@ -279,25 +281,27 @@ export function GrayDashboardCalendar({ initialDate }: GrayDashboardCalendarProp
         ))}
       </div>
       <div className={styles.calendarBody}>
-        <div className={styles.calendarTimesColumn}>
-          {HOURS_LABEL.map((label) => (
-            <span key={label}>{label}</span>
-          ))}
-        </div>
-        <div className={styles.calendarWeekColumns}>
-          {weekDays.map((day, columnIndex) => (
-            <div key={day.toISOString()} className={styles.calendarWeekColumn}>
-              <div className={styles.calendarColumnScroller}>
-                {weekLayouts[columnIndex]?.map((event) => (
-                  <EventCard
-                    key={event.id}
-                    event={event}
-                    onClick={() => handleEditEvent(event)}
-                  />
-                ))}
+        <div className={styles.calendarBodyScroll}>
+          <div className={styles.calendarTimesColumn}>
+            {HOURS_LABEL.map((label) => (
+              <span key={label}>{label}</span>
+            ))}
+          </div>
+          <div className={styles.calendarWeekColumns}>
+            {weekDays.map((day, columnIndex) => (
+              <div key={day.toISOString()} className={styles.calendarWeekColumn}>
+                <div className={styles.calendarColumnScroller}>
+                  {weekLayouts[columnIndex]?.map((event) => (
+                    <EventCard
+                      key={event.id}
+                      event={event}
+                      onClick={() => handleEditEvent(event)}
+                    />
+                  ))}
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       </div>
     </div>
@@ -313,22 +317,24 @@ export function GrayDashboardCalendar({ initialDate }: GrayDashboardCalendarProp
         </div>
       </div>
       <div className={styles.calendarBody}>
-        <div className={styles.calendarTimesColumn}>
-          {HOURS_LABEL.map((label) => (
-            <span key={label}>{label}</span>
-          ))}
-        </div>
-        <div className={styles.calendarDayColumn} ref={dayColumnRef}>
-          <div className={styles.calendarColumnScroller}>
-            {dayLayouts.map((event) => (
-              <EventCard
-                key={event.id}
-                event={event}
-                onClick={() => handleEditEvent(event)}
-                draggableProps={viewMode === "day" ? getDraggableProps(event) : undefined}
-                isDragging={draftPreview?.id === event.id}
-              />
+        <div className={styles.calendarBodyScroll} ref={dayColumnRef}>
+          <div className={styles.calendarTimesColumn}>
+            {HOURS_LABEL.map((label) => (
+              <span key={label}>{label}</span>
             ))}
+          </div>
+          <div className={styles.calendarDayColumn}>
+            <div className={styles.calendarColumnScroller}>
+              {dayLayouts.map((event) => (
+                <EventCard
+                  key={event.id}
+                  event={event}
+                  onClick={() => handleEditEvent(event)}
+                  draggableProps={viewMode === "day" ? getDraggableProps(event) : undefined}
+                  isDragging={draftPreview?.id === event.id}
+                />
+              ))}
+            </div>
           </div>
         </div>
       </div>
@@ -350,16 +356,18 @@ export function GrayDashboardCalendar({ initialDate }: GrayDashboardCalendarProp
 
   return (
     <div className={styles.dashboardCalendar}>
-      <CalendarSidebar
-        monthDate={monthDate}
-        selectedDate={selectedDate}
-        onSelectDate={handleDaySelect}
-        onNavigateMonth={handleMonthNavigate}
-        calendars={calendars}
-        onToggleCalendar={handleToggleCalendar}
-        isCollapsed={isSidebarCollapsed}
-        onToggleCollapse={() => setIsSidebarCollapsed((previous) => !previous)}
-      />
+      {showSidebar && (
+        <CalendarSidebar
+          monthDate={monthDate}
+          selectedDate={selectedDate}
+          onSelectDate={handleDaySelect}
+          onNavigateMonth={handleMonthNavigate}
+          calendars={calendars}
+          onToggleCalendar={handleToggleCalendar}
+          isCollapsed={isSidebarCollapsed}
+          onToggleCollapse={() => setIsSidebarCollapsed((previous) => !previous)}
+        />
+      )}
 
       <div className={styles.calendarSurface}>
         <header className={styles.calendarSurfaceHeader}>
@@ -374,18 +382,20 @@ export function GrayDashboardCalendar({ initialDate }: GrayDashboardCalendarProp
             </h2>
           </div>
           <div className={styles.calendarSurfaceActions}>
-            <div className={styles.calendarViewToggle}>
-              {["week", "day"].map((mode) => (
-                <button
-                  key={mode}
-                  type="button"
-                  data-active={viewMode === mode ? "true" : "false"}
-                  onClick={() => setViewMode(mode as CalendarViewMode)}
-                >
-                  {mode}
-                </button>
-              ))}
-            </div>
+            {!viewModeLocked && (
+              <div className={styles.calendarViewToggle}>
+                {["week", "day"].map((mode) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    data-active={viewMode === mode ? "true" : "false"}
+                    onClick={() => setViewMode(mode as CalendarViewMode)}
+                  >
+                    {mode}
+                  </button>
+                ))}
+              </div>
+            )}
             <button type="button" onClick={handleCreateEvent}>
               + New
             </button>

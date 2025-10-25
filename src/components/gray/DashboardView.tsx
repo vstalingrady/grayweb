@@ -32,7 +32,6 @@ export function GrayDashboardView({
     <>
       <div className={styles.dashboardHeaderRow}>
         <div className={styles.dashboardHeaderLeft}>
-          <span className={styles.dashboardEyebrow}>Dashboard</span>
           <h1 className={styles.dashboardHeadline}>Operational focus</h1>
         </div>
         <div className={styles.dashboardHeaderRight}>
@@ -162,7 +161,7 @@ export function GrayDashboardView({
           </article>
         </section>
       ) : (
-        <GrayDashboardCalendar initialDate={currentDate} />
+        <GrayDashboardCalendar initialDate={currentDate} showSidebar={true} />
       )}
     </>
   );
