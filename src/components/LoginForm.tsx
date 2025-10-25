@@ -72,11 +72,6 @@ export default function LoginForm() {
       if (error) {
         throw error;
       }
-
-      setMessage({
-        type: "success",
-        text: `Redirecting to ${provider} for authentication…`,
-      });
     } catch (error) {
       const text =
         error instanceof Error ? error.message : "OAuth request failed.";
@@ -110,19 +105,11 @@ export default function LoginForm() {
       }
 
       if (!remember && data.session) {
-        await supabase.auth.setSession(
-          {
-            access_token: data.session.access_token,
-            refresh_token: data.session.refresh_token,
-          },
-          { persistSession: false }
-        );
+        await supabase.auth.setSession({
+          access_token: data.session.access_token,
+          refresh_token: data.session.refresh_token,
+        });
       }
-
-      setMessage({
-        type: "success",
-        text: "Signed in successfully. Redirecting…",
-      });
 
       const destination = resolveRedirectTarget();
       if (typeof window !== "undefined") {
