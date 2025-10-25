@@ -126,6 +126,11 @@ const DAY_EVENTS_SEED: DayEvent[] = [
 
 const HOURS = Array.from({ length: 24 }, (_, index) => index);
 
+const MINUTES_IN_DAY = 24 * 60;
+const CALENDAR_HOUR_HEIGHT = 56;
+const DEFAULT_EVENT_DURATION_MINUTES = 60;
+const MIN_EVENT_DURATION_MINUTES = 45;
+
 const SIDEBAR_ITEMS: SidebarNavItem[] = [
   { id: "general", label: "General", icon: Gem },
   { id: "new-thread", label: "New Thread", icon: MessageSquarePlus },
@@ -174,6 +179,28 @@ const formatDate = (date: Date) =>
       day: "numeric",
     })
     .toUpperCase();
+
+const timeLabelToMinutes = (time: string) => {
+  const [hourPart, minutePart = "0"] = time.split(":");
+  const hours = Number.parseInt(hourPart, 10);
+  const minutes = Number.parseInt(minutePart, 10);
+  if (Number.isNaN(hours) || Number.isNaN(minutes)) {
+    return 0;
+  }
+  return Math.max(0, Math.min(MINUTES_IN_DAY, hours * 60 + minutes));
+};
+
+const minutesToDisplayLabel = (minutes: number) => {
+  const clampedMinutes = Math.max(0, Math.min(MINUTES_IN_DAY, minutes));
+  const hours = Math.floor(clampedMinutes / 60);
+  const remainder = clampedMinutes % 60;
+  const date = new Date();
+  date.setHours(hours, remainder, 0, 0);
+  return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+};
+
+const minutesToPixels = (minutes: number) =>
+  (minutes / 60) * CALENDAR_HOUR_HEIGHT;
 
 const formatHourLabel = (hour: number) => {
   if (hour === 0) {
@@ -266,6 +293,32 @@ export default function GrayPageClient({
   const dayEvents = useMemo(
     () => DAY_EVENTS_SEED.map((event) => ({ ...event })),
     []
+  );
+  const calendarEvents = useMemo(
+    () =>
+      dayEvents.map((event) => {
+        const startMinutes = timeLabelToMinutes(event.start);
+        const desiredEnd = event.end
+          ? timeLabelToMinutes(event.end)
+          : startMinutes + DEFAULT_EVENT_DURATION_MINUTES;
+        const safeEnd = Math.min(
+          Math.max(desiredEnd, startMinutes + MIN_EVENT_DURATION_MINUTES),
+          MINUTES_IN_DAY
+        );
+        const durationMinutes = safeEnd - startMinutes;
+        const eventHeight = Math.max(minutesToPixels(durationMinutes), 42);
+
+        return {
+          id: event.id,
+          label: event.label,
+          rangeLabel: `${minutesToDisplayLabel(startMinutes)} — ${minutesToDisplayLabel(
+            safeEnd
+          )}`,
+          topOffset: minutesToPixels(startMinutes),
+          height: eventHeight,
+        };
+      }),
+    [dayEvents]
   );
 
   useEffect(() => {
@@ -471,33 +524,49 @@ export default function GrayPageClient({
             </h1>
 
             <section className={styles.mainGrid}>
-              <div className={styles.primaryColumn}>
-                <div className={styles.calendarCard}>
-                  <header>Calendar</header>
-                  <div className={styles.calendarBody}>
-                    <ul className={styles.calendarHours}>
-                      {HOURS.map((hour) => (
-                        <li key={hour} className={styles.calendarHour}>
-                          <span className={styles.calendarHourLabel}>
-                            {formatHourLabel(hour)}
-                          </span>
-                          <span className={styles.calendarHourLine} />
-                        </li>
-                      ))}
-                    </ul>
-                    <div className={styles.eventList}>
-                      {dayEvents.map((event) => (
-                        <article key={event.id} className={styles.eventItem}>
-                          <span className={styles.eventTime}>
-                            {event.start}
-                            {event.end ? ` — ${event.end}` : ""}
-                          </span>
-                          <p className={styles.eventLabel}>{event.label}</p>
-                        </article>
-                      ))}
+                <div className={styles.primaryColumn}>
+                  <div className={styles.calendarCard}>
+                    <header>Calendar</header>
+                    <div className={styles.calendarBody}>
+                      <div className={styles.calendarTimes}>
+                        {HOURS.map((hour) => (
+                          <span key={hour}>{formatHourLabel(hour)}</span>
+                        ))}
+                      </div>
+                      <div className={styles.calendarViewport}>
+                        <div
+                          className={styles.calendarTrack}
+                          style={{
+                            height: `${CALENDAR_HOUR_HEIGHT * HOURS.length}px`,
+                          }}
+                        >
+                          {HOURS.map((hour) => (
+                            <span
+                              key={hour}
+                              className={styles.calendarRule}
+                              data-major={hour % 3 === 0 ? "true" : "false"}
+                              style={{
+                                top: `${hour * CALENDAR_HOUR_HEIGHT}px`,
+                              }}
+                            />
+                          ))}
+                          {calendarEvents.map((event) => (
+                            <article
+                              key={event.id}
+                              className={styles.calendarEvent}
+                              style={{
+                                top: `${event.topOffset}px`,
+                                height: `${event.height}px`,
+                              }}
+                            >
+                              <strong>{event.label}</strong>
+                              <span>{event.rangeLabel}</span>
+                            </article>
+                          ))}
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </div>
 
               </div>
 
