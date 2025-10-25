@@ -18,8 +18,11 @@ const plexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "gray_hackathon",
-  description: "Minimalist Supabase-powered auth experience.",
+  title: {
+    default: "Gray Operator",
+    template: "%s • Gray Operator",
+  },
+  description: "Operational cockpit for your Gray workspace.",
   icons: {
     icon: [
       {
