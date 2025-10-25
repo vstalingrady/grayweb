@@ -53,14 +53,6 @@ type SidebarNavItem = {
   active?: boolean;
 };
 
-type PulseEntry = {
-  id: string;
-  time: string;
-  status: "stable" | "up" | "down";
-  summary: string;
-  focus: string;
-};
-
 const PLAN_SEED: PlanItem[] = [
   {
     id: "plan-1",
@@ -167,30 +159,6 @@ const SIDEBAR_HISTORY = [
   },
 ];
 
-const PULSE_SEED: PulseEntry[] = [
-  {
-    id: "pulse-1",
-    time: "08:03",
-    status: "stable",
-    summary: "Daily stand-up cleared blockers in 11m.",
-    focus: "Keep async channel velocity high.",
-  },
-  {
-    id: "pulse-2",
-    time: "12:17",
-    status: "up",
-    summary: "Momentum spike: proactivity +12% vs. yesterday.",
-    focus: "Double-down on outbound builder outreach.",
-  },
-  {
-    id: "pulse-3",
-    time: "16:42",
-    status: "down",
-    summary: "Two tasks at risk; builder cohort waiting on guidance.",
-    focus: "Reprioritize checklist items to protect streak.",
-  },
-];
-
 const formatClock = (date: Date) =>
   date.toLocaleTimeString([], {
     hour: "2-digit",
@@ -280,9 +248,6 @@ export default function GrayPageClient({
   viewerEmail,
 }: GrayPageClientProps) {
   const [now, setNow] = useState(() => new Date(initialTimestamp));
-  const [pulseEntries] = useState<PulseEntry[]>(() =>
-    PULSE_SEED.map((entry) => ({ ...entry }))
-  );
   const [plans, setPlans] = useState<PlanItem[]>(() =>
     PLAN_SEED.map((plan) => ({ ...plan }))
   );
@@ -534,23 +499,6 @@ export default function GrayPageClient({
                   </div>
                 </div>
 
-                <div className={styles.pulseCard}>
-                  <header>
-                    <h2>Pulse</h2>
-                  </header>
-                  <div className={styles.pulseList}>
-                    {pulseEntries.map((entry) => (
-                      <article key={entry.id}>
-                        <div className={styles.pulseHeader}>
-                          <span>{entry.time}</span>
-                          <PulseStatus status={entry.status} />
-                        </div>
-                        <p>{entry.summary}</p>
-                        <span>{entry.focus}</span>
-                      </article>
-                    ))}
-                  </div>
-                </div>
               </div>
 
               <div className={styles.secondaryColumn}>
@@ -659,13 +607,5 @@ export default function GrayPageClient({
         </div>
       </div>
     </div>
-  );
-}
-
-function PulseStatus({ status }: { status: PulseEntry["status"] }) {
-  return (
-    <span className={styles.pulseStatus} data-status={status}>
-      {status === "up" ? "▲" : status === "down" ? "▼" : "◆"}
-    </span>
   );
 }

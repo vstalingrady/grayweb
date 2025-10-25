@@ -16,7 +16,7 @@
     );
   display: flex;
   justify-content: flex-start;
-  padding-top: clamp(24px, 5vh, 36px);
+  padding-top: 0;
   padding-right: clamp(16px, 4vw, 36px);
   padding-bottom: clamp(24px, 5vh, 36px);
   padding-left: 0;
@@ -78,7 +78,7 @@
   justify-content: space-between;
   padding: 28px 0 32px;
   width: 88px;
-  border-radius: 0 28px 28px 0;
+  border-radius: 0;
   background: rgba(7, 7, 7, 0.96);
   border: 1px solid rgba(255, 255, 255, 0.04);
   border-left: none;
@@ -240,7 +240,7 @@
   flex-direction: column;
   justify-content: space-between;
   padding: clamp(24px, 4vh, 34px) clamp(20px, 3.5vw, 30px);
-  border-radius: 0 28px 28px 0;
+  border-radius: 0;
   background: rgba(7, 7, 7, 0.96);
   border: 1px solid rgba(255, 255, 255, 0.04);
   border-left: none;
@@ -711,89 +711,6 @@
   font-size: 0.92rem;
   line-height: 1.4;
   color: rgba(245, 245, 245, 0.92);
-}
-
-.pulseCard {
-  composes: cardSurface;
-  padding: clamp(18px, 2.5vw, 24px);
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  min-height: 0;
-}
-
-.pulseCard header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  text-transform: uppercase;
-  letter-spacing: 0.28em;
-  font-size: 0.72rem;
-  color: rgba(235, 235, 235, 0.7);
-}
-
-.pulseList {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  overflow-y: auto;
-  padding-right: 4px;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
-}
-
-.pulseList::-webkit-scrollbar {
-  width: 6px;
-}
-
-.pulseList::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.14);
-  border-radius: 999px;
-}
-
-.pulseList article {
-  padding: 14px 16px;
-  border-radius: 18px;
-  background: rgba(20, 20, 20, 0.78);
-  border: 1px solid rgba(255, 255, 255, 0.04);
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.pulseHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-size: 0.74rem;
-  letter-spacing: 0.12em;
-  color: rgba(235, 235, 235, 0.7);
-}
-
-.pulseStatus {
-  font-size: 0.72rem;
-  letter-spacing: 0.12em;
-}
-
-.pulseStatus[data-status="up"] {
-  color: #8cffc1;
-}
-
-.pulseStatus[data-status="down"] {
-  color: #ff7878;
-}
-
-.pulseList article p {
-  font-size: 0.9rem;
-  line-height: 1.35;
-  color: rgba(245, 245, 245, 0.92);
-}
-
-.pulseList article span:last-child {
-  font-size: 0.74rem;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: rgba(235, 235, 235, 0.62);
 }
 
 .planPanel {
