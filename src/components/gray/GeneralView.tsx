@@ -4,6 +4,8 @@ import { GrayDashboardCalendar } from "@/components/calendar/GrayDashboardCalend
 import type { CalendarEvent, CalendarInfo } from "@/components/calendar/types";
 import { type HabitItem, type PlanItem } from "./types";
 
+const PANEL_HEIGHT = "min(640px, calc(100vh - 260px))";
+
 type PlanTab = "plans" | "habits";
 
 type GrayGeneralViewProps = {
@@ -47,13 +49,15 @@ export function GrayGeneralView({
             events={calendarEvents}
             onCalendarsChange={onCalendarsChange}
             onEventsChange={onCalendarEventsChange}
-            hourHeight={36}
-            maxHeight="min(640px, calc(100vh - 260px))"
+            maxHeight={PANEL_HEIGHT}
           />
         </div>
 
         <div className={styles.secondaryColumn}>
-          <div className={styles.planPanel}>
+          <div
+            className={styles.planPanel}
+            style={{ minHeight: PANEL_HEIGHT, height: PANEL_HEIGHT }}
+          >
             <div className={styles.tabBar}>
               <button
                 type="button"
