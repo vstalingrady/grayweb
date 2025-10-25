@@ -127,7 +127,7 @@ const DAY_EVENTS_SEED: DayEvent[] = [
 const HOURS = Array.from({ length: 24 }, (_, index) => index);
 
 const MINUTES_IN_DAY = 24 * 60;
-const CALENDAR_HOUR_HEIGHT = 52;
+const CALENDAR_HOUR_HEIGHT = 80;
 const DEFAULT_EVENT_DURATION_MINUTES = 60;
 const MIN_EVENT_DURATION_MINUTES = 45;
 
