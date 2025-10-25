@@ -113,11 +113,11 @@ export default function LoginForm() {
         throw error;
       }
 
-      if (!remember && data.session) {
-        await supabase.auth.setSession({
-          access_token: data.session.access_token,
-          refresh_token: data.session.refresh_token,
-        });
+      if (!remember && data.session && typeof window !== "undefined") {
+        const storageKey = supabase.auth.storageKey;
+        if (storageKey) {
+          window.localStorage.removeItem(storageKey);
+        }
       }
 
       const destination = resolveRedirectTarget();

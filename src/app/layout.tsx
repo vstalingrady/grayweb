@@ -19,6 +19,19 @@ const plexMono = IBM_Plex_Mono({
 export const metadata: Metadata = {
   title: "gray_hackathon",
   description: "Minimalist Supabase-powered auth experience.",
+  icons: {
+    icon: [
+      {
+        url: "/faviconlighttheme.ico",
+        media: "(prefers-color-scheme: light)",
+      },
+      {
+        url: "/favicondarktheme.ico",
+        media: "(prefers-color-scheme: dark)",
+      },
+      { rel: "shortcut icon", url: "/favicondarktheme.ico" },
+    ],
+  },
 };
 
 export default function RootLayout({
