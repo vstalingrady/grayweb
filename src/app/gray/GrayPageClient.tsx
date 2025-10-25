@@ -8,6 +8,9 @@ import { GrayWorkspaceHeader } from "@/components/gray/WorkspaceHeader";
 import { GrayDashboardView } from "@/components/gray/DashboardView";
 import { GrayGeneralView } from "@/components/gray/GeneralView";
 import { GrayChatBar } from "@/components/gray/ChatBar";
+import { GrayChatView } from "@/components/gray/ChatView";
+import { UserProvider, useUser } from "@/contexts/UserContext";
+import { apiService, CalendarEvent as ApiCalendarEvent } from "@/lib/api";
 import styles from "./GrayPageClient.module.css";
 import {
   type PlanItem,
@@ -19,6 +22,7 @@ import {
   type CalendarDisplayEvent,
   type SidebarHistorySection,
 } from "@/components/gray/types";
+import { useChatStore } from "@/components/gray/ChatProvider";
 
 const PLAN_SEED: PlanItem[] = [
   {
@@ -123,27 +127,6 @@ const NAVIGATION_ROUTES: Partial<Record<SidebarNavKey, string>> = {
   dashboard: "/dashboard",
 };
 
-const SIDEBAR_HISTORY: SidebarHistorySection[] = [
-  {
-    month: "July",
-    entries: [
-      "Subjective Attractiveness",
-      "Comparing Decimal Numbers",
-      "Mobile-Friendly Fade Effect",
-      "Kill la Kill Character Moments",
-      "Infinite Scrolling Payment Model",
-      "Infinite Logo Scroller Implementation",
-    ],
-  },
-  {
-    month: "June",
-    entries: [
-      "Chat Log Analysis Techniques",
-      "Debate on Content Creation Ethics",
-    ],
-  },
-];
-
 const formatClock = (date: Date) =>
   date.toLocaleTimeString([], {
     hour: "2-digit",
@@ -212,58 +195,21 @@ const greetingForDate = (date: Date) => {
   return "evening";
 };
 
-const DEFAULT_VIEWER_NAME = "Vstalin Grady";
-
-const viewerNameFromEmail = (email: string | null): string => {
-  if (!email) {
-    return DEFAULT_VIEWER_NAME;
-  }
-  const [username] = email.split("@");
-  if (!username) {
-    return DEFAULT_VIEWER_NAME;
-  }
-
-  const parts = username
-    .replace(/[\d_-]+/g, " ")
-    .split(/[.\s]+/)
-    .filter(Boolean)
-    .map((segment) => segment[0].toUpperCase() + segment.slice(1));
-
-  if (!parts.length) {
-    return DEFAULT_VIEWER_NAME;
-  }
-
-  if (parts.length === 1) {
-    return DEFAULT_VIEWER_NAME;
-  }
-
-  return parts.join(" ");
-};
-
-const viewerInitialsFromName = (name: string) => {
-  const parts = name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((segment) => segment[0]?.toUpperCase() ?? "");
-
-  const initials = parts.join("");
-  return initials || "VG";
-};
-
 type GrayPageClientProps = {
   initialTimestamp: number;
   viewerEmail: string | null;
   activeNav?: SidebarNavKey;
-  variant?: "general" | "dashboard";
+  variant?: "general" | "dashboard" | "chat";
+  activeChatId?: string | null;
 };
 
-export default function GrayPageClient({
+function GrayPageClientInner({
   initialTimestamp,
-  viewerEmail,
   activeNav,
   variant = "general",
-}: GrayPageClientProps) {
+  activeChatId = null,
+}: Omit<GrayPageClientProps, 'viewerEmail'>) {
+  const { user, loading } = useUser();
   const router = useRouter();
   const [now, setNow] = useState(() => new Date(initialTimestamp));
   const [plans, setPlans] = useState<PlanItem[]>(() =>
@@ -273,18 +219,88 @@ export default function GrayPageClient({
   const [chatDraft, setChatDraft] = useState("");
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
   const [dashboardTab, setDashboardTab] = useState<"pulse" | "calendar">("pulse");
+  const [dayEventsState, setDayEventsState] = useState<DayEvent[]>(DAY_EVENTS_SEED);
+  const { sessions, createSession } = useChatStore();
 
-  const viewerName = useMemo(
-    () => viewerNameFromEmail(viewerEmail),
-    [viewerEmail]
-  );
-  const viewerInitials = useMemo(
-    () => viewerInitialsFromName(viewerName),
-    [viewerName]
-  );
+  // Fetch calendar events from API when user is available
+  useEffect(() => {
+    if (user) {
+      apiService.getUserCalendarEvents(user.id).then((apiEvents: ApiCalendarEvent[]) => {
+        const dayEvents: DayEvent[] = apiEvents.map((apiEvent) => ({
+          id: apiEvent.id.toString(),
+          start: new Date(apiEvent.start_time).toTimeString().slice(0, 5),
+          end: new Date(apiEvent.end_time).toTimeString().slice(0, 5),
+          label: apiEvent.title,
+        }));
+        setDayEventsState(dayEvents.length > 0 ? dayEvents : DAY_EVENTS_SEED);
+      }).catch((error) => {
+        console.error('Failed to fetch calendar events:', error);
+      });
+    }
+  }, [user]);
+
+  const viewerName = useMemo(() => {
+    if (loading || !user) return "Loading...";
+    return user.full_name;
+  }, [user, loading]);
+
+  const viewerInitials = useMemo(() => {
+    if (loading || !user) return "...";
+    return user.initials;
+  }, [user, loading]);
+  const historySections = useMemo<SidebarHistorySection[]>(() => {
+    if (!sessions.length) {
+      return [];
+    }
+
+    const currentYear = new Date().getFullYear();
+    const groups = new Map<
+      string,
+      {
+        id: string;
+        label: string;
+        entries: SidebarHistorySection["entries"];
+        sortKey: number;
+      }
+    >();
+
+    sessions.forEach((session) => {
+      const date = new Date(session.updatedAt);
+      const groupId = `${date.getFullYear()}-${date.getMonth()}`;
+      const label =
+        date.getFullYear() === currentYear
+          ? date.toLocaleDateString([], { month: "long" })
+          : date.toLocaleDateString([], { month: "long", year: "numeric" });
+      const sortKey = new Date(date.getFullYear(), date.getMonth(), 1).getTime();
+
+      if (!groups.has(groupId)) {
+        groups.set(groupId, {
+          id: groupId,
+          label,
+          entries: [],
+          sortKey,
+        });
+      }
+
+      groups.get(groupId)?.entries.push({
+        id: session.id,
+        title: session.title,
+        href: `/chat/${session.id}`,
+        createdAt: session.updatedAt,
+      });
+    });
+
+    return Array.from(groups.values())
+      .sort((a, b) => b.sortKey - a.sortKey)
+      .map((group) => ({
+        id: group.id,
+        label: group.label,
+        entries: group.entries.sort((a, b) => b.createdAt - a.createdAt),
+      }));
+  }, [sessions]);
   const dayEvents = useMemo(
-    () => DAY_EVENTS_SEED.map((event) => ({ ...event })),
-    []
+    () => dayEventsState.map((event) => ({ ...event })),
+    [dayEventsState]
   );
   const calendarEvents = useMemo<CalendarDisplayEvent[]>(
     () =>
@@ -313,8 +329,10 @@ export default function GrayPageClient({
     [dayEvents]
   );
   const isDashboardView = variant === "dashboard";
+  const isChatView = variant === "chat";
   const resolvedActiveNav =
-    activeNav ?? (isDashboardView ? "dashboard" : "general");
+    activeNav ??
+    (isDashboardView ? "dashboard" : isChatView ? "history" : "general");
   const proactivity = PROACTIVITY_SEED;
   const dashboardDateLabel = useMemo(
     () => formatDashboardDate(now),
@@ -356,13 +374,20 @@ export default function GrayPageClient({
     );
   };
 
-  const handleChatSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleChatSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const draft = chatDraft.trim();
     if (!draft) {
       return;
     }
     setChatDraft("");
+    try {
+      const session = await createSession(draft);
+      router.push(`/chat/${session.id}`);
+    } catch (error) {
+      console.error("Failed to start chat session:", error);
+      setChatDraft(draft);
+    }
   };
 
   const timeLabel = formatClock(now);
@@ -383,14 +408,18 @@ export default function GrayPageClient({
             activeNav={resolvedActiveNav}
             railItems={SIDEBAR_RAIL_ITEMS}
             navItems={SIDEBAR_ITEMS}
-            historySections={SIDEBAR_HISTORY}
+            historySections={historySections}
             onExpand={() => setIsSidebarExpanded(true)}
             onCollapse={() => setIsSidebarExpanded(false)}
             onToggle={() => setIsSidebarExpanded((previous) => !previous)}
             onNavigate={handleNavigate}
+            activeChatId={activeChatId}
           />
 
-          <div className={styles.main}>
+          <div
+            className={styles.main}
+            data-dashboard={isDashboardView ? "true" : "false"}
+          >
             <GrayWorkspaceHeader
               timeLabel={timeLabel}
               dateLabel={dateLabel}
@@ -409,6 +438,8 @@ export default function GrayPageClient({
                   onSelectTab={setDashboardTab}
                   currentDate={now}
                 />
+              ) : isChatView ? (
+                <GrayChatView sessionId={activeChatId ?? null} />
               ) : (
                 <GrayGeneralView
                   greeting={greeting}
@@ -426,14 +457,36 @@ export default function GrayPageClient({
               )}
             </div>
 
-            <GrayChatBar
-              value={chatDraft}
-              onChange={setChatDraft}
-              onSubmit={handleChatSubmit}
-            />
+            {!isDashboardView && !isChatView && (
+              <GrayChatBar
+                value={chatDraft}
+                onChange={setChatDraft}
+                onSubmit={handleChatSubmit}
+              />
+            )}
           </div>
         </div>
       </div>
     </div>
+  );
+}
+
+// Wrapper component that provides the UserContext
+export default function GrayPageClient({
+  initialTimestamp,
+  viewerEmail,
+  activeNav,
+  variant = "general",
+  activeChatId = null,
+}: GrayPageClientProps) {
+  return (
+    <UserProvider userEmail={viewerEmail}>
+      <GrayPageClientInner
+        initialTimestamp={initialTimestamp}
+        activeNav={activeNav}
+        variant={variant}
+        activeChatId={activeChatId}
+      />
+    </UserProvider>
   );
 }
