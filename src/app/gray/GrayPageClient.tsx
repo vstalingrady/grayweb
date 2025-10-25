@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import {
   FormEvent,
   useEffect,
@@ -164,6 +165,11 @@ const SIDEBAR_RAIL_ITEMS: SidebarNavItem[] = [
   ...SIDEBAR_ITEMS,
 ];
 
+const NAVIGATION_ROUTES: Partial<Record<SidebarNavKey, string>> = {
+  general: "/",
+  dashboard: "/dashboard",
+};
+
 const SIDEBAR_HISTORY = [
   {
     month: "July",
@@ -305,6 +311,7 @@ export default function GrayPageClient({
   activeNav,
   variant = "general",
 }: GrayPageClientProps) {
+  const router = useRouter();
   const [now, setNow] = useState(() => new Date(initialTimestamp));
   const [plans, setPlans] = useState<PlanItem[]>(() =>
     PLAN_SEED.map((plan) => ({ ...plan }))
@@ -359,6 +366,20 @@ export default function GrayPageClient({
     () => formatDashboardDate(now),
     [now]
   );
+  const handleNavigate = (navId: SidebarNavKey) => {
+    if (navId === "search") {
+      setIsSidebarExpanded(true);
+      return;
+    }
+
+    const target = NAVIGATION_ROUTES[navId];
+    if (target) {
+      router.push(target);
+      return;
+    }
+
+    setIsSidebarExpanded(true);
+  };
 
   useEffect(() => {
     const start = Date.now();
@@ -423,7 +444,7 @@ export default function GrayPageClient({
                         type="button"
                         aria-label={item.label}
                         data-active={item.id === resolvedActiveNav ? "true" : "false"}
-                        onClick={() => setIsSidebarExpanded(true)}
+                        onClick={() => handleNavigate(item.id)}
                       >
                         <item.icon size={18} />
                       </button>
@@ -488,6 +509,7 @@ export default function GrayPageClient({
                               type="button"
                               data-active={item.id === resolvedActiveNav ? "true" : "false"}
                               aria-label={item.label}
+                              onClick={() => handleNavigate(item.id)}
                             >
                               <span className={styles.navIcon}>
                                 <item.icon size={18} />
