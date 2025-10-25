@@ -1,13 +1,35 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import styles from "./page.module.css";
 
 type Status = "processing" | "success" | "error";
 
-export default function AlignmentGrayLanding() {
+export default function AlignmentGrayPage() {
+  return (
+    <Suspense fallback={<ProcessingFallback />}>
+      <AlignmentGrayContent />
+    </Suspense>
+  );
+}
+
+function ProcessingFallback() {
+  return (
+    <main className={styles.wrapper}>
+      <div className={styles.card}>
+        <div className={styles.glow} />
+        <h1>gray_aligned</h1>
+        <p className={styles.status} data-state="processing">
+          Finalizing your login…
+        </p>
+      </div>
+    </main>
+  );
+}
+
+function AlignmentGrayContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [status, setStatus] = useState<Status>("processing");
