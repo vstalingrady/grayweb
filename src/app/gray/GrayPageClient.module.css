@@ -496,6 +496,9 @@
   flex-direction: column;
   gap: clamp(16px, 3vw, 26px);
   min-height: 0;
+  align-items: center;
+  padding: clamp(24px, 6vh, 56px) clamp(18px, 5vw, 48px)
+    clamp(32px, 7vh, 72px);
 }
 
 .header {
@@ -503,6 +506,7 @@
   justify-content: space-between;
   align-items: flex-start;
   gap: 18px;
+  width: min(960px, 100%);
 }
 
 .timeGroup {
@@ -570,15 +574,20 @@
   font-weight: 500;
   letter-spacing: 0.04em;
   color: rgba(245, 245, 245, 0.92);
+  width: min(960px, 100%);
+  text-align: left;
 }
 
 .mainGrid {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 0.4fr) minmax(0, 0.6fr);
   gap: clamp(18px, 2.5vw, 28px);
-  align-items: start;
+  align-items: stretch;
+  width: min(960px, 100%);
+  justify-content: center;
+  margin: 0 auto;
 }
 
 .primaryColumn,
@@ -587,6 +596,14 @@
   flex-direction: column;
   gap: clamp(18px, 3vw, 28px);
   min-height: 0;
+  align-items: stretch;
+  width: 100%;
+  height: 100%;
+}
+
+.primaryColumn > *,
+.secondaryColumn > * {
+  flex: 1;
 }
 
 .cardSurface {
@@ -609,8 +626,11 @@
   flex-direction: column;
   gap: 16px;
   min-height: 0;
-  max-width: 320px;
+  width: 100%;
+  margin: 0;
+  max-width: 384px;
   --calendar-hour-height: 52px;
+  height: 100%;
 }
 
 .calendarCard header {
@@ -744,6 +764,10 @@
   flex-direction: column;
   gap: 18px;
   min-height: 0;
+  width: 100%;
+  margin: 0;
+  height: 100%;
+  max-width: 576px;
 }
 
 .tabBar {
@@ -905,6 +929,7 @@
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(12, 12, 12, 0.72);
   backdrop-filter: blur(16px);
+  margin-bottom: clamp(8px, 2vh, 16px);
 }
 
 .chatIconButton,
@@ -946,8 +971,16 @@
 }
 
 @media (max-width: 1080px) {
+  .calendarCard,
+  .planPanel {
+    max-width: none;
+  }
+}
+
+@media (max-width: 1080px) {
   .mainGrid {
     grid-template-columns: 1fr;
+    width: min(520px, 100%);
   }
 }
 
