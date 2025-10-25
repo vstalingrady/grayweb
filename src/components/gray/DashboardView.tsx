@@ -1,6 +1,7 @@
 import { CheckSquare, Square, Flame, Trash2, ChevronDown, Clock } from "lucide-react";
 import styles from "@/app/gray/GrayPageClient.module.css";
 import { GrayDashboardCalendar } from "@/components/calendar/GrayDashboardCalendar";
+import type { CalendarEvent, CalendarInfo } from "@/components/calendar/types";
 import {
   type HabitItem,
   type PlanItem,
@@ -16,6 +17,10 @@ type GrayDashboardViewProps = {
   activeTab: "pulse" | "calendar";
   onSelectTab: (tab: "pulse" | "calendar") => void;
   currentDate: Date;
+  calendars: CalendarInfo[];
+  onCalendarsChange: (calendars: CalendarInfo[]) => void;
+  calendarEvents: CalendarEvent[];
+  onCalendarEventsChange: (events: CalendarEvent[]) => void;
 };
 
 export function GrayDashboardView({
@@ -27,6 +32,10 @@ export function GrayDashboardView({
   activeTab,
   onSelectTab,
   currentDate,
+  calendars,
+  onCalendarsChange,
+  calendarEvents,
+  onCalendarEventsChange,
 }: GrayDashboardViewProps) {
   return (
     <>
@@ -79,7 +88,7 @@ export function GrayDashboardView({
                           <Square size={16} />
                         )}
                       </span>
-                      <span>{plan.label}</span>
+                      <span className={styles.planLabel}>{plan.label}</span>
                     </button>
                   </li>
                 ))}
@@ -99,7 +108,7 @@ export function GrayDashboardView({
                 {habits.map((habit) => (
                   <li key={habit.id}>
                     <div>
-                      <span>{habit.label}</span>
+                      <span className={styles.habitLabel}>{habit.label}</span>
                       <span>{habit.previousLabel}</span>
                     </div>
                     <div>
@@ -161,7 +170,14 @@ export function GrayDashboardView({
           </article>
         </section>
       ) : (
-        <GrayDashboardCalendar initialDate={currentDate} showSidebar={true} />
+        <GrayDashboardCalendar
+          initialDate={currentDate}
+          showSidebar={true}
+          calendars={calendars}
+          events={calendarEvents}
+          onCalendarsChange={onCalendarsChange}
+          onEventsChange={onCalendarEventsChange}
+        />
       )}
     </>
   );

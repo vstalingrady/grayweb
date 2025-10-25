@@ -3,10 +3,11 @@
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Gem, MessageSquarePlus, LayoutDashboard, History, Search } from "lucide-react";
-import { GraySidebar } from "@/components/gray/Sidebar";
+import { GrayEnhancedSidebar } from "@/components/gray/EnhancedSidebar";
 import { GrayWorkspaceHeader } from "@/components/gray/WorkspaceHeader";
 import { GrayDashboardView } from "@/components/gray/DashboardView";
 import { GrayGeneralView } from "@/components/gray/GeneralView";
+import { GrayHistoryView } from "@/components/gray/HistoryView";
 import { GrayChatBar } from "@/components/gray/ChatBar";
 import { GrayChatView } from "@/components/gray/ChatView";
 import { UserProvider, useUser } from "@/contexts/UserContext";
@@ -16,13 +17,15 @@ import {
   type PlanItem,
   type HabitItem,
   type ProactivityItem,
-  type DayEvent,
   type SidebarNavKey,
   type SidebarNavItem,
-  type CalendarDisplayEvent,
   type SidebarHistorySection,
+  type SidebarHistoryEntry,
 } from "@/components/gray/types";
+import type { CalendarEvent, CalendarInfo } from "@/components/calendar/types";
 import { ChatProvider, useChatStore } from "@/components/gray/ChatProvider";
+import { DEFAULT_HISTORY_SECTIONS } from "@/components/gray/historySeed";
+import { createSeedCalendars, createSeedEvents } from "@/components/calendar/calendarSeed";
 
 const PLAN_SEED: PlanItem[] = [
   {
@@ -76,40 +79,6 @@ const PROACTIVITY_SEED: ProactivityItem = {
   time: "09:00 AM",
 };
 
-const DAY_EVENTS_SEED: DayEvent[] = [
-  {
-    id: "event-1",
-    start: "08:30",
-    end: "09:15",
-    label: "Builder cohort sync",
-  },
-  {
-    id: "event-2",
-    start: "11:00",
-    end: "12:00",
-    label: "Proactivity instrumentation review",
-  },
-  {
-    id: "event-3",
-    start: "15:30",
-    end: "16:00",
-    label: "Pulse QA slot",
-  },
-  {
-    id: "event-4",
-    start: "19:00",
-    end: "19:45",
-    label: "Alignment recap + journaling",
-  },
-];
-
-const HOURS = Array.from({ length: 24 }, (_, index) => index);
-
-const MINUTES_IN_DAY = 24 * 60;
-const CALENDAR_HOUR_HEIGHT = 72;
-const DEFAULT_EVENT_DURATION_MINUTES = 60;
-const MIN_EVENT_DURATION_MINUTES = 45;
-
 const SIDEBAR_ITEMS: SidebarNavItem[] = [
   { id: "general", label: "General", icon: Gem },
   { id: "new-thread", label: "New Thread", icon: MessageSquarePlus },
@@ -149,39 +118,28 @@ const formatDashboardDate = (date: Date) =>
     month: "long",
   });
 
-const timeLabelToMinutes = (time: string) => {
-  const [hourPart, minutePart = "0"] = time.split(":");
-  const hours = Number.parseInt(hourPart, 10);
-  const minutes = Number.parseInt(minutePart, 10);
-  if (Number.isNaN(hours) || Number.isNaN(minutes)) {
-    return 0;
+const deriveInitials = (fullName: string | null | undefined) => {
+  if (!fullName) {
+    return "";
   }
-  return Math.max(0, Math.min(MINUTES_IN_DAY, hours * 60 + minutes));
-};
 
-const minutesToDisplayLabel = (minutes: number) => {
-  const clampedMinutes = Math.max(0, Math.min(MINUTES_IN_DAY, minutes));
-  const hours = Math.floor(clampedMinutes / 60);
-  const remainder = clampedMinutes % 60;
-  const date = new Date();
-  date.setHours(hours, remainder, 0, 0);
-  return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-};
+  const parts = fullName
+    .split(" ")
+    .map((part) => part.trim())
+    .filter(Boolean);
 
-const minutesToPixels = (minutes: number) =>
-  (minutes / 60) * CALENDAR_HOUR_HEIGHT;
+  if (!parts.length) {
+    return "";
+  }
 
-const formatHourLabel = (hour: number) => {
-  if (hour === 0) {
-    return "12 AM";
+  if (parts.length === 1) {
+    const [first] = parts;
+    return first.slice(0, Math.min(first.length, 2)).toUpperCase();
   }
-  if (hour < 12) {
-    return `${hour} AM`;
-  }
-  if (hour === 12) {
-    return "12 PM";
-  }
-  return `${hour - 12} PM`;
+
+  const firstInitial = parts[0][0] ?? "";
+  const lastInitial = parts[parts.length - 1][0] ?? "";
+  return `${firstInitial}${lastInitial}`.toUpperCase();
 };
 
 const greetingForDate = (date: Date) => {
@@ -203,6 +161,8 @@ type GrayPageClientProps = {
   activeChatId?: string | null;
 };
 
+type ViewMode = "general" | "dashboard" | "history" | "chat";
+
 function GrayPageClientInner({
   initialTimestamp,
   activeNav,
@@ -219,38 +179,96 @@ function GrayPageClientInner({
   const [chatDraft, setChatDraft] = useState("");
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
   const [dashboardTab, setDashboardTab] = useState<"pulse" | "calendar">("pulse");
-  const [dayEventsState, setDayEventsState] = useState<DayEvent[]>(DAY_EVENTS_SEED);
+  const [calendarCalendars, setCalendarCalendars] = useState<CalendarInfo[]>(createSeedCalendars);
+  const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>(createSeedEvents);
   const { sessions, createSession } = useChatStore();
+
+  const baseViewMode: ViewMode =
+    variant === "chat"
+      ? "chat"
+      : variant === "dashboard"
+        ? "dashboard"
+        : "general";
+
+  const [manualViewMode, setManualViewMode] = useState<ViewMode | null>(() =>
+    activeNav === "history" && baseViewMode !== "chat" ? "history" : null
+  );
+
+  const viewMode: ViewMode =
+    baseViewMode === "chat"
+      ? "chat"
+      : manualViewMode ?? (activeNav === "history" ? "history" : baseViewMode);
 
   // Fetch calendar events from API when user is available
   useEffect(() => {
-    if (user) {
-      apiService.getUserCalendarEvents(user.id).then((apiEvents: ApiCalendarEvent[]) => {
-        const dayEvents: DayEvent[] = apiEvents.map((apiEvent) => ({
-          id: apiEvent.id.toString(),
-          start: new Date(apiEvent.start_time).toTimeString().slice(0, 5),
-          end: new Date(apiEvent.end_time).toTimeString().slice(0, 5),
-          label: apiEvent.title,
-        }));
-        setDayEventsState(dayEvents.length > 0 ? dayEvents : DAY_EVENTS_SEED);
-      }).catch((error) => {
-        console.error('Failed to fetch calendar events:', error);
-      });
+    if (!user) {
+      return;
     }
+
+    apiService
+      .getUserCalendarEvents(user.id)
+      .then((apiEvents: ApiCalendarEvent[]) => {
+        if (!apiEvents.length) {
+          return;
+        }
+
+        const mapped = apiEvents.map((apiEvent) => ({
+          id: apiEvent.id.toString(),
+          calendarId: apiEvent.calendar_id?.toString() ?? "default",
+          title: apiEvent.title,
+          start: new Date(apiEvent.start_time),
+          end: new Date(apiEvent.end_time),
+          color: "linear-gradient(135deg, rgba(91, 141, 239, 0.85), rgba(48, 79, 254, 0.9))",
+          entryType: "event",
+        }));
+
+        setCalendarEvents(mapped);
+
+        const knownIds = new Set(mapped.map((event) => event.calendarId));
+        setCalendarCalendars((previous) => {
+          const next = [...previous];
+          knownIds.forEach((id) => {
+            if (!next.some((calendar) => calendar.id === id)) {
+              next.push({
+                id,
+                label: id === "default" ? "Operations" : id,
+                color: "linear-gradient(135deg, #5b8def, #304ffe)",
+                isVisible: true,
+              });
+            }
+          });
+          return next;
+        });
+      })
+      .catch((error) => {
+        console.error("Failed to fetch calendar events:", error);
+      });
   }, [user]);
 
   const viewerName = useMemo(() => {
-    if (loading || !user) return "Loading...";
-    return user.full_name;
+    if (loading) {
+      return "Loading...";
+    }
+    return user?.full_name || "Operator";
   }, [user, loading]);
 
+  const viewerAvatarUrl = user?.profile_picture_url ?? null;
+
   const viewerInitials = useMemo(() => {
-    if (loading || !user) return "...";
-    return user.initials;
-  }, [user, loading]);
+    if (loading) {
+      return "--";
+    }
+    if (user?.initials) {
+      return user.initials;
+    }
+    return deriveInitials(user?.full_name ?? viewerName) || "OP";
+  }, [user, loading, viewerName]);
   const historySections = useMemo<SidebarHistorySection[]>(() => {
     if (!sessions.length) {
-      return [];
+      return DEFAULT_HISTORY_SECTIONS.map((section) => ({
+        ...section,
+        entries: section.entries.map((entry) => ({ ...entry })),
+      }));
     }
 
     const currentYear = new Date().getFullYear();
@@ -298,55 +316,55 @@ function GrayPageClientInner({
         entries: group.entries.sort((a, b) => b.createdAt - a.createdAt),
       }));
   }, [sessions]);
-  const dayEvents = useMemo(
-    () => dayEventsState.map((event) => ({ ...event })),
-    [dayEventsState]
-  );
-  const calendarEvents = useMemo<CalendarDisplayEvent[]>(
-    () =>
-      dayEvents.map((event) => {
-        const startMinutes = timeLabelToMinutes(event.start);
-        const desiredEnd = event.end
-          ? timeLabelToMinutes(event.end)
-          : startMinutes + DEFAULT_EVENT_DURATION_MINUTES;
-        const safeEnd = Math.min(
-          Math.max(desiredEnd, startMinutes + MIN_EVENT_DURATION_MINUTES),
-          MINUTES_IN_DAY
-        );
-        const durationMinutes = safeEnd - startMinutes;
-        const eventHeight = Math.max(minutesToPixels(durationMinutes), 42);
-
-        return {
-          id: event.id,
-          label: event.label,
-          rangeLabel: `${minutesToDisplayLabel(startMinutes)} — ${minutesToDisplayLabel(
-            safeEnd
-          )}`,
-          topOffset: minutesToPixels(startMinutes),
-          height: eventHeight,
-        };
-      }),
-    [dayEvents]
-  );
-  const isDashboardView = variant === "dashboard";
-  const isChatView = variant === "chat";
-  const resolvedActiveNav =
-    activeNav ??
-    (isDashboardView ? "dashboard" : isChatView ? "history" : "general");
   const proactivity = PROACTIVITY_SEED;
   const dashboardDateLabel = useMemo(
     () => formatDashboardDate(now),
     [now]
   );
+  const isDashboardView = viewMode === "dashboard";
+  const isChatView = viewMode === "chat";
+  const isHistoryView = viewMode === "history";
+  const sidebarActiveNav: SidebarNavKey =
+    viewMode === "chat"
+      ? "history"
+      : viewMode === "history"
+        ? "history"
+        : viewMode === "dashboard"
+          ? "dashboard"
+          : "general";
   const handleNavigate = (navId: SidebarNavKey) => {
     if (navId === "search") {
       setIsSidebarExpanded(true);
       return;
     }
 
-    const target = NAVIGATION_ROUTES[navId];
-    if (target) {
-      router.push(target);
+    if (navId === "history") {
+      setManualViewMode("history");
+      setIsSidebarExpanded(true);
+      return;
+    }
+
+    if (navId === "dashboard") {
+      setManualViewMode(null);
+      const target = NAVIGATION_ROUTES[navId];
+      if (target) {
+        router.push(target);
+      }
+      return;
+    }
+
+    if (navId === "general") {
+      setManualViewMode(null);
+      const target = NAVIGATION_ROUTES[navId];
+      if (target) {
+        router.push(target);
+      }
+      return;
+    }
+
+    if (navId === "new-thread") {
+      setManualViewMode(null);
+      setIsSidebarExpanded(true);
       return;
     }
 
@@ -390,22 +408,30 @@ function GrayPageClientInner({
     }
   };
 
+  const handleOpenHistoryEntry = (entry: SidebarHistoryEntry) => {
+    if (!entry.href || entry.href === "#") {
+      return;
+    }
+    setIsSidebarExpanded(false);
+    setManualViewMode(null);
+    router.push(entry.href);
+  };
+
   const timeLabel = formatClock(now);
   const dateLabel = formatDate(now);
   const greeting = `Good ${greetingForDate(now)}, ${viewerName}`;
-  const calendarTrackHeight = CALENDAR_HOUR_HEIGHT * HOURS.length;
-
   return (
     <div className={styles.page}>
       <div className={styles.backdrop} aria-hidden="true" />
       <div className={styles.overlay} aria-hidden="true" />
       <div className={styles.shell}>
         <div className={styles.layout}>
-          <GraySidebar
+          <GrayEnhancedSidebar
             isExpanded={isSidebarExpanded}
             viewerName={viewerName}
             viewerInitials={viewerInitials}
-            activeNav={resolvedActiveNav}
+            viewerAvatarUrl={viewerAvatarUrl}
+            activeNav={sidebarActiveNav}
             railItems={SIDEBAR_RAIL_ITEMS}
             navItems={SIDEBAR_ITEMS}
             historySections={historySections}
@@ -437,27 +463,37 @@ function GrayPageClientInner({
                   activeTab={dashboardTab}
                   onSelectTab={setDashboardTab}
                   currentDate={now}
+                  calendars={calendarCalendars}
+                  onCalendarsChange={setCalendarCalendars}
+                  calendarEvents={calendarEvents}
+                  onCalendarEventsChange={setCalendarEvents}
                 />
               ) : isChatView ? (
                 <GrayChatView sessionId={activeChatId ?? null} />
+              ) : isHistoryView ? (
+                <GrayHistoryView
+                  sections={historySections}
+                  onOpenEntry={handleOpenHistoryEntry}
+                  activeEntryId={activeChatId ?? null}
+                />
               ) : (
                 <GrayGeneralView
                   greeting={greeting}
-                  hours={HOURS}
-                  hourLabelFor={formatHourLabel}
                   calendarEvents={calendarEvents}
-                  calendarTrackHeight={calendarTrackHeight}
-                  calendarHourHeight={CALENDAR_HOUR_HEIGHT}
                   plans={plans}
                   habits={HABIT_SEED}
                   activeTab={planTab}
                   onChangeTab={setPlanTab}
                   onTogglePlan={togglePlan}
+                  currentDate={now}
+                  calendars={calendarCalendars}
+                  onCalendarsChange={setCalendarCalendars}
+                  onCalendarEventsChange={setCalendarEvents}
                 />
               )}
             </div>
 
-            {!isDashboardView && !isChatView && (
+            {viewMode === "general" && (
               <GrayChatBar
                 value={chatDraft}
                 onChange={setChatDraft}

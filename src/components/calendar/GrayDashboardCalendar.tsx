@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import styles from "./GrayDashboardCalendar.module.css";
 import { CalendarSidebar } from "./CalendarSidebar";
@@ -14,6 +14,7 @@ import {
   EventDraft,
   PositionedEvent,
 } from "./types";
+import { createSeedCalendars, createSeedEvents } from "./calendarSeed";
 
 const HOURS = Array.from({ length: 24 }, (_, index) => index);
 const HOUR_HEIGHT = 64;
@@ -68,99 +69,72 @@ const HOURS_LABEL = HOURS.map((hour) => {
   return `${hour - 12} PM`;
 });
 
-const seedCalendars: CalendarInfo[] = [
-  { id: "default", label: "Operations", color: "linear-gradient(135deg, #5b8def, #304ffe)", isVisible: true },
-  { id: "team", label: "Team", color: "linear-gradient(135deg, #ff7d9d, #ff14c6)", isVisible: true },
-  { id: "personal", label: "Personal", color: "linear-gradient(135deg, #20d39c, #0c9f6f)", isVisible: true },
-];
-
-const seedEvents: CalendarEvent[] = [
-  {
-    id: "event-1",
-    calendarId: "default",
-    title: "Builder cohort sync",
-    start: new Date("2025-10-20T09:00:00"),
-    end: new Date("2025-10-20T10:30:00"),
-    color: "linear-gradient(135deg, rgba(91, 141, 239, 0.85), rgba(48, 79, 254, 0.9))",
-    entryType: "event",
-  },
-  {
-    id: "event-2",
-    calendarId: "team",
-    title: "Design review",
-    start: new Date("2025-10-20T11:00:00"),
-    end: new Date("2025-10-20T12:00:00"),
-    color: "linear-gradient(135deg, rgba(255, 125, 157, 0.85), rgba(255, 20, 198, 0.9))",
-    entryType: "event",
-  },
-  {
-    id: "event-3",
-    calendarId: "personal",
-    title: "Run club",
-    start: new Date("2025-10-21T07:30:00"),
-    end: new Date("2025-10-21T08:15:00"),
-    color: "linear-gradient(135deg, rgba(32, 211, 156, 0.9), rgba(12, 159, 111, 0.9))",
-    entryType: "task",
-  },
-  {
-    id: "event-4",
-    calendarId: "default",
-    title: "Roadmap alignment",
-    start: new Date("2025-10-22T13:00:00"),
-    end: new Date("2025-10-22T14:30:00"),
-    color: "linear-gradient(135deg, rgba(91, 141, 239, 0.85), rgba(48, 79, 254, 0.9))",
-    entryType: "event",
-  },
-  {
-    id: "event-5",
-    calendarId: "default",
-    title: "Internal demo",
-    start: new Date("2025-10-24T16:00:00"),
-    end: new Date("2025-10-24T17:00:00"),
-    color: "linear-gradient(135deg, rgba(91, 141, 239, 0.85), rgba(48, 79, 254, 0.9))",
-    entryType: "event",
-  },
-  {
-    id: "event-6",
-    calendarId: "team",
-    title: "Support rotation",
-    start: new Date("2025-10-20T09:30:00"),
-    end: new Date("2025-10-20T10:30:00"),
-    color: "linear-gradient(135deg, rgba(255, 125, 157, 0.85), rgba(255, 20, 198, 0.9))",
-    entryType: "task",
-  },
-];
-
 const ensureDateZone = (value: Date) => new Date(value.getTime());
 
 type GrayDashboardCalendarProps = {
   initialDate?: Date;
   viewModeLocked?: CalendarViewMode;
   showSidebar?: boolean;
+  events?: CalendarEvent[];
+  calendars?: CalendarInfo[];
+  onEventsChange?: (events: CalendarEvent[]) => void;
+  onCalendarsChange?: (calendars: CalendarInfo[]) => void;
 };
 
-export function GrayDashboardCalendar({ initialDate, viewModeLocked, showSidebar = true }: GrayDashboardCalendarProps) {
+export function GrayDashboardCalendar({
+  initialDate,
+  viewModeLocked,
+  showSidebar = true,
+  events: externalEvents,
+  calendars: externalCalendars,
+  onEventsChange,
+  onCalendarsChange,
+}: GrayDashboardCalendarProps) {
   const [viewMode, setViewMode] = useState<CalendarViewMode>(viewModeLocked ?? "week");
   const initial = initialDate ? new Date(initialDate) : new Date();
   const [selectedDate, setSelectedDate] = useState(() => initial);
   const [monthDate, setMonthDate] = useState(() => initial);
-  const [calendars, setCalendars] = useState<CalendarInfo[]>(seedCalendars);
-  const [events, setEvents] = useState<CalendarEvent[]>(seedEvents);
+  const [calendarsState, setCalendarsState] = useState<CalendarInfo[]>(createSeedCalendars);
+  const [eventsState, setEventsState] = useState<CalendarEvent[]>(createSeedEvents);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [composerOpen, setComposerOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
   const [draftPreview, setDraftPreview] = useState<EventDraft | null>(null);
 
+  const calendars = externalCalendars ?? calendarsState;
+  const events = externalEvents ?? eventsState;
+
+  const updateCalendars = (updater: (previous: CalendarInfo[]) => CalendarInfo[]) => {
+    if (externalCalendars && onCalendarsChange) {
+      onCalendarsChange(updater(externalCalendars));
+      return;
+    }
+    setCalendarsState((previous) => {
+      const next = updater(previous);
+      onCalendarsChange?.(next);
+      return next;
+    });
+  };
+
+  const updateEvents = (updater: (previous: CalendarEvent[]) => CalendarEvent[]) => {
+    if (externalEvents && onEventsChange) {
+      onEventsChange(updater(externalEvents));
+      return;
+    }
+    setEventsState((previous) => {
+      const next = updater(previous);
+      onEventsChange?.(next);
+      return next;
+    });
+  };
+
   const dayAnchor = useMemo(() => startOfDay(selectedDate), [selectedDate]);
   const weekAnchor = useMemo(() => startOfWeek(selectedDate), [selectedDate]);
 
-  const calendarMap = useMemo(() => {
-    return new Map(calendars.map((calendar) => [calendar.id, calendar]));
-  }, [calendars]);
+  const calendarMap = useMemo(() => new Map(calendars.map((calendar) => [calendar.id, calendar])), [calendars]);
 
   const visibleEvents = useMemo(
-    () =>
-      events.filter((event) => calendarMap.get(event.calendarId)?.isVisible !== false),
+    () => events.filter((event) => calendarMap.get(event.calendarId)?.isVisible !== false),
     [calendarMap, events]
   );
 
@@ -209,6 +183,26 @@ export function GrayDashboardCalendar({ initialDate, viewModeLocked, showSidebar
 
   const dayColumnRef = useRef<HTMLDivElement | null>(null);
 
+  useEffect(() => {
+    if (viewMode !== "day") {
+      return;
+    }
+    const container = dayColumnRef.current;
+    if (!container) {
+      return;
+    }
+    if (!dayLayouts.length) {
+      container.scrollTop = 0;
+      return;
+    }
+
+    const earliestTop = dayLayouts.reduce((min, event) => Math.min(min, event.top), Number.POSITIVE_INFINITY);
+    const target = Math.max(earliestTop - HOUR_HEIGHT, 0);
+    if (Math.abs(container.scrollTop - target) > 4) {
+      container.scrollTo({ top: target });
+    }
+  }, [dayLayouts, viewMode]);
+
   const dragControls = useEventDrag({
     containerRef: dayColumnRef,
     dayAnchor,
@@ -216,7 +210,7 @@ export function GrayDashboardCalendar({ initialDate, viewModeLocked, showSidebar
     snapMinutes: SNAP_MINUTES,
     onPreview: setDraftPreview,
     onCommit: (draft) => {
-      setEvents((previous) =>
+      updateEvents((previous) =>
         previous.map((event) =>
           event.id === draft.id
             ? { ...event, start: ensureDateZone(draft.start), end: ensureDateZone(draft.end) }
@@ -229,7 +223,7 @@ export function GrayDashboardCalendar({ initialDate, viewModeLocked, showSidebar
   const { getDraggableProps } = dragControls;
 
   const handleToggleCalendar = (calendarId: string) => {
-    setCalendars((previous) =>
+    updateCalendars((previous) =>
       previous.map((calendar) =>
         calendar.id === calendarId
           ? { ...calendar, isVisible: !calendar.isVisible }
@@ -249,7 +243,7 @@ export function GrayDashboardCalendar({ initialDate, viewModeLocked, showSidebar
   };
 
   const handleComposerSubmit = ({ id, ...payload }: EventComposerPayload) => {
-    setEvents((previous) => {
+    updateEvents((previous) => {
       if (id) {
         return previous.map((event) =>
           event.id === id
@@ -267,6 +261,8 @@ export function GrayDashboardCalendar({ initialDate, viewModeLocked, showSidebar
       };
       return [...previous, newEvent];
     });
+    setComposerOpen(false);
+    setEditingEvent(null);
   };
 
   const renderWeekView = () => (
@@ -354,8 +350,13 @@ export function GrayDashboardCalendar({ initialDate, viewModeLocked, showSidebar
     });
   };
 
+  const calendarRootClassName = [
+    styles.dashboardCalendar,
+    showSidebar ? styles.dashboardCalendarWithSidebar : styles.dashboardCalendarStandalone,
+  ].join(" ");
+
   return (
-    <div className={styles.dashboardCalendar}>
+    <div className={calendarRootClassName}>
       {showSidebar && (
         <CalendarSidebar
           monthDate={monthDate}
@@ -376,20 +377,18 @@ export function GrayDashboardCalendar({ initialDate, viewModeLocked, showSidebar
               {viewMode === "week" ? "Week" : "Day"}
             </span>
             <h2>
-              {viewMode === "week"
-                ? formatWeekRange(selectedDate)
-                : formatDayLabel(selectedDate)}
+              {viewMode === "week" ? formatWeekRange(selectedDate) : formatDayLabel(selectedDate)}
             </h2>
           </div>
           <div className={styles.calendarSurfaceActions}>
             {!viewModeLocked && (
               <div className={styles.calendarViewToggle}>
-                {["week", "day"].map((mode) => (
+                {(["week", "day"] as CalendarViewMode[]).map((mode) => (
                   <button
                     key={mode}
                     type="button"
                     data-active={viewMode === mode ? "true" : "false"}
-                    onClick={() => setViewMode(mode as CalendarViewMode)}
+                    onClick={() => setViewMode(mode)}
                   >
                     {mode}
                   </button>
@@ -410,7 +409,10 @@ export function GrayDashboardCalendar({ initialDate, viewModeLocked, showSidebar
         referenceDate={selectedDate}
         activeEvent={editingEvent}
         calendars={calendars}
-        onRequestClose={() => setComposerOpen(false)}
+        onRequestClose={() => {
+          setComposerOpen(false);
+          setEditingEvent(null);
+        }}
         onSubmit={handleComposerSubmit}
       />
     </div>

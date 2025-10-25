@@ -56,8 +56,9 @@ export const useEventDrag = ({
 
         const target = pointerEvent.currentTarget;
         const containerRect = containerRef.current.getBoundingClientRect();
+        const scrollTop = containerRef.current.scrollTop;
         const minuteHeight = hourHeight / 60;
-        const pointerOffsetY = pointerEvent.clientY - containerRect.top;
+        const pointerOffsetY = pointerEvent.clientY - containerRect.top + scrollTop;
 
         const eventStartMinutes = minutesBetween(dayAnchor, calendarEvent.start);
         const eventEndMinutes = minutesBetween(dayAnchor, calendarEvent.end);
@@ -99,7 +100,7 @@ export const useEventDrag = ({
             return;
           }
           const containerBounds = containerRef.current.getBoundingClientRect();
-          const pointerY = moveEvent.clientY - containerBounds.top;
+          const pointerY = moveEvent.clientY - containerBounds.top + containerRef.current.scrollTop;
           const minuteHeightLocal = hourHeight / 60;
           const startMinutes = pointerY / minuteHeightLocal + dragState.offsetMinutes;
 

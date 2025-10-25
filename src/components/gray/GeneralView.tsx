@@ -1,42 +1,37 @@
 import { CheckSquare, Square, Flame } from "lucide-react";
 import styles from "@/app/gray/GrayPageClient.module.css";
 import { GrayDashboardCalendar } from "@/components/calendar/GrayDashboardCalendar";
-import {
-  type CalendarDisplayEvent,
-  type HabitItem,
-  type PlanItem,
-} from "./types";
+import type { CalendarEvent, CalendarInfo } from "@/components/calendar/types";
+import { type HabitItem, type PlanItem } from "./types";
 
 type PlanTab = "plans" | "habits";
 
 type GrayGeneralViewProps = {
   greeting: string;
-  hours: number[];
-  hourLabelFor: (hour: number) => string;
-  calendarEvents: CalendarDisplayEvent[];
-  calendarTrackHeight: number;
-  calendarHourHeight: number;
   plans: PlanItem[];
   habits: HabitItem[];
   activeTab: PlanTab;
   onChangeTab: (tab: PlanTab) => void;
   onTogglePlan: (id: string) => void;
   currentDate: Date;
+  calendars: CalendarInfo[];
+  onCalendarsChange: (calendars: CalendarInfo[]) => void;
+  calendarEvents: CalendarEvent[];
+  onCalendarEventsChange: (events: CalendarEvent[]) => void;
 };
 
 export function GrayGeneralView({
   greeting,
-  hours,
-  hourLabelFor,
   calendarEvents,
-  calendarTrackHeight,
-  calendarHourHeight,
   plans,
   habits,
   activeTab,
   onChangeTab,
   onTogglePlan,
   currentDate,
+  calendars,
+  onCalendarsChange,
+  onCalendarEventsChange,
 }: GrayGeneralViewProps) {
   return (
     <>
@@ -44,7 +39,15 @@ export function GrayGeneralView({
 
       <section className={styles.mainGrid}>
         <div className={styles.primaryColumn}>
-          <GrayDashboardCalendar initialDate={currentDate} viewModeLocked="day" showSidebar={false} />
+          <GrayDashboardCalendar
+            initialDate={currentDate}
+            viewModeLocked="day"
+            showSidebar={false}
+            calendars={calendars}
+            events={calendarEvents}
+            onCalendarsChange={onCalendarsChange}
+            onEventsChange={onCalendarEventsChange}
+          />
         </div>
 
         <div className={styles.secondaryColumn}>
@@ -83,7 +86,7 @@ export function GrayGeneralView({
                               <Square size={16} />
                             )}
                           </span>
-                          <span>{plan.label}</span>
+                          <span className={styles.planLabel}>{plan.label}</span>
                         </button>
                       </li>
                     ))}
@@ -98,7 +101,7 @@ export function GrayGeneralView({
                     {habits.map((habit) => (
                       <li key={habit.id}>
                         <div>
-                          <span>{habit.label}</span>
+                          <span className={styles.habitLabel}>{habit.label}</span>
                           <span>{habit.previousLabel}</span>
                         </div>
                         <div>

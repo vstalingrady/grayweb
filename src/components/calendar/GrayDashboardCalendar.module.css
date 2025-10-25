@@ -1,63 +1,115 @@
 .dashboardCalendar {
   display: grid;
-  grid-template-columns: minmax(220px, 280px) 1fr;
-  gap: clamp(20px, 4vw, 32px);
+  grid-template-columns: minmax(0, 1fr);
+  gap: clamp(14px, 2vw, 20px);
   width: 100%;
   min-width: 0;
   align-items: stretch;
 }
 
-.calendarSidebar {
-  background: rgba(12, 12, 12, 0.88);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 24px;
-  padding: 22px 22px 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-  min-height: 0;
-  transition: width 0.28s ease, opacity 0.2s ease;
+.dashboardCalendarWithSidebar {
+  grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
+  width: min(1400px, 100%);
 }
 
-.calendarSidebar[data-collapsed="true"] {
-  width: 72px;
-  padding: 20px 16px;
-  gap: 12px;
+.dashboardCalendarStandalone {
+  grid-template-columns: minmax(0, 1fr);
+  width: 100%;
+  max-width: none;
 }
+
+.dashboardCalendarStandalone .calendarSurface {
+  background: linear-gradient(
+    135deg,
+    rgba(18, 18, 18, 0.82),
+    rgba(8, 8, 8, 0.74)
+  );
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  padding: clamp(18px, 2.4vw, 24px);
+}
+
+.dashboardCalendarStandalone .calendarSurfaceHeader h2 {
+  letter-spacing: 0.18em;
+}
+
+.dashboardCalendarStandalone .calendarSurfaceEyebrow {
+  color: rgba(235, 235, 235, 0.52);
+}
+
+.dashboardCalendarStandalone .calendarSurfaceActions button {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(12, 12, 12, 0.7);
+  color: rgba(235, 235, 235, 0.8);
+}
+
+.dashboardCalendarStandalone .calendarViewToggle {
+  background: rgba(15, 15, 15, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.dashboardCalendarStandalone .calendarViewToggle button {
+  color: rgba(220, 220, 220, 0.64);
+}
+
+.dashboardCalendarStandalone .calendarViewToggle button[data-active="true"] {
+  background: rgba(245, 245, 245, 0.9);
+  color: #040404;
+}
+
+.dashboardCalendarStandalone .calendarWeekColumns,
+.dashboardCalendarStandalone .calendarDayColumn {
+  background: rgba(20, 20, 20, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.dashboardCalendarStandalone .calendarColumnScroller {
+  background-image: linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.03) 1px,
+    rgba(0, 0, 0, 0) 1px
+  );
+}
+
+.dashboardCalendarStandalone .calendarTimesColumn {
+  color: rgba(235, 235, 235, 0.42);
+}
+
+.dashboardCalendarStandalone .eventCard {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 20px 36px rgba(0, 0, 0, 0.38);
+}
+
+.calendarSidebar {
+  background: rgba(12, 12, 12, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 26px;
+  padding: 28px 28px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  min-height: 0;
+}
+
 
 .calendarSidebarHeader {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
+  flex-direction: column;
+  gap: 16px;
 }
 
 .calendarSidebarEyebrow {
   display: block;
-  font-size: 0.58rem;
+  font-size: 0.6rem;
   letter-spacing: 0.26em;
   text-transform: uppercase;
-  color: rgba(230, 230, 230, 0.56);
-  margin-bottom: 6px;
+  color: rgba(230, 230, 230, 0.64);
 }
 
 .calendarSidebarHeader h2 {
-  font-size: 0.94rem;
-  letter-spacing: 0.14em;
+  font-size: 1.08rem;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: rgba(245, 245, 245, 0.9);
-}
-
-.calendarSidebarToggle {
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(18, 18, 18, 0.82);
-  color: rgba(235, 235, 235, 0.74);
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  border-radius: 999px;
-  padding: 6px 14px;
-  font-size: 0.62rem;
-  cursor: pointer;
+  color: rgba(245, 245, 245, 0.94);
 }
 
 .calendarSidebarContent {
@@ -93,7 +145,7 @@
 .miniMonth {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 14px;
 }
 
 .miniMonthWeekdays {
@@ -110,7 +162,7 @@
 .miniMonthGrid {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
 
 .miniMonthRow {
@@ -154,14 +206,24 @@
 .calendarSidebarList {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
 }
 
-.calendarSidebarList h3 {
-  font-size: 0.62rem;
-  letter-spacing: 0.24em;
+.calendarSidebarList header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.64rem;
+  letter-spacing: 0.26em;
   text-transform: uppercase;
-  color: rgba(235, 235, 235, 0.54);
+  color: rgba(235, 235, 235, 0.6);
+}
+
+.calendarSidebarList header button {
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
 }
 
 .calendarSidebarList ul {
@@ -174,6 +236,7 @@
 }
 
 .calendarSidebarList li label {
+
   display: flex;
   align-items: center;
   gap: 12px;
@@ -184,6 +247,77 @@
 
 .calendarSidebarList input {
   accent-color: rgba(245, 245, 245, 0.9);
+}
+
+.calendarSidebarSubhead {
+  font-size: 0.72rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(230, 230, 230, 0.5);
+}
+
+.calendarSidebarHeaderActions {
+  display: inline-flex;
+  gap: 10px;
+}
+
+.calendarSidebarHeaderActions button {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(24, 24, 24, 0.82);
+  color: rgba(235, 235, 235, 0.72);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  font-size: 0.58rem;
+  border-radius: 999px;
+  padding: 6px 14px;
+  cursor: pointer;
+}
+
+.calendarSidebarCreate {
+  border-color: rgba(255, 255, 255, 0.24);
+  background: rgba(245, 245, 245, 0.92);
+  color: #050505;
+  font-weight: 600;
+}
+
+.calendarSidebarMeta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.64rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(230, 230, 230, 0.52);
+}
+
+.calendarSidebarMeta strong {
+  color: rgba(247, 247, 247, 0.86);
+}
+
+.calendarSidebarSearch input {
+  width: 100%;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(22, 22, 22, 0.9);
+  color: rgba(245, 245, 245, 0.85);
+  padding: 12px 16px;
+  font-size: 0.74rem;
+  letter-spacing: 0.12em;
+}
+
+.calendarSidebarFooter {
+  display: flex;
+  gap: 12px;
+  font-size: 0.56rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(235, 235, 235, 0.42);
+}
+
+.calendarSidebarFooter button {
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
 }
 
 .calendarSidebarSwatch {
@@ -197,10 +331,10 @@
   background: rgba(10, 10, 10, 0.84);
   border: 1px solid rgba(255, 255, 255, 0.05);
   border-radius: 26px;
-  padding: 24px 26px 28px;
+  padding: 16px 22px 22px;
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 14px;
   min-height: 0;
 }
 
@@ -208,7 +342,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 20px;
+  gap: 16px;
 }
 
 .calendarSurfaceEyebrow {
@@ -279,7 +413,7 @@
 .calendarGrid {
   display: grid;
   grid-template-rows: auto 1fr;
-  gap: 16px;
+  gap: 10px;
   min-height: 0;
 }
 
@@ -312,11 +446,28 @@
 }
 
 .calendarBody {
-  display: grid;
-  grid-template-columns: 80px minmax(0, 1fr);
-  gap: 0;
-  min-height: 0;
   position: relative;
+  min-height: 0;
+}
+
+.calendarBodyScroll {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  gap: 0;
+  max-height: clamp(360px, 65vh, 720px);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(146, 150, 160, 0.35) transparent;
+  scrollbar-gutter: stable both-edges;
+}
+
+.calendarBodyScroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.calendarBodyScroll::-webkit-scrollbar-thumb {
+  background: rgba(146, 150, 160, 0.35);
+  border-radius: 999px;
 }
 
 .calendarTimesColumn {
@@ -326,14 +477,16 @@
   letter-spacing: 0.16em;
   color: rgba(220, 220, 220, 0.38);
   text-align: right;
-  padding-right: 10px;
+  padding-right: 8px;
 }
 
 .calendarTimesColumn span {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: flex-end;
-  transform: translateY(50%);
+  padding-bottom: 0;
+  transform: translateY(-2px);
+  pointer-events: none;
 }
 
 .calendarWeekColumns,
@@ -342,6 +495,7 @@
   background: rgba(12, 12, 12, 0.68);
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 18px;
+  min-height: calc(64px * 24);
   overflow: hidden;
 }
 
@@ -364,6 +518,7 @@
     rgba(0, 0, 0, 0) 1px
   );
   background-size: 100% 64px;
+  padding: 0 6px 18px 0;
 }
 
 .eventCard {
@@ -402,6 +557,28 @@
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: rgba(247, 247, 247, 0.78);
+  font-family: var(
+      --font-mono,
+      "IBM Plex Mono",
+      SFMono-Regular,
+      Consolas,
+      "Liberation Mono",
+      Menlo,
+      monospace
+    );
+}
+
+.eventCardTitle {
+  font-family: var(
+      --font-mono,
+      "IBM Plex Mono",
+      SFMono-Regular,
+      Consolas,
+      "Liberation Mono",
+      Menlo,
+      monospace
+    );
+  letter-spacing: 0.04em;
 }
 
 .eventCard strong {

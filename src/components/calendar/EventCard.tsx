@@ -48,7 +48,9 @@ export function EventCard({
         left: `calc(${(event.column / Math.max(event.columnCount, 1)) * 100}% + ${
           event.column * 8
         }px)`,
-        width: `calc(${event.width * 100}% - ${Math.max(event.columnSpan - 1, 0) * 8 + 6}px)`,
+        width: `calc(${event.width * 100}% - ${
+          Math.max(event.columnSpan - 1, 0) * 8 + 12
+        }px)`,
         background: event.color,
         zIndex: event.zIndex,
       }}
@@ -58,7 +60,7 @@ export function EventCard({
       {...draggableProps}
     >
       <span className={styles.eventCardTime}>{timeLabel}</span>
-      <strong>{event.title}</strong>
+      <strong className={styles.eventCardTitle}>{event.title}</strong>
     </div>
   );
 }

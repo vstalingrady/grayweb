@@ -1,7 +1,6 @@
-import React, { useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { ChevronsRight, ChevronsUp, ChevronsDown, Search as SearchIcon, UserRound, History as HistoryGlyph, Plus, LayoutDashboard } from "lucide-react";
+import { ChevronsRight, ChevronsUp, ChevronsDown, Search as SearchIcon, UserRound } from "lucide-react";
 import { useUser } from "@/contexts/UserContext";
 import styles from "@/app/gray/GrayPageClient.module.css";
 import {
@@ -10,30 +9,7 @@ import {
   type SidebarNavKey,
 } from "./types";
 
-// Icon components from Gemini code
-const HistoryIcon: React.FC<{ className?: string }> = ({ className = "w-5 h-5" }) => (
-  <HistoryGlyph className={className} />
-);
-
-const PlusIcon: React.FC<{ className?: string }> = ({ className = 'w-5 h-5' }) => (
-  <Plus className={className} />
-);
-
-const DashboardIcon: React.FC<{ className?: string }> = ({ className = 'w-5 h-5' }) => (
-  <LayoutDashboard className={className} />
-);
-
-type EnhancedHistoryGroup = {
-  id: string;
-  label: string;
-  items: Array<{
-    id: string;
-    label: string;
-    href?: string;
-  }>;
-};
-
-type GrayEnhancedSidebarProps = {
+type GraySidebarProps = {
   isExpanded: boolean;
   viewerName: string;
   viewerInitials: string;
@@ -49,50 +25,23 @@ type GrayEnhancedSidebarProps = {
   activeChatId?: string | null;
 };
 
-export function GrayEnhancedSidebar({
+export function GraySidebar({
   isExpanded,
   viewerName,
   viewerInitials,
   viewerAvatarUrl = null,
   activeNav,
   railItems,
-  navItems: _navItems,
+  navItems,
   historySections,
   onExpand,
   onCollapse,
   onToggle,
   onNavigate,
   activeChatId = null,
-}: GrayEnhancedSidebarProps) {
+}: GraySidebarProps) {
   const { user } = useUser();
-  void _navItems;
   const sidebarAvatarUrl = viewerAvatarUrl ?? user?.profile_picture_url ?? null;
-  const [activeHistoryItem, setActiveHistoryItem] = useState<string | null>(
-    historySections[0]?.entries.find((entry) => !entry.href || entry.href === "#")?.id ?? null
-  );
-
-  const historyData = useMemo<EnhancedHistoryGroup[]>(
-    () =>
-      historySections.map((section) => ({
-        id: section.id,
-        label: section.label,
-        items: section.entries.map((entry) => ({
-          id: entry.id,
-          label: entry.title,
-          href: entry.href,
-        })),
-      })),
-    [historySections]
-  );
-
-  // Enhanced navigation items with history
-  const enhancedNavItems = [
-    { id: 'general' as SidebarNavKey, icon: null, label: 'General' },
-    { id: 'new-thread' as SidebarNavKey, icon: <PlusIcon />, label: 'New Thread' },
-    { id: 'dashboard' as SidebarNavKey, icon: <DashboardIcon />, label: 'Dashboard' },
-    { id: 'history' as SidebarNavKey, icon: <HistoryIcon />, label: 'History' },
-  ];
-
   return (
     <aside className={styles.sidebar} data-expanded={isExpanded ? "true" : "false"}>
       <div className={styles.sidebarRail}>
@@ -182,60 +131,43 @@ export function GrayEnhancedSidebar({
               </div>
               <nav aria-label="Primary">
                 <ul className={styles.sidebarNav}>
-                  {enhancedNavItems.map((item) => (
-                    <li key={item.id} className={styles.sidebarNavItem}>
+                  {navItems.map((item) => (
+                    <li key={item.id}>
                       <button
                         type="button"
                         data-active={item.id === activeNav ? "true" : "false"}
                         aria-label={item.label}
                         onClick={() => onNavigate(item.id)}
                       >
-                        <span className={styles.navIcon}>{item.icon}</span>
+                        <span className={styles.navIcon}>
+                          <item.icon size={18} />
+                        </span>
                         <span className={styles.navLabel}>{item.label}</span>
                       </button>
-
-                      {item.id === "history" && activeNav === "history" && isExpanded && historyData.length > 0 && (
-                        <div className={styles.enhancedHistory}>
-                          {historyData.map((group) => (
-                            <div key={group.id} className={styles.enhancedHistoryGroup}>
-                              <h4>{group.label.toUpperCase()}</h4>
-                              <ul>
-                                {group.items.map((entry) => {
-                                  const hasLink = Boolean(entry.href && entry.href !== "#");
-                                  const isActive = hasLink
-                                    ? entry.id === activeChatId
-                                    : activeHistoryItem === entry.id;
-                                  const linkClass = isActive
-                                    ? `${styles.enhancedHistoryLink} ${styles.enhancedHistoryLinkActive}`
-                                    : styles.enhancedHistoryLink;
-
-                                  return (
-                                    <li key={entry.id}>
-                                      {hasLink ? (
-                                        <Link href={entry.href!} className={linkClass}>
-                                          {entry.label}
-                                        </Link>
-                                      ) : (
-                                        <button
-                                          type="button"
-                                          className={linkClass}
-                                          onClick={() => setActiveHistoryItem(entry.id)}
-                                        >
-                                          {entry.label}
-                                        </button>
-                                      )}
-                                    </li>
-                                  );
-                                })}
-                              </ul>
-                            </div>
-                          ))}
-                        </div>
-                      )}
                     </li>
                   ))}
                 </ul>
               </nav>
+              <div className={styles.sidebarHistory}>
+                {historySections.map((section) => (
+                  <div key={section.id} className={styles.historySection}>
+                    <h3>{section.label}</h3>
+                    <ul>
+                      {section.entries.map((entry) => (
+                        <li key={entry.id}>
+                          <Link
+                            href={entry.href}
+                            className={styles.historyLink}
+                            data-active={entry.id === activeChatId ? "true" : "false"}
+                          >
+                            {entry.title}
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
           <div className={styles.sidebarBottom}>
@@ -248,8 +180,8 @@ export function GrayEnhancedSidebar({
               <span
                 className={styles.profileAvatar}
                 aria-hidden="true"
-              data-has-image={sidebarAvatarUrl ? "true" : "false"}
-            >
+                data-has-image={sidebarAvatarUrl ? "true" : "false"}
+              >
                 {sidebarAvatarUrl ? (
                   <>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
