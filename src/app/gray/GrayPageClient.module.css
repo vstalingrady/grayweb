@@ -59,7 +59,7 @@
 .sidebar {
   position: relative;
   display: flex;
-  width: 88px;
+  width: 72px;
   height: 100%;
   overflow: hidden;
   transition: width 0.28s ease;
@@ -74,8 +74,8 @@
   flex-direction: column;
   align-items: center;
   justify-content: space-between;
-  padding: 20px 0 16px;
-  width: 88px;
+  padding: 16px 0 12px;
+  width: 72px;
   border-radius: 0;
   background: rgba(7, 7, 7, 0.96);
   border: 1px solid rgba(255, 255, 255, 0.04);
@@ -124,35 +124,29 @@
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 12px;
   margin: 0;
   padding: 0;
 }
 
 .railNav button {
-  width: 48px;
-  height: 48px;
-  border-radius: 18px;
+  width: 32px;
+  height: 32px;
+  border-radius: 12px;
   border: none;
-  background: rgba(18, 18, 18, 0.8);
+  background: transparent;
   color: rgba(235, 235, 235, 0.72);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   transition:
-    background 0.2s ease,
     color 0.2s ease,
     transform 0.2s ease;
 }
 
-.railNav button[data-active="true"] {
-  color: rgba(255, 255, 255, 0.95);
-  background: rgba(60, 60, 60, 0.4);
-}
-
+.railNav button[data-active="true"],
 .railNav button:hover {
-  background: rgba(60, 60, 60, 0.6);
   color: rgba(255, 255, 255, 0.95);
   transform: translateX(2px);
 }
