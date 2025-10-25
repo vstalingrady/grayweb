@@ -173,7 +173,8 @@
   gap: clamp(20px, 4vw, 32px);
 }
 
-.panelSurface {
+.calendarPanel,
+.plannerPanel {
   background: rgba(10, 10, 10, 0.85);
   border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow:
@@ -183,7 +184,6 @@
 }
 
 .calendarPanel {
-  composes: panelSurface;
   display: flex;
   flex-direction: column;
   padding: clamp(18px, 3vw, 28px);
@@ -210,7 +210,8 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
-  padding-top: 4px;
+  margin: 0;
+  padding: 4px 0 0;
   font-family: var(
       --font-mono,
       "IBM Plex Mono",
@@ -300,7 +301,6 @@
 }
 
 .plannerPanel {
-  composes: panelSurface;
   display: flex;
   flex-direction: column;
   padding: clamp(18px, 3vw, 28px);
@@ -361,7 +361,8 @@
   flex-direction: column;
   gap: 12px;
   overflow-y: auto;
-  padding-right: 6px;
+  margin: 0;
+  padding: 0 6px 0 0;
   scrollbar-width: thin;
 }
 
