@@ -437,12 +437,13 @@ function GrayPageClientInner({
   const timeLabel = formatClock(now);
   const dateLabel = formatDate(now);
   const greeting = `Good ${greetingForDate(now)}, ${viewerName}`;
+  const showHeader = viewMode !== "chat";
   return (
     <div className={styles.page}>
       <div className={styles.backdrop} aria-hidden="true" />
       <div className={styles.overlay} aria-hidden="true" />
       <div className={styles.shell}>
-        <div className={styles.layout}>
+        <div className={styles.layout} data-view={viewMode}>
           <GrayEnhancedSidebar
             isExpanded={isSidebarExpanded}
             viewerName={viewerName}
@@ -462,12 +463,15 @@ function GrayPageClientInner({
           <div
             className={styles.main}
             data-dashboard={isDashboardView ? "true" : "false"}
+            data-view={viewMode}
           >
-            <GrayWorkspaceHeader
-              timeLabel={timeLabel}
-              dateLabel={dateLabel}
-              streakCount={streakCount}
-            />
+            {showHeader && (
+              <GrayWorkspaceHeader
+                timeLabel={timeLabel}
+                dateLabel={dateLabel}
+                streakCount={streakCount}
+              />
+            )}
 
             <div
               className={styles.mainContent}

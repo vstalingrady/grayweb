@@ -70,10 +70,6 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
     () => session?.messages ?? [],
     [session?.messages]
   );
-  const subtitle = session
-    ? `Updated ${formatRelativeTime(session.updatedAt)}`
-    : "Chat not found";
-
   const resizeComposer = useCallback((target?: HTMLTextAreaElement | null) => {
     const element = target ?? composerRef.current;
     if (!element) {
@@ -236,13 +232,6 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
 
   return (
     <div className={styles.chatView} aria-live="polite">
-      <header className={styles.chatHeader}>
-        <div className={styles.chatHeaderTitle}>
-          <span>{session.title || "Casual exchange"}</span>
-          <small>{SYSTEM_PROMPT}</small>
-        </div>
-        <span className={styles.chatHeaderMeta}>{subtitle}</span>
-      </header>
       <div className={styles.chatViewport}>
         <div className={styles.chatFade} aria-hidden="true" />
         <div className={styles.chatMessages}>
