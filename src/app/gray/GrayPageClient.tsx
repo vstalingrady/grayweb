@@ -13,7 +13,9 @@ import {
   Bell,
   CheckSquare,
   ChevronDown,
+  Clock,
   ChevronsUp,
+  ChevronsRight,
   Flame,
   Gem,
   History,
@@ -23,6 +25,8 @@ import {
   Plus,
   Search,
   Square,
+  Trash2,
+  UserRound,
 } from "lucide-react";
 import styles from "./GrayPageClient.module.css";
 
@@ -46,11 +50,20 @@ type DayEvent = {
   label: string;
 };
 
-type SidebarNavItem = {
+type ProactivityItem = {
   id: string;
+  label: string;
+  description: string;
+  cadence: string;
+  time: string;
+};
+
+type SidebarNavKey = "general" | "new-thread" | "dashboard" | "history" | "search";
+
+type SidebarNavItem = {
+  id: SidebarNavKey;
   icon: ComponentType<{ size?: number }>;
   label: string;
-  active?: boolean;
 };
 
 const PLAN_SEED: PlanItem[] = [
@@ -97,6 +110,14 @@ const HABIT_SEED: HabitItem[] = [
   },
 ];
 
+const PROACTIVITY_SEED: ProactivityItem = {
+  id: "proactivity-1",
+  label: "Check-ins",
+  description: "Daily sync nudges for squad channels.",
+  cadence: "Daily",
+  time: "09:00 AM",
+};
+
 const DAY_EVENTS_SEED: DayEvent[] = [
   {
     id: "event-1",
@@ -127,14 +148,14 @@ const DAY_EVENTS_SEED: DayEvent[] = [
 const HOURS = Array.from({ length: 24 }, (_, index) => index);
 
 const MINUTES_IN_DAY = 24 * 60;
-const CALENDAR_HOUR_HEIGHT = 80;
+const CALENDAR_HOUR_HEIGHT = 96;
 const DEFAULT_EVENT_DURATION_MINUTES = 60;
 const MIN_EVENT_DURATION_MINUTES = 45;
 
 const SIDEBAR_ITEMS: SidebarNavItem[] = [
   { id: "general", label: "General", icon: Gem },
   { id: "new-thread", label: "New Thread", icon: MessageSquarePlus },
-  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, active: true },
+  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { id: "history", label: "History", icon: History },
 ];
 
@@ -179,6 +200,12 @@ const formatDate = (date: Date) =>
       day: "numeric",
     })
     .toUpperCase();
+
+const formatDashboardDate = (date: Date) =>
+  date.toLocaleDateString([], {
+    day: "numeric",
+    month: "long",
+  });
 
 const timeLabelToMinutes = (time: string) => {
   const [hourPart, minutePart = "0"] = time.split(":");
@@ -268,11 +295,15 @@ const viewerInitialsFromName = (name: string) => {
 type GrayPageClientProps = {
   initialTimestamp: number;
   viewerEmail: string | null;
+  activeNav?: SidebarNavKey;
+  variant?: "general" | "dashboard";
 };
 
 export default function GrayPageClient({
   initialTimestamp,
   viewerEmail,
+  activeNav,
+  variant = "general",
 }: GrayPageClientProps) {
   const [now, setNow] = useState(() => new Date(initialTimestamp));
   const [plans, setPlans] = useState<PlanItem[]>(() =>
@@ -319,6 +350,14 @@ export default function GrayPageClient({
         };
       }),
     [dayEvents]
+  );
+  const isDashboardView = variant === "dashboard";
+  const resolvedActiveNav =
+    activeNav ?? (isDashboardView ? "dashboard" : "general");
+  const proactivity = PROACTIVITY_SEED;
+  const dashboardDateLabel = useMemo(
+    () => formatDashboardDate(now),
+    [now]
   );
 
   useEffect(() => {
@@ -383,7 +422,7 @@ export default function GrayPageClient({
                       <button
                         type="button"
                         aria-label={item.label}
-                        data-active={item.active ? "true" : "false"}
+                        data-active={item.id === resolvedActiveNav ? "true" : "false"}
                         onClick={() => setIsSidebarExpanded(true)}
                       >
                         <item.icon size={18} />
@@ -395,26 +434,20 @@ export default function GrayPageClient({
               <div className={styles.sidebarRailFooter}>
                 <button
                   type="button"
-                  className={styles.sidebarRailToggle}
-                  aria-label={
-                    isSidebarExpanded ? "Collapse sidebar" : "Expand sidebar"
-                  }
+                  className={styles.sidebarRailAvatar}
+                  aria-label={isSidebarExpanded ? "Collapse sidebar" : "Expand sidebar"}
+                  data-expanded={isSidebarExpanded ? "true" : "false"}
                   onClick={() =>
                     setIsSidebarExpanded((previous) => !previous)
                   }
                 >
-                  <ChevronsUp
-                    size={18}
-                    data-rotated={isSidebarExpanded ? "true" : "false"}
-                  />
-                </button>
-                <button
-                  type="button"
-                  className={styles.sidebarRailAvatar}
-                  aria-label="View operator profile"
-                  onClick={() => setIsSidebarExpanded(true)}
-                >
-                  <span>{viewerInitials}</span>
+                  <span className={styles.sidebarRailAvatarImage}>{viewerInitials}</span>
+                  <span
+                    className={styles.sidebarRailAvatarIcon}
+                    aria-hidden="true"
+                  >
+                    {isSidebarExpanded ? <ChevronsRight size={18} /> : <ChevronsUp size={18} />}
+                  </span>
                 </button>
               </div>
             </div>
@@ -453,7 +486,7 @@ export default function GrayPageClient({
                           <li key={item.id}>
                             <button
                               type="button"
-                              data-active={item.active ? "true" : "false"}
+                              data-active={item.id === resolvedActiveNav ? "true" : "false"}
                               aria-label={item.label}
                             >
                               <span className={styles.navIcon}>
@@ -484,14 +517,22 @@ export default function GrayPageClient({
                     </div>
                   </div>
                 </div>
-                <button type="button" className={styles.sidebarProfile}>
-                  <span className={styles.profileAvatar}>{viewerInitials}</span>
-                  <span className={styles.profileDetails}>
-                    <span>V. Stalingrady</span>
-                    <span>Operator</span>
-                  </span>
-                  <ChevronDown size={16} className={styles.profileChevron} />
-                </button>
+                <div className={styles.sidebarBottom}>
+                  <button
+                    type="button"
+                    className={styles.sidebarProfile}
+                    aria-label="Open account menu"
+                  >
+                    <span className={styles.profileAvatar} aria-hidden="true">
+                      <UserRound size={22} />
+                    </span>
+                    <span className={styles.profileDetails}>
+                      <span>{viewerName}</span>
+                      <span>Operator</span>
+                    </span>
+                    <ChevronsRight size={18} className={styles.profileChevron} />
+                  </button>
+                </div>
               </div>
             </div>
           </aside>
@@ -514,127 +555,248 @@ export default function GrayPageClient({
               </div>
             </header>
 
-            <h1 className={styles.greeting}>
-              Good {greetingForDate(now)}, {viewerName}
-            </h1>
-
-            <section className={styles.mainGrid}>
-                <div className={styles.primaryColumn}>
-                  <div className={styles.calendarCard}>
-                    <header>Calendar</header>
-                    <div className={styles.calendarBody}>
-                      <div className={styles.calendarTimes}>
-                        {HOURS.map((hour) => (
-                          <span key={hour}>{formatHourLabel(hour)}</span>
-                        ))}
-                      </div>
-                      <div className={styles.calendarViewport}>
-                        <div
-                          className={styles.calendarTrack}
-                          style={{
-                            height: `${CALENDAR_HOUR_HEIGHT * HOURS.length}px`,
-                          }}
-                        >
-                          {HOURS.map((hour) => (
-                            <span
-                              key={hour}
-                              className={styles.calendarRule}
-                              data-major={hour % 3 === 0 ? "true" : "false"}
-                              style={{
-                                top: `${hour * CALENDAR_HOUR_HEIGHT}px`,
-                              }}
-                            />
-                          ))}
-                          {calendarEvents.map((event) => (
-                            <article
-                              key={event.id}
-                              className={styles.calendarEvent}
-                              style={{
-                                top: `${event.topOffset}px`,
-                                height: `${event.height}px`,
-                              }}
+            {isDashboardView ? (
+              <>
+                <div className={styles.dashboardHeaderRow}>
+                  <div className={styles.dashboardHeaderLeft}>
+                    <span className={styles.dashboardEyebrow}>Dashboard</span>
+                    <h1 className={styles.dashboardHeadline}>
+                      Operational focus
+                    </h1>
+                  </div>
+                  <div className={styles.dashboardHeaderRight}>
+                    <div className={styles.dashboardToggle}>
+                      <button type="button" data-active="true">
+                        Pulse
+                      </button>
+                      <button type="button">Calendar</button>
+                    </div>
+                    <span className={styles.dashboardDate}>{dashboardDateLabel}</span>
+                  </div>
+                </div>
+                <section className={styles.dashboardGrid}>
+                  <article className={styles.dashboardCard}>
+                    <header className={styles.dashboardCardHeader}>
+                      <span>Plans</span>
+                    </header>
+                    <div className={styles.dashboardCardBody}>
+                      <ul className={styles.planList}>
+                        {plans.map((plan) => (
+                          <li key={plan.id}>
+                            <button
+                              type="button"
+                              data-completed={plan.completed}
+                              onClick={() => togglePlan(plan.id)}
                             >
-                              <strong>{event.label}</strong>
-                              <span>{event.rangeLabel}</span>
-                            </article>
+                              <span>
+                                {plan.completed ? (
+                                  <CheckSquare size={16} />
+                                ) : (
+                                  <Square size={16} />
+                                )}
+                              </span>
+                              <span>{plan.label}</span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                      <button type="button" className={styles.secondaryAction}>
+                        Add plans
+                      </button>
+                    </div>
+                  </article>
+                  <article className={styles.dashboardCard}>
+                    <header className={styles.dashboardCardHeader}>
+                      <span>Habits</span>
+                    </header>
+                    <div className={styles.dashboardCardBody}>
+                      <ul className={`${styles.habitList} ${styles.dashboardHabitList}`}>
+                        {HABIT_SEED.map((habit) => (
+                          <li key={habit.id}>
+                            <div>
+                              <span>{habit.label}</span>
+                              <span>{habit.previousLabel}</span>
+                            </div>
+                            <div>
+                              <Flame size={12} />
+                              <span>{habit.streakLabel}</span>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                      <button type="button" className={styles.secondaryAction}>
+                        Add habits
+                      </button>
+                    </div>
+                  </article>
+                  <article className={`${styles.dashboardCard} ${styles.proactivityCard}`}>
+                    <header className={styles.dashboardCardHeader}>
+                      <span>Proactivity</span>
+                    </header>
+                    <div className={styles.dashboardCardBody}>
+                      <div className={styles.proactivityHeader}>
+                        <div>
+                          <div className={styles.proactivityTitle}>
+                            <CheckSquare size={16} />
+                            <span>{proactivity.label}</span>
+                          </div>
+                          <p>{proactivity.description}</p>
+                        </div>
+                        <button
+                          type="button"
+                          className={styles.iconButton}
+                          aria-label="Remove proactivity item"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                      <div className={styles.proactivityControls}>
+                        <label>
+                          <span>Cadence</span>
+                          <div className={styles.dashboardSelect}>
+                            <span>{proactivity.cadence}</span>
+                            <ChevronDown size={14} />
+                          </div>
+                        </label>
+                        <label>
+                          <span>Time</span>
+                          <div className={styles.dashboardSelect}>
+                            <Clock size={14} />
+                            <span>{proactivity.time}</span>
+                          </div>
+                        </label>
+                      </div>
+                      <button type="button" className={styles.secondaryAction}>
+                        Add proactivity
+                      </button>
+                    </div>
+                  </article>
+                </section>
+              </>
+            ) : (
+              <>
+                <h1 className={styles.greeting}>
+                  Good {greetingForDate(now)}, {viewerName}
+                </h1>
+
+                <section className={styles.mainGrid}>
+                  <div className={styles.primaryColumn}>
+                    <div className={styles.calendarCard}>
+                      <header>Calendar</header>
+                      <div className={styles.calendarBody}>
+                        <div className={styles.calendarTimes}>
+                          {HOURS.map((hour) => (
+                            <span key={hour}>{formatHourLabel(hour)}</span>
                           ))}
+                        </div>
+                        <div className={styles.calendarViewport}>
+                          <div
+                            className={styles.calendarTrack}
+                            style={{
+                              height: `${CALENDAR_HOUR_HEIGHT * HOURS.length}px`,
+                            }}
+                          >
+                            {HOURS.map((hour) => (
+                              <span
+                                key={hour}
+                                className={styles.calendarRule}
+                                data-major={hour % 3 === 0 ? "true" : "false"}
+                                style={{
+                                  top: `${hour * CALENDAR_HOUR_HEIGHT}px`,
+                                }}
+                              />
+                            ))}
+                            {calendarEvents.map((event) => (
+                              <article
+                                key={event.id}
+                                className={styles.calendarEvent}
+                                style={{
+                                  top: `${event.topOffset}px`,
+                                  height: `${event.height}px`,
+                                }}
+                              >
+                                <strong>{event.label}</strong>
+                                <span>{event.rangeLabel}</span>
+                              </article>
+                            ))}
+                          </div>
                         </div>
                       </div>
                     </div>
                   </div>
 
-              </div>
-
-              <div className={styles.secondaryColumn}>
-                <div className={styles.planPanel}>
-                  <div className={styles.tabBar}>
-                    <button
-                      type="button"
-                      data-active={planTab === "plans"}
-                      onClick={() => setPlanTab("plans")}
-                    >
-                      Plans
-                    </button>
-                    <button
-                      type="button"
-                      data-active={planTab === "habits"}
-                      onClick={() => setPlanTab("habits")}
-                    >
-                      Habits
-                    </button>
-                  </div>
-                  <div className={styles.planBody}>
-                    {planTab === "plans" ? (
-                      <>
-                        <ul className={styles.planList}>
-                          {plans.map((plan) => (
-                            <li key={plan.id}>
-                              <button
-                                type="button"
-                                data-completed={plan.completed}
-                                onClick={() => togglePlan(plan.id)}
-                              >
-                                <span>
-                                  {plan.completed ? (
-                                    <CheckSquare size={16} />
-                                  ) : (
-                                    <Square size={16} />
-                                  )}
-                                </span>
-                                <span>{plan.label}</span>
-                              </button>
-                            </li>
-                          ))}
-                        </ul>
-                        <button type="button" className={styles.secondaryAction}>
-                          Add plans
+                  <div className={styles.secondaryColumn}>
+                    <div className={styles.planPanel}>
+                      <div className={styles.tabBar}>
+                        <button
+                          type="button"
+                          data-active={planTab === "plans"}
+                          onClick={() => setPlanTab("plans")}
+                        >
+                          Plans
                         </button>
-                      </>
-                    ) : (
-                      <>
-                        <ul className={styles.habitList}>
-                          {HABIT_SEED.map((habit) => (
-                            <li key={habit.id}>
-                              <div>
-                                <span>{habit.label}</span>
-                                <span>{habit.previousLabel}</span>
-                              </div>
-                              <div>
-                                <Flame size={12} />
-                                <span>{habit.streakLabel}</span>
-                              </div>
-                            </li>
-                          ))}
-                        </ul>
-                        <button type="button" className={styles.secondaryAction}>
-                          Add habits
+                        <button
+                          type="button"
+                          data-active={planTab === "habits"}
+                          onClick={() => setPlanTab("habits")}
+                        >
+                          Habits
                         </button>
-                      </>
-                    )}
+                      </div>
+                      <div className={styles.planBody}>
+                        {planTab === "plans" ? (
+                          <>
+                            <ul className={styles.planList}>
+                              {plans.map((plan) => (
+                                <li key={plan.id}>
+                                  <button
+                                    type="button"
+                                    data-completed={plan.completed}
+                                    onClick={() => togglePlan(plan.id)}
+                                  >
+                                    <span>
+                                      {plan.completed ? (
+                                        <CheckSquare size={16} />
+                                      ) : (
+                                        <Square size={16} />
+                                      )}
+                                    </span>
+                                    <span>{plan.label}</span>
+                                  </button>
+                                </li>
+                              ))}
+                            </ul>
+                            <button type="button" className={styles.secondaryAction}>
+                              Add plans
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <ul className={styles.habitList}>
+                              {HABIT_SEED.map((habit) => (
+                                <li key={habit.id}>
+                                  <div>
+                                    <span>{habit.label}</span>
+                                    <span>{habit.previousLabel}</span>
+                                  </div>
+                                  <div>
+                                    <Flame size={12} />
+                                    <span>{habit.streakLabel}</span>
+                                  </div>
+                                </li>
+                              ))}
+                            </ul>
+                            <button type="button" className={styles.secondaryAction}>
+                              Add habits
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
-            </section>
+                </section>
+              </>
+            )}
 
             <form className={styles.chatBar} onSubmit={handleChatSubmit}>
               <button

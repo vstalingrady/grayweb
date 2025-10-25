@@ -172,66 +172,58 @@
 }
 
 .sidebarRailAvatar {
-  width: 48px;
-  height: 48px;
+  width: auto;
+  height: auto;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: none;
   padding: 0;
-  background: rgba(20, 20, 20, 0.82);
+  background: transparent;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 8px;
   transition:
     background 0.2s ease,
-    border 0.2s ease,
     transform 0.2s ease;
 }
 
 .sidebarRailAvatar:hover {
-  background: rgba(40, 40, 40, 0.9);
-  border-color: rgba(255, 255, 255, 0.24);
   transform: translateY(-2px);
 }
 
-.sidebarRailAvatar span {
+.sidebarRailAvatar[data-expanded="true"] {
+  padding-right: 0;
+}
+
+.sidebarRailAvatarImage {
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  background: linear-gradient(
+    135deg,
+    rgba(96, 96, 102, 0.85),
+    rgba(32, 32, 36, 0.9)
+  );
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   font-size: 0.78rem;
   font-weight: 600;
   letter-spacing: 0.08em;
   color: rgba(244, 244, 244, 0.94);
 }
 
-.sidebarRailToggle {
-  width: 48px;
-  height: 48px;
-  border-radius: 18px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(18, 18, 18, 0.94);
-  color: rgba(235, 235, 235, 0.72);
+.sidebarRailAvatarIcon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  cursor: pointer;
-  transition:
-    border-color 0.2s ease,
-    background 0.2s ease,
-    color 0.2s ease,
-    transform 0.2s ease;
+  color: rgba(244, 244, 244, 0.75);
 }
 
-.sidebarRailToggle:hover {
-  border-color: rgba(255, 255, 255, 0.18);
-  color: rgba(255, 255, 255, 0.95);
-  background: rgba(26, 26, 26, 0.94);
-  transform: translateY(-2px);
-}
-
-.sidebarRailToggle svg {
-  transition: transform 0.24s ease;
-}
-
-.sidebarRailToggle svg[data-rotated="true"] {
-  transform: rotate(180deg);
+.sidebarRailAvatarIcon svg {
+  width: 18px;
+  height: 18px;
 }
 
 .sidebarPanel {
@@ -258,7 +250,8 @@
 .sidebarPanelContent {
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  justify-content: flex-start;
+  gap: clamp(24px, 5vh, 36px);
   padding: clamp(24px, 4vh, 34px) clamp(20px, 3.5vw, 30px);
   border-radius: 0;
   background: rgba(7, 7, 7, 0.96);
@@ -267,6 +260,14 @@
   width: 100%;
   height: 100%;
   backdrop-filter: blur(12px);
+}
+
+.sidebarBottom {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 16px;
+  margin-top: auto;
 }
 
 .sidebarTop {
@@ -451,13 +452,13 @@
 .sidebarProfile {
   display: flex;
   align-items: center;
-  gap: 12px;
-  justify-content: space-between;
+  gap: 14px;
+  justify-content: flex-start;
   width: 100%;
-  padding: 14px 16px;
+  padding: 14px 18px;
   border-radius: 18px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(18, 18, 18, 0.75);
+  border: none;
+  background: rgba(22, 22, 22, 0.86);
   margin-top: clamp(24px, 5vh, 36px);
   cursor: pointer;
   transition:
@@ -466,21 +467,27 @@
 }
 
 .sidebarProfile:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.12);
 }
 
 .profileAvatar {
-  width: 42px;
-  height: 42px;
+  width: 44px;
+  height: 44px;
   border-radius: 999px;
-  background: rgba(15, 15, 15, 0.92);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: linear-gradient(
+    145deg,
+    rgba(52, 52, 56, 0.82),
+    rgba(24, 24, 28, 0.92)
+  );
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-weight: 600;
-  font-size: 0.78rem;
-  letter-spacing: 0.08em;
+  color: rgba(238, 240, 244, 0.88);
+}
+
+.profileAvatar svg {
+  width: 22px;
+  height: 22px;
 }
 
 .profileDetails {
@@ -491,19 +498,24 @@
 }
 
 .profileDetails span:first-child {
-  font-size: 0.8rem;
-  letter-spacing: 0.08em;
+  font-size: 0.82rem;
+  letter-spacing: 0.1em;
+  color: rgba(246, 247, 250, 0.92);
 }
 
 .profileDetails span:last-child {
   font-size: 0.68rem;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: rgba(235, 235, 235, 0.54);
+  color: rgba(210, 214, 220, 0.64);
 }
 
 .profileChevron {
-  color: rgba(235, 235, 235, 0.54);
+  color: rgba(235, 235, 235, 0.68);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
 }
 
 .main {
@@ -593,6 +605,195 @@
   text-align: left;
 }
 
+.dashboardHeaderRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: clamp(16px, 3vw, 32px);
+  width: min(960px, 100%);
+  margin: 0 auto;
+  padding-top: 8px;
+}
+
+.dashboardHeaderLeft {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dashboardEyebrow {
+  font-size: 0.68rem;
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+  color: rgba(230, 230, 230, 0.6);
+}
+
+.dashboardHeadline {
+  font-size: clamp(1.8rem, 3.8vw, 2.4rem);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: rgba(245, 245, 245, 0.92);
+}
+
+.dashboardHeaderRight {
+  display: flex;
+  align-items: center;
+  gap: clamp(18px, 3vw, 32px);
+}
+
+.dashboardToggle {
+  display: inline-flex;
+  gap: 8px;
+  padding: 6px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(14, 14, 14, 0.7);
+}
+
+.dashboardToggle button {
+  border: none;
+  border-radius: 999px;
+  padding: 8px 18px;
+  font-size: 0.68rem;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: rgba(235, 235, 235, 0.65);
+  background: transparent;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease;
+}
+
+.dashboardToggle button[data-active="true"] {
+  background: rgba(255, 255, 255, 0.9);
+  color: #040404;
+  box-shadow: 0 16px 26px rgba(0, 0, 0, 0.35);
+}
+
+.dashboardDate {
+  font-size: 0.72rem;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: rgba(230, 230, 230, 0.56);
+}
+
+.dashboardGrid {
+  display: grid;
+  width: min(960px, 100%);
+  margin: clamp(18px, 3vw, 32px) auto 0;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: clamp(18px, 2.8vw, 32px);
+}
+
+.dashboardCard {
+  composes: cardSurface;
+  padding: clamp(18px, 2.4vw, 24px);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.dashboardCardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.7rem;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: rgba(235, 235, 235, 0.66);
+}
+
+.dashboardCardBody {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.dashboardHabitList {
+  max-height: none;
+}
+
+.proactivityCard {
+  gap: 16px;
+}
+
+.proactivityHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.proactivityTitle {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.88rem;
+  letter-spacing: 0.04em;
+  color: rgba(245, 245, 245, 0.9);
+}
+
+.proactivityHeader p {
+  margin: 6px 0 0;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  color: rgba(235, 235, 235, 0.6);
+}
+
+.iconButton {
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(14, 14, 14, 0.7);
+  color: rgba(235, 235, 235, 0.7);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.iconButton:hover {
+  background: rgba(26, 26, 26, 0.8);
+  color: rgba(255, 255, 255, 0.9);
+  transform: translateY(-1px);
+}
+
+.proactivityControls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 14px;
+}
+
+.proactivityControls label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.68rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(230, 230, 230, 0.5);
+}
+
+.dashboardSelect {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(12, 12, 12, 0.7);
+  color: rgba(245, 245, 245, 0.86);
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+}
+
 .mainGrid {
   flex: 1;
   min-height: 0;
@@ -644,7 +845,7 @@
   width: 100%;
   margin: 0;
   max-width: 384px;
-  --calendar-hour-height: 80px;
+  --calendar-hour-height: 96px;
   height: 100%;
 }
 
@@ -676,20 +877,21 @@
       "IBM Plex Mono",
       SFMono-Regular,
       Consolas,
-      "Liberation Mono",
-      Menlo,
-      monospace
-    );
-  padding-top: 12px;
+    "Liberation Mono",
+    Menlo,
+    monospace
+  );
+  padding-top: 16px;
+  gap: 0;
 }
 
 .calendarTimes span {
   height: var(--calendar-hour-height);
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: flex-end;
   padding-right: 8px;
-  padding-top: 6px;
+  padding-top: 0;
 }
 
 .calendarViewport {
@@ -698,19 +900,25 @@
   background: rgba(12, 12, 12, 0.8);
   border: 1px solid rgba(255, 255, 255, 0.05);
   border-radius: 20px;
-  padding: 10px 12px;
+  padding: 14px 18px;
   overflow-y: auto;
   min-height: 0;
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+  scrollbar-color: rgba(142, 146, 156, 0.55) transparent;
 }
 
 .calendarViewport::-webkit-scrollbar {
-  width: 6px;
+  width: 7px;
 }
 
 .calendarViewport::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.18);
+  background: linear-gradient(180deg, rgba(180, 184, 196, 0.75), rgba(126, 130, 140, 0.52));
+  border-radius: 999px;
+  border: 1px solid rgba(10, 10, 10, 0.4);
+}
+
+.calendarViewport::-webkit-scrollbar-track {
+  background: rgba(36, 36, 38, 0.48);
   border-radius: 999px;
 }
 
@@ -728,10 +936,10 @@
   background: linear-gradient(
     to right,
     rgba(255, 255, 255, 0.04),
-    rgba(255, 255, 255, 0.16),
+    rgba(255, 255, 255, 0.14),
     rgba(255, 255, 255, 0.04)
   );
-  opacity: 0.65;
+  opacity: 0.5;
   transform: translateY(-0.5px);
 }
 
@@ -740,7 +948,7 @@
   background: linear-gradient(
     to right,
     rgba(255, 255, 255, 0.08),
-    rgba(255, 255, 255, 0.28),
+    rgba(255, 255, 255, 0.24),
     rgba(255, 255, 255, 0.08)
   );
 }

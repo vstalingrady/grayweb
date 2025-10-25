@@ -2,9 +2,9 @@ import { redirect } from "next/navigation";
 import GrayPageClient from "@/app/gray/GrayPageClient";
 import { readServerSession } from "@/lib/auth/server";
 
-const DEFAULT_REDIRECT = "/login?redirect=/";
+const DEFAULT_REDIRECT = "/login?redirect=/dashboard";
 
-export default async function GrayWorkspaceHome() {
+export default async function DashboardPage() {
   const session = await readServerSession();
 
   if (!session) {
@@ -19,7 +19,8 @@ export default async function GrayWorkspaceHome() {
     <GrayPageClient
       initialTimestamp={initialTimestamp}
       viewerEmail={session?.email ?? null}
-      activeNav="general"
+      activeNav="dashboard"
+      variant="dashboard"
     />
   );
 }
