@@ -1,6 +1,7 @@
 .page {
   position: relative;
   min-height: 100vh;
+  height: 100vh;
   background: var(--background, #050505);
   color: var(--foreground, #f5f5f5);
   font-family: var(
@@ -47,32 +48,211 @@
   position: relative;
   z-index: 1;
   width: 100%;
+  height: 100%;
 }
 
 .layout {
   display: grid;
-  grid-template-columns: minmax(252px, 280px) 1fr;
+  grid-template-columns: auto 1fr;
   gap: clamp(24px, 4vw, 40px);
   align-items: stretch;
+  height: 100%;
 }
 
 .sidebar {
+  position: relative;
+  display: flex;
+  width: 88px;
+  height: 100%;
+  transition: width 0.28s ease;
+}
+
+.sidebar[data-expanded="true"] {
+  width: 320px;
+}
+
+.sidebarRail {
   display: flex;
   flex-direction: column;
+  align-items: center;
   justify-content: space-between;
-  padding: clamp(24px, 4vh, 34px) clamp(20px, 3.5vw, 30px);
-  border-radius: 0 30px 30px 0;
+  padding: 28px 0 32px;
+  width: 88px;
+  border-radius: 0 28px 28px 0;
   background: rgba(7, 7, 7, 0.96);
   border: 1px solid rgba(255, 255, 255, 0.04);
   border-left: none;
   box-shadow: none;
-  backdrop-filter: none;
+  backdrop-filter: blur(12px);
+  position: relative;
+  z-index: 2;
+}
+
+.sidebarRailLogo {
+  width: 48px;
+  height: 48px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(18, 18, 18, 0.94);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px;
+  cursor: pointer;
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease,
+    transform 0.2s ease;
+}
+
+.sidebarRailLogo:hover {
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(26, 26, 26, 0.94);
+  transform: translateY(-2px);
+}
+
+.railNav {
+  display: flex;
+  align-items: center;
+}
+
+.railNav ul {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  margin: 0;
+  padding: 0;
+}
+
+.railNav button {
+  width: 48px;
+  height: 48px;
+  border-radius: 18px;
+  border: none;
+  background: rgba(18, 18, 18, 0.8);
+  color: rgba(235, 235, 235, 0.72);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.railNav button[data-active="true"] {
+  color: rgba(255, 255, 255, 0.95);
+  background: rgba(60, 60, 60, 0.4);
+}
+
+.railNav button:hover {
+  background: rgba(60, 60, 60, 0.6);
+  color: rgba(255, 255, 255, 0.95);
+  transform: translateX(2px);
+}
+
+.sidebarRailFooter {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.sidebarRailAvatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 999px;
+  border: 2px solid rgba(255, 255, 255, 0.14);
+  overflow: hidden;
+  padding: 0;
+  background: rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.sidebarRailAvatar:hover {
+  transform: translateY(-2px);
+}
+
+.sidebarRailAvatar :global(img) {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.sidebarRailToggle {
+  width: 48px;
+  height: 48px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(18, 18, 18, 0.94);
+  color: rgba(235, 235, 235, 0.72);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease,
+    color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.sidebarRailToggle:hover {
+  border-color: rgba(255, 255, 255, 0.18);
+  color: rgba(255, 255, 255, 0.95);
+  background: rgba(26, 26, 26, 0.94);
+  transform: translateY(-2px);
+}
+
+.sidebarRailToggle svg {
+  transition: transform 0.24s ease;
+}
+
+.sidebarRailToggle svg[data-rotated="true"] {
+  transform: rotate(180deg);
+}
+
+.sidebarPanel {
+  width: 0;
+  overflow: hidden;
+  display: flex;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 0.24s ease,
+    transform 0.24s ease,
+    width 0.28s ease;
+  transform: translateX(-12px);
+}
+
+.sidebarPanel[data-expanded="true"] {
+  width: 232px;
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(0);
+}
+
+.sidebarPanelContent {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: clamp(24px, 4vh, 34px) clamp(20px, 3.5vw, 30px);
+  border-radius: 0 28px 28px 0;
+  background: rgba(7, 7, 7, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-left: none;
+  width: 100%;
+  height: 100%;
+  backdrop-filter: blur(12px);
 }
 
 .sidebarTop {
   display: flex;
   flex-direction: column;
-  gap: clamp(24px, 6vh, 36px);
+  gap: clamp(20px, 4vh, 28px);
 }
 
 .sidebarScroll {
@@ -81,19 +261,6 @@
   gap: 20px;
   flex: 1;
   min-height: 0;
-  overflow-y: auto;
-  padding-right: 4px;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
-}
-
-.sidebarScroll::-webkit-scrollbar {
-  width: 6px;
-}
-
-.sidebarScroll::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
-  border-radius: 999px;
 }
 
 .sidebarLogo {
@@ -265,6 +432,8 @@
   display: flex;
   align-items: center;
   gap: 12px;
+  justify-content: space-between;
+  width: 100%;
   padding: 14px 16px;
   border-radius: 18px;
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -298,6 +467,7 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
+  flex: 1;
 }
 
 .profileDetails span:first-child {
@@ -309,6 +479,10 @@
   font-size: 0.68rem;
   letter-spacing: 0.18em;
   text-transform: uppercase;
+  color: rgba(235, 235, 235, 0.54);
+}
+
+.profileChevron {
   color: rgba(235, 235, 235, 0.54);
 }
 
@@ -842,44 +1016,58 @@
   }
 
   .sidebar {
-    flex-direction: column;
     width: 100%;
-    border-radius: 22px;
-    padding: 16px 18px;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-left: 1px solid rgba(255, 255, 255, 0.08);
+    height: auto;
+    flex-direction: column;
   }
 
-  .sidebarTop {
+  .sidebarRail {
+    flex-direction: row;
+    width: 100%;
+    padding: 16px 18px;
+    border-radius: 22px;
+    gap: 16px;
+  }
+
+  .railNav ul {
+    flex-direction: row;
+    gap: 12px;
+  }
+
+  .sidebarRailFooter {
+    flex-direction: row;
+    gap: 12px;
+  }
+
+  .sidebarScroll {
     flex-direction: column;
     gap: 16px;
   }
 
-  .sidebarScroll {
-    flex-direction: row;
-    align-items: center;
-    gap: 12px;
-    overflow-x: auto;
-    overflow-y: hidden;
-  }
-
   .searchRow {
     flex: 0 0 auto;
-    width: 200px;
-  }
-
-  .sidebarNav {
-    flex-direction: row;
-    margin: 0;
-    gap: 12px;
-  }
-
-  .sidebarHistory {
-    display: none;
+    width: 100%;
   }
 
   .sidebarProfile {
     margin-top: 18px;
+  }
+
+  .sidebarPanel {
+    transform: none;
+  }
+
+  .sidebarPanel[data-expanded="true"] {
+    width: 100%;
+  }
+
+  .sidebarPanelContent {
+    border-radius: 22px;
+    margin-top: 18px;
+  }
+
+  .sidebarHistory {
+    display: none;
   }
 
   .main {

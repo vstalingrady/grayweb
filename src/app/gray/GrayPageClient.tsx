@@ -12,6 +12,8 @@ import {
   AudioLines,
   Bell,
   CheckSquare,
+  ChevronDown,
+  ChevronsUp,
   Flame,
   Gem,
   History,
@@ -137,6 +139,11 @@ const SIDEBAR_ITEMS: SidebarNavItem[] = [
   { id: "new-thread", label: "New Thread", icon: MessageSquarePlus },
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, active: true },
   { id: "history", label: "History", icon: History },
+];
+
+const SIDEBAR_RAIL_ITEMS: SidebarNavItem[] = [
+  { id: "search", label: "Search", icon: Search },
+  ...SIDEBAR_ITEMS,
 ];
 
 const SIDEBAR_HISTORY = [
@@ -281,6 +288,7 @@ export default function GrayPageClient({
   );
   const [planTab, setPlanTab] = useState<"plans" | "habits">("plans");
   const [chatDraft, setChatDraft] = useState("");
+  const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
 
   const viewerName = useMemo(
     () => viewerNameFromEmail(viewerEmail),
@@ -331,69 +339,148 @@ export default function GrayPageClient({
       <div className={styles.overlay} aria-hidden="true" />
       <div className={styles.shell}>
         <div className={styles.layout}>
-          <aside className={styles.sidebar}>
-            <div className={styles.sidebarTop}>
+          <aside
+            className={styles.sidebar}
+            data-expanded={isSidebarExpanded ? "true" : "false"}
+          >
+            <div className={styles.sidebarRail}>
               <button
                 type="button"
-                className={styles.sidebarLogo}
-                aria-label="Gray Alignment dashboard"
+                className={styles.sidebarRailLogo}
+                aria-label="Open Gray Alignment sidebar"
+                onClick={() => setIsSidebarExpanded(true)}
               >
                 <Image
                   src="/grayaiwhitenotspinning.svg"
                   alt="Gray Alignment emblem"
-                  width={28}
-                  height={28}
+                  width={24}
+                  height={24}
                   priority
-                  className={styles.sidebarLogoImage}
                 />
               </button>
-              <div className={styles.sidebarScroll}>
-                <div className={styles.searchRow}>
-                  <span className={styles.searchIcon}>
-                    <Search size={16} />
-                  </span>
-                  <span className={styles.searchLabel}>Search</span>
-                  <span className={styles.searchShortcut}>CTRL+K</span>
-                </div>
-                <nav aria-label="Primary">
-                  <ul className={styles.sidebarNav}>
-                    {SIDEBAR_ITEMS.map((item) => (
-                      <li key={item.id}>
-                        <button
-                          type="button"
-                          data-active={item.active ? "true" : "false"}
-                          aria-label={item.label}
-                        >
-                          <span className={styles.navIcon}>
-                            <item.icon size={18} />
-                          </span>
-                          <span className={styles.navLabel}>{item.label}</span>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </nav>
-                <div className={styles.sidebarHistory}>
-                  {SIDEBAR_HISTORY.map((section) => (
-                    <div key={section.month} className={styles.historySection}>
-                      <h3>{section.month}</h3>
-                      <ul>
-                        {section.entries.map((entry) => (
-                          <li key={entry}>{entry}</li>
-                        ))}
-                      </ul>
-                    </div>
+              <nav aria-label="Sidebar quick actions" className={styles.railNav}>
+                <ul>
+                  {SIDEBAR_RAIL_ITEMS.map((item) => (
+                    <li key={item.id}>
+                      <button
+                        type="button"
+                        aria-label={item.label}
+                        data-active={item.active ? "true" : "false"}
+                        onClick={() => setIsSidebarExpanded(true)}
+                      >
+                        <item.icon size={18} />
+                      </button>
+                    </li>
                   ))}
-                </div>
+                </ul>
+              </nav>
+              <div className={styles.sidebarRailFooter}>
+                <button
+                  type="button"
+                  className={styles.sidebarRailAvatar}
+                  aria-label="View operator profile"
+                  onClick={() => setIsSidebarExpanded(true)}
+                >
+                  <Image
+                    src="/astronauttest.jpg"
+                    alt="Operator avatar"
+                    width={32}
+                    height={32}
+                  />
+                </button>
+                <button
+                  type="button"
+                  className={styles.sidebarRailToggle}
+                  aria-label={
+                    isSidebarExpanded ? "Collapse sidebar" : "Expand sidebar"
+                  }
+                  onClick={() =>
+                    setIsSidebarExpanded((previous) => !previous)
+                  }
+                >
+                  <ChevronsUp
+                    size={18}
+                    data-rotated={isSidebarExpanded ? "true" : "false"}
+                  />
+                </button>
               </div>
             </div>
-            <button type="button" className={styles.sidebarProfile}>
-              <span className={styles.profileAvatar}>{viewerInitials}</span>
-              <span className={styles.profileDetails}>
-                <span>V. Stalingrady</span>
-                <span>Operator</span>
-              </span>
-            </button>
+            <div
+              className={styles.sidebarPanel}
+              data-expanded={isSidebarExpanded ? "true" : "false"}
+            >
+              <div className={styles.sidebarPanelContent}>
+                <div className={styles.sidebarTop}>
+                  <button
+                    type="button"
+                    className={styles.sidebarLogo}
+                    aria-label="Collapse Gray Alignment sidebar"
+                    onClick={() => setIsSidebarExpanded(false)}
+                  >
+                    <Image
+                      src="/grayaiwhitenotspinning.svg"
+                      alt="Gray Alignment emblem"
+                      width={28}
+                      height={28}
+                      priority
+                      className={styles.sidebarLogoImage}
+                    />
+                  </button>
+                  <div className={styles.sidebarScroll}>
+                    <div className={styles.searchRow}>
+                      <span className={styles.searchIcon}>
+                        <Search size={16} />
+                      </span>
+                      <span className={styles.searchLabel}>Search</span>
+                      <span className={styles.searchShortcut}>CTRL+K</span>
+                    </div>
+                    <nav aria-label="Primary">
+                      <ul className={styles.sidebarNav}>
+                        {SIDEBAR_ITEMS.map((item) => (
+                          <li key={item.id}>
+                            <button
+                              type="button"
+                              data-active={item.active ? "true" : "false"}
+                              aria-label={item.label}
+                            >
+                              <span className={styles.navIcon}>
+                                <item.icon size={18} />
+                              </span>
+                              <span className={styles.navLabel}>
+                                {item.label}
+                              </span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </nav>
+                    <div className={styles.sidebarHistory}>
+                      {SIDEBAR_HISTORY.map((section) => (
+                        <div
+                          key={section.month}
+                          className={styles.historySection}
+                        >
+                          <h3>{section.month}</h3>
+                          <ul>
+                            {section.entries.map((entry) => (
+                              <li key={entry}>{entry}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                <button type="button" className={styles.sidebarProfile}>
+                  <span className={styles.profileAvatar}>{viewerInitials}</span>
+                  <span className={styles.profileDetails}>
+                    <span>V. Stalingrady</span>
+                    <span>Operator</span>
+                  </span>
+                  <ChevronDown size={16} className={styles.profileChevron} />
+                </button>
+              </div>
+            </div>
           </aside>
 
           <div className={styles.main}>
