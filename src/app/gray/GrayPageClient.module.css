@@ -1,120 +1,20 @@
 .page {
   position: relative;
   min-height: 100vh;
-  display: flex;
-  background: radial-gradient(circle at top right, rgba(60, 60, 60, 0.1), transparent 55%),
-    var(--background);
+  background: var(--background);
   color: var(--foreground);
-  overflow: hidden;
-}
-
-.sidebar {
-  width: 72px;
-  background: rgba(5, 5, 5, 0.7);
-  border-right: 1px solid rgba(255, 255, 255, 0.05);
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 24px 0;
-  gap: 18px;
-  position: relative;
-  z-index: 10;
-  backdrop-filter: blur(12px);
-}
-
-.logo {
-  width: 44px;
-  height: 44px;
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(20, 20, 20, 0.85);
-  display: grid;
-  place-items: center;
-  color: var(--accent);
-  transition: border-color 0.2s ease, transform 0.2s ease;
-}
-
-.logo:hover {
-  border-color: rgba(255, 255, 255, 0.2);
-  transform: translateY(-2px);
-}
-
-.sidebarNav {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding-top: 12px;
-}
-
-.sidebarButton {
-  width: 44px;
-  height: 44px;
-  border-radius: 14px;
-  border: 1px solid transparent;
-  background: rgba(25, 25, 25, 0.65);
-  display: grid;
-  place-items: center;
-  color: rgba(235, 235, 235, 0.7);
-  cursor: pointer;
-  transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
-}
-
-.sidebarButton:hover {
-  border-color: rgba(255, 255, 255, 0.2);
-  color: var(--accent-hover);
-  background: rgba(40, 40, 40, 0.85);
-}
-
-.sidebarButton[data-active="true"] {
-  border-color: rgba(255, 255, 255, 0.35);
-  color: var(--accent);
-  background: rgba(60, 60, 60, 0.85);
-}
-
-.sidebarFooter {
-  margin-top: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  align-items: center;
-}
-
-.profile {
-  width: 48px;
-  height: 48px;
-  border-radius: 16px;
-  overflow: hidden;
-  border: 2px solid rgba(255, 255, 255, 0.18);
-  background: rgba(25, 25, 25, 0.8);
-  display: grid;
-  place-items: center;
-  cursor: pointer;
-}
-
-.profileAvatar {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.main {
-  position: relative;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 32px;
-  padding: 44px 60px 120px;
-  overflow: hidden;
+  justify-content: center;
 }
 
 .backdrop {
-  position: absolute;
+  position: fixed;
   inset: 0;
   background: linear-gradient(
       to bottom,
-      rgba(5, 5, 5, 0.85),
-      rgba(5, 5, 5, 0.7),
-      rgba(5, 5, 5, 0.92)
+      rgba(5, 5, 5, 0.76),
+      rgba(5, 5, 5, 0.72),
+      rgba(5, 5, 5, 0.86)
     ),
     url("/astronauttest.jpg") center / cover no-repeat;
   opacity: 0.55;
@@ -122,160 +22,106 @@
   pointer-events: none;
 }
 
-.header {
+.container {
   position: relative;
+  z-index: 1;
+  width: min(1120px, calc(100% - 64px));
+  margin: 0 auto;
+  padding: 96px 0 176px;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: space-between;
-  z-index: 2;
+  gap: 56px;
+}
+
+.header {
+  width: 100%;
+  max-width: 720px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 28px;
 }
 
 .streakBadge {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
+  gap: 12px;
+  padding: 8px 18px;
   border-radius: 999px;
-  background: rgba(20, 20, 20, 0.8);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  font-size: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(16, 16, 16, 0.78);
+  font-size: 0.78rem;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
-  letter-spacing: 0.12em;
 }
 
-.headerCenter {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
+.streakValue {
+  font-size: 1rem;
+  letter-spacing: 0.18em;
 }
 
-.clock {
-  font-size: 3rem;
-  font-weight: 500;
-  letter-spacing: 0.12em;
+.streakLabel {
+  font-size: 0.68rem;
+  letter-spacing: 0.3em;
 }
 
-.date {
-  font-size: 0.85rem;
-  letter-spacing: 0.4em;
-  color: rgba(230, 230, 230, 0.75);
-}
-
-.headerRight {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  background: rgba(20, 20, 20, 0.75);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  padding: 8px 14px;
-  border-radius: 999px;
-  font-size: 0.8rem;
-  letter-spacing: 0.06em;
-}
-
-.hero {
-  position: relative;
-  z-index: 2;
+.timeRow {
+  width: 100%;
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
   gap: 24px;
 }
 
-.greeting h1 {
-  font-size: 2.4rem;
-  font-weight: 600;
-  margin-bottom: 8px;
+.clock {
+  font-size: 3.4rem;
+  font-weight: 500;
+  letter-spacing: 0.14em;
 }
 
-.greeting p {
-  color: rgba(230, 230, 230, 0.7);
-  max-width: 420px;
-  font-size: 0.95rem;
+.date {
+  font-size: 0.88rem;
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+  color: rgba(235, 235, 235, 0.72);
 }
 
-.surfaceSwitch {
-  display: inline-flex;
-  background: rgba(15, 15, 15, 0.8);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 999px;
-  padding: 6px;
-  gap: 6px;
-}
-
-.surfaceSwitch button {
-  padding: 10px 22px;
-  border-radius: 999px;
-  font-size: 0.9rem;
+.greeting {
+  font-size: 2.6rem;
+  font-weight: 500;
+  text-align: center;
   letter-spacing: 0.08em;
-  background: transparent;
-  color: rgba(230, 230, 230, 0.65);
-  border: none;
-  cursor: pointer;
-  transition: background 0.2s ease, color 0.2s ease;
 }
 
-.surfaceSwitch button[data-active="true"] {
-  background: rgba(90, 90, 90, 0.9);
-  color: var(--foreground);
-}
-
-.workspaceSurface {
-  position: relative;
-  z-index: 2;
+.main {
+  width: 100%;
   display: flex;
-  gap: 28px;
   align-items: stretch;
+  gap: 32px;
 }
 
-.calendarColumn {
-  flex: 0 0 360px;
-  background: rgba(15, 15, 15, 0.82);
-  border-radius: 28px;
-  padding: 24px;
+.calendarCard {
+  flex: 1;
+  background: rgba(12, 12, 12, 0.82);
   border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 32px;
+  padding: 28px 32px;
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 28px;
 }
 
-.cardHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.cardHeader h2 {
-  font-size: 1rem;
+.calendarCard header {
+  font-size: 0.9rem;
+  letter-spacing: 0.34em;
   text-transform: uppercase;
-  letter-spacing: 0.3em;
+  color: rgba(230, 230, 230, 0.8);
 }
 
-.cardControls {
-  display: inline-flex;
-  gap: 8px;
-}
-
-.cardControls button {
-  width: 32px;
-  height: 32px;
-  border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(30, 30, 30, 0.8);
-  color: var(--accent);
-  cursor: pointer;
-  transition: background 0.2s ease, border-color 0.2s ease;
-}
-
-.cardControls button:hover {
-  background: rgba(70, 70, 70, 0.8);
-  border-color: rgba(255, 255, 255, 0.2);
-}
-
-.dayCalendar {
+.calendarBody {
   display: flex;
-  gap: 20px;
+  gap: 28px;
   overflow: hidden;
 }
 
@@ -283,29 +129,30 @@
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding-top: 8px;
-  font-size: 0.75rem;
+  gap: 18px;
+  font-size: 0.74rem;
+  letter-spacing: 0.2em;
   color: rgba(220, 220, 220, 0.45);
+  padding-top: 4px;
 }
 
-.timeRow {
-  height: 42px;
+.timeColumn li {
+  height: 48px;
   display: flex;
   align-items: flex-start;
 }
 
-.timeRow span {
-  letter-spacing: 0.2em;
+.timeColumn span {
+  pointer-events: none;
 }
 
 .eventColumn {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
   padding-right: 6px;
-  overflow: auto;
+  overflow-y: auto;
   scrollbar-width: thin;
 }
 
@@ -314,252 +161,234 @@
 }
 
 .eventColumn::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 16px;
 }
 
 .eventBlock {
   background: linear-gradient(
     135deg,
-    rgba(55, 55, 55, 0.55),
-    rgba(15, 15, 15, 0.9)
+    rgba(50, 50, 50, 0.5),
+    rgba(18, 18, 18, 0.88)
   );
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 18px;
-  padding: 14px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 22px;
+  padding: 16px 20px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 10px;
 }
 
 .eventTime {
-  font-size: 0.75rem;
-  color: rgba(235, 235, 235, 0.55);
+  font-size: 0.78rem;
   letter-spacing: 0.2em;
+  color: rgba(235, 235, 235, 0.6);
 }
 
 .eventBlock p {
-  font-size: 0.95rem;
-  line-height: 1.35;
+  font-size: 1rem;
+  line-height: 1.45;
 }
 
-.planColumn {
-  flex: 1;
+.sideColumn {
+  width: 360px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.planCard,
+.pulseCard {
   background: rgba(12, 12, 12, 0.82);
-  border-radius: 28px;
-  padding: 24px 28px 26px;
   border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 32px;
+  padding: 26px 28px;
   display: flex;
   flex-direction: column;
   gap: 20px;
 }
 
-.planSwitcher {
+.planTabs {
   display: inline-flex;
   gap: 12px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 4px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(18, 18, 18, 0.82);
 }
 
-.planSwitcher button {
-  background: none;
+.planTabs button {
   border: none;
-  cursor: pointer;
-  font-size: 1rem;
-  letter-spacing: 0.24em;
+  border-radius: 999px;
+  padding: 10px 20px;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: rgba(220, 220, 220, 0.5);
-  padding-bottom: 6px;
-  position: relative;
+  font-size: 0.8rem;
+  color: rgba(230, 230, 230, 0.58);
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
 }
 
-.planSwitcher button[data-active="true"] {
+.planTabs button[data-active="true"] {
+  background: rgba(60, 60, 60, 0.82);
   color: var(--foreground);
 }
 
-.planSwitcher button[data-active="true"]::after {
-  content: "";
-  position: absolute;
-  bottom: -8px;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: rgba(255, 255, 255, 0.85);
-  border-radius: 999px;
+.planBody,
+.habitBody {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
 }
 
-.planBody {
-  flex: 1;
-  overflow: hidden;
+.planBody h2,
+.habitBody h2 {
+  font-size: 0.82rem;
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+  color: rgba(235, 235, 235, 0.7);
 }
 
-.planList {
+.planBody ul,
+.habitBody ul {
   list-style: none;
   display: flex;
   flex-direction: column;
   gap: 14px;
-  overflow-y: auto;
-  max-height: 240px;
-  padding-right: 4px;
 }
 
-.planList li {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
+.planBody li {
   padding: 14px 16px;
-  background: rgba(18, 18, 18, 0.76);
   border-radius: 18px;
   border: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-.planList li[data-completed="true"] {
-  opacity: 0.55;
-  text-decoration: line-through;
-}
-
-.planList label {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  cursor: pointer;
-  line-height: 1.4;
-}
-
-.planList input {
-  width: 18px;
-  height: 18px;
-  border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.35);
-  background: transparent;
-  accent-color: var(--foreground);
-}
-
-.tag {
-  font-size: 0.65rem;
-  letter-spacing: 0.24em;
-  text-transform: uppercase;
-  color: rgba(220, 220, 220, 0.75);
-}
-
-.habitList {
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.habitList li {
+  background: rgba(18, 18, 18, 0.72);
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 12px 16px;
-  background: rgba(18, 18, 18, 0.72);
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
-.habitList li div {
+.planBody li[data-completed="true"] {
+  opacity: 0.55;
+  text-decoration: line-through;
+}
+
+.planBody label {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
+  width: 100%;
+  cursor: pointer;
 }
 
-.habitStreak {
-  font-family: var(--font-mono, "IBM Plex Mono", monospace);
-  font-size: 0.9rem;
-  letter-spacing: 0.2em;
-  color: rgba(230, 230, 230, 0.75);
+.planBody input {
+  width: 18px;
+  height: 18px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  background: transparent;
+  accent-color: var(--foreground);
+}
+
+.habitBody li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 18px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(18, 18, 18, 0.72);
+}
+
+.habitBody li div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.habitBody li span:nth-child(2) {
+  font-size: 0.78rem;
+  color: rgba(230, 230, 230, 0.6);
+  letter-spacing: 0.08em;
+}
+
+.habitMeta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.82rem;
+  letter-spacing: 0.12em;
+  color: rgba(235, 235, 235, 0.75);
 }
 
 .secondaryButton {
   align-self: flex-start;
-  padding: 10px 18px;
+  padding: 10px 20px;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(20, 20, 20, 0.72);
-  color: rgba(230, 230, 230, 0.85);
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(18, 18, 18, 0.78);
+  color: rgba(235, 235, 235, 0.85);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  font-size: 0.7rem;
   cursor: pointer;
-  transition: border-color 0.2s ease, background 0.2s ease;
-}
-
-.secondaryButton:hover {
-  border-color: rgba(255, 255, 255, 0.25);
-  background: rgba(50, 50, 50, 0.82);
-}
-
-.pulseCard {
-  margin-top: auto;
-  background: rgba(15, 15, 15, 0.8);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 20px;
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
 }
 
 .pulseCard header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 16px;
+}
+
+.pulseCard header h2 {
+  font-size: 0.82rem;
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+  color: rgba(235, 235, 235, 0.7);
 }
 
 .pulseCard header button {
-  background: none;
-  border: none;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  border: none;
+  background: none;
+  color: rgba(235, 235, 235, 0.7);
+  font-size: 0.8rem;
   cursor: pointer;
-  font-size: 0.85rem;
-  color: rgba(230, 230, 230, 0.75);
 }
 
-.pulseList {
+.pulseBody {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
 }
 
-.pulseRow {
+.pulseBody article {
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(18, 18, 18, 0.72);
+  padding: 16px 18px;
   display: flex;
-  gap: 18px;
-  padding: 14px 16px;
-  background: rgba(18, 18, 18, 0.75);
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  flex-direction: column;
+  gap: 10px;
 }
 
 .pulseMeta {
   display: flex;
-  flex-direction: column;
-  gap: 10px;
-  width: 80px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .pulseTime {
   font-family: var(--font-mono, "IBM Plex Mono", monospace);
-  font-size: 0.85rem;
-  letter-spacing: 0.24em;
-  color: rgba(230, 230, 230, 0.7);
-}
-
-.pulseBody {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.pulseBody span {
-  font-size: 0.85rem;
-  color: rgba(230, 230, 230, 0.55);
+  letter-spacing: 0.22em;
+  font-size: 0.78rem;
+  color: rgba(235, 235, 235, 0.65);
 }
 
 .pulseStatus {
@@ -575,311 +404,104 @@
 }
 
 .pulseStatus[data-status="stable"] {
-  color: rgba(240, 240, 240, 0.8);
+  color: rgba(240, 240, 240, 0.85);
 }
 
-.dashboardSurface {
-  position: relative;
-  z-index: 2;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 28px;
-}
-
-.dashboardCard {
-  background: rgba(15, 15, 15, 0.84);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 24px;
-  padding: 22px 26px;
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-  min-height: 320px;
-}
-
-.dashboardCard header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.dashboardCard header h2 {
-  font-size: 1.1rem;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-}
-
-.dashboardCard header span {
-  font-size: 0.85rem;
-  color: rgba(230, 230, 230, 0.6);
-}
-
-.dashboardPulse {
-  display: grid;
-  gap: 16px;
-}
-
-.dashboardPulse div {
-  background: rgba(18, 18, 18, 0.75);
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.dashboardPulse span {
-  font-family: var(--font-mono, "IBM Plex Mono", monospace);
-  letter-spacing: 0.24em;
-  font-size: 0.75rem;
-  color: rgba(230, 230, 230, 0.6);
-}
-
-.dashboardPulse p {
-  font-size: 0.95rem;
-  line-height: 1.35;
-}
-
-.weekCalendar {
-  display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.weekColumn {
-  background: rgba(18, 18, 18, 0.72);
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.04);
-  padding: 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  transition: border-color 0.2s ease, background 0.2s ease;
-}
-
-.weekColumn[data-active="true"] {
-  border-color: rgba(255, 255, 255, 0.22);
-  background: rgba(40, 40, 40, 0.8);
-}
-
-.weekLabel {
-  font-size: 0.85rem;
-  letter-spacing: 0.28em;
-  color: rgba(230, 230, 230, 0.65);
-}
-
-.weekColumn ul {
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.weekColumn li {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 0.9rem;
-  padding: 8px;
-  background: rgba(12, 12, 12, 0.75);
-  border-radius: 10px;
-}
-
-.weekColumn li span {
-  font-family: var(--font-mono, "IBM Plex Mono", monospace);
-  letter-spacing: 0.2em;
-  font-size: 0.75rem;
-  color: rgba(230, 230, 230, 0.55);
-}
-
-.chatToggle {
-  position: fixed;
-  bottom: 24px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 12;
-}
-
-.chatToggle button {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 28px;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(30, 30, 30, 0.82);
-  color: rgba(235, 235, 235, 0.85);
-  cursor: pointer;
-  transition: border-color 0.2s ease, background 0.2s ease;
-}
-
-.chatToggle button:hover {
-  border-color: rgba(255, 255, 255, 0.28);
-  background: rgba(60, 60, 60, 0.88);
-}
-
-.chatDrawer {
-  position: fixed;
-  right: 32px;
-  bottom: 32px;
-  width: 420px;
-  max-height: calc(100vh - 96px);
-  background: rgba(10, 10, 10, 0.94);
-  border-radius: 24px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  display: grid;
-  grid-template-rows: auto 1fr auto;
-  transform: translateY(120%);
-  transition: transform 0.35s ease;
-  z-index: 20;
-  overflow: hidden;
-}
-
-.chatDrawer[data-open="true"] {
-  transform: translateY(0%);
-}
-
-.chatDrawer header {
-  padding: 20px 24px 14px;
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.chatDrawer header h3 {
-  text-transform: uppercase;
-  letter-spacing: 0.3em;
-  font-size: 0.85rem;
-  margin-bottom: 6px;
-}
-
-.chatDrawer header span {
-  font-size: 0.85rem;
+.pulseBody span {
+  font-size: 0.86rem;
   color: rgba(235, 235, 235, 0.6);
 }
 
-.chatDrawer header button {
-  background: none;
-  border: none;
-  color: rgba(235, 235, 235, 0.55);
-  cursor: pointer;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-}
-
-.chatBody {
-  padding: 0 24px 18px;
-  overflow-y: auto;
+.chatBar {
+  position: fixed;
+  bottom: 32px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(720px, calc(100% - 72px));
   display: flex;
-  flex-direction: column;
-  gap: 14px;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 18px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(12, 12, 12, 0.88);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.35);
+  z-index: 2;
 }
 
-.chatMessage {
-  align-self: flex-start;
-  padding: 12px 16px;
-  border-radius: 18px;
-  background: rgba(20, 20, 20, 0.85);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  max-width: 85%;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.chatMessage[data-actor="user"] {
-  align-self: flex-end;
-  background: rgba(60, 60, 60, 0.8);
-}
-
-.chatMessage span {
-  font-family: var(--font-mono, "IBM Plex Mono", monospace);
-  font-size: 0.7rem;
-  letter-spacing: 0.2em;
-  color: rgba(235, 235, 235, 0.45);
-}
-
-.chatComposer {
-  padding: 16px 20px 20px;
-  display: flex;
-  gap: 12px;
-  border-top: 1px solid rgba(255, 255, 255, 0.05);
-  background: rgba(15, 15, 15, 0.95);
-}
-
-.chatComposer input {
+.chatBar input {
   flex: 1;
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(20, 20, 20, 0.85);
+  border: none;
+  background: transparent;
   color: var(--foreground);
-  padding: 12px 16px;
+  font-size: 0.95rem;
+  letter-spacing: 0.02em;
 }
 
-.chatComposer input::placeholder {
-  color: rgba(235, 235, 235, 0.4);
+.chatBar input::placeholder {
+  color: rgba(235, 235, 235, 0.55);
 }
 
-.chatComposer button {
-  width: 48px;
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(50, 50, 50, 0.8);
-  color: var(--foreground);
-  display: grid;
-  place-items: center;
+.chatIconButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(25, 25, 25, 0.82);
+  color: rgba(235, 235, 235, 0.8);
   cursor: pointer;
 }
 
-@media (max-width: 1260px) {
-  .workspaceSurface {
+.chatActions {
+  display: inline-flex;
+  gap: 10px;
+}
+
+.chatActions button {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(25, 25, 25, 0.82);
+  color: rgba(235, 235, 235, 0.8);
+  cursor: pointer;
+}
+
+@media (max-width: 1024px) {
+  .main {
     flex-direction: column;
   }
 
-  .calendarColumn,
-  .planColumn {
+  .sideColumn {
     width: 100%;
   }
-
-  .dashboardSurface {
-    grid-template-columns: 1fr;
-  }
-
-  .chatDrawer {
-    width: calc(100% - 64px);
-    right: 32px;
-  }
 }
 
-@media (max-width: 960px) {
-  .page {
+@media (max-width: 720px) {
+  .container {
+    width: calc(100% - 32px);
+    padding-top: 72px;
+  }
+
+  .timeRow {
     flex-direction: column;
+    align-items: center;
+    gap: 12px;
   }
 
-  .sidebar {
-    flex-direction: row;
-    width: auto;
-    padding: 16px 24px;
-    justify-content: space-between;
+  .date {
+    text-align: center;
   }
 
-  .sidebarNav {
-    flex-direction: row;
+  .clock {
+    font-size: 2.8rem;
   }
 
-  .sidebarFooter {
-    flex-direction: row;
-  }
-
-  .main {
-    padding: 32px 24px 120px;
-  }
-
-  .hero {
-    flex-direction: column;
-    align-items: flex-start;
+  .chatBar {
+    width: calc(100% - 40px);
+    bottom: 24px;
   }
 }
