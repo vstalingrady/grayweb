@@ -21,12 +21,14 @@ export function GrayWorkspaceHeader({
         <span className={styles.time}>{timeLabel}</span>
         <span className={styles.date}>{dateLabel}</span>
       </div>
-      <div className={styles.headerRight}>
-        <div className={styles.streakBadge}>
-          <Flame size={12} />
-          <span>{String(normalizedStreak).padStart(2, "0")} day streak</span>
+      {normalizedStreak > 0 && (
+        <div className={styles.headerRight}>
+          <div className={styles.streakBadge}>
+            <Flame size={12} />
+            <span>{String(normalizedStreak).padStart(2, "0")} day streak</span>
+          </div>
         </div>
-      </div>
+      )}
     </header>
   );
 }
