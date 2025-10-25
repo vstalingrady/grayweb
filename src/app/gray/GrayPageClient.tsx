@@ -452,7 +452,10 @@ function GrayPageClientInner({
               streakCount={streakCount}
             />
 
-            <div className={styles.mainContent}>
+            <div
+              className={styles.mainContent}
+              data-view={viewMode}
+            >
               {isDashboardView ? (
                 <GrayDashboardView
                   plans={plans}
