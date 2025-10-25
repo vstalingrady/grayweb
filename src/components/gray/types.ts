@@ -66,3 +66,12 @@ export type CalendarDisplayEvent = {
   topOffset: number;
   height: number;
 };
+
+export type PulseEntry = {
+  id: string;
+  dateKey: string;
+  timestamp: number;
+  plans: PlanItem[];
+  habits: HabitItem[];
+  proactivity: ProactivityItem;
+};

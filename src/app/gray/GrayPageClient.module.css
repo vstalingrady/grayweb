@@ -816,8 +816,8 @@
   width: 100%;
   align-items: stretch;
   justify-items: center;
-  padding: clamp(24px, 6vh, 56px) clamp(12px, 3vw, 28px)
-    clamp(32px, 8vh, 80px);
+  padding: clamp(12px, 3vh, 32px) clamp(12px, 3vw, 28px)
+    clamp(16px, 4vh, 40px);
 }
 
 .main[data-view="chat"] {
@@ -829,15 +829,15 @@
 .main[data-dashboard="true"] {
   grid-template-rows: auto 1fr;
   row-gap: clamp(14px, 2.4vw, 26px);
-  padding-top: clamp(16px, 4vh, 32px);
-  padding-bottom: clamp(32px, 8vh, 80px);
+  padding-top: clamp(8px, 2vh, 20px);
+  padding-bottom: clamp(20px, 5vh, 56px);
 }
 
 .mainContent {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: clamp(18px, 4vh, 32px);
+  gap: clamp(12px, 3vh, 24px);
   justify-content: flex-start;
   width: 100%;
   min-width: 0;
@@ -859,7 +859,7 @@
 }
 
 .mainContent[data-view="general"] {
-  padding-bottom: clamp(20px, 5vh, 48px);
+  padding-bottom: clamp(16px, 4vh, 40px);
 }
 
 .mainContent > .chatView,
@@ -1375,7 +1375,7 @@
   gap: clamp(16px, 3vw, 32px);
   width: min(1160px, 100%);
   margin: 0 auto;
-  padding-top: 4px;
+  padding-top: 0;
 }
 
 .dashboardHeaderLeft {
@@ -1449,6 +1449,88 @@
   gap: clamp(20px, 3vw, 36px);
 }
 
+.pulseHistoryBar {
+  width: min(1160px, 100%);
+  margin: clamp(16px, 2vw, 24px) auto 0;
+}
+
+.pulseHistoryRail {
+  display: flex;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 20px;
+  background: rgba(6, 6, 6, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(138, 142, 150, 0.32) transparent;
+}
+
+.pulseHistoryRail::-webkit-scrollbar {
+  height: 6px;
+}
+
+.pulseHistoryRail::-webkit-scrollbar-thumb {
+  background: rgba(138, 142, 150, 0.32);
+  border-radius: 999px;
+}
+
+.pulseHistoryItem {
+  min-width: 128px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(10, 10, 10, 0.85);
+  color: rgba(230, 230, 230, 0.7);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.pulseHistoryItem:hover {
+  transform: translateY(-1px);
+  background: rgba(14, 14, 14, 0.9);
+}
+
+.pulseHistoryItem[data-active="true"] {
+  border-color: rgba(118, 139, 255, 0.55);
+  background: rgba(18, 18, 18, 0.92);
+  color: rgba(220, 228, 255, 0.92);
+}
+
+.pulseHistoryItemPrimary {
+  font-size: 0.82rem;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+}
+
+.pulseHistoryItemMeta {
+  font-size: 0.66rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(220, 220, 220, 0.58);
+}
+
+.pulseEmptyState {
+  width: min(820px, 100%);
+  margin: clamp(28px, 6vh, 48px) auto 0;
+  padding: clamp(32px, 8vw, 48px);
+  border-radius: 28px;
+  border: 1px dashed rgba(255, 255, 255, 0.12);
+  background: rgba(10, 10, 10, 0.65);
+  text-align: center;
+  color: rgba(230, 230, 230, 0.68);
+  font-size: 0.86rem;
+  letter-spacing: 0.08em;
+}
+
 .dashboardCard {
   composes: cardSurface;
   padding: clamp(20px, 2.6vw, 28px);
@@ -1500,6 +1582,10 @@
   color: rgba(245, 245, 245, 0.9);
 }
 
+.proactivityTitle svg {
+  color: rgba(94, 214, 164, 0.9);
+}
+
 .proactivityHeader p {
   margin: 6px 0 0;
   font-size: 0.72rem;
@@ -1511,9 +1597,9 @@
   width: 36px;
   height: 36px;
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(14, 14, 14, 0.7);
-  color: rgba(235, 235, 235, 0.7);
+  border: 1px solid rgba(255, 96, 96, 0.35);
+  background: rgba(10, 10, 10, 0.78);
+  color: rgba(255, 122, 122, 0.86);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1525,9 +1611,15 @@
 }
 
 .iconButton:hover {
-  background: rgba(26, 26, 26, 0.8);
-  color: rgba(255, 255, 255, 0.9);
+  background: rgba(22, 22, 22, 0.85);
+  color: rgba(255, 156, 156, 0.92);
   transform: translateY(-1px);
+}
+
+.iconButton[disabled] {
+  cursor: not-allowed;
+  opacity: 0.55;
+  transform: none;
 }
 
 .proactivityControls {
@@ -1564,10 +1656,10 @@
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: clamp(18px, 2.5vw, 28px);
+  grid-template-columns: minmax(340px, 480px) minmax(260px, 360px);
+  gap: clamp(16px, 2vw, 24px);
   align-items: stretch;
-  width: min(1180px, 100%);
+  width: min(960px, 100%);
   justify-content: center;
   margin: 0 auto;
   margin-bottom: clamp(18px, 4vh, 32px);
@@ -1588,16 +1680,22 @@
   flex: 1;
 }
 
+.primaryColumnSlim {
+  max-width: clamp(320px, 50vw, 460px);
+  margin: 0 auto;
+}
+
+.secondaryColumnSlim {
+  max-width: clamp(260px, 45vw, 360px);
+  margin: 0 auto;
+}
+
 .cardSurface {
-  background: linear-gradient(
-    135deg,
-    rgba(18, 18, 18, 0.82),
-    rgba(8, 8, 8, 0.74)
-  );
-  border: 1px solid rgba(255, 255, 255, 0.04);
-  border-radius: 26px;
+  background: rgba(4, 4, 4, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 24px;
   box-shadow:
-    0 28px 46px rgba(0, 0, 0, 0.35),
+    0 28px 42px rgba(0, 0, 0, 0.45),
     inset 0 0 0 1px rgba(255, 255, 255, 0.02);
 }
 
@@ -2207,6 +2305,11 @@
   max-width: 576px;
 }
 
+.planPanelSlim {
+  max-width: clamp(260px, 40vw, 340px);
+  margin: 0 auto;
+}
+
 .tabBar {
   display: inline-flex;
   gap: 8px;
@@ -2276,11 +2379,12 @@
   display: flex;
   align-items: flex-start;
   gap: 14px;
-  padding: 12px 14px;
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(20, 20, 20, 0.75);
-  color: rgba(245, 245, 245, 0.9);
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(8, 8, 8, 0.78);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  color: rgba(240, 240, 240, 0.9);
   text-align: left;
   cursor: pointer;
   transition:
@@ -2291,21 +2395,31 @@
 
 .planList li button:hover {
   transform: translateY(-2px);
-  background: rgba(28, 28, 28, 0.8);
+  background: rgba(12, 12, 12, 0.82);
 }
 
 .planList li button[data-completed="true"] {
-  color: rgba(235, 235, 235, 0.55);
+  color: rgba(210, 210, 210, 0.46);
   text-decoration: line-through;
 }
 
 .planList li button span:first-child {
   display: inline-flex;
-  color: rgba(235, 235, 235, 0.7);
+  color: rgba(190, 190, 190, 0.75);
 }
 
 .planList li button[data-completed="true"] span:first-child {
-  color: rgba(94, 188, 255, 0.85);
+  color: #6f9dff;
+}
+
+.planList li button[disabled] {
+  cursor: not-allowed;
+  opacity: 0.65;
+  transform: none;
+}
+
+.planList li button[disabled]:hover {
+  background: rgba(8, 8, 8, 0.78);
 }
 
 .planLabel {
@@ -2325,23 +2439,18 @@
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  padding: 12px 14px;
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(20, 20, 20, 0.75);
-  color: rgba(245, 245, 245, 0.9);
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(8, 8, 8, 0.78);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  color: rgba(240, 240, 240, 0.9);
 }
 
 .habitList li div:first-child {
   display: flex;
   flex-direction: column;
   gap: 6px;
-}
-
-.habitList li div:first-child span:last-child {
-  font-size: 0.72rem;
-  letter-spacing: 0.06em;
-  color: rgba(235, 235, 235, 0.55);
 }
 
 .habitList li div:last-child {
@@ -2351,7 +2460,11 @@
   font-size: 0.72rem;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: rgba(235, 235, 235, 0.68);
+  color: rgba(255, 196, 116, 0.88);
+}
+
+.habitList li div:last-child svg {
+  color: rgba(255, 196, 116, 0.88);
 }
 
 .habitLabel {
@@ -2367,32 +2480,59 @@
   letter-spacing: 0.02em;
 }
 
+.habitMeta {
+  font-size: 0.7rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(235, 235, 235, 0.58);
+}
+
 .secondaryAction {
   align-self: flex-start;
-  padding: 10px 18px;
-  border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(12, 12, 12, 0.7);
-  color: rgba(235, 235, 235, 0.8);
+  padding: 10px 20px;
+  border-radius: 16px;
+  border: 1px solid rgba(118, 139, 255, 0.55);
+  background: rgba(8, 8, 8, 0.86);
+  color: rgba(214, 222, 255, 0.85);
   font-size: 0.68rem;
   letter-spacing: 0.2em;
   text-transform: uppercase;
   cursor: pointer;
+  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.38);
+  transition:
+    background 0.2s ease,
+    color 0.2s ease,
+    border-color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.secondaryAction:hover {
+  transform: translateY(-1px);
+  background: rgba(12, 12, 12, 0.92);
+  border-color: rgba(148, 167, 255, 0.7);
+}
+
+.secondaryAction[disabled],
+.secondaryAction[data-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.6;
+  transform: none;
+  border-color: rgba(118, 139, 255, 0.25);
 }
 
 .chatBar {
   justify-self: center;
-  width: min(760px, 100%);
+  width: min(520px, 100%);
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 12px 16px;
+  padding: 10px 14px;
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(12, 12, 12, 0.72);
   backdrop-filter: blur(16px);
-  margin-top: clamp(18px, 3vh, 32px);
-  margin-bottom: clamp(16px, 4vh, 32px);
+  margin-top: clamp(22px, 4vh, 40px);
+  margin-bottom: clamp(10px, 2vh, 24px);
 }
 
 .chatIconButton,

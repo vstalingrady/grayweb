@@ -54,7 +54,7 @@ const formatRelativeTime = (timestamp: number) => {
 };
 
 export function GrayChatView({ sessionId }: GrayChatViewProps) {
-  const { getSession, appendMessage, updateSession } = useChatStore();
+  const { getSession, appendMessage, updateSession, workspaceContext } = useChatStore();
   const session = sessionId ? getSession(sessionId) : undefined;
   const { user } = useUser();
   const [draft, setDraft] = useState("");
@@ -195,6 +195,7 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
             conversation_id: conversationId,
             system_prompt: SYSTEM_PROMPT,
             user_id: user.id,
+            context: workspaceContext ?? undefined,
           });
           updateSession(session.id, { conversationId: response.conversation_id });
           appendMessage(session.id, "assistant", response.response);
@@ -250,9 +251,7 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
             const isUser = message.role === "user";
             const isAssistant = !isUser;
             const isPrimaryAssistant = isAssistant && index === firstAssistantIndex;
-            const quickReplies = isPrimaryAssistant
-              ? ["Share a fun fact about AI", "Discuss latest xAI updates"]
-              : [];
+            const quickReplies = [];
             return (
               <div
                 key={message.id}

@@ -419,9 +419,19 @@ export function GrayDashboardCalendar({
     </div>
   );
 
+  const updateSelectedDate = useCallback(
+    (compute: (previous: Date) => Date) => {
+      setSelectedDate((previous) => {
+        const next = compute(previous);
+        setMonthDate(next);
+        return next;
+      });
+    },
+    []
+  );
+
   const handleDaySelect = (nextDate: Date) => {
-    setSelectedDate(nextDate);
-    setMonthDate(nextDate);
+    updateSelectedDate(() => nextDate);
   };
 
   const handleMonthNavigate = (offset: number) => {
@@ -430,6 +440,19 @@ export function GrayDashboardCalendar({
       next.setMonth(previous.getMonth() + offset);
       return next;
     });
+  };
+
+  const handleNavigateRange = (direction: number) => {
+    updateSelectedDate((previous) => {
+      const next = new Date(previous);
+      const delta = direction * (viewMode === "week" ? 7 : 1);
+      next.setDate(previous.getDate() + delta);
+      return next;
+    });
+  };
+
+  const handleGoToday = () => {
+    updateSelectedDate(() => startOfDay(new Date()));
   };
 
   const calendarRootClassName = [
@@ -445,6 +468,14 @@ export function GrayDashboardCalendar({
     calendarStyle["--calendar-max-height"] =
       typeof maxHeight === "number" ? `${maxHeight}px` : maxHeight;
   }
+
+  const monthLabel = selectedDate.toLocaleDateString(undefined, {
+    month: "long",
+    year: "numeric",
+  });
+
+  const rangeLabel =
+    viewMode === "week" ? formatWeekRange(selectedDate) : formatDayLabel(selectedDate);
 
   return (
     <div
@@ -466,15 +497,14 @@ export function GrayDashboardCalendar({
 
       <div className={styles.calendarSurface}>
         <header className={styles.calendarSurfaceHeader}>
-          <div>
-            <span className={styles.calendarSurfaceEyebrow}>
-              {viewMode === "week" ? "Week" : "Day"}
-            </span>
-            <h2>
-              {viewMode === "week" ? formatWeekRange(selectedDate) : formatDayLabel(selectedDate)}
-            </h2>
+          <div className={styles.calendarSurfaceHeaderLeft}>
+            <span className={styles.calendarSurfaceEyebrow}>Calendar</span>
+            <div>
+              <h2>{monthLabel}</h2>
+              <p className={styles.calendarSurfaceRange}>{rangeLabel}</p>
+            </div>
           </div>
-          <div className={styles.calendarSurfaceActions}>
+          <div className={styles.calendarSurfaceHeaderRight}>
             {!viewModeLocked && (
               <div className={styles.calendarViewToggle}>
                 {(["week", "day"] as CalendarViewMode[]).map((mode) => (
@@ -489,9 +519,30 @@ export function GrayDashboardCalendar({
                 ))}
               </div>
             )}
-            <button type="button" onClick={handleCreateEvent}>
-              + New
-            </button>
+            <div className={styles.calendarSurfaceNav}>
+              <button type="button" onClick={handleGoToday}>
+                Today
+              </button>
+              <div className={styles.calendarSurfaceNavArrows}>
+                <button
+                  type="button"
+                  aria-label="Previous period"
+                  onClick={() => handleNavigateRange(-1)}
+                >
+                  ‹
+                </button>
+                <button
+                  type="button"
+                  aria-label="Next period"
+                  onClick={() => handleNavigateRange(1)}
+                >
+                  ›
+                </button>
+              </div>
+              <button type="button" onClick={handleCreateEvent}>
+                + Create
+              </button>
+            </div>
           </div>
         </header>
 

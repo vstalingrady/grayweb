@@ -104,6 +104,21 @@ user_streaks = sqlalchemy.Table(
     sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
 )
 
+# Proactivity tracking
+proactivity_logs = sqlalchemy.Table(
+    "proactivity_logs",
+    metadata,
+    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True, index=True),
+    sqlalchemy.Column("user_id", sqlalchemy.ForeignKey("users.id")),
+    sqlalchemy.Column("activity_date", sqlalchemy.DateTime, default=datetime.utcnow),
+    sqlalchemy.Column("tasks_completed", sqlalchemy.Integer, default=0),
+    sqlalchemy.Column("total_tasks", sqlalchemy.Integer, default=0),
+    sqlalchemy.Column("score", sqlalchemy.Integer, default=0),
+    sqlalchemy.Column("notes", sqlalchemy.String, nullable=True),
+    sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
+    sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
+)
+
 # Pydantic models
 class UserBase(BaseModel):
     email: EmailStr
@@ -214,6 +229,36 @@ class UserStreak(UserStreakBase):
     class Config:
         orm_mode = True
 
+# Proactivity models
+class ProactivityLogBase(BaseModel):
+    activity_date: datetime
+    tasks_completed: int = 0
+    total_tasks: int = 0
+    score: int = 0
+    notes: Optional[str] = None
+
+class ProactivityLogCreate(ProactivityLogBase):
+    pass
+
+class DailyCheckIn(BaseModel):
+    tasks_completed: int
+    total_tasks: int
+    notes: Optional[str] = None
+
+class ProactivityLog(ProactivityLogBase):
+    id: int
+    user_id: int
+    activity_date: datetime
+    tasks_completed: int
+    total_tasks: int
+    score: int
+    notes: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        orm_mode = True
+
 class PlanUpdate(BaseModel):
     label: Optional[str] = None
     completed: Optional[bool] = None
@@ -253,6 +298,7 @@ class ChatRequest(BaseModel):
     message: str
     conversation_id: Optional[str] = None
     user_id: int
+    context: Optional[str] = None
 
 class ChatResponse(BaseModel):
     response: str
@@ -447,12 +493,18 @@ async def save_conversation_message(conversation_id: str, message: Dict[str, str
     except Exception as e:
         print(f"Error saving message: {e}")
 
-async def generate_ai_response(message: str, conversation_history: List[Dict[str, str]] = None) -> str:
+async def generate_ai_response(
+    message: str,
+    conversation_history: List[Dict[str, str]] = None,
+    workspace_context: Optional[str] = None,
+) -> str:
     """Generate AI response using Gemini or fallback"""
     if gemini_model:
         try:
             # Build conversation context
             context = ""
+            if workspace_context:
+                context += f"Workspace context:\n{workspace_context.strip()}\n\n"
             if conversation_history:
                 for msg in conversation_history[-10:]:  # Last 10 messages for context
                     context += f"{msg['role']}: {msg['text']}\n"
@@ -500,7 +552,11 @@ async def chat_with_ai(request: ChatRequest):
                 print(f"Error getting conversation history: {e}")
 
         # Generate AI response
-        ai_response = await generate_ai_response(request.message, conversation_history)
+        ai_response = await generate_ai_response(
+            request.message,
+            conversation_history,
+            request.context,
+        )
 
         # Save AI response
         await save_conversation_message(conversation_id, {
@@ -940,7 +996,6 @@ async def get_user_calendar_events(user_id: int, db: databases.Database = Depend
 async def create_calendar_event(user_id: int, event: CalendarEventCreate, db: databases.Database = Depends(get_database)):
     query = calendar_events.insert().values(
         user_id=user_id,
-        calendar_id=event.calendar_id,
         title=event.title,
         description=event.description,
         start_time=event.start_time,
@@ -948,6 +1003,147 @@ async def create_calendar_event(user_id: int, event: CalendarEventCreate, db: da
     )
     event_id = await db.execute(query)
     return {**event.dict(), "id": event_id, "user_id": user_id}
+
+# Proactivity API endpoints
+@app.get("/users/{user_id}/proactivity", response_model=List[ProactivityLog])
+async def get_user_proactivity(user_id: int, db: databases.Database = Depends(get_database)):
+    """Get user's proactivity logs"""
+    from datetime import datetime
+
+    query = proactivity_logs.select().where(proactivity_logs.c.user_id == user_id).order_by(proactivity_logs.c.activity_date.desc())
+    results = await db.fetch_all(query)
+
+    # Fix null timestamps for response
+    formatted_results = []
+    for result in results:
+        formatted_results.append({
+            "id": result.id,
+            "user_id": result.user_id,
+            "activity_date": result.activity_date,
+            "tasks_completed": result.tasks_completed,
+            "total_tasks": result.total_tasks,
+            "score": result.score,
+            "notes": result.notes,
+            "created_at": result.created_at if result.created_at else datetime.utcnow(),
+            "updated_at": result.updated_at if result.updated_at else datetime.utcnow()
+        })
+
+    return formatted_results
+
+@app.post("/users/{user_id}/proactivity", response_model=ProactivityLog, status_code=status.HTTP_201_CREATED)
+async def create_proactivity_log(user_id: int, proactivity: ProactivityLogCreate, db: databases.Database = Depends(get_database)):
+    """Create a new proactivity log entry"""
+    # Calculate score based on tasks completed vs total tasks
+    score = min(100, (proactivity.tasks_completed / max(proactivity.total_tasks, 1)) * 100) if proactivity.total_tasks > 0 else 0
+    query = proactivity_logs.insert().values(
+        user_id=user_id,
+        activity_date=datetime.utcnow(),
+        tasks_completed=proactivity.tasks_completed,
+        total_tasks=proactivity.total_tasks,
+        score=score,
+        notes=proactivity.notes
+    )
+    log_id = await db.execute(query)
+    return {**proactivity.dict(), "id": log_id, "user_id": user_id}
+
+@app.post("/users/{user_id}/proactivity/daily-checkin", response_model=ProactivityLog)
+async def daily_proactivity_checkin(
+    user_id: int,
+    checkin: DailyCheckIn,
+    db: databases.Database = Depends(get_database)
+):
+    """Daily proactivity check-in - creates or updates today's proactivity log"""
+    from datetime import datetime
+    from sqlalchemy import func
+
+    today = datetime.utcnow().date()
+
+    # Check if there's already a log for today
+    existing_log_query = proactivity_logs.select().where(
+        (proactivity_logs.c.user_id == user_id) &
+        (func.date(proactivity_logs.c.activity_date) == today)
+    )
+    existing_log = await db.fetch_one(existing_log_query)
+
+    if existing_log:
+        # Update existing log with new data
+        score = min(100, (checkin.tasks_completed / max(checkin.total_tasks, 1)) * 100) if checkin.total_tasks > 0 else 0
+        await db.execute(
+            proactivity_logs.update()
+            .where(proactivity_logs.c.id == existing_log.id)
+            .values(
+                tasks_completed=checkin.tasks_completed,
+                total_tasks=checkin.total_tasks,
+                score=score,
+                notes=checkin.notes
+            )
+        )
+        result = await db.fetch_one(proactivity_logs.select().where(proactivity_logs.c.id == existing_log.id))
+        return {
+            "id": result.id,
+            "user_id": result.user_id,
+            "activity_date": result.activity_date,
+            "tasks_completed": result.tasks_completed,
+            "total_tasks": result.total_tasks,
+            "score": result.score,
+            "notes": result.notes,
+            "created_at": result.created_at if result.created_at else datetime.utcnow(),
+            "updated_at": datetime.utcnow()
+        }
+    else:
+        # Create new log for today
+        score = min(100, (checkin.tasks_completed / max(checkin.total_tasks, 1)) * 100) if checkin.total_tasks > 0 else 0
+        query = proactivity_logs.insert().values(
+            user_id=user_id,
+            activity_date=datetime.utcnow(),
+            tasks_completed=checkin.tasks_completed,
+            total_tasks=checkin.total_tasks,
+            score=score,
+            notes=checkin.notes
+        )
+        log_id = await db.execute(query)
+        result = await db.fetch_one(proactivity_logs.select().where(proactivity_logs.c.id == log_id))
+        return {
+            "id": result.id,
+            "user_id": result.user_id,
+            "activity_date": result.activity_date,
+            "tasks_completed": result.tasks_completed,
+            "total_tasks": result.total_tasks,
+            "score": result.score,
+            "notes": result.notes,
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow()
+        }
+
+@app.get("/users/{user_id}/proactivity/streak", response_model=dict)
+async def get_proactivity_streak(user_id: int, db: databases.Database = Depends(get_database)):
+    """Get user's current proactivity streak"""
+    from datetime import datetime
+
+    # Calculate streak (consecutive days with proactivity score >= 70)
+    subquery = """
+        SELECT activity_date, score
+        FROM proactivity_logs
+        WHERE user_id = :user_id
+        AND score >= 70
+        ORDER BY activity_date DESC
+    """
+
+    # Execute raw query to get qualifying days
+    result = await db.fetch_all(subquery.replace(":user_id", str(user_id)))
+
+    streak = 0
+    current_date = None
+
+    for row in result:
+        # Parse the activity_date (it comes as a string from raw SQL)
+        row_date = datetime.strptime(row.activity_date.split('.')[0], '%Y-%m-%dT%H:%M:%S').date() if isinstance(row.activity_date, str) else row.activity_date.date()
+
+        if current_date is None or (row_date - current_date).days > 1:
+            streak = 1
+        current_date = row_date
+
+    return {"current_streak": streak, "best_streak": streak}
 
 if __name__ == "__main__":
     import uvicorn

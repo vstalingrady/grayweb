@@ -1,10 +1,11 @@
 "use client";
 
+/* eslint-disable react-hooks/set-state-in-effect */
+
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Gem, MessageSquarePlus, LayoutDashboard, History, Search } from "lucide-react";
 import { GrayEnhancedSidebar } from "@/components/gray/EnhancedSidebar";
-import { GrayWorkspaceHeader } from "@/components/gray/WorkspaceHeader";
 import { GrayDashboardView } from "@/components/gray/DashboardView";
 import { GrayGeneralView } from "@/components/gray/GeneralView";
 import { GrayHistoryView } from "@/components/gray/HistoryView";
@@ -21,10 +22,12 @@ import {
   type SidebarNavItem,
   type SidebarHistorySection,
   type SidebarHistoryEntry,
+  type PulseEntry,
 } from "@/components/gray/types";
 import type { CalendarEvent, CalendarInfo } from "@/components/calendar/types";
 import { ChatProvider, useChatStore } from "@/components/gray/ChatProvider";
 import { DEFAULT_HISTORY_SECTIONS } from "@/components/gray/historySeed";
+import { GrayWorkspaceHeader } from "@/components/gray/WorkspaceHeader";
 const PROACTIVITY_SEED: ProactivityItem = {
   id: "proactivity-1",
   label: "Check-ins",
@@ -34,6 +37,188 @@ const PROACTIVITY_SEED: ProactivityItem = {
 };
 
 const DEFAULT_EVENT_COLOR = "linear-gradient(135deg, rgba(91, 141, 239, 0.85), rgba(48, 79, 254, 0.9))";
+
+const PULSE_STORAGE_KEY_PREFIX = "gray-dashboard-pulses:";
+const MAX_PULSE_HISTORY = 30;
+
+const toDateKey = (date: Date) => {
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, "0");
+  const day = `${date.getDate()}`.padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const clonePlans = (plans: PlanItem[]): PlanItem[] =>
+  plans.map((plan) => ({
+    id: plan.id,
+    label: plan.label,
+    completed: plan.completed,
+  }));
+
+const cloneHabits = (habits: HabitItem[]): HabitItem[] =>
+  habits.map((habit) => ({
+    id: habit.id,
+    label: habit.label,
+    streakLabel: habit.streakLabel,
+    previousLabel: habit.previousLabel,
+  }));
+
+const cloneProactivity = (item: ProactivityItem): ProactivityItem => ({
+  id: item.id,
+  label: item.label,
+  description: item.description,
+  cadence: item.cadence,
+  time: item.time,
+});
+
+const createPulseSnapshot = (
+  referenceDate: Date,
+  plans: PlanItem[],
+  habits: HabitItem[],
+  proactivity: ProactivityItem,
+  stableId?: string
+): PulseEntry => ({
+  id: stableId ?? `pulse-${toDateKey(referenceDate)}`,
+  dateKey: toDateKey(referenceDate),
+  timestamp: referenceDate.getTime(),
+  plans: clonePlans(plans),
+  habits: cloneHabits(habits),
+  proactivity: cloneProactivity(proactivity),
+});
+
+const arePlanListsEqual = (a: PlanItem[], b: PlanItem[]) =>
+  a.length === b.length &&
+  a.every((plan, index) => {
+    const other = b[index];
+    return (
+      other !== undefined &&
+      plan.id === other.id &&
+      plan.label === other.label &&
+      plan.completed === other.completed
+    );
+  });
+
+const areHabitListsEqual = (a: HabitItem[], b: HabitItem[]) =>
+  a.length === b.length &&
+  a.every((habit, index) => {
+    const other = b[index];
+    return (
+      other !== undefined &&
+      habit.id === other.id &&
+      habit.label === other.label &&
+      habit.streakLabel === other.streakLabel &&
+      habit.previousLabel === other.previousLabel
+    );
+  });
+
+const areProactivityItemsEqual = (a: ProactivityItem, b: ProactivityItem) =>
+  a.id === b.id &&
+  a.label === b.label &&
+  a.description === b.description &&
+  a.cadence === b.cadence &&
+  a.time === b.time;
+
+const sanitizePulseEntry = (raw: Partial<PulseEntry> | null | undefined): PulseEntry | null => {
+  if (!raw) {
+    return null;
+  }
+
+  const timestamp =
+    typeof raw.timestamp === "number"
+      ? raw.timestamp
+      : typeof raw.timestamp === "string"
+        ? Number.parseInt(raw.timestamp, 10)
+        : Number.NaN;
+
+  if (!Number.isFinite(timestamp)) {
+    return null;
+  }
+
+  const referenceDate = new Date(timestamp);
+  const dateKey =
+    typeof raw.dateKey === "string" && raw.dateKey
+      ? raw.dateKey
+      : toDateKey(referenceDate);
+  const id =
+    typeof raw.id === "string" && raw.id
+      ? raw.id
+      : `pulse-${dateKey}`;
+
+  const plans = Array.isArray(raw.plans)
+    ? raw.plans
+        .map((plan) => ({
+          id: String(plan?.id ?? ""),
+          label: typeof plan?.label === "string" ? plan.label : "",
+          completed: Boolean(plan?.completed),
+        }))
+        .filter((plan) => plan.id.length > 0)
+    : [];
+
+  const habits = Array.isArray(raw.habits)
+    ? raw.habits
+        .map((habit) => ({
+          id: String(habit?.id ?? ""),
+          label: typeof habit?.label === "string" ? habit.label : "",
+          streakLabel: typeof habit?.streakLabel === "string" ? habit.streakLabel : "",
+          previousLabel: typeof habit?.previousLabel === "string" ? habit.previousLabel : "",
+        }))
+        .filter((habit) => habit.id.length > 0)
+    : [];
+
+  const proactivity = raw.proactivity
+    ? {
+        id: String(raw.proactivity.id ?? PROACTIVITY_SEED.id),
+        label: typeof raw.proactivity.label === "string" ? raw.proactivity.label : PROACTIVITY_SEED.label,
+        description:
+          typeof raw.proactivity.description === "string"
+            ? raw.proactivity.description
+            : PROACTIVITY_SEED.description,
+        cadence:
+          typeof raw.proactivity.cadence === "string"
+            ? raw.proactivity.cadence
+            : PROACTIVITY_SEED.cadence,
+        time:
+          typeof raw.proactivity.time === "string"
+            ? raw.proactivity.time
+            : PROACTIVITY_SEED.time,
+      }
+    : cloneProactivity(PROACTIVITY_SEED);
+
+  return {
+    id,
+    dateKey,
+    timestamp,
+    plans,
+    habits,
+    proactivity,
+  };
+};
+
+const sanitizePulseEntries = (raw: unknown): PulseEntry[] => {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+
+  return raw
+    .map((entry) => sanitizePulseEntry(entry))
+    .filter((entry): entry is PulseEntry => entry !== null)
+    .sort((a, b) => b.timestamp - a.timestamp);
+};
+
+const arePulseEntriesEqual = (a: PulseEntry[], b: PulseEntry[]) =>
+  a.length === b.length &&
+  a.every((entry, index) => {
+    const other = b[index];
+    return (
+      other !== undefined &&
+      entry.id === other.id &&
+      entry.dateKey === other.dateKey &&
+      entry.timestamp === other.timestamp &&
+      arePlanListsEqual(entry.plans, other.plans) &&
+      areHabitListsEqual(entry.habits, other.habits) &&
+      areProactivityItemsEqual(entry.proactivity, other.proactivity)
+    );
+  });
 
 const SIDEBAR_ITEMS: SidebarNavItem[] = [
   { id: "general", label: "General", icon: Gem },
@@ -51,22 +236,6 @@ const NAVIGATION_ROUTES: Partial<Record<SidebarNavKey, string>> = {
   general: "/",
   dashboard: "/dashboard",
 };
-
-const formatClock = (date: Date) =>
-  date.toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
-
-const formatDate = (date: Date) =>
-  date
-    .toLocaleDateString([], {
-      weekday: "long",
-      month: "long",
-      day: "numeric",
-    })
-    .toUpperCase();
 
 const formatDashboardDate = (date: Date) =>
   date.toLocaleDateString([], {
@@ -134,10 +303,18 @@ function GrayPageClientInner({
   const [chatDraft, setChatDraft] = useState("");
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
   const [dashboardTab, setDashboardTab] = useState<"pulse" | "calendar">("pulse");
+  const [pulseEntries, setPulseEntries] = useState<PulseEntry[]>([]);
+  const [activePulseId, setActivePulseId] = useState<string | null>(null);
+  const [streakCount, setStreakCount] = useState(0);
   const [calendarCalendars, setCalendarCalendars] = useState<CalendarInfo[]>([]);
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
-  const [streakCount, setStreakCount] = useState(0);
-  const { sessions, createSession, renameSession, deleteSession } = useChatStore();
+  const {
+    sessions,
+    createSession,
+    renameSession,
+    deleteSession,
+    setWorkspaceContext,
+  } = useChatStore();
   const supportsInlineChat = variant !== "chat";
   const [currentChatId, setCurrentChatId] = useState<string | null>(() => activeChatId ?? null);
 
@@ -166,10 +343,63 @@ function GrayPageClientInner({
     }
     setPlans([]);
     setHabits([]);
+    setPulseEntries([]);
+    setActivePulseId(null);
     setCalendarCalendars([]);
     setCalendarEvents([]);
     setStreakCount(0);
   }, [user]);
+
+  useEffect(() => {
+    if (!user?.id) {
+      return;
+    }
+    if (typeof window === "undefined") {
+      return;
+    }
+    const storageKey = `${PULSE_STORAGE_KEY_PREFIX}${user.id}`;
+    try {
+      const stored = window.localStorage.getItem(storageKey);
+      if (!stored) {
+        setPulseEntries([]);
+        setActivePulseId(null);
+        return;
+      }
+      const parsed = JSON.parse(stored) as unknown;
+      const sanitized = sanitizePulseEntries(parsed).slice(0, MAX_PULSE_HISTORY);
+      setPulseEntries((previous) => {
+        if (arePulseEntriesEqual(previous, sanitized)) {
+          return previous;
+        }
+        return sanitized;
+      });
+      setActivePulseId((previous) => {
+        if (previous && sanitized.some((entry) => entry.id === previous)) {
+          return previous;
+        }
+        return sanitized[0]?.id ?? null;
+      });
+    } catch (error) {
+      console.error("Failed to load pulse history:", error);
+      setPulseEntries([]);
+      setActivePulseId(null);
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user?.id) {
+      return;
+    }
+    if (typeof window === "undefined") {
+      return;
+    }
+    const storageKey = `${PULSE_STORAGE_KEY_PREFIX}${user.id}`;
+    try {
+      window.localStorage.setItem(storageKey, JSON.stringify(pulseEntries));
+    } catch (error) {
+      console.error("Failed to persist pulse history:", error);
+    }
+  }, [pulseEntries, user?.id]);
 
   useEffect(() => {
     if (!user) {
@@ -180,11 +410,23 @@ function GrayPageClientInner({
 
     const loadWorkspaceData = async () => {
       try {
-        const [calendarResponse, eventResponse, planResponse, habitResponse] = await Promise.all([
+        const [
+          calendarResponse,
+          eventResponse,
+          planResponse,
+          habitResponse,
+          streakResponse,
+        ] = await Promise.all([
           apiService.getUserCalendars(user.id),
           apiService.getUserCalendarEvents(user.id),
           apiService.getUserPlans(user.id),
           apiService.getUserHabits(user.id),
+          apiService
+            .getUserStreak(user.id)
+            .catch((error) => {
+              console.error("Failed to load user streak:", error);
+              return null;
+            }),
         ]);
 
         if (!isMounted) {
@@ -237,6 +479,7 @@ function GrayPageClientInner({
         setCalendarEvents(mappedEvents);
         setPlans(mappedPlans);
         setHabits(mappedHabits);
+        setStreakCount(streakResponse?.current_streak ?? 0);
       } catch (error) {
         console.error("Failed to load workspace data:", error);
       }
@@ -255,29 +498,6 @@ function GrayPageClientInner({
     }
     return user?.full_name || "Operator";
   }, [user, loading]);
-
-  useEffect(() => {
-    if (!user) {
-      return;
-    }
-
-    let isMounted = true;
-    apiService
-      .touchUserStreak(user.id)
-      .then((streak) => {
-        if (!isMounted) {
-          return;
-        }
-        setStreakCount(streak.current_streak ?? 0);
-      })
-      .catch((error) => {
-        console.error("Failed to update streak:", error);
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, [user]);
 
   const viewerAvatarUrl = user?.profile_picture_url ?? null;
 
@@ -344,6 +564,41 @@ function GrayPageClientInner({
       }));
   }, [sessions]);
   const proactivity = PROACTIVITY_SEED;
+  const nowDateKey = useMemo(() => toDateKey(now), [now]);
+  const workspaceTimeLabel = useMemo(
+    () =>
+      now
+        .toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: true,
+        })
+        .toUpperCase(),
+    [now]
+  );
+  const workspaceDateLabel = useMemo(
+    () =>
+      now.toLocaleDateString([], {
+        weekday: "long",
+        month: "long",
+        day: "numeric",
+      }),
+    [now]
+  );
+  const todayAnchor = useMemo(() => {
+    const [yearString, monthString, dayString] = nowDateKey.split("-");
+    const year = Number.parseInt(yearString ?? "", 10);
+    const monthIndex = Number.parseInt(monthString ?? "", 10) - 1;
+    const day = Number.parseInt(dayString ?? "", 10);
+
+    if (Number.isNaN(year) || Number.isNaN(monthIndex) || Number.isNaN(day)) {
+      const fallback = new Date();
+      fallback.setHours(0, 0, 0, 0);
+      return fallback;
+    }
+
+    return new Date(year, monthIndex, day, 0, 0, 0, 0);
+  }, [nowDateKey]);
   const dashboardDateLabel = useMemo(
     () => formatDashboardDate(now),
     [now]
@@ -413,9 +668,125 @@ function GrayPageClientInner({
   const derivedHabits = user ? habits : [];
   const derivedCalendars = user ? calendarCalendars : [];
   const derivedEvents = user ? calendarEvents : [];
+  const workspaceContextSummary = useMemo(() => {
+    const currentCalendars = user ? calendarCalendars : [];
+    const currentPlans = user ? plans : [];
+    const currentHabits = user ? habits : [];
+
+    const calendarLines = currentCalendars.length
+      ? currentCalendars
+          .map((calendar) => `- ${calendar.label} (${calendar.isVisible ? "visible" : "hidden"})`)
+          .join("\n")
+      : "- No calendars connected.";
+
+    const planLines = currentPlans.length
+      ? currentPlans
+          .map((plan) => `- ${plan.completed ? "done" : "pending"}: ${plan.label}`)
+          .join("\n")
+      : "- No plans captured.";
+
+    const habitLines = currentHabits.length
+      ? currentHabits
+          .map(
+            (habit) =>
+              `- ${habit.label} (streak: ${habit.streakLabel}${habit.previousLabel ? ` | previous: ${habit.previousLabel}` : ""})`
+          )
+          .join("\n")
+      : "- No habits tracked.";
+
+    const proactivityLine = `- ${proactivity.label}: ${proactivity.description} (Cadence: ${proactivity.cadence}, Time: ${proactivity.time})`;
+
+    return [
+      "Calendars:",
+      calendarLines,
+      "",
+      "Plans:",
+      planLines,
+      "",
+      "Habits:",
+      habitLines,
+      "",
+      "Proactivity:",
+      proactivityLine,
+    ]
+      .join("\n")
+      .trim();
+  }, [calendarCalendars, habits, plans, proactivity, user]);
+
+  useEffect(() => {
+    setWorkspaceContext(workspaceContextSummary);
+  }, [setWorkspaceContext, workspaceContextSummary]);
+  const activePulse = useMemo(() => {
+    if (!pulseEntries.length) {
+      return null;
+    }
+    if (!activePulseId) {
+      return pulseEntries[0];
+    }
+    return pulseEntries.find((entry) => entry.id === activePulseId) ?? pulseEntries[0];
+  }, [pulseEntries, activePulseId]);
+  const isActivePulseEditable = activePulse?.dateKey === nowDateKey;
+
+  useEffect(() => {
+    if (!user?.id) {
+      return;
+    }
+
+    const currentPlans = user ? plans : [];
+    const currentHabits = user ? habits : [];
+    const snapshotBase = createPulseSnapshot(todayAnchor, currentPlans, currentHabits, proactivity);
+
+    setPulseEntries((previous) => {
+      const existingIndex = previous.findIndex((entry) => entry.dateKey === snapshotBase.dateKey);
+      const stableId = existingIndex >= 0 ? previous[existingIndex].id : snapshotBase.id;
+      const snapshot: PulseEntry = {
+        ...snapshotBase,
+        id: stableId,
+      };
+
+      if (existingIndex === 0) {
+        const current = previous[0];
+        if (
+          arePlanListsEqual(current.plans, snapshot.plans) &&
+          areHabitListsEqual(current.habits, snapshot.habits) &&
+          areProactivityItemsEqual(current.proactivity, snapshot.proactivity)
+        ) {
+          return previous;
+        }
+        return [
+          { ...current, ...snapshot },
+          ...previous.slice(1),
+        ];
+      }
+
+      if (existingIndex > 0) {
+        const without = previous.filter((_, index) => index !== existingIndex);
+        return [snapshot, ...without].slice(0, MAX_PULSE_HISTORY);
+      }
+
+      return [snapshot, ...previous].slice(0, MAX_PULSE_HISTORY);
+    });
+  }, [user, plans, habits, proactivity, todayAnchor]);
+
+  useEffect(() => {
+    if (!pulseEntries.length) {
+      if (activePulseId !== null) {
+        setActivePulseId(null);
+      }
+      return;
+    }
+
+    if (!activePulseId || !pulseEntries.some((entry) => entry.id === activePulseId)) {
+      setActivePulseId(pulseEntries[0].id);
+    }
+  }, [pulseEntries, activePulseId]);
 
   const togglePlan = (id: string) => {
     if (!user) {
+      return;
+    }
+
+    if (!isActivePulseEditable && pulseEntries.length > 0) {
       return;
     }
 
@@ -546,10 +917,7 @@ function GrayPageClientInner({
     }
   };
 
-  const timeLabel = formatClock(now);
-  const dateLabel = formatDate(now);
   const greeting = `Good ${greetingForDate(now)}, ${viewerName}`;
-  const showHeader = viewMode !== "chat";
   return (
     <div className={styles.page}>
       <div className={styles.backdrop} aria-hidden="true" />
@@ -577,23 +945,24 @@ function GrayPageClientInner({
             data-dashboard={isDashboardView ? "true" : "false"}
             data-view={viewMode}
           >
-            {showHeader && (
-              <GrayWorkspaceHeader
-                timeLabel={timeLabel}
-                dateLabel={dateLabel}
-                streakCount={streakCount}
-              />
-            )}
-
             <div
               className={styles.mainContent}
               data-view={viewMode}
             >
+              {(isDashboardView || viewMode === "general") && (
+                <GrayWorkspaceHeader
+                  timeLabel={workspaceTimeLabel}
+                  dateLabel={workspaceDateLabel}
+                  streakCount={streakCount}
+                />
+              )}
               {isDashboardView ? (
                 <GrayDashboardView
-                  plans={derivedPlans}
-                  habits={derivedHabits}
-                  proactivity={proactivity}
+                  pulseEntries={pulseEntries}
+                  currentPulse={activePulse}
+                  isCurrentPulseEditable={Boolean(isActivePulseEditable)}
+                  onSelectPulse={setActivePulseId}
+                  proactivityFallback={proactivity}
                   dashboardDateLabel={dashboardDateLabel}
                   onTogglePlan={togglePlan}
                   activeTab={dashboardTab}

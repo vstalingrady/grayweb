@@ -39,6 +39,8 @@ type ChatContextValue = {
   renameSession: (sessionId: string, title: string) => void;
   deleteSession: (sessionId: string) => void;
   getSession: (sessionId: string) => ChatSession | undefined;
+  workspaceContext: string | null;
+  setWorkspaceContext: (context: string | null) => void;
 };
 
 const ChatContext = createContext<ChatContextValue | null>(null);
@@ -128,9 +130,23 @@ const loadStoredSessions = (): ChatSession[] => {
   }
 };
 
-export function ChatProvider({ children }: { children: ReactNode }) {
+type ChatProviderProps = {
+  children: ReactNode;
+  workspaceContext?: string;
+};
+
+export function ChatProvider({ children, workspaceContext }: ChatProviderProps) {
   const { user } = useUser();
   const [sessions, setSessions] = useState<ChatSession[]>(loadStoredSessions);
+  const [workspaceContextValue, setWorkspaceContextValue] = useState<string | null>(
+    workspaceContext ?? null
+  );
+
+  useEffect(() => {
+    if (workspaceContext !== undefined) {
+      setWorkspaceContextValue(workspaceContext ?? null);
+    }
+  }, [workspaceContext]);
 
   const persistSessions = useCallback((next: ChatSession[]) => {
     if (typeof window === "undefined") {
@@ -242,6 +258,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             message: initialMessage,
             system_prompt: SYSTEM_PROMPT,
             user_id: user.id,
+            context: workspaceContextValue ?? undefined,
           });
 
           updateSession(baseSession.id, {
@@ -258,7 +275,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
       return baseSession;
     },
-    [appendMessage, persistSessions, updateSession, user]
+    [appendMessage, persistSessions, updateSession, user, workspaceContextValue]
   );
 
   const getSession = useCallback(
@@ -275,8 +292,19 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       renameSession,
       deleteSession,
       getSession,
+      workspaceContext: workspaceContextValue,
+      setWorkspaceContext: setWorkspaceContextValue,
     }),
-    [appendMessage, createSession, deleteSession, getSession, renameSession, sessions, updateSession]
+    [
+      appendMessage,
+      createSession,
+      deleteSession,
+      getSession,
+      renameSession,
+      sessions,
+      updateSession,
+      workspaceContextValue,
+    ]
   );
 
   useEffect(() => {

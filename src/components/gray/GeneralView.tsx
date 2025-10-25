@@ -4,7 +4,8 @@ import { GrayDashboardCalendar } from "@/components/calendar/GrayDashboardCalend
 import type { CalendarEvent, CalendarInfo } from "@/components/calendar/types";
 import { type HabitItem, type PlanItem } from "./types";
 
-const PANEL_HEIGHT = "min(640px, calc(100vh - 260px))";
+const PANEL_HEIGHT = "min(540px, calc(100vh - 320px))";
+const COMPACT_CALENDAR_HOUR_HEIGHT = 56;
 
 type PlanTab = "plans" | "habits";
 
@@ -40,7 +41,7 @@ export function GrayGeneralView({
       <h1 className={styles.greeting}>{greeting}</h1>
 
       <section className={styles.mainGrid}>
-        <div className={styles.primaryColumn}>
+        <div className={`${styles.primaryColumn} ${styles.primaryColumnSlim}`}>
           <GrayDashboardCalendar
             initialDate={currentDate}
             viewModeLocked="day"
@@ -50,12 +51,13 @@ export function GrayGeneralView({
             onCalendarsChange={onCalendarsChange}
             onEventsChange={onCalendarEventsChange}
             maxHeight={PANEL_HEIGHT}
+            hourHeight={COMPACT_CALENDAR_HOUR_HEIGHT}
           />
         </div>
 
-        <div className={styles.secondaryColumn}>
+        <div className={`${styles.secondaryColumn} ${styles.secondaryColumnSlim}`}>
           <div
-            className={styles.planPanel}
+            className={`${styles.planPanel} ${styles.planPanelSlim}`}
             style={{ minHeight: PANEL_HEIGHT, height: PANEL_HEIGHT }}
           >
             <div className={styles.tabBar}>
@@ -78,7 +80,7 @@ export function GrayGeneralView({
               {activeTab === "plans" ? (
                 <>
                   <ul className={styles.planList}>
-                    {plans.map((plan) => (
+                    {(plans || []).map((plan) => (
                       <li key={plan.id}>
                         <button
                           type="button"
@@ -107,8 +109,8 @@ export function GrayGeneralView({
                     {habits.map((habit) => (
                       <li key={habit.id}>
                         <div>
-                          <span className={styles.habitLabel}>{habit.label}</span>
-                          <span>{habit.previousLabel}</span>
+                      <span className={styles.habitLabel}>{habit.label}</span>
+                      <span className={styles.habitMeta}>{habit.previousLabel}</span>
                         </div>
                         <div>
                           <Flame size={12} />

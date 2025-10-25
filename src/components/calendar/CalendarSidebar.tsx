@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { CalendarInfo } from "./types";
 import styles from "./GrayDashboardCalendar.module.css";
 import { MiniMonth } from "./MiniMonth";
@@ -9,6 +10,8 @@ type CalendarSidebarProps = {
   onNavigateMonth: (offset: number) => void;
   calendars: CalendarInfo[];
   onToggleCalendar: (calendarId: string) => void;
+  isCollapsed?: boolean;
+  onToggleCollapse?: () => void;
 };
 
 const formatMonthLabel = (date: Date) =>
@@ -27,6 +30,16 @@ export function CalendarSidebar({
   isCollapsed,
   onToggleCollapse,
 }: CalendarSidebarProps) {
+  const timezoneLabel = useMemo(() => {
+    const offsetMinutes = -new Date().getTimezoneOffset();
+    const sign = offsetMinutes >= 0 ? "+" : "-";
+    const absMinutes = Math.abs(offsetMinutes);
+    const hours = Math.floor(absMinutes / 60);
+    const minutes = absMinutes % 60;
+    const minuteLabel = minutes ? `:${minutes.toString().padStart(2, "0")}` : "";
+    return `GMT${sign}${hours}${minuteLabel}`;
+  }, []);
+
   return (
     <aside className={styles.calendarSidebar}>
       <header className={styles.calendarSidebarHeader}>
@@ -42,17 +55,40 @@ export function CalendarSidebar({
           </span>
         </div>
         <div className={styles.calendarSidebarHeaderActions}>
-          <button type="button" onClick={() => onNavigateMonth(-1)}>
-            Prev
+          <button
+            type="button"
+            aria-label="Show previous month"
+            onClick={() => onNavigateMonth(-1)}
+          >
+            ‹
           </button>
-          <button type="button" onClick={() => onNavigateMonth(1)}>
-            Next
+          <button
+            type="button"
+            aria-label="Show next month"
+            onClick={() => onNavigateMonth(1)}
+          >
+            ›
           </button>
-          <button type="button" className={styles.calendarSidebarCreate}>+ Create</button>
+          <button type="button" className={styles.calendarSidebarCreate}>
+            + Create
+          </button>
+          {onToggleCollapse && (
+            <button
+              type="button"
+              className={styles.calendarSidebarCollapse}
+              aria-pressed={isCollapsed ? "true" : "false"}
+              onClick={onToggleCollapse}
+            >
+              {isCollapsed ? "Expand" : "Collapse"}
+            </button>
+          )}
         </div>
       </header>
 
-      <div className={styles.calendarSidebarContent}>
+      <div
+        className={styles.calendarSidebarContent}
+        data-visible={isCollapsed ? "false" : "true"}
+      >
         <MiniMonth
           referenceDate={monthDate}
           selectedDate={selectedDate}
@@ -61,7 +97,7 @@ export function CalendarSidebar({
 
         <div className={styles.calendarSidebarMeta}>
           <span>Time</span>
-          <strong>{`GMT${Intl.DateTimeFormat().resolvedOptions().timeZone}`}</strong>
+          <strong>{timezoneLabel}</strong>
         </div>
 
         <div className={styles.calendarSidebarSearch}>

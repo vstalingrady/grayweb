@@ -1,22 +1,102 @@
-# gray_hackathon
+# User Profile Management System with AI Chat
 
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+This project integrates a FastAPI backend with a Next.js frontend to replace placeholder data with real user profiles, AI-powered chat sessions, and calendar events from a database.
+
+## Features
+
+- **Real User Profiles**: Fetches user data from database instead of hardcoded names
+- **Profile Pictures**: Supports real profile images with fallback to avatars
+- **Dynamic Roles**: User roles retrieved from database
+- **AI-Powered Chat**: Real chat with Google Gemini AI integration
+- **Conversation Persistence**: Chat history saved to Supabase
+- **Markdown Support**: AI responses render with rich formatting
+- **Calendar Events**: User-specific calendar events from database
+- **Automatic User Creation**: Creates new users automatically when they first visit
+- **Profile Pictures**: Supports real profile images with fallback to avatars
+- **Dynamic Roles**: User roles retrieved from database
+- **Chat Sessions**: Real chat history stored in database
+- **Calendar Events**: User-specific calendar events from database
+- **Automatic User Creation**: Creates new users automatically when they first visit
 
 ## Getting Started
 
-First, run the development server:
+### 1. Install Dependencies
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+# Install frontend dependencies
+npm install
+
+# Install backend dependencies
+cd backend
+pip install -r requirements.txt
+cd ..
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the noir landing page. Head to [http://localhost:3000/login](http://localhost:3000/login) (or `/signup`) for the Supabase-powered auth experience.
+### 2. Environment Setup
+
+Create a `.env` file in the `backend/` directory:
+
+```env
+DATABASE_URL=sqlite:///./users.db
+GEMINI_API_KEY=your_gemini_api_key_here
+SUPABASE_URL=your_supabase_url_here
+SUPABASE_KEY=your_supabase_anon_key_here
+```
+
+#### Getting API Keys
+
+**Google Gemini API:**
+1. Go to [Google AI Studio](https://aistudio.google.com/app/apikey)
+2. Create a new API key
+3. Replace `your_gemini_api_key_here` with your key
+
+**Supabase (Optional - for chat persistence):**
+1. Create a free account at [supabase.com](https://supabase.com)
+2. Create a new project
+3. Go to Settings > API to get your URL and anon key
+4. Replace the placeholder values in your `.env` file
+
+**Set up Supabase Table:**
+In your Supabase project, go to the SQL Editor and run:
+
+```sql
+CREATE TABLE public.conversations (
+  id UUID NOT NULL DEFAULT gen_random_uuid(),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  title TEXT NULL,
+  history JSONB NULL,
+  CONSTRAINT conversations_pkey PRIMARY KEY (id)
+);
+```
+
+### 3. Run the Application
+
+You have two options:
+
+#### Option 1: Run Frontend and Backend Separately
+
+```bash
+# Terminal 1: Start the backend
+npm run backend
+
+# Terminal 2: Start the frontend
+npm run dev
+```
+
+#### Option 2: Run Both Together
+
+```bash
+# This will start both the backend and frontend concurrently
+npm run dev:full
+```
+
+### 4. Access the Application
+
+- Frontend: http://localhost:3000
+- Backend API: http://localhost:8000
+- API Documentation: http://localhost:8000/docs
+
+Open [http://localhost:3000](http://localhost:3000) with your browser to see the application.
 
 ## Auth experience
 
