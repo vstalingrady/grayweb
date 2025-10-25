@@ -22,7 +22,7 @@ import {
   type CalendarDisplayEvent,
   type SidebarHistorySection,
 } from "@/components/gray/types";
-import { useChatStore } from "@/components/gray/ChatProvider";
+import { ChatProvider, useChatStore } from "@/components/gray/ChatProvider";
 
 const PLAN_SEED: PlanItem[] = [
   {
@@ -481,12 +481,14 @@ export default function GrayPageClient({
 }: GrayPageClientProps) {
   return (
     <UserProvider userEmail={viewerEmail}>
-      <GrayPageClientInner
-        initialTimestamp={initialTimestamp}
-        activeNav={activeNav}
-        variant={variant}
-        activeChatId={activeChatId}
-      />
+      <ChatProvider>
+        <GrayPageClientInner
+          initialTimestamp={initialTimestamp}
+          activeNav={activeNav}
+          variant={variant}
+          activeChatId={activeChatId}
+        />
+      </ChatProvider>
     </UserProvider>
   );
 }
