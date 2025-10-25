@@ -582,16 +582,26 @@ export default function GrayPageClient({
                       Operational focus
                     </h1>
                   </div>
-                  <div className={styles.dashboardHeaderRight}>
-                    <div className={styles.dashboardToggle}>
-                      <button type="button" data-active="true">
-                        Pulse
-                      </button>
-                      <button type="button">Calendar</button>
+                    <div className={styles.dashboardHeaderRight}>
+                      <div className={styles.dashboardToggle}>
+                        <button
+                          type="button"
+                          data-active="true"
+                          aria-pressed="true"
+                        >
+                          Pulse
+                        </button>
+                        <button
+                          type="button"
+                          aria-pressed="false"
+                          onClick={() => router.push("/")}
+                        >
+                          Calendar
+                        </button>
+                      </div>
+                      <span className={styles.dashboardDate}>{dashboardDateLabel}</span>
                     </div>
-                    <span className={styles.dashboardDate}>{dashboardDateLabel}</span>
                   </div>
-                </div>
                 <section className={styles.dashboardGrid}>
                   <article className={styles.dashboardCard}>
                     <header className={styles.dashboardCardHeader}>
