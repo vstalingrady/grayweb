@@ -925,32 +925,24 @@
 .calendarTrack {
   position: relative;
   width: 100%;
-  min-height: calc(var(--calendar-hour-height) * 6);
+  min-height: calc(var(--calendar-hour-height) * 24);
+  background-image: linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.05),
+    rgba(255, 255, 255, 0.05) 1px,
+    rgba(0, 0, 0, 0) 1px,
+    rgba(0, 0, 0, 0) var(--calendar-hour-height)
+  );
+  background-size: 100% var(--calendar-hour-height);
+  background-repeat: repeat-y;
 }
 
 .calendarRule {
-  position: absolute;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background: linear-gradient(
-    to right,
-    rgba(255, 255, 255, 0.04),
-    rgba(255, 255, 255, 0.14),
-    rgba(255, 255, 255, 0.04)
-  );
-  opacity: 0.5;
-  transform: translateY(-0.5px);
+  display: none;
 }
 
 .calendarRule[data-major="true"] {
-  opacity: 0.95;
-  background: linear-gradient(
-    to right,
-    rgba(255, 255, 255, 0.08),
-    rgba(255, 255, 255, 0.24),
-    rgba(255, 255, 255, 0.08)
-  );
+  display: none;
 }
 
 .calendarEvent {
