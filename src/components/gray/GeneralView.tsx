@@ -1,11 +1,11 @@
-import { CheckSquare, Square, Flame } from "lucide-react";
+import { CheckSquare, Square, Flame, Pencil, Trash2 } from "lucide-react";
 import styles from "@/app/gray/GrayPageClient.module.css";
 import { GrayDashboardCalendar } from "@/components/calendar/GrayDashboardCalendar";
 import type { CalendarEvent, CalendarInfo } from "@/components/calendar/types";
 import { type HabitItem, type PlanItem } from "./types";
 
-const PANEL_HEIGHT = "min(540px, calc(100vh - 320px))";
-const COMPACT_CALENDAR_HOUR_HEIGHT = 52;
+const PANEL_HEIGHT = "min(620px, calc(100vh - 220px))";
+const COMPACT_CALENDAR_HOUR_HEIGHT = 56;
 
 type PlanTab = "plans" | "habits";
 
@@ -16,11 +16,16 @@ type GrayGeneralViewProps = {
   activeTab: PlanTab;
   onChangeTab: (tab: PlanTab) => void;
   onTogglePlan: (id: string) => void;
+  onToggleHabit: (id: string) => void;
+  onEditPlan: (plan: PlanItem) => void;
+  onDeletePlan: (plan: PlanItem) => void;
   currentDate: Date;
   calendars: CalendarInfo[];
   onCalendarsChange: (calendars: CalendarInfo[]) => void;
   calendarEvents: CalendarEvent[];
   onCalendarEventsChange: (events: CalendarEvent[]) => void;
+  onEditHabit: (habit: HabitItem) => void;
+  onDeleteHabit: (habit: HabitItem) => void;
 };
 
 export function GrayGeneralView({
@@ -31,10 +36,15 @@ export function GrayGeneralView({
   activeTab,
   onChangeTab,
   onTogglePlan,
+  onToggleHabit,
+  onEditPlan,
+  onDeletePlan,
   currentDate,
   calendars,
   onCalendarsChange,
   onCalendarEventsChange,
+  onEditHabit,
+  onDeleteHabit,
 }: GrayGeneralViewProps) {
   return (
     <>
@@ -47,6 +57,8 @@ export function GrayGeneralView({
             viewModeLocked="day"
             showSidebar={false}
             showSurfaceLabel={false}
+            showSurfaceHeading={false}
+            compactSurface
             showHeaderControls={false}
             showHeaderDates={false}
             calendars={calendars}
@@ -84,8 +96,9 @@ export function GrayGeneralView({
                 <>
                   <ul className={styles.planList}>
                     {(plans || []).map((plan) => (
-                      <li key={plan.id}>
+                      <li key={plan.id} className={styles.planListItem}>
                         <button
+                          className={styles.planItemButton}
                           type="button"
                           data-completed={plan.completed}
                           onClick={() => onTogglePlan(plan.id)}
@@ -99,6 +112,24 @@ export function GrayGeneralView({
                           </span>
                           <span className={styles.planLabel}>{plan.label}</span>
                         </button>
+                        <div className={styles.listItemActions}>
+                          <button
+                            type="button"
+                            className={styles.listItemActionButton}
+                            onClick={() => onEditPlan(plan)}
+                            aria-label={`Edit plan ${plan.label}`}
+                          >
+                            <Pencil size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            className={styles.listItemActionButton}
+                            onClick={() => onDeletePlan(plan)}
+                            aria-label={`Delete plan ${plan.label}`}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
                       </li>
                     ))}
                   </ul>
@@ -110,14 +141,43 @@ export function GrayGeneralView({
                 <>
                   <ul className={styles.habitList}>
                     {habits.map((habit) => (
-                      <li key={habit.id}>
-                        <div>
-                      <span className={styles.habitLabel}>{habit.label}</span>
-                      <span className={styles.habitMeta}>{habit.previousLabel}</span>
-                        </div>
-                        <div>
+                      <li key={habit.id} className={styles.habitListItem}>
+                        <button
+                          className={styles.planItemButton}
+                          type="button"
+                          data-completed={habit.completed ? "true" : "false"}
+                          onClick={() => onToggleHabit(habit.id)}
+                        >
+                          <span>
+                            {habit.completed ? (
+                              <CheckSquare size={16} />
+                            ) : (
+                              <Square size={16} />
+                            )}
+                          </span>
+                          <span className={styles.habitLabel}>{habit.label}</span>
+                        </button>
+                        <div className={styles.habitListItemMeta}>
                           <Flame size={12} />
                           <span>{habit.streakLabel}</span>
+                        </div>
+                        <div className={styles.listItemActions}>
+                          <button
+                            type="button"
+                            className={styles.listItemActionButton}
+                            onClick={() => onEditHabit(habit)}
+                            aria-label={`Edit habit ${habit.label}`}
+                          >
+                            <Pencil size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            className={styles.listItemActionButton}
+                            onClick={() => onDeleteHabit(habit)}
+                            aria-label={`Delete habit ${habit.label}`}
+                          >
+                            <Trash2 size={14} />
+                          </button>
                         </div>
                       </li>
                     ))}

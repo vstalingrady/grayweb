@@ -3,7 +3,7 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 
 import { useRouter } from "next/navigation";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { Gem, MessageSquarePlus, LayoutDashboard, History, Search } from "lucide-react";
 import { GrayEnhancedSidebar } from "@/components/gray/EnhancedSidebar";
 import { GrayDashboardView } from "@/components/gray/DashboardView";
@@ -13,6 +13,7 @@ import { GrayChatBar } from "@/components/gray/ChatBar";
 import { GrayChatView } from "@/components/gray/ChatView";
 import { UserProvider, useUser } from "@/contexts/UserContext";
 import { apiService } from "@/lib/api";
+import { formatDisplayName } from "@/lib/names";
 import styles from "./GrayPageClient.module.css";
 import {
   type PlanItem,
@@ -28,6 +29,7 @@ import type { CalendarEvent, CalendarInfo } from "@/components/calendar/types";
 import { ChatProvider, useChatStore } from "@/components/gray/ChatProvider";
 import { DEFAULT_HISTORY_SECTIONS } from "@/components/gray/historySeed";
 import { GrayWorkspaceHeader } from "@/components/gray/WorkspaceHeader";
+import { PersonalizationPanel } from "@/components/gray/PersonalizationPanel";
 const PROACTIVITY_SEED: ProactivityItem = {
   id: "proactivity-1",
   label: "Check-ins",
@@ -61,6 +63,7 @@ const cloneHabits = (habits: HabitItem[]): HabitItem[] =>
     label: habit.label,
     streakLabel: habit.streakLabel,
     previousLabel: habit.previousLabel,
+    completed: Boolean(habit.completed),
   }));
 
 const cloneProactivity = (item: ProactivityItem): ProactivityItem => ({
@@ -107,7 +110,8 @@ const areHabitListsEqual = (a: HabitItem[], b: HabitItem[]) =>
       habit.id === other.id &&
       habit.label === other.label &&
       habit.streakLabel === other.streakLabel &&
-      habit.previousLabel === other.previousLabel
+      habit.previousLabel === other.previousLabel &&
+      Boolean(habit.completed) === Boolean(other.completed)
     );
   });
 
@@ -161,6 +165,7 @@ const sanitizePulseEntry = (raw: Partial<PulseEntry> | null | undefined): PulseE
           label: typeof habit?.label === "string" ? habit.label : "",
           streakLabel: typeof habit?.streakLabel === "string" ? habit.streakLabel : "",
           previousLabel: typeof habit?.previousLabel === "string" ? habit.previousLabel : "",
+          completed: Boolean((habit as HabitItem | { completed?: boolean })?.completed),
         }))
         .filter((habit) => habit.id.length > 0)
     : [];
@@ -237,12 +242,6 @@ const NAVIGATION_ROUTES: Partial<Record<SidebarNavKey, string>> = {
   dashboard: "/dashboard",
 };
 
-const formatDashboardDate = (date: Date) =>
-  date.toLocaleDateString([], {
-    day: "numeric",
-    month: "long",
-  });
-
 const deriveInitials = (fullName: string | null | undefined) => {
   if (!fullName) {
     return "";
@@ -301,8 +300,9 @@ function GrayPageClientInner({
   const [habits, setHabits] = useState<HabitItem[]>([]);
   const [planTab, setPlanTab] = useState<"plans" | "habits">("plans");
   const [chatDraft, setChatDraft] = useState("");
-  const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
+  const [isSidebarExpanded, setIsSidebarExpanded] = useState(true);
   const [dashboardTab, setDashboardTab] = useState<"pulse" | "calendar">("pulse");
+  const [isPersonalizationOpen, setIsPersonalizationOpen] = useState(false);
   const [pulseEntries, setPulseEntries] = useState<PulseEntry[]>([]);
   const [activePulseId, setActivePulseId] = useState<string | null>(null);
   const [streakCount, setStreakCount] = useState(0);
@@ -317,6 +317,8 @@ function GrayPageClientInner({
   } = useChatStore();
   const supportsInlineChat = variant !== "chat";
   const [currentChatId, setCurrentChatId] = useState<string | null>(() => activeChatId ?? null);
+  const [pendingRedirectChatId, setPendingRedirectChatId] = useState<string | null>(null);
+  const userId = typeof user?.id === "number" ? user.id : null;
 
   const baseViewMode: ViewMode =
     variant === "chat"
@@ -402,7 +404,7 @@ function GrayPageClientInner({
   }, [pulseEntries, user?.id]);
 
   useEffect(() => {
-    if (!user) {
+    if (loading || userId === null) {
       return;
     }
 
@@ -417,12 +419,12 @@ function GrayPageClientInner({
           habitResponse,
           streakResponse,
         ] = await Promise.all([
-          apiService.getUserCalendars(user.id),
-          apiService.getUserCalendarEvents(user.id),
-          apiService.getUserPlans(user.id),
-          apiService.getUserHabits(user.id),
+          apiService.getUserCalendars(userId),
+          apiService.getUserCalendarEvents(userId),
+          apiService.getUserPlans(userId),
+          apiService.getUserHabits(userId),
           apiService
-            .getUserStreak(user.id)
+            .getUserStreak(userId)
             .catch((error) => {
               console.error("Failed to load user streak:", error);
               return null;
@@ -433,12 +435,14 @@ function GrayPageClientInner({
           return;
         }
 
-        const mappedCalendars: CalendarInfo[] = calendarResponse.map((calendar) => ({
-          id: calendar.id.toString(),
-          label: calendar.label,
-          color: calendar.color,
-          isVisible: Boolean(calendar.is_visible),
-        }));
+        const mappedCalendars: CalendarInfo[] = Array.isArray(calendarResponse)
+          ? calendarResponse.map((calendar) => ({
+              id: calendar.id.toString(),
+              label: calendar.label,
+              color: calendar.color,
+              isVisible: Boolean(calendar.is_visible),
+            }))
+          : [];
 
         const calendarColorMap = new Map<string, string>(
           mappedCalendars.map((calendar) => [calendar.id, calendar.color])
@@ -448,32 +452,41 @@ function GrayPageClientInner({
         const fallbackEventColor =
           calendarColorMap.get(fallbackCalendarId) ?? DEFAULT_EVENT_COLOR;
 
-        const mappedEvents: CalendarEvent[] = eventResponse.map((event) => {
-          const associatedCalendarId = event.calendar_id ? event.calendar_id.toString() : fallbackCalendarId;
-          return {
-            id: event.id.toString(),
-            calendarId: associatedCalendarId,
-            title: event.title,
-            start: new Date(event.start_time),
-            end: new Date(event.end_time),
-            color: calendarColorMap.get(associatedCalendarId) ?? fallbackEventColor,
-            entryType: "event",
-            description: event.description ?? undefined,
-          };
-        });
+        const mappedEvents: CalendarEvent[] = Array.isArray(eventResponse)
+          ? eventResponse.map((event) => {
+              const associatedCalendarId = event.calendar_id
+                ? event.calendar_id.toString()
+                : fallbackCalendarId;
+              return {
+                id: event.id.toString(),
+                calendarId: associatedCalendarId,
+                title: event.title,
+                start: new Date(event.start_time),
+                end: new Date(event.end_time),
+                color: calendarColorMap.get(associatedCalendarId) ?? fallbackEventColor,
+                entryType: "event",
+                description: event.description ?? undefined,
+              };
+            })
+          : [];
 
-        const mappedPlans: PlanItem[] = planResponse.map((plan) => ({
-          id: plan.id.toString(),
-          label: plan.label,
-          completed: Boolean(plan.completed),
-        }));
+        const mappedPlans: PlanItem[] = Array.isArray(planResponse)
+          ? planResponse.map((plan) => ({
+              id: plan.id.toString(),
+              label: plan.label,
+              completed: Boolean(plan.completed),
+            }))
+          : [];
 
-        const mappedHabits: HabitItem[] = habitResponse.map((habit) => ({
-          id: habit.id.toString(),
-          label: habit.label,
-          streakLabel: habit.streak_label,
-          previousLabel: habit.previous_label,
-        }));
+        const mappedHabits: HabitItem[] = Array.isArray(habitResponse)
+          ? habitResponse.map((habit) => ({
+              id: habit.id.toString(),
+              label: habit.label,
+              streakLabel: habit.streak_label,
+              previousLabel: habit.previous_label,
+              completed: false,
+            }))
+          : [];
 
         setCalendarCalendars(mappedCalendars);
         setCalendarEvents(mappedEvents);
@@ -490,16 +503,20 @@ function GrayPageClientInner({
     return () => {
       isMounted = false;
     };
-  }, [user]);
+    // apiService is a module singleton with stable identity; dependencies limited to auth state.
+  }, [loading, userId]);
 
   const viewerName = useMemo(() => {
     if (loading) {
       return "Loading...";
     }
-    return user?.full_name || "Operator";
-  }, [user, loading]);
+    return formatDisplayName(user?.full_name, user?.email);
+  }, [loading, user?.email, user?.full_name]);
 
-  const viewerAvatarUrl = user?.profile_picture_url ?? null;
+  const viewerAvatarUrl =
+    user?.profile_picture_url && user.profile_picture_url.trim().length > 0
+      ? user.profile_picture_url
+      : "/astronauttest.jpg";
 
   const viewerInitials = useMemo(() => {
     if (loading) {
@@ -550,7 +567,7 @@ function GrayPageClientInner({
       groups.get(groupId)?.entries.push({
         id: session.id,
         title: session.title,
-        href: `/chat/${session.id}`,
+        href: `/c/${session.id}`,
         createdAt: session.updatedAt,
       });
     });
@@ -599,10 +616,6 @@ function GrayPageClientInner({
 
     return new Date(year, monthIndex, day, 0, 0, 0, 0);
   }, [nowDateKey]);
-  const dashboardDateLabel = useMemo(
-    () => formatDashboardDate(now),
-    [now]
-  );
   const isDashboardView = viewMode === "dashboard";
   const isChatView = viewMode === "chat";
   const isHistoryView = viewMode === "history";
@@ -664,58 +677,107 @@ function GrayPageClientInner({
     return () => window.clearInterval(interval);
   }, [initialTimestamp]);
 
+  const handleOpenPersonalization = () => {
+    setIsPersonalizationOpen(true);
+  };
+
+  const handleClosePersonalization = () => {
+    setIsPersonalizationOpen(false);
+  };
+
+  const handleOpenSettings = () => {
+    console.info("Settings panel is not implemented yet.");
+  };
+
+  const handleOpenHelp = () => {
+    console.info("Help center is not implemented yet.");
+  };
+
+  const handleLogOut = () => {
+    console.info("Log out is not implemented yet.");
+  };
+
   const derivedPlans = user ? plans : [];
   const derivedHabits = user ? habits : [];
   const derivedCalendars = user ? calendarCalendars : [];
   const derivedEvents = user ? calendarEvents : [];
-  const workspaceContextSummary = useMemo(() => {
-    const currentCalendars = user ? calendarCalendars : [];
-    const currentPlans = user ? plans : [];
-    const currentHabits = user ? habits : [];
+  const workspaceContextSummary = useMemo<string | null>(() => {
+    if (!user) {
+      return null;
+    }
 
-    const calendarLines = currentCalendars.length
-      ? currentCalendars
+    const sections: string[] = [];
+    const currentCalendars = calendarCalendars;
+    const currentPlans = plans;
+    const currentHabits = habits;
+
+    if (currentCalendars.length > 0) {
+      sections.push(
+        "Calendars:",
+        currentCalendars
           .map((calendar) => `- ${calendar.label} (${calendar.isVisible ? "visible" : "hidden"})`)
           .join("\n")
-      : "- No calendars connected.";
+      );
+    }
 
-    const planLines = currentPlans.length
-      ? currentPlans
-          .map((plan) => `- ${plan.completed ? "done" : "pending"}: ${plan.label}`)
-          .join("\n")
-      : "- No plans captured.";
+    if (currentPlans.length > 0) {
+      if (sections.length > 0) {
+        sections.push("");
+      }
+      sections.push(
+        "Plans:",
+        currentPlans.map((plan) => `- ${plan.completed ? "done" : "pending"}: ${plan.label}`).join("\n")
+      );
+    }
 
-    const habitLines = currentHabits.length
-      ? currentHabits
+    if (currentHabits.length > 0) {
+      if (sections.length > 0) {
+        sections.push("");
+      }
+      sections.push(
+        "Habits:",
+        currentHabits
           .map(
             (habit) =>
-              `- ${habit.label} (streak: ${habit.streakLabel}${habit.previousLabel ? ` | previous: ${habit.previousLabel}` : ""})`
+              `- ${habit.label} (streak: ${habit.streakLabel}${
+                habit.previousLabel ? ` | previous: ${habit.previousLabel}` : ""
+              })`
           )
           .join("\n")
-      : "- No habits tracked.";
+      );
+    }
 
-    const proactivityLine = `- ${proactivity.label}: ${proactivity.description} (Cadence: ${proactivity.cadence}, Time: ${proactivity.time})`;
+    const hasWorkspaceDetails = sections.length > 0;
+    const shouldIncludeProactivity =
+      hasWorkspaceDetails && !areProactivityItemsEqual(proactivity, PROACTIVITY_SEED);
 
-    return [
-      "Calendars:",
-      calendarLines,
-      "",
-      "Plans:",
-      planLines,
-      "",
-      "Habits:",
-      habitLines,
-      "",
-      "Proactivity:",
-      proactivityLine,
-    ]
-      .join("\n")
-      .trim();
+    if (shouldIncludeProactivity) {
+      sections.push(
+        "",
+        "Proactivity:",
+        `- ${proactivity.label}: ${proactivity.description} (Cadence: ${proactivity.cadence}, Time: ${proactivity.time})`
+      );
+    }
+
+    const summary = sections.join("\n").trim();
+    return summary.length > 0 ? summary : null;
   }, [calendarCalendars, habits, plans, proactivity, user]);
 
   useEffect(() => {
     setWorkspaceContext(workspaceContextSummary);
   }, [setWorkspaceContext, workspaceContextSummary]);
+
+  useEffect(() => {
+    if (!pendingRedirectChatId) {
+      return;
+    }
+    const pendingSession = sessions.find((session) => session.id === pendingRedirectChatId);
+    if (!pendingSession || pendingSession.isResponding) {
+      return;
+    }
+    setPendingRedirectChatId(null);
+    router.push(`/c/${pendingSession.id}`);
+  }, [pendingRedirectChatId, router, sessions]);
   const activePulse = useMemo(() => {
     if (!pulseEntries.length) {
       return null;
@@ -816,6 +878,147 @@ function GrayPageClientInner({
       });
   };
 
+  const editPlan = (planToEdit: PlanItem) => {
+    if (!user) {
+      return;
+    }
+    if (!isActivePulseEditable && pulseEntries.length > 0) {
+      return;
+    }
+
+    const planId = Number(planToEdit.id);
+    if (Number.isNaN(planId)) {
+      return;
+    }
+
+    const nextLabel = window.prompt("Edit plan", planToEdit.label)?.trim();
+    if (!nextLabel || nextLabel === planToEdit.label) {
+      return;
+    }
+
+    const previousPlans = plans;
+    const updatedPlans = previousPlans.map((plan) =>
+      plan.id === planToEdit.id ? { ...plan, label: nextLabel } : plan
+    );
+
+    setPlans(updatedPlans);
+
+    apiService
+      .updatePlan(user.id, planId, { label: nextLabel })
+      .catch((error) => {
+        console.error("Failed to rename plan:", error);
+        setPlans(previousPlans);
+      });
+  };
+
+  const deletePlan = (planToDelete: PlanItem) => {
+    if (!user) {
+      return;
+    }
+    if (!isActivePulseEditable && pulseEntries.length > 0) {
+      return;
+    }
+
+    const planId = Number(planToDelete.id);
+    if (Number.isNaN(planId)) {
+      return;
+    }
+
+    const previousPlans = plans;
+    const updatedPlans = previousPlans.filter((plan) => plan.id !== planToDelete.id);
+    setPlans(updatedPlans);
+
+    apiService
+      .deletePlan(user.id, planId)
+      .catch((error) => {
+        console.error("Failed to delete plan:", error);
+        setPlans(previousPlans);
+      });
+  };
+
+  const toggleHabit = (id: string) => {
+    if (!user) {
+      return;
+    }
+    if (!isActivePulseEditable && pulseEntries.length > 0) {
+      return;
+    }
+    const previousHabits = habits;
+    const targetHabit = previousHabits.find((habit) => habit.id === id);
+    if (!targetHabit) {
+      return;
+    }
+
+    const updatedHabits = previousHabits.map((habit) =>
+      habit.id === id ? { ...habit, completed: !habit.completed } : habit
+    );
+    setHabits(updatedHabits);
+  };
+
+  const editHabit = (habitToEdit: HabitItem) => {
+    if (!user) {
+      return;
+    }
+    if (!isActivePulseEditable && pulseEntries.length > 0) {
+      return;
+    }
+
+    const habitId = Number(habitToEdit.id);
+    if (Number.isNaN(habitId)) {
+      return;
+    }
+
+    const nextLabel = window.prompt("Edit habit", habitToEdit.label)?.trim();
+    if (!nextLabel || nextLabel === habitToEdit.label) {
+      return;
+    }
+
+    const previousHabits = habits;
+    const updatedHabits = previousHabits.map((habit) =>
+      habit.id === habitToEdit.id ? { ...habit, label: nextLabel } : habit
+    );
+
+    setHabits(updatedHabits);
+
+    apiService
+      .updateHabit(user.id, habitId, { label: nextLabel })
+      .catch((error) => {
+        console.error("Failed to rename habit:", error);
+        setHabits(previousHabits);
+      });
+  };
+
+  const deleteHabit = (habitToDelete: HabitItem) => {
+    if (!user) {
+      return;
+    }
+    if (!isActivePulseEditable && pulseEntries.length > 0) {
+      return;
+    }
+
+    const habitId = Number(habitToDelete.id);
+    if (Number.isNaN(habitId)) {
+      return;
+    }
+
+    const previousHabits = habits;
+    const updatedHabits = previousHabits.filter((habit) => habit.id !== habitToDelete.id);
+    setHabits(updatedHabits);
+
+    apiService
+      .deleteHabit(user.id, habitId)
+      .catch((error) => {
+        console.error("Failed to delete habit:", error);
+        // If habit is already deleted on backend, keep it removed from UI
+        if (error.message.includes("Habit not found")) {
+          console.log("Habit was already deleted on backend, keeping UI updated");
+          return;
+        }
+        // For other errors, restore the habit in UI
+        setHabits(previousHabits);
+      });
+  };
+
   const handleCalendarsChange = (nextCalendars: CalendarInfo[]) => {
     const previousCalendars = new Map(calendarCalendars.map((calendar) => [calendar.id, calendar]));
     setCalendarCalendars(nextCalendars);
@@ -854,6 +1057,26 @@ function GrayPageClientInner({
     setCalendarEvents(nextEvents);
   };
 
+  const handleCalendarIntegration = useCallback(async () => {
+    if (!user) {
+      console.warn("Unable to start Google Calendar integration without a user.");
+      return;
+    }
+
+    try {
+      const response = await apiService.requestGoogleCalendarAuth(user.id);
+      const authUrl = response?.authorization_url;
+
+      if (authUrl) {
+        window.open(authUrl, "_blank", "noopener,noreferrer");
+      } else {
+        console.error("Google Calendar integration response did not include an authorization URL.");
+      }
+    } catch (error) {
+      console.error("Failed to initiate Google Calendar integration:", error);
+    }
+  }, [user]);
+
   const handleChatSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const draft = chatDraft.trim();
@@ -866,9 +1089,10 @@ function GrayPageClientInner({
       if (supportsInlineChat) {
         setCurrentChatId(session.id);
         setManualViewMode("chat");
-        setIsSidebarExpanded(false);
+        setPendingRedirectChatId(session.id);
+        router.prefetch(`/c/${session.id}`);
       } else {
-        router.push(`/chat/${session.id}`);
+        router.push(`/c/${session.id}`);
       }
     } catch (error) {
       console.error("Failed to start chat session:", error);
@@ -883,10 +1107,8 @@ function GrayPageClientInner({
     if (supportsInlineChat) {
       setCurrentChatId(entry.id);
       setManualViewMode("chat");
-      setIsSidebarExpanded(false);
       return;
     }
-    setIsSidebarExpanded(false);
     setManualViewMode(null);
     router.push(entry.href);
   };
@@ -938,6 +1160,10 @@ function GrayPageClientInner({
             onToggle={() => setIsSidebarExpanded((previous) => !previous)}
             onNavigate={handleNavigate}
             activeChatId={currentChatId}
+            onOpenPersonalization={handleOpenPersonalization}
+            onOpenSettings={handleOpenSettings}
+            onOpenHelp={handleOpenHelp}
+            onLogOut={handleLogOut}
           />
 
           <div
@@ -949,7 +1175,7 @@ function GrayPageClientInner({
               className={styles.mainContent}
               data-view={viewMode}
             >
-              {(isDashboardView || viewMode === "general") && (
+              {viewMode === "general" && (
                 <GrayWorkspaceHeader
                   timeLabel={workspaceTimeLabel}
                   dateLabel={workspaceDateLabel}
@@ -963,8 +1189,10 @@ function GrayPageClientInner({
                   isCurrentPulseEditable={Boolean(isActivePulseEditable)}
                   onSelectPulse={setActivePulseId}
                   proactivityFallback={proactivity}
-                  dashboardDateLabel={dashboardDateLabel}
                   onTogglePlan={togglePlan}
+                  onToggleHabit={toggleHabit}
+                  onEditPlan={editPlan}
+                  onDeletePlan={deletePlan}
                   activeTab={dashboardTab}
                   onSelectTab={setDashboardTab}
                   currentDate={now}
@@ -972,6 +1200,9 @@ function GrayPageClientInner({
                   onCalendarsChange={handleCalendarsChange}
                   calendarEvents={derivedEvents}
                   onCalendarEventsChange={handleEventsChange}
+                  onEditHabit={editHabit}
+                  onDeleteHabit={deleteHabit}
+                  onIntegrationAction={handleCalendarIntegration}
                 />
               ) : isChatView ? (
                 <GrayChatView sessionId={currentChatId ?? null} />
@@ -985,32 +1216,46 @@ function GrayPageClientInner({
                   onDeleteEntry={handleDeleteHistoryEntry}
                 />
               ) : (
-                <GrayGeneralView
-                  greeting={greeting}
-                  calendarEvents={derivedEvents}
-                  plans={derivedPlans}
-                  habits={derivedHabits}
-                  activeTab={planTab}
-                  onChangeTab={setPlanTab}
-                  onTogglePlan={togglePlan}
-                  currentDate={now}
-                  calendars={derivedCalendars}
-                  onCalendarsChange={handleCalendarsChange}
-                  onCalendarEventsChange={handleEventsChange}
-                />
+                <div className={styles.generalViewSection}>
+                  <GrayGeneralView
+                    greeting={greeting}
+                    calendarEvents={derivedEvents}
+                    plans={derivedPlans}
+                    habits={derivedHabits}
+                    activeTab={planTab}
+                    onChangeTab={setPlanTab}
+                    onTogglePlan={togglePlan}
+                    onToggleHabit={toggleHabit}
+                    onEditPlan={editPlan}
+                    onDeletePlan={deletePlan}
+                    currentDate={now}
+                    calendars={derivedCalendars}
+                    onCalendarsChange={handleCalendarsChange}
+                    onCalendarEventsChange={handleEventsChange}
+                    onEditHabit={editHabit}
+                    onDeleteHabit={deleteHabit}
+                  />
+                  <div className={`${styles.chatBarRow} ${styles.generalChatBarRow}`}>
+                    <GrayChatBar
+                      value={chatDraft}
+                      onChange={setChatDraft}
+                      onSubmit={handleChatSubmit}
+                    />
+                  </div>
+                </div>
               )}
             </div>
 
-            {viewMode === "general" && (
-              <GrayChatBar
-                value={chatDraft}
-                onChange={setChatDraft}
-                onSubmit={handleChatSubmit}
-              />
-            )}
           </div>
         </div>
       </div>
+      {isPersonalizationOpen && (
+        <PersonalizationPanel
+          viewerName={viewerName}
+          viewerRole={user?.role || "Operator"}
+          onClose={handleClosePersonalization}
+        />
+      )}
     </div>
   );
 }

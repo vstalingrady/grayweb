@@ -1,3 +1,4 @@
+import { type ReactNode } from "react";
 import { CalendarInfo } from "./types";
 import styles from "./GrayDashboardCalendar.module.css";
 import { MiniMonth } from "./MiniMonth";
@@ -13,9 +14,12 @@ type CalendarSidebarProps = {
   onToggleCollapse?: () => void;
   showSelectedDateLabel?: boolean;
   showCreateAction?: boolean;
+  showMonthNavigation?: boolean;
   integrationActionLabel?: string;
   onIntegrationAction?: () => void;
   className?: string;
+  showCalendarList?: boolean;
+  children?: ReactNode;
 };
 
 const formatMonthLabel = (date: Date) =>
@@ -35,9 +39,12 @@ export function CalendarSidebar({
   onToggleCollapse,
   showSelectedDateLabel = true,
   showCreateAction = true,
+  showMonthNavigation = true,
   integrationActionLabel = "Add Google Calendar integration",
   onIntegrationAction,
   className,
+  showCalendarList = true,
+  children,
 }: CalendarSidebarProps) {
   const sidebarClassName = [styles.calendarSidebar, className]
     .filter(Boolean)
@@ -59,37 +66,43 @@ export function CalendarSidebar({
             </span>
           ) : null}
         </div>
-        <div className={styles.calendarSidebarHeaderActions}>
-          <button
-            type="button"
-            aria-label="Show previous month"
-            onClick={() => onNavigateMonth(-1)}
-          >
-            ‹
-          </button>
-          <button
-            type="button"
-            aria-label="Show next month"
-            onClick={() => onNavigateMonth(1)}
-          >
-            ›
-          </button>
-          {showCreateAction && (
-            <button type="button" className={styles.calendarSidebarCreate}>
-              + Create
-            </button>
-          )}
-          {onToggleCollapse && (
-            <button
-              type="button"
-              className={styles.calendarSidebarCollapse}
-              aria-pressed={isCollapsed ? "true" : "false"}
-              onClick={onToggleCollapse}
-            >
-              {isCollapsed ? "Expand" : "Collapse"}
-            </button>
-          )}
-        </div>
+        {(showMonthNavigation || showCreateAction || onToggleCollapse) && (
+          <div className={styles.calendarSidebarHeaderActions}>
+            {showMonthNavigation && (
+              <>
+                <button
+                  type="button"
+                  aria-label="Show previous month"
+                  onClick={() => onNavigateMonth(-1)}
+                >
+                  ‹
+                </button>
+                <button
+                  type="button"
+                  aria-label="Show next month"
+                  onClick={() => onNavigateMonth(1)}
+                >
+                  ›
+                </button>
+              </>
+            )}
+            {showCreateAction && (
+              <button type="button" className={styles.calendarSidebarCreate}>
+                + Create
+              </button>
+            )}
+            {onToggleCollapse && (
+              <button
+                type="button"
+                className={styles.calendarSidebarCollapse}
+                aria-pressed={isCollapsed ? "true" : "false"}
+                onClick={onToggleCollapse}
+              >
+                {isCollapsed ? "Expand" : "Collapse"}
+              </button>
+            )}
+          </div>
+        )}
       </header>
 
       <div
@@ -102,40 +115,43 @@ export function CalendarSidebar({
           onSelectDate={onSelectDate}
         />
 
-        <section className={styles.calendarSidebarList}>
-          <header>
-            <span>My calendars</span>
-            <button type="button">+</button>
-          </header>
-          <ul>
-            {calendars.map((calendar) => (
-              <li key={calendar.id}>
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={calendar.isVisible}
-                    onChange={() => onToggleCalendar(calendar.id)}
-                  />
-                  <span
-                    className={styles.calendarSidebarSwatch}
-                    style={{ background: calendar.color }}
-                    aria-hidden="true"
-                  />
-                  <span>{calendar.label}</span>
-                </label>
+        {showCalendarList ? (
+          <section className={styles.calendarSidebarList}>
+            <header>
+              <span>My calendars</span>
+              <button type="button">+</button>
+            </header>
+            <ul>
+              {calendars.map((calendar) => (
+                <li key={calendar.id}>
+                  <button
+                    type="button"
+                    className={styles.calendarSidebarChip}
+                    aria-pressed={calendar.isVisible ? "true" : "false"}
+                    onClick={() => onToggleCalendar(calendar.id)}
+                  >
+                    <span
+                      className={styles.calendarSidebarSwatch}
+                      style={{ background: calendar.color }}
+                      aria-hidden="true"
+                    />
+                    <span>{calendar.label}</span>
+                  </button>
+                </li>
+              ))}
+              <li className={styles.calendarSidebarIntegration}>
+                <button
+                  type="button"
+                  className={styles.calendarSidebarIntegrationButton}
+                  onClick={onIntegrationAction}
+                >
+                  {integrationActionLabel}
+                </button>
               </li>
-            ))}
-            <li className={styles.calendarSidebarIntegration}>
-              <button
-                type="button"
-                className={styles.calendarSidebarIntegrationButton}
-                onClick={onIntegrationAction}
-              >
-                {integrationActionLabel}
-              </button>
-            </li>
-          </ul>
-        </section>
+            </ul>
+          </section>
+        ) : null}
+        {children ? <div className={styles.calendarSidebarExtra}>{children}</div> : null}
       </div>
     </aside>
   );
