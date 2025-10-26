@@ -676,10 +676,13 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
             if (!didReceiveToken && displayText) {
               await simulateMessageStream(assistantMessageId, displayText);
             } else {
-              setDisplayedAssistantContent((prev) => ({
-                ...prev,
-                [assistantMessageId as string]: displayText,
-              }));
+              {
+                const key = String(assistantMessageId);
+                setDisplayedAssistantContent((prev) => ({
+                  ...prev,
+                  [key]: displayText,
+                }));
+              }
             }
           }
           updateSession(targetSessionId, { isResponding: false });
