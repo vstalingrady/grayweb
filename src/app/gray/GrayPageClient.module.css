@@ -100,19 +100,26 @@
 }
 
 .sidebarRailLogo {
-  width: 32px;
-  height: 32px;
   border: none;
   background: transparent;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   padding: 0;
+  width: auto;
+  height: auto;
+  line-height: 0;
   cursor: pointer;
 }
 
 .sidebarRailLogo:hover {
   transform: none;
+}
+
+.sidebarRailLogoImage {
+  width: 24px;
+  height: 24px;
+  display: block;
 }
 
 .railNav {
@@ -287,31 +294,26 @@
 }
 
 .sidebarLogo {
-  width: 48px;
-  height: 48px;
-  border-radius: 18px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(18, 18, 18, 0.94);
+  width: auto;
+  height: auto;
+  border-radius: 0;
+  border: none;
+  background: transparent;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 10px;
+  padding: 0;
   cursor: pointer;
-  transition:
-    border-color 0.2s ease,
-    background 0.2s ease,
-    transform 0.2s ease;
+  transition: transform 0.2s ease;
 }
 
 .sidebarLogo:hover {
-  border-color: rgba(255, 255, 255, 0.18);
-  background: rgba(26, 26, 26, 0.94);
   transform: translateX(2px);
 }
 
 .sidebarLogoImage {
-  width: 100%;
-  height: 100%;
+  width: 28px;
+  height: 28px;
   object-fit: contain;
 }
 
@@ -396,7 +398,17 @@
 
 .sidebarNavItem {
   position: relative;
-  padding-bottom: 2px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sidebarNavItem[data-nav="history"] {
+  gap: 0;
+}
+
+.sidebarNavItem[data-nav="history"] > .sidebarHistory {
+  margin-top: 0;
 }
 
 .navIcon {
@@ -412,72 +424,78 @@
   text-align: left;
 }
 
-.enhancedHistory {
-  position: relative;
+.sidebarHistory {
   display: flex;
   flex-direction: column;
   gap: 18px;
-  padding: 12px 0 6px 32px;
-  margin-top: 6px;
+  margin-top: 10px;
+  padding-left: 52px;
+  position: relative;
 }
 
-.enhancedHistory::before {
+.sidebarHistory::before {
   content: "";
   position: absolute;
-  top: 10px;
-  bottom: 10px;
-  left: 12px;
+  left: 30px;
+  top: 4px;
+  bottom: 8px;
   width: 1px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0.04));
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02));
+  pointer-events: none;
 }
 
-.enhancedHistoryGroup {
+.sidebarHistoryGroup {
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 
-.enhancedHistoryGroup h4 {
-  margin: 0;
-  font-size: 0.64rem;
-  letter-spacing: 0.24em;
+.sidebarHistoryLabel {
+  font-size: 0.62rem;
+  letter-spacing: 0.26em;
   text-transform: uppercase;
-  color: rgba(235, 235, 235, 0.46);
+  color: rgba(235, 235, 235, 0.48);
+  padding-left: 4px;
 }
 
-.enhancedHistoryGroup ul {
+.sidebarHistoryList {
   list-style: none;
   margin: 0;
-  padding: 0;
+  padding: 0 0 0 20px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
-.enhancedHistoryLink {
-  display: block;
-  width: 100%;
-  padding: 0;
-  background: none;
-  border: none;
-  text-align: left;
-  font-size: 0.86rem;
-  line-height: 1.4;
-  color: rgba(235, 235, 235, 0.78);
-  cursor: pointer;
+.sidebarHistoryList li {
+  padding-left: 0;
+}
+
+.sidebarHistoryLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.84rem;
+  color: rgba(235, 235, 235, 0.74);
   text-decoration: none;
   transition: color 0.2s ease, transform 0.2s ease;
 }
 
-.enhancedHistoryLink:hover,
-.enhancedHistoryLink:focus-visible {
+.sidebarHistoryLink:hover,
+.sidebarHistoryLink:focus-visible {
   color: rgba(255, 255, 255, 0.92);
   transform: translateX(2px);
   outline: none;
 }
 
-.enhancedHistoryLinkActive {
+.sidebarHistoryLinkActive {
   color: rgba(255, 255, 255, 0.96);
+}
+
+.sidebarHistoryEmpty {
+  font-size: 0.76rem;
+  color: rgba(235, 235, 235, 0.46);
+  padding-left: 46px;
 }
 
 .historyView {
@@ -1449,6 +1467,31 @@
   gap: clamp(20px, 3vw, 36px);
 }
 
+.dashboardPulseLayout {
+  display: grid;
+  width: min(1160px, 100%);
+  margin: clamp(16px, 2.4vw, 32px) auto 0;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+  gap: clamp(20px, 3vw, 36px);
+  align-items: flex-start;
+}
+
+.dashboardPulseLayout .dashboardGrid {
+  width: 100%;
+  margin: 0;
+}
+
+.dashboardSidebarColumn {
+  display: flex;
+  justify-content: center;
+  min-width: 0;
+}
+
+.dashboardSidebarColumn > * {
+  width: 100%;
+  max-width: 360px;
+}
+
 .pulseHistoryBar {
   width: min(1160px, 100%);
   margin: clamp(16px, 2vw, 24px) auto 0;
@@ -1656,7 +1699,7 @@
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(340px, 480px) minmax(260px, 360px);
+  grid-template-columns: minmax(300px, 420px) minmax(320px, 460px);
   gap: clamp(16px, 2vw, 24px);
   align-items: stretch;
   width: min(960px, 100%);
@@ -1681,12 +1724,12 @@
 }
 
 .primaryColumnSlim {
-  max-width: clamp(320px, 50vw, 460px);
+  max-width: clamp(280px, 45vw, 400px);
   margin: 0 auto;
 }
 
 .secondaryColumnSlim {
-  max-width: clamp(260px, 45vw, 360px);
+  max-width: clamp(320px, 55vw, 460px);
   margin: 0 auto;
 }
 
@@ -2303,10 +2346,14 @@
   margin: 0;
   height: 100%;
   max-width: 576px;
+  background: rgba(6, 6, 6, 0.86);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 32px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
 .planPanelSlim {
-  max-width: clamp(260px, 40vw, 340px);
+  max-width: clamp(320px, 50vw, 420px);
   margin: 0 auto;
 }
 
@@ -2422,6 +2469,31 @@
   background: rgba(8, 8, 8, 0.78);
 }
 
+.listEmptyMessage {
+  padding: 18px;
+  border-radius: 18px;
+  border: 1px dashed rgba(255, 255, 255, 0.1);
+  background: rgba(8, 8, 8, 0.6);
+  color: rgba(235, 235, 235, 0.6);
+  font-size: 0.82rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cardEmptyMessage {
+  padding: 22px;
+  border-radius: 18px;
+  border: 1px dashed rgba(255, 255, 255, 0.1);
+  background: rgba(8, 8, 8, 0.6);
+  color: rgba(235, 235, 235, 0.64);
+  font-size: 0.86rem;
+  letter-spacing: 0.02em;
+  text-align: center;
+}
+
 .planLabel {
   font-family: var(
       --font-mono,
@@ -2433,6 +2505,70 @@
       monospace
     );
   letter-spacing: 0.02em;
+}
+
+.pulseCreateCard {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 100%;
+}
+
+.pulseCreateContent {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.pulseCreateEyebrow {
+  font-size: 0.62rem;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: rgba(235, 235, 235, 0.52);
+}
+
+.pulseCreateContent h3 {
+  margin: 0;
+  font-size: 1.22rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(247, 247, 247, 0.94);
+}
+
+.pulseCreateContent p {
+  margin: 0;
+  font-size: 0.86rem;
+  line-height: 1.5;
+  color: rgba(235, 235, 235, 0.7);
+}
+
+.pulseCreateAction {
+  align-self: flex-start;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  padding: 10px 20px;
+  background: rgba(12, 12, 12, 0.78);
+  color: rgba(240, 240, 240, 0.92);
+  font-size: 0.72rem;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.pulseCreateAction:hover {
+  background: rgba(40, 40, 40, 0.84);
+  border-color: rgba(255, 255, 255, 0.26);
+  transform: translateY(-1px);
+}
+
+.pulseCreateAction[disabled] {
+  cursor: not-allowed;
+  opacity: 0.5;
+  transform: none;
 }
 
 .habitList li {
@@ -2581,6 +2717,18 @@
 
   .dashboardCalendarLayout {
     grid-template-columns: 1fr;
+  }
+
+  .dashboardPulseLayout {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboardSidebarColumn {
+    justify-content: stretch;
+  }
+
+  .dashboardSidebarColumn > * {
+    max-width: none;
   }
 
   .calendarBoardGrid {
