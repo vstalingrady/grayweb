@@ -14,6 +14,7 @@ import { GrayChatView } from "@/components/gray/ChatView";
 import { UserProvider, useUser } from "@/contexts/UserContext";
 import { apiService } from "@/lib/api";
 import { formatDisplayName } from "@/lib/names";
+import { getSupabaseClient } from "@/lib/supabaseClient";
 import styles from "./GrayPageClient.module.css";
 import {
   type PlanItem,
@@ -693,9 +694,18 @@ function GrayPageClientInner({
     console.info("Help center is not implemented yet.");
   };
 
-  const handleLogOut = () => {
-    console.info("Log out is not implemented yet.");
-  };
+  const handleLogOut = useCallback(async () => {
+    try {
+      const supabase = getSupabaseClient();
+      if (supabase) {
+        await supabase.auth.signOut();
+      }
+    } catch (error) {
+      console.error("Failed to log out:", error);
+    } finally {
+      router.push("/login");
+    }
+  }, [router]);
 
   const derivedPlans = user ? plans : [];
   const derivedHabits = user ? habits : [];
