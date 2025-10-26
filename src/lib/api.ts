@@ -156,6 +156,28 @@ export interface ChatResponse {
   conversation_id: string;
 }
 
+export type ChatStreamTokenEvent = {
+  type: 'token';
+  delta: string;
+};
+
+export type ChatStreamEndEvent = {
+  type: 'end';
+  conversationId: string | null;
+  response: string;
+};
+
+export type ChatStreamErrorEvent = {
+  type: 'error';
+  message: string;
+};
+
+export type ChatStreamEvent = ChatStreamTokenEvent | ChatStreamEndEvent | ChatStreamErrorEvent;
+
+export interface ChatTitleResponse {
+  title: string;
+}
+
 export interface GoogleAuthResponse {
   authorization_url: string;
   state?: string;
@@ -358,10 +380,15 @@ class ApiService {
     });
   }
 
-  async requestGoogleCalendarAuth(userId: number): Promise<GoogleAuthResponse> {
+  async requestGoogleCalendarAuth(userId: number, options?: { redirectUri?: string }): Promise<GoogleAuthResponse> {
+    const payload: Record<string, unknown> = { user_id: userId };
+    if (options?.redirectUri) {
+      payload.redirect_uri = options.redirectUri;
+    }
+
     return this.fetch<GoogleAuthResponse>(`/users/${userId}/google-calendar/auth`, {
       method: 'POST',
-      body: JSON.stringify({ user_id: userId }),
+      body: JSON.stringify(payload),
     });
   }
 
@@ -370,6 +397,186 @@ class ApiService {
     return this.fetch<ChatResponse>('/api/chat', {
       method: 'POST',
       body: JSON.stringify(request),
+    });
+  }
+
+  async *sendMessageStream(
+    request: ChatRequest,
+    options?: { signal?: AbortSignal }
+  ): AsyncGenerator<ChatStreamEvent, void, unknown> {
+    const baseUrl = resolveApiBaseUrl();
+    const endpoint = '/api/chat/stream';
+    const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+    const url = `${baseUrl}${normalizedEndpoint}`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Accept: 'text/event-stream',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(request),
+      signal: options?.signal,
+    });
+
+    if (!response.ok) {
+      let detail = `HTTP error! status: ${response.status}`;
+      try {
+        const payload = await response.json();
+        if (payload?.detail) {
+          detail = payload.detail;
+        }
+      } catch {
+        // Best effort - non JSON payloads fall back to default message.
+      }
+      throw new Error(detail);
+    }
+
+    const contentType = response.headers.get('content-type') ?? '';
+    if (contentType.includes('application/json')) {
+      const payload = await response.json();
+      yield {
+        type: 'end',
+        conversationId: payload?.conversation_id ?? payload?.conversationId ?? null,
+        response: payload?.response ?? payload?.text ?? '',
+      };
+      return;
+    }
+
+    if (!response.body) {
+      throw new Error('Streaming response body is empty.');
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    const parseSseEvent = (chunk: string): ChatStreamEvent | null => {
+      const lines = chunk.split(/\r?\n/);
+      let eventType = 'message';
+      const dataLines: string[] = [];
+
+      for (const line of lines) {
+        if (!line) {
+          continue;
+        }
+        if (line.startsWith(':')) {
+          continue;
+        }
+        if (line.startsWith('event:')) {
+          eventType = line.slice('event:'.length).trim() || eventType;
+          continue;
+        }
+        if (line.startsWith('data:')) {
+          const separatorIndex = line.indexOf(':');
+          const rawValue = separatorIndex >= 0 ? line.slice(separatorIndex + 1) : '';
+          const value = rawValue.startsWith(' ') ? rawValue.slice(1) : rawValue;
+          dataLines.push(value);
+        }
+      }
+
+      const dataString = dataLines.join('\n');
+      if (!dataString) {
+        return null;
+      }
+
+      let payload: any = null;
+      try {
+        payload = JSON.parse(dataString);
+      } catch {
+        payload = { delta: dataString };
+      }
+
+      if (eventType === 'token') {
+        const delta = payload?.delta ?? payload?.token ?? payload?.text ?? '';
+        if (!delta) {
+          return null;
+        }
+        return {
+          type: 'token',
+          delta,
+        };
+      }
+
+      if (eventType === 'end') {
+        return {
+          type: 'end',
+          conversationId: payload?.conversation_id ?? payload?.conversationId ?? null,
+          response: payload?.response ?? payload?.text ?? '',
+        };
+      }
+
+      if (eventType === 'error') {
+        return {
+          type: 'error',
+          message: payload?.message ?? payload?.error ?? 'Stream error',
+        };
+      }
+
+      if (payload?.delta ?? payload?.token ?? payload?.text) {
+        return {
+          type: 'token',
+          delta: payload?.delta ?? payload?.token ?? payload?.text ?? '',
+        };
+      }
+
+      return null;
+    };
+
+    const flushBuffer = (): ChatStreamEvent[] => {
+      const events: ChatStreamEvent[] = [];
+      while (true) {
+        let delimiterIndex = buffer.indexOf('\n\n');
+        let delimiterLength = 2;
+        if (delimiterIndex === -1) {
+          delimiterIndex = buffer.indexOf('\r\n\r\n');
+          delimiterLength = 4;
+        }
+        if (delimiterIndex === -1) {
+          break;
+        }
+        const rawEvent = buffer.slice(0, delimiterIndex);
+        buffer = buffer.slice(delimiterIndex + delimiterLength);
+        const parsed = parseSseEvent(rawEvent);
+        if (parsed) {
+          events.push(parsed);
+        }
+      }
+      return events;
+    };
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+      buffer += decoder.decode(value, { stream: true });
+      const events = flushBuffer();
+      for (const event of events) {
+        if (event) {
+          yield event;
+          if (event.type === 'end' || event.type === 'error') {
+            return;
+          }
+        }
+      }
+    }
+
+    buffer += decoder.decode();
+    const remaining = flushBuffer();
+    for (const event of remaining) {
+      if (event) {
+        yield event;
+        if (event.type === 'end' || event.type === 'error') {
+          return;
+        }
+      }
+    }
+  }
+
+  async generateChatTitle(message: string): Promise<ChatTitleResponse> {
+    return this.fetch<ChatTitleResponse>('/api/chat/title', {
+      method: 'POST',
+      body: JSON.stringify({ message }),
     });
   }
 

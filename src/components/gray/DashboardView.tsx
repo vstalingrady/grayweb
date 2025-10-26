@@ -46,6 +46,7 @@ type GrayDashboardViewProps = {
   onCalendarsChange: (calendars: CalendarInfo[]) => void;
   calendarEvents: CalendarEvent[];
   onCalendarEventsChange: (events: CalendarEvent[]) => void;
+  onIntegrationAction?: () => void;
 };
 
 export function GrayDashboardView({
@@ -62,6 +63,7 @@ export function GrayDashboardView({
   onCalendarsChange,
   calendarEvents,
   onCalendarEventsChange,
+  onIntegrationAction,
 }: GrayDashboardViewProps) {
   const hasPulseData = Boolean(currentPulse && pulseEntries.length > 0);
   const displayPlans = hasPulseData ? currentPulse?.plans ?? [] : [];
@@ -330,6 +332,7 @@ export function GrayDashboardView({
                     showCalendarList={false}
                     showCreateAction={false}
                     showMonthNavigation={false}
+                    onIntegrationAction={onIntegrationAction}
                   >
                     <div className={styles.calendarSidebarExtras}>
                       <article
@@ -521,6 +524,7 @@ export function GrayDashboardView({
             surfaceClassName={styles.dashboardCalendarSurface}
             maxHeight={CALENDAR_PANEL_MAX_HEIGHT}
             hourHeight={CALENDAR_PANEL_HOUR_HEIGHT}
+            onIntegrationAction={onIntegrationAction}
           />
         </div>
       )}

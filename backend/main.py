@@ -23,6 +23,7 @@ from google_calendar import (
     GoogleCalendarInfo,
     GoogleCalendarEvent,
     GoogleAuthRequest,
+    GoogleAuthCallbackRequest,
     GoogleAuthResponse,
     get_google_auth_url,
     exchange_code_for_tokens,
@@ -213,6 +214,22 @@ proactivity_logs = sqlalchemy.Table(
     sqlalchemy.Column("total_tasks", sqlalchemy.Integer, default=0),
     sqlalchemy.Column("score", sqlalchemy.Integer, default=0),
     sqlalchemy.Column("notes", sqlalchemy.String, nullable=True),
+    sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
+    sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
+)
+
+google_calendar_credentials = sqlalchemy.Table(
+    "google_calendar_credentials",
+    metadata,
+    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True, index=True),
+    sqlalchemy.Column("user_id", sqlalchemy.ForeignKey("users.id"), unique=True),
+    sqlalchemy.Column("access_token", sqlalchemy.String),
+    sqlalchemy.Column("refresh_token", sqlalchemy.String),
+    sqlalchemy.Column("token_uri", sqlalchemy.String),
+    sqlalchemy.Column("client_id", sqlalchemy.String),
+    sqlalchemy.Column("client_secret", sqlalchemy.String),
+    sqlalchemy.Column("scopes", sqlalchemy.String),
+    sqlalchemy.Column("expires_at", sqlalchemy.DateTime, nullable=True),
     sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
     sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
 )
@@ -1866,17 +1883,94 @@ async def get_proactivity_streak(user_id: int, db: databases.Database = Depends(
 
     return {"current_streak": streak, "best_streak": streak}
 
+# Google Calendar helpers
+
+def _serialize_scopes(scopes: List[str]) -> str:
+    try:
+        return json.dumps(scopes)
+    except (TypeError, ValueError):
+        return json.dumps([])
+
+
+def _hydrate_scopes(raw_scopes):
+    if isinstance(raw_scopes, list):
+        return raw_scopes
+    if isinstance(raw_scopes, str):
+        try:
+            loaded = json.loads(raw_scopes)
+            if isinstance(loaded, list):
+                return loaded
+        except json.JSONDecodeError:
+            return [scope.strip() for scope in raw_scopes.split() if scope.strip()]
+    return []
+
+
+def map_google_credentials(record) -> GoogleCalendarCredentials:
+    if not record:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Google Calendar not connected. Please authorize first."
+        )
+
+    record_dict = dict(record)
+    scopes = _hydrate_scopes(record_dict.get("scopes"))
+    return GoogleCalendarCredentials(
+        user_id=record_dict["user_id"],
+        access_token=record_dict["access_token"],
+        refresh_token=record_dict["refresh_token"],
+        token_uri=record_dict["token_uri"],
+        client_id=record_dict["client_id"],
+        client_secret=record_dict["client_secret"],
+        scopes=scopes,
+        expires_at=record_dict.get("expires_at"),
+        created_at=record_dict.get("created_at", datetime.utcnow()),
+        updated_at=record_dict.get("updated_at", datetime.utcnow()),
+    )
+
+
+async def upsert_google_calendar_credentials(db: databases.Database, creds: GoogleCalendarCredentials) -> None:
+    payload = {
+        "user_id": creds.user_id,
+        "access_token": creds.access_token,
+        "refresh_token": creds.refresh_token,
+        "token_uri": creds.token_uri,
+        "client_id": creds.client_id,
+        "client_secret": creds.client_secret,
+        "scopes": _serialize_scopes(creds.scopes),
+        "expires_at": creds.expires_at,
+        "created_at": creds.created_at,
+        "updated_at": datetime.utcnow(),
+    }
+
+    existing = await db.fetch_one(
+        google_calendar_credentials.select().where(google_calendar_credentials.c.user_id == creds.user_id)
+    )
+
+    if existing:
+        await db.execute(
+            google_calendar_credentials
+            .update()
+            .where(google_calendar_credentials.c.user_id == creds.user_id)
+            .values(payload)
+        )
+    else:
+        await db.execute(google_calendar_credentials.insert().values(payload))
+
+
 # Google Calendar endpoints
 @app.post("/users/{user_id}/google-calendar/auth", response_model=GoogleAuthResponse)
 async def google_calendar_auth(user_id: int, request: GoogleAuthRequest, db: databases.Database = Depends(get_database)):
     """Generate Google Calendar authorization URL."""
-    return get_google_auth_url(user_id)
+    if request.user_id and request.user_id != user_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Mismatched user identifier for Google Calendar auth request")
+    return get_google_auth_url(user_id, request.redirect_uri)
 
-@app.post("/users/{user_id}/google-calendar/callback", response_model=GoogleCalendarCredentials)
-async def google_calendar_callback(user_id: int, code: str, state: str, db: databases.Database = Depends(get_database)):
+@app.post("/google-calendar/oauth/callback", response_model=GoogleCalendarCredentials)
+async def google_calendar_callback(request: GoogleAuthCallbackRequest, db: databases.Database = Depends(get_database)):
     """Handle Google Calendar OAuth callback."""
     try:
-        credentials = await exchange_code_for_tokens(code, state)
+        credentials = await exchange_code_for_tokens(request.code, request.state, request.redirect_uri)
+        await upsert_google_calendar_credentials(db, credentials)
         return credentials
     except HTTPException as e:
         raise e
@@ -1889,14 +1983,8 @@ async def get_google_calendars(user_id: int, db: databases.Database = Depends(ge
         query = google_calendar_credentials.select().where(google_calendar_credentials.c.user_id == user_id)
         stored_creds = await db.fetch_one(query)
 
-        if not stored_creds:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Google Calendar not connected. Please authorize first."
-            )
-
-        # Create Google Calendar service
-        service = await get_google_calendar_service(stored_creds)
+        creds = map_google_credentials(stored_creds)
+        service = await get_google_calendar_service(creds)
         calendars = await list_google_calendars(service)
         return calendars
     except HTTPException as e:
@@ -1910,14 +1998,8 @@ async def get_google_calendar_events(user_id: int, calendar_id: str, time_min: O
         query = google_calendar_credentials.select().where(google_calendar_credentials.c.user_id == user_id)
         stored_creds = await db.fetch_one(query)
 
-        if not stored_creds:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Google Calendar not connected. Please authorize first."
-            )
-
-        # Create Google Calendar service
-        service = await get_google_calendar_service(stored_creds)
+        creds = map_google_credentials(stored_creds)
+        service = await get_google_calendar_service(creds)
         events = await list_google_events(service, calendar_id, time_min, time_max)
         return events
     except HTTPException as e:
@@ -1931,14 +2013,8 @@ async def create_google_calendar_event(user_id: int, calendar_id: str, event_dat
         query = google_calendar_credentials.select().where(google_calendar_credentials.c.user_id == user_id)
         stored_creds = await db.fetch_one(query)
 
-        if not stored_creds:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Google Calendar not connected. Please authorize first."
-            )
-
-        # Create Google Calendar service
-        service = await get_google_calendar_service(stored_creds)
+        creds = map_google_credentials(stored_creds)
+        service = await get_google_calendar_service(creds)
         event = await create_google_event(service, calendar_id, event_data)
         return event
     except HTTPException as e:

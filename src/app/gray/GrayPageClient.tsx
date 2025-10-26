@@ -1073,8 +1073,14 @@ function GrayPageClientInner({
       return;
     }
 
+    const callbackUrl = typeof window !== "undefined"
+      ? `${window.location.origin}/api/auth/google-calendar/callback`
+      : undefined;
+
     try {
-      const response = await apiService.requestGoogleCalendarAuth(user.id);
+      const response = await apiService.requestGoogleCalendarAuth(user.id, {
+        redirectUri: callbackUrl,
+      });
       const authUrl = response?.authorization_url;
 
       if (authUrl) {

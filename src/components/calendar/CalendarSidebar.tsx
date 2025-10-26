@@ -139,15 +139,17 @@ export function CalendarSidebar({
                   </button>
                 </li>
               ))}
-              <li className={styles.calendarSidebarIntegration}>
-                <button
-                  type="button"
-                  className={styles.calendarSidebarIntegrationButton}
-                  onClick={onIntegrationAction}
-                >
-                  {integrationActionLabel}
-                </button>
-              </li>
+              {onIntegrationAction ? (
+                <li className={styles.calendarSidebarIntegration}>
+                  <button
+                    type="button"
+                    className={styles.calendarSidebarIntegrationButton}
+                    onClick={onIntegrationAction}
+                  >
+                    {integrationActionLabel}
+                  </button>
+                </li>
+              ) : null}
             </ul>
           </section>
         ) : null}
