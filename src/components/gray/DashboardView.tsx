@@ -39,6 +39,9 @@ type GrayDashboardViewProps = {
   onSelectPulse: (id: string) => void;
   proactivityFallback: ProactivityItem;
   onTogglePlan: (id: string) => void;
+  onToggleHabit?: (id: string) => void;
+  onEditPlan?: (plan: { id: string; label: string; completed: boolean }) => void;
+  onDeletePlan?: (plan: { id: string; label: string; completed: boolean }) => void;
   activeTab: "pulse" | "calendar";
   onSelectTab: (tab: "pulse" | "calendar") => void;
   currentDate: Date;
@@ -46,6 +49,8 @@ type GrayDashboardViewProps = {
   onCalendarsChange: (calendars: CalendarInfo[]) => void;
   calendarEvents: CalendarEvent[];
   onCalendarEventsChange: (events: CalendarEvent[]) => void;
+  onEditHabit?: (habit: { id: string; label: string; previousLabel: string; streakLabel: string }) => void;
+  onDeleteHabit?: (habit: { id: string; label: string; previousLabel: string; streakLabel: string }) => void;
   onIntegrationAction?: () => void;
 };
 
