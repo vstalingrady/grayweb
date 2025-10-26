@@ -1,21 +1,28 @@
 import type { Metadata } from "next";
-import { IBM_Plex_Mono, Plus_Jakarta_Sans } from "next/font/google";
+// Switched to local/system fonts to avoid network fetches during build.
+// Original (Google Fonts) imports kept below for easy re-enable.
+// import { IBM_Plex_Mono, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import "katex/dist/katex.min.css";
 
-const plusJakarta = Plus_Jakarta_Sans({
-  variable: "--font-sans",
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-  display: "swap",
-});
+// Local/offline-safe fallbacks using system fonts.
+// These objects mimic next/font API's `.variable` for className usage.
+const plusJakarta = { variable: "font-sans" } as const;
+const plexMono = { variable: "font-mono" } as const;
 
-const plexMono = IBM_Plex_Mono({
-  variable: "--font-mono",
-  subsets: ["latin"],
-  weight: ["400", "500", "600"],
-  display: "swap",
-});
+// To re-enable Google Fonts, replace the above with:
+// const plusJakarta = Plus_Jakarta_Sans({
+//   variable: "--font-sans",
+//   subsets: ["latin"],
+//   weight: ["400", "500", "600", "700"],
+//   display: "swap",
+// });
+// const plexMono = IBM_Plex_Mono({
+//   variable: "--font-mono",
+//   subsets: ["latin"],
+//   weight: ["400", "500", "600"],
+//   display: "swap",
+// });
 
 export const metadata: Metadata = {
   title: {
@@ -44,8 +51,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body className={`${plusJakarta.variable} ${plexMono.variable}`}>
+    <html lang="en" className="${plusJakarta.variable} ${plexMono.variable}">
+      <body>
         {children}
       </body>
     </html>
