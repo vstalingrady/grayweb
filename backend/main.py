@@ -1,18 +1,36 @@
-from fastapi import FastAPI, HTTPException, Depends, status
+from fastapi import FastAPI, HTTPException, Depends, status, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, EmailStr
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, AsyncGenerator, Tuple
 import databases
 import sqlalchemy
 from datetime import datetime
 import os
 import json
 import asyncio
+import threading
+import tempfile
+import time
+import re
 from dotenv import load_dotenv
 import google.generativeai as genai
 from supabase import create_client, Client
+from pathlib import Path
+from google_calendar import (
+    GoogleCalendarCredentials,
+    GoogleCalendarInfo,
+    GoogleCalendarEvent,
+    GoogleAuthRequest,
+    GoogleAuthResponse,
+    get_google_auth_url,
+    exchange_code_for_tokens,
+    get_google_calendar_service,
+    list_google_calendars,
+    list_google_events,
+    create_google_event
+)
 
 load_dotenv()
 
@@ -20,6 +38,86 @@ load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./test.db")
 database = databases.Database(DATABASE_URL)
 metadata = sqlalchemy.MetaData()
+
+
+def _int_env(var_name: str, default: int) -> int:
+    try:
+        return int(os.getenv(var_name, default))
+    except (TypeError, ValueError):
+        return default
+
+
+def _float_env(var_name: str, default: float) -> float:
+    try:
+        return float(os.getenv(var_name, default))
+    except (TypeError, ValueError):
+        return default
+
+
+MAX_GEMINI_UPLOAD_MB = max(1, _int_env("GEMINI_MAX_UPLOAD_MB", 20))
+MAX_GEMINI_UPLOAD_BYTES = MAX_GEMINI_UPLOAD_MB * 1024 * 1024
+GEMINI_FILE_POLL_INTERVAL = max(0.25, _float_env("GEMINI_FILE_POLL_INTERVAL", 1.0))
+GEMINI_FILE_POLL_TIMEOUT = max(5.0, _float_env("GEMINI_FILE_POLL_TIMEOUT", 60.0))
+STREAMING_TOKEN_DELAY = max(0.0, _float_env("GRAY_STREAMING_TOKEN_DELAY_SECONDS", 0.045))
+
+def _split_env_list(value: Optional[str]) -> List[str]:
+    if not value:
+        return []
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
+def _origin_variants(origin: str) -> List[str]:
+    cleaned = origin.strip().rstrip("/")
+    if not cleaned:
+        return []
+
+    variants = {cleaned}
+    if cleaned.startswith("http://"):
+        variants.add(cleaned.replace("http://", "https://", 1))
+    elif cleaned.startswith("https://"):
+        variants.add(cleaned.replace("https://", "http://", 1))
+    return list(variants)
+
+
+def _build_allowed_origins() -> List[str]:
+    explicit = _split_env_list(os.getenv("CORS_ALLOW_ORIGINS"))
+    if explicit:
+        return explicit
+
+    default_origins = {
+        "http://localhost:3000",
+        "https://localhost:3000",
+        "http://127.0.0.1:3000",
+        "https://127.0.0.1:3000",
+        "http://localhost:5173",
+        "https://localhost:5173",
+        "http://127.0.0.1:5173",
+        "https://127.0.0.1:5173",
+    }
+
+    candidate_env_vars = [
+        os.getenv("NEXT_PUBLIC_SITE_URL"),
+        os.getenv("SITE_URL"),
+        os.getenv("NEXT_PUBLIC_AUTH_REDIRECT"),
+        os.getenv("FRONTEND_URL"),
+    ]
+
+    for candidate in candidate_env_vars:
+        for variant in _origin_variants(candidate or ""):
+            default_origins.add(variant)
+
+    return sorted(default_origins)
+
+
+ALLOWED_ORIGINS = _build_allowed_origins()
+
+def _fallback_title_from_message(message: str) -> str:
+    trimmed = (message or "").strip()
+    if not trimmed:
+        return "New Chat"
+    if len(trimmed) <= 48:
+        return trimmed
+    return f"{trimmed[:45].rstrip()}…"
 
 # Database tables
 users = sqlalchemy.Table(
@@ -224,7 +322,7 @@ class UserStreak(UserStreakBase):
     id: int
     user_id: int
     created_at: datetime
-    updated_at: datetime
+    updated_at: Optional[datetime] = None
 
     class Config:
         orm_mode = True
@@ -286,9 +384,18 @@ class HabitUpdate(BaseModel):
     previous_label: Optional[str] = None
 
 # AI Chat models
+class GeminiAttachment(BaseModel):
+    name: str
+    uri: str
+    mime_type: str
+    display_name: Optional[str] = None
+    size_bytes: Optional[int] = None
+
+
 class ChatMessage(BaseModel):
     role: str  # 'user' or 'model'
     text: str
+    attachments: Optional[List[GeminiAttachment]] = None
 
 class ChatSessionCreate(BaseModel):
     title: str
@@ -299,10 +406,32 @@ class ChatRequest(BaseModel):
     conversation_id: Optional[str] = None
     user_id: int
     context: Optional[str] = None
+    system_prompt: Optional[str] = None
+    attachments: Optional[List[GeminiAttachment]] = None
 
 class ChatResponse(BaseModel):
     response: str
     conversation_id: str
+
+
+class ChatTitleRequest(BaseModel):
+    message: str
+
+
+class ChatTitleResponse(BaseModel):
+    title: str
+
+
+class GeminiFile(BaseModel):
+    name: str
+    display_name: Optional[str] = None
+    mime_type: Optional[str] = None
+    uri: Optional[str] = None
+    download_uri: Optional[str] = None
+    size_bytes: Optional[int] = None
+    state: Optional[str] = None
+    create_time: Optional[str] = None
+    update_time: Optional[str] = None
 
 # Gemini AI and Supabase setup
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
@@ -325,8 +454,15 @@ if GEMINI_API_KEY and GEMINI_API_KEY != "your_gemini_api_key_here":
         except Exception as e2:
             print(f"Failed to initialize fallback model: {e2}")
             gemini_model = None
+    try:
+        gemini_title_model = genai.GenerativeModel('models/gemini-flash-lite-latest')
+        print("Gemini title model initialized with models/gemini-flash-lite-latest")
+    except Exception as title_error:
+        print(f"Failed to initialize title model: {title_error}")
+        gemini_title_model = gemini_model
 else:
     gemini_model = None
+    gemini_title_model = None
     print("Warning: GEMINI_API_KEY not configured. AI responses will be simulated.")
 
 # Initialize Supabase
@@ -342,18 +478,44 @@ else:
     supabase = None
     print("Warning: Supabase credentials not configured. Conversation history will not be persisted.")
 
+SUPABASE_CONVERSATIONS_ENABLED = supabase is not None
+
+
+def _conversation_store_available() -> bool:
+    return supabase is not None and SUPABASE_CONVERSATIONS_ENABLED
+
+
+LOCAL_CONVERSATION_STORE: Dict[str, List[Dict[str, Any]]] = {}
+LOCAL_CONVERSATION_LOCK = asyncio.Lock()
+
+
+def _disable_conversation_store(reason: str) -> None:
+    global SUPABASE_CONVERSATIONS_ENABLED
+    if SUPABASE_CONVERSATIONS_ENABLED:
+        SUPABASE_CONVERSATIONS_ENABLED = False
+        print(f"Conversation storage disabled: {reason}")
+
+
+def _handle_conversation_store_error(context: str, error: Exception) -> None:
+    code = getattr(error, "code", None)
+    message = getattr(error, "message", None)
+    if isinstance(error, dict):
+        code = error.get("code")
+        message = error.get("message")
+    details = message or str(error)
+    print(f"{context}: {details}")
+    normalized = (details or "").lower()
+    if code == "PGRST205" or "could not find the table" in normalized:
+        _disable_conversation_store("Supabase 'conversations' table missing; suppressing further requests.")
+
+
 # FastAPI app
 app = FastAPI(title="User Profile API with AI Chat", version="1.0.0")
 
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-    ],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -379,6 +541,123 @@ def generate_initials(full_name: str) -> str:
     elif len(parts) == 1:
         return parts[0][:2].upper()
     return "U"
+
+
+async def persist_upload_file(upload_file: UploadFile) -> str:
+    """Persist an uploaded file to a temporary path with size validation."""
+    suffix = ""
+    if upload_file.filename:
+        suffix = Path(upload_file.filename).suffix
+
+    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+    written = 0
+    try:
+        while True:
+            chunk = await upload_file.read(1024 * 1024)
+            if not chunk:
+                break
+            written += len(chunk)
+            if written > MAX_GEMINI_UPLOAD_BYTES:
+                raise HTTPException(
+                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                    detail=f"File exceeds {MAX_GEMINI_UPLOAD_MB} MB limit.",
+                )
+            temp_file.write(chunk)
+        return temp_file.name
+    except Exception:
+        temp_path = temp_file.name
+        temp_file.close()
+        try:
+            os.unlink(temp_path)
+        except OSError:
+            pass
+        raise
+    finally:
+        temp_file.close()
+
+
+def wait_for_gemini_file_ready(file_resource):
+    """Poll the Gemini API until the uploaded file is ACTIVE."""
+    target_name = getattr(file_resource, "name", None)
+    if not target_name:
+        return file_resource
+
+    start_time = time.time()
+    while True:
+        current = genai.get_file(target_name)
+        state = getattr(current, "state", None)
+        state_name = getattr(state, "name", None) if hasattr(state, "name") else state
+        if isinstance(state_name, str):
+            state_name = state_name.upper()
+
+        if state_name == "ACTIVE":
+            return current
+        if state_name == "FAILED":
+            raise RuntimeError("Gemini file processing failed.")
+
+        elapsed = time.time() - start_time
+        if elapsed >= GEMINI_FILE_POLL_TIMEOUT:
+            raise TimeoutError("Timed out waiting for Gemini file to finish processing.")
+        time.sleep(GEMINI_FILE_POLL_INTERVAL)
+
+
+def upload_file_and_wait(path: str, display_name: Optional[str], mime_type: Optional[str]):
+    """Upload a file to Gemini and wait for processing to complete."""
+    upload_kwargs: Dict[str, Any] = {"path": path}
+    if display_name:
+        upload_kwargs["display_name"] = display_name
+    if mime_type:
+        upload_kwargs["mime_type"] = mime_type
+
+    uploaded = genai.upload_file(**upload_kwargs)
+    state = getattr(uploaded, "state", None)
+    state_name = getattr(state, "name", None) if hasattr(state, "name") else state
+    if isinstance(state_name, str) and state_name.upper() == "ACTIVE":
+        return uploaded
+    return wait_for_gemini_file_ready(uploaded)
+
+
+def serialize_gemini_file(file_obj: Any) -> GeminiFile:
+    """Convert a google.generativeai File into a serializable schema."""
+
+    def _to_int(value: Any) -> Optional[int]:
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
+
+    def _to_str(value: Any) -> Optional[str]:
+        if isinstance(value, datetime):
+            return value.isoformat()
+        if value is None:
+            return None
+        return str(value)
+
+    state = getattr(file_obj, "state", None)
+    state_name = getattr(state, "name", None) if hasattr(state, "name") else state
+    if isinstance(state_name, str):
+        state_name = state_name.upper()
+
+    return GeminiFile(
+        name=getattr(file_obj, "name", ""),
+        display_name=getattr(file_obj, "display_name", None),
+        mime_type=getattr(file_obj, "mime_type", None),
+        uri=getattr(file_obj, "uri", None),
+        download_uri=getattr(file_obj, "download_uri", None),
+        size_bytes=_to_int(
+            getattr(file_obj, "size_bytes", None)
+            or getattr(file_obj, "sizeBytes", None)
+        ),
+        state=state_name,
+        create_time=_to_str(
+            getattr(file_obj, "create_time", None)
+            or getattr(file_obj, "createTime", None)
+        ),
+        update_time=_to_str(
+            getattr(file_obj, "update_time", None)
+            or getattr(file_obj, "updateTime", None)
+        ),
+    )
 
 # Streak helper functions
 async def get_or_create_user_streak(user_id: int, db: databases.Database) -> UserStreak:
@@ -449,17 +728,16 @@ async def root():
 # AI Chat helper functions
 async def get_or_create_conversation(conversation_id: Optional[str], user_id: int) -> str:
     """Get existing conversation or create new one"""
-    if conversation_id and supabase:
+    if conversation_id and _conversation_store_available():
         try:
             # Check if conversation exists
             result = supabase.table("conversations").select("id, history").eq("id", conversation_id).execute()
             if result.data:
                 return conversation_id
-        except Exception as e:
-            print(f"Error checking conversation: {e}")
+        except Exception as error:
+            _handle_conversation_store_error("Error checking conversation", error)
 
-    # Create new conversation
-    if supabase:
+    if _conversation_store_available():
         try:
             result = supabase.table("conversations").insert({
                 "title": "New Conversation",
@@ -467,16 +745,22 @@ async def get_or_create_conversation(conversation_id: Optional[str], user_id: in
             }).execute()
             if result.data:
                 return result.data[0]["id"]
-        except Exception as e:
-            print(f"Error creating conversation: {e}")
+        except Exception as error:
+            _handle_conversation_store_error("Error creating conversation", error)
 
     # Fallback: return a mock ID
     import uuid
-    return str(uuid.uuid4())
+    candidate_id = conversation_id or str(uuid.uuid4())
+    async with LOCAL_CONVERSATION_LOCK:
+        LOCAL_CONVERSATION_STORE.setdefault(candidate_id, [])
+    return candidate_id
 
-async def save_conversation_message(conversation_id: str, message: Dict[str, str]):
+async def save_conversation_message(conversation_id: str, message: Dict[str, Any]):
     """Save message to conversation history"""
-    if not supabase:
+    if not _conversation_store_available():
+        async with LOCAL_CONVERSATION_LOCK:
+            history = LOCAL_CONVERSATION_STORE.setdefault(conversation_id, [])
+            history.append(message)
         return
 
     try:
@@ -490,72 +774,429 @@ async def save_conversation_message(conversation_id: str, message: Dict[str, str
             supabase.table("conversations").update({
                 "history": history
             }).eq("id", conversation_id).execute()
-    except Exception as e:
-        print(f"Error saving message: {e}")
+    except Exception as error:
+        _handle_conversation_store_error("Error saving message", error)
+
+
+def _format_structured_ai_reply(user_message: str, thinking: str, ai_reply: str) -> str:
+    """Return a response that matches the user/thinking/ai template expected by the client."""
+    user_section = (user_message or "").strip() or "(no message provided)"
+    thinking_section = (thinking or "").strip() or "Considering how to respond helpfully."
+    ai_section = (ai_reply or "").strip() or "Let me know how I can assist further."
+    return "\n\n".join(
+        [
+            f"user:\n{user_section}",
+            f"thinking (not visible):\n<thinking>{thinking_section}</thinking>",
+            f"ai:\n{ai_section}",
+        ]
+    )
+
+async def generate_chat_title_suggestion(message: str) -> Optional[str]:
+    """Generate a concise chat title using Gemini Flash Lite."""
+    trimmed = (message or "").strip()
+    if not trimmed:
+        return None
+    if not GEMINI_API_KEY or not gemini_title_model:
+        return None
+
+    prompt = (
+        "Generate a concise yet descriptive chat title summarizing the following user query. "
+        "Respond with Title Case, avoid quotes or trailing punctuation, and aim for 4-10 words "
+        "when it helps clarity (never exceed 12 words). Favor specific key concepts over generic greetings.\n\n"
+        f"User query:\n{trimmed}"
+    )
+
+    try:
+        response = gemini_title_model.generate_content(prompt)
+        text_response = getattr(response, "text", None) or ""
+        if not text_response:
+            candidates = getattr(response, "candidates", None) or []
+            for candidate in candidates:
+                content = getattr(candidate, "content", None)
+                parts = getattr(content, "parts", None) if content else None
+                if not parts:
+                    continue
+                text_parts = [
+                    getattr(part, "text", None)
+                    for part in parts
+                    if getattr(part, "text", None)
+                ]
+                if text_parts:
+                    text_response = " ".join(text_parts)
+                    break
+
+        cleaned = " ".join(text_response.strip().split())
+        if not cleaned:
+            return None
+
+        first_line = cleaned.split("\n", 1)[0].strip()
+        normalized = first_line.strip('"').strip("'")
+        normalized = normalized.rstrip(".")
+        if not normalized:
+            return None
+        # Cap overly long results to keep sidebar tidy
+        return normalized[:80].strip()
+    except Exception as error:  # pragma: no cover - best effort logging
+        print(f"Gemini title generation error: {error}")
+        return None
+
+
+def _prepare_gemini_contents(
+    message: str,
+    conversation_history: Optional[List[Dict[str, Any]]] = None,
+    workspace_context: Optional[str] = None,
+    system_prompt: Optional[str] = None,
+    attachments: Optional[List[GeminiAttachment]] = None,
+) -> List[Dict[str, Any]]:
+    """Build the Gemini content payload shared by streaming and non-streaming calls."""
+    history: List[Dict[str, Any]] = list((conversation_history or [])[-10:])
+    include_current = True
+    if history:
+        last_entry = history[-1]
+        if last_entry.get("role") == "user" and last_entry.get("text") == message:
+            include_current = False
+            if attachments and not last_entry.get("attachments"):
+                last_entry["attachments"] = [
+                    attachment.dict(exclude_none=True) for attachment in attachments
+                ]
+    if include_current:
+        history.append(
+            {
+                "role": "user",
+                "text": message,
+                "attachments": [
+                    attachment.dict(exclude_none=True) for attachment in attachments
+                ]
+                if attachments
+                else None,
+            }
+        )
+
+    def build_parts(entry: Dict[str, Any]) -> List[Dict[str, Any]]:
+        parts: List[Dict[str, Any]] = []
+        for attachment in entry.get("attachments") or []:
+            if not attachment:
+                continue
+            if isinstance(attachment, dict):
+                uri = attachment.get("uri")
+                mime_type = attachment.get("mime_type")
+            else:
+                uri = getattr(attachment, "uri", None)
+                mime_type = getattr(attachment, "mime_type", None)
+            if uri and mime_type:
+                parts.append(
+                    {
+                        "file_data": {
+                            "file_uri": uri,
+                            "mime_type": mime_type,
+                        }
+                    }
+                )
+        text = entry.get("text")
+        if text:
+            parts.append({"text": text})
+        return parts
+
+    contents: List[Dict[str, Any]] = []
+    system_parts: List[str] = []
+    if system_prompt:
+        trimmed_prompt = system_prompt.strip()
+        if trimmed_prompt:
+            system_parts.append(trimmed_prompt)
+    if workspace_context:
+        trimmed_context = workspace_context.strip()
+        if trimmed_context:
+            system_parts.append(f"Workspace context:\n{trimmed_context}")
+    if system_parts:
+        contents.append(
+            {
+                "role": "user",
+                "parts": [{"text": "\n\n".join(system_parts)}],
+            }
+        )
+
+    for entry in history:
+        parts = build_parts(entry)
+        if not parts:
+            continue
+        role = "user" if entry.get("role") == "user" else "model"
+        contents.append({"role": role, "parts": parts})
+
+    if not contents:
+        contents.append({"role": "user", "parts": [{"text": message}]})
+
+    return contents
+
+
+def _extract_response_text(candidate: Any) -> str:
+    """Extract text from a Gemini response or chunk."""
+    text_attr = getattr(candidate, "text", None)
+    if text_attr:
+        return text_attr
+    candidates = getattr(candidate, "candidates", None) or []
+    for entry in candidates:
+        content = getattr(entry, "content", None)
+        parts = getattr(content, "parts", None) if content else None
+        if not parts:
+            continue
+        texts = [
+            getattr(part, "text", None)
+            for part in parts
+            if getattr(part, "text", None)
+        ]
+        if texts:
+            return "\n".join(texts)
+    return ""
+
+
+async def stream_ai_response(
+    message: str,
+    conversation_history: Optional[List[Dict[str, Any]]] = None,
+    workspace_context: Optional[str] = None,
+    system_prompt: Optional[str] = None,
+    attachments: Optional[List[GeminiAttachment]] = None,
+) -> AsyncGenerator[Tuple[str, str], None]:
+    """Stream Gemini response chunks, falling back to the legacy flow if streaming fails."""
+    if gemini_model and GEMINI_API_KEY:
+        try:
+            contents = _prepare_gemini_contents(
+                message,
+                conversation_history,
+                workspace_context,
+                system_prompt,
+                attachments,
+            )
+            loop = asyncio.get_running_loop()
+            queue: asyncio.Queue[Tuple[str, Any]] = asyncio.Queue()
+
+            def push(item: Tuple[str, Any]):
+                asyncio.run_coroutine_threadsafe(queue.put(item), loop)
+
+            def worker():
+                try:
+                    response = gemini_model.generate_content(contents, stream=True)
+                    for chunk in response:
+                        delta = _extract_response_text(chunk)
+                        if not delta:
+                            continue
+                        for piece in _chunk_response_text(delta):
+                            if piece:
+                                push(("delta", piece))
+                    try:
+                        response.resolve()
+                    except Exception:
+                        pass
+                    final_text = _extract_response_text(response)
+                    push(("final", final_text or ""))
+                except Exception as worker_error:
+                    push(("error", worker_error))
+                finally:
+                    push(("stop", ""))
+
+            threading.Thread(target=worker, daemon=True).start()
+
+            while True:
+                kind, payload = await queue.get()
+                if kind == "delta":
+                    yield ("delta", payload)
+                elif kind == "final":
+                    yield ("final", payload)
+                elif kind == "error":
+                    raise payload
+                elif kind == "stop":
+                    break
+            return
+        except Exception as streaming_error:
+            print(f"Gemini streaming error: {streaming_error}")
+
+    fallback_response = await generate_ai_response(
+        message,
+        conversation_history=conversation_history,
+        workspace_context=workspace_context,
+        system_prompt=system_prompt,
+        attachments=attachments,
+    )
+    visible = _extract_ai_section(fallback_response)
+    for fragment in _chunk_response_text(visible):
+        if fragment:
+            yield ("delta", fragment)
+    yield ("final", fallback_response)
+
 
 async def generate_ai_response(
     message: str,
-    conversation_history: List[Dict[str, str]] = None,
+    conversation_history: List[Dict[str, Any]] = None,
     workspace_context: Optional[str] = None,
+    system_prompt: Optional[str] = None,
+    attachments: Optional[List[GeminiAttachment]] = None,
 ) -> str:
     """Generate AI response using Gemini or fallback"""
-    if gemini_model:
+    if gemini_model and GEMINI_API_KEY:
         try:
-            # Build conversation context
-            context = ""
-            if workspace_context:
-                context += f"Workspace context:\n{workspace_context.strip()}\n\n"
-            if conversation_history:
-                for msg in conversation_history[-10:]:  # Last 10 messages for context
-                    context += f"{msg['role']}: {msg['text']}\n"
-
-            # Generate response
-            full_prompt = f"{context}\nuser: {message}\nmodel:"
-            response = gemini_model.generate_content(full_prompt)
-            return response.text
+            contents = _prepare_gemini_contents(
+                message,
+                conversation_history,
+                workspace_context,
+                system_prompt,
+                attachments,
+            )
+            response = gemini_model.generate_content(contents)
+            extracted = _extract_response_text(response)
+            if extracted:
+                return extracted
         except Exception as e:
             print(f"Gemini API error: {e}")
 
     # Fallback response
-    responses = [
-        "That's an interesting point! Could you tell me more about what you're thinking?",
-        "I appreciate you sharing that. Let me think about how I can best help you.",
-        "Thanks for your message! What would you like to explore further?",
-        "I understand. How can I assist you with this topic?",
-        "That's a great question! Here's what comes to mind..."
+    fallback_options = [
+        (
+            "Reviewing the latest message to choose a helpful follow-up.",
+            "That's an interesting point! Could you tell me more about what you're thinking?",
+        ),
+        (
+            "Considering next steps the user might appreciate.",
+            "I appreciate you sharing that. Let me think about how I can best help you.",
+        ),
+        (
+            "Looking for the most useful direction to take the conversation.",
+            "Thanks for your message! What would you like to explore further?",
+        ),
+        (
+            "Assessing what resources or clarification might support the user.",
+            "I understand. How can I assist you with this topic?",
+        ),
+        (
+            "Gathering my thoughts to provide a concise suggestion.",
+            "That's a great question! Here's what comes to mind...",
+        ),
     ]
     import random
-    return random.choice(responses)
+    thinking, reply_text = random.choice(fallback_options)
+    return _format_structured_ai_reply(message, thinking, reply_text)
+
+
+AI_SECTION_PATTERN = re.compile(r"ai:\s*(.*)$", re.IGNORECASE | re.DOTALL)
+TOKEN_SPLIT_REGEX = re.compile(r"(\s+)")
+
+
+def _extract_ai_section(structured_text: str) -> str:
+    """Extract the AI-visible section from a structured response."""
+    if not structured_text:
+        return ""
+    match = AI_SECTION_PATTERN.search(structured_text)
+    if match:
+        return match.group(1)
+    return structured_text
+
+
+def _chunk_response_text(text: str, max_chunk_size: int = 48):
+    """Yield small chunks from the response text to simulate token-level streaming."""
+    if not text:
+        return
+
+    for fragment in TOKEN_SPLIT_REGEX.split(text):
+        if not fragment:
+            continue
+        if fragment.isspace():
+            yield fragment
+            continue
+        start = 0
+        while start < len(fragment):
+            yield fragment[start:start + max_chunk_size]
+            start += max_chunk_size
+
+
+def _sse_event(event: str, payload: Dict[str, Any]) -> str:
+    """Serialize an SSE event."""
+    return f"event: {event}\ndata: {json.dumps(payload)}\n\n"
+
+
+# Gemini file endpoints
+@app.post("/api/files/upload", response_model=GeminiFile)
+async def upload_media_file(
+    file: UploadFile = File(...),
+    display_name: Optional[str] = Form(None),
+):
+    """Upload a media file to Gemini and return the processed metadata."""
+    if not GEMINI_API_KEY:
+        raise HTTPException(status_code=400, detail="Gemini API key is not configured.")
+
+    temp_path = await persist_upload_file(file)
+    try:
+        processed_file = await asyncio.to_thread(
+            upload_file_and_wait,
+            temp_path,
+            display_name or file.filename,
+            file.content_type,
+        )
+    except HTTPException:
+        raise
+    except TimeoutError as exc:
+        raise HTTPException(status_code=504, detail=str(exc)) from exc
+    except Exception as exc:  # pragma: no cover - best effort logging
+        raise HTTPException(status_code=500, detail=f"Gemini upload failed: {exc}") from exc
+    finally:
+        try:
+            os.unlink(temp_path)
+        except OSError:
+            pass
+
+    return serialize_gemini_file(processed_file)
+
 
 # AI Chat endpoints
+@app.post("/api/chat/title", response_model=ChatTitleResponse)
+async def create_chat_title(request: ChatTitleRequest):
+    """Generate a chat title suggestion using Gemini Flash Lite."""
+    suggestion: Optional[str] = None
+    try:
+        suggestion = await generate_chat_title_suggestion(request.message)
+    except Exception as error:  # pragma: no cover - best effort logging
+        print(f"Title generation error: {error}")
+    if suggestion:
+        return ChatTitleResponse(title=suggestion)
+    return ChatTitleResponse(title=_fallback_title_from_message(request.message))
+
+
 @app.post("/api/chat", response_model=ChatResponse)
-async def chat_with_ai(request: ChatRequest):
+async def chat_with_ai(request: ChatRequest, db: databases.Database = Depends(get_database)):
     """Send a message to AI and get a response"""
     try:
         # Get or create conversation
         conversation_id = await get_or_create_conversation(request.conversation_id, request.user_id)
 
         # Save user message
-        await save_conversation_message(conversation_id, {
+        user_message_payload: Dict[str, Any] = {
             "role": "user",
             "text": request.message
-        })
+        }
+        if request.attachments:
+            user_message_payload["attachments"] = [
+                attachment.dict(exclude_none=True) for attachment in request.attachments
+            ]
+
+        await save_conversation_message(conversation_id, user_message_payload)
 
         # Get conversation history for context
         conversation_history = []
-        if supabase and conversation_id:
+        if _conversation_store_available() and conversation_id:
             try:
                 result = supabase.table("conversations").select("history").eq("id", conversation_id).execute()
                 if result.data:
                     conversation_history = result.data[0]["history"] or []
-            except Exception as e:
-                print(f"Error getting conversation history: {e}")
+            except Exception as error:
+                _handle_conversation_store_error("Error getting conversation history", error)
+        elif conversation_id:
+            async with LOCAL_CONVERSATION_LOCK:
+                conversation_history = list(LOCAL_CONVERSATION_STORE.get(conversation_id, []))
 
         # Generate AI response
         ai_response = await generate_ai_response(
             request.message,
             conversation_history,
             request.context,
+            request.system_prompt,
+            request.attachments,
         )
 
         # Save AI response
@@ -572,17 +1213,112 @@ async def chat_with_ai(request: ChatRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Chat error: {str(e)}")
 
+
+@app.post("/api/chat/stream")
+async def chat_with_ai_stream(request: ChatRequest, db: databases.Database = Depends(get_database)):
+    """Stream an AI response token-by-token using Server-Sent Events."""
+    try:
+        conversation_id = await get_or_create_conversation(request.conversation_id, request.user_id)
+
+        user_message_payload: Dict[str, Any] = {
+            "role": "user",
+            "text": request.message,
+        }
+        if request.attachments:
+            user_message_payload["attachments"] = [
+                attachment.dict(exclude_none=True) for attachment in request.attachments
+            ]
+
+        await save_conversation_message(conversation_id, user_message_payload)
+
+        conversation_history: List[Dict[str, Any]] = []
+        if _conversation_store_available() and conversation_id:
+            try:
+                result = supabase.table("conversations").select("history").eq("id", conversation_id).execute()
+                if result.data:
+                    conversation_history = result.data[0]["history"] or []
+            except Exception as supabase_error:  # pragma: no cover - logging
+                _handle_conversation_store_error("Error getting conversation history", supabase_error)
+        elif conversation_id:
+            async with LOCAL_CONVERSATION_LOCK:
+                conversation_history = list(LOCAL_CONVERSATION_STORE.get(conversation_id, []))
+
+        async def event_stream() -> AsyncGenerator[str, None]:
+            try:
+                accumulated_visible = ""
+                final_response: Optional[str] = None
+                async for kind, payload in stream_ai_response(
+                    request.message,
+                    conversation_history,
+                    request.context,
+                    request.system_prompt,
+                    request.attachments,
+                ):
+                    if kind == "delta":
+                        if not payload:
+                            continue
+                        accumulated_visible += payload
+                        yield _sse_event("token", {"delta": payload})
+                        if STREAMING_TOKEN_DELAY:
+                            await asyncio.sleep(STREAMING_TOKEN_DELAY)
+                        else:
+                            await asyncio.sleep(0)
+                    elif kind == "final":
+                        if payload:
+                            final_response = payload
+
+                if final_response is None:
+                    final_response = accumulated_visible
+
+                await save_conversation_message(
+                    conversation_id,
+                    {
+                        "role": "model",
+                        "text": final_response,
+                    },
+                )
+
+                await update_user_streak(request.user_id, db)
+
+                yield _sse_event(
+                    "end",
+                    {
+                        "conversation_id": conversation_id,
+                        "response": final_response,
+                    },
+                )
+            except Exception as stream_error:  # pragma: no cover - best effort logging
+                yield _sse_event("error", {"message": str(stream_error)})
+
+        headers = {
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        }
+        return StreamingResponse(event_stream(), media_type="text/event-stream", headers=headers)
+    except Exception as error:
+        async def error_stream() -> AsyncGenerator[str, None]:
+            yield _sse_event("error", {"message": str(error)})
+
+        return StreamingResponse(error_stream(), status_code=500, media_type="text/event-stream")
+
 @app.get("/api/conversation/{conversation_id}")
 async def get_conversation(conversation_id: str):
     """Get conversation history"""
     try:
-        if not supabase:
-            return []
+        if not _conversation_store_available():
+            async with LOCAL_CONVERSATION_LOCK:
+                return list(LOCAL_CONVERSATION_STORE.get(conversation_id, []))
 
-        result = supabase.table("conversations").select("history").eq("id", conversation_id).execute()
-        if result.data:
-            return result.data[0]["history"] or []
-        return []
+        try:
+            result = supabase.table("conversations").select("history").eq("id", conversation_id).execute()
+            if result.data:
+                return result.data[0]["history"] or []
+            return []
+        except Exception as supabase_error:
+            # Handle missing table gracefully
+            _handle_conversation_store_error("Warning: Conversations table not found or inaccessible", supabase_error)
+            return []
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching conversation: {str(e)}")
@@ -591,20 +1327,27 @@ async def get_conversation(conversation_id: str):
 async def create_conversation(request: ChatSessionCreate):
     """Create a new conversation"""
     try:
-        if not supabase:
+        if not _conversation_store_available():
             # Fallback: return mock conversation
             import uuid
             return {"id": str(uuid.uuid4()), "title": request.title, "history": []}
 
-        result = supabase.table("conversations").insert({
-            "title": request.title,
-            "history": []
-        }).execute()
+        try:
+            result = supabase.table("conversations").insert({
+                "title": request.title,
+                "history": []
+            }).execute()
 
-        if result.data:
-            return result.data[0]
-        else:
-            raise HTTPException(status_code=500, detail="Failed to create conversation")
+            if result.data:
+                return result.data[0]
+            else:
+                raise HTTPException(status_code=500, detail="Failed to create conversation")
+        except Exception as supabase_error:
+            # Handle missing table gracefully
+            _handle_conversation_store_error("Warning: Conversations table not found or inaccessible", supabase_error)
+            # Fallback: return mock conversation
+            import uuid
+            return {"id": str(uuid.uuid4()), "title": request.title, "history": []}
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error creating conversation: {str(e)}")
@@ -721,67 +1464,9 @@ async def create_user(user: UserCreate, db: databases.Database = Depends(get_dat
             )
         )
 
-    # Seed default plans
-    default_plans = [
-        {
-            "label": "Restore proactive cadence for the builder cohort.",
-            "completed": False,
-        },
-        {
-            "label": "Draft mitigation follow-up checklist.",
-            "completed": False,
-        },
-        {
-            "label": "Lock launch checklist scope for the revamp.",
-            "completed": True,
-        },
-        {
-            "label": "Draft async sync for builder cohort.",
-            "completed": False,
-        },
-    ]
+    # Plans: no default placeholder data - users create their own
 
-    for plan in default_plans:
-        await db.execute(
-            plans.insert().values(
-                user_id=user_id,
-                label=plan["label"],
-                completed=plan["completed"],
-                created_at=now,
-                updated_at=now,
-            )
-        )
-
-    # Seed default habits
-    default_habits = [
-        {
-            "label": "Coaching loop deferred until services stabilize.",
-            "streak_label": "4 days",
-            "previous_label": "Prev: Yesterday — 3 days",
-        },
-        {
-            "label": "No YouTube.",
-            "streak_label": "6 days",
-            "previous_label": "Prev: Yesterday — 5 days",
-        },
-        {
-            "label": "Movement break.",
-            "streak_label": "2 days",
-            "previous_label": "Prev: Yesterday — 1 day",
-        },
-    ]
-
-    for habit in default_habits:
-        await db.execute(
-            habits.insert().values(
-                user_id=user_id,
-                label=habit["label"],
-                streak_label=habit["streak_label"],
-                previous_label=habit["previous_label"],
-                created_at=now,
-                updated_at=now,
-            )
-        )
+    # Habits: no default placeholder data - users create their own
 
     return {
         **user.dict(),
@@ -932,6 +1617,24 @@ async def update_plan(user_id: int, plan_id: int, plan_update: PlanUpdate, db: d
     query = plans.select().where(plans.c.id == plan_id)
     return await db.fetch_one(query)
 
+@app.delete("/users/{user_id}/plans/{plan_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_plan(user_id: int, plan_id: int, db: databases.Database = Depends(get_database)):
+    # Check if plan exists and belongs to user
+    query = plans.select().where(
+        (plans.c.id == plan_id) & (plans.c.user_id == user_id)
+    )
+    existing = await db.fetch_one(query)
+
+    if not existing:
+        raise HTTPException(status_code=404, detail="Plan not found")
+
+    # Delete the plan
+    delete_query = plans.delete().where(
+        (plans.c.id == plan_id) & (plans.c.user_id == user_id)
+    )
+    await db.execute(delete_query)
+    return None
+
 @app.get("/users/{user_id}/habits", response_model=List[Habit])
 async def get_user_habits(user_id: int, db: databases.Database = Depends(get_database)):
     query = habits.select().where(habits.c.user_id == user_id).order_by(habits.c.created_at)
@@ -976,6 +1679,24 @@ async def update_habit(user_id: int, habit_id: int, habit_update: HabitUpdate, d
     )
     query = habits.select().where(habits.c.id == habit_id)
     return await db.fetch_one(query)
+
+@app.delete("/users/{user_id}/habits/{habit_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_habit(user_id: int, habit_id: int, db: databases.Database = Depends(get_database)):
+    # Check if habit exists and belongs to user
+    query = habits.select().where(
+        (habits.c.id == habit_id) & (habits.c.user_id == user_id)
+    )
+    existing = await db.fetch_one(query)
+
+    if not existing:
+        raise HTTPException(status_code=404, detail="Habit not found")
+
+    # Delete the habit
+    delete_query = habits.delete().where(
+        (habits.c.id == habit_id) & (habits.c.user_id == user_id)
+    )
+    await db.execute(delete_query)
+    return None
 
 @app.get("/users/{user_id}/streak", response_model=UserStreak)
 async def get_user_streak(user_id: int, db: databases.Database = Depends(get_database)):
@@ -1144,6 +1865,84 @@ async def get_proactivity_streak(user_id: int, db: databases.Database = Depends(
         current_date = row_date
 
     return {"current_streak": streak, "best_streak": streak}
+
+# Google Calendar endpoints
+@app.post("/users/{user_id}/google-calendar/auth", response_model=GoogleAuthResponse)
+async def google_calendar_auth(user_id: int, request: GoogleAuthRequest, db: databases.Database = Depends(get_database)):
+    """Generate Google Calendar authorization URL."""
+    return get_google_auth_url(user_id)
+
+@app.post("/users/{user_id}/google-calendar/callback", response_model=GoogleCalendarCredentials)
+async def google_calendar_callback(user_id: int, code: str, state: str, db: databases.Database = Depends(get_database)):
+    """Handle Google Calendar OAuth callback."""
+    try:
+        credentials = await exchange_code_for_tokens(code, state)
+        return credentials
+    except HTTPException as e:
+        raise e
+
+@app.get("/users/{user_id}/google-calendars", response_model=List[GoogleCalendarInfo])
+async def get_google_calendars(user_id: int, db: databases.Database = Depends(get_database)):
+    """Get user's Google Calendars."""
+    try:
+        # Get user's Google Calendar credentials from database
+        query = google_calendar_credentials.select().where(google_calendar_credentials.c.user_id == user_id)
+        stored_creds = await db.fetch_one(query)
+
+        if not stored_creds:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Google Calendar not connected. Please authorize first."
+            )
+
+        # Create Google Calendar service
+        service = await get_google_calendar_service(stored_creds)
+        calendars = await list_google_calendars(service)
+        return calendars
+    except HTTPException as e:
+        raise e
+
+@app.get("/users/{user_id}/google-calendars/{calendar_id}/events", response_model=List[GoogleCalendarEvent])
+async def get_google_calendar_events(user_id: int, calendar_id: str, time_min: Optional[datetime] = None, time_max: Optional[datetime] = None, db: databases.Database = Depends(get_database)):
+    """Get events from a Google Calendar."""
+    try:
+        # Get user's Google Calendar credentials from database
+        query = google_calendar_credentials.select().where(google_calendar_credentials.c.user_id == user_id)
+        stored_creds = await db.fetch_one(query)
+
+        if not stored_creds:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Google Calendar not connected. Please authorize first."
+            )
+
+        # Create Google Calendar service
+        service = await get_google_calendar_service(stored_creds)
+        events = await list_google_events(service, calendar_id, time_min, time_max)
+        return events
+    except HTTPException as e:
+        raise e
+
+@app.post("/users/{user_id}/google-calendars/{calendar_id}/events", response_model=GoogleCalendarEvent)
+async def create_google_calendar_event(user_id: int, calendar_id: str, event_data: dict, db: databases.Database = Depends(get_database)):
+    """Create a new event in Google Calendar."""
+    try:
+        # Get user's Google Calendar credentials from database
+        query = google_calendar_credentials.select().where(google_calendar_credentials.c.user_id == user_id)
+        stored_creds = await db.fetch_one(query)
+
+        if not stored_creds:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Google Calendar not connected. Please authorize first."
+            )
+
+        # Create Google Calendar service
+        service = await get_google_calendar_service(stored_creds)
+        event = await create_google_event(service, calendar_id, event_data)
+        return event
+    except HTTPException as e:
+        raise e
 
 if __name__ == "__main__":
     import uvicorn

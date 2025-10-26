@@ -4,15 +4,12 @@ import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "re
 import {
   Loader2,
   RefreshCw,
-  Volume2,
   Copy,
-  Share2,
-  ThumbsDown,
-  ThumbsUp,
   Image as ImageIcon,
   FileText,
   X,
   CheckCircle2,
+  Trash2,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -24,6 +21,8 @@ import {
   SYSTEM_PROMPT,
   useChatStore,
   buildAssistantReply,
+  shouldIncludeWorkspaceContext,
+  normalizeAssistantContent,
   type ChatMessage as ChatSessionMessage,
   type ChatRole,
 } from "./ChatProvider";
@@ -109,7 +108,8 @@ const getAssistantDisplayText = (content?: string | null) =>
   parseStructuredAssistantMessage(content).ai;
 
 export function GrayChatView({ sessionId }: GrayChatViewProps) {
-  const { getSession, appendMessage, updateSession, workspaceContext } = useChatStore();
+  const { getSession, appendMessage, updateMessage, deleteMessage, updateSession, workspaceContext } =
+    useChatStore();
   const session = sessionId ? getSession(sessionId) : undefined;
   const { user } = useUser();
   const [draft, setDraft] = useState("");
@@ -120,11 +120,13 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
   const attachmentsRef = useRef<ComposerAttachment[]>([]);
   const [displayedAssistantContent, setDisplayedAssistantContent] = useState<Record<string, string>>({});
   const processedAssistantMessagesRef = useRef<Set<string>>(new Set());
+  const simulatedMessagesRef = useRef<Set<string>>(new Set());
   const hydrationCompleteRef = useRef(false);
   const animationTimersRef = useRef<Map<string, number>>(new Map());
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const copyResetTimeoutRef = useRef<number | null>(null);
   const [regeneratingMessageId, setRegeneratingMessageId] = useState<string | null>(null);
+  const [activeStreamingMessageId, setActiveStreamingMessageId] = useState<string | null>(null);
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [composerAttachments, setComposerAttachments] = useState<ComposerAttachment[]>([]);
   const revokePreviewUrl = useCallback((url?: string) => {
@@ -286,18 +288,37 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
     processedAssistantMessagesRef.current.clear();
     hydrationCompleteRef.current = false;
     setDisplayedAssistantContent({});
+    setActiveStreamingMessageId(null);
   }, [session?.id]);
 
   useEffect(() => {
-    if (!isHistoryLoading) {
+    if (isHistoryLoading) {
+      animationTimersRef.current.forEach((timer) => window.clearInterval(timer));
+      animationTimersRef.current.clear();
+      processedAssistantMessagesRef.current.clear();
+      hydrationCompleteRef.current = false;
+      setDisplayedAssistantContent({});
+      setActiveStreamingMessageId(null);
       return;
     }
-    animationTimersRef.current.forEach((timer) => window.clearInterval(timer));
-    animationTimersRef.current.clear();
+
+    if (!session || hydrationCompleteRef.current) {
+      return;
+    }
+
     processedAssistantMessagesRef.current.clear();
-    hydrationCompleteRef.current = false;
-    setDisplayedAssistantContent({});
-  }, [isHistoryLoading]);
+    const initialAssistantContent: Record<string, string> = {};
+    session.messages.forEach((message) => {
+      if (message.role !== "assistant") {
+        return;
+      }
+      processedAssistantMessagesRef.current.add(message.id);
+      initialAssistantContent[message.id] = getAssistantDisplayText(message.content);
+    });
+
+    setDisplayedAssistantContent(initialAssistantContent);
+    hydrationCompleteRef.current = true;
+  }, [isHistoryLoading, session]);
 
   useEffect(
     () => () => {
@@ -335,6 +356,21 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
     clearComposerAttachments();
   }, [clearComposerAttachments, session?.id]);
 
+  const simulateMessageStream = useCallback(async (messageId: string | null, finalText: string) => {
+    if (!messageId) {
+      return;
+    }
+    simulatedMessagesRef.current.add(messageId);
+    try {
+      setDisplayedAssistantContent((prev) => ({
+        ...prev,
+        [messageId]: finalText,
+      }));
+    } finally {
+      simulatedMessagesRef.current.delete(messageId);
+    }
+  }, []);
+
   useEffect(() => {
     if (!session) {
       return;
@@ -358,9 +394,12 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
       return;
     }
 
-    const timersToCleanup: number[] = [];
     messages.forEach((message) => {
       if (message.role !== "assistant") {
+        return;
+      }
+
+      if (simulatedMessagesRef.current.has(message.id)) {
         return;
       }
 
@@ -381,36 +420,11 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
 
       processedAssistantMessagesRef.current.add(message.id);
       const full = getAssistantDisplayText(message.content);
-      if (!full) {
-        setDisplayedAssistantContent((prev) => ({
-          ...prev,
-          [message.id]: "",
-        }));
-        return;
-      }
-
-      let index = 0;
-      const total = full.length;
-      const step = Math.max(1, Math.ceil(total / 60));
-      const timer = window.setInterval(() => {
-        index = Math.min(index + step, total);
-        const nextSlice = full.slice(0, index);
-        setDisplayedAssistantContent((prev) => ({
-          ...prev,
-          [message.id]: nextSlice,
-        }));
-        if (index >= total) {
-          window.clearInterval(timer);
-          animationTimersRef.current.delete(message.id);
-        }
-      }, 18);
-      animationTimersRef.current.set(message.id, timer);
-      timersToCleanup.push(timer);
+      setDisplayedAssistantContent((prev) => ({
+        ...prev,
+        [message.id]: full,
+      }));
     });
-
-    return () => {
-      timersToCleanup.forEach((timer) => window.clearInterval(timer));
-    };
   }, [messages, session]);
 
   useEffect(() => {
@@ -480,6 +494,215 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
     };
   }, [activeConversationId, activeSessionId, updateSession]);
 
+  const streamAssistantReply = useCallback(
+    async (
+      targetSessionId: string,
+      prompt: string,
+      conversationId: string | null,
+      attachments?: ChatAttachment[]
+    ) => {
+      if (!user) {
+        const fallback = buildAssistantReply(prompt);
+        const assistantMessage = appendMessage(targetSessionId, "assistant", fallback);
+        updateSession(targetSessionId, { isResponding: false });
+        if (assistantMessage?.id) {
+          setDisplayedAssistantContent((prev) => ({
+            ...prev,
+            [assistantMessage.id]: getAssistantDisplayText(fallback),
+          }));
+        }
+        return fallback;
+      }
+
+      updateSession(targetSessionId, { isResponding: true });
+      const useWorkspaceContext = shouldIncludeWorkspaceContext(prompt, workspaceContext);
+      const contextPayload = useWorkspaceContext ? workspaceContext ?? undefined : undefined;
+      let assistantMessageId: string | null = null;
+      let streamingMessageId: string | null = null;
+      let accumulated = "";
+      let streamedConversationId: string | null = conversationId;
+      let didReceiveToken = false;
+      try {
+        for await (const event of apiService.sendMessageStream({
+          message: prompt,
+          conversation_id: conversationId ?? undefined,
+          system_prompt: SYSTEM_PROMPT,
+          user_id: user.id,
+          context: contextPayload,
+          attachments: attachments && attachments.length ? attachments : undefined,
+        })) {
+          if (event.type === "token") {
+            didReceiveToken = true;
+            accumulated += event.delta;
+            if (!assistantMessageId) {
+              const assistantMessage = appendMessage(targetSessionId, "assistant", accumulated);
+              assistantMessageId = assistantMessage?.id ?? null;
+              streamingMessageId = assistantMessageId;
+              if (streamingMessageId) {
+                setActiveStreamingMessageId(streamingMessageId);
+              }
+            } else if (assistantMessageId) {
+              updateMessage(targetSessionId, assistantMessageId, { content: accumulated });
+            }
+            if (assistantMessageId) {
+              setDisplayedAssistantContent((prev) => ({
+                ...prev,
+                [assistantMessageId]: accumulated,
+              }));
+              updateSession(targetSessionId, { isResponding: true });
+            }
+            continue;
+          }
+
+          if (event.type === "end") {
+            streamedConversationId = event.conversationId ?? streamedConversationId;
+            const finalResponse = normalizeAssistantContent(event.response ?? accumulated, prompt);
+            accumulated = finalResponse;
+            if (!assistantMessageId) {
+              const assistantMessage = appendMessage(targetSessionId, "assistant", finalResponse);
+              assistantMessageId = assistantMessage?.id ?? null;
+              streamingMessageId = assistantMessageId;
+              if (streamingMessageId) {
+                setActiveStreamingMessageId(streamingMessageId);
+              }
+            } else if (assistantMessageId) {
+              updateMessage(targetSessionId, assistantMessageId, { content: finalResponse });
+            }
+            if (assistantMessageId) {
+              const finalDisplay = getAssistantDisplayText(finalResponse);
+              if (!didReceiveToken && finalDisplay) {
+                await simulateMessageStream(assistantMessageId, finalDisplay);
+              } else {
+                setDisplayedAssistantContent((prev) => ({
+                  ...prev,
+                  [assistantMessageId]: finalDisplay,
+                }));
+              }
+            }
+            updateSession(targetSessionId, {
+              conversationId: streamedConversationId ?? undefined,
+              isResponding: false,
+            });
+            return finalResponse;
+          }
+
+          if (event.type === "error") {
+            throw new Error(event.message);
+          }
+        }
+
+        if (!assistantMessageId) {
+          const normalized = normalizeAssistantContent(accumulated, prompt);
+          const assistantMessage = appendMessage(targetSessionId, "assistant", normalized);
+          assistantMessageId = assistantMessage?.id ?? null;
+          accumulated = normalized;
+          if (!didReceiveToken && assistantMessageId && !streamingMessageId) {
+            streamingMessageId = assistantMessageId;
+            setActiveStreamingMessageId(assistantMessageId);
+          }
+        }
+        if (assistantMessageId) {
+          const displayText = getAssistantDisplayText(accumulated);
+          if (!didReceiveToken && displayText) {
+            await simulateMessageStream(assistantMessageId, displayText);
+          } else {
+            setDisplayedAssistantContent((prev) => ({
+              ...prev,
+              [assistantMessageId]: displayText,
+            }));
+          }
+        }
+
+        updateSession(targetSessionId, {
+          conversationId: streamedConversationId ?? undefined,
+          isResponding: false,
+        });
+        return accumulated;
+      } catch (error) {
+        console.error("Failed to stream assistant reply:", error);
+        try {
+          const fallbackResponse = await apiService.sendMessage({
+            message: prompt,
+            conversation_id: conversationId ?? undefined,
+            system_prompt: SYSTEM_PROMPT,
+            user_id: user.id,
+            context: contextPayload,
+            attachments: attachments && attachments.length ? attachments : undefined,
+          });
+          streamedConversationId = fallbackResponse.conversation_id ?? streamedConversationId;
+          const finalResponse = normalizeAssistantContent(fallbackResponse.response, prompt);
+          if (assistantMessageId) {
+            updateMessage(targetSessionId, assistantMessageId, { content: finalResponse });
+          } else {
+            const assistantMessage = appendMessage(targetSessionId, "assistant", finalResponse);
+            assistantMessageId = assistantMessage?.id ?? null;
+            if (!didReceiveToken && assistantMessageId && !streamingMessageId) {
+              streamingMessageId = assistantMessageId;
+              setActiveStreamingMessageId(assistantMessageId);
+            }
+          }
+          if (assistantMessageId) {
+            const displayText = getAssistantDisplayText(finalResponse);
+            if (!didReceiveToken && displayText) {
+              await simulateMessageStream(assistantMessageId, displayText);
+            } else {
+              setDisplayedAssistantContent((prev) => ({
+                ...prev,
+                [assistantMessageId]: displayText,
+              }));
+            }
+          }
+          updateSession(targetSessionId, {
+            conversationId: streamedConversationId ?? undefined,
+            isResponding: false,
+          });
+          return finalResponse;
+        } catch (fallbackError) {
+          console.error("Fallback chat request failed:", fallbackError);
+          const fallback = buildAssistantReply(prompt);
+          if (assistantMessageId) {
+            updateMessage(targetSessionId, assistantMessageId, { content: fallback });
+          } else {
+            const assistantMessage = appendMessage(targetSessionId, "assistant", fallback);
+            assistantMessageId = assistantMessage?.id ?? null;
+            if (!didReceiveToken && assistantMessageId && !streamingMessageId) {
+              streamingMessageId = assistantMessageId;
+              setActiveStreamingMessageId(assistantMessageId);
+            }
+          }
+          if (assistantMessageId) {
+            const displayText = getAssistantDisplayText(fallback);
+            if (!didReceiveToken && displayText) {
+              await simulateMessageStream(assistantMessageId, displayText);
+            } else {
+              setDisplayedAssistantContent((prev) => ({
+                ...prev,
+                [assistantMessageId]: displayText,
+              }));
+            }
+          }
+          updateSession(targetSessionId, { isResponding: false });
+          return fallback;
+        }
+      } finally {
+        if (streamingMessageId) {
+          setActiveStreamingMessageId((previous) =>
+            previous === streamingMessageId ? null : previous
+          );
+        }
+      }
+    },
+    [
+      appendMessage,
+      shouldIncludeWorkspaceContext,
+      simulateMessageStream,
+      updateMessage,
+      updateSession,
+      user,
+      workspaceContext,
+    ]
+  );
+
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!session) {
@@ -507,24 +730,12 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
     }
 
     if (user) {
-      const conversationId = session.conversationId;
-      (async () => {
-        try {
-          const response = await apiService.sendMessage({
-            message: content,
-            conversation_id: conversationId,
-            system_prompt: SYSTEM_PROMPT,
-            user_id: user.id,
-            context: workspaceContext ?? undefined,
-            attachments: attachmentPayload.length ? attachmentPayload : undefined,
-          });
-          updateSession(session.id, { conversationId: response.conversation_id });
-          appendMessage(session.id, "assistant", response.response);
-        } catch (error) {
-          console.error("Failed to send message:", error);
-          updateSession(session.id, { isResponding: false });
-        }
-      })();
+      void streamAssistantReply(
+        session.id,
+        content,
+        session.conversationId ?? null,
+        attachmentPayload.length ? attachmentPayload : undefined
+      );
       return;
     }
 
@@ -602,23 +813,35 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
     []
   );
 
-  const handleShareMessage = useCallback(
-    async (messageId: string, text: string) => {
-      const trimmed = text.trim();
-      if (!trimmed) {
+  const handleDeleteMessage = useCallback(
+    (messageId: string) => {
+      if (!session) {
         return;
       }
-      if (typeof navigator !== "undefined" && navigator.share) {
-        try {
-          await navigator.share({ text: trimmed });
-          return;
-        } catch (error) {
-          console.warn("Sharing failed, falling back to copy:", error);
-        }
+      const timer = animationTimersRef.current.get(messageId);
+      if (timer) {
+        window.clearInterval(timer);
+        animationTimersRef.current.delete(messageId);
       }
-      await handleCopyMessage(messageId, trimmed);
+      processedAssistantMessagesRef.current.delete(messageId);
+      simulatedMessagesRef.current.delete(messageId);
+      if (activeStreamingMessageId === messageId) {
+        setActiveStreamingMessageId(null);
+      }
+      setDisplayedAssistantContent((prev) => {
+        if (!(messageId in prev)) {
+          return prev;
+        }
+        const next = { ...prev };
+        delete next[messageId];
+        return next;
+      });
+      if (copiedMessageId === messageId) {
+        setCopiedMessageId(null);
+      }
+      deleteMessage(session.id, messageId);
     },
-    [handleCopyMessage]
+    [activeStreamingMessageId, copiedMessageId, deleteMessage, session]
   );
 
   const handleRegenerate = useCallback(
@@ -686,24 +909,13 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
       );
 
       if (user) {
-        (async () => {
+        void (async () => {
           try {
-            const response = await apiService.sendMessage({
-              message: userMessage.content,
-              conversation_id: session.conversationId,
-              system_prompt: SYSTEM_PROMPT,
-              user_id: user.id,
-              context: workspaceContext ?? undefined,
-              attachments: attachments.length ? attachments : undefined,
-            });
-            updateSession(session.id, { conversationId: response.conversation_id });
-            appendMessage(session.id, "assistant", response.response);
-          } catch (error) {
-            console.error("Failed to regenerate response:", error);
-            appendMessage(
+            await streamAssistantReply(
               session.id,
-              "assistant",
-              assistantMessage.content || buildAssistantReply(userMessage.content)
+              userMessage.content,
+              session.conversationId ?? null,
+              attachments.length ? attachments : undefined
             );
           } finally {
             setRegeneratingMessageId(null);
@@ -723,6 +935,7 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
       messages,
       session,
       updateSession,
+      streamAssistantReply,
       user,
       workspaceContext,
     ]
@@ -761,17 +974,6 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
       <div className={styles.chatViewport}>
         <div className={styles.chatFade} aria-hidden="true" />
         <div className={styles.chatMessages}>
-          {isHistoryLoading && (
-            <div className={styles.chatMessage} data-role="assistant">
-              <div className={styles.chatBubble}>
-                <div className={styles.chatTyping}>
-                  <span />
-                  <span />
-                  <span />
-                </div>
-                </div>
-              </div>
-            )}
           {messages.map((message, messageIndex) => {
             const isUser = message.role === "user";
             const isAssistant = !isUser;
@@ -779,13 +981,17 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
             const rawContent = message.content ?? "";
             const assistantSections = isAssistant ? parseStructuredAssistantMessage(rawContent) : null;
             const fullText = isAssistant ? assistantSections?.ai ?? rawContent : rawContent;
-            const animatedText = isAssistant
-              ? displayedAssistantContent[message.id] ?? ""
-              : fullText;
+            const assistantDisplayEntry = isAssistant ? displayedAssistantContent[message.id] : undefined;
+            const animatedText = isAssistant ? assistantDisplayEntry ?? "" : fullText;
+            const isStreamingMessage = isAssistant && message.id === activeStreamingMessageId;
             const isAnimating =
-              isAssistant && fullText.length > 0 && animatedText.length < fullText.length;
+              isAssistant &&
+              assistantDisplayEntry !== undefined &&
+              (isStreamingMessage || (fullText.length > 0 && animatedText.length < fullText.length));
             const hasTextContent = isAssistant
-              ? fullText.trim().length > 0
+              ? isStreamingMessage
+                ? true
+                : fullText.trim().length > 0
               : Boolean(animatedText.trim());
             const messageAttachments = message.attachments ?? [];
             const hasMessageAttachments = messageAttachments.length > 0;
@@ -794,13 +1000,15 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
               : null;
             const isLatestAssistantMessage = isAssistant && message.id === latestAssistantMessageId;
             const isRegenerating = regeneratingMessageId === message.id;
+            const bubbleClassName = isUser ? styles.chatBubbleUser : styles.chatBubbleAssistant;
             return (
               <div
                 key={message.id}
                 className={styles.chatMessage}
                 data-role={isUser ? "user" : "assistant"}
+                data-streaming={isStreamingMessage ? "true" : undefined}
               >
-                <div className={styles.chatBubble}>
+                <div className={`${styles.chatBubble} ${bubbleClassName}`}>
                   {hasTextContent && (
                     <div
                       className={
@@ -815,8 +1023,8 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
                         </>
                       ) : (
                         <ReactMarkdown
-                          remarkPlugins={[remarkGfm, remarkMath]}
-                          rehypePlugins={[rehypeKatex]}
+                          remarkPlugins={[remarkMath, remarkGfm]}
+                          rehypePlugins={[[rehypeKatex, { strict: false }]]}
                         >
                           {isAssistant ? fullText : animatedText}
                         </ReactMarkdown>
@@ -863,9 +1071,6 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
                       >
                         {isRegenerating ? <Loader2 size={15} /> : <RefreshCw size={15} />}
                       </button>
-                      <button type="button" aria-label="Listen to response">
-                        <Volume2 size={15} />
-                      </button>
                       <button
                         type="button"
                         aria-label="Copy response"
@@ -876,17 +1081,11 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
                       </button>
                       <button
                         type="button"
-                        aria-label="Share response"
-                        onClick={() => handleShareMessage(message.id, fullText)}
-                        disabled={!fullText.trim()}
+                        aria-label="Delete message"
+                        onClick={() => handleDeleteMessage(message.id)}
+                        data-variant="danger"
                       >
-                        <Share2 size={15} />
-                      </button>
-                      <button type="button" aria-label="Thumbs up">
-                        <ThumbsUp size={15} />
-                      </button>
-                      <button type="button" aria-label="Thumbs down">
-                        <ThumbsDown size={15} />
+                        <Trash2 size={15} />
                       </button>
                       <span aria-hidden="true">
                         {responseDurationLabel ?? "—"}
@@ -908,7 +1107,7 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
           })}
           {isResponding && (
             <div className={styles.chatMessage} data-role="assistant">
-              <div className={styles.chatBubble}>
+              <div className={`${styles.chatBubble} ${styles.chatBubbleAssistant}`}>
                 <div className={styles.chatTyping}>
                   <span />
                   <span />
