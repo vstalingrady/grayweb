@@ -9,9 +9,9 @@ import calendarStyles from "@/components/calendar/GrayDashboardCalendar.module.c
 
 const CALENDAR_PANEL_MAX_HEIGHT = "min(900px, calc(100vh - 150px))";
 const CALENDAR_PANEL_HOUR_HEIGHT = 62;
-const DASHBOARD_PANEL_SIZING_STYLE: CSSProperties & { [key: string]: string | number } = {
+const DASHBOARD_PANEL_SIZING_STYLE = {
   "--calendar-max-height": CALENDAR_PANEL_MAX_HEIGHT,
-};
+} as CSSProperties & { [key: string]: string | number };
 
 const startOfWeek = (value: Date) => {
   const next = new Date(value);
