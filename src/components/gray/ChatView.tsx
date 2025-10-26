@@ -535,9 +535,9 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
           if (event.type === "token") {
             didReceiveToken = true;
             accumulated += event.delta;
-            if (!assistantMessageId) {
+              if (!assistantMessageId) {
               const assistantMessage = appendMessage(targetSessionId, "assistant", accumulated);
-              assistantMessageId = assistantMessage?.id ?? null;
+              assistantMessageId = (assistantMessage as { id: string } | null)?.id ?? null;
               streamingMessageId = assistantMessageId;
               if (streamingMessageId) {
                 setActiveStreamingMessageId(streamingMessageId);
@@ -548,7 +548,7 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
             if (assistantMessageId) {
               setDisplayedAssistantContent((prev) => ({
                 ...prev,
-                [assistantMessageId]: accumulated,
+                [assistantMessageId as string]: accumulated,
               }));
               updateSession(targetSessionId, { isResponding: true });
             }
@@ -561,7 +561,7 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
             accumulated = finalResponse;
             if (!assistantMessageId) {
               const assistantMessage = appendMessage(targetSessionId, "assistant", finalResponse);
-              assistantMessageId = assistantMessage?.id ?? null;
+              assistantMessageId = (assistantMessage as { id: string } | null)?.id ?? null;
               streamingMessageId = assistantMessageId;
               if (streamingMessageId) {
                 setActiveStreamingMessageId(streamingMessageId);
@@ -576,7 +576,7 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
               } else {
                 setDisplayedAssistantContent((prev) => ({
                   ...prev,
-                  [assistantMessageId]: finalDisplay,
+                  [assistantMessageId as string]: finalDisplay,
                 }));
               }
             }
@@ -595,7 +595,7 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
         if (!assistantMessageId) {
           const normalized = normalizeAssistantContent(accumulated, prompt);
           const assistantMessage = appendMessage(targetSessionId, "assistant", normalized);
-          assistantMessageId = assistantMessage?.id ?? null;
+          assistantMessageId = (assistantMessage as { id: string } | null)?.id ?? null;
           accumulated = normalized;
           if (!didReceiveToken && assistantMessageId && !streamingMessageId) {
             streamingMessageId = assistantMessageId;
@@ -609,7 +609,7 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
           } else {
             setDisplayedAssistantContent((prev) => ({
               ...prev,
-              [assistantMessageId]: displayText,
+              [assistantMessageId as string]: displayText,
             }));
           }
         }
