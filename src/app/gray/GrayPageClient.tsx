@@ -1288,7 +1288,7 @@ export default function GrayPageClient({
   activeChatId = null,
 }: GrayPageClientProps) {
   return (
-    <UserProvider userEmail={viewerEmail}>
+    <UserProvider userEmail={viewerEmail ?? undefined}>
       <ChatProvider>
         <GrayPageClientInner
           key={variant === "chat" ? `chat-${activeChatId ?? "new"}` : "gray-root"}
