@@ -468,7 +468,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
               accumulated += event.delta;
               if (!assistantMessageId) {
                 const assistantMessage = appendMessage(baseSession.id, "assistant", accumulated);
-                assistantMessageId = assistantMessage?.id ?? null;
+                assistantMessageId = (assistantMessage as ChatMessage | null)?.id ?? null;
                 updateSession(baseSession.id, { isResponding: true });
               } else if (assistantMessageId) {
                 updateMessage(baseSession.id, assistantMessageId, { content: accumulated });
@@ -482,7 +482,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
               accumulated = finalResponse;
               if (!assistantMessageId) {
                 const assistantMessage = appendMessage(baseSession.id, "assistant", finalResponse);
-                assistantMessageId = assistantMessage?.id ?? null;
+                assistantMessageId = (assistantMessage as ChatMessage | null)?.id ?? null;
               } else if (assistantMessageId) {
                 updateMessage(baseSession.id, assistantMessageId, { content: finalResponse });
               }
@@ -501,7 +501,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
           if (!assistantMessageId) {
             const normalized = normalizeAssistantContent(accumulated, initialMessage);
             const assistantMessage = appendMessage(baseSession.id, "assistant", normalized);
-            assistantMessageId = assistantMessage?.id ?? null;
+            assistantMessageId = (assistantMessage as ChatMessage | null)?.id ?? null;
             accumulated = normalized;
           }
 
