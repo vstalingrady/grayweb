@@ -39,6 +39,17 @@ function GrayCallbackContent() {
     let isMounted = true;
 
     const processSession = async () => {
+      // Check if we've already processed tokens in this session
+      if (typeof window !== "undefined") {
+        const processed = sessionStorage.getItem('auth-callback-processed');
+        if (processed) {
+          console.log('Auth callback already processed, redirecting to final destination');
+          const redirectTarget = new URLSearchParams(window.location.search).get("redirect")?.trim() || "/";
+          router.replace(redirectTarget);
+          router.refresh();
+          return;
+        }
+      }
       const supabase = getSupabaseClient();
       if (!supabase) {
         if (!isMounted) {
@@ -139,6 +150,12 @@ function GrayCallbackContent() {
 
         setStatus("success");
         setMessage("Signed in. Taking you to your workspace…");
+
+        // Mark that we've processed the auth callback
+        if (typeof window !== "undefined") {
+          sessionStorage.setItem('auth-callback-processed', 'true');
+        }
+
         setTimeout(() => {
           router.replace(redirectTarget);
           router.refresh();
