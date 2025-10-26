@@ -187,11 +187,20 @@ class ApiService {
     } catch (error) {
       const baseUrl = resolveApiBaseUrl();
 
-      if (error instanceof TypeError && error.message === 'Failed to fetch') {
-        console.error(`API network error (${endpoint} -> ${baseUrl}):`, error);
-        throw new Error(
-          `Unable to reach the API at ${baseUrl}. Verify that the backend service is running and accessible.`
-        );
+      if (error instanceof TypeError) {
+        const normalizedMessage = error.message.toLowerCase();
+        const isNetworkFailure =
+          normalizedMessage.includes('failed to fetch') ||
+          normalizedMessage.includes('fetch failed') ||
+          normalizedMessage.includes('networkerror') ||
+          normalizedMessage.includes('network request failed');
+
+        if (isNetworkFailure) {
+          console.error(`API network error (${endpoint} -> ${baseUrl}):`, error);
+          throw new Error(
+            `Unable to reach the API at ${baseUrl}. Verify that the backend service is running and accessible.`
+          );
+        }
       }
 
       console.error(`API Error (${endpoint} -> ${baseUrl}):`, error);
