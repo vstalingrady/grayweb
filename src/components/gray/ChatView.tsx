@@ -678,7 +678,7 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
             } else {
               setDisplayedAssistantContent((prev) => ({
                 ...prev,
-                [assistantMessageId]: displayText,
+                [assistantMessageId as string]: displayText,
               }));
             }
           }
