@@ -1,11 +1,42 @@
 const DEV_FALLBACK_API_URL = 'http://localhost:8000';
+const API_PROXY_PREFIX = '/api/backend';
+
+const isProxyDisabled = () =>
+  process.env.NEXT_PUBLIC_DISABLE_API_PROXY?.toLowerCase() === 'true';
+
+const shouldUseProxyBase = (candidateUrl?: string) => {
+  if (typeof window === 'undefined' || isProxyDisabled()) {
+    return false;
+  }
+
+  const trimmed = candidateUrl?.trim();
+  if (!trimmed || trimmed.length === 0) {
+    return true;
+  }
+
+  if (trimmed.startsWith('/')) {
+    return false;
+  }
+
+  const usesInsecureHttp = trimmed.toLowerCase().startsWith('http://');
+  const isSecureContext = window.location?.protocol === 'https:';
+
+  return Boolean(isSecureContext && usesInsecureHttp);
+};
 
 const stripTrailingSlashes = (value: string) => value.replace(/\/+$/, '');
 
 const resolveApiBaseUrl = () => {
   const envUrl = process.env.NEXT_PUBLIC_API_URL?.trim();
   if (envUrl) {
+    if (shouldUseProxyBase(envUrl)) {
+      return API_PROXY_PREFIX;
+    }
     return stripTrailingSlashes(envUrl);
+  }
+
+  if (shouldUseProxyBase()) {
+    return API_PROXY_PREFIX;
   }
 
   if (typeof window !== 'undefined' && window.location) {
@@ -123,6 +154,11 @@ export interface ChatRequest {
 export interface ChatResponse {
   response: string;
   conversation_id: string;
+}
+
+export interface GoogleAuthResponse {
+  authorization_url: string;
+  state?: string;
 }
 
 export interface GeminiFileMetadata {
@@ -319,6 +355,13 @@ class ApiService {
   async touchUserStreak(userId: number): Promise<UserStreak> {
     return this.fetch<UserStreak>(`/users/${userId}/streak`, {
       method: 'POST',
+    });
+  }
+
+  async requestGoogleCalendarAuth(userId: number): Promise<GoogleAuthResponse> {
+    return this.fetch<GoogleAuthResponse>(`/users/${userId}/google-calendar/auth`, {
+      method: 'POST',
+      body: JSON.stringify({ user_id: userId }),
     });
   }
 
