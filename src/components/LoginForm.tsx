@@ -116,6 +116,16 @@ const buildCallbackDestination = (): string => {
   return `${origin}${CALLBACK_PATH}?redirect=${encoded}`;
 };
 
+const overrideSupabaseRedirectUrl = (url: string): string => {
+  try {
+    const parsed = new URL(url);
+    parsed.searchParams.set("redirect_to", buildCallbackDestination());
+    return parsed.toString();
+  } catch {
+    return url;
+  }
+};
+
 const persistAuthCookies = (email?: string | null) => {
   if (typeof window === "undefined") {
     return;
@@ -166,7 +176,7 @@ export default function LoginForm() {
 
     try {
       const redirectTo = ensureAbsoluteUrl(buildCallbackDestination());
-      const { error } = await supabase.auth.signInWithOAuth({
+      const { data, error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
           redirectTo,
@@ -174,11 +184,22 @@ export default function LoginForm() {
             provider === "discord"
               ? "identify email guilds"
               : "email profile openid",
+          skipBrowserRedirect: true,
         },
       });
       if (error) {
         throw error;
       }
+
+      const targetUrl = data?.url
+        ? overrideSupabaseRedirectUrl(data.url)
+        : null;
+
+      if (!targetUrl) {
+        throw new Error("Unable to initiate OAuth flow.");
+      }
+
+      window.location.assign(targetUrl);
     } catch (error) {
       const text =
         error instanceof Error ? error.message : "OAuth request failed.";
