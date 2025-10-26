@@ -93,8 +93,22 @@ function GrayCallbackContent() {
           refreshToken = params.get("refresh_token");
         }
 
+        // If we found tokens in URL, store them for potential later use
+        if (accessToken && refreshToken && typeof window !== "undefined") {
+          sessionStorage.setItem('oauth_access_token', accessToken);
+          sessionStorage.setItem('oauth_refresh_token', refreshToken);
+          console.log('Stored tokens in sessionStorage');
+        }
+
         console.log('Final access token present:', !!accessToken);
         console.log('Final refresh token present:', !!refreshToken);
+
+        // If no tokens found in current URL, check sessionStorage (in case we stored them)
+        if (!accessToken && !refreshToken && typeof window !== "undefined") {
+          accessToken = sessionStorage.getItem('oauth_access_token');
+          refreshToken = sessionStorage.getItem('oauth_refresh_token');
+          console.log('Retrieved tokens from sessionStorage - Access token present:', !!accessToken);
+        }
 
         if (!accessToken || !refreshToken) {
           setStatus("error");
@@ -151,8 +165,10 @@ function GrayCallbackContent() {
         setStatus("success");
         setMessage("Signed in. Taking you to your workspace…");
 
-        // Mark that we've processed the auth callback
+        // Clean up stored tokens and mark as processed
         if (typeof window !== "undefined") {
+          sessionStorage.removeItem('oauth_access_token');
+          sessionStorage.removeItem('oauth_refresh_token');
           sessionStorage.setItem('auth-callback-processed', 'true');
         }
 
