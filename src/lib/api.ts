@@ -1,4 +1,33 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const DEV_FALLBACK_API_URL = 'http://localhost:8000';
+
+const stripTrailingSlashes = (value: string) => value.replace(/\/+$/, '');
+
+const resolveApiBaseUrl = () => {
+  const envUrl = process.env.NEXT_PUBLIC_API_URL?.trim();
+  if (envUrl) {
+    return stripTrailingSlashes(envUrl);
+  }
+
+  if (typeof window !== 'undefined' && window.location) {
+    const { origin, hostname } = window.location;
+    if (hostname && hostname !== 'localhost' && hostname !== '127.0.0.1') {
+      return stripTrailingSlashes(origin);
+    }
+  }
+
+  const runtimeUrl =
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    process.env.SITE_URL ||
+    process.env.NEXT_PUBLIC_VERCEL_URL ||
+    process.env.VERCEL_URL;
+
+  if (runtimeUrl && runtimeUrl.trim().length > 0) {
+    const normalized = runtimeUrl.startsWith('http') ? runtimeUrl : `https://${runtimeUrl}`;
+    return stripTrailingSlashes(normalized);
+  }
+
+  return stripTrailingSlashes(DEV_FALLBACK_API_URL);
+};
 
 export interface User {
   id: number;
@@ -68,9 +97,18 @@ export interface UserStreak {
   updated_at: string;
 }
 
+export interface ChatAttachment {
+  name: string;
+  uri: string;
+  mime_type: string;
+  display_name?: string;
+  size_bytes?: number;
+}
+
 export interface ChatMessage {
   role: 'user' | 'model';
   text: string;
+  attachments?: ChatAttachment[];
 }
 
 export interface ChatRequest {
@@ -79,11 +117,24 @@ export interface ChatRequest {
   user_id: number;
   system_prompt?: string;
   context?: string;
+  attachments?: ChatAttachment[];
 }
 
 export interface ChatResponse {
   response: string;
   conversation_id: string;
+}
+
+export interface GeminiFileMetadata {
+  name: string;
+  display_name?: string;
+  mime_type?: string;
+  uri?: string;
+  download_uri?: string;
+  size_bytes?: number;
+  state?: string;
+  create_time?: string;
+  update_time?: string;
 }
 
 export interface UserCreate {
@@ -101,13 +152,18 @@ export interface UserUpdate {
 
 class ApiService {
   private async fetch<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-    const url = `${API_BASE_URL}${endpoint}`;
+    const baseUrl = resolveApiBaseUrl();
+    const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+    const url = `${baseUrl}${normalizedEndpoint}`;
+    const isFormDataBody = typeof FormData !== 'undefined' && options.body instanceof FormData;
+    const headers = new Headers(options.headers ?? undefined);
+    if (!isFormDataBody && !headers.has('Content-Type')) {
+      headers.set('Content-Type', 'application/json');
+    }
+
     const config: RequestInit = {
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
       ...options,
+      headers,
     };
 
     try {
@@ -118,10 +174,32 @@ class ApiService {
         throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
       }
 
+      if (response.status === 204) {
+        return undefined as T;
+      }
+
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        return undefined as T;
+      }
+
       return await response.json();
     } catch (error) {
-      console.error(`API Error (${endpoint}):`, error);
-      throw error;
+      const baseUrl = resolveApiBaseUrl();
+
+      if (error instanceof TypeError && error.message === 'Failed to fetch') {
+        console.error(`API network error (${endpoint} -> ${baseUrl}):`, error);
+        throw new Error(
+          `Unable to reach the API at ${baseUrl}. Verify that the backend service is running and accessible.`
+        );
+      }
+
+      console.error(`API Error (${endpoint} -> ${baseUrl}):`, error);
+      if (error instanceof Error) {
+        throw error;
+      }
+
+      throw new Error('Unexpected API error');
     }
   }
 
@@ -201,6 +279,12 @@ class ApiService {
     });
   }
 
+  async deletePlan(userId: number, planId: number): Promise<void> {
+    await this.fetch<void>(`/users/${userId}/plans/${planId}`, {
+      method: 'DELETE',
+    });
+  }
+
   // Habits
   async getUserHabits(userId: number): Promise<Habit[]> {
     return this.fetch<Habit[]>(`/users/${userId}/habits`);
@@ -210,6 +294,12 @@ class ApiService {
     return this.fetch<Habit>(`/users/${userId}/habits/${habitId}`, {
       method: 'PATCH',
       body: JSON.stringify(updateData),
+    });
+  }
+
+  async deleteHabit(userId: number, habitId: number): Promise<void> {
+    await this.fetch<void>(`/users/${userId}/habits/${habitId}`, {
+      method: 'DELETE',
     });
   }
 
@@ -239,6 +329,19 @@ class ApiService {
     return this.fetch('/api/conversation', {
       method: 'POST',
       body: JSON.stringify({ title, user_id: userId }),
+    });
+  }
+
+  async uploadGeminiFile(file: File, displayName?: string): Promise<GeminiFileMetadata> {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (displayName) {
+      formData.append('display_name', displayName);
+    }
+
+    return this.fetch<GeminiFileMetadata>('/api/files/upload', {
+      method: 'POST',
+      body: formData,
     });
   }
 }
