@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useReducer } from "react";
+import { FormEvent, useEffect, useMemo, useReducer, useRef } from "react";
 
 import styles from "./GrayDashboardCalendar.module.css";
 import {
@@ -6,6 +6,7 @@ import {
   CalendarEvent,
   CalendarInfo,
 } from "./types";
+import { Clock3, X } from "lucide-react";
 
 export type EventComposerPayload = {
   id?: string;
@@ -40,6 +41,8 @@ type ComposerState = {
 type ComposerAction =
   | { type: "reset"; payload: ComposerState }
   | { type: "update"; payload: Partial<ComposerState> };
+
+const COLOR_SWATCHES = ["#4C6FFF", "#0AD5B0", "#F6A623", "#D075FF", "#E36D7D", "#CDD1D5"] as const;
 
 const DEFAULT_STATE: ComposerState = {
   title: "",
@@ -107,6 +110,7 @@ export function EventComposer({
     ...DEFAULT_STATE,
     calendarId: calendarFallbackId,
   });
+  const customColorInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (!isOpen) {
@@ -140,6 +144,25 @@ export function EventComposer({
     });
   }, [activeEvent, calendarFallbackId, initialRange, isOpen]);
 
+  const formattedRangeLabel = useMemo(() => {
+    const start = combineDateWithTime(referenceDate, state.startTime);
+    const end = combineDateWithTime(referenceDate, state.endTime);
+    const datePart = start.toLocaleDateString(undefined, {
+      weekday: "short",
+      month: "long",
+      day: "numeric",
+    });
+    const startLabel = start.toLocaleTimeString(undefined, {
+      hour: "numeric",
+      minute: "2-digit",
+    });
+    const endLabel = end.toLocaleTimeString(undefined, {
+      hour: "numeric",
+      minute: "2-digit",
+    });
+    return `${datePart} - ${startLabel} to ${endLabel}`;
+  }, [referenceDate, state.startTime, state.endTime]);
+
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
 
@@ -163,18 +186,33 @@ export function EventComposer({
     return null;
   }
 
+  const handleSelectColor = (colorValue: string) => {
+    dispatch({ type: "update", payload: { color: colorValue } });
+  };
+
+  const handlePickCustomColor = () => {
+    customColorInputRef.current?.click();
+  };
+
+  const isTask = state.entryType === "task";
+
   return (
     <div className={styles.composerOverlay} role="dialog" aria-modal="true">
       <div className={styles.composerCard}>
-        <header>
-          <h2>{activeEvent ? "Edit event" : "Create event"}</h2>
-          <button type="button" onClick={onRequestClose}>
-            Close
+        <header className={styles.composerHeader}>
+          <div>
+            <p className={styles.composerEyebrow}>{activeEvent ? "Edit" : "Add"} event</p>
+            <h2>{activeEvent ? "Edit event" : "Add event"}</h2>
+          </div>
+          <button type="button" onClick={onRequestClose} aria-label="Close dialog">
+            <X size={18} />
           </button>
         </header>
 
         <form onSubmit={handleSubmit} className={styles.composerForm}>
-          <label>
+          <div className={styles.composerSummary}>{formattedRangeLabel}</div>
+
+          <label className={styles.composerField}>
             <span>Title</span>
             <input
               type="text"
@@ -182,39 +220,93 @@ export function EventComposer({
               onChange={(event) =>
                 dispatch({ type: "update", payload: { title: event.target.value } })
               }
-              placeholder="What's on your schedule?"
-              required
+              placeholder="Event title"
             />
           </label>
 
-          <div className={styles.composerTimeRow}>
-            <label>
-              <span>Starts</span>
-              <input
-                type="time"
-                value={state.startTime}
-                onChange={(event) =>
-                  dispatch({ type: "update", payload: { startTime: event.target.value } })
-                }
-                step={900}
-                required
-              />
+          <div className={styles.composerDualField}>
+            <label className={styles.composerField}>
+              <span>Start</span>
+              <div className={styles.composerInputShell}>
+                <input
+                  type="time"
+                  value={state.startTime}
+                  onChange={(event) =>
+                    dispatch({ type: "update", payload: { startTime: event.target.value } })
+                  }
+                  step={300}
+                  required
+                />
+                <Clock3 size={16} />
+              </div>
             </label>
-            <label>
-              <span>Ends</span>
-              <input
-                type="time"
-                value={state.endTime}
-                onChange={(event) =>
-                  dispatch({ type: "update", payload: { endTime: event.target.value } })
-                }
-                step={900}
-                required
-              />
+            <label className={styles.composerField}>
+              <span>End</span>
+              <div className={styles.composerInputShell}>
+                <input
+                  type="time"
+                  value={state.endTime}
+                  onChange={(event) =>
+                    dispatch({ type: "update", payload: { endTime: event.target.value } })
+                  }
+                  step={300}
+                  required
+                />
+                <Clock3 size={16} />
+              </div>
             </label>
           </div>
 
-          <label>
+          <button
+            type="button"
+            className={styles.composerTaskToggle}
+            data-active={isTask ? "true" : "false"}
+            onClick={() =>
+              dispatch({
+                type: "update",
+                payload: { entryType: isTask ? "event" : "task" },
+              })
+            }
+          >
+            <span>Task</span>
+          </button>
+
+          <div className={styles.composerField}>
+            <span>Color</span>
+            <div className={styles.composerColors}>
+              {COLOR_SWATCHES.map((swatch) => (
+                <button
+                  key={swatch}
+                  type="button"
+                  className={styles.composerColorDot}
+                  style={{ backgroundColor: swatch }}
+                  data-active={state.color === swatch ? "true" : "false"}
+                  onClick={() => handleSelectColor(swatch)}
+                  aria-label={`Select ${swatch} color`}
+                />
+              ))}
+              <button
+                type="button"
+                className={styles.composerColorDot}
+                data-active={
+                  COLOR_SWATCHES.includes(state.color as (typeof COLOR_SWATCHES)[number]) ? "false" : "true"
+                }
+                onClick={handlePickCustomColor}
+                aria-label="Pick custom color"
+              >
+                <span>+</span>
+              </button>
+              <input
+                ref={customColorInputRef}
+                type="color"
+                value={state.color}
+                onChange={(event) => handleSelectColor(event.target.value)}
+                className={styles.composerHiddenColor}
+              />
+            </div>
+          </div>
+
+          <label className={styles.composerField}>
             <span>Calendar</span>
             <select
               value={state.calendarId}
@@ -230,40 +322,11 @@ export function EventComposer({
             </select>
           </label>
 
-          <div className={styles.composerMetaRow}>
-            <label>
-              <span>Color</span>
-              <input
-                type="color"
-                value={state.color}
-                onChange={(event) =>
-                  dispatch({ type: "update", payload: { color: event.target.value } })
-                }
-              />
-            </label>
-
-            <label className={styles.composerToggleLabel}>
-              <span>Entry type</span>
-              <div className={styles.composerToggleGroup}>
-                {(["event", "task"] as CalendarEntryType[]).map((type) => (
-                  <button
-                    key={type}
-                    type="button"
-                    data-active={state.entryType === type ? "true" : "false"}
-                    onClick={() => dispatch({ type: "update", payload: { entryType: type } })}
-                  >
-                    {type}
-                  </button>
-                ))}
-              </div>
-            </label>
-          </div>
-
           <footer className={styles.composerFooter}>
             <button type="button" onClick={onRequestClose}>
               Cancel
             </button>
-            <button type="submit">Save</button>
+            <button type="submit">{activeEvent ? "Save changes" : "Add event"}</button>
           </footer>
         </form>
       </div>

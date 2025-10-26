@@ -6,6 +6,7 @@ import styles from "./GeminiPageClient.module.css";
 import { GeminiSidebar } from "@/components/gemini/GeminiSidebar";
 import { GeminiDashboardView } from "@/components/gemini/GeminiDashboardView";
 import { GeminiCalendarView } from "@/components/gemini/GeminiCalendarView";
+import { formatDisplayName } from "@/lib/names";
 
 type GeminiPageClientProps = {
   viewerEmail: string | null;
@@ -47,27 +48,12 @@ const EVENT_BLUEPRINT: CalendarEvent[] = [
   },
 ];
 
-const viewerNameFromEmail = (email: string | null): string => {
-  if (!email) {
-    return "Operator";
-  }
-  const [username] = email.split("@");
-  if (!username) {
-    return "Operator";
-  }
-  const parts = username
-    .replace(/[\d_-]+/g, " ")
-    .split(/[.\s]+/)
-    .filter(Boolean)
-    .map((segment) => segment[0].toUpperCase() + segment.slice(1));
-  return parts.length >= 2 ? parts.slice(0, 2).join(" ") : "Operator";
-};
-
 export default function GeminiPageClient({ viewerEmail }: GeminiPageClientProps) {
   const [activeDate, setActiveDate] = useState(() => new Date("2025-10-25T12:00:00"));
   const [view, setView] = useState<"dashboard" | "calendar">("dashboard");
 
-  const viewerName = useMemo(() => viewerNameFromEmail(viewerEmail), [viewerEmail]);
+  const viewerName = useMemo(() => formatDisplayName(null, viewerEmail), [viewerEmail]);
+  const viewerRole = "Operator";
   const greeting = useMemo(() => {
     const hour = activeDate.getHours();
     if (hour < 12) {
@@ -107,6 +93,8 @@ export default function GeminiPageClient({ viewerEmail }: GeminiPageClientProps)
             currentDate={activeDate}
             onChangeDate={setActiveDate}
             isCalendarView={view === "calendar"}
+            viewerName={viewerName}
+            viewerRole={viewerRole}
           />
 
           <div className={styles.main}>

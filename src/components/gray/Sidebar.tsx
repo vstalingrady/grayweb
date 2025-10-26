@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { ChevronsRight, ChevronsUp, ChevronsDown, Search as SearchIcon, UserRound } from "lucide-react";
+import { ChevronsRight, ChevronsUp, Search as SearchIcon, UserRound } from "lucide-react";
 import { useUser } from "@/contexts/UserContext";
 import styles from "@/app/gray/GrayPageClient.module.css";
 import {
@@ -171,32 +171,39 @@ export function GraySidebar({
             </div>
           </div>
           <div className={styles.sidebarBottom}>
-            <button
-              type="button"
-              className={styles.sidebarProfile}
-              aria-label="Collapse Gray Alignment sidebar"
-              onClick={onCollapse}
-            >
-              <span
-                className={styles.profileAvatar}
-                aria-hidden="true"
-                data-has-image={sidebarAvatarUrl ? "true" : "false"}
+            <div className={styles.sidebarProfile} role="group" aria-label="Profile controls">
+              <button type="button" className={styles.profileMenuButton} aria-label="View profile">
+                <span className={styles.profileInfo}>
+                  <span
+                    className={styles.profileAvatar}
+                    aria-hidden="true"
+                    data-has-image={sidebarAvatarUrl ? "true" : "false"}
+                  >
+                    {sidebarAvatarUrl ? (
+                      <>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={sidebarAvatarUrl} alt={viewerName} />
+                      </>
+                    ) : (
+                      <UserRound size={22} />
+                    )}
+                  </span>
+                  <span className={styles.profileDetails}>
+                    <span>{viewerName}</span>
+                    <span>{user?.role || "Operator"}</span>
+                  </span>
+                </span>
+              </button>
+              <button
+                type="button"
+                className={styles.profileToggleButton}
+                aria-label={isExpanded ? "Collapse sidebar" : "Expand sidebar"}
+                data-expanded={isExpanded ? "true" : "false"}
+                onClick={onCollapse}
               >
-                {sidebarAvatarUrl ? (
-                  <>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={sidebarAvatarUrl} alt={viewerName} />
-                  </>
-                ) : (
-                  <UserRound size={22} />
-                )}
-              </span>
-              <span className={styles.profileDetails}>
-                <span>{viewerName}</span>
-                <span>{user?.role || "Operator"}</span>
-              </span>
-              <ChevronsDown size={18} className={styles.profileChevron} />
-            </button>
+                {isExpanded ? <ChevronsRight size={18} /> : <ChevronsUp size={18} />}
+              </button>
+            </div>
           </div>
         </div>
       </div>

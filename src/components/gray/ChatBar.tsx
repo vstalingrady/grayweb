@@ -1,7 +1,7 @@
 "use client";
 
 import styles from "@/app/gray/GrayPageClient.module.css";
-import { ArrowUpRight, Paperclip } from "lucide-react";
+import { ArrowUpRight, Loader2, Paperclip } from "lucide-react";
 import { type ChangeEvent, type FormEvent, useRef } from "react";
 
 type GrayChatBarProps = {
@@ -9,6 +9,10 @@ type GrayChatBarProps = {
   onChange: (value: string) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onSelectFiles?: (files: File[]) => void;
+  placeholder?: string;
+  isSubmitDisabled?: boolean;
+  isSubmitting?: boolean;
+  fileAccept?: string;
 };
 
 export function GrayChatBar({
@@ -16,6 +20,10 @@ export function GrayChatBar({
   onChange,
   onSubmit,
   onSelectFiles,
+  placeholder = "Ask anything",
+  isSubmitDisabled,
+  isSubmitting = false,
+  fileAccept,
 }: GrayChatBarProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -32,7 +40,8 @@ export function GrayChatBar({
     event.target.value = "";
   };
 
-  const isSubmitDisabled = value.trim().length === 0;
+  const computedDisabled =
+    typeof isSubmitDisabled === "boolean" ? isSubmitDisabled : value.trim().length === 0;
 
   return (
     <form className={styles.chatBar} onSubmit={onSubmit}>
@@ -42,6 +51,7 @@ export function GrayChatBar({
         multiple
         hidden
         onChange={handleFileInputChange}
+        accept={fileAccept}
       />
       <button
         type="button"
@@ -55,18 +65,18 @@ export function GrayChatBar({
       <input
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        placeholder="Ask anything"
+        placeholder={placeholder}
         className={styles.chatInput}
-        aria-label="Ask anything"
+        aria-label={placeholder}
       />
       <button
         type="submit"
         aria-label="Send message"
         title="Send message"
         className={styles.chatActionButton}
-        disabled={isSubmitDisabled}
+        disabled={computedDisabled}
       >
-        <ArrowUpRight size={18} />
+        {isSubmitting ? <Loader2 size={18} className={styles.chatSpinner} /> : <ArrowUpRight size={18} />}
       </button>
     </form>
   );

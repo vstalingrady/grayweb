@@ -1592,7 +1592,12 @@
   grid-template-rows: auto minmax(0, 1fr);
   row-gap: clamp(14px, 2.4vw, 26px);
   padding-top: clamp(8px, 2vh, 20px);
-  padding-bottom: clamp(48px, 10vh, 140px);
+  padding-bottom: clamp(20px, 4vh, 48px);
+}
+
+/* When Pulse tab is active, tighten bottom padding further */
+.page[data-dashboard-tab="pulse"] .main[data-dashboard="true"] {
+  padding-bottom: clamp(8px, 2vh, 24px);
 }
 
 .main[data-view="general"] {
@@ -3114,7 +3119,7 @@
 
 .dashboardCalendarContainer {
   width: min(1400px, calc(100vw - clamp(32px, 6vw, 120px)));
-  margin: clamp(12px, 2.4vw, 28px) auto clamp(60px, 12vh, 160px);
+  margin: clamp(8px, 1.8vw, 18px) auto clamp(12px, 3vh, 24px);
   padding: 0 clamp(8px, 2vw, 20px);
   display: flex;
   justify-content: center;
@@ -3127,10 +3132,21 @@
 
 .page[data-dashboard-tab="pulse"] .dashboardCalendarContainer {
   min-height: 0;
-  height: calc(100vh - clamp(120px, 18vh, 220px));
-  max-height: calc(100vh - clamp(120px, 18vh, 220px));
+  height: calc(100vh - clamp(40px, 10vh, 120px));
+  max-height: calc(100vh - clamp(40px, 10vh, 120px));
   overflow-y: auto;
   padding-right: clamp(6px, 1vw, 16px);
+  scrollbar-width: none; /* Firefox */
+}
+.page[data-dashboard-tab="pulse"] .dashboardCalendarContainer::-webkit-scrollbar {
+  width: 0px; /* Chrome/Safari */
+  height: 0px;
+}
+
+/* Avoid content cutoff by ensuring inner shell stretches */
+.page[data-dashboard-tab="pulse"] .dashboardCalendarShell {
+  height: auto;
+  min-height: calc(100% - clamp(0px, 1vh, 12px));
 }
 
 .dashboardCalendarContainer > * {

@@ -42,6 +42,7 @@ export type HabitItem = {
   label: string;
   streakLabel: string;
   previousLabel: string;
+  completed?: boolean;
 };
 
 export type DayEvent = {

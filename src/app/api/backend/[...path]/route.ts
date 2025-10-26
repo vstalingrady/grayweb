@@ -98,36 +98,42 @@ const proxyRequest = async (request: NextRequest, pathSegments: string[] = []) =
 
 export const runtime = "nodejs";
 
-type RouteContext = { params: { path?: string[] } };
+// Align with Next 16 route handler typing where `context.params` may be a Promise
+// in the type definition. We defensively support both sync and async params.
+type RouteParams = { path?: string[] } | Promise<{ path?: string[] }>;
+type RouteContext = { params: RouteParams };
 
-const getPathSegments = (context: RouteContext) => {
-  return context.params?.path ?? [];
+const getPathSegments = async (context: RouteContext) => {
+  const params = (typeof (context as any).params?.then === "function")
+    ? await (context.params as Promise<{ path?: string[] }>)
+    : (context.params as { path?: string[] } | undefined);
+  return params?.path ?? [];
 };
 
 export async function GET(request: NextRequest, context: RouteContext) {
-  return proxyRequest(request, getPathSegments(context));
+  return proxyRequest(request, await getPathSegments(context));
 }
 
 export async function HEAD(request: NextRequest, context: RouteContext) {
-  return proxyRequest(request, getPathSegments(context));
+  return proxyRequest(request, await getPathSegments(context));
 }
 
 export async function POST(request: NextRequest, context: RouteContext) {
-  return proxyRequest(request, getPathSegments(context));
+  return proxyRequest(request, await getPathSegments(context));
 }
 
 export async function PUT(request: NextRequest, context: RouteContext) {
-  return proxyRequest(request, getPathSegments(context));
+  return proxyRequest(request, await getPathSegments(context));
 }
 
 export async function PATCH(request: NextRequest, context: RouteContext) {
-  return proxyRequest(request, getPathSegments(context));
+  return proxyRequest(request, await getPathSegments(context));
 }
 
 export async function DELETE(request: NextRequest, context: RouteContext) {
-  return proxyRequest(request, getPathSegments(context));
+  return proxyRequest(request, await getPathSegments(context));
 }
 
 export async function OPTIONS(request: NextRequest, context: RouteContext) {
-  return proxyRequest(request, getPathSegments(context));
+  return proxyRequest(request, await getPathSegments(context));
 }

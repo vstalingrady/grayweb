@@ -19,6 +19,7 @@ import { createSeedCalendars, createSeedEvents } from "./calendarSeed";
 const HOURS = Array.from({ length: 24 }, (_, index) => index);
 const DEFAULT_HOUR_HEIGHT = 64;
 const SNAP_MINUTES = 15;
+const CALENDAR_BODY_RESERVED_HEIGHT = 140;
 
 type CalendarViewMode = "week" | "day";
 
@@ -83,10 +84,15 @@ type GrayDashboardCalendarProps = {
   maxHeight?: number | string;
   showSelectedDateLabel?: boolean;
   showSurfaceLabel?: boolean;
+  showSurfaceHeading?: boolean;
   showHeaderControls?: boolean;
   showHeaderDates?: boolean;
+  compactSurface?: boolean;
   className?: string;
   surfaceClassName?: string;
+  showTodayButton?: boolean;
+  showCreateButton?: boolean;
+  onIntegrationAction?: () => void;
 };
 
 export function GrayDashboardCalendar({
@@ -101,10 +107,15 @@ export function GrayDashboardCalendar({
   maxHeight,
   showSelectedDateLabel = true,
   showSurfaceLabel = true,
+  showSurfaceHeading = true,
   showHeaderControls = true,
   showHeaderDates = true,
+  compactSurface = false,
   className,
   surfaceClassName,
+  showTodayButton = true,
+  showCreateButton = true,
+  onIntegrationAction,
 }: GrayDashboardCalendarProps) {
   const hourHeight = hourHeightProp ?? DEFAULT_HOUR_HEIGHT;
   const [viewMode, setViewMode] = useState<CalendarViewMode>(viewModeLocked ?? "week");
@@ -116,7 +127,7 @@ export function GrayDashboardCalendar({
   const [composerOpen, setComposerOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
   const [draftPreview, setDraftPreview] = useState<EventDraft | null>(null);
-  const [nowReference, setNowReference] = useState(() => new Date());
+  const [nowReference, setNowReference] = useState<Date | null>(null);
   const [composerRange, setComposerRange] = useState<{ start: Date; end: Date } | null>(null);
 
   const calendars = externalCalendars ?? calendarsState;
@@ -200,9 +211,9 @@ export function GrayDashboardCalendar({
   }, [hourHeight, visibleEvents, weekDays]);
 
   useEffect(() => {
-    const interval = window.setInterval(() => {
-      setNowReference(new Date());
-    }, 60000);
+    const syncNow = () => setNowReference(new Date());
+    syncNow();
+    const interval = window.setInterval(syncNow, 60000);
     return () => window.clearInterval(interval);
   }, []);
 
@@ -217,12 +228,12 @@ export function GrayDashboardCalendar({
   );
 
   const showDayNowIndicator = useMemo(
-    () => isSameDay(nowReference, selectedDate),
+    () => (nowReference ? isSameDay(nowReference, selectedDate) : false),
     [nowReference, selectedDate]
   );
 
   const dayIndicatorOffset = useMemo(
-    () => (showDayNowIndicator ? getNowOffset(nowReference) : null),
+    () => (showDayNowIndicator && nowReference ? getNowOffset(nowReference) : null),
     [showDayNowIndicator, nowReference, getNowOffset]
   );
 
@@ -325,7 +336,10 @@ export function GrayDashboardCalendar({
     setComposerRange(null);
   };
 
-  const handleColumnDoubleClick = (event: MouseEvent<HTMLDivElement>, day: Date) => {
+  const handleColumnClick = (event: MouseEvent<HTMLDivElement>, day: Date) => {
+    if (event.target !== event.currentTarget) {
+      return;
+    }
     const target = event.currentTarget;
     const bounds = target.getBoundingClientRect();
     const offsetY = event.clientY - bounds.top;
@@ -342,7 +356,7 @@ export function GrayDashboardCalendar({
           <div className={styles.calendarHeaderPlaceholder} />
           {weekDays.map((day) => {
             const isSelectedDay = isSameDay(day, selectedDate);
-            const isToday = isSameDay(day, nowReference);
+            const isToday = nowReference ? isSameDay(day, nowReference) : false;
             return (
               <div
                 key={day.toISOString()}
@@ -365,35 +379,38 @@ export function GrayDashboardCalendar({
             ))}
           </div>
           <div className={styles.calendarWeekColumns}>
-            {weekDays.map((day, columnIndex) => (
-              <div
-                key={day.toISOString()}
-                className={styles.calendarWeekColumn}
-                data-today={isSameDay(day, nowReference) ? "true" : "false"}
-                data-selected={isSameDay(day, selectedDate) ? "true" : "false"}
-              >
+            {weekDays.map((day, columnIndex) => {
+              const isToday = nowReference ? isSameDay(day, nowReference) : false;
+              return (
                 <div
-                  className={styles.calendarColumnScroller}
-                  onDoubleClick={(event) => handleColumnDoubleClick(event, day)}
+                  key={day.toISOString()}
+                  className={styles.calendarWeekColumn}
+                  data-today={isToday ? "true" : "false"}
+                  data-selected={isSameDay(day, selectedDate) ? "true" : "false"}
                 >
-                  {weekLayouts[columnIndex]?.map((event) => (
-                    <EventCard
-                      key={event.id}
-                      event={event}
-                      onClick={() => handleEditEvent(event)}
-                    />
-                  ))}
-                  {isSameDay(day, nowReference) && (
-                    <div
-                      className={styles.nowIndicator}
-                      style={{ top: `${getNowOffset(nowReference)}px` }}
-                    >
-                      <span className={styles.nowIndicatorDot} />
-                    </div>
-                  )}
+                  <div
+                  className={styles.calendarColumnScroller}
+                  onClick={(event) => handleColumnClick(event, day)}
+                >
+                    {weekLayouts[columnIndex]?.map((event) => (
+                      <EventCard
+                        key={event.id}
+                        event={event}
+                        onClick={() => handleEditEvent(event)}
+                      />
+                    ))}
+                    {isToday && nowReference && (
+                      <div
+                        className={styles.nowIndicator}
+                        style={{ top: `${getNowOffset(nowReference)}px` }}
+                      >
+                        <span className={styles.nowIndicatorDot} />
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </div>
@@ -408,7 +425,7 @@ export function GrayDashboardCalendar({
           <div
             className={styles.calendarHeaderCell}
             data-selected="true"
-            data-today={isSameDay(selectedDate, nowReference) ? "true" : "false"}
+            data-today={(nowReference ? isSameDay(selectedDate, nowReference) : false) ? "true" : "false"}
           >
             <span>{selectedDate.toLocaleDateString(undefined, { weekday: "short" })}</span>
             <strong>{selectedDate.getDate()}</strong>
@@ -425,11 +442,11 @@ export function GrayDashboardCalendar({
           <div
             className={styles.calendarDayColumn}
             data-selected="true"
-            data-today={isSameDay(selectedDate, nowReference) ? "true" : "false"}
+            data-today={(nowReference ? isSameDay(selectedDate, nowReference) : false) ? "true" : "false"}
           >
             <div
               className={styles.calendarColumnScroller}
-              onDoubleClick={(event) => handleColumnDoubleClick(event, selectedDate)}
+              onClick={(event) => handleColumnClick(event, selectedDate)}
             >
               {dayLayouts.map((event) => (
                 <EventCard
@@ -504,8 +521,9 @@ export function GrayDashboardCalendar({
   };
 
   if (maxHeight !== undefined) {
-    calendarStyle["--calendar-max-height"] =
-      typeof maxHeight === "number" ? `${maxHeight}px` : maxHeight;
+    const resolvedMaxHeight = typeof maxHeight === "number" ? `${maxHeight}px` : maxHeight;
+    calendarStyle["--calendar-max-height"] = resolvedMaxHeight;
+    calendarStyle["--calendar-body-height"] = `max(300px, calc(${resolvedMaxHeight} - ${CALENDAR_BODY_RESERVED_HEIGHT}px))`;
   }
 
   const monthLabel = selectedDate.toLocaleDateString(undefined, {
@@ -522,15 +540,23 @@ export function GrayDashboardCalendar({
       style={calendarStyle}
     >
       <div
-        className={[styles.calendarSurface, surfaceClassName].filter(Boolean).join(" ")}
+        className={[
+          styles.calendarSurface,
+          compactSurface ? styles.calendarSurfaceCompact : null,
+          surfaceClassName,
+        ]
+          .filter(Boolean)
+          .join(" ")}
       >
         <header className={styles.calendarSurfaceHeader}>
           <div className={styles.calendarSurfaceHeaderLeft}>
             {showSurfaceLabel && <span className={styles.calendarSurfaceLabel}>Calendar</span>}
-            <div>
-              <h2 className={styles.calendarSurfaceTitle}>{monthLabel}</h2>
-              <p className={styles.calendarSurfaceRange}>{rangeLabel}</p>
-            </div>
+            {showSurfaceHeading && (
+              <div>
+                <h2 className={styles.calendarSurfaceTitle}>{monthLabel}</h2>
+                <p className={styles.calendarSurfaceRange}>{rangeLabel}</p>
+              </div>
+            )}
           </div>
           <div className={styles.calendarSurfaceHeaderRight}>
             {!viewModeLocked && (
@@ -546,13 +572,15 @@ export function GrayDashboardCalendar({
             )}
             {showHeaderControls && (
               <div className={styles.calendarSurfaceNav}>
-                <button
-                  type="button"
-                  className={styles.calendarSurfaceButton}
-                  onClick={handleGoToday}
-                >
-                  Today
-                </button>
+                {showTodayButton && (
+                  <button
+                    type="button"
+                    className={styles.calendarSurfaceButton}
+                    onClick={handleGoToday}
+                  >
+                    Today
+                  </button>
+                )}
                 <div className={styles.calendarSurfaceNavArrows}>
                   <button
                     type="button"
@@ -569,13 +597,15 @@ export function GrayDashboardCalendar({
                     ›
                   </button>
                 </div>
-                <button
-                  type="button"
-                  className={styles.calendarSurfaceCreate}
-                  onClick={handleCreateEvent}
-                >
-                  + Create
-                </button>
+                {showCreateButton && (
+                  <button
+                    type="button"
+                    className={styles.calendarSurfaceCreate}
+                    onClick={handleCreateEvent}
+                  >
+                    + Create
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -596,6 +626,7 @@ export function GrayDashboardCalendar({
                 onToggleCalendar={handleToggleCalendar}
                 showSelectedDateLabel={showSelectedDateLabel}
                 className={styles.calendarSidebarIntegrated}
+                onIntegrationAction={onIntegrationAction}
               />
             </div>
           )}

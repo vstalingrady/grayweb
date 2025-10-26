@@ -1,7 +1,17 @@
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { ChevronsRight, ChevronsUp, ChevronsDown, Search as SearchIcon, UserRound } from "lucide-react";
+import {
+  ChevronsRight,
+  ChevronsUp,
+  ChevronsDown,
+  Search as SearchIcon,
+  UserRound,
+  Sparkles,
+  Settings as SettingsIcon,
+  LifeBuoy,
+  LogOut,
+} from "lucide-react";
 import { useUser } from "@/contexts/UserContext";
 import styles from "@/app/gray/GrayPageClient.module.css";
 import { type SidebarHistorySection, type SidebarNavItem, type SidebarNavKey, type SidebarHistoryEntry } from "./types";
@@ -20,6 +30,10 @@ type GrayEnhancedSidebarProps = {
   onToggle: () => void;
   onNavigate: (nav: SidebarNavKey) => void;
   activeChatId?: string | null;
+  onOpenPersonalization?: () => void;
+  onOpenSettings?: () => void;
+  onOpenHelp?: () => void;
+  onLogOut?: () => void;
 };
 
 export function GrayEnhancedSidebar({
@@ -36,9 +50,16 @@ export function GrayEnhancedSidebar({
   onToggle,
   onNavigate,
   activeChatId = null,
+  onOpenPersonalization,
+  onOpenSettings,
+  onOpenHelp,
+  onLogOut,
 }: GrayEnhancedSidebarProps) {
   const { user } = useUser();
   const sidebarAvatarUrl = viewerAvatarUrl ?? user?.profile_picture_url ?? null;
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const profileControlsRef = useRef<HTMLDivElement | null>(null);
+  const profileMenuRef = useRef<HTMLDivElement | null>(null);
 
   const historyGroups = useMemo(() => {
     const allEntries = historySections
@@ -130,6 +151,63 @@ export function GrayEnhancedSidebar({
       }));
   }, [historySections]);
 
+  useEffect(() => {
+    if (!isProfileMenuOpen) {
+      return;
+    }
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (
+        profileMenuRef.current &&
+        !profileMenuRef.current.contains(target) &&
+        profileControlsRef.current &&
+        !profileControlsRef.current.contains(target)
+      ) {
+        setIsProfileMenuOpen(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsProfileMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isProfileMenuOpen]);
+
+  const handleProfileClick = () => {
+    setIsProfileMenuOpen((previous) => !previous);
+  };
+
+  const handleSidebarToggle = () => {
+    setIsProfileMenuOpen(false);
+    onToggle();
+  };
+
+  const handleOpenPersonalization = () => {
+    onOpenPersonalization?.();
+    setIsProfileMenuOpen(false);
+  };
+
+  const handleOpenSettings = () => {
+    onOpenSettings?.();
+    setIsProfileMenuOpen(false);
+  };
+
+  const handleOpenHelp = () => {
+    onOpenHelp?.();
+    setIsProfileMenuOpen(false);
+  };
+
+  const handleLogOut = () => {
+    onLogOut?.();
+    setIsProfileMenuOpen(false);
+  };
+
   return (
     <aside className={styles.sidebar} data-expanded={isExpanded ? "true" : "false"}>
       <div className={styles.sidebarRail}>
@@ -170,7 +248,10 @@ export function GrayEnhancedSidebar({
             className={styles.sidebarRailAvatar}
             aria-label={isExpanded ? "Collapse sidebar" : "Expand sidebar"}
             data-expanded={isExpanded ? "true" : "false"}
-            onClick={onToggle}
+            onClick={() => {
+              setIsProfileMenuOpen(false);
+              onToggle();
+            }}
           >
             <span
               className={styles.sidebarRailAvatarImage}
@@ -199,7 +280,10 @@ export function GrayEnhancedSidebar({
               type="button"
               className={styles.sidebarLogo}
               aria-label="Collapse Gray Alignment sidebar"
-              onClick={onCollapse}
+              onClick={() => {
+                setIsProfileMenuOpen(false);
+                onCollapse();
+              }}
             >
               <Image
                 src="/grayaiwhitenotspinning.svg"
@@ -275,34 +359,105 @@ export function GrayEnhancedSidebar({
                   </nav>
                 </div>
               </div>
-          <div className={styles.sidebarBottom}>
-            <button
-              type="button"
-              className={styles.sidebarProfile}
-              aria-label="Collapse Gray Alignment sidebar"
-              onClick={onCollapse}
-            >
-              <span
-                className={styles.profileAvatar}
-                aria-hidden="true"
-                data-has-image={sidebarAvatarUrl ? "true" : "false"}
-              >
-                {sidebarAvatarUrl ? (
-                  <>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={sidebarAvatarUrl} alt={viewerName} />
-                  </>
-                ) : (
-                  <UserRound size={22} />
-                )}
-              </span>
-              <span className={styles.profileDetails}>
-                <span>{viewerName}</span>
-                <span>{user?.role || "Operator"}</span>
-              </span>
-              <ChevronsDown size={18} className={styles.profileChevron} />
-            </button>
-          </div>
+              <div className={styles.sidebarBottom}>
+                <div className={styles.sidebarProfile}>
+                  <div
+                    className={styles.profileMenuWrapper}
+                    data-expanded={isProfileMenuOpen ? "true" : "false"}
+                    role="group"
+                    aria-label="Profile actions"
+                    ref={profileControlsRef}
+                  >
+                    <button
+                      type="button"
+                      className={styles.profileMenuButton}
+                      aria-label={isProfileMenuOpen ? "Collapse profile menu" : "Expand profile menu"}
+                      aria-haspopup="menu"
+                      aria-expanded={isProfileMenuOpen ? "true" : "false"}
+                      onClick={handleProfileClick}
+                    >
+                      <span className={styles.profileInfo}>
+                        <span
+                          className={styles.profileAvatar}
+                          aria-hidden="true"
+                          data-has-image={sidebarAvatarUrl ? "true" : "false"}
+                        >
+                          {sidebarAvatarUrl ? (
+                            <>
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={sidebarAvatarUrl} alt={viewerName} />
+                            </>
+                          ) : (
+                            <UserRound size={22} />
+                          )}
+                        </span>
+                        <span className={styles.profileDetails}>
+                          <span>{viewerName}</span>
+                          <span>{user?.role || "Operator"}</span>
+                        </span>
+                      </span>
+                    </button>
+                    {isProfileMenuOpen && (
+                      <div className={styles.profileMenu} role="menu" ref={profileMenuRef}>
+                        <button
+                          type="button"
+                          className={styles.profileMenuItem}
+                          onClick={handleOpenPersonalization}
+                          role="menuitem"
+                        >
+                          <span className={styles.profileMenuIcon}>
+                            <Sparkles size={16} />
+                          </span>
+                          <span className={styles.profileMenuLabel}>Personalization</span>
+                        </button>
+                        <button
+                          type="button"
+                          className={styles.profileMenuItem}
+                          onClick={handleOpenSettings}
+                          role="menuitem"
+                        >
+                          <span className={styles.profileMenuIcon}>
+                            <SettingsIcon size={16} />
+                          </span>
+                          <span className={styles.profileMenuLabel}>Settings</span>
+                        </button>
+                        <button
+                          type="button"
+                          className={styles.profileMenuItem}
+                          onClick={handleOpenHelp}
+                          role="menuitem"
+                        >
+                          <span className={styles.profileMenuIcon}>
+                            <LifeBuoy size={16} />
+                          </span>
+                          <span className={styles.profileMenuLabel}>Help</span>
+                        </button>
+                        <span className={styles.profileMenuDivider} aria-hidden="true" />
+                        <button
+                          type="button"
+                          className={`${styles.profileMenuItem} ${styles.profileMenuLogout}`}
+                          onClick={handleLogOut}
+                          role="menuitem"
+                        >
+                          <span className={styles.profileMenuIcon}>
+                            <LogOut size={16} />
+                          </span>
+                          <span className={styles.profileMenuLabel}>Log out</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    className={styles.profileToggleButton}
+                    aria-label={isExpanded ? "Collapse sidebar" : "Expand sidebar"}
+                    data-expanded={isExpanded ? "true" : "false"}
+                    onClick={handleSidebarToggle}
+                  >
+                    {isExpanded ? <ChevronsRight size={18} /> : <ChevronsUp size={18} />}
+                  </button>
+                </div>
+              </div>
         </div>
       </div>
     </aside>

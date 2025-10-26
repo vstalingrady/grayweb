@@ -41,6 +41,8 @@ DATABASE_URL=sqlite:///./users.db
 GEMINI_API_KEY=your_gemini_api_key_here
 SUPABASE_URL=your_supabase_url_here
 SUPABASE_KEY=your_supabase_anon_key_here
+# Optional: comma separated list of frontend origins allowed to call the API
+# CORS_ALLOW_ORIGINS=https://your-frontend-domain.com,https://app.example.com
 ```
 
 #### Getting API Keys

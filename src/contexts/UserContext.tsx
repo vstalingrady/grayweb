@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { apiService, User } from '@/lib/api';
+import { humanizeIdentifier } from '@/lib/names';
 import { getSupabaseClient } from '@/lib/supabaseClient';
 
 interface UserContextType {
@@ -25,14 +26,7 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const deriveNameFromEmail = (email: string) => {
-    const localPart = email.split('@')[0] ?? email;
-    return localPart
-      .split(/[\s._-]+/)
-      .filter(Boolean)
-      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-      .join(' ');
-  };
+  const deriveNameFromEmail = (email: string) => humanizeIdentifier(email) ?? 'Operator';
 
   const fetchSupabaseProfile = async (): Promise<{ fullName: string | null; avatarUrl: string | null } | null> => {
     try {

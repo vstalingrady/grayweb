@@ -1,7 +1,9 @@
 "use client";
 
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Calendar,
+  ChevronDown,
   Clock3,
   MessageSquare,
   Plus,
@@ -24,6 +26,9 @@ type GeminiSidebarProps = {
   currentDate: Date;
   onChangeDate: (date: Date) => void;
   isCalendarView: boolean;
+  viewerName: string;
+  viewerRole?: string | null;
+  viewerAvatarUrl?: string | null;
 };
 
 const CALENDAR_ENTRIES = [
@@ -45,10 +50,50 @@ export function GeminiSidebar({
   currentDate,
   onChangeDate,
   isCalendarView,
+  viewerName,
+  viewerRole = "Operator",
+  viewerAvatarUrl = null,
 }: GeminiSidebarProps) {
   const week = getWeekDays(currentDate);
   const monthDays = getCalendarMonth(currentDate);
   const today = new Date();
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const profileRef = useRef<HTMLDivElement | null>(null);
+
+  const viewerInitials = useMemo(() => {
+    const letters = viewerName
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase())
+      .join("");
+    return letters || "VS";
+  }, [viewerName]);
+
+  useEffect(() => {
+    if (!isProfileMenuOpen) {
+      return;
+    }
+    const handleClickAway = (event: MouseEvent) => {
+      if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
+        setIsProfileMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickAway);
+    return () => {
+      document.removeEventListener("mousedown", handleClickAway);
+    };
+  }, [isProfileMenuOpen]);
+
+  const handleProfileToggle = () => {
+    setIsProfileMenuOpen((previous) => !previous);
+  };
+
+  const normalizedRole = (viewerRole ?? "Operator").toUpperCase();
+  const sidebarAvatarUrl =
+    typeof viewerAvatarUrl === "string" && viewerAvatarUrl.trim().length > 0
+      ? viewerAvatarUrl
+      : "/astronauttest.jpg";
 
   return (
     <aside className={styles.sidebar}>
@@ -162,9 +207,67 @@ export function GeminiSidebar({
           </div>
         </section>
 
-        <div className={styles.footnote}>
-          <a href="#">Terms</a>
-          <a href="#">Privacy</a>
+        <div className={styles.sidebarBottom}>
+          <div
+            className={styles.sidebarProfile}
+            data-open={isProfileMenuOpen ? "true" : "false"}
+            ref={profileRef}
+          >
+            <button
+              type="button"
+              className={styles.sidebarProfileButton}
+              aria-haspopup="true"
+              aria-expanded={isProfileMenuOpen ? "true" : "false"}
+              onClick={handleProfileToggle}
+            >
+              <span
+                className={styles.sidebarProfileAvatar}
+                data-has-image={sidebarAvatarUrl ? "true" : "false"}
+              >
+                {sidebarAvatarUrl ? (
+                  <>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={sidebarAvatarUrl} alt={viewerName} />
+                  </>
+                ) : (
+                  viewerInitials
+                )}
+              </span>
+              <span className={styles.sidebarProfileText}>
+                <span>{viewerName}</span>
+                <span>{normalizedRole}</span>
+              </span>
+              <span
+                className={styles.sidebarProfileCaret}
+                data-open={isProfileMenuOpen ? "true" : "false"}
+                aria-hidden="true"
+              >
+                <ChevronDown size={16} />
+              </span>
+            </button>
+            {isProfileMenuOpen && (
+              <div className={styles.sidebarProfileMenu} role="menu">
+                <button type="button" className={styles.sidebarProfileMenuItem} role="menuitem">
+                  Personalize Gray
+                </button>
+                <button type="button" className={styles.sidebarProfileMenuItem} role="menuitem">
+                  Preferences
+                </button>
+                <span className={styles.sidebarProfileDivider} aria-hidden="true" />
+                <button
+                  type="button"
+                  className={`${styles.sidebarProfileMenuItem} ${styles.sidebarProfileLogout}`}
+                  role="menuitem"
+                >
+                  Log out
+                </button>
+              </div>
+            )}
+          </div>
+          <div className={styles.footnote}>
+            <a href="#">Terms</a>
+            <a href="#">Privacy</a>
+          </div>
         </div>
       </div>
     </aside>
