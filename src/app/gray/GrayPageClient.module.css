@@ -359,7 +359,7 @@
 .sidebarNav {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -370,30 +370,23 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 14px;
-  border-radius: 16px;
+  padding: 8px 0;
+  border-radius: 0;
   border: none;
-  background: rgba(20, 20, 20, 0.55);
-  color: rgba(235, 235, 235, 0.78);
+  background: transparent;
+  color: rgba(235, 235, 235, 0.72);
   font-size: 0.82rem;
   letter-spacing: 0.04em;
   cursor: pointer;
-  transition:
-    background 0.2s ease,
-    color 0.2s ease,
-    transform 0.2s ease;
+  transition: color 0.2s ease;
 }
 
 .sidebarNav button:hover {
-  background: rgba(60, 60, 60, 0.6);
-  color: rgba(255, 255, 255, 0.95);
-  transform: translateX(2px);
+  color: rgba(255, 255, 255, 0.86);
 }
 
 .sidebarNav button[data-active="true"] {
-  background: rgba(255, 255, 255, 0.88);
-  color: #050505;
-  box-shadow: 0 16px 28px rgba(0, 0, 0, 0.4);
+  color: rgba(255, 255, 255, 0.92);
 }
 
 .sidebarNavItem {
@@ -405,7 +398,7 @@
 
 .sidebarNavItem[data-nav="history"] {
   gap: 0;
-  --history-line-offset: calc(14px + 9px);
+  --history-line-offset: 20px;
 }
 
 .sidebarNavItem[data-nav="history"] > .sidebarHistory {
@@ -416,7 +409,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
+  width: 20px;
   color: inherit;
 }
 
@@ -428,18 +421,18 @@
 .sidebarHistoryConnector {
   display: block;
   position: relative;
-  height: 18px;
-  margin: -8px 0 4px;
+  height: 0;
+  margin: 0;
 }
 
 .sidebarHistoryConnector::before {
   content: "";
   position: absolute;
   left: var(--history-line-offset);
-  top: 0;
+  top: -9px;
   bottom: 0;
   width: 2px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0.06));
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.32), rgba(255, 255, 255, 0.08));
   pointer-events: none;
 }
 
@@ -447,8 +440,8 @@
   display: flex;
   flex-direction: column;
   gap: 18px;
-  margin-top: 0;
-  padding-left: 54px;
+  margin-top: 6px;
+  padding-left: 38px;
   position: relative;
 }
 
@@ -457,9 +450,9 @@
   position: absolute;
   left: var(--history-line-offset);
   top: 0;
-  bottom: 6px;
+  bottom: 4px;
   width: 2px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.04));
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.06));
   pointer-events: none;
 }
 
@@ -473,14 +466,14 @@
   font-size: 0.62rem;
   letter-spacing: 0.26em;
   text-transform: uppercase;
-  color: rgba(235, 235, 235, 0.48);
-  padding-left: 6px;
+  color: rgba(235, 235, 235, 0.52);
+  padding-left: 4px;
 }
 
 .sidebarHistoryList {
   list-style: none;
   margin: 0;
-  padding: 0 0 0 18px;
+  padding: 0 0 0 16px;
   display: flex;
   flex-direction: column;
   gap: 6px;
