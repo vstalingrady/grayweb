@@ -173,6 +173,9 @@ export default function LoginForm() {
 
     try {
       const redirectTo = ensureAbsoluteUrl(buildCallbackDestination());
+      console.log('OAuth redirectTo URL:', redirectTo);
+      console.log('buildCallbackDestination():', buildCallbackDestination());
+      console.log('resolveSiteOrigin():', resolveSiteOrigin());
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
@@ -191,6 +194,9 @@ export default function LoginForm() {
       const targetUrl = data?.url
         ? overrideSupabaseRedirectUrl(data.url)
         : null;
+
+      console.log('Supabase OAuth URL:', data?.url);
+      console.log('Final target URL after override:', targetUrl);
 
       if (!targetUrl) {
         throw new Error("Unable to initiate OAuth flow.");

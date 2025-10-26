@@ -56,12 +56,34 @@ function GrayCallbackContent() {
           return;
         }
 
+        console.log('Current URL:', window.location.href);
+        console.log('Hash:', window.location.hash);
+        console.log('Search params:', window.location.search);
+
+        // Check hash parameters first
         const hash = window.location.hash.startsWith("#")
           ? window.location.hash.slice(1)
           : window.location.hash;
-        const params = new URLSearchParams(hash);
-        const accessToken = params.get("access_token");
-        const refreshToken = params.get("refresh_token");
+        console.log('Processed hash:', hash);
+
+        let params = new URLSearchParams(hash);
+        console.log('URLSearchParams keys from hash:', Array.from(params.keys()));
+
+        let accessToken = params.get("access_token");
+        let refreshToken = params.get("refresh_token");
+
+        // If no tokens in hash, check URL search parameters
+        if (!accessToken && !refreshToken) {
+          console.log('No tokens in hash, checking URL search params...');
+          params = new URLSearchParams(window.location.search);
+          console.log('URLSearchParams keys from search:', Array.from(params.keys()));
+
+          accessToken = params.get("access_token");
+          refreshToken = params.get("refresh_token");
+        }
+
+        console.log('Final access token present:', !!accessToken);
+        console.log('Final refresh token present:', !!refreshToken);
 
         if (!accessToken || !refreshToken) {
           setStatus("error");
