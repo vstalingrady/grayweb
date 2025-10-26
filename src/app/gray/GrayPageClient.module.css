@@ -381,7 +381,7 @@
 .personalizationPanel {
   width: min(1040px, 100%);
   max-height: calc(100vh - 120px);
-  overflow: hidden;
+  overflow: auto;
   border-radius: clamp(22px, 4vw, 32px);
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(10, 10, 14, 0.94);
@@ -490,6 +490,26 @@
   font-size: 0.78rem;
   letter-spacing: 0.04em;
   color: rgba(214, 214, 226, 0.58);
+}
+
+.personalizationSectionLabel {
+  text-transform: uppercase;
+  font-size: 0.62rem;
+  letter-spacing: 0.3em;
+  color: rgba(205, 208, 222, 0.6);
+  margin: 0;
+}
+
+.personalizationHint {
+  margin: 4px 0 0;
+  font-size: 0.74rem;
+  color: rgba(188, 192, 208, 0.72);
+}
+
+.personalizationTraitHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .personalizationLink {
@@ -626,9 +646,42 @@
   transform: translateY(-1px);
 }
 
-.personalizationToggleState {
-  font-weight: 500;
-  color: rgba(220, 220, 236, 0.78);
+.personalizationToggleHint {
+  display: block;
+  font-size: 0.72rem;
+  color: rgba(203, 206, 220, 0.62);
+}
+
+.personalizationSwitch {
+  width: 44px;
+  height: 26px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  display: inline-flex;
+  align-items: center;
+  padding: 3px;
+  transition:
+    background 0.2s ease,
+    border 0.2s ease;
+}
+
+.personalizationSwitch span {
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.8);
+  transform: translateX(0);
+  transition: transform 0.2s ease;
+}
+
+.personalizationSwitch[data-active="true"] {
+  background: rgba(90, 110, 255, 0.35);
+  border-color: rgba(118, 134, 255, 0.52);
+}
+
+.personalizationSwitch[data-active="true"] span {
+  transform: translateX(16px);
 }
 
 .personalizationPersonaGrid {
@@ -660,6 +713,24 @@
 
 .personalizationPersonaChip:hover {
   transform: translateY(-1px);
+}
+
+.personalizationSelect {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  background: rgba(16, 16, 24, 0.85);
+  color: rgba(236, 236, 246, 0.86);
+  padding: 6px 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  text-transform: none;
+}
+
+.personalizationSelect:hover {
+  border-color: rgba(118, 134, 255, 0.52);
+  color: rgba(255, 255, 255, 0.92);
 }
 
 .personalizationBackgroundGrid {
@@ -739,6 +810,87 @@
   outline: none;
   border-color: rgba(118, 134, 255, 0.52);
   box-shadow: 0 0 0 1px rgba(118, 134, 255, 0.42);
+}
+
+.personalizationAboutCard {
+  gap: 18px;
+}
+
+.personalizationAboutList {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 0;
+}
+
+.personalizationAboutItem {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  padding-bottom: 12px;
+}
+
+.personalizationAboutItem:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.personalizationAboutItem dt {
+  font-size: 0.72rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(197, 200, 212, 0.68);
+  margin: 0;
+}
+
+.personalizationAboutItem dd {
+  margin: 0;
+  font-size: 0.92rem;
+  color: rgba(238, 238, 246, 0.92);
+  text-align: right;
+}
+
+.personalizationMemoryCard {
+  gap: 12px;
+}
+
+.personalizationMemoryMeter {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.personalizationMemoryTrack {
+  width: 100%;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+
+.personalizationMemoryTrack span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #ff7a7a, #ff3d3d);
+}
+
+.personalizationMemoryStats {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.personalizationMemoryStats span:first-child {
+  font-size: 0.82rem;
+  letter-spacing: 0.08em;
+  color: rgba(243, 200, 200, 0.92);
+}
+
+.personalizationMemoryStats span:last-child {
+  font-size: 0.74rem;
+  color: rgba(211, 214, 226, 0.62);
+  line-height: 1.5;
 }
 
 @media (max-width: 960px) {
