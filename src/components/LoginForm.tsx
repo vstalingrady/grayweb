@@ -43,6 +43,17 @@ const SUPABASE_STORAGE_KEY = (() => {
 const isProductionHost = (host?: string) =>
   !!host && (host.endsWith("gray.alignment.id") || host === "gray.alignment.id");
 
+const resolveSiteOrigin = (): string => {
+  if (typeof window !== "undefined" && window.location?.origin) {
+    // If we're not already on the prod host but running in prod, force it
+    const { origin, hostname, protocol } = window.location;
+    if (isProductionHost(hostname)) return origin;
+    return `https://gray.alignment.id`;
+  }
+  // Server-side fallback
+  return `https://gray.alignment.id`;
+};
+
 const ensureAbsoluteUrl = (target: string): string => {
   if (target.startsWith("http://") || target.startsWith("https://")) {
     return target;
@@ -101,12 +112,8 @@ const resolvePostAuthDestination = (): string => {
 const buildCallbackDestination = (): string => {
   const target = resolvePostAuthDestination();
   const encoded = encodeURIComponent(target);
-  if (typeof window !== "undefined") {
-    const origin = window.location.origin;
-    return `${origin}${CALLBACK_PATH}?redirect=${encoded}`;
-  }
-  // On server, prefer production fallback
-  return `${FALLBACK_BASE}${CALLBACK_PATH}?redirect=${encoded}`;
+  const origin = resolveSiteOrigin();
+  return `${origin}${CALLBACK_PATH}?redirect=${encoded}`;
 };
 
 const persistAuthCookies = (email?: string | null) => {
