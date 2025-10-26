@@ -1,4 +1,4 @@
-import { useMemo, useCallback, useState, useEffect } from "react";
+import { useMemo, useCallback, useState, useEffect, type CSSProperties } from "react";
 import { CheckSquare, Square, Flame, Trash2, ChevronDown, Clock } from "lucide-react";
 import styles from "@/app/gray/GrayPageClient.module.css";
 import { GrayDashboardCalendar } from "@/components/calendar/GrayDashboardCalendar";
@@ -9,6 +9,9 @@ import calendarStyles from "@/components/calendar/GrayDashboardCalendar.module.c
 
 const CALENDAR_PANEL_MAX_HEIGHT = "min(900px, calc(100vh - 150px))";
 const CALENDAR_PANEL_HOUR_HEIGHT = 62;
+const DASHBOARD_PANEL_SIZING_STYLE = {
+  "--calendar-max-height": CALENDAR_PANEL_MAX_HEIGHT,
+} satisfies CSSProperties;
 
 const startOfWeek = (value: Date) => {
   const next = new Date(value);
@@ -258,7 +261,10 @@ export function GrayDashboardView({
 
       {activeTab === "pulse" ? (
         <div className={styles.dashboardCalendarContainer}>
-          <div className={styles.dashboardCalendarShell}>
+          <div
+            className={styles.dashboardCalendarShell}
+            style={DASHBOARD_PANEL_SIZING_STYLE}
+          >
             <div className={styles.dashboardCalendarSurface}>
               <header className={`${calendarStyles.calendarSurfaceHeader} ${styles.pulseSurfaceHeader}`}>
                 <div className={calendarStyles.calendarSurfaceHeaderLeft}>

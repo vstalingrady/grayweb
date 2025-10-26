@@ -2429,6 +2429,8 @@
   flex-direction: column;
   gap: clamp(20px, 3vw, 32px);
   min-height: 0;
+  overflow-y: auto;
+  padding-right: clamp(6px, 1vw, 14px);
 }
 
 .pulseCalendarShell {
@@ -3134,7 +3136,10 @@
   padding: clamp(24px, 3.5vw, 36px);
   display: flex;
   flex-direction: column;
-  overflow: visible;
+  min-height: 0;
+  height: var(--calendar-max-height, auto);
+  max-height: var(--calendar-max-height, none);
+  overflow: hidden;
 }
 
 .dashboardCalendarShell > * {
@@ -3163,6 +3168,12 @@
   border-radius: 0;
   border: none;
   box-shadow: none;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(16px, 2vw, 26px);
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
 }
 
 .dashboardCalendarSurface .calendarSurfaceHeaderLeft {
@@ -3185,12 +3196,18 @@
   padding: clamp(18px, 3vw, 28px) 0 0;
   border-top: none;
   gap: clamp(18px, 3vw, 28px);
+  flex: 1;
+  min-height: 0;
+  align-items: stretch;
 }
 
 .dashboardCalendarSurface .calendarSidebarPanel {
   border-right: none;
   margin-right: clamp(14px, 2.8vw, 24px);
   padding-right: clamp(14px, 2.8vw, 24px);
+  align-self: stretch;
+  height: 100%;
+  overflow-y: auto;
 }
 
 .calendarTimes {
