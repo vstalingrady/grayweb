@@ -1156,8 +1156,10 @@ function GrayPageClientInner({
   };
 
   const greeting = `Good ${greetingForDate(now)}, ${viewerName}`;
+  const dashboardTabAttr = isDashboardView ? dashboardTab : undefined;
+
   return (
-    <div className={styles.page}>
+    <div className={styles.page} data-dashboard-tab={dashboardTabAttr}>
       <div className={styles.backdrop} aria-hidden="true" />
       <div className={styles.overlay} aria-hidden="true" />
       <div className={styles.shell}>
@@ -1186,6 +1188,7 @@ function GrayPageClientInner({
             className={styles.main}
             data-dashboard={isDashboardView ? "true" : "false"}
             data-view={viewMode}
+            data-dashboard-tab={dashboardTabAttr}
           >
             <div
               className={styles.mainContent}

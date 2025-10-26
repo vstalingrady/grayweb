@@ -20,6 +20,14 @@
   overflow: hidden;
 }
 
+.page[data-dashboard-tab="pulse"] {
+  overflow-y: auto;
+}
+
+.page[data-dashboard-tab="calendar"] {
+  overflow: hidden;
+}
+
 .backdrop {
   position: fixed;
   inset: 0;
@@ -3111,6 +3119,18 @@
   display: flex;
   justify-content: center;
   box-sizing: border-box;
+}
+
+.page[data-dashboard-tab="calendar"] .dashboardCalendarContainer {
+  margin-bottom: clamp(16px, 2vw, 32px);
+}
+
+.page[data-dashboard-tab="pulse"] .dashboardCalendarContainer {
+  min-height: 0;
+  height: calc(100vh - clamp(120px, 18vh, 220px));
+  max-height: calc(100vh - clamp(120px, 18vh, 220px));
+  overflow-y: auto;
+  padding-right: clamp(6px, 1vw, 16px);
 }
 
 .dashboardCalendarContainer > * {
