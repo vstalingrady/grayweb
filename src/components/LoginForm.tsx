@@ -59,11 +59,8 @@ const ensureAbsoluteUrl = (target: string): string => {
     return target;
   }
 
-  if (typeof window !== "undefined") {
-    return new URL(target, window.location.origin).toString();
-  }
-
-  return new URL(target, FALLBACK_BASE).toString();
+  const origin = resolveSiteOrigin();
+  return new URL(target, origin).toString();
 };
 
 const sanitizeRedirect = (target: string | null | undefined): string | null => {
