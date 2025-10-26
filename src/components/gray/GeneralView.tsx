@@ -5,7 +5,7 @@ import type { CalendarEvent, CalendarInfo } from "@/components/calendar/types";
 import { type HabitItem, type PlanItem } from "./types";
 
 const PANEL_HEIGHT = "min(540px, calc(100vh - 320px))";
-const COMPACT_CALENDAR_HOUR_HEIGHT = 56;
+const COMPACT_CALENDAR_HOUR_HEIGHT = 52;
 
 type PlanTab = "plans" | "habits";
 
@@ -46,6 +46,9 @@ export function GrayGeneralView({
             initialDate={currentDate}
             viewModeLocked="day"
             showSidebar={false}
+            showSurfaceLabel={false}
+            showHeaderControls={false}
+            showHeaderDates={false}
             calendars={calendars}
             events={calendarEvents}
             onCalendarsChange={onCalendarsChange}

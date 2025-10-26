@@ -1,9 +1,14 @@
-import { useMemo } from "react";
+import { useMemo, useCallback, useState, useEffect } from "react";
 import { CheckSquare, Square, Flame, Trash2, ChevronDown, Clock } from "lucide-react";
 import styles from "@/app/gray/GrayPageClient.module.css";
 import { GrayDashboardCalendar } from "@/components/calendar/GrayDashboardCalendar";
 import type { CalendarEvent, CalendarInfo } from "@/components/calendar/types";
 import { type ProactivityItem, type PulseEntry } from "./types";
+import { CalendarSidebar } from "@/components/calendar/CalendarSidebar";
+import calendarStyles from "@/components/calendar/GrayDashboardCalendar.module.css";
+
+const CALENDAR_PANEL_MAX_HEIGHT = "min(900px, calc(100vh - 150px))";
+const CALENDAR_PANEL_HOUR_HEIGHT = 62;
 
 type GrayDashboardViewProps = {
   pulseEntries: PulseEntry[];
@@ -11,7 +16,6 @@ type GrayDashboardViewProps = {
   isCurrentPulseEditable: boolean;
   onSelectPulse: (id: string) => void;
   proactivityFallback: ProactivityItem;
-  dashboardDateLabel: string;
   onTogglePlan: (id: string) => void;
   activeTab: "pulse" | "calendar";
   onSelectTab: (tab: "pulse" | "calendar") => void;
@@ -28,7 +32,6 @@ export function GrayDashboardView({
   isCurrentPulseEditable,
   onSelectPulse,
   proactivityFallback,
-  dashboardDateLabel,
   onTogglePlan,
   activeTab,
   onSelectTab,
@@ -38,10 +41,44 @@ export function GrayDashboardView({
   calendarEvents,
   onCalendarEventsChange,
 }: GrayDashboardViewProps) {
-  const displayPlans = currentPulse?.plans ?? [];
-  const displayHabits = currentPulse?.habits ?? [];
-  const displayProactivity = currentPulse?.proactivity ?? proactivityFallback;
-  const activePulseId = currentPulse?.id ?? null;
+  const hasPulseData = Boolean(currentPulse && pulseEntries.length > 0);
+  const displayPlans = hasPulseData ? currentPulse?.plans ?? [] : [];
+  const displayHabits = hasPulseData ? currentPulse?.habits ?? [] : [];
+  const displayProactivity = hasPulseData ? currentPulse?.proactivity ?? proactivityFallback : null;
+  const activePulseId = hasPulseData ? currentPulse?.id ?? null : null;
+  const [pulseSelectedDate, setPulseSelectedDate] = useState<Date>(() => new Date(currentDate));
+  const [pulseMonthDate, setPulseMonthDate] = useState<Date>(() => new Date(currentDate));
+
+  useEffect(() => {
+    setPulseSelectedDate(new Date(currentDate));
+    setPulseMonthDate(new Date(currentDate));
+  }, [currentDate]);
+
+  const handlePulseDateSelect = useCallback((nextDate: Date) => {
+    setPulseSelectedDate(nextDate);
+    setPulseMonthDate(nextDate);
+  }, []);
+
+  const handlePulseMonthNavigate = useCallback((offset: number) => {
+    setPulseMonthDate((previous) => {
+      const next = new Date(previous);
+      next.setMonth(previous.getMonth() + offset);
+      return next;
+    });
+  }, []);
+
+  const handleCalendarVisibilityToggle = useCallback(
+    (calendarId: string) => {
+      onCalendarsChange(
+        calendars.map((calendar) =>
+          calendar.id === calendarId
+            ? { ...calendar, isVisible: !calendar.isVisible }
+            : calendar
+        )
+      );
+    },
+    [calendars, onCalendarsChange]
+  );
 
   const dayFormatter = useMemo(
     () =>
@@ -99,7 +136,6 @@ export function GrayDashboardView({
     onTogglePlan(planId);
   };
 
-  const hasPulseData = Boolean(currentPulse);
   const showPlansList = displayPlans.length > 0;
   const showHabitsList = displayHabits.length > 0;
 
@@ -128,38 +164,45 @@ export function GrayDashboardView({
               Calendar
             </button>
           </div>
-          <span className={styles.dashboardDate}>{dashboardDateLabel}</span>
         </div>
       </div>
 
       {activeTab === "pulse" ? (
-        hasPulseData ? (
-          <>
-            <div className={styles.pulseHistoryBar}>
-              <div className={styles.pulseHistoryRail} role="tablist" aria-label="Daily pulse history">
-                {pulseEntries.map((entry) => {
-                  const isActive = entry.id === activePulseId;
-                  return (
+        <div className={styles.dashboardPulseSurface}>
+          <div className={styles.dashboardPulseLayout}>
+            <aside className={styles.dashboardSidebarColumn}>
+              {hasPulseData ? (
+                <CalendarSidebar
+                  monthDate={pulseMonthDate}
+                  selectedDate={pulseSelectedDate}
+                  onSelectDate={handlePulseDateSelect}
+                  onNavigateMonth={handlePulseMonthNavigate}
+                  calendars={calendars}
+                  onToggleCalendar={handleCalendarVisibilityToggle}
+                  showSelectedDateLabel={false}
+                  showCreateAction={false}
+                  className={styles.pulseSidebarIntegrated}
+                />
+              ) : (
+                <div className={`${calendarStyles.calendarSidebar} ${styles.pulseCreateCard}`}>
+                  <div className={styles.pulseCreateContent}>
+                    <span className={styles.pulseCreateEyebrow}>Today</span>
+                    <h3>Create your first pulse</h3>
+                    <p>
+                      Capture today&apos;s plans and habits to track your momentum. Add items and see them
+                      reflected across your calendar.
+                    </p>
                     <button
-                      key={entry.id}
                       type="button"
-                      role="tab"
-                      aria-selected={isActive}
-                      className={styles.pulseHistoryItem}
-                      data-active={isActive ? "true" : "false"}
-                      tabIndex={isActive ? 0 : -1}
-                      onClick={() => onSelectPulse(entry.id)}
+                      className={styles.pulseCreateAction}
+                      disabled={!isCurrentPulseEditable}
                     >
-                      <span className={styles.pulseHistoryItemPrimary}>
-                        {dayFormatter.format(new Date(entry.timestamp))}
-                      </span>
-                      <span className={styles.pulseHistoryItemMeta}>{describePulseMeta(entry)}</span>
+                      Start a pulse
                     </button>
-                  );
-                })}
-              </div>
-            </div>
-
+                  </div>
+                </div>
+              )}
+            </aside>
             <section className={styles.dashboardGrid}>
               <article className={styles.dashboardCard}>
                 <header className={styles.dashboardCardHeader}>
@@ -182,8 +225,12 @@ export function GrayDashboardView({
                               <span className={styles.planLabel}>{plan.label}</span>
                             </button>
                           </li>
-                        ))
-                      : null}
+                          ))
+                      : (
+                        <li className={styles.listEmptyMessage}>
+                          <span>No plans captured yet.</span>
+                        </li>
+                      )}
                   </ul>
                   <button
                     type="button"
@@ -214,84 +261,99 @@ export function GrayDashboardView({
                               <span>{habit.streakLabel}</span>
                             </div>
                           </li>
-                        ))
-                      : null}
+                          ))
+                      : (
+                        <li className={styles.listEmptyMessage}>
+                          <span>No habits tracked yet.</span>
+                        </li>
+                      )}
                   </ul>
                   <button
                     type="button"
                     className={styles.secondaryAction}
                     disabled={!isCurrentPulseEditable}
-                    data-disabled={!isCurrentPulseEditable ? "true" : "false"}
-                  >
-                    Add habits
-                  </button>
-                </div>
-              </article>
-
-              <article className={`${styles.dashboardCard} ${styles.proactivityCard}`}>
-                <header className={styles.dashboardCardHeader}>
-                  <span>Proactivity</span>
-                </header>
-                <div className={styles.dashboardCardBody}>
-                  <div className={styles.proactivityHeader}>
-                    <div>
-                      <div className={styles.proactivityTitle}>
-                        <CheckSquare size={16} />
-                        <span>{displayProactivity?.label ?? "—"}</span>
-                      </div>
-                      <p>{displayProactivity?.description ?? ""}</p>
-                    </div>
-                    <button
-                      type="button"
-                      className={styles.iconButton}
-                      aria-label="Remove proactivity item"
-                      disabled={!isCurrentPulseEditable}
+                      data-disabled={!isCurrentPulseEditable ? "true" : "false"}
                     >
-                      <Trash2 size={16} />
+                      Add habits
                     </button>
                   </div>
-                  <div className={styles.proactivityControls}>
-                    <label>
-                      <span>Cadence</span>
-                      <div className={styles.dashboardSelect}>
-                        <span>{displayProactivity?.cadence ?? "Daily"}</span>
-                        <ChevronDown size={14} />
+                </article>
+
+                <article className={`${styles.dashboardCard} ${styles.proactivityCard}`}>
+                  <header className={styles.dashboardCardHeader}>
+                    <span>Proactivity</span>
+                  </header>
+                  <div className={styles.dashboardCardBody}>
+                    {displayProactivity ? (
+                      <>
+                        <div className={styles.proactivityHeader}>
+                          <div>
+                            <div className={styles.proactivityTitle}>
+                              <CheckSquare size={16} />
+                              <span>{displayProactivity.label}</span>
+                            </div>
+                            <p>{displayProactivity.description}</p>
+                          </div>
+                          <button
+                            type="button"
+                            className={styles.iconButton}
+                            aria-label="Remove proactivity item"
+                            disabled={!isCurrentPulseEditable}
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                        <div className={styles.proactivityControls}>
+                          <label>
+                            <span>Cadence</span>
+                            <div className={styles.dashboardSelect}>
+                              <span>{displayProactivity.cadence ?? "Daily"}</span>
+                              <ChevronDown size={14} />
+                            </div>
+                          </label>
+                          <label>
+                            <span>Time</span>
+                            <div className={styles.dashboardSelect}>
+                              <Clock size={14} />
+                              <span>{displayProactivity.time ?? "09:00 AM"}</span>
+                            </div>
+                          </label>
+                        </div>
+                      </>
+                    ) : (
+                      <div className={styles.cardEmptyMessage}>
+                        <span>No proactivity focus set yet.</span>
                       </div>
-                    </label>
-                    <label>
-                      <span>Time</span>
-                      <div className={styles.dashboardSelect}>
-                        <Clock size={14} />
-                        <span>{displayProactivity?.time ?? "09:00 AM"}</span>
-                      </div>
-                    </label>
+                    )}
+                    <button
+                      type="button"
+                      className={styles.secondaryAction}
+                      disabled={!isCurrentPulseEditable}
+                      data-disabled={!isCurrentPulseEditable ? "true" : "false"}
+                    >
+                      {displayProactivity ? "Update proactivity" : "Add proactivity"}
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    className={styles.secondaryAction}
-                    disabled={!isCurrentPulseEditable}
-                    data-disabled={!isCurrentPulseEditable ? "true" : "false"}
-                  >
-                    Add proactivity
-                  </button>
-                </div>
-              </article>
-            </section>
-          </>
-        ) : (
-          <div className={styles.pulseEmptyState}>
-            <p>No pulse data yet. Start by creating plans or habits for today.</p>
+                </article>
+              </section>
+            </div>
           </div>
-        )
       ) : (
-        <GrayDashboardCalendar
-          initialDate={currentDate}
-          showSidebar={true}
-          calendars={calendars}
-          events={calendarEvents}
-          onCalendarsChange={onCalendarsChange}
-          onEventsChange={onCalendarEventsChange}
-        />
+        <div className={styles.dashboardCalendarContainer}>
+          <GrayDashboardCalendar
+            initialDate={currentDate}
+            showSidebar={true}
+            calendars={calendars}
+            events={calendarEvents}
+            onCalendarsChange={onCalendarsChange}
+            onEventsChange={onCalendarEventsChange}
+            showSelectedDateLabel={false}
+            className={styles.dashboardCalendarAligned}
+            surfaceClassName={styles.dashboardCalendarSurface}
+            maxHeight={CALENDAR_PANEL_MAX_HEIGHT}
+            hourHeight={CALENDAR_PANEL_HOUR_HEIGHT}
+          />
+        </div>
       )}
     </>
   );

@@ -1,4 +1,3 @@
-import { useMemo } from "react";
 import { CalendarInfo } from "./types";
 import styles from "./GrayDashboardCalendar.module.css";
 import { MiniMonth } from "./MiniMonth";
@@ -12,6 +11,11 @@ type CalendarSidebarProps = {
   onToggleCalendar: (calendarId: string) => void;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
+  showSelectedDateLabel?: boolean;
+  showCreateAction?: boolean;
+  integrationActionLabel?: string;
+  onIntegrationAction?: () => void;
+  className?: string;
 };
 
 const formatMonthLabel = (date: Date) =>
@@ -29,30 +33,31 @@ export function CalendarSidebar({
   onToggleCalendar,
   isCollapsed,
   onToggleCollapse,
+  showSelectedDateLabel = true,
+  showCreateAction = true,
+  integrationActionLabel = "Add Google Calendar integration",
+  onIntegrationAction,
+  className,
 }: CalendarSidebarProps) {
-  const timezoneLabel = useMemo(() => {
-    const offsetMinutes = -new Date().getTimezoneOffset();
-    const sign = offsetMinutes >= 0 ? "+" : "-";
-    const absMinutes = Math.abs(offsetMinutes);
-    const hours = Math.floor(absMinutes / 60);
-    const minutes = absMinutes % 60;
-    const minuteLabel = minutes ? `:${minutes.toString().padStart(2, "0")}` : "";
-    return `GMT${sign}${hours}${minuteLabel}`;
-  }, []);
+  const sidebarClassName = [styles.calendarSidebar, className]
+    .filter(Boolean)
+    .join(" ");
 
   return (
-    <aside className={styles.calendarSidebar}>
+    <aside className={sidebarClassName}>
       <header className={styles.calendarSidebarHeader}>
         <div>
           <span className={styles.calendarSidebarEyebrow}>Calendar</span>
           <h2>{formatMonthLabel(monthDate)}</h2>
-          <span className={styles.calendarSidebarSubhead}>
-            {selectedDate.toLocaleDateString(undefined, {
-              month: "long",
-              day: "numeric",
-              year: "numeric",
-            })}
-          </span>
+          {showSelectedDateLabel ? (
+            <span className={styles.calendarSidebarSubhead}>
+              {selectedDate.toLocaleDateString(undefined, {
+                month: "long",
+                day: "numeric",
+                year: "numeric",
+              })}
+            </span>
+          ) : null}
         </div>
         <div className={styles.calendarSidebarHeaderActions}>
           <button
@@ -69,9 +74,11 @@ export function CalendarSidebar({
           >
             ›
           </button>
-          <button type="button" className={styles.calendarSidebarCreate}>
-            + Create
-          </button>
+          {showCreateAction && (
+            <button type="button" className={styles.calendarSidebarCreate}>
+              + Create
+            </button>
+          )}
           {onToggleCollapse && (
             <button
               type="button"
@@ -94,19 +101,6 @@ export function CalendarSidebar({
           selectedDate={selectedDate}
           onSelectDate={onSelectDate}
         />
-
-        <div className={styles.calendarSidebarMeta}>
-          <span>Time</span>
-          <strong>{timezoneLabel}</strong>
-        </div>
-
-        <div className={styles.calendarSidebarSearch}>
-          <input
-            type="search"
-            placeholder="Search for people"
-            onChange={() => {}}
-          />
-        </div>
 
         <section className={styles.calendarSidebarList}>
           <header>
@@ -131,29 +125,17 @@ export function CalendarSidebar({
                 </label>
               </li>
             ))}
-          </ul>
-        </section>
-
-        <section className={styles.calendarSidebarList}>
-          <header>
-            <span>Other calendars</span>
-            <button type="button">+</button>
-          </header>
-          <ul>
-            <li>
-              <label>
-                <input type="checkbox" />
-                <span className={styles.calendarSidebarSwatch} />
-                <span>Browse resources</span>
-              </label>
+            <li className={styles.calendarSidebarIntegration}>
+              <button
+                type="button"
+                className={styles.calendarSidebarIntegrationButton}
+                onClick={onIntegrationAction}
+              >
+                {integrationActionLabel}
+              </button>
             </li>
           </ul>
         </section>
-
-        <footer className={styles.calendarSidebarFooter}>
-          <button type="button">Terms</button>
-          <button type="button">Privacy</button>
-        </footer>
       </div>
     </aside>
   );

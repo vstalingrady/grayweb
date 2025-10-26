@@ -377,6 +377,9 @@
   color: rgba(235, 235, 235, 0.72);
   font-size: 0.82rem;
   letter-spacing: 0.04em;
+  font-family: "Plus Jakarta Sans", var(--font-sans), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  font-weight: 500;
   cursor: pointer;
   transition: color 0.2s ease;
 }
@@ -398,11 +401,13 @@
 
 .sidebarNavItem[data-nav="history"] {
   gap: 0;
-  --history-line-offset: 20px;
+  --history-line-offset: 12px;
 }
 
 .sidebarNavItem[data-nav="history"] > .sidebarHistory {
   margin-top: 0;
+  padding-top: 0;
+  border-top: none;
 }
 
 .navIcon {
@@ -421,7 +426,7 @@
 .sidebarHistoryConnector {
   display: block;
   position: relative;
-  height: 0;
+  height: 14px;
   margin: 0;
 }
 
@@ -429,10 +434,10 @@
   content: "";
   position: absolute;
   left: var(--history-line-offset);
-  top: -9px;
+  top: 0;
   bottom: 0;
   width: 2px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.32), rgba(255, 255, 255, 0.08));
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0.08));
   pointer-events: none;
 }
 
@@ -441,7 +446,7 @@
   flex-direction: column;
   gap: 18px;
   margin-top: 6px;
-  padding-left: 38px;
+  padding-left: 24px;
   position: relative;
 }
 
@@ -449,10 +454,10 @@
   content: "";
   position: absolute;
   left: var(--history-line-offset);
-  top: 0;
-  bottom: 4px;
+  top: -14px;
+  bottom: 0;
   width: 2px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.06));
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0.08));
   pointer-events: none;
 }
 
@@ -466,14 +471,15 @@
   font-size: 0.62rem;
   letter-spacing: 0.26em;
   text-transform: uppercase;
-  color: rgba(235, 235, 235, 0.52);
-  padding-left: 4px;
+  font-weight: 500;
+  color: rgba(235, 235, 235, 0.7);
+  padding-left: 2px;
 }
 
 .sidebarHistoryList {
   list-style: none;
   margin: 0;
-  padding: 0 0 0 16px;
+  padding: 0 0 0 8px;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -488,7 +494,10 @@
   align-items: center;
   gap: 8px;
   font-size: 0.84rem;
-  color: rgba(235, 235, 235, 0.74);
+  font-family: "Plus Jakarta Sans", var(--font-sans), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  font-weight: 500;
+  color: rgba(235, 235, 235, 0.84);
   text-decoration: none;
   transition: color 0.2s ease, transform 0.2s ease;
 }
@@ -502,6 +511,7 @@
 
 .sidebarHistoryLinkActive {
   color: rgba(255, 255, 255, 0.96);
+  font-weight: 600;
 }
 
 .sidebarHistoryEmpty {
@@ -1479,13 +1489,43 @@
   gap: clamp(20px, 3vw, 36px);
 }
 
+.dashboardPulseSurface {
+  width: min(1240px, 100%);
+  margin: clamp(20px, 3vw, 38px) auto 0;
+  background: radial-gradient(
+      circle at top left,
+      rgba(20, 20, 20, 0.95),
+      rgba(6, 6, 6, 0.96)
+    )
+    no-repeat;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 38px;
+  padding: clamp(26px, 3vw, 40px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.03),
+    0 32px 60px rgba(0, 0, 0, 0.55);
+  position: relative;
+  overflow: hidden;
+}
+
+.dashboardPulseSurface::after {
+  content: "";
+  position: absolute;
+  inset: 18px;
+  border-radius: 30px;
+  border: 1px solid rgba(255, 255, 255, 0.025);
+  pointer-events: none;
+}
+
 .dashboardPulseLayout {
+  position: relative;
+  z-index: 1;
   display: grid;
-  width: min(1160px, 100%);
-  margin: clamp(16px, 2.4vw, 32px) auto 0;
-  grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
-  gap: clamp(20px, 3vw, 36px);
+  width: 100%;
+  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+  gap: clamp(24px, 3vw, 40px);
   align-items: flex-start;
+  padding-bottom: clamp(12px, 2vw, 24px);
 }
 
 .dashboardPulseLayout .dashboardGrid {
@@ -1495,13 +1535,24 @@
 
 .dashboardSidebarColumn {
   display: flex;
-  justify-content: center;
+  justify-content: flex-start;
   min-width: 0;
 }
 
 .dashboardSidebarColumn > * {
   width: 100%;
-  max-width: 360px;
+  max-width: none;
+}
+
+.pulseSidebarIntegrated {
+  background: transparent;
+  border: none;
+  padding: 0;
+  box-shadow: none;
+}
+
+.pulseSidebarIntegrated::after {
+  display: none;
 }
 
 .pulseHistoryBar {
@@ -1784,6 +1835,61 @@
   align-items: stretch;
 }
 
+.dashboardCalendarContainer {
+  width: min(1420px, 97.5%);
+  margin: clamp(22px, 3vw, 36px) auto 0;
+  display: flex;
+  justify-content: flex-start;
+  padding-bottom: 0;
+}
+
+.dashboardCalendarContainer > * {
+  flex: 1;
+}
+
+.dashboardCalendarAligned {
+  position: relative;
+  margin: 0;
+  max-width: 100%;
+  width: 100%;
+  margin-bottom: 0;
+  padding: clamp(18px, 2.2vw, 30px);
+  border-radius: 34px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: linear-gradient(140deg, rgba(18, 18, 18, 0.92), rgba(6, 6, 6, 0.78));
+  box-shadow:
+    0 28px 60px rgba(0, 0, 0, 0.48),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(10px);
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.dashboardCalendarAligned > * {
+  position: relative;
+  z-index: 1;
+}
+
+.dashboardCalendarAligned::after {
+  content: "";
+  position: absolute;
+  inset: 12px;
+  border-radius: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  pointer-events: none;
+  opacity: 0.7;
+  z-index: 0;
+}
+
+.dashboardCalendarSurface {
+  background: rgba(12, 12, 12, 0.88);
+  border-radius: 26px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.03),
+    0 24px 48px rgba(0, 0, 0, 0.35);
+}
+
 .calendarTimes {
   width: 64px;
   display: flex;
@@ -1818,9 +1924,9 @@
 .calendarViewport {
   position: relative;
   flex: 1;
-  background: rgba(12, 12, 12, 0.78);
-  border: 1px solid rgba(255, 255, 255, 0.04);
-  border-radius: 20px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
   padding: 12px 18px;
   overflow-y: auto;
   min-height: 0;
@@ -1908,9 +2014,9 @@
 }
 
 .dashboardCalendarSidebar {
-  background: rgba(12, 12, 12, 0.84);
-  border: 1px solid rgba(255, 255, 255, 0.04);
-  border-radius: 26px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
   padding: 22px;
   display: flex;
   flex-direction: column;
@@ -1942,7 +2048,7 @@
 }
 
 .dashboardCalendarSidebarHeader button {
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  border: none;
   background: rgba(32, 32, 32, 0.9);
   color: rgba(247, 247, 247, 0.86);
   font-size: 0.74rem;
@@ -1959,14 +2065,13 @@
 
 .dashboardCalendarSidebarHeader button:hover {
   background: rgba(52, 52, 52, 0.94);
-  border-color: rgba(255, 255, 255, 0.26);
   transform: translateY(-1px);
 }
 
 .dashboardMiniCalendar {
-  background: rgba(18, 18, 18, 0.92);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: 20px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
   padding: 16px 18px;
   display: flex;
   flex-direction: column;
@@ -2032,9 +2137,9 @@
 
 .calendarSidebarSearch input {
   width: 100%;
-  border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(22, 22, 22, 0.9);
+  border-radius: 0;
+  border: none;
+  background: transparent;
   color: rgba(235, 235, 235, 0.78);
   font-size: 0.72rem;
   letter-spacing: 0.12em;
@@ -2051,8 +2156,8 @@
 }
 
 .calendarSidebarSearch input:focus {
-  border-color: rgba(255, 255, 255, 0.2);
-  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.08);
+  border-color: transparent;
+  box-shadow: none;
 }
 
 .calendarSidebarSectionList {
@@ -2174,9 +2279,9 @@
 }
 
 .dashboardCalendarBoard {
-  background: rgba(10, 10, 10, 0.82);
-  border: 1px solid rgba(255, 255, 255, 0.04);
-  border-radius: 26px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
   padding: 22px 24px 26px;
   display: flex;
   flex-direction: column;
@@ -2215,7 +2320,7 @@
 }
 
 .calendarBoardActions button {
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  border: none;
   background: rgba(20, 20, 20, 0.72);
   color: rgba(235, 235, 235, 0.78);
   font-size: 0.7rem;
@@ -2232,7 +2337,6 @@
 
 .calendarBoardActions button:hover {
   background: rgba(40, 40, 40, 0.84);
-  border-color: rgba(255, 255, 255, 0.26);
   transform: translateY(-1px);
 }
 
@@ -2636,7 +2740,8 @@
 }
 
 .secondaryAction {
-  align-self: flex-start;
+  align-self: flex-end;
+  margin-left: auto;
   padding: 10px 20px;
   border-radius: 16px;
   border: 1px solid rgba(118, 139, 255, 0.55);
