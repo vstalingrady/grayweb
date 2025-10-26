@@ -24,7 +24,8 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
 
 const DEFAULT_APP_PATH = "/";
 const CALLBACK_PATH = "/callback";
-const FALLBACK_BASE = envSiteUrl || "http://localhost:3000";
+// Prefer configured site URL; fall back to production domain
+const FALLBACK_BASE = envSiteUrl || "https://gray.alignment.id";
 const SUPABASE_STORAGE_KEY = (() => {
   if (!supabaseUrl) {
     return undefined;
