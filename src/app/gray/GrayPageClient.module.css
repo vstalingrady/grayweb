@@ -405,6 +405,7 @@
 
 .sidebarNavItem[data-nav="history"] {
   gap: 0;
+  --history-line-offset: calc(14px + 9px);
 }
 
 .sidebarNavItem[data-nav="history"] > .sidebarHistory {
@@ -424,23 +425,41 @@
   text-align: left;
 }
 
+.sidebarHistoryConnector {
+  display: block;
+  position: relative;
+  height: 18px;
+  margin: -8px 0 4px;
+}
+
+.sidebarHistoryConnector::before {
+  content: "";
+  position: absolute;
+  left: var(--history-line-offset);
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0.06));
+  pointer-events: none;
+}
+
 .sidebarHistory {
   display: flex;
   flex-direction: column;
   gap: 18px;
-  margin-top: 10px;
-  padding-left: 52px;
+  margin-top: 0;
+  padding-left: 54px;
   position: relative;
 }
 
 .sidebarHistory::before {
   content: "";
   position: absolute;
-  left: 30px;
-  top: 4px;
-  bottom: 8px;
-  width: 1px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02));
+  left: var(--history-line-offset);
+  top: 0;
+  bottom: 6px;
+  width: 2px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.04));
   pointer-events: none;
 }
 
@@ -455,13 +474,13 @@
   letter-spacing: 0.26em;
   text-transform: uppercase;
   color: rgba(235, 235, 235, 0.48);
-  padding-left: 4px;
+  padding-left: 6px;
 }
 
 .sidebarHistoryList {
   list-style: none;
   margin: 0;
-  padding: 0 0 0 20px;
+  padding: 0 0 0 18px;
   display: flex;
   flex-direction: column;
   gap: 6px;

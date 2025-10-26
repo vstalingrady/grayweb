@@ -1,23 +1,10 @@
 import React, { useMemo } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { ChevronsRight, ChevronsUp, ChevronsDown, Search as SearchIcon, UserRound, History as HistoryGlyph, Plus, LayoutDashboard } from "lucide-react";
+import { ChevronsRight, ChevronsUp, ChevronsDown, Search as SearchIcon, UserRound } from "lucide-react";
 import { useUser } from "@/contexts/UserContext";
 import styles from "@/app/gray/GrayPageClient.module.css";
 import { type SidebarHistorySection, type SidebarNavItem, type SidebarNavKey, type SidebarHistoryEntry } from "./types";
-
-// Icon components from Gemini code
-const HistoryIcon: React.FC<{ className?: string }> = ({ className = "w-5 h-5" }) => (
-  <HistoryGlyph className={className} />
-);
-
-const PlusIcon: React.FC<{ className?: string }> = ({ className = "w-5 h-5" }) => (
-  <Plus className={className} />
-);
-
-const DashboardIcon: React.FC<{ className?: string }> = ({ className = "w-5 h-5" }) => (
-  <LayoutDashboard className={className} />
-);
 
 type GrayEnhancedSidebarProps = {
   isExpanded: boolean;
@@ -42,7 +29,7 @@ export function GrayEnhancedSidebar({
   viewerAvatarUrl = null,
   activeNav,
   railItems,
-  navItems: _navItems,
+  navItems,
   historySections,
   onExpand,
   onCollapse,
@@ -51,7 +38,6 @@ export function GrayEnhancedSidebar({
   activeChatId = null,
 }: GrayEnhancedSidebarProps) {
   const { user } = useUser();
-  void _navItems;
   const sidebarAvatarUrl = viewerAvatarUrl ?? user?.profile_picture_url ?? null;
 
   const historyGroups = useMemo(() => {
@@ -144,14 +130,6 @@ export function GrayEnhancedSidebar({
       }));
   }, [historySections]);
 
-  // Enhanced navigation items with history
-  const enhancedNavItems = [
-    { id: 'general' as SidebarNavKey, icon: null, label: 'General' },
-    { id: 'new-thread' as SidebarNavKey, icon: <PlusIcon />, label: 'New Thread' },
-    { id: 'dashboard' as SidebarNavKey, icon: <DashboardIcon />, label: 'Dashboard' },
-    { id: 'history' as SidebarNavKey, icon: <HistoryIcon />, label: 'History' },
-  ];
-
   return (
     <aside className={styles.sidebar} data-expanded={isExpanded ? "true" : "false"}>
       <div className={styles.sidebarRail}>
@@ -242,7 +220,7 @@ export function GrayEnhancedSidebar({
               </div>
                   <nav aria-label="Primary">
                     <ul className={styles.sidebarNav}>
-                      {enhancedNavItems.map((item) => (
+                      {navItems.map((item) => (
                         <li key={item.id} className={styles.sidebarNavItem} data-nav={item.id}>
                           <button
                             type="button"
@@ -250,41 +228,46 @@ export function GrayEnhancedSidebar({
                             aria-label={item.label}
                             onClick={() => onNavigate(item.id)}
                           >
-                            <span className={styles.navIcon}>{item.icon}</span>
+                            <span className={styles.navIcon}>
+                              <item.icon size={18} />
+                            </span>
                             <span className={styles.navLabel}>{item.label}</span>
                           </button>
 
                           {item.id === "history" && isExpanded && (
-                            <div className={styles.sidebarHistory}>
-                              {historyGroups.length > 0 ? (
-                                historyGroups.map((group) => (
-                                  <div key={group.id} className={styles.sidebarHistoryGroup}>
-                                    <span className={styles.sidebarHistoryLabel}>{group.label}</span>
-                                    <ul className={styles.sidebarHistoryList}>
-                                      {group.items.map((entry) => {
-                                        const isActive = entry.id === activeChatId;
-                                        return (
-                                          <li key={entry.id}>
-                                            <Link
-                                              href={entry.href}
-                                              className={
-                                                isActive
-                                                  ? `${styles.sidebarHistoryLink} ${styles.sidebarHistoryLinkActive}`
-                                                  : styles.sidebarHistoryLink
-                                              }
-                                            >
-                                              {entry.title}
-                                            </Link>
-                                          </li>
-                                        );
-                                      })}
-                                    </ul>
-                                  </div>
-                                ))
-                              ) : (
-                                <span className={styles.sidebarHistoryEmpty}>No conversations yet.</span>
-                              )}
-                            </div>
+                            <>
+                              <span className={styles.sidebarHistoryConnector} aria-hidden="true" />
+                              <div className={styles.sidebarHistory}>
+                                {historyGroups.length > 0 ? (
+                                  historyGroups.map((group) => (
+                                    <div key={group.id} className={styles.sidebarHistoryGroup}>
+                                      <span className={styles.sidebarHistoryLabel}>{group.label}</span>
+                                      <ul className={styles.sidebarHistoryList}>
+                                        {group.items.map((entry) => {
+                                          const isActive = entry.id === activeChatId;
+                                          return (
+                                            <li key={entry.id}>
+                                              <Link
+                                                href={entry.href}
+                                                className={
+                                                  isActive
+                                                    ? `${styles.sidebarHistoryLink} ${styles.sidebarHistoryLinkActive}`
+                                                    : styles.sidebarHistoryLink
+                                                }
+                                              >
+                                                {entry.title}
+                                              </Link>
+                                            </li>
+                                          );
+                                        })}
+                                      </ul>
+                                    </div>
+                                  ))
+                                ) : (
+                                  <span className={styles.sidebarHistoryEmpty}>No conversations yet.</span>
+                                )}
+                              </div>
+                            </>
                           )}
                         </li>
                       ))}
