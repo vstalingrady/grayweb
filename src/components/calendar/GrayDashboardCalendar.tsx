@@ -516,7 +516,7 @@ export function GrayDashboardCalendar({
     .filter(Boolean)
     .join(" ");
 
-  const calendarStyle: CSSProperties = {
+  const calendarStyle: CSSProperties & { [key: string]: string | number | undefined } = {
     "--calendar-hour-height": `${hourHeight}px`,
   };
 
