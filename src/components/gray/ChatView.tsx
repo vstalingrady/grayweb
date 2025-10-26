@@ -1,8 +1,7 @@
 "use client";
 
-import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ArrowUp,
   Loader2,
   RefreshCw,
   Volume2,
@@ -10,59 +9,129 @@ import {
   Share2,
   ThumbsDown,
   ThumbsUp,
-  Paperclip,
+  Image as ImageIcon,
+  FileText,
+  X,
+  CheckCircle2,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import styles from "@/app/gray/GrayPageClient.module.css";
-import { SYSTEM_PROMPT, useChatStore, buildAssistantReply } from "./ChatProvider";
+import { GrayChatBar } from "./ChatBar";
+import {
+  SYSTEM_PROMPT,
+  useChatStore,
+  buildAssistantReply,
+  type ChatMessage as ChatSessionMessage,
+  type ChatRole,
+} from "./ChatProvider";
 import { useUser } from "@/contexts/UserContext";
-import { apiService } from "@/lib/api";
+import { apiService, type ChatAttachment, type GeminiFileMetadata } from "@/lib/api";
 
 type GrayChatViewProps = {
   sessionId: string | null;
 };
 
-const MAX_COMPOSER_HEIGHT = 160;
+const MAX_ATTACHMENTS = 5;
+const MAX_ATTACHMENT_SIZE_BYTES = 20 * 1024 * 1024;
 
-const formatRelativeTime = (timestamp: number) => {
-  const now = Date.now();
-  const delta = now - timestamp;
-  const minutes = Math.floor(delta / (60 * 1000));
-  if (minutes < 1) {
-    return "just now";
-  }
-  if (minutes < 60) {
-    return `${minutes} minute${minutes === 1 ? "" : "s"} ago`;
-  }
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) {
-    return `${hours} hour${hours === 1 ? "" : "s"} ago`;
-  }
-  const days = Math.floor(hours / 24);
-  if (days < 30) {
-    return `${days} day${days === 1 ? "" : "s"} ago`;
-  }
-  const date = new Date(timestamp);
-  return date.toLocaleDateString([], {
-    month: "short",
-    day: "numeric",
-    year: date.getFullYear() !== new Date().getFullYear() ? "numeric" : undefined,
-  });
+type ComposerAttachmentStatus = "uploading" | "uploaded" | "error";
+
+type ComposerAttachment = {
+  id: string;
+  file: File;
+  status: ComposerAttachmentStatus;
+  previewUrl?: string;
+  uploaded?: ChatAttachment;
+  error?: string;
 };
+
+const formatFileSize = (bytes?: number) => {
+  if (!bytes || Number.isNaN(bytes)) {
+    return "";
+  }
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+  if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`;
+  }
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+};
+
+const mapGeminiFileToAttachment = (file: GeminiFileMetadata): ChatAttachment => {
+  return {
+    name: file.name,
+    uri: file.uri ?? file.download_uri ?? "",
+    mime_type: file.mime_type ?? "application/octet-stream",
+    display_name: file.display_name ?? file.name,
+    size_bytes: file.size_bytes,
+  };
+};
+
+type AssistantSections = {
+  user: string | null;
+  thinking: string | null;
+  ai: string;
+  isStructured: boolean;
+};
+
+const parseStructuredAssistantMessage = (content?: string | null): AssistantSections => {
+  const raw = (content ?? "").replace(/\r\n/g, "\n");
+  const templateMatch = raw.match(
+    /user:\s*([\s\S]*?)\n\s*thinking \(not visible\):\s*<thinking>([\s\S]*?)<\/thinking>\s*\n\s*ai:\s*([\s\S]*)/i
+  );
+
+  if (!templateMatch) {
+    const fallback = raw.trim();
+    return {
+      user: null,
+      thinking: null,
+      ai: fallback,
+      isStructured: false,
+    };
+  }
+
+  const [, userSection, thinkingSection, aiSection] = templateMatch;
+  const sanitize = (value: string) => value.replace(/^\s+|\s+$/g, "");
+
+  return {
+    user: sanitize(userSection) || null,
+    thinking: sanitize(thinkingSection) || null,
+    ai: sanitize(aiSection),
+    isStructured: true,
+  };
+};
+
+const getAssistantDisplayText = (content?: string | null) =>
+  parseStructuredAssistantMessage(content).ai;
 
 export function GrayChatView({ sessionId }: GrayChatViewProps) {
   const { getSession, appendMessage, updateSession, workspaceContext } = useChatStore();
   const session = sessionId ? getSession(sessionId) : undefined;
   const { user } = useUser();
   const [draft, setDraft] = useState("");
+  const [hasHydrated, setHasHydrated] = useState(false);
   const replyTimeout = useRef<number | null>(null);
   const scrollAnchorRef = useRef<HTMLDivElement | null>(null);
-  const composerRef = useRef<HTMLTextAreaElement | null>(null);
   const isLoadingHistoryRef = useRef<string | null>(null);
+  const attachmentsRef = useRef<ComposerAttachment[]>([]);
+  const [displayedAssistantContent, setDisplayedAssistantContent] = useState<Record<string, string>>({});
+  const processedAssistantMessagesRef = useRef<Set<string>>(new Set());
+  const hydrationCompleteRef = useRef(false);
+  const animationTimersRef = useRef<Map<string, number>>(new Map());
+  const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
+  const copyResetTimeoutRef = useRef<number | null>(null);
+  const [regeneratingMessageId, setRegeneratingMessageId] = useState<string | null>(null);
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
+  const [composerAttachments, setComposerAttachments] = useState<ComposerAttachment[]>([]);
+  const revokePreviewUrl = useCallback((url?: string) => {
+    if (url) {
+      URL.revokeObjectURL(url);
+    }
+  }, []);
   const activeSessionId = session?.id ?? null;
   const activeConversationId = session?.conversationId ?? null;
 
@@ -70,16 +139,135 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
     () => session?.messages ?? [],
     [session?.messages]
   );
-  const resizeComposer = useCallback((target?: HTMLTextAreaElement | null) => {
-    const element = target ?? composerRef.current;
-    if (!element) {
-      return;
-    }
-    element.style.height = "auto";
-    const nextHeight = Math.min(element.scrollHeight, MAX_COMPOSER_HEIGHT);
-    element.style.height = `${nextHeight}px`;
-    element.style.overflowY = element.scrollHeight > MAX_COMPOSER_HEIGHT ? "auto" : "hidden";
+  const clearComposerAttachments = useCallback(() => {
+    setComposerAttachments((prev) => {
+      if (!prev.length) {
+        return prev;
+      }
+      prev.forEach((attachment) => revokePreviewUrl(attachment.previewUrl));
+      return [];
+    });
+  }, [revokePreviewUrl]);
+  const uploadComposerAttachment = useCallback((attachmentId: string, file: File) => {
+    setComposerAttachments((prev) =>
+      prev.map((attachment) =>
+        attachment.id === attachmentId
+          ? { ...attachment, status: "uploading", error: undefined }
+          : attachment
+      )
+    );
+
+    apiService
+      .uploadGeminiFile(file, file.name)
+      .then((uploadedFile: GeminiFileMetadata) => {
+        const normalized = mapGeminiFileToAttachment(uploadedFile);
+        if (!normalized.uri) {
+          throw new Error("Gemini did not return a reusable file URI.");
+        }
+        setComposerAttachments((prev) =>
+          prev.map((attachment) =>
+            attachment.id === attachmentId
+              ? { ...attachment, status: "uploaded", uploaded: normalized, error: undefined }
+              : attachment
+          )
+        );
+      })
+      .catch((error: unknown) => {
+        console.error("Failed to upload attachment:", error);
+        const message =
+          error instanceof Error
+            ? error.message
+            : typeof error === "string"
+              ? error
+              : "File upload failed.";
+        setComposerAttachments((prev) =>
+          prev.map((attachment) =>
+            attachment.id === attachmentId
+              ? { ...attachment, status: "error", error: message }
+              : attachment
+          )
+        );
+      });
   }, []);
+
+  const handleFilesSelected = useCallback(
+    (files: File[]) => {
+      if (!files.length) {
+        return;
+      }
+
+      const availableSlots = MAX_ATTACHMENTS - composerAttachments.length;
+      if (availableSlots <= 0) {
+        return;
+      }
+
+      const selection = files.slice(0, availableSlots);
+      const limitLabel = `${Math.round(MAX_ATTACHMENT_SIZE_BYTES / (1024 * 1024))} MB`;
+
+      selection.forEach((file) => {
+        const id =
+          typeof crypto !== "undefined" && "randomUUID" in crypto
+            ? crypto.randomUUID()
+            : `${Date.now()}-${file.name}`;
+
+        if (file.size > MAX_ATTACHMENT_SIZE_BYTES) {
+          setComposerAttachments((prev) => [
+            ...prev,
+            {
+              id,
+              file,
+              status: "error",
+              error: `File exceeds ${limitLabel}.`,
+            },
+          ]);
+          return;
+        }
+
+        const previewUrl = file.type.startsWith("image/")
+          ? URL.createObjectURL(file)
+          : undefined;
+        setComposerAttachments((prev) => [
+          ...prev,
+          {
+            id,
+            file,
+            status: "uploading",
+            previewUrl,
+          },
+        ]);
+        uploadComposerAttachment(id, file);
+      });
+    },
+    [composerAttachments.length, uploadComposerAttachment]
+  );
+
+  const handleRemoveAttachment = useCallback(
+    (attachmentId: string) => {
+      setComposerAttachments((prev) => {
+        const target = prev.find((attachment) => attachment.id === attachmentId);
+        if (target) {
+          revokePreviewUrl(target.previewUrl);
+        }
+        return prev.filter((attachment) => attachment.id !== attachmentId);
+      });
+    },
+    [revokePreviewUrl]
+  );
+
+  useEffect(() => {
+    setHasHydrated(true);
+  }, []);
+
+  const handleRetryAttachment = useCallback(
+    (attachmentId: string) => {
+      const target = composerAttachments.find((attachment) => attachment.id === attachmentId);
+      if (!target) {
+        return;
+      }
+      uploadComposerAttachment(attachmentId, target.file);
+    },
+    [composerAttachments, uploadComposerAttachment]
+  );
 
   useEffect(() => {
     if (!scrollAnchorRef.current) {
@@ -87,6 +275,44 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
     }
     scrollAnchorRef.current.scrollIntoView({ behavior: "smooth" });
   }, [messages.length, session?.isResponding]);
+
+  useEffect(() => {
+    attachmentsRef.current = composerAttachments;
+  }, [composerAttachments]);
+
+  useEffect(() => {
+    animationTimersRef.current.forEach((timer) => window.clearInterval(timer));
+    animationTimersRef.current.clear();
+    processedAssistantMessagesRef.current.clear();
+    hydrationCompleteRef.current = false;
+    setDisplayedAssistantContent({});
+  }, [session?.id]);
+
+  useEffect(() => {
+    if (!isHistoryLoading) {
+      return;
+    }
+    animationTimersRef.current.forEach((timer) => window.clearInterval(timer));
+    animationTimersRef.current.clear();
+    processedAssistantMessagesRef.current.clear();
+    hydrationCompleteRef.current = false;
+    setDisplayedAssistantContent({});
+  }, [isHistoryLoading]);
+
+  useEffect(
+    () => () => {
+      animationTimersRef.current.forEach((timer) => window.clearInterval(timer));
+      animationTimersRef.current.clear();
+    },
+    []
+  );
+
+  useEffect(
+    () => () => {
+      attachmentsRef.current.forEach((attachment) => revokePreviewUrl(attachment.previewUrl));
+    },
+    [revokePreviewUrl]
+  );
 
   useEffect(
     () => () => {
@@ -106,12 +332,95 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
   }, [session?.id]);
 
   useEffect(() => {
-    resizeComposer();
-  }, [resizeComposer, draft]);
+    clearComposerAttachments();
+  }, [clearComposerAttachments, session?.id]);
 
   useEffect(() => {
-    resizeComposer();
-  }, [messages.length, resizeComposer]);
+    if (!session) {
+      return;
+    }
+
+    if (!hydrationCompleteRef.current) {
+      const initial: Record<string, string> = {};
+      messages.forEach((message) => {
+        if (message.role === "assistant") {
+          processedAssistantMessagesRef.current.add(message.id);
+          initial[message.id] = getAssistantDisplayText(message.content);
+        }
+      });
+      if (Object.keys(initial).length > 0) {
+        setDisplayedAssistantContent((prev) => ({
+          ...prev,
+          ...initial,
+        }));
+      }
+      hydrationCompleteRef.current = true;
+      return;
+    }
+
+    const timersToCleanup: number[] = [];
+    messages.forEach((message) => {
+      if (message.role !== "assistant") {
+        return;
+      }
+
+      if (processedAssistantMessagesRef.current.has(message.id)) {
+        setDisplayedAssistantContent((prev) => {
+          const existing = prev[message.id];
+          const displayText = getAssistantDisplayText(message.content);
+          if (existing === undefined || existing !== displayText) {
+            return {
+              ...prev,
+              [message.id]: displayText,
+            };
+          }
+          return prev;
+        });
+        return;
+      }
+
+      processedAssistantMessagesRef.current.add(message.id);
+      const full = getAssistantDisplayText(message.content);
+      if (!full) {
+        setDisplayedAssistantContent((prev) => ({
+          ...prev,
+          [message.id]: "",
+        }));
+        return;
+      }
+
+      let index = 0;
+      const total = full.length;
+      const step = Math.max(1, Math.ceil(total / 60));
+      const timer = window.setInterval(() => {
+        index = Math.min(index + step, total);
+        const nextSlice = full.slice(0, index);
+        setDisplayedAssistantContent((prev) => ({
+          ...prev,
+          [message.id]: nextSlice,
+        }));
+        if (index >= total) {
+          window.clearInterval(timer);
+          animationTimersRef.current.delete(message.id);
+        }
+      }, 18);
+      animationTimersRef.current.set(message.id, timer);
+      timersToCleanup.push(timer);
+    });
+
+    return () => {
+      timersToCleanup.forEach((timer) => window.clearInterval(timer));
+    };
+  }, [messages, session]);
+
+  useEffect(() => {
+    return () => {
+      if (copyResetTimeoutRef.current !== null) {
+        window.clearTimeout(copyResetTimeoutRef.current);
+        copyResetTimeoutRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!activeSessionId || !activeConversationId) {
@@ -138,15 +447,19 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
           return;
         }
 
-        const mappedHistory = history.map((message, index) => ({
-          id:
-            typeof crypto !== "undefined" && "randomUUID" in crypto
-              ? crypto.randomUUID()
-              : `${activeConversationId}-${index}-${Date.now()}`,
-          role: message.role === "model" ? "assistant" : "user",
-          content: message.text,
-          createdAt: Date.now(),
-        }));
+        const mappedHistory: ChatSessionMessage[] = history.map((message, index) => {
+          const role: ChatRole = message.role === "model" ? "assistant" : "user";
+          return {
+            id:
+              typeof crypto !== "undefined" && "randomUUID" in crypto
+                ? crypto.randomUUID()
+                : `${activeConversationId}-${index}-${Date.now()}`,
+            role,
+            content: message.text,
+            createdAt: Date.now(),
+            attachments: Array.isArray(message.attachments) ? message.attachments : undefined,
+          };
+        });
 
         updateSession(activeSessionId, {
           messages: mappedHistory,
@@ -167,21 +480,28 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
     };
   }, [activeConversationId, activeSessionId, updateSession]);
 
-  const handleDraftChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
-    setDraft(event.target.value);
-    resizeComposer(event.currentTarget);
-  };
-
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (!session) {
+      return;
+    }
     const content = draft.trim();
-    if (!content || !session) {
+    const readyAttachments = composerAttachments.filter(
+      (attachment) => attachment.status === "uploaded" && attachment.uploaded
+    );
+    const attachmentPayload = readyAttachments.map((attachment) => attachment.uploaded!) as ChatAttachment[];
+    const hasMessageBody = Boolean(content) || attachmentPayload.length > 0;
+    const hasPendingAttachments = composerAttachments.some(
+      (attachment) => attachment.status !== "uploaded"
+    );
+
+    if (!hasMessageBody || hasPendingAttachments) {
       return;
     }
 
-    appendMessage(session.id, "user", content);
+    appendMessage(session.id, "user", content, attachmentPayload.length ? attachmentPayload : undefined);
     setDraft("");
-    resizeComposer();
+    clearComposerAttachments();
     if (replyTimeout.current !== null) {
       window.clearTimeout(replyTimeout.current);
     }
@@ -196,6 +516,7 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
             system_prompt: SYSTEM_PROMPT,
             user_id: user.id,
             context: workspaceContext ?? undefined,
+            attachments: attachmentPayload.length ? attachmentPayload : undefined,
           });
           updateSession(session.id, { conversationId: response.conversation_id });
           appendMessage(session.id, "assistant", response.response);
@@ -213,10 +534,209 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
     }, 700);
   };
 
-  const firstAssistantIndex = useMemo(
-    () => messages.findIndex((message) => message.role === "assistant"),
+  const latestAssistantMessageId = useMemo(() => {
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      const message = messages[index];
+      if (message.role === "assistant") {
+        return message.id;
+      }
+    }
+    return null;
+  }, [messages]);
+
+  const getResponseDurationLabel = useCallback(
+    (messageIndex: number) => {
+      const message = messages[messageIndex];
+      if (!message || message.role !== "assistant") {
+        return null;
+      }
+      for (let index = messageIndex - 1; index >= 0; index -= 1) {
+        const candidate = messages[index];
+        if (candidate.role === "assistant") {
+          continue;
+        }
+        if (candidate.role === "user") {
+          const diffMs = Math.max(0, message.createdAt - candidate.createdAt);
+          if (!Number.isFinite(diffMs)) {
+            return null;
+          }
+          const diffSeconds = diffMs / 1000;
+          if (diffSeconds < 0.1) {
+            return "<0.1s";
+          }
+          if (diffSeconds >= 10) {
+            return `${Math.round(diffSeconds)}s`;
+          }
+          return `${diffSeconds.toFixed(1)}s`;
+        }
+      }
+      return null;
+    },
     [messages]
   );
+
+  const handleCopyMessage = useCallback(
+    async (messageId: string, text: string) => {
+      const trimmed = text.trim();
+      if (!trimmed) {
+        return;
+      }
+      if (typeof navigator === "undefined" || !navigator.clipboard?.writeText) {
+        console.warn("Clipboard API is not available in this environment.");
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(trimmed);
+        setCopiedMessageId(messageId);
+        if (copyResetTimeoutRef.current !== null) {
+          window.clearTimeout(copyResetTimeoutRef.current);
+        }
+        copyResetTimeoutRef.current = window.setTimeout(() => {
+          setCopiedMessageId(null);
+          copyResetTimeoutRef.current = null;
+        }, 2000);
+      } catch (error) {
+        console.error("Failed to copy response:", error);
+      }
+    },
+    []
+  );
+
+  const handleShareMessage = useCallback(
+    async (messageId: string, text: string) => {
+      const trimmed = text.trim();
+      if (!trimmed) {
+        return;
+      }
+      if (typeof navigator !== "undefined" && navigator.share) {
+        try {
+          await navigator.share({ text: trimmed });
+          return;
+        } catch (error) {
+          console.warn("Sharing failed, falling back to copy:", error);
+        }
+      }
+      await handleCopyMessage(messageId, trimmed);
+    },
+    [handleCopyMessage]
+  );
+
+  const handleRegenerate = useCallback(
+    (messageId: string) => {
+      if (!session) {
+        return;
+      }
+
+      const assistantIndex = messages.findIndex((message) => message.id === messageId);
+      if (assistantIndex === -1) {
+        return;
+      }
+
+      const assistantMessage = messages[assistantIndex];
+      if (assistantMessage.role !== "assistant") {
+        return;
+      }
+
+      if (assistantMessage.id !== latestAssistantMessageId) {
+        console.warn("Regeneration is only supported for the latest assistant response.");
+        return;
+      }
+
+      let userIndex = assistantIndex - 1;
+      while (userIndex >= 0 && messages[userIndex].role !== "user") {
+        userIndex -= 1;
+      }
+      if (userIndex < 0) {
+        console.warn("Unable to locate the originating user message for regeneration.");
+        return;
+      }
+
+      const userMessage = messages[userIndex];
+      const preservedMessages = messages.slice(0, userIndex);
+
+      const animationsTimer = animationTimersRef.current.get(assistantMessage.id);
+      if (animationsTimer) {
+        window.clearInterval(animationsTimer);
+        animationTimersRef.current.delete(assistantMessage.id);
+      }
+
+      setDisplayedAssistantContent((prev) => {
+        if (!(assistantMessage.id in prev)) {
+          return prev;
+        }
+        const next = { ...prev };
+        delete next[assistantMessage.id];
+        return next;
+      });
+      processedAssistantMessagesRef.current.delete(assistantMessage.id);
+
+      setRegeneratingMessageId(assistantMessage.id);
+
+      updateSession(session.id, {
+        messages: preservedMessages,
+        isResponding: true,
+      });
+
+      const attachments = userMessage.attachments ?? [];
+      appendMessage(
+        session.id,
+        "user",
+        userMessage.content,
+        attachments.length ? attachments : undefined
+      );
+
+      if (user) {
+        (async () => {
+          try {
+            const response = await apiService.sendMessage({
+              message: userMessage.content,
+              conversation_id: session.conversationId,
+              system_prompt: SYSTEM_PROMPT,
+              user_id: user.id,
+              context: workspaceContext ?? undefined,
+              attachments: attachments.length ? attachments : undefined,
+            });
+            updateSession(session.id, { conversationId: response.conversation_id });
+            appendMessage(session.id, "assistant", response.response);
+          } catch (error) {
+            console.error("Failed to regenerate response:", error);
+            appendMessage(
+              session.id,
+              "assistant",
+              assistantMessage.content || buildAssistantReply(userMessage.content)
+            );
+          } finally {
+            setRegeneratingMessageId(null);
+          }
+        })();
+        return;
+      }
+
+      window.setTimeout(() => {
+        appendMessage(session.id, "assistant", buildAssistantReply(userMessage.content));
+        setRegeneratingMessageId(null);
+      }, 700);
+    },
+    [
+      appendMessage,
+      latestAssistantMessageId,
+      messages,
+      session,
+      updateSession,
+      user,
+      workspaceContext,
+    ]
+  );
+
+  if (!hasHydrated) {
+    return (
+      <div className={styles.chatView} aria-live="polite">
+        <div className={styles.chatViewport}>
+          <div className={styles.chatFade} aria-hidden="true" />
+        </div>
+      </div>
+    );
+  }
 
   if (!session) {
     return (
@@ -230,6 +750,11 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
   }
 
   const isResponding = session.isResponding;
+  const trimmedDraft = draft.trim();
+  const hasUploadedAttachments = composerAttachments.some((attachment) => attachment.status === "uploaded");
+  const hasPendingAttachments = composerAttachments.some((attachment) => attachment.status !== "uploaded");
+  const composerHasContent = Boolean(trimmedDraft) || hasUploadedAttachments;
+  const isSendDisabled = isResponding || !composerHasContent || hasPendingAttachments;
 
   return (
     <div className={styles.chatView} aria-live="polite">
@@ -244,14 +769,31 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
                   <span />
                   <span />
                 </div>
+                </div>
               </div>
-            </div>
-          )}
-          {messages.map((message, index) => {
+            )}
+          {messages.map((message, messageIndex) => {
             const isUser = message.role === "user";
             const isAssistant = !isUser;
-            const isPrimaryAssistant = isAssistant && index === firstAssistantIndex;
-            const quickReplies = [];
+            const quickReplies: string[] = [];
+            const rawContent = message.content ?? "";
+            const assistantSections = isAssistant ? parseStructuredAssistantMessage(rawContent) : null;
+            const fullText = isAssistant ? assistantSections?.ai ?? rawContent : rawContent;
+            const animatedText = isAssistant
+              ? displayedAssistantContent[message.id] ?? ""
+              : fullText;
+            const isAnimating =
+              isAssistant && fullText.length > 0 && animatedText.length < fullText.length;
+            const hasTextContent = isAssistant
+              ? fullText.trim().length > 0
+              : Boolean(animatedText.trim());
+            const messageAttachments = message.attachments ?? [];
+            const hasMessageAttachments = messageAttachments.length > 0;
+            const responseDurationLabel = isAssistant
+              ? getResponseDurationLabel(messageIndex)
+              : null;
+            const isLatestAssistantMessage = isAssistant && message.id === latestAssistantMessageId;
+            const isRegenerating = regeneratingMessageId === message.id;
             return (
               <div
                 key={message.id}
@@ -259,28 +801,85 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
                 data-role={isUser ? "user" : "assistant"}
               >
                 <div className={styles.chatBubble}>
-                  <div className={styles.chatMarkdown}>
-                    <ReactMarkdown
-                      remarkPlugins={[remarkGfm, remarkMath]}
-                      rehypePlugins={[rehypeKatex]}
+                  {hasTextContent && (
+                    <div
+                      className={
+                        isAnimating ? styles.chatMarkdownGenerating : styles.chatMarkdown
+                      }
+                      data-animating={isAnimating ? "true" : "false"}
                     >
-                      {message.content}
-                    </ReactMarkdown>
-                  </div>
+                      {isAssistant && isAnimating ? (
+                        <>
+                          <span>{animatedText || "\u00a0"}</span>
+                          <span className={styles.chatTokenCursor} aria-hidden="true" />
+                        </>
+                      ) : (
+                        <ReactMarkdown
+                          remarkPlugins={[remarkGfm, remarkMath]}
+                          rehypePlugins={[rehypeKatex]}
+                        >
+                          {isAssistant ? fullText : animatedText}
+                        </ReactMarkdown>
+                      )}
+                    </div>
+                  )}
+                  {hasMessageAttachments && (
+                    <div className={styles.chatMessageAttachments}>
+                      {messageAttachments.map((attachment) => {
+                        const isImage = attachment.mime_type?.startsWith("image/");
+                        const sizeLabel = formatFileSize(attachment.size_bytes);
+                        return (
+                          <div
+                            key={`${message.id}-${attachment.name}`}
+                            className={styles.chatMessageAttachment}
+                          >
+                            <div className={styles.chatMessageAttachmentIcon}>
+                              {isImage ? <ImageIcon size={16} /> : <FileText size={16} />}
+                            </div>
+                            <div className={styles.chatMessageAttachmentMeta}>
+                              <span>{attachment.display_name ?? attachment.name}</span>
+                              <div>
+                                {sizeLabel && <span>{sizeLabel}</span>}
+                                <span className={styles.chatMessageAttachmentHint}>
+                                  Stored in Gemini
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
                 {isAssistant && (
                   <div className={styles.chatMessageFooter}>
                     <div className={styles.chatActionRow}>
-                      <button type="button" aria-label="Regenerate response">
-                        <RefreshCw size={15} />
+                      <button
+                        type="button"
+                        aria-label="Regenerate response"
+                        onClick={() => handleRegenerate(message.id)}
+                        disabled={!isLatestAssistantMessage || isRegenerating}
+                        data-state={isRegenerating ? "loading" : "idle"}
+                      >
+                        {isRegenerating ? <Loader2 size={15} /> : <RefreshCw size={15} />}
                       </button>
                       <button type="button" aria-label="Listen to response">
                         <Volume2 size={15} />
                       </button>
-                      <button type="button" aria-label="Copy response">
-                        <Copy size={15} />
+                      <button
+                        type="button"
+                        aria-label="Copy response"
+                        onClick={() => handleCopyMessage(message.id, fullText)}
+                        disabled={!fullText.trim()}
+                      >
+                        {copiedMessageId === message.id ? <CheckCircle2 size={15} /> : <Copy size={15} />}
                       </button>
-                      <button type="button" aria-label="Share response">
+                      <button
+                        type="button"
+                        aria-label="Share response"
+                        onClick={() => handleShareMessage(message.id, fullText)}
+                        disabled={!fullText.trim()}
+                      >
                         <Share2 size={15} />
                       </button>
                       <button type="button" aria-label="Thumbs up">
@@ -289,7 +888,9 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
                       <button type="button" aria-label="Thumbs down">
                         <ThumbsDown size={15} />
                       </button>
-                      <span aria-hidden="true">1.6s</span>
+                      <span aria-hidden="true">
+                        {responseDurationLabel ?? "—"}
+                      </span>
                     </div>
                     {quickReplies.length > 0 && (
                       <div className={styles.chatQuickReplies}>
@@ -320,34 +921,80 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
         </div>
       </div>
 
-      <form className={styles.chatComposer} onSubmit={handleSubmit}>
-        <textarea
-          value={draft}
-          onChange={handleDraftChange}
-          placeholder="Message Gray"
-          className={styles.chatComposerInput}
-          rows={1}
-          ref={composerRef}
-        />
-        <div className={styles.chatComposerActions}>
-          <button type="button" className={styles.chatComposerSecondary} aria-label="Open attachments">
-            <Paperclip size={16} />
-          </button>
-          <button
-            type="submit"
-            aria-label="Send message"
-            className={styles.chatComposerSend}
-            disabled={isResponding || !draft.trim()}
-          >
-            {isResponding ? (
-              <Loader2 size={18} className={styles.chatSpinner} />
-            ) : (
-              <ArrowUp size={18} />
-            )}
-          </button>
+      <div className={styles.chatComposerDock}>
+        {composerAttachments.length > 0 && (
+          <div className={styles.chatAttachmentList}>
+            {composerAttachments.map((attachment) => {
+              const isImage = attachment.file.type.startsWith("image/");
+              const sizeLabel = formatFileSize(attachment.file.size);
+              return (
+                <div
+                  key={attachment.id}
+                  className={styles.chatAttachmentItem}
+                  data-status={attachment.status}
+                >
+                  <div className={styles.chatAttachmentPreview}>
+                    {isImage && attachment.previewUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={attachment.previewUrl} alt={attachment.file.name} />
+                    ) : (
+                      <FileText size={16} />
+                    )}
+                  </div>
+                  <div className={styles.chatAttachmentMeta}>
+                    <span className={styles.chatAttachmentName}>{attachment.file.name}</span>
+                    <span className={styles.chatAttachmentDetails}>
+                      {sizeLabel}
+                      {sizeLabel && attachment.status !== "uploaded" ? " • " : ""}
+                      {attachment.status === "uploading" && "Uploading"}
+                      {attachment.status === "uploaded" && "Ready"}
+                      {attachment.status === "error" && "Failed"}
+                    </span>
+                    {attachment.error && (
+                      <span className={styles.chatAttachmentError}>{attachment.error}</span>
+                    )}
+                  </div>
+                  <div className={styles.chatAttachmentActions}>
+                    {attachment.status === "uploading" && (
+                      <Loader2 size={16} className={styles.chatAttachmentSpinner} />
+                    )}
+                    {attachment.status === "uploaded" && <CheckCircle2 size={16} />}
+                    {attachment.status === "error" && (
+                      <button
+                        type="button"
+                        className={styles.chatAttachmentRetry}
+                        onClick={() => handleRetryAttachment(attachment.id)}
+                      >
+                        Retry
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className={styles.chatAttachmentRemove}
+                      aria-label="Remove attachment"
+                      onClick={() => handleRemoveAttachment(attachment.id)}
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        <div className={styles.chatBarRow}>
+          <GrayChatBar
+            value={draft}
+            onChange={setDraft}
+            onSubmit={handleSubmit}
+            onSelectFiles={handleFilesSelected}
+            isSubmitDisabled={isSendDisabled}
+            isSubmitting={isResponding}
+            fileAccept="image/*,application/pdf,text/plain,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,.csv,.md,.json"
+          />
         </div>
-      </form>
-      <p className={styles.chatDisclaimer}>Gray can make mistakes. Check important info.</p>
+        <p className={styles.chatDisclaimer}>Gray can make mistakes. Check important info.</p>
+      </div>
     </div>
   );
 }
