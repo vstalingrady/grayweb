@@ -40,6 +40,9 @@ const SUPABASE_STORAGE_KEY = (() => {
   }
 })();
 
+const isProductionHost = (host?: string) =>
+  !!host && (host.endsWith("gray.alignment.id") || host === "gray.alignment.id");
+
 const ensureAbsoluteUrl = (target: string): string => {
   if (target.startsWith("http://") || target.startsWith("https://")) {
     return target;
@@ -76,7 +79,12 @@ const sanitizeRedirect = (target: string | null | undefined): string | null => {
 
 const resolvePostAuthDestination = (): string => {
   if (envRedirect) {
-    return envRedirect;
+    try {
+      const u = new URL(envRedirect, "https://placeholder");
+      if (!u.host || isProductionHost(u.host)) {
+        return envRedirect;
+      }
+    } catch {}
   }
 
   if (typeof window !== "undefined") {
@@ -93,7 +101,12 @@ const resolvePostAuthDestination = (): string => {
 const buildCallbackDestination = (): string => {
   const target = resolvePostAuthDestination();
   const encoded = encodeURIComponent(target);
-  return `${CALLBACK_PATH}?redirect=${encoded}`;
+  if (typeof window !== "undefined") {
+    const origin = window.location.origin;
+    return `${origin}${CALLBACK_PATH}?redirect=${encoded}`;
+  }
+  // On server, prefer production fallback
+  return `${FALLBACK_BASE}${CALLBACK_PATH}?redirect=${encoded}`;
 };
 
 const persistAuthCookies = (email?: string | null) => {
