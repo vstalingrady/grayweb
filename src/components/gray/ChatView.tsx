@@ -35,6 +35,7 @@ type GrayChatViewProps = {
 
 const MAX_ATTACHMENTS = 5;
 const MAX_ATTACHMENT_SIZE_BYTES = 20 * 1024 * 1024;
+const FALLBACK_ASSISTANT_DELAY_MS = 150;
 
 type ComposerAttachmentStatus = "uploading" | "uploaded" | "error";
 
@@ -742,7 +743,7 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
     replyTimeout.current = window.setTimeout(() => {
       appendMessage(session.id, "assistant", buildAssistantReply(content));
       replyTimeout.current = null;
-    }, 700);
+    }, FALLBACK_ASSISTANT_DELAY_MS);
   };
 
   const latestAssistantMessageId = useMemo(() => {
@@ -927,7 +928,7 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
       window.setTimeout(() => {
         appendMessage(session.id, "assistant", buildAssistantReply(userMessage.content));
         setRegeneratingMessageId(null);
-      }, 700);
+      }, FALLBACK_ASSISTANT_DELAY_MS);
     },
     [
       appendMessage,
@@ -1017,10 +1018,7 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
                       data-animating={isAnimating ? "true" : "false"}
                     >
                       {isAssistant && isAnimating ? (
-                        <>
-                          <span>{animatedText || "\u00a0"}</span>
-                          <span className={styles.chatTokenCursor} aria-hidden="true" />
-                        </>
+                        <span>{animatedText || "\u00a0"}</span>
                       ) : (
                         <ReactMarkdown
                           remarkPlugins={[remarkMath, remarkGfm]}
@@ -1105,17 +1103,6 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
               </div>
             );
           })}
-          {isResponding && (
-            <div className={styles.chatMessage} data-role="assistant">
-              <div className={`${styles.chatBubble} ${styles.chatBubbleAssistant}`}>
-                <div className={styles.chatTyping}>
-                  <span />
-                  <span />
-                  <span />
-                </div>
-              </div>
-            </div>
-          )}
           <div ref={scrollAnchorRef} />
         </div>
       </div>

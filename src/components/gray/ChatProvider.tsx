@@ -70,6 +70,7 @@ const PLACEHOLDER_TITLES = new Set([
   "Mobile-Friendly Fade Effect",
   "Chat Log Analysis Techniques",
 ]);
+const FALLBACK_ASSISTANT_DELAY_MS = 150;
 
 export const SYSTEM_PROMPT = [
   "You're Gray, the helpful teammate in the Alignment workspace. Sound like a thoughtful human colleague—relaxed, plain language, and natural contractions. Mirror the user's mood without going overboard and keep boundaries professional.",
@@ -440,7 +441,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
           window.setTimeout(() => {
             appendMessage(baseSession.id, "assistant", buildAssistantReply(initialMessage));
             updateSession(baseSession.id, { isResponding: false });
-          }, 700);
+          }, FALLBACK_ASSISTANT_DELAY_MS);
         }
         return baseSession;
       }
