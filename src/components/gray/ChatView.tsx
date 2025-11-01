@@ -35,7 +35,7 @@ type GrayChatViewProps = {
 
 const MAX_ATTACHMENTS = 5;
 const MAX_ATTACHMENT_SIZE_BYTES = 20 * 1024 * 1024;
-const FALLBACK_ASSISTANT_DELAY_MS = 150;
+const FALLBACK_ASSISTANT_DELAY_MS = 0;
 
 type ComposerAttachmentStatus = "uploading" | "uploaded" | "error";
 
@@ -121,9 +121,6 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
   const attachmentsRef = useRef<ComposerAttachment[]>([]);
   const [displayedAssistantContent, setDisplayedAssistantContent] = useState<Record<string, string>>({});
   const processedAssistantMessagesRef = useRef<Set<string>>(new Set());
-  const simulatedMessagesRef = useRef<Set<string>>(new Set());
-  const hydrationCompleteRef = useRef(false);
-  const animationTimersRef = useRef<Map<string, number>>(new Map());
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const copyResetTimeoutRef = useRef<number | null>(null);
   const [regeneratingMessageId, setRegeneratingMessageId] = useState<string | null>(null);
@@ -284,26 +281,20 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
   }, [composerAttachments]);
 
   useEffect(() => {
-    animationTimersRef.current.forEach((timer) => window.clearInterval(timer));
-    animationTimersRef.current.clear();
     processedAssistantMessagesRef.current.clear();
-    hydrationCompleteRef.current = false;
     setDisplayedAssistantContent({});
     setActiveStreamingMessageId(null);
   }, [session?.id]);
 
   useEffect(() => {
     if (isHistoryLoading) {
-      animationTimersRef.current.forEach((timer) => window.clearInterval(timer));
-      animationTimersRef.current.clear();
       processedAssistantMessagesRef.current.clear();
-      hydrationCompleteRef.current = false;
       setDisplayedAssistantContent({});
       setActiveStreamingMessageId(null);
       return;
     }
 
-    if (!session || hydrationCompleteRef.current) {
+    if (!session) {
       return;
     }
 
@@ -318,17 +309,9 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
     });
 
     setDisplayedAssistantContent(initialAssistantContent);
-    hydrationCompleteRef.current = true;
   }, [isHistoryLoading, session]);
 
-  useEffect(
-    () => () => {
-      animationTimersRef.current.forEach((timer) => window.clearInterval(timer));
-      animationTimersRef.current.clear();
-    },
-    []
-  );
-
+  
   useEffect(
     () => () => {
       attachmentsRef.current.forEach((attachment) => revokePreviewUrl(attachment.previewUrl));
@@ -357,50 +340,14 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
     clearComposerAttachments();
   }, [clearComposerAttachments, session?.id]);
 
-  const simulateMessageStream = useCallback(async (messageId: string | null, finalText: string) => {
-    if (!messageId) {
-      return;
-    }
-    simulatedMessagesRef.current.add(messageId);
-    try {
-      setDisplayedAssistantContent((prev) => ({
-        ...prev,
-        [messageId]: finalText,
-      }));
-    } finally {
-      simulatedMessagesRef.current.delete(messageId);
-    }
-  }, []);
-
+  
   useEffect(() => {
     if (!session) {
       return;
     }
 
-    if (!hydrationCompleteRef.current) {
-      const initial: Record<string, string> = {};
-      messages.forEach((message) => {
-        if (message.role === "assistant") {
-          processedAssistantMessagesRef.current.add(message.id);
-          initial[message.id] = getAssistantDisplayText(message.content);
-        }
-      });
-      if (Object.keys(initial).length > 0) {
-        setDisplayedAssistantContent((prev) => ({
-          ...prev,
-          ...initial,
-        }));
-      }
-      hydrationCompleteRef.current = true;
-      return;
-    }
-
     messages.forEach((message) => {
       if (message.role !== "assistant") {
-        return;
-      }
-
-      if (simulatedMessagesRef.current.has(message.id)) {
         return;
       }
 
@@ -546,9 +493,10 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
               updateMessage(targetSessionId, assistantMessageId, { content: accumulated });
             }
             if (assistantMessageId) {
+              const displayText = getAssistantDisplayText(accumulated);
               setDisplayedAssistantContent((prev) => ({
                 ...prev,
-                [assistantMessageId as string]: accumulated,
+                [assistantMessageId as string]: displayText,
               }));
               updateSession(targetSessionId, { isResponding: true });
             }
@@ -571,14 +519,10 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
             }
             if (assistantMessageId) {
               const finalDisplay = getAssistantDisplayText(finalResponse);
-              if (!didReceiveToken && finalDisplay) {
-                await simulateMessageStream(assistantMessageId, finalDisplay);
-              } else {
-                setDisplayedAssistantContent((prev) => ({
-                  ...prev,
-                  [assistantMessageId as string]: finalDisplay,
-                }));
-              }
+              setDisplayedAssistantContent((prev) => ({
+                ...prev,
+                [assistantMessageId as string]: finalDisplay,
+              }));
             }
             updateSession(targetSessionId, {
               conversationId: streamedConversationId ?? undefined,
@@ -604,14 +548,10 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
         }
         if (assistantMessageId) {
           const displayText = getAssistantDisplayText(accumulated);
-          if (!didReceiveToken && displayText) {
-            await simulateMessageStream(assistantMessageId, displayText);
-          } else {
-            setDisplayedAssistantContent((prev) => ({
-              ...prev,
-              [assistantMessageId as string]: displayText,
-            }));
-          }
+          setDisplayedAssistantContent((prev) => ({
+            ...prev,
+            [assistantMessageId as string]: displayText,
+          }));
         }
 
         updateSession(targetSessionId, {
@@ -644,14 +584,10 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
           }
           if (assistantMessageId) {
             const displayText = getAssistantDisplayText(finalResponse);
-            if (!didReceiveToken && displayText) {
-              await simulateMessageStream(assistantMessageId, displayText);
-            } else {
-                setDisplayedAssistantContent((prev) => ({
-                  ...prev,
-                  [assistantMessageId as string]: displayText,
-                }));
-            }
+            setDisplayedAssistantContent((prev) => ({
+              ...prev,
+              [assistantMessageId as string]: displayText,
+            }));
           }
           updateSession(targetSessionId, {
             conversationId: streamedConversationId ?? undefined,
@@ -673,17 +609,10 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
           }
           if (assistantMessageId) {
             const displayText = getAssistantDisplayText(fallback);
-            if (!didReceiveToken && displayText) {
-              await simulateMessageStream(assistantMessageId, displayText);
-            } else {
-              {
-                const key = String(assistantMessageId);
-                setDisplayedAssistantContent((prev) => ({
-                  ...prev,
-                  [key]: displayText,
-                }));
-              }
-            }
+            setDisplayedAssistantContent((prev) => ({
+              ...prev,
+              [assistantMessageId as string]: displayText,
+            }));
           }
           updateSession(targetSessionId, { isResponding: false });
           return fallback;
@@ -699,7 +628,6 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
     [
       appendMessage,
       shouldIncludeWorkspaceContext,
-      simulateMessageStream,
       updateMessage,
       updateSession,
       user,
@@ -743,10 +671,8 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
       return;
     }
 
-    replyTimeout.current = window.setTimeout(() => {
-      appendMessage(session.id, "assistant", buildAssistantReply(content));
+    appendMessage(session.id, "assistant", buildAssistantReply(content));
       replyTimeout.current = null;
-    }, FALLBACK_ASSISTANT_DELAY_MS);
   };
 
   const latestAssistantMessageId = useMemo(() => {
@@ -822,13 +748,7 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
       if (!session) {
         return;
       }
-      const timer = animationTimersRef.current.get(messageId);
-      if (timer) {
-        window.clearInterval(timer);
-        animationTimersRef.current.delete(messageId);
-      }
       processedAssistantMessagesRef.current.delete(messageId);
-      simulatedMessagesRef.current.delete(messageId);
       if (activeStreamingMessageId === messageId) {
         setActiveStreamingMessageId(null);
       }
@@ -881,12 +801,6 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
       const userMessage = messages[userIndex];
       const preservedMessages = messages.slice(0, userIndex);
 
-      const animationsTimer = animationTimersRef.current.get(assistantMessage.id);
-      if (animationsTimer) {
-        window.clearInterval(animationsTimer);
-        animationTimersRef.current.delete(assistantMessage.id);
-      }
-
       setDisplayedAssistantContent((prev) => {
         if (!(assistantMessage.id in prev)) {
           return prev;
@@ -928,10 +842,8 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
         return;
       }
 
-      window.setTimeout(() => {
-        appendMessage(session.id, "assistant", buildAssistantReply(userMessage.content));
-        setRegeneratingMessageId(null);
-      }, FALLBACK_ASSISTANT_DELAY_MS);
+      appendMessage(session.id, "assistant", buildAssistantReply(userMessage.content));
+      setRegeneratingMessageId(null);
     },
     [
       appendMessage,
@@ -988,15 +900,7 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
             const assistantDisplayEntry = isAssistant ? displayedAssistantContent[message.id] : undefined;
             const animatedText = isAssistant ? assistantDisplayEntry ?? "" : fullText;
             const isStreamingMessage = isAssistant && message.id === activeStreamingMessageId;
-            const isAnimating =
-              isAssistant &&
-              assistantDisplayEntry !== undefined &&
-              (isStreamingMessage || (fullText.length > 0 && animatedText.length < fullText.length));
-            const hasTextContent = isAssistant
-              ? isStreamingMessage
-                ? true
-                : fullText.trim().length > 0
-              : Boolean(animatedText.trim());
+            const hasTextContent = Boolean(animatedText.trim());
             const messageAttachments = message.attachments ?? [];
             const hasMessageAttachments = messageAttachments.length > 0;
             const responseDurationLabel = isAssistant
@@ -1014,22 +918,13 @@ export function GrayChatView({ sessionId }: GrayChatViewProps) {
               >
                 <div className={`${styles.chatBubble} ${bubbleClassName}`}>
                   {hasTextContent && (
-                    <div
-                      className={
-                        isAnimating ? styles.chatMarkdownGenerating : styles.chatMarkdown
-                      }
-                      data-animating={isAnimating ? "true" : "false"}
-                    >
-                      {isAssistant && isAnimating ? (
-                        <span>{animatedText || "\u00a0"}</span>
-                      ) : (
-                        <ReactMarkdown
-                          remarkPlugins={[remarkMath, remarkGfm]}
-                          rehypePlugins={[[rehypeKatex, { strict: false }]]}
-                        >
-                          {isAssistant ? fullText : animatedText}
-                        </ReactMarkdown>
-                      )}
+                    <div className={styles.chatMarkdown}>
+                      <ReactMarkdown
+                        remarkPlugins={[remarkMath, remarkGfm]}
+                        rehypePlugins={[[rehypeKatex, { strict: false }]]}
+                      >
+                        {animatedText}
+                      </ReactMarkdown>
                     </div>
                   )}
                   {hasMessageAttachments && (
