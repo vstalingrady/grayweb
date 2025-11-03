@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "backend": "cd backend && python start.py",
+    "backend": "cd backend && python3 start.py",
     "dev:full": "concurrently \"npm run backend\" \"npm run dev\""
   },
   "dependencies": {
