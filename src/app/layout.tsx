@@ -1,35 +1,16 @@
 import type { Metadata } from "next";
-// Switched to local/system fonts to avoid network fetches during build.
-// Original (Google Fonts) imports kept below for easy re-enable.
-// import { IBM_Plex_Mono, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import "katex/dist/katex.min.css";
 
-// Local/offline-safe fallbacks using system fonts.
-// These objects mimic next/font API's `.variable` for className usage.
-const plusJakarta = { variable: "font-sans" } as const;
-const plexMono = { variable: "font-mono" } as const;
-
-// To re-enable Google Fonts, replace the above with:
-// const plusJakarta = Plus_Jakarta_Sans({
-//   variable: "--font-sans",
-//   subsets: ["latin"],
-//   weight: ["400", "500", "600", "700"],
-//   display: "swap",
-// });
-// const plexMono = IBM_Plex_Mono({
-//   variable: "--font-mono",
-//   subsets: ["latin"],
-//   weight: ["400", "500", "600"],
-//   display: "swap",
-// });
-
 export const metadata: Metadata = {
+  metadataBase: process.env.VERCEL_URL
+    ? new URL(`https://${process.env.VERCEL_URL}`)
+    : new URL("https://alignment.id"),
   title: {
-    default: "Gray Operator",
-    template: "%s • Gray Operator",
+    default: "alignment.id",
+    template: "%s • alignment.id",
   },
-  description: "Operational cockpit for your Gray workspace.",
+  description: "alignment.id — exploring tools for intentionality and focus in a world engineered for distraction.",
   icons: {
     icon: [
       {
@@ -40,8 +21,11 @@ export const metadata: Metadata = {
         url: "/favicondarktheme.ico",
         media: "(prefers-color-scheme: dark)",
       },
-      { rel: "shortcut icon", url: "/favicondarktheme.ico" },
+      {
+        url: "/favicondarktheme.ico",
+      },
     ],
+    shortcut: ["/favicondarktheme.ico"],
   },
 };
 
@@ -51,8 +35,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="${plusJakarta.variable} ${plexMono.variable}">
+    <html lang="en">
       <body>
+        <svg style={{ display: "none" }} aria-hidden focusable="false">
+          <filter id="grainy-noise">
+            <feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="3" stitchTiles="stitch" />
+          </filter>
+        </svg>
         {children}
       </body>
     </html>

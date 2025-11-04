@@ -6,6 +6,7 @@ import { FormEvent, useState } from "react";
 import { Loader2, Lock, Mail } from "lucide-react";
 import { FaDiscord, FaGoogle } from "react-icons/fa6";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import { getSupabaseAuthStorageKeys } from "@/lib/supabaseStorage";
 import styles from "./LoginForm.module.css";
 
 type MessageState =
@@ -20,37 +21,39 @@ const providers = [
 
 const envRedirect = process.env.NEXT_PUBLIC_AUTH_REDIRECT?.trim();
 const envSiteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim();
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
-
-const DEFAULT_APP_PATH = "/";
+const DEFAULT_APP_PATH = "/gray";
 const CALLBACK_PATH = "/callback";
 // Prefer configured site URL; fall back to production domain
 const FALLBACK_BASE = envSiteUrl || "https://gray.alignment.id";
-const SUPABASE_STORAGE_KEY = (() => {
-  if (!supabaseUrl) {
-    return undefined;
-  }
-
-  try {
-    const hostname = new URL(supabaseUrl).hostname;
-    const projectRef = hostname.split(".")[0];
-    return `sb-${projectRef}-auth-token`;
-  } catch {
-    return undefined;
-  }
-})();
+const SUPABASE_STORAGE_KEYS = getSupabaseAuthStorageKeys();
 
 const isProductionHost = (host?: string) =>
   !!host && (host.endsWith("gray.alignment.id") || host === "gray.alignment.id");
 
 const resolveSiteOrigin = (): string => {
   if (typeof window !== "undefined" && window.location?.origin) {
-    // If we're not already on the prod host but running in prod, force it
-    const { origin, hostname, protocol } = window.location;
-    if (isProductionHost(hostname)) return origin;
+    const { origin, hostname } = window.location;
+
+    // Development environment - use localhost
+    if (hostname === "localhost" || hostname === "127.0.0.1") {
+      return origin;
+    }
+
+    // Production environment - use gray.alignment.id
+    if (isProductionHost(hostname)) {
+      return origin;
+    }
+
+    // Default to production for unknown hosts
     return `https://gray.alignment.id`;
   }
-  // Server-side fallback
+
+  // Server-side: check environment for proper fallback
+  if (process.env.NODE_ENV === "development") {
+    return "http://localhost:3000";
+  }
+
+  // Server-side fallback to production
   return `https://gray.alignment.id`;
 };
 
@@ -244,15 +247,10 @@ export default function LoginForm() {
         throw error;
       }
 
-      if (
-        !remember &&
-        data.session &&
-        typeof window !== "undefined" &&
-        SUPABASE_STORAGE_KEY
-      ) {
-        window.localStorage.removeItem(SUPABASE_STORAGE_KEY);
-        window.localStorage.removeItem(`${SUPABASE_STORAGE_KEY}-code-verifier`);
-        window.localStorage.removeItem(`${SUPABASE_STORAGE_KEY}-user`);
+      if (!remember && data.session && typeof window !== "undefined") {
+        SUPABASE_STORAGE_KEYS.forEach((key) => {
+          window.localStorage.removeItem(key);
+        });
       }
 
       persistAuthCookies(data.session?.user?.email ?? data.user?.email ?? email);

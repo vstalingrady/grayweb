@@ -1,9 +1,11 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { AuthApiError } from '@supabase/supabase-js';
 import { apiService, User } from '@/lib/api';
 import { humanizeIdentifier } from '@/lib/names';
 import { getSupabaseClient } from '@/lib/supabaseClient';
+import { clearSupabaseAuthStorage } from '@/lib/supabaseStorage';
 
 interface UserContextType {
   user: User | null;
@@ -37,6 +39,19 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
 
       const { data, error: supabaseError } = await supabase.auth.getUser();
       if (supabaseError) {
+        if (
+          supabaseError instanceof AuthApiError &&
+          typeof supabaseError.message === 'string' &&
+          supabaseError.message.toLowerCase().includes('invalid refresh token')
+        ) {
+          clearSupabaseAuthStorage();
+          try {
+            await supabase.auth.signOut({ scope: 'local' });
+          } catch {
+            // Ignore sign out errors; the storage is already cleared
+          }
+          return null;
+        }
         throw supabaseError;
       }
 

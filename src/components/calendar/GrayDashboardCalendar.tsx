@@ -1,6 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type CSSProperties,
+  type MouseEvent,
+  type ReactNode,
+} from "react";
 
 import styles from "./GrayDashboardCalendar.module.css";
 import { CalendarSidebar } from "./CalendarSidebar";
@@ -15,11 +25,13 @@ import {
   PositionedEvent,
 } from "./types";
 import { createSeedCalendars, createSeedEvents } from "./calendarSeed";
+import type { DashboardHeaderProps } from "@/components/gray/DashboardHeader";
 
 const HOURS = Array.from({ length: 24 }, (_, index) => index);
 const DEFAULT_HOUR_HEIGHT = 64;
 const SNAP_MINUTES = 15;
 const CALENDAR_BODY_RESERVED_HEIGHT = 140;
+const TIMELINE_WIDTH = 56;
 
 type CalendarViewMode = "week" | "day";
 
@@ -93,6 +105,11 @@ type GrayDashboardCalendarProps = {
   showTodayButton?: boolean;
   showCreateButton?: boolean;
   onIntegrationAction?: () => void;
+  dashboardTab?: "pulse" | "calendar";
+  onSelectDashboardTab?: (tab: "pulse" | "calendar") => void;
+  renderHeader?: (props: DashboardHeaderProps) => ReactNode;
+  embedWithinParentSurface?: boolean;
+  currentDate?: Date;
 };
 
 export function GrayDashboardCalendar({
@@ -116,6 +133,11 @@ export function GrayDashboardCalendar({
   showTodayButton = true,
   showCreateButton = true,
   onIntegrationAction,
+  dashboardTab = "calendar",
+  onSelectDashboardTab,
+  renderHeader,
+  embedWithinParentSurface = false,
+  currentDate,
 }: GrayDashboardCalendarProps) {
   const hourHeight = hourHeightProp ?? DEFAULT_HOUR_HEIGHT;
   const [viewMode, setViewMode] = useState<CalendarViewMode>(viewModeLocked ?? "week");
@@ -127,7 +149,7 @@ export function GrayDashboardCalendar({
   const [composerOpen, setComposerOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
   const [draftPreview, setDraftPreview] = useState<EventDraft | null>(null);
-  const [nowReference, setNowReference] = useState<Date | null>(null);
+  const [nowReference, setNowReference] = useState<Date | null>(() => currentDate ?? null);
   const [composerRange, setComposerRange] = useState<{ start: Date; end: Date } | null>(null);
 
   const calendars = externalCalendars ?? calendarsState;
@@ -177,6 +199,13 @@ export function GrayDashboardCalendar({
     [weekAnchor]
   );
 
+  const timeZoneLabel = useMemo(() => {
+    const formatter = new Intl.DateTimeFormat(undefined, { timeZoneName: "short" });
+    const parts = formatter.formatToParts(new Date());
+    const zone = parts.find((part) => part.type === "timeZoneName")?.value;
+    return zone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
+  }, []);
+
   const dayEvents = useMemo(() => {
     const filtered = visibleEvents.filter((event) => isSameDay(event.start, selectedDate));
     if (draftPreview) {
@@ -210,12 +239,33 @@ export function GrayDashboardCalendar({
     });
   }, [hourHeight, visibleEvents, weekDays]);
 
+  const updateViewMode = useCallback(
+    (nextMode: CalendarViewMode) => {
+      if (viewModeLocked) {
+        return;
+      }
+      setViewMode(nextMode);
+    },
+    [viewModeLocked]
+  );
+
+  const handleViewModeChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    updateViewMode(event.target.value as CalendarViewMode);
+  };
+
+  const rangeNavigationLabel = viewMode === "week" ? "week" : "day";
+  const shouldShowDashboardToggle = typeof onSelectDashboardTab === "function";
+
   useEffect(() => {
-    const syncNow = () => setNowReference(new Date());
-    syncNow();
-    const interval = window.setInterval(syncNow, 60000);
-    return () => window.clearInterval(interval);
-  }, []);
+    if (currentDate) {
+      setNowReference(currentDate);
+    } else {
+      const syncNow = () => setNowReference(new Date());
+      syncNow();
+      const interval = window.setInterval(syncNow, 60000);
+      return () => window.clearInterval(interval);
+    }
+  }, [currentDate]);
 
   const getNowOffset = useCallback(
     (reference: Date) => {
@@ -236,6 +286,20 @@ export function GrayDashboardCalendar({
     () => (showDayNowIndicator && nowReference ? getNowOffset(nowReference) : null),
     [showDayNowIndicator, nowReference, getNowOffset]
   );
+
+  const weekNowIndicator = useMemo(() => {
+    if (!nowReference) {
+      return null;
+    }
+    const dayIndex = weekDays.findIndex((day) => isSameDay(day, nowReference));
+    if (dayIndex === -1) {
+      return null;
+    }
+    return {
+      offset: getNowOffset(nowReference),
+      dayIndex,
+    };
+  }, [getNowOffset, nowReference, weekDays]);
 
   const dayColumnRef = useRef<HTMLDivElement | null>(null);
 
@@ -353,7 +417,9 @@ export function GrayDashboardCalendar({
     <div className={styles.calendarGrid}>
       {showHeaderDates && (
         <div className={styles.calendarHeaderRow}>
-          <div className={styles.calendarHeaderPlaceholder} />
+          <div className={styles.calendarHeaderPlaceholder}>
+            <span className={styles.calendarTimezoneLabel}>{timeZoneLabel}</span>
+          </div>
           {weekDays.map((day) => {
             const isSelectedDay = isSameDay(day, selectedDate);
             const isToday = nowReference ? isSameDay(day, nowReference) : false;
@@ -372,46 +438,71 @@ export function GrayDashboardCalendar({
         </div>
       )}
       <div className={styles.calendarBody}>
-        <div className={styles.calendarBodyScroll}>
+        <div
+          className={styles.calendarBodyScroll}
+          style={{ "--calendar-grid-columns": String(weekDays.length) } as CSSProperties}
+        >
           <div className={styles.calendarTimesColumn}>
-            {HOURS_LABEL.map((label) => (
-              <span key={label}>{label}</span>
+            {HOURS_LABEL.map((label, hour) => (
+              <span key={label} data-hour={hour}>
+                {label}
+              </span>
             ))}
-          </div>
-          <div className={styles.calendarWeekColumns}>
-            {weekDays.map((day, columnIndex) => {
-              const isToday = nowReference ? isSameDay(day, nowReference) : false;
-              return (
+            {weekNowIndicator && (
+              <>
                 <div
-                  key={day.toISOString()}
-                  className={styles.calendarWeekColumn}
-                  data-today={isToday ? "true" : "false"}
-                  data-selected={isSameDay(day, selectedDate) ? "true" : "false"}
-                >
-                  <div
+                  className={styles.calendarTimelineNowLine}
+                  style={{ top: `${weekNowIndicator.offset}px` }}
+                  aria-hidden="true"
+                />
+                <div
+                  className={styles.calendarTimelineNowMarker}
+                  style={{ top: `${weekNowIndicator.offset}px` }}
+                  aria-hidden="true"
+                />
+              </>
+            )}
+          </div>
+          {weekDays.map((day, columnIndex) => {
+            const isToday = nowReference ? isSameDay(day, nowReference) : false;
+            const columnNowIndicatorOffset =
+              weekNowIndicator?.dayIndex === columnIndex ? weekNowIndicator.offset : null;
+            return (
+              <div
+                key={day.toISOString()}
+                className={styles.calendarWeekColumn}
+                data-today={isToday ? "true" : "false"}
+                data-selected={isSameDay(day, selectedDate) ? "true" : "false"}
+              >
+                <div
                   className={styles.calendarColumnScroller}
                   onClick={(event) => handleColumnClick(event, day)}
                 >
-                    {weekLayouts[columnIndex]?.map((event) => (
-                      <EventCard
-                        key={event.id}
-                        event={event}
-                        onClick={() => handleEditEvent(event)}
-                      />
-                    ))}
-                    {isToday && nowReference && (
-                      <div
-                        className={styles.nowIndicator}
-                        style={{ top: `${getNowOffset(nowReference)}px` }}
-                      >
-                        <span className={styles.nowIndicatorDot} />
-                      </div>
-                    )}
-                  </div>
+                  {columnNowIndicatorOffset !== null && (
+                    <div
+                      className={styles.nowIndicator}
+                      style={{ top: `${columnNowIndicatorOffset}px` }}
+                      aria-hidden="true"
+                    />
+                  )}
+                  {columnNowIndicatorOffset !== null && (
+                    <div
+                      className={styles.nowIndicatorDot}
+                      style={{ top: `${columnNowIndicatorOffset}px` }}
+                      aria-hidden="true"
+                    />
+                  )}
+                  {weekLayouts[columnIndex]?.map((event) => (
+                    <EventCard
+                      key={event.id}
+                      event={event}
+                      onClick={() => handleEditEvent(event)}
+                    />
+                  ))}
                 </div>
-              );
-            })}
-          </div>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>
@@ -421,7 +512,9 @@ export function GrayDashboardCalendar({
     <div className={styles.calendarGrid}>
       {showHeaderDates && (
         <div className={styles.calendarHeaderRow}>
-          <div className={styles.calendarHeaderPlaceholder} />
+          <div className={styles.calendarHeaderPlaceholder}>
+            <span className={styles.calendarTimezoneLabel}>{timeZoneLabel}</span>
+          </div>
           <div
             className={styles.calendarHeaderCell}
             data-selected="true"
@@ -433,11 +526,31 @@ export function GrayDashboardCalendar({
         </div>
       )}
       <div className={styles.calendarBody}>
-        <div className={styles.calendarBodyScroll} ref={dayColumnRef}>
+        <div
+          className={styles.calendarBodyScroll}
+          ref={dayColumnRef}
+          style={{ "--calendar-grid-columns": "1" } as CSSProperties}
+        >
           <div className={styles.calendarTimesColumn}>
-            {HOURS_LABEL.map((label) => (
-              <span key={label}>{label}</span>
+            {HOURS_LABEL.map((label, hour) => (
+              <span key={label} data-hour={hour}>
+                {label}
+              </span>
             ))}
+            {dayIndicatorOffset !== null && (
+              <>
+                <div
+                  className={styles.calendarTimelineNowLine}
+                  style={{ top: `${dayIndicatorOffset}px` }}
+                  aria-hidden="true"
+                />
+                <div
+                  className={styles.calendarTimelineNowMarker}
+                  style={{ top: `${dayIndicatorOffset}px` }}
+                  aria-hidden="true"
+                />
+              </>
+            )}
           </div>
           <div
             className={styles.calendarDayColumn}
@@ -448,6 +561,20 @@ export function GrayDashboardCalendar({
               className={styles.calendarColumnScroller}
               onClick={(event) => handleColumnClick(event, selectedDate)}
             >
+              {dayIndicatorOffset !== null && (
+                <>
+                  <div
+                    className={styles.nowIndicator}
+                    style={{ top: `${dayIndicatorOffset}px` }}
+                    aria-hidden="true"
+                  />
+                  <div
+                    className={styles.nowIndicatorDot}
+                    style={{ top: `${dayIndicatorOffset}px` }}
+                    aria-hidden="true"
+                  />
+                </>
+              )}
               {dayLayouts.map((event) => (
                 <EventCard
                   key={event.id}
@@ -457,14 +584,6 @@ export function GrayDashboardCalendar({
                   isDragging={draftPreview?.id === event.id}
                 />
               ))}
-              {dayIndicatorOffset !== null && (
-                <div
-                  className={styles.nowIndicator}
-                  style={{ top: `${dayIndicatorOffset}px` }}
-                >
-                  <span className={styles.nowIndicatorDot} />
-                </div>
-              )}
             </div>
           </div>
         </div>
@@ -508,22 +627,28 @@ export function GrayDashboardCalendar({
     updateSelectedDate(() => startOfDay(new Date()));
   };
 
-  const calendarRootClassName = [
-    styles.dashboardCalendar,
-    showSidebar ? styles.dashboardCalendarWithSidebar : styles.dashboardCalendarStandalone,
-    className,
-  ]
-    .filter(Boolean)
-    .join(" ");
-
   const calendarStyle: CSSProperties & { [key: string]: string | number | undefined } = {
     "--calendar-hour-height": `${hourHeight}px`,
+    "--calendar-timeline-width": `${TIMELINE_WIDTH}px`,
   };
 
   if (maxHeight !== undefined) {
     const resolvedMaxHeight = typeof maxHeight === "number" ? `${maxHeight}px` : maxHeight;
     calendarStyle["--calendar-max-height"] = resolvedMaxHeight;
-    calendarStyle["--calendar-body-height"] = `max(300px, calc(${resolvedMaxHeight} - ${CALENDAR_BODY_RESERVED_HEIGHT}px))`;
+
+    if (compactSurface) {
+      calendarStyle["--calendar-body-height"] = `calc(${resolvedMaxHeight} - 80px)`;
+    } else if (embedWithinParentSurface) {
+      calendarStyle["--calendar-body-height"] = resolvedMaxHeight;
+    } else {
+      calendarStyle["--calendar-body-height"] = `max(300px, calc(${resolvedMaxHeight} - ${CALENDAR_BODY_RESERVED_HEIGHT}px))`;
+    }
+  } else if (embedWithinParentSurface || compactSurface) {
+    calendarStyle["--calendar-max-height"] = "100%";
+    calendarStyle["--calendar-body-height"] = "calc(100% - 0px)";
+  } else {
+    calendarStyle["--calendar-max-height"] = "100%";
+    calendarStyle["--calendar-body-height"] = "calc(100% - 0px)";
   }
 
   const monthLabel = selectedDate.toLocaleDateString(undefined, {
@@ -534,45 +659,131 @@ export function GrayDashboardCalendar({
   const rangeLabel =
     viewMode === "week" ? formatWeekRange(selectedDate) : formatDayLabel(selectedDate);
 
-  return (
-    <div
-      className={calendarRootClassName}
-      style={calendarStyle}
-    >
-      <div
-        className={[
-          styles.calendarSurface,
-          compactSurface ? styles.calendarSurfaceCompact : null,
-          surfaceClassName,
-        ]
-          .filter(Boolean)
-          .join(" ")}
-      >
+  const calendarSurfaceClassName = [
+    styles.dashboardCalendar,
+    showSidebar ? styles.dashboardCalendarWithSidebar : styles.dashboardCalendarStandalone,
+    styles.calendarSurface,
+    compactSurface ? styles.calendarSurfaceCompact : null,
+    surfaceClassName,
+    className,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  const showViewSelect = showHeaderControls && !viewModeLocked;
+  const showTodayControl = showHeaderControls && showTodayButton;
+  const showNavigationControls = showHeaderControls;
+  const showCreateControl =
+    showCreateButton && (showHeaderControls || showSurfaceHeading || shouldShowDashboardToggle);
+  const hasHeaderRight =
+    showNavigationControls || showTodayControl || showViewSelect || showCreateControl;
+  const shouldRenderHeader = shouldShowDashboardToggle || showSurfaceHeading || hasHeaderRight;
+
+  const headerProps: DashboardHeaderProps = {
+    activeTab: dashboardTab ?? "calendar",
+    onSelectTab: (tab) => onSelectDashboardTab?.(tab),
+    label: showSurfaceLabel ? "Calendar" : undefined,
+    title: monthLabel,
+    rangeLabel: showHeaderDates ? rangeLabel : undefined,
+    onPrevMonth: () => handleMonthNavigate(-1),
+    onNextMonth: () => handleMonthNavigate(1),
+    onPrevRange: () => handleNavigateRange(-1),
+    onNextRange: () => handleNavigateRange(1),
+    onGoToday: showTodayControl ? handleGoToday : undefined,
+    viewMode,
+    onViewModeChange: showViewSelect ? updateViewMode : undefined,
+    viewModeOptions: [
+      { value: "week", label: "Week" },
+      { value: "day", label: "Day" },
+    ],
+    onCreateEvent: showCreateControl ? handleCreateEvent : undefined,
+    rangeNavigationLabel,
+  };
+
+  const dashboardToggle = shouldShowDashboardToggle ? (
+    <div className={styles.calendarSurfaceHeadingGroup}>
+      <div className={styles.calendarSurfaceTabs}>
+        <button
+          type="button"
+          className={styles.calendarSurfaceTab}
+          data-active={dashboardTab === "pulse"}
+          aria-pressed={dashboardTab === "pulse"}
+          onClick={() => onSelectDashboardTab?.("pulse")}
+        >
+          Pulse
+        </button>
+        <button
+          type="button"
+          className={styles.calendarSurfaceTab}
+          data-active={dashboardTab === "calendar"}
+          aria-pressed={dashboardTab === "calendar"}
+          onClick={() => onSelectDashboardTab?.("calendar")}
+        >
+          Calendar
+        </button>
+      </div>
+    </div>
+  ) : null;
+
+  const headerNode = renderHeader
+    ? renderHeader(headerProps)
+    : shouldRenderHeader
+      ? (
         <header className={styles.calendarSurfaceHeader}>
           <div className={styles.calendarSurfaceHeaderLeft}>
-            {showSurfaceLabel && <span className={styles.calendarSurfaceLabel}>Calendar</span>}
+            {dashboardToggle}
             {showSurfaceHeading && (
-              <div>
+              <>
+                {showSurfaceLabel && (
+                  <span className={styles.calendarSurfaceLabel}>Calendar</span>
+                )}
                 <h2 className={styles.calendarSurfaceTitle}>{monthLabel}</h2>
-                <p className={styles.calendarSurfaceRange}>{rangeLabel}</p>
-              </div>
+                {showHeaderDates && (
+                  <p className={styles.calendarSurfaceRange}>{rangeLabel}</p>
+                )}
+              </>
             )}
           </div>
-          <div className={styles.calendarSurfaceHeaderRight}>
-            {!viewModeLocked && (
-              <select
-                aria-label="Calendar view"
-                className={styles.calendarViewSelect}
-                value={viewMode}
-                onChange={(event) => setViewMode(event.target.value as CalendarViewMode)}
-              >
-                <option value="week">Week</option>
-                <option value="day">Day</option>
-              </select>
-            )}
-            {showHeaderControls && (
+          {hasHeaderRight && (
+            <div className={styles.calendarSurfaceHeaderRight}>
               <div className={styles.calendarSurfaceNav}>
-                {showTodayButton && (
+                {showNavigationControls && (
+                  <>
+                    <div className={styles.calendarSurfaceNavArrows}>
+                      <button
+                        type="button"
+                        aria-label="Previous month"
+                        onClick={() => handleMonthNavigate(-1)}
+                      >
+                        ‹
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="Next month"
+                        onClick={() => handleMonthNavigate(1)}
+                      >
+                        ›
+                      </button>
+                    </div>
+                    <div className={styles.calendarSurfaceNavArrows}>
+                      <button
+                        type="button"
+                        aria-label={`Previous ${rangeNavigationLabel}`}
+                        onClick={() => handleNavigateRange(-1)}
+                      >
+                        ‹
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={`Next ${rangeNavigationLabel}`}
+                        onClick={() => handleNavigateRange(1)}
+                      >
+                        ›
+                      </button>
+                    </div>
+                  </>
+                )}
+                {showTodayControl && (
                   <button
                     type="button"
                     className={styles.calendarSurfaceButton}
@@ -581,74 +792,101 @@ export function GrayDashboardCalendar({
                     Today
                   </button>
                 )}
-                <div className={styles.calendarSurfaceNavArrows}>
-                  <button
-                    type="button"
-                    aria-label="Previous period"
-                    onClick={() => handleNavigateRange(-1)}
+                {showViewSelect && (
+                  <select
+                    className={styles.calendarViewSelect}
+                    value={viewMode}
+                    onChange={handleViewModeChange}
                   >
-                    ‹
-                  </button>
-                  <button
-                    type="button"
-                    aria-label="Next period"
-                    onClick={() => handleNavigateRange(1)}
-                  >
-                    ›
-                  </button>
-                </div>
-                {showCreateButton && (
+                    <option value="week">Week</option>
+                    <option value="day">Day</option>
+                  </select>
+                )}
+                {showCreateControl && (
                   <button
                     type="button"
                     className={styles.calendarSurfaceCreate}
                     onClick={handleCreateEvent}
                   >
-                    + Create
+                    New Event
                   </button>
                 )}
               </div>
-            )}
-          </div>
-        </header>
-
-        <div
-          className={styles.calendarSurfaceBody}
-          data-has-sidebar={showSidebar ? "true" : "false"}
-        >
-          {showSidebar && (
-            <div className={styles.calendarSidebarPanel}>
-              <CalendarSidebar
-                monthDate={monthDate}
-                selectedDate={selectedDate}
-                onSelectDate={handleDaySelect}
-                onNavigateMonth={handleMonthNavigate}
-                calendars={calendars}
-                onToggleCalendar={handleToggleCalendar}
-                showSelectedDateLabel={showSelectedDateLabel}
-                className={styles.calendarSidebarIntegrated}
-                onIntegrationAction={onIntegrationAction}
-              />
             </div>
           )}
-          <div className={styles.calendarBoard}>
-            {viewMode === "week" ? renderWeekView() : renderDayView()}
-          </div>
-        </div>
-      </div>
+        </header>
+      )
+      : null;
 
-      <EventComposer
-        isOpen={composerOpen}
-        referenceDate={selectedDate}
-        activeEvent={editingEvent}
-        initialRange={composerRange}
-        calendars={calendars}
-        onRequestClose={() => {
-          setComposerOpen(false);
-          setEditingEvent(null);
-          setComposerRange(null);
-        }}
-        onSubmit={handleComposerSubmit}
-      />
+  const bodyClassName = [
+    styles.calendarSurfaceBody,
+    embedWithinParentSurface && surfaceClassName ? surfaceClassName : null,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  const bodyElement = (
+    <div
+      className={bodyClassName}
+      data-has-sidebar={showSidebar ? "true" : "false"}
+      style={embedWithinParentSurface ? calendarStyle : undefined}
+    >
+      {showSidebar && (
+        <div className={styles.calendarSidebarPanel}>
+          <CalendarSidebar
+            monthDate={monthDate}
+            selectedDate={selectedDate}
+            onSelectDate={handleDaySelect}
+            onNavigateMonth={handleMonthNavigate}
+            calendars={calendars}
+            onToggleCalendar={handleToggleCalendar}
+            showSelectedDateLabel={showSelectedDateLabel}
+            className={styles.calendarSidebarIntegrated}
+            showMonthNavigation
+            onIntegrationAction={onIntegrationAction}
+          />
+        </div>
+      )}
+      <div className={styles.calendarBoard}>
+        {viewMode === "week" ? renderWeekView() : renderDayView()}
+      </div>
+    </div>
+  );
+
+  const eventComposer = (
+    <EventComposer
+      isOpen={composerOpen}
+      referenceDate={selectedDate}
+      activeEvent={editingEvent}
+      initialRange={composerRange}
+      calendars={calendars}
+      onRequestClose={() => {
+        setComposerOpen(false);
+        setEditingEvent(null);
+        setComposerRange(null);
+      }}
+      onSubmit={handleComposerSubmit}
+    />
+  );
+
+  if (embedWithinParentSurface) {
+    return (
+      <>
+        {headerNode}
+        {bodyElement}
+        {eventComposer}
+      </>
+    );
+  }
+
+  return (
+    <div
+      className={calendarSurfaceClassName}
+      style={calendarStyle}
+    >
+      {headerNode}
+      {bodyElement}
+      {eventComposer}
     </div>
   );
 }

@@ -2,11 +2,11 @@ from fastapi import FastAPI, HTTPException, Depends, status, UploadFile, File, F
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, EmailStr
-from typing import Optional, List, Dict, Any, AsyncGenerator, Tuple
+from pydantic import BaseModel, EmailStr, Field, constr, validator
+from typing import Optional, List, Dict, Any, AsyncGenerator, Tuple, Union
 import databases
 import sqlalchemy
-from datetime import datetime
+from datetime import datetime, timezone, date
 import os
 import json
 import asyncio
@@ -18,6 +18,7 @@ from dotenv import load_dotenv
 import google.generativeai as genai
 from supabase import create_client, Client
 from pathlib import Path
+from uuid import uuid4
 from google_calendar import (
     GoogleCalendarCredentials,
     GoogleCalendarInfo,
@@ -120,6 +121,15 @@ def _fallback_title_from_message(message: str) -> str:
         return trimmed
     return f"{trimmed[:45].rstrip()}…"
 
+MAX_DASHBOARD_PULSE_HISTORY = 30
+DEFAULT_DASHBOARD_PROACTIVITY = {
+    "id": "proactivity-default",
+    "label": "Check-ins",
+    "description": "Daily sync nudges for squad channels.",
+    "cadence": "Daily",
+    "time": "09:00 AM",
+}
+
 # Database tables
 users = sqlalchemy.Table(
     "users",
@@ -190,6 +200,21 @@ habits = sqlalchemy.Table(
     sqlalchemy.Column("previous_label", sqlalchemy.String),
     sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
     sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
+)
+
+dashboard_pulses = sqlalchemy.Table(
+    "dashboard_pulses",
+    metadata,
+    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True, index=True),
+    sqlalchemy.Column("user_id", sqlalchemy.ForeignKey("users.id"), nullable=False),
+    sqlalchemy.Column("date_key", sqlalchemy.String, nullable=False),
+    sqlalchemy.Column("timestamp", sqlalchemy.DateTime, nullable=False),
+    sqlalchemy.Column("plans", sqlalchemy.JSON, nullable=False, default=list),
+    sqlalchemy.Column("habits", sqlalchemy.JSON, nullable=False, default=list),
+    sqlalchemy.Column("proactivity", sqlalchemy.JSON, nullable=False, default=dict),
+    sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
+    sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
+    sqlalchemy.UniqueConstraint("user_id", "date_key", name="uq_dashboard_pulses_user_date"),
 )
 
 user_streaks = sqlalchemy.Table(
@@ -399,6 +424,85 @@ class HabitUpdate(BaseModel):
     label: Optional[str] = None
     streak_label: Optional[str] = None
     previous_label: Optional[str] = None
+
+
+class DashboardPulsePlanItem(BaseModel):
+    id: str
+    label: str
+    completed: bool = False
+
+
+class DashboardPulseHabitItem(BaseModel):
+    id: str
+    label: str
+    streak_label: Optional[str] = None
+    previous_label: Optional[str] = None
+    completed: bool = False
+
+
+class DashboardPulseProactivity(BaseModel):
+    id: str
+    label: str
+    description: Optional[str] = None
+    cadence: str
+    time: str
+
+
+class DashboardPulseBase(BaseModel):
+    date_key: constr(regex=r"^\d{4}-\d{2}-\d{2}$")
+    timestamp: Optional[int] = None
+    plans: List[DashboardPulsePlanItem] = []
+    habits: List[DashboardPulseHabitItem] = []
+    proactivity: DashboardPulseProactivity
+
+    @validator("timestamp", pre=True, always=True)
+    def _validate_timestamp(cls, value):
+        if value is None:
+            return int(datetime.utcnow().timestamp() * 1000)
+        if isinstance(value, datetime):
+            return int(value.replace(tzinfo=timezone.utc).timestamp() * 1000)
+        if isinstance(value, (int, float)):
+            return int(value)
+        if isinstance(value, str) and value.strip():
+            try:
+                return int(float(value))
+            except ValueError as exc:
+                raise ValueError("timestamp must be milliseconds since epoch") from exc
+        raise ValueError("timestamp must be milliseconds since epoch")
+
+
+class DashboardPulseCreate(DashboardPulseBase):
+    carry_forward: bool = False
+
+
+class DashboardPulseUpdate(BaseModel):
+    timestamp: Optional[int] = None
+    plans: Optional[List[DashboardPulsePlanItem]] = None
+    habits: Optional[List[DashboardPulseHabitItem]] = None
+    proactivity: Optional[DashboardPulseProactivity] = None
+
+
+class DashboardPulse(DashboardPulseBase):
+    id: int
+    user_id: int
+    timestamp: int
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        orm_mode = True
+
+
+class DashboardProactivitySummary(BaseModel):
+    logs: List[ProactivityLog] = Field(default_factory=list)
+    streak: Dict[str, int] = Field(default_factory=dict)
+
+
+class DashboardSummary(BaseModel):
+    today: Optional[DashboardPulse] = None
+    recent: List[DashboardPulse] = Field(default_factory=list)
+    pulses: List[DashboardPulse] = Field(default_factory=list)
+    proactivity: DashboardProactivitySummary = Field(default_factory=DashboardProactivitySummary)
 
 # AI Chat models
 class GeminiAttachment(BaseModel):
@@ -675,6 +779,296 @@ def serialize_gemini_file(file_obj: Any) -> GeminiFile:
             or getattr(file_obj, "updateTime", None)
         ),
     )
+
+
+def _timestamp_ms_to_datetime(timestamp_ms: Optional[int]) -> datetime:
+    if timestamp_ms is None:
+        return datetime.utcnow()
+    try:
+        normalized = datetime.fromtimestamp(int(timestamp_ms) / 1000, tz=timezone.utc)
+    except (OSError, OverflowError, ValueError):
+        normalized = datetime.utcnow().replace(tzinfo=timezone.utc)
+    return normalized.replace(tzinfo=None)
+
+
+def _datetime_to_ms(value: Optional[datetime]) -> int:
+    base = value or datetime.utcnow()
+    if base.tzinfo is None:
+        aware = base.replace(tzinfo=timezone.utc)
+    else:
+        aware = base.astimezone(timezone.utc)
+    return int(aware.timestamp() * 1000)
+
+
+def _normalize_plan_items(raw: Any) -> List[Dict[str, Any]]:
+    normalized: List[Dict[str, Any]] = []
+    if not isinstance(raw, list):
+        return normalized
+
+    seen_ids: set[str] = set()
+    seen_labels: set[str] = set()
+
+    for entry in raw:
+        if not isinstance(entry, dict):
+            continue
+        identifier = str(entry.get("id") or "").strip()
+        label = str(entry.get("label") or "").strip()
+        if not label:
+            continue
+        dedupe_key = label.lower()
+        if identifier:
+            if identifier in seen_ids:
+                continue
+            seen_ids.add(identifier)
+        elif dedupe_key in seen_labels:
+            continue
+        else:
+            identifier = f"plan-{uuid4().hex[:8]}"
+        seen_labels.add(dedupe_key)
+        normalized.append(
+            {
+                "id": identifier,
+                "label": label,
+                "completed": bool(entry.get("completed")),
+            }
+        )
+    return normalized
+
+
+def _normalize_habit_items(raw: Any) -> List[Dict[str, Any]]:
+    normalized: List[Dict[str, Any]] = []
+    if not isinstance(raw, list):
+        return normalized
+
+    seen_ids: set[str] = set()
+    for entry in raw:
+        if not isinstance(entry, dict):
+            continue
+        identifier = str(entry.get("id") or "").strip()
+        label = str(entry.get("label") or "").strip()
+        if not label:
+            continue
+        if identifier:
+            if identifier in seen_ids:
+                continue
+            seen_ids.add(identifier)
+        else:
+            identifier = f"habit-{uuid4().hex[:8]}"
+        normalized.append(
+            {
+                "id": identifier,
+                "label": label,
+                "streak_label": str(entry.get("streak_label") or ""),
+                "previous_label": str(entry.get("previous_label") or ""),
+                "completed": bool(entry.get("completed")),
+            }
+        )
+    return normalized
+
+
+def _normalize_proactivity(raw: Any) -> Dict[str, Any]:
+    if not isinstance(raw, dict):
+        raw = {}
+
+    identifier = str(raw.get("id") or DEFAULT_DASHBOARD_PROACTIVITY["id"]).strip()
+    label = str(raw.get("label") or DEFAULT_DASHBOARD_PROACTIVITY["label"]).strip()
+    description = raw.get("description")
+    cadence = str(raw.get("cadence") or DEFAULT_DASHBOARD_PROACTIVITY["cadence"]).strip()
+    time_label = str(raw.get("time") or DEFAULT_DASHBOARD_PROACTIVITY["time"]).strip()
+
+    return {
+        "id": identifier or DEFAULT_DASHBOARD_PROACTIVITY["id"],
+        "label": label or DEFAULT_DASHBOARD_PROACTIVITY["label"],
+        "description": (description or DEFAULT_DASHBOARD_PROACTIVITY.get("description")) or "",
+        "cadence": cadence or DEFAULT_DASHBOARD_PROACTIVITY["cadence"],
+        "time": time_label or DEFAULT_DASHBOARD_PROACTIVITY["time"],
+    }
+
+
+def _serialize_dashboard_pulse_record(record: Any) -> Optional[Dict[str, Any]]:
+    if not record:
+        return None
+    plans = _normalize_plan_items(record["plans"])
+    habits = _normalize_habit_items(record["habits"])
+    proactivity = _normalize_proactivity(record["proactivity"])
+    timestamp_ms = _datetime_to_ms(record["timestamp"])
+    return {
+        "id": record["id"],
+        "user_id": record["user_id"],
+        "date_key": record["date_key"],
+        "timestamp": timestamp_ms,
+        "plans": plans,
+        "habits": habits,
+        "proactivity": proactivity,
+        "created_at": record["created_at"],
+        "updated_at": record["updated_at"],
+    }
+
+
+def _carry_forward_dashboard_entries(
+    previous: Optional[Dict[str, Any]],
+    plans: List[Dict[str, Any]],
+    habits: List[Dict[str, Any]],
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    if not previous:
+        return plans, habits
+
+    carry_plans = list(plans)
+    carry_habits = list(habits)
+
+    existing_plan_ids = {item["id"] for item in carry_plans}
+    existing_plan_labels = {item["label"].lower() for item in carry_plans}
+
+    for entry in previous.get("plans", []):
+        if entry.get("completed"):
+            continue
+        identifier = str(entry.get("id") or "").strip()
+        label = str(entry.get("label") or "").strip()
+        if not label:
+            continue
+        if identifier and identifier in existing_plan_ids:
+            continue
+        if label.lower() in existing_plan_labels:
+            continue
+        carry_plans.append(
+            {
+                "id": identifier or f"plan-{uuid4().hex[:8]}",
+                "label": label,
+                "completed": False,
+            }
+        )
+        if identifier:
+            existing_plan_ids.add(identifier)
+        existing_plan_labels.add(label.lower())
+
+    existing_habit_ids = {item["id"] for item in carry_habits}
+    for entry in previous.get("habits", []):
+        identifier = str(entry.get("id") or "").strip()
+        label = str(entry.get("label") or "").strip()
+        if not label:
+            continue
+        if identifier and identifier in existing_habit_ids:
+            continue
+        carry_habits.append(
+            {
+                "id": identifier or f"habit-{uuid4().hex[:8]}",
+                "label": label,
+                "streak_label": str(entry.get("streak_label") or ""),
+                "previous_label": str(entry.get("previous_label") or ""),
+                "completed": False,
+            }
+        )
+        if identifier:
+            existing_habit_ids.add(identifier)
+
+    return carry_plans, carry_habits
+
+
+async def _load_dashboard_pulse_by_date(db: databases.Database, user_id: int, date_key: str):
+    query = (
+        dashboard_pulses.select()
+        .where(
+            (dashboard_pulses.c.user_id == user_id)
+            & (dashboard_pulses.c.date_key == date_key)
+        )
+        .limit(1)
+    )
+    return await db.fetch_one(query)
+
+
+async def _load_previous_dashboard_pulse(db: databases.Database, user_id: int, date_key: str):
+    query = (
+        dashboard_pulses.select()
+        .where(
+            (dashboard_pulses.c.user_id == user_id)
+            & (dashboard_pulses.c.date_key < date_key)
+        )
+        .order_by(dashboard_pulses.c.date_key.desc())
+        .limit(1)
+    )
+    return await db.fetch_one(query)
+
+
+def _coerce_activity_day(value: Any) -> Optional[date]:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, str):
+        candidate = value.strip()
+        if not candidate:
+            return None
+        try:
+            parsed = datetime.fromisoformat(candidate.replace("Z", "+00:00"))
+        except ValueError:
+            try:
+                parsed = datetime.strptime(candidate.split(".")[0], "%Y-%m-%dT%H:%M:%S")
+            except ValueError:
+                return None
+        return parsed.date()
+    return None
+
+
+async def _compute_proactivity_streak(db: databases.Database, user_id: int) -> Dict[str, int]:
+    rows = await db.fetch_all(
+        proactivity_logs.select()
+        .where(proactivity_logs.c.user_id == user_id)
+        .order_by(proactivity_logs.c.activity_date.desc())
+    )
+
+    qualifying_days: List[date] = []
+    seen: set[date] = set()
+
+    for row in rows:
+        if row["score"] is not None and row["score"] < 70:
+            continue
+        day = _coerce_activity_day(row["activity_date"])
+        if day is None or day in seen:
+            continue
+        seen.add(day)
+        qualifying_days.append(day)
+
+    if not qualifying_days:
+        return {"current_streak": 0, "best_streak": 0}
+
+    qualifying_days_sorted = sorted(qualifying_days)
+    best_streak = 0
+    streak = 0
+    previous_day: Optional[date] = None
+
+    for day in qualifying_days_sorted:
+        if previous_day is None:
+            streak = 1
+        else:
+            delta = (day - previous_day).days
+            if delta == 0:
+                continue
+            if delta == 1:
+                streak += 1
+            else:
+                streak = 1
+        previous_day = day
+        best_streak = max(best_streak, streak)
+
+    qualifying_days_desc = sorted(qualifying_days, reverse=True)
+    current_streak = 0
+    previous_day = None
+    for day in qualifying_days_desc:
+        if previous_day is None:
+            current_streak = 1
+        else:
+            delta = (previous_day - day).days
+            if delta == 0:
+                continue
+            if delta == 1:
+                current_streak += 1
+            else:
+                break
+        previous_day = day
+
+    best_streak = max(best_streak, current_streak)
+    return {"current_streak": current_streak, "best_streak": best_streak}
+
 
 # Streak helper functions
 async def get_or_create_user_streak(user_id: int, db: databases.Database) -> UserStreak:
@@ -1385,24 +1779,8 @@ async def create_user(user: UserCreate, db: databases.Database = Depends(get_dat
     )
     user_id = await db.execute(query)
 
-    # Seed default calendars
-    default_calendars = [
-        {
-            "label": "Operations",
-            "color": "linear-gradient(135deg, #5b8def, #304ffe)",
-            "is_visible": True,
-        },
-        {
-            "label": "Team",
-            "color": "linear-gradient(135deg, #ff7d9d, #ff14c6)",
-            "is_visible": True,
-        },
-        {
-            "label": "Personal",
-            "color": "linear-gradient(135deg, #20d39c, #0c9f6f)",
-            "is_visible": True,
-        },
-    ]
+    # Seed default calendars (disabled – calendars are user generated now)
+    default_calendars: List[Dict[str, str | bool]] = []
 
     calendar_ids: Dict[str, int] = {}
     for calendar in default_calendars:
@@ -1418,45 +1796,8 @@ async def create_user(user: UserCreate, db: databases.Database = Depends(get_dat
         )
         calendar_ids[calendar["label"]] = calendar_id
 
-    # Seed default calendar events
-    default_events = [
-        {
-            "title": "Builder cohort sync",
-            "calendar_label": "Operations",
-            "start": "2025-10-25T08:30:00",
-            "end": "2025-10-25T09:15:00",
-        },
-        {
-            "title": "Proactivity instrumentation review",
-            "calendar_label": "Operations",
-            "start": "2025-10-25T11:00:00",
-            "end": "2025-10-25T12:00:00",
-        },
-        {
-            "title": "Pulse QA slot",
-            "calendar_label": "Operations",
-            "start": "2025-10-25T15:30:00",
-            "end": "2025-10-25T16:00:00",
-        },
-        {
-            "title": "Alignment recap + journaling",
-            "calendar_label": "Operations",
-            "start": "2025-10-25T19:00:00",
-            "end": "2025-10-25T19:45:00",
-        },
-        {
-            "title": "Design review",
-            "calendar_label": "Team",
-            "start": "2025-10-24T11:00:00",
-            "end": "2025-10-24T12:00:00",
-        },
-        {
-            "title": "Run club",
-            "calendar_label": "Personal",
-            "start": "2025-10-23T07:30:00",
-            "end": "2025-10-23T08:15:00",
-        },
-    ]
+    # Seed default calendar events (disabled – events are user generated now)
+    default_events: List[Dict[str, str]] = []
 
     for event in default_events:
         calendar_id = calendar_ids.get(event["calendar_label"])
@@ -1742,6 +2083,231 @@ async def create_calendar_event(user_id: int, event: CalendarEventCreate, db: da
     event_id = await db.execute(query)
     return {**event.dict(), "id": event_id, "user_id": user_id}
 
+
+# Dashboard API endpoints
+@app.get("/users/{user_id}/dashboard/pulses", response_model=List[DashboardPulse])
+async def list_dashboard_pulses(
+    user_id: int,
+    limit: int = MAX_DASHBOARD_PULSE_HISTORY,
+    db: databases.Database = Depends(get_database),
+):
+    safe_limit = max(1, min(limit, MAX_DASHBOARD_PULSE_HISTORY))
+    query = (
+        dashboard_pulses.select()
+        .where(dashboard_pulses.c.user_id == user_id)
+        .order_by(dashboard_pulses.c.date_key.desc())
+        .limit(safe_limit)
+    )
+    records = await db.fetch_all(query)
+    pulses: List[DashboardPulse] = []
+    for record in records:
+        payload = _serialize_dashboard_pulse_record(record)
+        if not payload:
+            continue
+        pulses.append(DashboardPulse(**payload))
+    return pulses
+
+
+@app.get("/users/{user_id}/dashboard/pulses/{date_key}", response_model=DashboardPulse)
+async def get_dashboard_pulse(
+    user_id: int,
+    date_key: str,
+    db: databases.Database = Depends(get_database),
+):
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date_key):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid date key; expected YYYY-MM-DD")
+
+    record = await _load_dashboard_pulse_by_date(db, user_id, date_key)
+    payload = _serialize_dashboard_pulse_record(record)
+    if not payload:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pulse entry not found")
+    return DashboardPulse(**payload)
+
+
+@app.post("/users/{user_id}/dashboard/pulses", response_model=DashboardPulse, status_code=status.HTTP_201_CREATED)
+async def create_dashboard_pulse(
+    user_id: int,
+    pulse: DashboardPulseCreate,
+    db: databases.Database = Depends(get_database),
+):
+    timestamp_dt = _timestamp_ms_to_datetime(pulse.timestamp)
+    plans_payload = _normalize_plan_items([item.dict() for item in pulse.plans])
+    habits_payload = _normalize_habit_items([item.dict() for item in pulse.habits])
+    proactivity_payload = _normalize_proactivity(pulse.proactivity.dict())
+
+    if pulse.carry_forward:
+        previous_record = await _load_previous_dashboard_pulse(db, user_id, pulse.date_key)
+        previous_serialized = _serialize_dashboard_pulse_record(previous_record)
+        plans_payload, habits_payload = _carry_forward_dashboard_entries(
+            previous_serialized or {"plans": [], "habits": []},
+            plans_payload,
+            habits_payload,
+        )
+
+    now = datetime.utcnow()
+    existing = await _load_dashboard_pulse_by_date(db, user_id, pulse.date_key)
+
+    if existing:
+        await db.execute(
+            dashboard_pulses.update()
+            .where(dashboard_pulses.c.id == existing["id"])
+            .values(
+                timestamp=timestamp_dt,
+                plans=plans_payload,
+                habits=habits_payload,
+                proactivity=proactivity_payload,
+                updated_at=now,
+            )
+        )
+        record = await db.fetch_one(
+            dashboard_pulses.select().where(dashboard_pulses.c.id == existing["id"])
+        )
+    else:
+        pulse_id = await db.execute(
+            dashboard_pulses.insert().values(
+                user_id=user_id,
+                date_key=pulse.date_key,
+                timestamp=timestamp_dt,
+                plans=plans_payload,
+                habits=habits_payload,
+                proactivity=proactivity_payload,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        record = await db.fetch_one(
+            dashboard_pulses.select().where(dashboard_pulses.c.id == pulse_id)
+        )
+
+    payload = _serialize_dashboard_pulse_record(record)
+    if not payload:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to persist dashboard pulse")
+    return DashboardPulse(**payload)
+
+
+@app.put("/users/{user_id}/dashboard/pulses/{pulse_id}", response_model=DashboardPulse)
+async def update_dashboard_pulse(
+    user_id: int,
+    pulse_id: int,
+    pulse_update: DashboardPulseUpdate,
+    db: databases.Database = Depends(get_database),
+):
+    existing = await db.fetch_one(
+        dashboard_pulses.select().where(
+            (dashboard_pulses.c.id == pulse_id) & (dashboard_pulses.c.user_id == user_id)
+        )
+    )
+    if not existing:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pulse entry not found")
+
+    update_data: Dict[str, Any] = {}
+    if pulse_update.timestamp is not None:
+        update_data["timestamp"] = _timestamp_ms_to_datetime(pulse_update.timestamp)
+    if pulse_update.plans is not None:
+        update_data["plans"] = _normalize_plan_items([item.dict() for item in pulse_update.plans])
+    if pulse_update.habits is not None:
+        update_data["habits"] = _normalize_habit_items([item.dict() for item in pulse_update.habits])
+    if pulse_update.proactivity is not None:
+        update_data["proactivity"] = _normalize_proactivity(pulse_update.proactivity.dict())
+
+    if not update_data:
+        payload = _serialize_dashboard_pulse_record(existing)
+        if not payload:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to load dashboard pulse")
+        return DashboardPulse(**payload)
+
+    update_data["updated_at"] = datetime.utcnow()
+    await db.execute(
+        dashboard_pulses.update()
+        .where(dashboard_pulses.c.id == pulse_id)
+        .values(**update_data)
+    )
+    record = await db.fetch_one(dashboard_pulses.select().where(dashboard_pulses.c.id == pulse_id))
+    payload = _serialize_dashboard_pulse_record(record)
+    if not payload:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to update dashboard pulse")
+    return DashboardPulse(**payload)
+
+
+@app.delete("/users/{user_id}/dashboard/pulses/{pulse_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_dashboard_pulse(
+    user_id: int,
+    pulse_id: int,
+    db: databases.Database = Depends(get_database),
+):
+    existing = await db.fetch_one(
+        dashboard_pulses.select().where(
+            (dashboard_pulses.c.id == pulse_id) & (dashboard_pulses.c.user_id == user_id)
+        )
+    )
+    if not existing:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pulse entry not found")
+
+    await db.execute(
+        dashboard_pulses.delete().where(dashboard_pulses.c.id == pulse_id)
+    )
+    return None
+
+
+@app.get("/users/{user_id}/dashboard/summary", response_model=DashboardSummary)
+async def get_dashboard_summary(
+    user_id: int,
+    db: databases.Database = Depends(get_database),
+):
+    pulses_query = (
+        dashboard_pulses.select()
+        .where(dashboard_pulses.c.user_id == user_id)
+        .order_by(dashboard_pulses.c.date_key.desc())
+        .limit(MAX_DASHBOARD_PULSE_HISTORY)
+    )
+    pulse_records = await db.fetch_all(pulses_query)
+
+    pulse_items: List[DashboardPulse] = []
+    for record in pulse_records:
+        payload = _serialize_dashboard_pulse_record(record)
+        if not payload:
+            continue
+        pulse_items.append(DashboardPulse(**payload))
+
+    today_key = datetime.utcnow().strftime("%Y-%m-%d")
+    today_entry = next((pulse for pulse in pulse_items if pulse.date_key == today_key), None)
+    recent_entries = pulse_items[:7]
+
+    proactivity_records = await db.fetch_all(
+        proactivity_logs.select()
+        .where(proactivity_logs.c.user_id == user_id)
+        .order_by(proactivity_logs.c.activity_date.desc())
+        .limit(10)
+    )
+    proactivity_logs_payload: List[ProactivityLog] = []
+    for record in proactivity_records:
+        proactivity_logs_payload.append(
+            ProactivityLog(
+                id=record["id"],
+                user_id=record["user_id"],
+                activity_date=record["activity_date"],
+                tasks_completed=record["tasks_completed"],
+                total_tasks=record["total_tasks"],
+                score=record["score"],
+                notes=record["notes"],
+                created_at=record["created_at"],
+                updated_at=record["updated_at"],
+            )
+        )
+
+    streak = await _compute_proactivity_streak(db, user_id)
+
+    return DashboardSummary(
+        today=today_entry,
+        recent=recent_entries,
+        pulses=pulse_items,
+        proactivity=DashboardProactivitySummary(
+            logs=proactivity_logs_payload,
+            streak=streak,
+        ),
+    )
+
+
 # Proactivity API endpoints
 @app.get("/users/{user_id}/proactivity", response_model=List[ProactivityLog])
 async def get_user_proactivity(user_id: int, db: databases.Database = Depends(get_database)):
@@ -1856,32 +2422,7 @@ async def daily_proactivity_checkin(
 @app.get("/users/{user_id}/proactivity/streak", response_model=dict)
 async def get_proactivity_streak(user_id: int, db: databases.Database = Depends(get_database)):
     """Get user's current proactivity streak"""
-    from datetime import datetime
-
-    # Calculate streak (consecutive days with proactivity score >= 70)
-    subquery = """
-        SELECT activity_date, score
-        FROM proactivity_logs
-        WHERE user_id = :user_id
-        AND score >= 70
-        ORDER BY activity_date DESC
-    """
-
-    # Execute raw query to get qualifying days
-    result = await db.fetch_all(subquery.replace(":user_id", str(user_id)))
-
-    streak = 0
-    current_date = None
-
-    for row in result:
-        # Parse the activity_date (it comes as a string from raw SQL)
-        row_date = datetime.strptime(row.activity_date.split('.')[0], '%Y-%m-%dT%H:%M:%S').date() if isinstance(row.activity_date, str) else row.activity_date.date()
-
-        if current_date is None or (row_date - current_date).days > 1:
-            streak = 1
-        current_date = row_date
-
-    return {"current_streak": streak, "best_streak": streak}
+    return await _compute_proactivity_streak(db, user_id)
 
 # Google Calendar helpers
 

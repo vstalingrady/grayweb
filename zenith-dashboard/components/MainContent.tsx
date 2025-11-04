@@ -132,7 +132,7 @@ const MainContent: React.FC<MainContentProps> = ({ user, userNameOverride, loadi
   );
 
   return (
-    <main className="flex flex-1 flex-col px-12 py-10 pb-24">
+    <main className="flex flex-1 min-h-full flex-col px-12 pt-10 pb-0">
       {/* Header */}
       <header className="flex items-start justify-between">
         <div className="space-y-1">
@@ -171,98 +171,104 @@ const MainContent: React.FC<MainContentProps> = ({ user, userNameOverride, loadi
       </header>
 
       {/* Widgets */}
-      <div className="mt-14 grid flex-1 grid-cols-1 gap-10 xl:grid-cols-[320px_minmax(0,1fr)]">
+      <div className="mt-14 grid flex-1 grid-cols-1 gap-10 items-stretch xl:grid-cols-2">
         {/* Calendar */}
-        <div className="flex flex-col rounded-[34px] bg-black/60 p-6 shadow-[0_30px_60px_-35px_rgba(0,0,0,0.6)]">
-          <div className="flex items-center justify-between rounded-[24px] bg-white/[0.02] px-5 py-4">
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.45em] text-white/40">Day</p>
-              <p className="mt-1 text-lg font-semibold text-white">{cardDayLabel}</p>
-            </div>
-            <button className="rounded-full border border-white/20 bg-white/[0.06] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-white transition hover:bg-white/[0.12]">
-              + New
-            </button>
-          </div>
-          <div className="relative mt-6 flex flex-1 gap-6">
-            <div className="flex flex-col justify-between text-right text-xs font-semibold uppercase tracking-[0.3em] text-white/30">
-              {timelineHours.map((hour) => (
-                <span key={hour} className="h-[52px]">
-                  {formatHourLabel(hour)}
-                </span>
-              ))}
-            </div>
-            <div className="relative flex-1">
-              <div className="absolute inset-0">
-                {timelineHours.map((hour, index) => (
-                  <div
-                    key={hour}
-                    className="absolute left-0 right-0 border-t border-white/10"
-                    style={{ top: `${(index / (timelineHours.length - 1)) * 100}%` }}
-                  />
-                ))}
+        <article className="gray-panel gray-dashboard__panel gray-dashboard__panel--calendar">
+          <div className="gray-dashboard__calendar-card">
+            <div className="flex h-full w-full min-h-[600px] flex-col rounded-[34px] border border-white/10 bg-black/60 p-6 shadow-[0_30px_60px_-35px_rgba(0,0,0,0.6)]">
+              <div className="flex items-center justify-between rounded-[24px] bg-white/[0.02] px-5 py-4">
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.45em] text-white/40">Day</p>
+                  <p className="mt-1 text-lg font-semibold text-white">{cardDayLabel}</p>
+                </div>
+                <button className="rounded-full border border-white/20 bg-white/[0.06] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-white transition hover:bg-white/[0.12]">
+                  + New
+                </button>
               </div>
-              <div className="relative h-[520px]">
-                {calendarEvents.map((event) => {
-                  const startMinutes =
-                    (event.startHour * 60 + event.startMinute) - calendarStartHour * 60;
-                  const endMinutes =
-                    (event.endHour * 60 + event.endMinute) - calendarStartHour * 60;
-                  const top = (startMinutes / totalTimelineMinutes) * 100;
-                  const height = ((endMinutes - startMinutes) / totalTimelineMinutes) * 100;
-                  return (
-                    <div
-                      key={`${event.title}-${event.startHour}`}
-                      className="absolute left-0 right-4"
-                      style={{
-                        top: `${top}%`,
-                        height: `${Math.max(height, 6)}%`,
-                      }}
-                    >
-                      <div className="flex h-full flex-col justify-center rounded-3xl bg-gradient-to-r from-[#4563FF] to-[#6F98FF] px-4 py-3 text-white shadow-[0_35px_60px_-35px_rgba(73,115,255,0.9)]">
-                        <span className="text-[11px] font-semibold uppercase tracking-[0.3em] text-white/80">
-                          {`${formatTimeLabel(event.startHour, event.startMinute)} - ${formatTimeLabel(event.endHour, event.endMinute)}`}
-                        </span>
-                        <span className="mt-1 text-sm font-semibold tracking-tight">
-                          {event.title}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
+              <div className="relative mt-6 flex flex-1 gap-6">
+                <div className="flex flex-col justify-between text-right text-xs font-semibold uppercase tracking-[0.3em] text-white/30">
+                  {timelineHours.map((hour) => (
+                    <span key={hour} className="h-[52px]">
+                      {formatHourLabel(hour)}
+                    </span>
+                  ))}
+                </div>
+                <div className="relative flex flex-1">
+                  <div className="absolute inset-0">
+                    {timelineHours.map((hour, index) => (
+                      <div
+                        key={hour}
+                        className="absolute left-0 right-0 border-t border-white/10"
+                        style={{ top: `${(index / (timelineHours.length - 1)) * 100}%` }}
+                      />
+                    ))}
+                  </div>
+                  <div className="relative flex-1 min-h-[360px]">
+                    {calendarEvents.map((event) => {
+                      const startMinutes =
+                        (event.startHour * 60 + event.startMinute) - calendarStartHour * 60;
+                      const endMinutes =
+                        (event.endHour * 60 + event.endMinute) - calendarStartHour * 60;
+                      const top = (startMinutes / totalTimelineMinutes) * 100;
+                      const height = ((endMinutes - startMinutes) / totalTimelineMinutes) * 100;
+                      return (
+                        <div
+                          key={`${event.title}-${event.startHour}`}
+                          className="absolute left-0 right-4"
+                          style={{
+                            top: `${top}%`,
+                            height: `${Math.max(height, 6)}%`,
+                          }}
+                        >
+                          <div className="flex h-full flex-col justify-center rounded-3xl bg-gradient-to-r from-[#4563FF] to-[#6F98FF] px-4 py-3 text-white shadow-[0_35px_60px_-35px_rgba(73,115,255,0.9)]">
+                            <span className="text-[11px] font-semibold uppercase tracking-[0.3em] text-white/80">
+                              {`${formatTimeLabel(event.startHour, event.startMinute)} - ${formatTimeLabel(event.endHour, event.endMinute)}`}
+                            </span>
+                            <span className="mt-1 text-sm font-semibold tracking-tight">
+                              {event.title}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        </article>
 
         {/* Plans */}
-        <div className="flex h-full flex-col rounded-[34px] border border-white/10 bg-black/60 p-6 shadow-[0_30px_60px_-35px_rgba(0,0,0,0.6)]">
-          <div className="flex items-center gap-3">
-            <div className="inline-flex rounded-full border border-white/10 bg-white/[0.04] p-1">
-              <button className="rounded-full bg-white text-xs font-semibold uppercase tracking-[0.25em] text-black px-4 py-2">
-                Plans
-              </button>
-              <button className="rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.25em] text-white/40">
-                Habits
+        <article className="gray-panel gray-dashboard__panel gray-dashboard__panel--pulse">
+          <div className="flex h-full min-h-[600px] flex-col rounded-[34px] border border-white/10 bg-black/60 p-6 shadow-[0_30px_60px_-35px_rgba(0,0,0,0.6)]">
+            <div className="flex items-center gap-3">
+              <div className="inline-flex rounded-full border border-white/10 bg-white/[0.04] p-1">
+                <button className="rounded-full bg-white text-xs font-semibold uppercase tracking-[0.25em] text-black px-4 py-2">
+                  Plans
+                </button>
+                <button className="rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.25em] text-white/40">
+                  Habits
+                </button>
+              </div>
+              <span className="ml-auto text-xs font-semibold uppercase tracking-[0.25em] text-white/40">
+                Builder Pulse
+              </span>
+            </div>
+            <div className="mt-6 flex-1 space-y-3">
+              {/* Plans will be populated from database */}
+            </div>
+            <div className="mt-6">
+              <button className="w-full rounded-full border border-white/15 bg-white/[0.06] py-3 text-sm font-semibold uppercase tracking-[0.3em] text-white transition hover:bg-white/[0.12]">
+                Add Plans
               </button>
             </div>
-            <span className="ml-auto text-xs font-semibold uppercase tracking-[0.25em] text-white/40">
-              Builder Pulse
-            </span>
           </div>
-          <div className="mt-6 flex-1 space-y-3">
-            {/* Plans will be populated from database */}
-          </div>
-          <div className="mt-6">
-            <button className="w-full rounded-full border border-white/15 bg-white/[0.06] py-3 text-sm font-semibold uppercase tracking-[0.3em] text-white transition hover:bg-white/[0.12]">
-              Add Plans
-            </button>
-          </div>
-        </div>
+        </article>
       </div>
-      
+
       {/* Ask Input */}
-      <div className="mt-12 flex justify-center">
-        <div className="sticky bottom-10 z-20 w-full max-w-2xl">
+      <div className="mt-12 flex justify-center pb-0">
+        <div className="sticky bottom-0 z-20 w-full max-w-2xl">
           <input
             type="text"
             placeholder="Ask anything"

@@ -89,6 +89,20 @@ if __name__ == "__main__":
         sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=sqlalchemy.func.now()),
         sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=sqlalchemy.func.now(), onupdate=sqlalchemy.func.now()),
     )
+    dashboard_pulses = sqlalchemy.Table(
+        "dashboard_pulses",
+        metadata,
+        sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True, index=True),
+        sqlalchemy.Column("user_id", sqlalchemy.ForeignKey("users.id"), nullable=False),
+        sqlalchemy.Column("date_key", sqlalchemy.String, nullable=False),
+        sqlalchemy.Column("timestamp", sqlalchemy.DateTime, nullable=False),
+        sqlalchemy.Column("plans", sqlalchemy.JSON, nullable=False, default=list),
+        sqlalchemy.Column("habits", sqlalchemy.JSON, nullable=False, default=list),
+        sqlalchemy.Column("proactivity", sqlalchemy.JSON, nullable=False, default=dict),
+        sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=sqlalchemy.func.now()),
+        sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=sqlalchemy.func.now(), onupdate=sqlalchemy.func.now()),
+        sqlalchemy.UniqueConstraint("user_id", "date_key", name="uq_dashboard_pulses_user_date"),
+    )
     user_streaks = sqlalchemy.Table(
         "user_streaks",
         metadata,

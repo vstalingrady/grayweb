@@ -1,6 +1,8 @@
+import { useState } from "react";
 import { CheckSquare, Square, Flame, Pencil, Trash2 } from "lucide-react";
 import styles from "@/app/gray/GrayPageClient.module.css";
 import { GrayDashboardCalendar } from "@/components/calendar/GrayDashboardCalendar";
+import { AddPlanHabitModal } from "./AddPlanHabitModal";
 import type { CalendarEvent, CalendarInfo } from "@/components/calendar/types";
 import { type HabitItem, type PlanItem } from "./types";
 
@@ -26,6 +28,7 @@ type GrayGeneralViewProps = {
   onCalendarEventsChange: (events: CalendarEvent[]) => void;
   onEditHabit: (habit: HabitItem) => void;
   onDeleteHabit: (habit: HabitItem) => void;
+  onRefreshData: () => Promise<void>;
 };
 
 export function GrayGeneralView({
@@ -45,7 +48,26 @@ export function GrayGeneralView({
   onCalendarEventsChange,
   onEditHabit,
   onDeleteHabit,
+  onRefreshData,
 }: GrayGeneralViewProps) {
+  const [modalState, setModalState] = useState<{ isOpen: boolean; type: "plan" | "habit" | null }>({
+    isOpen: false,
+    type: null,
+  });
+
+  const openModal = (type: "plan" | "habit") => {
+    setModalState({ isOpen: true, type });
+  };
+
+  const closeModal = () => {
+    setModalState({ isOpen: false, type: null });
+  };
+
+  const handleModalSuccess = async () => {
+    // Trigger a refresh of the data
+    await onRefreshData();
+  };
+
   return (
     <>
       <h1 className={styles.greeting}>{greeting}</h1>
@@ -133,7 +155,7 @@ export function GrayGeneralView({
                       </li>
                     ))}
                   </ul>
-                  <button type="button" className={styles.secondaryAction}>
+                  <button type="button" className={styles.secondaryAction} onClick={() => openModal("plan")}>
                     Add plans
                   </button>
                 </>
@@ -182,7 +204,7 @@ export function GrayGeneralView({
                       </li>
                     ))}
                   </ul>
-                  <button type="button" className={styles.secondaryAction}>
+                  <button type="button" className={styles.secondaryAction} onClick={() => openModal("habit")}>
                     Add habits
                   </button>
                 </>
@@ -191,6 +213,15 @@ export function GrayGeneralView({
           </div>
         </div>
       </section>
+
+      {modalState.isOpen && modalState.type && (
+        <AddPlanHabitModal
+          isOpen={modalState.isOpen}
+          onClose={closeModal}
+          type={modalState.type}
+          onSuccess={handleModalSuccess}
+        />
+      )}
     </>
   );
 }

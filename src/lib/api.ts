@@ -352,9 +352,23 @@ class ApiService {
     });
   }
 
+  async createPlan(userId: number, planData: { label: string; completed?: boolean }): Promise<Plan> {
+    return this.fetch<Plan>(`/users/${userId}/plans`, {
+      method: 'POST',
+      body: JSON.stringify(planData),
+    });
+  }
+
   // Habits
   async getUserHabits(userId: number): Promise<Habit[]> {
     return this.fetch<Habit[]>(`/users/${userId}/habits`);
+  }
+
+  async createHabit(userId: number, habitData: { label: string }): Promise<Habit> {
+    return this.fetch<Habit>(`/users/${userId}/habits`, {
+      method: 'POST',
+      body: JSON.stringify(habitData),
+    });
   }
 
   async updateHabit(userId: number, habitId: number, updateData: Partial<Pick<Habit, 'label' | 'streak_label' | 'previous_label'>>): Promise<Habit> {

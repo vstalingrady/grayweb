@@ -21,10 +21,14 @@ from pydantic import BaseModel
 # Environment variables for Google Calendar
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
-GOOGLE_REDIRECT_URI = os.getenv(
-    "GOOGLE_REDIRECT_URI",
-    "https://gray.alignment.id/api/auth/google/callback",
-)
+# Determine redirect URI based on environment
+def get_default_redirect_uri() -> str:
+    """Get the default redirect URI based on environment."""
+    if os.getenv("ENVIRONMENT") == "development" or os.getenv("NODE_ENV") == "development":
+        return "http://localhost:8000/api/auth/google/callback"
+    return "https://gray.alignment.id/api/auth/google/callback"
+
+GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI") or get_default_redirect_uri()
 SCOPES = ["https://www.googleapis.com/auth/calendar.readonly", "https://www.googleapis.com/auth/calendar.events"]
 STATE_TOKEN_TTL_SECONDS = int(os.getenv("GOOGLE_STATE_TTL_SECONDS", "900"))
 STATE_SIGNING_SECRET = (

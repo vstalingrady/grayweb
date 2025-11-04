@@ -301,7 +301,7 @@ function GrayPageClientInner({
   const [habits, setHabits] = useState<HabitItem[]>([]);
   const [planTab, setPlanTab] = useState<"plans" | "habits">("plans");
   const [chatDraft, setChatDraft] = useState("");
-  const [isSidebarExpanded, setIsSidebarExpanded] = useState(true);
+  const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
   const [dashboardTab, setDashboardTab] = useState<"pulse" | "calendar">("pulse");
   const [isPersonalizationOpen, setIsPersonalizationOpen] = useState(false);
   const [pulseEntries, setPulseEntries] = useState<PulseEntry[]>([]);
@@ -1029,6 +1029,42 @@ function GrayPageClientInner({
       });
   };
 
+  const refreshPlansAndHabits = async () => {
+    if (!user?.id) {
+      return;
+    }
+
+    try {
+      const [planResponse, habitResponse] = await Promise.all([
+        apiService.getUserPlans(user.id),
+        apiService.getUserHabits(user.id),
+      ]);
+
+      const mappedPlans: PlanItem[] = Array.isArray(planResponse)
+        ? planResponse.map((plan) => ({
+            id: plan.id.toString(),
+            label: plan.label,
+            completed: Boolean(plan.completed),
+          }))
+        : [];
+
+      const mappedHabits: HabitItem[] = Array.isArray(habitResponse)
+        ? habitResponse.map((habit) => ({
+            id: habit.id.toString(),
+            label: habit.label,
+            streakLabel: habit.streak_label,
+            previousLabel: habit.previous_label,
+            completed: false,
+          }))
+        : [];
+
+      setPlans(mappedPlans);
+      setHabits(mappedHabits);
+    } catch (error) {
+      console.error("Failed to refresh plans and habits:", error);
+    }
+  };
+
   const handleCalendarsChange = (nextCalendars: CalendarInfo[]) => {
     const previousCalendars = new Map(calendarCalendars.map((calendar) => [calendar.id, calendar]));
     setCalendarCalendars(nextCalendars);
@@ -1253,6 +1289,7 @@ function GrayPageClientInner({
                     onCalendarEventsChange={handleEventsChange}
                     onEditHabit={editHabit}
                     onDeleteHabit={deleteHabit}
+                    onRefreshData={refreshPlansAndHabits}
                   />
                   <div className={`${styles.chatBarRow} ${styles.generalChatBarRow}`}>
                     <GrayChatBar
