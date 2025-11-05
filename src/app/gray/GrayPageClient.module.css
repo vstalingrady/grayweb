@@ -1696,10 +1696,15 @@
 
 .generalViewSection {
   width: min(1180px, 100%);
+  max-width: calc(100vw - clamp(32px, 8vw, 120px));
+  margin: 0 auto;
+  padding: 0 clamp(20px, 6vw, 48px);
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   gap: clamp(18px, 3vh, 32px);
   align-items: stretch;
+  padding-bottom: var(--gray-chat-bar-clearance);
 }
 
 .mainContent[data-view="general"] .mainGrid {
@@ -3661,7 +3666,9 @@ h1.greeting {
   grid-template-columns: minmax(300px, 420px) minmax(320px, 460px);
   gap: clamp(16px, 2vw, 24px);
   align-items: stretch;
-  width: min(960px, 100%);
+  width: 100%;
+  max-width: 960px;
+  box-sizing: border-box;
   justify-content: center;
   margin: 0 auto;
   margin-bottom: 0;
@@ -5006,7 +5013,7 @@ h1.greeting {
 @media (max-width: 1080px) {
   .mainGrid {
     grid-template-columns: 1fr;
-    width: min(520px, 100%);
+    max-width: 520px;
   }
 }
 
