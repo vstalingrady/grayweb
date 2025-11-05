@@ -679,6 +679,11 @@ export function GrayDashboardView({
   const showHabitsList = displayHabits.length > 0;
 
   const headerClassName = styles.pulseSurfaceHeader;
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   const proactivityModalContent = !isProactivityModalOpen
     ? null
@@ -908,6 +913,11 @@ export function GrayDashboardView({
     </div>
   );
 
+  const proactivityModal =
+    isMounted && isProactivityModalOpen && typeof document !== "undefined"
+      ? createPortal(proactivityModalContent, document.body)
+      : null;
+
   const pulseMonthLabel = pulseMonthDate.toLocaleDateString(undefined, {
     month: "long",
     year: "numeric",
@@ -921,7 +931,7 @@ export function GrayDashboardView({
 
   const pulseContent = (
     <>
-      {proactivityModalContent}
+      {proactivityModal}
       <DashboardHeader
         activeTab={activeTab}
         onSelectTab={onSelectTab}
