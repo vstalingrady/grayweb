@@ -3833,11 +3833,13 @@ h1.greeting {
 }
 
 .dashboardCalendarSurface .calendarSurfaceBody {
-  padding: 0 0 0;
+  padding: clamp(12px, 1.8vw, 20px);
+  padding-bottom: clamp(18px, 2.6vw, 28px);
   border-top: none;
   gap: clamp(10px, 1.6vw, 18px);
   flex: 1;
   min-height: 0;
+  height: 100%;
   max-height: 100%;
   align-items: stretch;
   overflow: hidden;
@@ -4874,14 +4876,22 @@ h1.greeting {
   align-self: stretch;
   display: flex;
   justify-content: center;
-  position: static;
+  position: sticky;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + clamp(12px, 2vh, 28px));
   margin: 0 auto;
   padding: clamp(6px, 2vh, 18px) 0 clamp(18px, 3vh, 32px);
-  z-index: 5;
+  z-index: 20;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(5, 5, 5, 0) 0%,
+      rgba(5, 5, 5, 0.78) 45%,
+      rgba(5, 5, 5, 0.92) 100%
+    );
+  backdrop-filter: blur(10px);
 }
 
 .generalChatBarRow {
-  position: static;
   margin: 0 auto;
   padding: clamp(12px, 2vh, 24px) 0 clamp(12px, 2vh, 24px);
 }
