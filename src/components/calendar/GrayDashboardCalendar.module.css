@@ -690,7 +690,8 @@
   display: flex;
   align-items: flex-end;
   justify-content: flex-end;
-  padding-right: 6px;
+  padding: 1px 6px 0 0;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .calendarTimezoneLabel {
@@ -842,11 +843,13 @@
   background-size: 100% var(--calendar-hour-height, 64px);
   background-repeat: repeat-y;
   background-position: 0 calc(var(--calendar-hour-height, 64px) / -2);
-  border: 1px solid rgba(255, 255, 255, 0.04);
+  border: none;
   border-radius: 0;
   min-height: calc(var(--calendar-hour-height, 64px) * 24);
   overflow: hidden;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.02),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.02);
   width: 100%;
   z-index: 1;
 }
@@ -945,7 +948,7 @@
   flex-direction: column;
   gap: 6px;
   padding: 8px 10px;
-  border-radius: 12px;
+  border-radius: 6px;
   color: rgba(247, 247, 247, 0.94);
   box-shadow: 0 22px 36px rgba(0, 0, 0, 0.45);
   border: 1px solid rgba(255, 255, 255, 0.08);
