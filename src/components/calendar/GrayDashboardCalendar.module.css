@@ -764,7 +764,9 @@
   gap: 0;
   height: var(--calendar-body-height, auto);
   max-height: var(--calendar-body-height, none);
+  overflow: auto;
   overflow-y: auto;
+  overflow-x: hidden;
   scrollbar-width: thin;
   scrollbar-color: rgba(146, 150, 160, 0.35) transparent;
   scrollbar-gutter: stable both-edges;
@@ -827,7 +829,7 @@
   z-index: 3;
 }
 
-.calendarWeekColumns,
+.calendarWeekColumn,
 .calendarDayColumn {
   position: relative;
   background-color: rgba(4, 4, 4, 0.88);
@@ -851,6 +853,9 @@
   display: grid;
   grid-template-columns: repeat(7, minmax(128px, 1fr));
   width: 100%;
+  background: transparent;
+  border: none;
+  min-height: calc(var(--calendar-hour-height, 64px) * 24);
 }
 
 .calendarWeekColumn,
@@ -905,7 +910,9 @@
   max-height: var(--calendar-body-height, 100%);
   padding: 0 12px 24px 0;
   z-index: 2;
+  overflow: auto;
   overflow-y: auto;
+  overflow-x: hidden;
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
   overscroll-behavior: contain;
