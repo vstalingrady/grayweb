@@ -670,6 +670,7 @@
   min-height: 0;
   flex: 1;
   width: 100%;
+  overflow: hidden;
 }
 
 .calendarHeaderRow {
@@ -793,7 +794,7 @@
   letter-spacing: 0.26em;
   color: rgba(225, 225, 225, 0.32);
   text-align: right;
-  padding: 0 6px 0 0;
+  padding: 1px 6px 0 0;
   text-transform: uppercase;
   background-image: linear-gradient(
     to bottom,
@@ -856,6 +857,7 @@
   background: transparent;
   border: none;
   min-height: calc(var(--calendar-hour-height, 64px) * 24);
+  overflow: hidden;
 }
 
 .calendarWeekColumn,
