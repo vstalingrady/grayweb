@@ -51,6 +51,10 @@
   pointer-events: none;
 }
 
+:global(:root) {
+  --gray-chat-bar-clearance: clamp(112px, 16vh, 176px);
+}
+
 .shell {
   position: relative;
   z-index: 1;
@@ -1625,7 +1629,9 @@
   grid-template-rows: auto auto;
   row-gap: 0;
   --chat-column-max-width: min(620px, 100%);
-  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + clamp(20px, 4vh, 52px));
+  padding-bottom: calc(
+    env(safe-area-inset-bottom, 0px) + clamp(20px, 4vh, 52px) + var(--gray-chat-bar-clearance)
+  );
   overflow: visible;
 }
 
@@ -1640,6 +1646,7 @@
   min-height: 0;
   height: 100%;
   flex: 1 1 auto;
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + var(--gray-chat-bar-clearance));
 }
 
 .mainContent[data-view="dashboard"] {
@@ -1666,6 +1673,7 @@
   justify-content: flex-start;
   gap: 0;
   padding: 0;
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + var(--gray-chat-bar-clearance));
   flex: 1 1 auto;
   align-self: stretch;
 }
@@ -1681,7 +1689,9 @@
   justify-content: flex-start;
   gap: clamp(18px, 3.5vh, 36px);
   padding-top: clamp(24px, 5vh, 56px);
-  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + clamp(24px, 5vh, 56px));
+  padding-bottom: calc(
+    env(safe-area-inset-bottom, 0px) + clamp(24px, 5vh, 56px) + var(--gray-chat-bar-clearance)
+  );
 }
 
 .generalViewSection {
@@ -1700,7 +1710,7 @@
 
 .mainContent[data-view="general"] {
   overflow-y: auto;
-  padding-bottom: 20px;
+  padding-bottom: calc(20px + var(--gray-chat-bar-clearance));
   display: flex;
   flex-direction: column;
 }
@@ -1733,7 +1743,7 @@
   position: relative;
   --chat-column-max-width: min(760px, 100%);
   --chat-bubble-max-width: min(70ch, 100%);
-  --chat-composer-overlap: clamp(80px, 12vh, 120px);
+  --chat-composer-overlap: calc(var(--gray-chat-bar-clearance) + clamp(16px, 3vh, 28px));
   overflow: visible;
 }
 
@@ -1784,7 +1794,7 @@
   padding:
     clamp(18px, 3vh, 28px)
     0
-    clamp(16px, 3vh, 24px)
+    calc(var(--chat-composer-overlap) + clamp(16px, 3vh, 24px))
     clamp(18px, 3vw, 32px);
   overflow-y: auto;
   scroll-behavior: smooth;
@@ -2222,6 +2232,7 @@
   color: rgba(235, 235, 235, 0.38);
   width: min(520px, 100%);
   margin: 0 auto;
+  margin-bottom: calc(var(--gray-chat-bar-clearance) + clamp(12px, 2vh, 24px));
 }
 
 .chatSpinner {
@@ -4871,34 +4882,45 @@ h1.greeting {
 }
 
 .chatBarRow {
-  width: 100%;
-  max-width: min(var(--chat-column-max-width), 100%);
-  align-self: stretch;
+  position: fixed;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + clamp(16px, 3vh, 32px));
+  transform: translateX(-50%);
+  width: min(100%, 960px);
+  max-width: calc(100vw - clamp(32px, 8vw, 120px));
+  align-self: center;
   display: flex;
   justify-content: center;
-  position: sticky;
-  bottom: calc(env(safe-area-inset-bottom, 0px) + clamp(12px, 2vh, 28px));
-  margin: 0 auto;
-  padding: clamp(6px, 2vh, 18px) 0 clamp(18px, 3vh, 32px);
-  z-index: 20;
+  align-items: center;
+  gap: 0;
+  padding: clamp(10px, 2vh, 20px) clamp(16px, 4vw, 32px);
+  box-sizing: border-box;
+  z-index: 80;
+  margin: 0;
+  pointer-events: auto;
+}
+
+.chatBarRow::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: clamp(28px, 6vw, 42px);
   background:
     linear-gradient(
       180deg,
       rgba(5, 5, 5, 0) 0%,
-      rgba(5, 5, 5, 0.78) 45%,
+      rgba(5, 5, 5, 0.72) 40%,
       rgba(5, 5, 5, 0.92) 100%
     );
-  backdrop-filter: blur(10px);
+  backdrop-filter: blur(18px);
+  z-index: -1;
+  pointer-events: none;
 }
 
-.generalChatBarRow {
-  margin: 0 auto;
-  padding: clamp(12px, 2vh, 24px) 0 clamp(12px, 2vh, 24px);
-}
-
+.generalChatBarRow,
 .dashboardChatBarRow {
-  margin: clamp(18px, 3vh, 32px) auto clamp(28px, 4vh, 44px);
-  padding: clamp(10px, 2vh, 18px) 0 0;
+  width: 100%;
+  max-width: min(var(--chat-column-max-width, 760px), 100%);
 }
 
 .chatIconButton,
