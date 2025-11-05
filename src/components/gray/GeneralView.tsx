@@ -6,8 +6,52 @@ import { AddPlanHabitModal } from "./AddPlanHabitModal";
 import type { CalendarEvent, CalendarInfo } from "@/components/calendar/types";
 import { type HabitItem, type PlanItem } from "./types";
 
-const PANEL_HEIGHT = "min(620px, calc(100vh - 220px))";
+const PANEL_HEIGHT =
+  "clamp(480px, calc(100vh - (220px + var(--gray-chat-bar-clearance, 160px))), 840px)";
 const COMPACT_CALENDAR_HOUR_HEIGHT = 56;
+
+const formatPlanMeta = (plan: { scheduleSlot?: string | null; deadline?: string | null }) => {
+  const parts: string[] = [];
+  if (plan.scheduleSlot) {
+    const [startRaw, endRaw] = plan.scheduleSlot.split("-").map((value) => value?.trim() ?? "");
+    const parseTime = (time: string) => {
+      const [h, m] = time.split(":").map((value) => Number.parseInt(value, 10));
+      if (Number.isNaN(h) || Number.isNaN(m)) {
+        return null;
+      }
+      const date = new Date();
+      date.setHours(h, m, 0, 0);
+      return date;
+    };
+    const startTime = parseTime(startRaw);
+    const endTime = parseTime(endRaw);
+    if (startTime && endTime) {
+      parts.push(
+        `Slot ${startTime.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })} – ${endTime.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`
+      );
+    } else if (startTime) {
+      parts.push(`Slot ${startTime.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`);
+    } else {
+      parts.push(`Slot ${plan.scheduleSlot}`);
+    }
+  }
+
+  if (plan.deadline) {
+    const deadlineDate = new Date(plan.deadline);
+    if (!Number.isNaN(deadlineDate.getTime())) {
+      parts.push(
+        `Due ${deadlineDate.toLocaleDateString([], {
+          month: "short",
+          day: "numeric",
+        })}`
+      );
+    } else {
+      parts.push(`Due ${plan.deadline}`);
+    }
+  }
+
+  return parts.join(" • ");
+};
 
 type PlanTab = "plans" | "habits";
 
@@ -122,23 +166,28 @@ export function GrayGeneralView({
                         <button
                           className={styles.planItemButton}
                           type="button"
-                          data-completed={plan.completed}
+                          data-completed={plan.completed ? "true" : "false"}
                           onClick={() => onTogglePlan(plan.id)}
                         >
-                          <span>
-                            {plan.completed ? (
-                              <CheckSquare size={16} />
-                            ) : (
-                              <Square size={16} />
+                          <span className={styles.planCheckbox} aria-hidden="true">
+                            {plan.completed ? <CheckSquare size={16} /> : <Square size={16} />}
+                          </span>
+                          <span className={styles.planLabelGroup}>
+                            <span className={styles.planLabel}>{plan.label}</span>
+                            {(plan.scheduleSlot || plan.deadline) && (
+                              <span className={styles.planMeta}>{formatPlanMeta(plan)}</span>
                             )}
                           </span>
-                          <span className={styles.planLabel}>{plan.label}</span>
                         </button>
-                        <div className={styles.listItemActions}>
+                        <span className={styles.listItemActions}>
                           <button
                             type="button"
                             className={styles.listItemActionButton}
-                            onClick={() => onEditPlan(plan)}
+                            onClick={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              onEditPlan(plan);
+                            }}
                             aria-label={`Edit plan ${plan.label}`}
                           >
                             <Pencil size={14} />
@@ -146,12 +195,16 @@ export function GrayGeneralView({
                           <button
                             type="button"
                             className={styles.listItemActionButton}
-                            onClick={() => onDeletePlan(plan)}
+                            onClick={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              onDeletePlan(plan);
+                            }}
                             aria-label={`Delete plan ${plan.label}`}
                           >
                             <Trash2 size={14} />
                           </button>
-                        </div>
+                        </span>
                       </li>
                     ))}
                   </ul>
@@ -170,24 +223,27 @@ export function GrayGeneralView({
                           data-completed={habit.completed ? "true" : "false"}
                           onClick={() => onToggleHabit(habit.id)}
                         >
-                          <span>
-                            {habit.completed ? (
-                              <CheckSquare size={16} />
-                            ) : (
-                              <Square size={16} />
-                            )}
+                          <span className={styles.planCheckbox} aria-hidden="true">
+                            {habit.completed ? <CheckSquare size={16} /> : <Square size={16} />}
                           </span>
-                          <span className={styles.habitLabel}>{habit.label}</span>
+                          <span className={styles.habitContent}>
+                            <span className={styles.habitLabel}>{habit.label}</span>
+                            <span className={styles.habitMeta}>Prev: {habit.previousLabel}</span>
+                          </span>
                         </button>
-                        <div className={styles.habitListItemMeta}>
-                          <Flame size={12} />
+                        <span className={styles.habitStreak}>
+                          <Flame size={12} aria-hidden="true" />
                           <span>{habit.streakLabel}</span>
-                        </div>
-                        <div className={styles.listItemActions}>
+                        </span>
+                        <span className={styles.listItemActions}>
                           <button
                             type="button"
                             className={styles.listItemActionButton}
-                            onClick={() => onEditHabit(habit)}
+                            onClick={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              onEditHabit(habit);
+                            }}
                             aria-label={`Edit habit ${habit.label}`}
                           >
                             <Pencil size={14} />
@@ -195,12 +251,16 @@ export function GrayGeneralView({
                           <button
                             type="button"
                             className={styles.listItemActionButton}
-                            onClick={() => onDeleteHabit(habit)}
+                            onClick={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              onDeleteHabit(habit);
+                            }}
                             aria-label={`Delete habit ${habit.label}`}
                           >
                             <Trash2 size={14} />
                           </button>
-                        </div>
+                        </span>
                       </li>
                     ))}
                   </ul>
