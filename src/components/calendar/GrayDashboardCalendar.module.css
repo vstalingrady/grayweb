@@ -841,6 +841,7 @@
   );
   background-size: 100% var(--calendar-hour-height, 64px);
   background-repeat: repeat-y;
+  background-position: 0 calc(var(--calendar-hour-height, 64px) / -2);
   border: 1px solid rgba(255, 255, 255, 0.04);
   border-radius: 0;
   min-height: calc(var(--calendar-hour-height, 64px) * 24);
