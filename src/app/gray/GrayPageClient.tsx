@@ -1,7 +1,5 @@
 "use client";
 
-/* eslint-disable react-hooks/set-state-in-effect */
-
 import { useRouter } from "next/navigation";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { Gem, MessageSquarePlus, LayoutDashboard, History, Search } from "lucide-react";
@@ -36,7 +34,9 @@ const PROACTIVITY_SEED: ProactivityItem = {
   label: "Check-ins",
   description: "Daily sync nudges for squad channels.",
   cadence: "Daily",
-  time: "09:00 AM",
+  time: "09:00",
+  times: ["09:00"],
+  channels: ["assistant"],
 };
 
 const DEFAULT_EVENT_COLOR = "linear-gradient(135deg, rgba(91, 141, 239, 0.85), rgba(48, 79, 254, 0.9))";
@@ -51,11 +51,75 @@ const toDateKey = (date: Date) => {
   return `${year}-${month}-${day}`;
 };
 
+const normalizeTimeValue = (value: string | null | undefined): string => {
+  if (!value) {
+    return "09:00";
+  }
+  const trimmed = value.trim();
+  const timeMatch = trimmed.match(/^(\d{1,2}):(\d{2})(?:\s*(AM|PM))?$/i);
+  if (!timeMatch) {
+    return trimmed.slice(0, 5);
+  }
+  let hour = Number.parseInt(timeMatch[1], 10);
+  const minute = Number.parseInt(timeMatch[2], 10);
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) {
+    return "09:00";
+  }
+  const period = timeMatch[3]?.toUpperCase();
+  if (period === "AM") {
+    if (hour === 12) {
+      hour = 0;
+    }
+  } else if (period === "PM") {
+    if (hour !== 12) {
+      hour += 12;
+    }
+  }
+  const normalizedHour = Math.max(0, Math.min(23, hour));
+  const normalizedMinute = Math.max(0, Math.min(59, minute));
+  return `${String(normalizedHour).padStart(2, "0")}:${String(normalizedMinute).padStart(2, "0")}`;
+};
+
+const normalizeProactivityTimes = (
+  times: string[] | null | undefined,
+  fallback: string | null | undefined = null
+): string[] => {
+  const sourceTimes =
+    Array.isArray(times) && times.length > 0
+      ? times
+      : fallback
+        ? [fallback]
+        : [];
+
+  const normalized = sourceTimes
+    .map((value) => normalizeTimeValue(value))
+    .filter((value, index, array) => array.indexOf(value) === index);
+
+  return normalized.length > 0 ? normalized : [normalizeTimeValue(null)];
+};
+
+const primaryProactivityTime = (times: string[] | null | undefined, fallback?: string | null) =>
+  normalizeProactivityTimes(times ?? null, fallback)[0];
+
+const normalizeProactivityChannels = (channels: string[] | null | undefined): string[] => {
+  if (!Array.isArray(channels)) {
+    return [];
+  }
+
+  const normalized = channels
+    .map((channel) => (typeof channel === "string" ? channel.trim() : ""))
+    .filter((channel) => channel.length > 0);
+
+  return normalized.filter((channel, index, array) => array.indexOf(channel) === index);
+};
+
 const clonePlans = (plans: PlanItem[]): PlanItem[] =>
   plans.map((plan) => ({
     id: plan.id,
     label: plan.label,
     completed: plan.completed,
+    deadline: plan.deadline ?? null,
+    scheduleSlot: plan.scheduleSlot ?? null,
   }));
 
 const cloneHabits = (habits: HabitItem[]): HabitItem[] =>
@@ -67,19 +131,24 @@ const cloneHabits = (habits: HabitItem[]): HabitItem[] =>
     completed: Boolean(habit.completed),
   }));
 
-const cloneProactivity = (item: ProactivityItem): ProactivityItem => ({
-  id: item.id,
-  label: item.label,
-  description: item.description,
-  cadence: item.cadence,
-  time: item.time,
-});
+const cloneProactivity = (item: ProactivityItem | null | undefined): ProactivityItem | null =>
+  item
+    ? {
+        id: item.id,
+        label: item.label,
+        description: item.description,
+        cadence: item.cadence,
+        times: normalizeProactivityTimes(item.times ?? null, item.time),
+        time: primaryProactivityTime(item.times ?? null, item.time),
+        channels: normalizeProactivityChannels(item.channels ?? null),
+      }
+    : null;
 
 const createPulseSnapshot = (
   referenceDate: Date,
   plans: PlanItem[],
   habits: HabitItem[],
-  proactivity: ProactivityItem,
+  proactivity: ProactivityItem | null,
   stableId?: string
 ): PulseEntry => ({
   id: stableId ?? `pulse-${toDateKey(referenceDate)}`,
@@ -98,7 +167,9 @@ const arePlanListsEqual = (a: PlanItem[], b: PlanItem[]) =>
       other !== undefined &&
       plan.id === other.id &&
       plan.label === other.label &&
-      plan.completed === other.completed
+      plan.completed === other.completed &&
+      (plan.deadline ?? null) === (other.deadline ?? null) &&
+      (plan.scheduleSlot ?? null) === (other.scheduleSlot ?? null)
     );
   });
 
@@ -116,12 +187,25 @@ const areHabitListsEqual = (a: HabitItem[], b: HabitItem[]) =>
     );
   });
 
-const areProactivityItemsEqual = (a: ProactivityItem, b: ProactivityItem) =>
-  a.id === b.id &&
-  a.label === b.label &&
-  a.description === b.description &&
-  a.cadence === b.cadence &&
-  a.time === b.time;
+const areProactivityItemsEqual = (a: ProactivityItem | null, b: ProactivityItem | null) => {
+  if (a === b) {
+    return true;
+  }
+  if (!a || !b) {
+    return false;
+  }
+  return (
+    a.id === b.id &&
+    a.label === b.label &&
+    a.description === b.description &&
+    a.cadence === b.cadence &&
+    primaryProactivityTime(a.times ?? null, a.time) === primaryProactivityTime(b.times ?? null, b.time) &&
+    normalizeProactivityTimes(a.times ?? null, a.time).join("|") ===
+      normalizeProactivityTimes(b.times ?? null, b.time).join("|") &&
+    normalizeProactivityChannels(a.channels ?? null).join("|") ===
+      normalizeProactivityChannels(b.channels ?? null).join("|")
+  );
+};
 
 const sanitizePulseEntry = (raw: Partial<PulseEntry> | null | undefined): PulseEntry | null => {
   if (!raw) {
@@ -171,24 +255,37 @@ const sanitizePulseEntry = (raw: Partial<PulseEntry> | null | undefined): PulseE
         .filter((habit) => habit.id.length > 0)
     : [];
 
-  const proactivity = raw.proactivity
-    ? {
-        id: String(raw.proactivity.id ?? PROACTIVITY_SEED.id),
-        label: typeof raw.proactivity.label === "string" ? raw.proactivity.label : PROACTIVITY_SEED.label,
-        description:
-          typeof raw.proactivity.description === "string"
-            ? raw.proactivity.description
-            : PROACTIVITY_SEED.description,
-        cadence:
-          typeof raw.proactivity.cadence === "string"
-            ? raw.proactivity.cadence
-            : PROACTIVITY_SEED.cadence,
-        time:
-          typeof raw.proactivity.time === "string"
-            ? raw.proactivity.time
-            : PROACTIVITY_SEED.time,
-      }
-    : cloneProactivity(PROACTIVITY_SEED);
+  const rawProactivity = raw.proactivity;
+  let proactivity: ProactivityItem | null;
+  if (rawProactivity === undefined) {
+    proactivity = cloneProactivity(PROACTIVITY_SEED);
+  } else if (rawProactivity === null) {
+    proactivity = null;
+  } else {
+    proactivity = {
+      id: String(rawProactivity.id ?? PROACTIVITY_SEED.id),
+      label: typeof rawProactivity.label === "string" ? rawProactivity.label : PROACTIVITY_SEED.label,
+      description:
+        typeof rawProactivity.description === "string"
+          ? rawProactivity.description
+          : PROACTIVITY_SEED.description,
+      cadence:
+        typeof rawProactivity.cadence === "string"
+          ? rawProactivity.cadence
+          : PROACTIVITY_SEED.cadence,
+      times: normalizeProactivityTimes(
+        Array.isArray(rawProactivity.times) ? rawProactivity.times : null,
+        typeof rawProactivity.time === "string" ? rawProactivity.time : PROACTIVITY_SEED.time
+      ),
+      time: primaryProactivityTime(
+        Array.isArray(rawProactivity.times) ? rawProactivity.times : null,
+        typeof rawProactivity.time === "string" ? rawProactivity.time : PROACTIVITY_SEED.time
+      ),
+      channels: normalizeProactivityChannels(
+        Array.isArray(rawProactivity.channels) ? rawProactivity.channels : null
+      ),
+    };
+  }
 
   return {
     id,
@@ -299,6 +396,9 @@ function GrayPageClientInner({
   const [now, setNow] = useState(() => new Date(initialTimestamp));
   const [plans, setPlans] = useState<PlanItem[]>([]);
   const [habits, setHabits] = useState<HabitItem[]>([]);
+  const [proactivity, setProactivity] = useState<ProactivityItem | null>(() =>
+    cloneProactivity(PROACTIVITY_SEED)
+  );
   const [planTab, setPlanTab] = useState<"plans" | "habits">("plans");
   const [chatDraft, setChatDraft] = useState("");
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
@@ -346,6 +446,7 @@ function GrayPageClientInner({
     }
     setPlans([]);
     setHabits([]);
+    setProactivity(cloneProactivity(PROACTIVITY_SEED));
     setPulseEntries([]);
     setActivePulseId(null);
     setCalendarCalendars([]);
@@ -366,6 +467,7 @@ function GrayPageClientInner({
       if (!stored) {
         setPulseEntries([]);
         setActivePulseId(null);
+        setProactivity(cloneProactivity(PROACTIVITY_SEED));
         return;
       }
       const parsed = JSON.parse(stored) as unknown;
@@ -382,10 +484,18 @@ function GrayPageClientInner({
         }
         return sanitized[0]?.id ?? null;
       });
+      const nextProactivity = sanitized[0]?.proactivity ?? cloneProactivity(PROACTIVITY_SEED);
+      setProactivity((previous) => {
+        if (areProactivityItemsEqual(previous, nextProactivity ?? null)) {
+          return previous;
+        }
+        return cloneProactivity(nextProactivity) ?? null;
+      });
     } catch (error) {
       console.error("Failed to load pulse history:", error);
       setPulseEntries([]);
       setActivePulseId(null);
+      setProactivity(cloneProactivity(PROACTIVITY_SEED));
     }
   }, [user?.id]);
 
@@ -476,6 +586,8 @@ function GrayPageClientInner({
               id: plan.id.toString(),
               label: plan.label,
               completed: Boolean(plan.completed),
+              deadline: plan.deadline ?? null,
+              scheduleSlot: plan.schedule_slot ?? null,
             }))
           : [];
 
@@ -581,7 +693,6 @@ function GrayPageClientInner({
         entries: group.entries.sort((a, b) => b.createdAt - a.createdAt),
       }));
   }, [sessions]);
-  const proactivity = PROACTIVITY_SEED;
   const nowDateKey = useMemo(() => toDateKey(now), [now]);
   const workspaceTimeLabel = useMemo(
     () =>
@@ -758,14 +869,17 @@ function GrayPageClientInner({
     }
 
     const hasWorkspaceDetails = sections.length > 0;
+    const defaultProactivity = cloneProactivity(PROACTIVITY_SEED);
     const shouldIncludeProactivity =
-      hasWorkspaceDetails && !areProactivityItemsEqual(proactivity, PROACTIVITY_SEED);
+      hasWorkspaceDetails &&
+      proactivity !== null &&
+      !areProactivityItemsEqual(proactivity, defaultProactivity);
 
-    if (shouldIncludeProactivity) {
+    if (shouldIncludeProactivity && proactivity) {
       sections.push(
         "",
         "Proactivity:",
-        `- ${proactivity.label}: ${proactivity.description} (Cadence: ${proactivity.cadence}, Time: ${proactivity.time})`
+        `- ${proactivity.label}: ${proactivity.description} (Cadence: ${proactivity.cadence}, Times: ${(proactivity.times ?? [proactivity.time]).join(", ")})`
       );
     }
 
@@ -1029,6 +1143,19 @@ function GrayPageClientInner({
       });
   };
 
+  const selectProactivityPreset = (next: ProactivityItem) => {
+    setProactivity({
+      ...next,
+      times: normalizeProactivityTimes(next.times ?? null, next.time),
+      time: primaryProactivityTime(next.times ?? null, next.time),
+      channels: normalizeProactivityChannels(next.channels ?? null),
+    });
+  };
+
+  const removeProactivity = () => {
+    setProactivity(null);
+  };
+
   const refreshPlansAndHabits = async () => {
     if (!user?.id) {
       return;
@@ -1045,6 +1172,8 @@ function GrayPageClientInner({
             id: plan.id.toString(),
             label: plan.label,
             completed: Boolean(plan.completed),
+            deadline: plan.deadline ?? null,
+            scheduleSlot: plan.schedule_slot ?? null,
           }))
         : [];
 
@@ -1099,8 +1228,99 @@ function GrayPageClientInner({
     });
   };
 
-  const handleEventsChange = (nextEvents: CalendarEvent[]) => {
+  const handleEventsChange = async (nextEvents: CalendarEvent[]) => {
+    const previousEvents = calendarEvents;
     setCalendarEvents(nextEvents);
+
+    if (!user) {
+      return;
+    }
+
+    // Find deleted events (in previous but not in next)
+    const deletedEventIds = previousEvents
+      .filter(prev => !nextEvents.find(next => next.id === prev.id))
+      .map(event => event.id);
+
+    // Find new events (in next but not in previous)
+    const newEvents = nextEvents.filter(
+      next => !previousEvents.find(prev => prev.id === next.id)
+    );
+
+    // Find updated events (in both, but with different data)
+    const updatedEvents = nextEvents.filter(next => {
+      const prev = previousEvents.find(p => p.id === next.id);
+      if (!prev) return false;
+      return (
+        prev.title !== next.title ||
+        prev.start.getTime() !== next.start.getTime() ||
+        prev.end.getTime() !== next.end.getTime() ||
+        prev.description !== next.description ||
+        prev.calendarId !== next.calendarId
+      );
+    });
+
+    // Delete removed events
+    for (const eventId of deletedEventIds) {
+      const numericId = Number(eventId);
+      if (!Number.isNaN(numericId)) {
+        // Real event - delete from backend
+        apiService.deleteCalendarEvent(user.id, numericId).catch((error) => {
+          console.error("Failed to delete calendar event:", error);
+          // Revert the change on error
+          setCalendarEvents(previousEvents);
+        });
+      } else if (eventId.startsWith('evt-')) {
+        // Temporary event - just remove from local state
+        // No need to call API
+        console.log("Removing temporary event:", eventId);
+      }
+    }
+
+    // Create new events
+    for (const event of newEvents) {
+      const numericCalendarId = event.calendarId ? Number(event.calendarId) : null;
+      if (!Number.isNaN(numericCalendarId) || event.calendarId === "default") {
+        try {
+          const createdEvent = await apiService.createCalendarEvent(user.id, {
+            calendar_id: event.calendarId === "default" ? null : numericCalendarId,
+            title: event.title,
+            description: event.description,
+            start_time: event.start.toISOString(),
+            end_time: event.end.toISOString(),
+          });
+          // Update the local state with the real ID from the backend
+          setCalendarEvents(prev => prev.map(e => e.id === event.id ? {
+            ...e,
+            id: createdEvent.id.toString()
+          } : e));
+        } catch (error) {
+          console.error("Failed to create calendar event:", error);
+          // Revert the change on error
+          setCalendarEvents(previousEvents);
+        }
+      }
+    }
+
+    // Update existing events
+    for (const event of updatedEvents) {
+      const numericEventId = Number(event.id);
+      const numericCalendarId = event.calendarId ? Number(event.calendarId) : null;
+      if (!Number.isNaN(numericEventId) && (!Number.isNaN(numericCalendarId) || event.calendarId === "default")) {
+        try {
+          await apiService.updateCalendarEvent(user.id, numericEventId, {
+            calendar_id: event.calendarId === "default" ? null : numericCalendarId,
+            title: event.title,
+            description: event.description,
+            start_time: event.start.toISOString(),
+            end_time: event.end.toISOString(),
+          });
+        } catch (error) {
+          console.error("Failed to update calendar event:", error);
+          // Revert the change on error
+          setCalendarEvents(previousEvents);
+        }
+      }
+    }
   };
 
   const handleCalendarIntegration = useCallback(async () => {
@@ -1238,27 +1458,39 @@ function GrayPageClientInner({
                 />
               )}
               {isDashboardView ? (
-                <GrayDashboardView
-                  pulseEntries={pulseEntries}
-                  currentPulse={activePulse}
-                  isCurrentPulseEditable={Boolean(isActivePulseEditable)}
-                  onSelectPulse={setActivePulseId}
-                  proactivityFallback={proactivity}
-                  onTogglePlan={togglePlan}
-                  onToggleHabit={toggleHabit}
-                  onEditPlan={editPlan}
-                  onDeletePlan={deletePlan}
-                  activeTab={dashboardTab}
-                  onSelectTab={setDashboardTab}
-                  currentDate={now}
-                  calendars={derivedCalendars}
-                  onCalendarsChange={handleCalendarsChange}
-                  calendarEvents={derivedEvents}
-                  onCalendarEventsChange={handleEventsChange}
-                  onEditHabit={editHabit}
-                  onDeleteHabit={deleteHabit}
-                  onIntegrationAction={handleCalendarIntegration}
-                />
+                <>
+                  <GrayDashboardView
+                    pulseEntries={pulseEntries}
+                    currentPulse={activePulse}
+                    isCurrentPulseEditable={Boolean(isActivePulseEditable)}
+                    onSelectPulse={setActivePulseId}
+                    proactivityFallback={proactivity}
+                    onProactivitySelect={selectProactivityPreset}
+                    onProactivityRemove={removeProactivity}
+                    onTogglePlan={togglePlan}
+                    onToggleHabit={toggleHabit}
+                    onEditPlan={editPlan}
+                    onDeletePlan={deletePlan}
+                    activeTab={dashboardTab}
+                    onSelectTab={setDashboardTab}
+                    currentDate={now}
+                    calendars={derivedCalendars}
+                    onCalendarsChange={handleCalendarsChange}
+                    calendarEvents={derivedEvents}
+                    onCalendarEventsChange={handleEventsChange}
+                    onEditHabit={editHabit}
+                    onDeleteHabit={deleteHabit}
+                    onIntegrationAction={handleCalendarIntegration}
+                    onRefreshData={refreshPlansAndHabits}
+                  />
+                  <div className={`${styles.chatBarRow} ${styles.dashboardChatBarRow}`}>
+                    <GrayChatBar
+                      value={chatDraft}
+                      onChange={setChatDraft}
+                      onSubmit={handleChatSubmit}
+                    />
+                  </div>
+                </>
               ) : isChatView ? (
                 <GrayChatView sessionId={currentChatId ?? null} />
               ) : isHistoryView ? (
