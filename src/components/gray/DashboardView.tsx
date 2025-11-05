@@ -7,6 +7,7 @@ import {
   type CSSProperties,
   type ChangeEvent,
 } from "react";
+import { createPortal } from "react-dom";
 import { CheckSquare, Square, Flame, X, Plus, ChevronDown, Pencil } from "lucide-react";
 import styles from "@/app/gray/GrayPageClient.module.css";
 import { GrayDashboardCalendar } from "@/components/calendar/GrayDashboardCalendar";
@@ -679,15 +680,17 @@ export function GrayDashboardView({
 
   const headerClassName = styles.pulseSurfaceHeader;
 
-  const proactivityModal = isProactivityModalOpen ? (
-    <div
-      className={styles.proactivityModalBackdrop}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="proactivityModalHeading"
-    >
-      <div className={styles.proactivityModal}>
-        <header className={styles.proactivityModalHeader}>
+  const proactivityModalContent = !isProactivityModalOpen
+    ? null
+    : (
+      <div
+        className={styles.proactivityModalBackdrop}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="proactivityModalHeading"
+      >
+        <div className={styles.proactivityModal}>
+          <header className={styles.proactivityModalHeader}>
           <div className={styles.proactivityModalHeading}>
             <span className={styles.proactivityModalEyebrow} id="proactivityModalHeading">
               Proactivity
@@ -903,7 +906,7 @@ export function GrayDashboardView({
         </footer>
       </div>
     </div>
-  ) : null;
+  );
 
   const pulseMonthLabel = pulseMonthDate.toLocaleDateString(undefined, {
     month: "long",
@@ -918,7 +921,7 @@ export function GrayDashboardView({
 
   const pulseContent = (
     <>
-      {proactivityModal}
+      {proactivityModalContent}
       <DashboardHeader
         activeTab={activeTab}
         onSelectTab={onSelectTab}
