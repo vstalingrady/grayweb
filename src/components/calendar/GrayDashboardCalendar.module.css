@@ -683,6 +683,8 @@
   text-transform: uppercase;
   color: rgba(225, 225, 225, 0.45);
   width: 100%;
+  padding-right: var(--calendar-scrollbar-compensation, 0px);
+  box-sizing: border-box;
 }
 
 .calendarHeaderPlaceholder {

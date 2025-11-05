@@ -345,6 +345,39 @@ export function GrayDashboardCalendar({
   });
   const { getDraggableProps, suppressClickRef } = dragControls;
 
+  const weekScrollRef = useRef<HTMLDivElement | null>(null);
+  const [weekScrollbarWidth, setWeekScrollbarWidth] = useState(0);
+
+  useEffect(() => {
+    if (viewMode !== "week") {
+      return;
+    }
+    const element = weekScrollRef.current;
+    if (!element) {
+      return;
+    }
+
+    const updateScrollbarWidth = () => {
+      const nextWidth = element.offsetWidth - element.clientWidth;
+      setWeekScrollbarWidth(nextWidth > 0 ? nextWidth : 0);
+    };
+
+    updateScrollbarWidth();
+
+    let resizeObserver: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== "undefined") {
+      resizeObserver = new ResizeObserver(updateScrollbarWidth);
+      resizeObserver.observe(element);
+    } else {
+      window.addEventListener("resize", updateScrollbarWidth);
+    }
+
+    return () => {
+      resizeObserver?.disconnect();
+      window.removeEventListener("resize", updateScrollbarWidth);
+    };
+  }, [viewMode, weekDays]);
+
   const handleToggleCalendar = (calendarId: string) => {
     updateCalendars((previous) =>
       previous.map((calendar) =>
@@ -416,7 +449,14 @@ export function GrayDashboardCalendar({
   const renderWeekView = () => (
     <div className={styles.calendarGrid}>
       {showHeaderDates && (
-        <div className={styles.calendarHeaderRow}>
+        <div
+          className={styles.calendarHeaderRow}
+          style={
+            weekScrollbarWidth > 0
+              ? ({ "--calendar-scrollbar-compensation": `${weekScrollbarWidth}px` } as CSSProperties)
+              : undefined
+          }
+        >
           <div className={styles.calendarHeaderPlaceholder}>
             <span className={styles.calendarTimezoneLabel}>{timeZoneLabel}</span>
           </div>
@@ -438,7 +478,7 @@ export function GrayDashboardCalendar({
         </div>
       )}
       <div className={styles.calendarBody}>
-        <div className={styles.calendarBodyScroll}>
+        <div className={styles.calendarBodyScroll} ref={weekScrollRef}>
           <div className={styles.calendarTimesColumn}>
             {HOURS_LABEL.map((label, hour) => (
               <span key={label} data-hour={hour}>
