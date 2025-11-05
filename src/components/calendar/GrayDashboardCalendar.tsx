@@ -438,10 +438,7 @@ export function GrayDashboardCalendar({
         </div>
       )}
       <div className={styles.calendarBody}>
-        <div
-          className={styles.calendarBodyScroll}
-          style={{ "--calendar-grid-columns": String(weekDays.length) } as CSSProperties}
-        >
+        <div className={styles.calendarBodyScroll}>
           <div className={styles.calendarTimesColumn}>
             {HOURS_LABEL.map((label, hour) => (
               <span key={label} data-hour={hour}>
@@ -463,55 +460,57 @@ export function GrayDashboardCalendar({
               </>
             )}
           </div>
-          {weekDays.map((day, columnIndex) => {
-            const isToday = nowReference ? isSameDay(day, nowReference) : false;
-            const columnNowIndicatorOffset =
-              weekNowIndicator?.dayIndex === columnIndex ? weekNowIndicator.offset : null;
-            return (
-              <div
-                key={day.toISOString()}
-                className={styles.calendarWeekColumn}
-                data-today={isToday ? "true" : "false"}
-                data-selected={isSameDay(day, selectedDate) ? "true" : "false"}
-              >
+          <div className={styles.calendarWeekColumns}>
+            {weekDays.map((day, columnIndex) => {
+              const isToday = nowReference ? isSameDay(day, nowReference) : false;
+              const columnNowIndicatorOffset =
+                weekNowIndicator?.dayIndex === columnIndex ? weekNowIndicator.offset : null;
+              return (
                 <div
-                  className={styles.calendarColumnScroller}
-                  onClick={(event) => handleColumnClick(event, day)}
+                  key={day.toISOString()}
+                  className={styles.calendarWeekColumn}
+                  data-today={isToday ? "true" : "false"}
+                  data-selected={isSameDay(day, selectedDate) ? "true" : "false"}
                 >
-                  <div className={styles.calendarHourGrid} aria-hidden="true">
-                    {HOURS.map((hour) => (
-                      <div key={hour} className={styles.calendarHourRow} />
+                  <div
+                    className={styles.calendarColumnScroller}
+                    onClick={(event) => handleColumnClick(event, day)}
+                  >
+                    <div className={styles.calendarHourGrid} aria-hidden="true">
+                      {HOURS.map((hour) => (
+                        <div key={hour} className={styles.calendarHourRow} />
+                      ))}
+                    </div>
+                    {columnNowIndicatorOffset !== null && (
+                      <>
+                        <div
+                          className={styles.nowIndicator}
+                          style={{ top: `${columnNowIndicatorOffset}px` }}
+                          aria-hidden="true"
+                        />
+                        <div
+                          className={styles.nowIndicatorDot}
+                          style={{ top: `${columnNowIndicatorOffset}px` }}
+                          aria-hidden="true"
+                        />
+                      </>
+                    )}
+                    {weekLayouts[columnIndex]?.map((event) => (
+                      <EventCard
+                        key={event.id}
+                        event={event}
+                        onClick={() => {
+                          if (!suppressClickRef.current) {
+                            handleEditEvent(event);
+                          }
+                        }}
+                      />
                     ))}
                   </div>
-                  {columnNowIndicatorOffset !== null && (
-                    <>
-                      <div
-                        className={styles.nowIndicator}
-                        style={{ top: `${columnNowIndicatorOffset}px` }}
-                        aria-hidden="true"
-                      />
-                      <div
-                        className={styles.nowIndicatorDot}
-                        style={{ top: `${columnNowIndicatorOffset}px` }}
-                        aria-hidden="true"
-                      />
-                    </>
-                  )}
-                  {weekLayouts[columnIndex]?.map((event) => (
-                    <EventCard
-                      key={event.id}
-                      event={event}
-                      onClick={() => {
-                        if (!suppressClickRef.current) {
-                          handleEditEvent(event);
-                        }
-                      }}
-                    />
-                  ))}
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
       </div>
     </div>
