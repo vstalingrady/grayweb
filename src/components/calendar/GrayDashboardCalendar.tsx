@@ -694,7 +694,7 @@ export function GrayDashboardCalendar({
     calendarStyle["--calendar-max-height"] = resolvedMaxHeight;
 
     if (compactSurface) {
-      calendarStyle["--calendar-body-height"] = `calc(${resolvedMaxHeight} - 80px)`;
+      calendarStyle["--calendar-body-height"] = resolvedMaxHeight;
     } else if (embedWithinParentSurface) {
       calendarStyle["--calendar-body-height"] = resolvedMaxHeight;
     } else {
