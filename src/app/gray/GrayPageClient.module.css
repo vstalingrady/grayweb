@@ -1603,13 +1603,13 @@
 
 .main[data-dashboard="true"] {
   grid-template-rows: minmax(0, 1fr);
-  row-gap: 0;
-  padding-top: 0;
-  padding-bottom: 0;
+  row-gap: clamp(12px, 2vh, 20px);
+  padding-top: clamp(8px, 1.6vh, 16px);
+  padding-bottom: clamp(20px, 3vh, 32px);
   justify-items: stretch;
-  height: 100%;
-  max-height: 100%;
-  overflow: hidden;
+  height: auto;
+  max-height: none;
+  overflow: visible;
 }
 
 /* When Pulse tab is active, tighten bottom padding further */
@@ -3732,55 +3732,26 @@ h1.greeting {
   margin: 0 auto;
   padding: clamp(16px, 3vh, 28px) clamp(16px, 3vw, 32px);
   box-sizing: border-box;
-  height: 100%;
+  height: auto;
   flex: 1 1 auto;
   min-height: 0;
-  overflow: hidden;
+  overflow: visible;
   justify-content: flex-start;
 }
 
 .page[data-dashboard-tab="pulse"] .dashboardCalendarContainer,
 .page[data-dashboard-tab="calendar"] .dashboardCalendarContainer {
-  min-height: 0;
-  height: 100%;
-  max-height: none;
-  overflow-y: auto;
-  overflow-x: hidden;
-  margin: 0 auto;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
-}
-
-.page[data-dashboard-tab="pulse"] .dashboardCalendarContainer::-webkit-scrollbar,
-.page[data-dashboard-tab="calendar"] .dashboardCalendarContainer::-webkit-scrollbar {
-  width: 6px;
-}
-
-.page[data-dashboard-tab="pulse"] .dashboardCalendarContainer::-webkit-scrollbar-track,
-.page[data-dashboard-tab="calendar"] .dashboardCalendarContainer::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.03);
-  border-radius: 999px;
-}
-
-.page[data-dashboard-tab="pulse"] .dashboardCalendarContainer::-webkit-scrollbar-thumb,
-.page[data-dashboard-tab="calendar"] .dashboardCalendarContainer::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 999px;
-}
-
-.page[data-dashboard-tab="pulse"] .dashboardCalendarContainer::-webkit-scrollbar-thumb:hover,
-.page[data-dashboard-tab="calendar"] .dashboardCalendarContainer::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.3);
+  overflow: visible;
 }
 
 /* Ensure both pulse and calendar tabs have identical sizing */
 .page[data-dashboard-tab="pulse"] .dashboardCalendarShell,
 .page[data-dashboard-tab="calendar"] .dashboardCalendarShell {
-  height: 100%;
-  min-height: 100%;
-  max-height: 100%;
+  height: auto;
+  min-height: 0;
+  max-height: none;
   max-width: 100%;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .dashboardCalendarContainer > * {

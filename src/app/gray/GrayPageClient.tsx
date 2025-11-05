@@ -1458,39 +1458,37 @@ function GrayPageClientInner({
                 />
               )}
               {isDashboardView ? (
-                <>
-                  <GrayDashboardView
-                    pulseEntries={pulseEntries}
-                    currentPulse={activePulse}
-                    isCurrentPulseEditable={Boolean(isActivePulseEditable)}
-                    onSelectPulse={setActivePulseId}
-                    proactivityFallback={proactivity}
-                    onProactivitySelect={selectProactivityPreset}
-                    onProactivityRemove={removeProactivity}
-                    onTogglePlan={togglePlan}
-                    onToggleHabit={toggleHabit}
-                    onEditPlan={editPlan}
-                    onDeletePlan={deletePlan}
-                    activeTab={dashboardTab}
-                    onSelectTab={setDashboardTab}
-                    currentDate={now}
-                    calendars={derivedCalendars}
-                    onCalendarsChange={handleCalendarsChange}
-                    calendarEvents={derivedEvents}
-                    onCalendarEventsChange={handleEventsChange}
-                    onEditHabit={editHabit}
-                    onDeleteHabit={deleteHabit}
-                    onIntegrationAction={handleCalendarIntegration}
-                    onRefreshData={refreshPlansAndHabits}
-                  />
-                  <div className={`${styles.chatBarRow} ${styles.dashboardChatBarRow}`}>
+                <GrayDashboardView
+                  pulseEntries={pulseEntries}
+                  currentPulse={activePulse}
+                  isCurrentPulseEditable={Boolean(isActivePulseEditable)}
+                  onSelectPulse={setActivePulseId}
+                  proactivityFallback={proactivity}
+                  onProactivitySelect={selectProactivityPreset}
+                  onProactivityRemove={removeProactivity}
+                  onTogglePlan={togglePlan}
+                  onToggleHabit={toggleHabit}
+                  onEditPlan={editPlan}
+                  onDeletePlan={deletePlan}
+                  activeTab={dashboardTab}
+                  onSelectTab={setDashboardTab}
+                  currentDate={now}
+                  calendars={derivedCalendars}
+                  onCalendarsChange={handleCalendarsChange}
+                  calendarEvents={derivedEvents}
+                  onCalendarEventsChange={handleEventsChange}
+                  onEditHabit={editHabit}
+                  onDeleteHabit={deleteHabit}
+                  onIntegrationAction={handleCalendarIntegration}
+                  onRefreshData={refreshPlansAndHabits}
+                  chatBar={
                     <GrayChatBar
                       value={chatDraft}
                       onChange={setChatDraft}
                       onSubmit={handleChatSubmit}
                     />
-                  </div>
-                </>
+                  }
+                />
               ) : isChatView ? (
                 <GrayChatView sessionId={currentChatId ?? null} />
               ) : isHistoryView ? (

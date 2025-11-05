@@ -6,13 +6,14 @@ import {
   useRef,
   type CSSProperties,
   type ChangeEvent,
+  type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
-import { CheckSquare, Square, Flame, X, Plus, ChevronDown, Pencil } from "lucide-react";
+import { CheckSquare, Square, Flame, X, Plus, ChevronDown, Pencil, Trash2 } from "lucide-react";
 import styles from "@/app/gray/GrayPageClient.module.css";
 import { GrayDashboardCalendar } from "@/components/calendar/GrayDashboardCalendar";
 import type { CalendarEvent, CalendarInfo } from "@/components/calendar/types";
-import { type ProactivityItem, type PulseEntry } from "./types";
+import { type ProactivityItem, type PulseEntry, type PlanItem, type HabitItem } from "./types";
 import { CalendarSidebar } from "@/components/calendar/CalendarSidebar";
 import calendarStyles from "@/components/calendar/GrayDashboardCalendar.module.css";
 import { DashboardHeader } from "./DashboardHeader";
@@ -256,6 +257,7 @@ type GrayDashboardViewProps = {
   onDeleteHabit?: (habit: { id: string; label: string; previousLabel: string; streakLabel: string }) => void;
   onIntegrationAction?: () => void;
   onRefreshData: () => Promise<void>;
+  chatBar?: ReactNode;
 };
 
 export function GrayDashboardView({
@@ -267,6 +269,8 @@ export function GrayDashboardView({
   onProactivitySelect,
   onProactivityRemove,
   onTogglePlan,
+  onEditPlan,
+  onDeletePlan,
   activeTab,
   onSelectTab,
   currentDate,
@@ -274,8 +278,11 @@ export function GrayDashboardView({
   onCalendarsChange,
   calendarEvents,
   onCalendarEventsChange,
+  onEditHabit,
+  onDeleteHabit,
   onIntegrationAction,
   onRefreshData,
+  chatBar,
 }: GrayDashboardViewProps) {
   const hasPulseData = Boolean(currentPulse && pulseEntries.length > 0);
   const displayPlans = hasPulseData ? currentPulse?.plans ?? [] : [];
@@ -675,10 +682,52 @@ export function GrayDashboardView({
     onTogglePlan(planId);
   };
 
+  const handlePlanEdit = useCallback(
+    (plan: PlanItem) => {
+      if (!isCurrentPulseEditable || !onEditPlan) {
+        return;
+      }
+      onEditPlan(plan);
+    },
+    [isCurrentPulseEditable, onEditPlan]
+  );
+
+  const handlePlanDelete = useCallback(
+    (plan: PlanItem) => {
+      if (!isCurrentPulseEditable || !onDeletePlan) {
+        return;
+      }
+      onDeletePlan(plan);
+    },
+    [isCurrentPulseEditable, onDeletePlan]
+  );
+
+  const handleHabitEdit = useCallback(
+    (habit: HabitItem) => {
+      if (!isCurrentPulseEditable || !onEditHabit) {
+        return;
+      }
+      onEditHabit(habit);
+    },
+    [isCurrentPulseEditable, onEditHabit]
+  );
+
+  const handleHabitDelete = useCallback(
+    (habit: HabitItem) => {
+      if (!isCurrentPulseEditable || !onDeleteHabit) {
+        return;
+      }
+      onDeleteHabit(habit);
+    },
+    [isCurrentPulseEditable, onDeleteHabit]
+  );
+
   const showPlansList = displayPlans.length > 0;
   const showHabitsList = displayHabits.length > 0;
 
   const headerClassName = styles.pulseSurfaceHeader;
+  const canManagePlans = isCurrentPulseEditable && Boolean(onEditPlan || onDeletePlan);
+  const canManageHabits = isCurrentPulseEditable && Boolean(onEditHabit || onDeleteHabit);
   const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
@@ -965,15 +1014,6 @@ export function GrayDashboardView({
               </header>
               <div className={styles.dashboardCardBody}>
                 {displayProactivity ? (
-                  <>
-                    <div className={styles.proactivityHeader}>
-                      <div>
-                        <div className={styles.proactivityTitle}>
-                          <CheckSquare size={16} />
-                          <span>{displayProactivity.label}</span>
-                        </div>
-                      </div>
-                    </div>
                     <div className={styles.proactivitySummaryInline}>
                       {proactivitySummaryTokens.length > 0
                         ? proactivitySummaryTokens.map((token, index) => (
@@ -981,7 +1021,6 @@ export function GrayDashboardView({
                           ))
                         : <span>—</span>}
                     </div>
-                  </>
                 ) : (
                   <div className={styles.cardEmptyMessage}>
                     <span>Not configured</span>
@@ -1013,23 +1052,58 @@ export function GrayDashboardView({
                     <ul className={styles.planList}>
                       {showPlansList
                         ? displayPlans.map((plan) => (
-                            <li key={plan.id}>
+                            <li key={plan.id} className={styles.planListItem}>
                               <button
                                 type="button"
-                                data-completed={plan.completed}
+                                className={styles.planItemButton}
+                                data-completed={plan.completed ? "true" : "false"}
                                 onClick={() => handlePlanToggle(plan.id)}
                                 disabled={!isCurrentPulseEditable}
                               >
-                                <span>
+                                <span className={styles.planCheckbox} aria-hidden="true">
                                   {plan.completed ? <CheckSquare size={16} /> : <Square size={16} />}
                                 </span>
                                 <span className={styles.planLabelGroup}>
                                   <span className={styles.planLabel}>{plan.label}</span>
                                   {(plan.scheduleSlot || plan.deadline) && (
-                                    <span className={styles.habitMeta}>{formatPlanMeta(plan)}</span>
+                                    <span className={styles.planMeta}>{formatPlanMeta(plan)}</span>
                                   )}
                                 </span>
                               </button>
+                              {canManagePlans ? (
+                                <span className={styles.listItemActions}>
+                                  {onEditPlan ? (
+                                    <button
+                                      type="button"
+                                      className={styles.listItemActionButton}
+                                      onClick={(event) => {
+                                        event.preventDefault();
+                                        event.stopPropagation();
+                                        handlePlanEdit(plan);
+                                      }}
+                                      aria-label={`Edit plan ${plan.label}`}
+                                      disabled={!isCurrentPulseEditable}
+                                    >
+                                      <Pencil size={14} />
+                                    </button>
+                                  ) : null}
+                                  {onDeletePlan ? (
+                                    <button
+                                      type="button"
+                                      className={styles.listItemActionButton}
+                                      onClick={(event) => {
+                                        event.preventDefault();
+                                        event.stopPropagation();
+                                        handlePlanDelete(plan);
+                                      }}
+                                      aria-label={`Delete plan ${plan.label}`}
+                                      disabled={!isCurrentPulseEditable}
+                                    >
+                                      <Trash2 size={14} />
+                                    </button>
+                                  ) : null}
+                                </span>
+                              ) : null}
                             </li>
                           ))
                         : (
@@ -1058,15 +1132,49 @@ export function GrayDashboardView({
                     <ul className={`${styles.habitList} ${styles.dashboardHabitList}`}>
                       {showHabitsList
                         ? displayHabits.map((habit) => (
-                            <li key={habit.id}>
-                              <div>
+                            <li key={habit.id} className={styles.habitListItem}>
+                              <div className={styles.habitContent}>
                                 <span className={styles.habitLabel}>{habit.label}</span>
                                 <span className={styles.habitMeta}>Prev: {habit.previousLabel}</span>
                               </div>
-                              <div>
-                                <Flame size={12} />
+                              <div className={styles.habitStreak}>
+                                <Flame size={12} aria-hidden="true" />
                                 <span>{habit.streakLabel}</span>
                               </div>
+                              {canManageHabits ? (
+                                <span className={styles.listItemActions}>
+                                  {onEditHabit ? (
+                                    <button
+                                      type="button"
+                                      className={styles.listItemActionButton}
+                                      onClick={(event) => {
+                                        event.preventDefault();
+                                        event.stopPropagation();
+                                        handleHabitEdit(habit);
+                                      }}
+                                      aria-label={`Edit habit ${habit.label}`}
+                                      disabled={!isCurrentPulseEditable}
+                                    >
+                                      <Pencil size={14} />
+                                    </button>
+                                  ) : null}
+                                  {onDeleteHabit ? (
+                                    <button
+                                      type="button"
+                                      className={styles.listItemActionButton}
+                                      onClick={(event) => {
+                                        event.preventDefault();
+                                        event.stopPropagation();
+                                        handleHabitDelete(habit);
+                                      }}
+                                      aria-label={`Delete habit ${habit.label}`}
+                                      disabled={!isCurrentPulseEditable}
+                                    >
+                                      <Trash2 size={14} />
+                                    </button>
+                                  ) : null}
+                                </span>
+                              ) : null}
                             </li>
                           ))
                         : (
@@ -1143,6 +1251,11 @@ export function GrayDashboardView({
             {activeTab === "pulse" ? pulseContent : calendarContent}
           </div>
         </div>
+        {chatBar ? (
+          <div className={`${styles.chatBarRow} ${styles.dashboardChatBarRow}`}>
+            {chatBar}
+          </div>
+        ) : null}
       </div>
       {modalState.isOpen && modalState.type && (
         <AddPlanHabitModal
