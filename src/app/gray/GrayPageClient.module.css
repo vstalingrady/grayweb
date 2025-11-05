@@ -3748,7 +3748,7 @@ h1.greeting {
   width: 100%;
   max-width: none;
   margin: 0 auto;
-  padding: clamp(16px, 3vh, 28px) clamp(16px, 3vw, 32px);
+  padding: clamp(8px, 1.6vh, 14px) clamp(10px, 1.8vw, 18px);
   box-sizing: border-box;
   height: auto;
   flex: 1 1 auto;
@@ -3809,7 +3809,7 @@ h1.greeting {
   max-width: 100%;
   width: 100%;
   height: 100%;
-  padding: clamp(18px, 2.6vw, 32px);
+  padding: clamp(14px, 2.1vw, 24px);
   border: none;
   background: transparent;
   box-shadow: none;
@@ -3831,7 +3831,7 @@ h1.greeting {
   height: 100%;
   max-height: 100%;
   overflow: hidden;
-  padding: clamp(14px, 2vw, 22px);
+  padding: clamp(12px, 1.8vw, 20px);
 }
 
 .dashboardCalendarSurface .calendarSurfaceHeaderLeft {
