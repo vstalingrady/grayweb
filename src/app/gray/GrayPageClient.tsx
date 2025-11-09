@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Gem, MessageSquarePlus, LayoutDashboard, History, Search } from "lucide-react";
 import { GrayEnhancedSidebar } from "@/components/gray/EnhancedSidebar";
 import { GrayDashboardView } from "@/components/gray/DashboardView";
@@ -23,9 +23,16 @@ import {
   type SidebarHistorySection,
   type SidebarHistoryEntry,
   type PulseEntry,
+  type ContextUsageSummary,
 } from "@/components/gray/types";
 import type { CalendarEvent, CalendarInfo } from "@/components/calendar/types";
-import { ChatProvider, useChatStore } from "@/components/gray/ChatProvider";
+import {
+  ChatProvider,
+  useChatStore,
+  GENERAL_CHAT_SESSION_ID,
+  deriveTitleFromMessage,
+  type ChatSession,
+} from "@/components/gray/ChatProvider";
 import { DEFAULT_HISTORY_SECTIONS } from "@/components/gray/historySeed";
 import { GrayWorkspaceHeader } from "@/components/gray/WorkspaceHeader";
 import { PersonalizationPanel } from "@/components/gray/PersonalizationPanel";
@@ -38,6 +45,8 @@ const PROACTIVITY_SEED: ProactivityItem = {
   times: ["09:00"],
   channels: ["assistant"],
 };
+
+const SIDEBAR_EXPANDED_STORAGE_KEY = "gray-sidebar-expanded";
 
 const DEFAULT_EVENT_COLOR = "linear-gradient(135deg, rgba(91, 141, 239, 0.85), rgba(48, 79, 254, 0.9))";
 
@@ -111,6 +120,27 @@ const normalizeProactivityChannels = (channels: string[] | null | undefined): st
     .filter((channel) => channel.length > 0);
 
   return normalized.filter((channel, index, array) => array.indexOf(channel) === index);
+};
+
+const isGenericSessionTitle = (title: string | null | undefined): boolean => {
+  if (!title) {
+    return true;
+  }
+  const trimmed = title.trim();
+  return trimmed.length === 0 || trimmed.toLowerCase() === "new chat";
+};
+
+const getReadableSessionTitle = (session: ChatSession): string => {
+  if (!isGenericSessionTitle(session.title)) {
+    return session.title.trim();
+  }
+  const firstMeaningfulUserMessage = session.messages.find(
+    (message) => message.role === "user" && message.content.trim().length > 0
+  );
+  if (firstMeaningfulUserMessage) {
+    return deriveTitleFromMessage(firstMeaningfulUserMessage.content);
+  }
+  return "New Chat";
 };
 
 const clonePlans = (plans: PlanItem[]): PlanItem[] =>
@@ -325,7 +355,7 @@ const arePulseEntriesEqual = (a: PulseEntry[], b: PulseEntry[]) =>
 
 const SIDEBAR_ITEMS: SidebarNavItem[] = [
   { id: "general", label: "General", icon: Gem },
-  { id: "new-thread", label: "New Thread", icon: MessageSquarePlus },
+  { id: "threads", label: "Threads", icon: MessageSquarePlus },
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { id: "history", label: "History", icon: History },
 ];
@@ -336,7 +366,8 @@ const SIDEBAR_RAIL_ITEMS: SidebarNavItem[] = [
 ];
 
 const NAVIGATION_ROUTES: Partial<Record<SidebarNavKey, string>> = {
-  general: "/",
+  general: "/g",
+  threads: "/",
   dashboard: "/dashboard",
 };
 
@@ -401,25 +432,71 @@ function GrayPageClientInner({
   );
   const [planTab, setPlanTab] = useState<"plans" | "habits">("plans");
   const [chatDraft, setChatDraft] = useState("");
-  const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
+  const [hasSeenGeneralChat, setHasSeenGeneralChat] = useState(false);
+  const [isSidebarExpanded, setIsSidebarExpanded] = useState<boolean>(true);
+  const [hasLoadedSidebarPref, setHasLoadedSidebarPref] = useState(false);
   const [dashboardTab, setDashboardTab] = useState<"pulse" | "calendar">("pulse");
   const [isPersonalizationOpen, setIsPersonalizationOpen] = useState(false);
+  const [contextUsageSummary, setContextUsageSummary] = useState<ContextUsageSummary | null>(null);
   const [pulseEntries, setPulseEntries] = useState<PulseEntry[]>([]);
   const [activePulseId, setActivePulseId] = useState<string | null>(null);
   const [streakCount, setStreakCount] = useState(0);
   const [calendarCalendars, setCalendarCalendars] = useState<CalendarInfo[]>([]);
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
+  const [calendarSelectedDate, setCalendarSelectedDate] = useState<Date>(() => new Date(initialTimestamp));
   const {
     sessions,
-    createSession,
     renameSession,
     deleteSession,
     setWorkspaceContext,
+    sendGeneralMessage,
+    createThreadSession,
+    generalSessionId,
+    updateSession,
+    getSession,
+    ensureSession,
   } = useChatStore();
   const supportsInlineChat = variant !== "chat";
+  const shouldShowDashboardChatBar = variant !== "dashboard";
   const [currentChatId, setCurrentChatId] = useState<string | null>(() => activeChatId ?? null);
   const [pendingRedirectChatId, setPendingRedirectChatId] = useState<string | null>(null);
   const userId = typeof user?.id === "number" ? user.id : null;
+  const [isCompactLayout, setIsCompactLayout] = useState(false);
+  const ensureSessionRef = useRef(ensureSession);
+
+  useEffect(() => {
+    ensureSessionRef.current = ensureSession;
+  }, [ensureSession]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    try {
+      const stored = window.localStorage.getItem(SIDEBAR_EXPANDED_STORAGE_KEY);
+      if (stored === "true" || stored === "false") {
+        setIsSidebarExpanded(stored === "true");
+      }
+    } catch (error) {
+      console.warn("Failed to load sidebar state:", error);
+    } finally {
+      setHasLoadedSidebarPref(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!hasLoadedSidebarPref || typeof window === "undefined") {
+      return;
+    }
+    try {
+      window.localStorage.setItem(
+        SIDEBAR_EXPANDED_STORAGE_KEY,
+        isSidebarExpanded ? "true" : "false"
+      );
+    } catch (error) {
+      console.warn("Failed to persist sidebar state:", error);
+    }
+  }, [hasLoadedSidebarPref, isSidebarExpanded]);
 
   const baseViewMode: ViewMode =
     variant === "chat"
@@ -435,10 +512,24 @@ function GrayPageClientInner({
     return activeNav === "history" && baseViewMode !== "chat" ? "history" : null;
   });
 
+  const effectiveManualViewMode =
+    activeNav === "general" || activeNav === "dashboard" || activeNav === "threads"
+      ? null
+      : manualViewMode;
+
   const viewMode: ViewMode =
     baseViewMode === "chat"
       ? "chat"
-      : manualViewMode ?? (activeNav === "history" ? "history" : baseViewMode);
+      : effectiveManualViewMode ?? (activeNav === "history" ? "history" : baseViewMode);
+
+  useEffect(() => {
+    if (baseViewMode === "chat") {
+      return;
+    }
+    if (activeNav === "general" && manualViewMode !== null) {
+      setManualViewMode(null);
+    }
+  }, [activeNav, baseViewMode, manualViewMode]);
 
   useEffect(() => {
     if (user) {
@@ -453,6 +544,29 @@ function GrayPageClientInner({
     setCalendarEvents([]);
     setStreakCount(0);
   }, [user]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const evaluateViewport = () => {
+      const width = window.innerWidth || 0;
+      const height = window.innerHeight || 0;
+      const aspectRatio = height > 0 ? height / Math.max(width, 1) : 0;
+      const shouldUseCompactLayout = width <= 1024 || aspectRatio >= 1.1;
+      setIsCompactLayout((previous) =>
+        previous === shouldUseCompactLayout ? previous : shouldUseCompactLayout
+      );
+    };
+
+    evaluateViewport();
+    window.addEventListener("resize", evaluateViewport);
+    window.addEventListener("orientationchange", evaluateViewport);
+    return () => {
+      window.removeEventListener("resize", evaluateViewport);
+      window.removeEventListener("orientationchange", evaluateViewport);
+    };
+  }, []);
 
   useEffect(() => {
     if (!user?.id) {
@@ -641,7 +755,8 @@ function GrayPageClientInner({
     return deriveInitials(user?.full_name ?? viewerName) || "OP";
   }, [user, loading, viewerName]);
   const historySections = useMemo<SidebarHistorySection[]>(() => {
-    if (!sessions.length) {
+    const threadSessions = sessions.filter((session) => session.scope === "thread");
+    if (!threadSessions.length) {
       return DEFAULT_HISTORY_SECTIONS.map((section) => ({
         ...section,
         entries: section.entries.map((entry) => ({ ...entry })),
@@ -659,7 +774,7 @@ function GrayPageClientInner({
       }
     >();
 
-    sessions.forEach((session) => {
+    threadSessions.forEach((session) => {
       const date = new Date(session.updatedAt);
       const groupId = `${date.getFullYear()}-${date.getMonth()}`;
       const label =
@@ -679,7 +794,7 @@ function GrayPageClientInner({
 
       groups.get(groupId)?.entries.push({
         id: session.id,
-        title: session.title,
+        title: getReadableSessionTitle(session),
         href: `/c/${session.id}`,
         createdAt: session.updatedAt,
       });
@@ -732,13 +847,17 @@ function GrayPageClientInner({
   const isChatView = viewMode === "chat";
   const isHistoryView = viewMode === "history";
   const sidebarActiveNav: SidebarNavKey =
-    viewMode === "chat"
-      ? "history"
-      : viewMode === "history"
-        ? "history"
-        : viewMode === "dashboard"
-          ? "dashboard"
-          : "general";
+    activeNav === "threads"
+      ? "threads"
+      : viewMode === "chat"
+        ? currentChatId && generalSessionId && currentChatId === generalSessionId
+          ? "general"
+          : "history"
+        : viewMode === "history"
+          ? "history"
+          : viewMode === "dashboard"
+            ? "dashboard"
+            : "general";
   const handleNavigate = (navId: SidebarNavKey) => {
     if (navId === "search") {
       setIsSidebarExpanded(true);
@@ -769,9 +888,13 @@ function GrayPageClientInner({
       return;
     }
 
-    if (navId === "new-thread") {
-      setManualViewMode(null);
+    if (navId === "threads") {
       setIsSidebarExpanded(true);
+      setManualViewMode(null);
+      const target = NAVIGATION_ROUTES[navId];
+      if (target) {
+        router.push(target);
+      }
       return;
     }
 
@@ -883,9 +1006,66 @@ function GrayPageClientInner({
       );
     }
 
+    const visibleCalendarMap = new Map(currentCalendars.map((calendar) => [calendar.id, calendar.label]));
+    const nowTime = now.getTime();
+    const upcomingEvents = derivedEvents
+      .filter((event) => {
+        const startDate = event.start instanceof Date ? event.start : new Date(event.start);
+        return startDate.getTime() >= nowTime - 30 * 60 * 1000;
+      })
+      .sort((a, b) => {
+        const aTime = (a.start instanceof Date ? a.start : new Date(a.start)).getTime();
+        const bTime = (b.start instanceof Date ? b.start : new Date(b.start)).getTime();
+        return aTime - bTime;
+      })
+      .slice(0, 3);
+
+    if (upcomingEvents.length > 0) {
+      if (sections.length > 0) {
+        sections.push("");
+      }
+      sections.push(
+        "Upcoming events:",
+        upcomingEvents
+          .map((event) => {
+            const startDate = event.start instanceof Date ? event.start : new Date(event.start);
+            const dateLabel = startDate.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
+            const timeLabel = startDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+            const calendarLabel = visibleCalendarMap.get(event.calendarId) ?? "Calendar";
+            return `- ${dateLabel} ${timeLabel}: ${event.title} [${calendarLabel}]`;
+          })
+          .join("\n")
+      );
+    }
+
+    const recentPulses = [...pulseEntries]
+      .filter((entry) => Number.isFinite(entry.timestamp))
+      .sort((a, b) => b.timestamp - a.timestamp)
+      .slice(0, 3);
+
+    if (recentPulses.length > 0) {
+      if (sections.length > 0) {
+        sections.push("");
+      }
+      const pulseLines = recentPulses.map((pulse) => {
+        const dateLabel = new Date(pulse.timestamp).toLocaleDateString([], {
+          weekday: "short",
+          month: "short",
+          day: "numeric",
+        });
+        const totalPlans = pulse.plans.length;
+        const completedPlans = pulse.plans.filter((plan) => plan.completed).length;
+        const totalHabits = pulse.habits.length;
+        const activeHabits = pulse.habits.filter((habit) => Boolean(habit.completed)).length;
+        const proactivityLabel = pulse.proactivity?.label ?? "No proactivity focus";
+        return `- ${dateLabel}: ${completedPlans}/${totalPlans} plans complete, ${activeHabits}/${totalHabits} habits on track, Proactivity: ${proactivityLabel}`;
+      });
+      sections.push("Pulse snapshots:", pulseLines.join("\n"));
+    }
+
     const summary = sections.join("\n").trim();
     return summary.length > 0 ? summary : null;
-  }, [calendarCalendars, habits, plans, proactivity, user]);
+  }, [calendarCalendars, calendarEvents, habits, plans, proactivity, pulseEntries, user, now, derivedEvents]);
 
   useEffect(() => {
     setWorkspaceContext(workspaceContextSummary);
@@ -900,8 +1080,106 @@ function GrayPageClientInner({
       return;
     }
     setPendingRedirectChatId(null);
-    router.push(`/c/${pendingSession.id}`);
-  }, [pendingRedirectChatId, router, sessions]);
+    const generalId = generalSessionId ?? GENERAL_CHAT_SESSION_ID;
+    if (pendingSession.id === generalId) {
+      router.push("/g");
+    } else {
+      router.push(`/c/${pendingSession.id}`);
+    }
+  }, [generalSessionId, pendingRedirectChatId, router, sessions]);
+  useEffect(() => {
+    if (activeNav === "threads") {
+      return;
+    }
+    if (!currentChatId && generalSessionId) {
+      setCurrentChatId(generalSessionId);
+    }
+  }, [activeNav, currentChatId, generalSessionId]);
+
+  /**
+   * Synchronize currentChatId with /c/[chatId] when in full-page chat mode.
+   *
+   * Behavior:
+   * - /c/{thread_session_id}:
+   *     use that local session (messages stream & persist correctly).
+   * - /c/{conversation_id}:
+   *     if any session has conversationId === id, use that session.
+   * - unknown /c/{id}:
+   *     create a real thread ChatSession with id === {id}, so sending messages works.
+   * - missing id:
+   *     fall back to generalSessionId.
+   */
+  useEffect(() => {
+    if (variant !== "chat") {
+      return;
+    }
+
+    // No explicit chat id -> keep using general session.
+    if (!activeChatId) {
+      if (!currentChatId && generalSessionId) {
+        setCurrentChatId(generalSessionId);
+      }
+      return;
+    }
+
+    // Already selected the right session.
+    if (currentChatId === activeChatId) {
+      return;
+    }
+
+    // 1) Exact local session id match (/c/{session.id}).
+    const directSession = sessions.find((session) => session.id === activeChatId);
+    if (directSession) {
+      if (currentChatId !== directSession.id) {
+        setCurrentChatId(directSession.id);
+      }
+      return;
+    }
+
+    // 2) Match by conversationId so /c/{conversationId} works.
+    const byConversation = sessions.find(
+      (session) => session.conversationId && session.conversationId === activeChatId
+    );
+    if (byConversation) {
+      if (currentChatId !== byConversation.id) {
+        setCurrentChatId(byConversation.id);
+      }
+      return;
+    }
+
+    // 3) Unknown id: seed a real session so /c/{id} can hydrate & stream normally.
+    let resolved = getSession(activeChatId);
+    if (!resolved) {
+      const ensureSessionFn = ensureSessionRef.current;
+      if (!ensureSessionFn) {
+        return;
+      }
+      const nowTs = Date.now();
+      resolved = ensureSessionFn(activeChatId, () => ({
+        id: activeChatId,
+        title: "Shared Chat",
+        createdAt: nowTs,
+        updatedAt: nowTs,
+        messages: [],
+        isResponding: false,
+        scope: "thread",
+        conversationId: activeChatId,
+        pendingAutoStream: false,
+      }));
+    } else if (!resolved.conversationId) {
+      updateSession(resolved.id, { conversationId: activeChatId });
+    }
+
+    setCurrentChatId(resolved?.id ?? activeChatId);
+  }, [
+    activeChatId,
+    currentChatId,
+    generalSessionId,
+    getSession,
+    sessions,
+    updateSession,
+    variant,
+  ]);
   const activePulse = useMemo(() => {
     if (!pulseEntries.length) {
       return null;
@@ -1356,18 +1634,48 @@ function GrayPageClientInner({
       return;
     }
     setChatDraft("");
+
     try {
-      const session = await createSession(draft);
-      if (supportsInlineChat) {
+      const isGeneralChatActive =
+        Boolean(currentChatId) &&
+        Boolean(generalSessionId) &&
+        currentChatId === generalSessionId;
+
+      const shouldStartStandaloneThread =
+        viewMode === "general" && (!currentChatId || isGeneralChatActive);
+
+      // When starting a standalone thread from the dashboard/general view,
+      // immediately navigate to the thread route (no deferred redirect),
+      // so the main chat view renders and begins streaming without extra delay.
+      if (shouldStartStandaloneThread) {
+        const session = await createThreadSession(draft);
+        setHasSeenGeneralChat(true);
         setCurrentChatId(session.id);
-        setManualViewMode("chat");
-        setPendingRedirectChatId(session.id);
-        router.prefetch(`/c/${session.id}`);
-      } else {
+
+        // Push directly instead of prefetch-then-lazy-redirect.
         router.push(`/c/${session.id}`);
+        return;
+      }
+
+      const sessionId = await sendGeneralMessage(draft);
+      setHasSeenGeneralChat(true);
+      setCurrentChatId(sessionId);
+
+      const generalId = generalSessionId ?? GENERAL_CHAT_SESSION_ID;
+      const isGeneralSession = sessionId === generalId;
+
+      if (supportsInlineChat) {
+        // Switch layout immediately to chat mode so the user sees the reply begin
+        // without waiting for an asynchronous redirect effect chain.
+        setManualViewMode("chat");
+        setPendingRedirectChatId(null);
+      } else if (isGeneralSession) {
+        router.push("/g");
+      } else if (activeChatId !== sessionId) {
+        router.push(`/c/${sessionId}`);
       }
     } catch (error) {
-      console.error("Failed to start chat session:", error);
+      console.error("Failed to send general message:", error);
       setChatDraft(draft);
     }
   };
@@ -1415,7 +1723,11 @@ function GrayPageClientInner({
   const dashboardTabAttr = isDashboardView ? dashboardTab : undefined;
 
   return (
-    <div className={styles.page} data-dashboard-tab={dashboardTabAttr}>
+    <div
+      className={styles.page}
+      data-dashboard-tab={dashboardTabAttr}
+      data-compact={isCompactLayout ? "true" : "false"}
+    >
       <div className={styles.backdrop} aria-hidden="true" />
       <div className={styles.overlay} aria-hidden="true" />
       <div className={styles.shell}>
@@ -1445,10 +1757,12 @@ function GrayPageClientInner({
             data-dashboard={isDashboardView ? "true" : "false"}
             data-view={viewMode}
             data-dashboard-tab={dashboardTabAttr}
+            data-compact={isCompactLayout ? "true" : "false"}
           >
             <div
               className={styles.mainContent}
               data-view={viewMode}
+              data-compact={isCompactLayout ? "true" : "false"}
             >
               {viewMode === "general" && (
                 <GrayWorkspaceHeader
@@ -1477,20 +1791,66 @@ function GrayPageClientInner({
                   onCalendarsChange={handleCalendarsChange}
                   calendarEvents={derivedEvents}
                   onCalendarEventsChange={handleEventsChange}
+                  calendarSelectedDate={calendarSelectedDate}
+                  onCalendarSelectedDateChange={setCalendarSelectedDate}
                   onEditHabit={editHabit}
                   onDeleteHabit={deleteHabit}
                   onIntegrationAction={handleCalendarIntegration}
                   onRefreshData={refreshPlansAndHabits}
                   chatBar={
-                    <GrayChatBar
-                      value={chatDraft}
-                      onChange={setChatDraft}
-                      onSubmit={handleChatSubmit}
-                    />
+                    shouldShowDashboardChatBar ? (
+                      <GrayChatBar
+                        value={chatDraft}
+                        onChange={setChatDraft}
+                        onSubmit={handleChatSubmit}
+                      />
+                    ) : undefined
                   }
+                  isCompactLayout={isCompactLayout}
                 />
               ) : isChatView ? (
-                <GrayChatView sessionId={currentChatId ?? null} />
+                <GrayChatView
+                  sessionId={currentChatId ?? null}
+                  onContextUsageChange={setContextUsageSummary}
+                  introContent={
+                    activeNav !== "threads" &&
+                    supportsInlineChat &&
+                    !hasSeenGeneralChat &&
+                    currentChatId &&
+                    generalSessionId &&
+                    currentChatId === generalSessionId ? (
+                      <div className={styles.introStack}>
+                        <GrayWorkspaceHeader
+                          timeLabel={workspaceTimeLabel}
+                          dateLabel={workspaceDateLabel}
+                          streakCount={streakCount}
+                        />
+                        <GrayGeneralView
+                          greeting={greeting}
+                          calendarEvents={derivedEvents}
+                          plans={derivedPlans}
+                          habits={derivedHabits}
+                          activeTab={planTab}
+                          onChangeTab={setPlanTab}
+                          onTogglePlan={togglePlan}
+                          onToggleHabit={toggleHabit}
+                          onEditPlan={editPlan}
+                          onDeletePlan={deletePlan}
+                          currentDate={now}
+                          calendars={derivedCalendars}
+                          onCalendarsChange={handleCalendarsChange}
+                          onCalendarEventsChange={handleEventsChange}
+                          calendarSelectedDate={calendarSelectedDate}
+                          onCalendarSelectedDateChange={setCalendarSelectedDate}
+                          isCompactLayout={isCompactLayout}
+                          onEditHabit={editHabit}
+                          onDeleteHabit={deleteHabit}
+                          onRefreshData={refreshPlansAndHabits}
+                        />
+                      </div>
+                    ) : null
+                  }
+                />
               ) : isHistoryView ? (
                 <GrayHistoryView
                   sections={historySections}
@@ -1517,6 +1877,9 @@ function GrayPageClientInner({
                     calendars={derivedCalendars}
                     onCalendarsChange={handleCalendarsChange}
                     onCalendarEventsChange={handleEventsChange}
+                    calendarSelectedDate={calendarSelectedDate}
+                    onCalendarSelectedDateChange={setCalendarSelectedDate}
+                    isCompactLayout={isCompactLayout}
                     onEditHabit={editHabit}
                     onDeleteHabit={deleteHabit}
                     onRefreshData={refreshPlansAndHabits}
@@ -1539,6 +1902,8 @@ function GrayPageClientInner({
         <PersonalizationPanel
           viewerName={viewerName}
           viewerRole={user?.role || "Operator"}
+          userId={userId}
+          contextUsage={contextUsageSummary}
           onClose={handleClosePersonalization}
         />
       )}

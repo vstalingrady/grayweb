@@ -3,13 +3,14 @@ import {
   useCallback,
   useState,
   useEffect,
+  useLayoutEffect,
   useRef,
   type CSSProperties,
   type ChangeEvent,
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
-import { CheckSquare, Square, Flame, X, Plus, ChevronDown, Pencil, Trash2 } from "lucide-react";
+import { Check, Square, Flame, X, Plus, ChevronDown, Pencil, Trash2 } from "lucide-react";
 import styles from "@/app/gray/GrayPageClient.module.css";
 import { GrayDashboardCalendar } from "@/components/calendar/GrayDashboardCalendar";
 import type { CalendarEvent, CalendarInfo } from "@/components/calendar/types";
@@ -19,11 +20,52 @@ import calendarStyles from "@/components/calendar/GrayDashboardCalendar.module.c
 import { DashboardHeader } from "./DashboardHeader";
 import { AddPlanHabitModal } from "./AddPlanHabitModal";
 
-const CALENDAR_PANEL_MAX_HEIGHT = "100%";
+const CALENDAR_PANEL_MAX_HEIGHT_WITH_CHAT =
+  "clamp(360px, calc(100vh - (320px + var(--gray-chat-bar-clearance, 112px))), 660px)";
+const CALENDAR_PANEL_MAX_HEIGHT_NO_CHAT =
+  "clamp(420px, calc(100vh - clamp(48px, 6vh, 120px)), calc(100vh - clamp(32px, 4vh, 96px)))";
 const CALENDAR_PANEL_HOUR_HEIGHT = 62;
-const DASHBOARD_PANEL_SIZING_STYLE = {
-  "--calendar-max-height": CALENDAR_PANEL_MAX_HEIGHT,
-} as CSSProperties & { [key: string]: string | number };
+
+const buildPanelSizingStyle = (hasChatBar: boolean) =>
+  ({
+    "--calendar-max-height": hasChatBar
+      ? CALENDAR_PANEL_MAX_HEIGHT_WITH_CHAT
+      : CALENDAR_PANEL_MAX_HEIGHT_NO_CHAT,
+    "--dashboard-panel-max-height": hasChatBar
+      ? CALENDAR_PANEL_MAX_HEIGHT_WITH_CHAT
+      : CALENDAR_PANEL_MAX_HEIGHT_NO_CHAT,
+  }) as CSSProperties & { [key: string]: string | number };
+
+const DAY_IN_MS = 24 * 60 * 60 * 1000;
+
+const normalizeToStartOfDay = (value: Date) => {
+  const next = new Date(value);
+  next.setHours(0, 0, 0, 0);
+  return next;
+};
+
+const formatRelativeDayLabel = (targetDate: Date, referenceDate: Date) => {
+  const targetStart = normalizeToStartOfDay(targetDate);
+  const referenceStart = normalizeToStartOfDay(referenceDate);
+  const deltaDays = Math.round((targetStart.getTime() - referenceStart.getTime()) / DAY_IN_MS);
+
+  if (deltaDays === 0) {
+    return "Today";
+  }
+  if (deltaDays === -1) {
+    return "Yesterday";
+  }
+  if (deltaDays === 1) {
+    return "Tomorrow";
+  }
+
+  const options: Intl.DateTimeFormatOptions = { month: "long", day: "numeric" };
+  if (targetStart.getFullYear() !== referenceStart.getFullYear()) {
+    options.year = "numeric";
+  }
+
+  return targetStart.toLocaleDateString(undefined, options);
+};
 
 const toDateKey = (date: Date) => {
   const year = date.getFullYear();
@@ -133,14 +175,14 @@ const PROACTIVITY_PRESETS: ProactivityPreset[] = [
   },
 ];
 
-type CustomChannelValue = "assistant" | "email";
+type CustomChannelValue = "assistant" | "email" | "browser";
 
 type CustomSettingsState = {
   times: string[];
   channels: CustomChannelValue[];
 };
 
-const ALL_CUSTOM_CHANNELS: CustomChannelValue[] = ["assistant", "email"];
+const ALL_CUSTOM_CHANNELS: CustomChannelValue[] = ["assistant", "email", "browser"];
 
 const CUSTOM_CHANNEL_OPTIONS: Array<{
   value: CustomChannelValue;
@@ -156,6 +198,11 @@ const CUSTOM_CHANNEL_OPTIONS: Array<{
     value: "email",
     label: "Email digest",
     helper: "A summary sent to your inbox.",
+  },
+  {
+    value: "browser",
+    label: "Browser notifications",
+    helper: "Web push notifications directly to your browser.",
   },
 ];
 
@@ -253,11 +300,14 @@ type GrayDashboardViewProps = {
   onCalendarsChange: (calendars: CalendarInfo[]) => void;
   calendarEvents: CalendarEvent[];
   onCalendarEventsChange: (events: CalendarEvent[]) => void;
+  calendarSelectedDate?: Date;
+  onCalendarSelectedDateChange?: (date: Date) => void;
   onEditHabit?: (habit: { id: string; label: string; previousLabel: string; streakLabel: string }) => void;
   onDeleteHabit?: (habit: { id: string; label: string; previousLabel: string; streakLabel: string }) => void;
   onIntegrationAction?: () => void;
   onRefreshData: () => Promise<void>;
   chatBar?: ReactNode;
+  isCompactLayout?: boolean;
 };
 
 export function GrayDashboardView({
@@ -271,6 +321,7 @@ export function GrayDashboardView({
   onTogglePlan,
   onEditPlan,
   onDeletePlan,
+  onToggleHabit,
   activeTab,
   onSelectTab,
   currentDate,
@@ -278,11 +329,14 @@ export function GrayDashboardView({
   onCalendarsChange,
   calendarEvents,
   onCalendarEventsChange,
+  calendarSelectedDate,
+  onCalendarSelectedDateChange,
   onEditHabit,
   onDeleteHabit,
   onIntegrationAction,
   onRefreshData,
   chatBar,
+  isCompactLayout = false,
 }: GrayDashboardViewProps) {
   const hasPulseData = Boolean(currentPulse && pulseEntries.length > 0);
   const displayPlans = hasPulseData ? currentPulse?.plans ?? [] : [];
@@ -297,6 +351,7 @@ export function GrayDashboardView({
     type: null,
   });
   const [isProactivityModalOpen, setIsProactivityModalOpen] = useState(false);
+  const [isProactivityChannelDropdownOpen, setIsProactivityChannelDropdownOpen] = useState(false);
   const fallbackProactivityTimes = useMemo(
     () => getProactivityTimes(proactivityFallback),
     [proactivityFallback]
@@ -309,6 +364,76 @@ export function GrayDashboardView({
   }, [displayProactivity, fallbackProactivityTimes]);
   const fallbackProactivityTime = fallbackProactivityTimes[0];
   const activeProactivityTime = activeProactivityTimes[0] ?? fallbackProactivityTime;
+  const isChatBarVisible = Boolean(chatBar) && !modalState.isOpen;
+  const calendarContainerRef = useRef<HTMLDivElement | null>(null);
+  const chatDockRef = useRef<HTMLDivElement | null>(null);
+  const [panelMaxHeightPx, setPanelMaxHeightPx] = useState<number | null>(null);
+  const panelSizingStyle = useMemo(() => {
+    const style = buildPanelSizingStyle(isChatBarVisible);
+    if (panelMaxHeightPx !== null) {
+      const maxHeightValue = `${panelMaxHeightPx}px`;
+      style["--calendar-max-height"] = maxHeightValue;
+      style["--dashboard-panel-max-height"] = maxHeightValue;
+    }
+    return style;
+  }, [isChatBarVisible, panelMaxHeightPx]);
+
+  useLayoutEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const computePanelHeight = () => {
+      const container = calendarContainerRef.current;
+      if (!container) {
+        return;
+      }
+      const viewportHeight = window.innerHeight;
+      const rect = container.getBoundingClientRect();
+      const paddingBottom = Number.parseFloat(
+        window.getComputedStyle(container).paddingBottom || "0"
+      );
+      const chatDockHeight =
+        isChatBarVisible && chatDockRef.current
+          ? chatDockRef.current.getBoundingClientRect().height
+          : 0;
+      const clearance = paddingBottom + chatDockHeight + (isChatBarVisible ? 24 : 16);
+      const availableHeight = Math.max(420, viewportHeight - rect.top - clearance);
+      setPanelMaxHeightPx((previous) => {
+        const rounded = Math.round(availableHeight);
+        return previous === rounded ? previous : rounded;
+      });
+    };
+
+    computePanelHeight();
+    const handleResize = () => computePanelHeight();
+    window.addEventListener("resize", handleResize);
+    window.addEventListener("orientationchange", handleResize);
+
+    const observers: ResizeObserver[] = [];
+    if (typeof ResizeObserver !== "undefined") {
+      if (calendarContainerRef.current) {
+        const observer = new ResizeObserver(() => computePanelHeight());
+        observer.observe(calendarContainerRef.current);
+        observers.push(observer);
+      }
+      if (chatDockRef.current) {
+        const observer = new ResizeObserver(() => computePanelHeight());
+        observer.observe(chatDockRef.current);
+        observers.push(observer);
+      }
+    }
+
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      window.removeEventListener("orientationchange", handleResize);
+      observers.forEach((observer) => observer.disconnect());
+    };
+  }, [isChatBarVisible, activeTab]);
+  const pulseTodayButtonLabel = useMemo(
+    () => formatRelativeDayLabel(pulseSelectedDate, currentDate),
+    [pulseSelectedDate, currentDate]
+  );
   const activeProactivityId = displayProactivity?.id ?? proactivityFallback?.id ?? null;
   const activeProactivityCadence =
     displayProactivity?.cadence ?? proactivityFallback?.cadence ?? null;
@@ -344,6 +469,7 @@ export function GrayDashboardView({
   const customTimes = customSettings.times;
   const customChannels = customSettings.channels;
   const customTimeInputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const proactivityChannelDropdownRef = useRef<HTMLDivElement>(null);
   const customChannelSummary = useMemo(() => {
     return customChannels
       .map(
@@ -428,9 +554,21 @@ export function GrayDashboardView({
       }
     };
 
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        isProactivityChannelDropdownOpen &&
+        proactivityChannelDropdownRef.current &&
+        !proactivityChannelDropdownRef.current.contains(event.target as Node)
+      ) {
+        setIsProactivityChannelDropdownOpen(false);
+      }
+    };
+
     window.addEventListener("keydown", handleKeyDown);
+    document.addEventListener("mousedown", handleClickOutside);
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener("mousedown", handleClickOutside);
     };
   }, [
     activeProactivityId,
@@ -548,6 +686,16 @@ export function GrayDashboardView({
     [onSelectPulse, pulseEntriesByDate]
   );
 
+  const handlePulseShiftDay = useCallback(
+    (offset: number) => {
+      const base = pulseSelectedDate ?? currentDate;
+      const next = new Date(base);
+      next.setDate(base.getDate() + offset);
+      handlePulseDateSelect(next);
+    },
+    [currentDate, handlePulseDateSelect, pulseSelectedDate]
+  );
+
   const handlePulseMonthNavigate = useCallback((offset: number) => {
     setPulseMonthDate((previous) => {
       const next = new Date(previous);
@@ -630,6 +778,7 @@ export function GrayDashboardView({
 
   const handleCloseProactivityModal = useCallback(() => {
     setIsProactivityModalOpen(false);
+    setIsProactivityChannelDropdownOpen(false);
   }, []);
 
   const handlePresetSelectChange = useCallback(
@@ -682,6 +831,13 @@ export function GrayDashboardView({
     onTogglePlan(planId);
   };
 
+  const handleHabitToggle = (habitId: string) => {
+    if (!isCurrentPulseEditable || !onToggleHabit) {
+      return;
+    }
+    onToggleHabit(habitId);
+  };
+
   const handlePlanEdit = useCallback(
     (plan: PlanItem) => {
       if (!isCurrentPulseEditable || !onEditPlan) {
@@ -727,7 +883,7 @@ export function GrayDashboardView({
 
   const headerClassName = styles.pulseSurfaceHeader;
   const canManagePlans = isCurrentPulseEditable && Boolean(onEditPlan || onDeletePlan);
-  const canManageHabits = isCurrentPulseEditable && Boolean(onEditHabit || onDeleteHabit);
+  const canManageHabits = isCurrentPulseEditable && Boolean(onToggleHabit || onEditHabit || onDeleteHabit);
   const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
@@ -772,28 +928,58 @@ export function GrayDashboardView({
           </span>
         </div>
         <div className={styles.proactivityChannelsLabel}>
-          <div
-            className={styles.proactivityChannelSwitches}
-            aria-label="Notification channels"
-          >
-            {CUSTOM_CHANNEL_OPTIONS.map((option) => {
-              const isActive = proactivityChannels.includes(option.value);
-              return (
-                <button
-                  key={option.value}
-                  type="button"
-                  className={styles.proactivityChannelSwitch}
-                  data-active={isActive ? "true" : "false"}
-                  onClick={() => handleActiveChannelToggle(option.value)}
-                  disabled={!isCurrentPulseEditable || !onProactivitySelect}
-                >
-                  <span>{option.label}</span>
-                  <span className={styles.proactivityChannelSwitchTrack}>
-                    <span className={styles.proactivityChannelSwitchThumb} />
-                  </span>
-                </button>
-              );
-            })}
+          <label className={styles.proactivityChannelDropdownLabel}>
+            Notification channels
+          </label>
+          <div className={styles.proactivityChannelDropdown} ref={proactivityChannelDropdownRef}>
+            <button
+              type="button"
+              className={styles.proactivityChannelDropdownButton}
+              onClick={() => setIsProactivityChannelDropdownOpen(!isProactivityChannelDropdownOpen)}
+              disabled={!isCurrentPulseEditable || !onProactivitySelect}
+            >
+              <span className={styles.proactivityChannelDropdownSummary}>
+                {proactivityChannels.length > 0
+                  ? proactivityChannels
+                      .map(
+                        (channel) =>
+                          CUSTOM_CHANNEL_OPTIONS.find((option) => option.value === channel)?.label ?? channel
+                      )
+                      .join(", ")
+                  : "Select channels"}
+              </span>
+              <ChevronDown
+                size={14}
+                className={`${styles.proactivityChannelDropdownIcon} ${
+                  isProactivityChannelDropdownOpen ? styles.proactivityChannelDropdownIconOpen : ""
+                }`}
+                aria-hidden="true"
+              />
+            </button>
+            {isProactivityChannelDropdownOpen && (
+              <div className={styles.proactivityChannelDropdownMenu}>
+                {CUSTOM_CHANNEL_OPTIONS.map((option) => {
+                  const isActive = proactivityChannels.includes(option.value);
+                  return (
+                    <label
+                      key={option.value}
+                      className={styles.proactivityChannelDropdownItem}
+                    >
+                      <input
+                        type="checkbox"
+                        className={styles.proactivityChannelDropdownCheckbox}
+                        checked={isActive}
+                        onChange={() => handleActiveChannelToggle(option.value)}
+                      />
+                      <span className={styles.proactivityChannelDropdownItemContent}>
+                        <span className={styles.proactivityChannelDropdownItemLabel}>{option.label}</span>
+                        <span className={styles.proactivityChannelDropdownItemHelper}>{option.helper}</span>
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
         <div className={styles.proactivityModalActions}>
@@ -967,6 +1153,222 @@ export function GrayDashboardView({
       ? createPortal(proactivityModalContent, document.body)
       : null;
 
+  const renderProactivityCard = (additionalClassName?: string) => (
+    <article
+      className={[
+        styles.dashboardCard,
+        styles.proactivityCard,
+        additionalClassName ?? "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+    >
+      <header className={styles.dashboardCardHeader}>
+        <span>Proactivity</span>
+      </header>
+      <div className={styles.dashboardCardBody}>
+        {displayProactivity ? (
+          <div className={styles.proactivitySummaryInline}>
+            {proactivitySummaryTokens.length > 0
+              ? proactivitySummaryTokens.map((token, index) => (
+                  <span key={`${token}-${index}`}>{token}</span>
+                ))
+              : <span>—</span>}
+          </div>
+        ) : (
+          <div className={styles.cardEmptyMessage}>
+            <span>Not configured</span>
+          </div>
+        )}
+        <button
+          type="button"
+          className={styles.secondaryAction}
+          disabled={!canOpenProactivityModal}
+          data-disabled={!canOpenProactivityModal ? "true" : "false"}
+          onClick={handleOpenProactivityModal}
+        >
+          {proactivityButtonLabel}
+        </button>
+      </div>
+    </article>
+  );
+
+  const sidebarProactivityCard = renderProactivityCard(styles.sidebarProactivityCard);
+  const proactivityCard = renderProactivityCard();
+
+  const plansCard = (
+    <article className={styles.dashboardCard}>
+      <header className={styles.dashboardCardHeader}>
+        <span>Plans</span>
+      </header>
+      <div className={styles.dashboardCardBody}>
+        <ul className={styles.planList}>
+          {showPlansList
+            ? displayPlans.map((plan) => (
+                <li key={plan.id} className={styles.planListItem}>
+                  <button
+                    type="button"
+                    className={styles.planItemButton}
+                    data-completed={plan.completed ? "true" : "false"}
+                    onClick={() => handlePlanToggle(plan.id)}
+                    disabled={!isCurrentPulseEditable}
+                  >
+                    <span className={styles.planCheckbox} aria-hidden="true">
+                      {plan.completed ? <Check size={14} /> : <Square size={14} />}
+                    </span>
+                    <span className={styles.planLabelGroup}>
+                      <span className={styles.planLabel}>{plan.label}</span>
+                      {plan.details ? (
+                        <span className={styles.planDetails}>{plan.details}</span>
+                      ) : null}
+                      {(plan.scheduleSlot || plan.deadline) && (
+                        <span className={styles.planMeta}>{formatPlanMeta(plan)}</span>
+                      )}
+                    </span>
+                  </button>
+                  {canManagePlans ? (
+                    <span className={styles.listItemActions}>
+                      {onEditPlan ? (
+                        <button
+                          type="button"
+                          className={styles.listItemActionButton}
+                          onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            handlePlanEdit(plan);
+                          }}
+                          aria-label={`Edit plan ${plan.label}`}
+                          disabled={!isCurrentPulseEditable}
+                        >
+                          <Pencil size={14} />
+                        </button>
+                      ) : null}
+                      {onDeletePlan ? (
+                        <button
+                          type="button"
+                          className={styles.listItemActionButton}
+                          onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            handlePlanDelete(plan);
+                          }}
+                          aria-label={`Delete plan ${plan.label}`}
+                          disabled={!isCurrentPulseEditable}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      ) : null}
+                    </span>
+                  ) : null}
+                </li>
+              ))
+            : (
+              <li className={styles.listEmptyMessage}>
+                <span>No plans captured yet.</span>
+              </li>
+            )}
+        </ul>
+        <button
+          type="button"
+          className={styles.secondaryAction}
+          disabled={!isCurrentPulseEditable}
+          data-disabled={!isCurrentPulseEditable ? "true" : "false"}
+          onClick={() => openModal("plan")}
+        >
+          Add plans
+        </button>
+      </div>
+    </article>
+  );
+
+  const habitsCard = (
+    <article className={styles.dashboardCard}>
+      <header className={styles.dashboardCardHeader}>
+        <span>Habits</span>
+      </header>
+      <div className={styles.dashboardCardBody}>
+        <ul className={`${styles.habitList} ${styles.dashboardHabitList}`}>
+          {showHabitsList
+            ? displayHabits.map((habit) => (
+                <li key={habit.id} className={styles.habitListItem}>
+                  <button
+                    type="button"
+                    className={styles.planItemButton}
+                    data-completed={habit.completed ? "true" : "false"}
+                    onClick={() => handleHabitToggle(habit.id)}
+                    disabled={!isCurrentPulseEditable || !onToggleHabit}
+                  >
+                    <span className={styles.planCheckbox} aria-hidden="true">
+                      {habit.completed ? <Check size={14} /> : <Square size={14} />}
+                    </span>
+                    <span className={styles.habitContent}>
+                      <span className={styles.habitLabel}>{habit.label}</span>
+                      {habit.details ? (
+                        <span className={styles.habitDetails}>{habit.details}</span>
+                      ) : null}
+                    </span>
+                  </button>
+                  <span className={styles.habitRightSection}>
+                    {canManageHabits ? (
+                      <span className={styles.listItemActions}>
+                        {onEditHabit ? (
+                          <button
+                            type="button"
+                            className={styles.listItemActionButton}
+                            onClick={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              handleHabitEdit(habit);
+                            }}
+                            aria-label={`Edit habit ${habit.label}`}
+                            disabled={!isCurrentPulseEditable}
+                          >
+                            <Pencil size={14} />
+                          </button>
+                        ) : null}
+                        {onDeleteHabit ? (
+                          <button
+                            type="button"
+                            className={styles.listItemActionButton}
+                            onClick={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              handleHabitDelete(habit);
+                            }}
+                            aria-label={`Delete habit ${habit.label}`}
+                            disabled={!isCurrentPulseEditable}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        ) : null}
+                      </span>
+                    ) : null}
+                    <span className={styles.habitStreak}>
+                      <Flame size={12} aria-hidden="true" />
+                      <span>{habit.streakLabel}</span>
+                    </span>
+                  </span>
+                </li>
+              ))
+            : (
+              <li className={styles.listEmptyMessage}>
+                <span>No habits tracked yet.</span>
+              </li>
+            )}
+        </ul>
+        <button
+          type="button"
+          className={styles.secondaryAction}
+          disabled={!isCurrentPulseEditable}
+          data-disabled={!isCurrentPulseEditable ? "true" : "false"}
+          onClick={() => openModal("habit")}
+        >
+          Add habits
+        </button>
+      </div>
+    </article>
+  );
+
   const pulseMonthLabel = pulseMonthDate.toLocaleDateString(undefined, {
     month: "long",
     year: "numeric",
@@ -984,9 +1386,10 @@ export function GrayDashboardView({
       <DashboardHeader
         activeTab={activeTab}
         onSelectTab={onSelectTab}
-        onPrevMonth={() => handlePulseMonthNavigate(-1)}
-        onNextMonth={() => handlePulseMonthNavigate(1)}
+        onPrevRange={() => handlePulseShiftDay(-1)}
+        onNextRange={() => handlePulseShiftDay(1)}
         onGoToday={handlePulseGoToday}
+        todayButtonLabel={pulseTodayButtonLabel}
         className={headerClassName}
       />
       <div className={calendarStyles.calendarSurfaceBody} data-has-sidebar="true">
@@ -997,206 +1400,52 @@ export function GrayDashboardView({
             onSelectDate={handlePulseDateSelect}
             onNavigateMonth={handlePulseMonthNavigate}
             calendars={calendars}
-          onToggleCalendar={handleCalendarVisibilityToggle}
-          showSelectedDateLabel={false}
-          showMonthNavigation
-          className={calendarStyles.calendarSidebarIntegrated}
-          showCalendarList={false}
-          showCreateAction={false}
-          onIntegrationAction={onIntegrationAction}
-        >
-          <div className={styles.calendarSidebarExtras}>
-            <article
-              className={`${styles.dashboardCard} ${styles.proactivityCard} ${styles.sidebarProactivityCard}`}
-            >
-              <header className={styles.dashboardCardHeader}>
-                <span>Proactivity</span>
-              </header>
-              <div className={styles.dashboardCardBody}>
-                {displayProactivity ? (
-                    <div className={styles.proactivitySummaryInline}>
-                      {proactivitySummaryTokens.length > 0
-                        ? proactivitySummaryTokens.map((token, index) => (
-                            <span key={`${token}-${index}`}>{token}</span>
-                          ))
-                        : <span>—</span>}
-                    </div>
-                ) : (
-                  <div className={styles.cardEmptyMessage}>
-                    <span>Not configured</span>
-                  </div>
-                )}
-                <button
-                  type="button"
-                  className={styles.secondaryAction}
-                  disabled={!canOpenProactivityModal}
-                  data-disabled={!canOpenProactivityModal ? "true" : "false"}
-                  onClick={handleOpenProactivityModal}
-                >
-                  {proactivityButtonLabel}
-                </button>
-              </div>
-            </article>
-          </div>
-        </CalendarSidebar>
+            onToggleCalendar={handleCalendarVisibilityToggle}
+            showSelectedDateLabel={false}
+            showMonthNavigation
+            className={calendarStyles.calendarSidebarIntegrated}
+            showCalendarList={false}
+            showCreateAction={false}
+            onIntegrationAction={onIntegrationAction}
+          >
+            <div className={styles.calendarSidebarExtras}>{sidebarProactivityCard}</div>
+          </CalendarSidebar>
         </div>
         <div className={`${calendarStyles.calendarBoard} ${styles.pulseBoard}`}>
           <div className={calendarStyles.calendarGrid}>
             <div className={styles.pulseBoardContent}>
               <section className={`${styles.dashboardGrid} ${styles.pulseGridStacked}`}>
-                <article className={styles.dashboardCard}>
-                  <header className={styles.dashboardCardHeader}>
-                    <span>Plans</span>
-                  </header>
-                  <div className={styles.dashboardCardBody}>
-                    <ul className={styles.planList}>
-                      {showPlansList
-                        ? displayPlans.map((plan) => (
-                            <li key={plan.id} className={styles.planListItem}>
-                              <button
-                                type="button"
-                                className={styles.planItemButton}
-                                data-completed={plan.completed ? "true" : "false"}
-                                onClick={() => handlePlanToggle(plan.id)}
-                                disabled={!isCurrentPulseEditable}
-                              >
-                                <span className={styles.planCheckbox} aria-hidden="true">
-                                  {plan.completed ? <CheckSquare size={16} /> : <Square size={16} />}
-                                </span>
-                                <span className={styles.planLabelGroup}>
-                                  <span className={styles.planLabel}>{plan.label}</span>
-                                  {(plan.scheduleSlot || plan.deadline) && (
-                                    <span className={styles.planMeta}>{formatPlanMeta(plan)}</span>
-                                  )}
-                                </span>
-                              </button>
-                              {canManagePlans ? (
-                                <span className={styles.listItemActions}>
-                                  {onEditPlan ? (
-                                    <button
-                                      type="button"
-                                      className={styles.listItemActionButton}
-                                      onClick={(event) => {
-                                        event.preventDefault();
-                                        event.stopPropagation();
-                                        handlePlanEdit(plan);
-                                      }}
-                                      aria-label={`Edit plan ${plan.label}`}
-                                      disabled={!isCurrentPulseEditable}
-                                    >
-                                      <Pencil size={14} />
-                                    </button>
-                                  ) : null}
-                                  {onDeletePlan ? (
-                                    <button
-                                      type="button"
-                                      className={styles.listItemActionButton}
-                                      onClick={(event) => {
-                                        event.preventDefault();
-                                        event.stopPropagation();
-                                        handlePlanDelete(plan);
-                                      }}
-                                      aria-label={`Delete plan ${plan.label}`}
-                                      disabled={!isCurrentPulseEditable}
-                                    >
-                                      <Trash2 size={14} />
-                                    </button>
-                                  ) : null}
-                                </span>
-                              ) : null}
-                            </li>
-                          ))
-                        : (
-                          <li className={styles.listEmptyMessage}>
-                            <span>No plans captured yet.</span>
-                          </li>
-                        )}
-                    </ul>
-                    <button
-                      type="button"
-                      className={styles.secondaryAction}
-                      disabled={!isCurrentPulseEditable}
-                      data-disabled={!isCurrentPulseEditable ? "true" : "false"}
-                      onClick={() => openModal("plan")}
-                    >
-                      Add plans
-                    </button>
-                  </div>
-                </article>
-
-                <article className={styles.dashboardCard}>
-                  <header className={styles.dashboardCardHeader}>
-                    <span>Habits</span>
-                  </header>
-                  <div className={styles.dashboardCardBody}>
-                    <ul className={`${styles.habitList} ${styles.dashboardHabitList}`}>
-                      {showHabitsList
-                        ? displayHabits.map((habit) => (
-                            <li key={habit.id} className={styles.habitListItem}>
-                              <div className={styles.habitContent}>
-                                <span className={styles.habitLabel}>{habit.label}</span>
-                                <span className={styles.habitMeta}>Prev: {habit.previousLabel}</span>
-                              </div>
-                              <div className={styles.habitStreak}>
-                                <Flame size={12} aria-hidden="true" />
-                                <span>{habit.streakLabel}</span>
-                              </div>
-                              {canManageHabits ? (
-                                <span className={styles.listItemActions}>
-                                  {onEditHabit ? (
-                                    <button
-                                      type="button"
-                                      className={styles.listItemActionButton}
-                                      onClick={(event) => {
-                                        event.preventDefault();
-                                        event.stopPropagation();
-                                        handleHabitEdit(habit);
-                                      }}
-                                      aria-label={`Edit habit ${habit.label}`}
-                                      disabled={!isCurrentPulseEditable}
-                                    >
-                                      <Pencil size={14} />
-                                    </button>
-                                  ) : null}
-                                  {onDeleteHabit ? (
-                                    <button
-                                      type="button"
-                                      className={styles.listItemActionButton}
-                                      onClick={(event) => {
-                                        event.preventDefault();
-                                        event.stopPropagation();
-                                        handleHabitDelete(habit);
-                                      }}
-                                      aria-label={`Delete habit ${habit.label}`}
-                                      disabled={!isCurrentPulseEditable}
-                                    >
-                                      <Trash2 size={14} />
-                                    </button>
-                                  ) : null}
-                                </span>
-                              ) : null}
-                            </li>
-                          ))
-                        : (
-                          <li className={styles.listEmptyMessage}>
-                            <span>No habits tracked yet.</span>
-                          </li>
-                        )}
-                    </ul>
-                    <button
-                      type="button"
-                      className={styles.secondaryAction}
-                      disabled={!isCurrentPulseEditable}
-                      data-disabled={!isCurrentPulseEditable ? "true" : "false"}
-                      onClick={() => openModal("habit")}
-                    >
-                      Add habits
-                    </button>
-                  </div>
-                </article>
+                {plansCard}
+                {habitsCard}
               </section>
             </div>
           </div>
+        </div>
+      </div>
+    </>
+  );
+
+  const compactPulseContent = (
+    <>
+      {proactivityModal}
+      <DashboardHeader
+        activeTab={activeTab}
+        onSelectTab={onSelectTab}
+        onPrevRange={() => handlePulseShiftDay(-1)}
+        onNextRange={() => handlePulseShiftDay(1)}
+        onGoToday={handlePulseGoToday}
+        todayButtonLabel={pulseTodayButtonLabel}
+        className={headerClassName}
+      />
+      <div className={styles.dashboardCompact}>
+        <div className={styles.dashboardCompactMeta}>
+          <span className={styles.dashboardCompactRange}>{pulseRangeLabel}</span>
+          <span className={styles.dashboardCompactTimezone}>{timezoneLabel}</span>
+        </div>
+        <div className={styles.dashboardCompactGrid}>
+          {plansCard}
+          {habitsCard}
+          {proactivityCard}
         </div>
       </div>
     </>
@@ -1212,6 +1461,8 @@ export function GrayDashboardView({
       events={calendarEvents}
       onCalendarsChange={onCalendarsChange}
       onEventsChange={onCalendarEventsChange}
+      selectedDate={calendarSelectedDate}
+      onSelectedDateChange={onCalendarSelectedDateChange}
       hourHeight={CALENDAR_PANEL_HOUR_HEIGHT}
       onIntegrationAction={onIntegrationAction}
       dashboardTab={activeTab}
@@ -1232,6 +1483,20 @@ export function GrayDashboardView({
     />
   );
 
+  const compactCalendarContent = (
+    <>
+      <DashboardHeader
+        activeTab={activeTab}
+        onSelectTab={onSelectTab}
+        className={headerClassName}
+      />
+      <div className={styles.dashboardCompactNotice}>
+        <h3>Calendar works best on a wider screen</h3>
+        <p>Expand your window or rotate your device to manage events and view the full schedule.</p>
+      </div>
+    </>
+  );
+
   const dashboardSurfaceClassName = [
     styles.dashboardCalendarSurface,
     calendarStyles.calendarSurface,
@@ -1240,20 +1505,39 @@ export function GrayDashboardView({
     .filter(Boolean)
     .join(" ");
 
+  const surfaceContent = isCompactLayout
+    ? activeTab === "pulse"
+      ? compactPulseContent
+      : compactCalendarContent
+    : activeTab === "pulse"
+      ? pulseContent
+      : calendarContent;
+
   return (
     <>
-      <div className={styles.dashboardCalendarContainer}>
+      <div
+        className={styles.dashboardCalendarContainer}
+        data-compact={isCompactLayout ? "true" : "false"}
+        ref={calendarContainerRef}
+      >
         <div
           className={styles.dashboardCalendarShell}
-          style={DASHBOARD_PANEL_SIZING_STYLE}
+          style={panelSizingStyle}
+          data-compact={isCompactLayout ? "true" : "false"}
         >
-          <div className={dashboardSurfaceClassName}>
-            {activeTab === "pulse" ? pulseContent : calendarContent}
+          <div
+            className={dashboardSurfaceClassName}
+            data-compact={isCompactLayout ? "true" : "false"}
+          >
+            {surfaceContent}
           </div>
         </div>
-        {chatBar ? (
-          <div className={`${styles.chatBarRow} ${styles.dashboardChatBarRow}`}>
-            {chatBar}
+        {isChatBarVisible ? (
+          <div className={styles.chatComposerDock} ref={chatDockRef}>
+            <div className={`${styles.chatBarRow} ${styles.dashboardChatBarRow}`}>
+              {chatBar}
+            </div>
+            <p className={styles.chatDisclaimer}>Gray can make mistakes. Check important info.</p>
           </div>
         ) : null}
       </div>
