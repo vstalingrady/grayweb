@@ -11,6 +11,7 @@ import {
   Settings as SettingsIcon,
   LifeBuoy,
   LogOut,
+  Star,
 } from "lucide-react";
 import { useUser } from "@/contexts/UserContext";
 import styles from "@/app/gray/GrayPageClient.module.css";
@@ -21,6 +22,7 @@ type GrayEnhancedSidebarProps = {
   viewerName: string;
   viewerInitials: string;
   viewerAvatarUrl?: string | null;
+  viewerPlanLabel: string;
   activeNav: SidebarNavKey;
   railItems: SidebarNavItem[];
   navItems: SidebarNavItem[];
@@ -33,6 +35,7 @@ type GrayEnhancedSidebarProps = {
   onOpenPersonalization?: () => void;
   onOpenSettings?: () => void;
   onOpenHelp?: () => void;
+  onUpgradePlan?: () => void;
   onLogOut?: () => void;
 };
 
@@ -41,6 +44,7 @@ export function GrayEnhancedSidebar({
   viewerName,
   viewerInitials,
   viewerAvatarUrl = null,
+  viewerPlanLabel,
   activeNav,
   railItems,
   navItems,
@@ -53,6 +57,7 @@ export function GrayEnhancedSidebar({
   onOpenPersonalization,
   onOpenSettings,
   onOpenHelp,
+  onUpgradePlan,
   onLogOut,
 }: GrayEnhancedSidebarProps) {
   const { user } = useUser();
@@ -60,6 +65,8 @@ export function GrayEnhancedSidebar({
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const profileControlsRef = useRef<HTMLDivElement | null>(null);
   const profileMenuRef = useRef<HTMLDivElement | null>(null);
+  const normalizedPlan = viewerPlanLabel?.trim().length ? viewerPlanLabel : "Free";
+  const isDepthMember = normalizedPlan.trim().toLowerCase() === "depth";
 
   const historyGroups = useMemo(() => {
     const allEntries = historySections
@@ -200,6 +207,11 @@ export function GrayEnhancedSidebar({
 
   const handleOpenHelp = () => {
     onOpenHelp?.();
+    setIsProfileMenuOpen(false);
+  };
+
+  const handleUpgradePlan = () => {
+    onUpgradePlan?.();
     setIsProfileMenuOpen(false);
   };
 
@@ -393,22 +405,42 @@ export function GrayEnhancedSidebar({
                         </span>
                         <span className={styles.profileDetails}>
                           <span>{viewerName}</span>
-                          <span>{user?.role || "Operator"}</span>
+                          <span>{normalizedPlan}</span>
                         </span>
                       </span>
                     </button>
                     {isProfileMenuOpen && (
                       <div className={styles.profileMenu} role="menu" ref={profileMenuRef}>
+                        {!isDepthMember ? (
+                          <>
+                            <button
+                              type="button"
+                              className={`${styles.profileMenuItem} ${styles.profileMenuUpgrade}`}
+                              onClick={handleUpgradePlan}
+                              role="menuitem"
+                            >
+                              <span className={styles.profileMenuItemContent}>
+                                <span className={styles.profileMenuIcon}>
+                                  <Star size={16} />
+                                </span>
+                                <span className={styles.profileMenuLabel}>Upgrade to Depth</span>
+                              </span>
+                            </button>
+                            <span className={styles.profileMenuDivider} aria-hidden="true" />
+                          </>
+                        ) : null}
                         <button
                           type="button"
                           className={styles.profileMenuItem}
                           onClick={handleOpenPersonalization}
                           role="menuitem"
                         >
-                          <span className={styles.profileMenuIcon}>
-                            <Sparkles size={16} />
+                          <span className={styles.profileMenuItemContent}>
+                            <span className={styles.profileMenuIcon}>
+                              <Sparkles size={16} />
+                            </span>
+                            <span className={styles.profileMenuLabel}>Personalization</span>
                           </span>
-                          <span className={styles.profileMenuLabel}>Personalization</span>
                         </button>
                         <button
                           type="button"
@@ -416,10 +448,12 @@ export function GrayEnhancedSidebar({
                           onClick={handleOpenSettings}
                           role="menuitem"
                         >
-                          <span className={styles.profileMenuIcon}>
-                            <SettingsIcon size={16} />
+                          <span className={styles.profileMenuItemContent}>
+                            <span className={styles.profileMenuIcon}>
+                              <SettingsIcon size={16} />
+                            </span>
+                            <span className={styles.profileMenuLabel}>Settings</span>
                           </span>
-                          <span className={styles.profileMenuLabel}>Settings</span>
                         </button>
                         <button
                           type="button"
@@ -427,10 +461,12 @@ export function GrayEnhancedSidebar({
                           onClick={handleOpenHelp}
                           role="menuitem"
                         >
-                          <span className={styles.profileMenuIcon}>
-                            <LifeBuoy size={16} />
+                          <span className={styles.profileMenuItemContent}>
+                            <span className={styles.profileMenuIcon}>
+                              <LifeBuoy size={16} />
+                            </span>
+                            <span className={styles.profileMenuLabel}>Help</span>
                           </span>
-                          <span className={styles.profileMenuLabel}>Help</span>
                         </button>
                         <span className={styles.profileMenuDivider} aria-hidden="true" />
                         <button
@@ -439,10 +475,12 @@ export function GrayEnhancedSidebar({
                           onClick={handleLogOut}
                           role="menuitem"
                         >
-                          <span className={styles.profileMenuIcon}>
-                            <LogOut size={16} />
+                          <span className={styles.profileMenuItemContent}>
+                            <span className={styles.profileMenuIcon}>
+                              <LogOut size={16} />
+                            </span>
+                            <span className={styles.profileMenuLabel}>Log out</span>
                           </span>
-                          <span className={styles.profileMenuLabel}>Log out</span>
                         </button>
                       </div>
                     )}
