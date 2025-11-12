@@ -1,18 +1,36 @@
 "use client";
 
 import Image from "next/image";
-import { useRouter } from "next/navigation";
-import { FormEvent, useState } from "react";
-import { Loader2, Lock, Mail } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import { FormEvent, useEffect, useState } from "react";
+import { Loader2 } from "lucide-react";
 import { FaDiscord, FaGoogle } from "react-icons/fa6";
+import ShaderBackground from "@/components/shaders/ShaderBackground";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { getSupabaseAuthStorageKeys } from "@/lib/supabaseStorage";
+import {
+  hostFromUrl,
+  isLocalHostname,
+  isProductionHost,
+  isGrayWorkspaceHost,
+  normalizeWorkspaceRedirect,
+  resolveDefaultWorkspacePath,
+  resolveWorkspaceHost,
+  resolveWorkspaceOrigin,
+} from "@/lib/grayRouting";
 import styles from "./LoginForm.module.css";
+import { persistAuthCookies, clearAuthCookies } from "@/lib/auth/cookies";
 
 type MessageState =
   | { type: "idle" }
   | { type: "success"; text: string }
   | { type: "error"; text: string };
+
+type AuthMode = "signin" | "signup";
+
+type LoginFormProps = {
+  initialMode?: AuthMode;
+};
 
 const providers = [
   { id: "google" as const, label: "Google", icon: FaGoogle },
@@ -21,31 +39,37 @@ const providers = [
 
 const envRedirect = process.env.NEXT_PUBLIC_AUTH_REDIRECT?.trim();
 const envSiteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim();
-const DEFAULT_APP_PATH = "/gray";
 const CALLBACK_PATH = "/callback";
-// Prefer configured site URL; fall back to production domain
-const FALLBACK_BASE = envSiteUrl || "https://gray.alignment.id";
 const SUPABASE_STORAGE_KEYS = getSupabaseAuthStorageKeys();
-
-const isProductionHost = (host?: string) =>
-  !!host && (host.endsWith("gray.alignment.id") || host === "gray.alignment.id");
+const MIN_PASSWORD_LENGTH = 8;
 
 const resolveSiteOrigin = (): string => {
   if (typeof window !== "undefined" && window.location?.origin) {
     const { origin, hostname } = window.location;
 
-    // Development environment - use localhost
-    if (hostname === "localhost" || hostname === "127.0.0.1") {
+    // Development environment - use localhost-derived origin
+    if (isLocalHostname(hostname)) {
       return origin;
     }
 
-    // Production environment - use gray.alignment.id
-    if (isProductionHost(hostname)) {
+    // Dedicated Gray hosts should respect their own origins
+    if (isProductionHost(hostname) || isGrayWorkspaceHost(hostname)) {
       return origin;
     }
 
     // Default to production for unknown hosts
     return `https://gray.alignment.id`;
+  }
+
+  if (envSiteUrl) {
+    try {
+      const normalized = envSiteUrl.startsWith("http")
+        ? envSiteUrl
+        : `https://${envSiteUrl}`;
+      return new URL(normalized).origin;
+    } catch {
+      // Ignore invalid SITE_URL values
+    }
   }
 
   // Server-side: check environment for proper fallback
@@ -55,6 +79,14 @@ const resolveSiteOrigin = (): string => {
 
   // Server-side fallback to production
   return `https://gray.alignment.id`;
+};
+
+const resolveHostContext = (): string | null => {
+  if (typeof window !== "undefined" && window.location) {
+    return window.location.hostname;
+  }
+
+  return hostFromUrl(envSiteUrl);
 };
 
 const ensureAbsoluteUrl = (target: string): string => {
@@ -89,30 +121,93 @@ const sanitizeRedirect = (target: string | null | undefined): string | null => {
 };
 
 const resolvePostAuthDestination = (): string => {
+  const host = resolveHostContext();
+  const workspaceHost = resolveWorkspaceHost(host) ?? host;
+
   if (envRedirect) {
     try {
       const u = new URL(envRedirect, "https://placeholder");
-      if (!u.host || isProductionHost(u.host)) {
+      if (!u.host) {
+        return normalizeWorkspaceRedirect(envRedirect, workspaceHost);
+      }
+
+      if (
+        isProductionHost(u.host) ||
+        (workspaceHost && u.hostname === workspaceHost) ||
+        (host && u.hostname === host)
+      ) {
         return envRedirect;
       }
-    } catch {}
+    } catch {
+      // Ignore invalid auth redirect configuration
+    }
   }
 
   if (typeof window !== "undefined") {
     const url = new URL(window.location.href);
     const sanitized = sanitizeRedirect(url.searchParams.get("redirect"));
     if (sanitized) {
-      return sanitized;
+      return normalizeWorkspaceRedirect(sanitized, workspaceHost);
     }
   }
 
-  return DEFAULT_APP_PATH;
+  return resolveDefaultWorkspacePath(workspaceHost);
+};
+
+const buildLoopbackOrigin = (
+  protocol?: string,
+  port?: string | null | undefined
+): string => {
+  const normalizedProtocol =
+    protocol && protocol.endsWith(":") ? protocol : `${protocol ?? "http"}:`;
+  const portSuffix = port ? `:${port}` : "";
+  return `${normalizedProtocol}//localhost${portSuffix}`;
+};
+
+const isLoopbackHost = (host: string | null | undefined): boolean =>
+  host === "localhost" || host === "127.0.0.1";
+
+const resolveCallbackOrigin = (): string => {
+  if (typeof window !== "undefined" && window.location) {
+    const { hostname, protocol, port } = window.location;
+
+    if (isLoopbackHost(hostname)) {
+      return buildLoopbackOrigin(protocol, port);
+    }
+
+    const workspaceOrigin = resolveWorkspaceOrigin(hostname, protocol, port);
+
+    if (workspaceOrigin) {
+      try {
+        const parsed = new URL(workspaceOrigin);
+        if (isLoopbackHost(parsed.hostname)) {
+          return buildLoopbackOrigin(parsed.protocol, parsed.port);
+        }
+        return parsed.origin;
+      } catch {
+        return workspaceOrigin;
+      }
+    }
+
+    return window.location.origin;
+  }
+
+  const origin = resolveSiteOrigin();
+  try {
+    const parsed = new URL(origin);
+    if (isLoopbackHost(parsed.hostname)) {
+      return buildLoopbackOrigin(parsed.protocol, parsed.port);
+    }
+    return parsed.origin;
+  } catch {
+    return origin;
+  }
 };
 
 const buildCallbackDestination = (): string => {
   const target = resolvePostAuthDestination();
   const encoded = encodeURIComponent(target);
-  const origin = resolveSiteOrigin();
+  const origin = resolveCallbackOrigin();
   return `${origin}${CALLBACK_PATH}?redirect=${encoded}`;
 };
 
@@ -126,40 +221,28 @@ const overrideSupabaseRedirectUrl = (url: string): string => {
   }
 };
 
-const persistAuthCookies = (email?: string | null) => {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  const expiration = new Date();
-  expiration.setDate(expiration.getDate() + 30);
-
-  const baseAttributes = [
-    "path=/",
-    "sameSite=Lax",
-    `expires=${expiration.toUTCString()}`,
-  ];
-  if (window.location.protocol === "https:") {
-    baseAttributes.push("secure");
-  }
-
-  document.cookie = ["gray-auth=1", ...baseAttributes].join("; ");
-
-  if (email) {
-    document.cookie = [
-      `gray-auth-email=${encodeURIComponent(email)}`,
-      ...baseAttributes,
-    ].join("; ");
-  }
-};
-
-export default function LoginForm() {
+export default function LoginForm({ initialMode = "signin" }: LoginFormProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(true);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<MessageState>({ type: "idle" });
+  const [authMode, setAuthMode] = useState<AuthMode>(initialMode);
+  const [showPassword, setShowPassword] = useState(false);
+
+  useEffect(() => {
+    setAuthMode(initialMode);
+  }, [initialMode]);
+
+  useEffect(() => {
+    setMessage({ type: "idle" });
+    if (authMode === "signup") {
+      setPassword("");
+    }
+    setShowPassword(false);
+  }, [authMode]);
 
   const handleOAuth = async (provider: "google" | "discord") => {
     const supabase = getSupabaseClient();
@@ -171,14 +254,19 @@ export default function LoginForm() {
       return;
     }
 
+    if (typeof window !== "undefined") {
+      try {
+        window.sessionStorage.removeItem("auth-callback-processed");
+      } catch {
+        // Ignore storage access issues
+      }
+    }
+
     setLoading(true);
     setMessage({ type: "idle" });
 
     try {
       const redirectTo = ensureAbsoluteUrl(buildCallbackDestination());
-      console.log('OAuth redirectTo URL:', redirectTo);
-      console.log('buildCallbackDestination():', buildCallbackDestination());
-      console.log('resolveSiteOrigin():', resolveSiteOrigin());
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
@@ -198,9 +286,6 @@ export default function LoginForm() {
         ? overrideSupabaseRedirectUrl(data.url)
         : null;
 
-      console.log('Supabase OAuth URL:', data?.url);
-      console.log('Final target URL after override:', targetUrl);
-
       if (!targetUrl) {
         throw new Error("Unable to initiate OAuth flow.");
       }
@@ -215,17 +300,58 @@ export default function LoginForm() {
     }
   };
 
-  const handleEmailLogin = async (event: FormEvent<HTMLFormElement>) => {
+  const performPostAuthNavigation = (destination: string) => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    if (destination.startsWith("http://") || destination.startsWith("https://")) {
+      window.location.href = destination;
+      return;
+    }
+
+    const { hostname, protocol, port } = window.location;
+    const workspaceHost = resolveWorkspaceHost(hostname);
+    const workspaceOrigin = resolveWorkspaceOrigin(hostname, protocol, port);
+
+    if (workspaceHost && workspaceOrigin) {
+      const normalizedPath = normalizeWorkspaceRedirect(destination, workspaceHost);
+      const finalPath = normalizedPath.startsWith("/")
+        ? normalizedPath
+        : `/${normalizedPath}`;
+      window.location.href = `${workspaceOrigin}${finalPath}`;
+      return;
+    }
+
+    const absoluteDestination = ensureAbsoluteUrl(destination);
+    window.location.href = absoluteDestination;
+  };
+
+  const handleEmailAuth = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setMessage({ type: "idle" });
     const supabase = getSupabaseClient();
 
-    if (!email || !password) {
+    const trimmedEmail = email.trim();
+
+    if (!trimmedEmail || !password) {
       setMessage({
         type: "error",
         text: "Please enter both email and password to continue.",
       });
       return;
+    }
+
+    if (authMode === "signup" && password.length < MIN_PASSWORD_LENGTH) {
+      setMessage({
+        type: "error",
+        text: `Password must be at least ${MIN_PASSWORD_LENGTH} characters long.`,
+      });
+      return;
+    }
+
+    if (trimmedEmail !== email) {
+      setEmail(trimmedEmail);
     }
 
     if (!supabase) {
@@ -238,169 +364,300 @@ export default function LoginForm() {
 
     setLoading(true);
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
+      const isSignIn = authMode === "signin";
+      if (isSignIn) {
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: trimmedEmail,
+          password,
+        });
+
+        if (error) {
+          throw error;
+        }
+
+        if (!remember && typeof window !== "undefined") {
+          SUPABASE_STORAGE_KEYS.forEach((key) => {
+            window.localStorage.removeItem(key);
+          });
+          clearAuthCookies();
+        }
+
+        if (remember) {
+          persistAuthCookies(
+            data.session?.user?.email ?? data.user?.email ?? trimmedEmail
+          );
+        } else {
+          clearAuthCookies();
+        }
+
+        const destination = resolvePostAuthDestination();
+        if (typeof window !== "undefined") {
+          performPostAuthNavigation(destination);
+        }
+        return;
+      }
+
+      const { data, error } = await supabase.auth.signUp({
+        email: trimmedEmail,
         password,
+        options: {
+          emailRedirectTo: ensureAbsoluteUrl(buildCallbackDestination()),
+        },
       });
 
       if (error) {
         throw error;
       }
 
-      if (!remember && data.session && typeof window !== "undefined") {
-        SUPABASE_STORAGE_KEYS.forEach((key) => {
-          window.localStorage.removeItem(key);
-        });
-      }
+      const sessionEmail =
+        data.session?.user?.email ?? data.user?.email ?? trimmedEmail ?? null;
 
-      persistAuthCookies(data.session?.user?.email ?? data.user?.email ?? email);
-
-      const destination = resolvePostAuthDestination();
-      if (typeof window !== "undefined") {
-        const absoluteDestination = ensureAbsoluteUrl(destination);
-        if (
-          absoluteDestination.startsWith("http://") ||
-          absoluteDestination.startsWith("https://")
-        ) {
-          window.location.href = absoluteDestination;
-        } else {
-          router.replace(destination);
-          router.refresh();
+      if (data.session) {
+        if (!remember && typeof window !== "undefined") {
+          SUPABASE_STORAGE_KEYS.forEach((key) => {
+            window.localStorage.removeItem(key);
+          });
+          clearAuthCookies();
         }
+        if (remember) {
+          persistAuthCookies(sessionEmail);
+        } else {
+          clearAuthCookies();
+        }
+        const destination = resolvePostAuthDestination();
+        if (typeof window !== "undefined") {
+          performPostAuthNavigation(destination);
+        }
+        return;
       }
+
+      setPassword("");
+      setMessage({
+        type: "success",
+        text: "Check your email to confirm your account. Once verified, return here to sign in.",
+      });
     } catch (error) {
       const text =
-        error instanceof Error ? error.message : "Unable to sign in.";
+        error instanceof Error
+          ? error.message
+          : authMode === "signin"
+            ? "Unable to sign in."
+            : "Unable to sign up.";
       setMessage({ type: "error", text });
     } finally {
       setLoading(false);
     }
   };
 
-  return (
-    <div className={styles.card}>
-      <div className={styles.content}>
-        <header className={styles.header}>
-          <h1>Welcome back</h1>
-          <p>Sign in to continue crafting your black noir experience.</p>
-        </header>
+  const isSignIn = authMode === "signin";
+  const heading = isSignIn ? "Welcome back" : "Welcome";
+  const subtitle = isSignIn
+    ? "Accelerate your personal growth."
+    : "Create your account to start accelerating your personal growth.";
+  const submitLabel = isSignIn ? "Sign In" : "Create Account";
+  const footerPrompt = isSignIn
+    ? "Don't have an account?"
+    : "Already have an account?";
+  const footerAction = isSignIn ? "Sign Up" : "Sign In";
 
-        <div className={styles.oauthRow}>
-          {providers.map(({ id, label, icon: Icon }) => (
+  const handleModeToggle = () => {
+    setAuthMode(isSignIn ? "signup" : "signin");
+    if (typeof pathname === "string") {
+      if (isSignIn && pathname.startsWith("/login")) {
+        router.replace("/signup");
+      } else if (!isSignIn && pathname.startsWith("/signup")) {
+        router.replace("/login");
+      }
+    }
+  };
+
+  const renderedMessage =
+    message.type === "idle"
+      ? null
+      : (
+        <p
+          className={`${styles.authFeedback} ${
+            message.type === "success"
+              ? styles.authFeedbackSuccess
+              : styles.authFeedbackError
+          }`}
+        >
+          {message.text}
+        </p>
+      );
+
+  return (
+    <div className={styles.authPage}>
+      <div className={styles.authShell}>
+        <aside className={styles.authVisualPanel} aria-hidden>
+          <ShaderBackground className={styles.authVisualGradient} fullHeight={false}>
+            <div className={styles.authGlassFrame}>
+              <span className={styles.authGlassGlow} />
+              <span className={styles.authGlassSurface} />
+              <div className={styles.authGlassCore}>
+                <span className={styles.authGlassCoreSheen} />
+                <div className={styles.authVisual}>
+                  <div className={styles.authOrb}>
+                    <Image
+                      src="/grayaiwhite.svg"
+                      alt="Gray emblem"
+                      width={180}
+                      height={180}
+                      priority
+                      className={styles.authOrbLogo}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className={styles.authMantra}>
+              <span className={styles.authMantraLine}>For the best in us.</span>
+              <span className={`${styles.authMantraLine} ${styles.authMantraLineAlt}`}>
+                Maximize human potential.
+              </span>
+            </div>
+          </ShaderBackground>
+        </aside>
+        <section className={styles.authContent}>
+          <Image
+            src="/alignmentlogo.svg"
+            alt="Alignment logo"
+            width={140}
+            height={36}
+            priority
+            className={styles.authAlignmentLogo}
+          />
+          <div className={styles.authPanel}>
+            <header className={styles.authHeading}>
+              <h1 className={styles.authTitle}>{heading}</h1>
+              <p className={styles.authSubtitle}>{subtitle}</p>
+            </header>
+
+            <div className={styles.authOauth}>
+              {providers.map(({ id, label, icon: Icon }) => (
+                <button
+                  key={id}
+                  type="button"
+                  className={styles.authOauthButton}
+                  onClick={() => handleOAuth(id)}
+                  disabled={loading}
+                >
+                  <span className={styles.authOauthIcon}>
+                    <Icon size={18} />
+                  </span>
+                  Continue with {label}
+                </button>
+              ))}
+            </div>
+
+            <div className={styles.authDivider}>or continue with email</div>
+
+            <form className={styles.authForm} onSubmit={handleEmailAuth}>
+              <div className={styles.authFields}>
+                <div className={styles.authField}>
+                  <label className={styles.authFieldLabel} htmlFor="email">
+                    Email
+                  </label>
+                  <input
+                    id="email"
+                    type="email"
+                    className={styles.authFieldInput}
+                    placeholder="you@example.com"
+                    autoComplete="email"
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    disabled={loading}
+                    required
+                  />
+                </div>
+
+                <div className={styles.authField}>
+                  <label className={styles.authFieldLabel} htmlFor="password">
+                    Password
+                  </label>
+                  <div className={styles.authFieldInputWrapper}>
+                    <input
+                      id="password"
+                      type={showPassword ? "text" : "password"}
+                      className={styles.authFieldInput}
+                      placeholder="••••••••"
+                      autoComplete={
+                        isSignIn ? "current-password" : "new-password"
+                      }
+                      value={password}
+                      onChange={(event) => setPassword(event.target.value)}
+                      disabled={loading}
+                      required
+                    />
+                    <button
+                      type="button"
+                      className={styles.authPasswordToggle}
+                      onClick={() => setShowPassword((value) => !value)}
+                      aria-pressed={showPassword}
+                      aria-label={
+                        showPassword ? "Hide password" : "Show password"
+                      }
+                      disabled={loading}
+                    >
+                      {showPassword ? "Hide" : "Show"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className={styles.authOptions}>
+                <label className={styles.authRemember}>
+                  <input
+                    type="checkbox"
+                    className={styles.authToggleInput}
+                    checked={remember}
+                    onChange={(event) => setRemember(event.target.checked)}
+                    disabled={loading}
+                  />
+                  <span className={styles.authToggleTrack} aria-hidden>
+                    <span className={styles.authToggleThumb} />
+                  </span>
+                  <span className={styles.authRememberLabel}>Remember me</span>
+                </label>
+                <a
+                  className={styles.authForgot}
+                  href="https://app.supabase.com/"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Forgot password?
+                </a>
+              </div>
+
+              {renderedMessage}
+
             <button
-              key={id}
-              type="button"
-              className={styles.oauthButton}
-              onClick={() => handleOAuth(id)}
+              type="submit"
+              className={styles.authSubmit}
               disabled={loading}
             >
-              <span className={styles.brandIcon}>
-                <Icon size={18} />
-              </span>
-              Continue with {label}
+              {loading ? (
+                <Loader2 size={18} className={styles.authSpinner} />
+              ) : (
+                submitLabel
+              )}
             </button>
-          ))}
+          </form>
+
+          <div className={styles.authFooter}>
+            <span className={styles.authFooterPrompt}>{footerPrompt}</span>
+            <button
+              type="button"
+              className={styles.authFooterLink}
+              onClick={handleModeToggle}
+              disabled={loading}
+            >
+              {footerAction}
+            </button>
+          </div>
         </div>
-
-        <p className={styles.divider}>or sign in with email</p>
-
-        <form className={styles.form} onSubmit={handleEmailLogin}>
-          <div className={styles.field}>
-            <label className={styles.fieldLabel} htmlFor="email">
-              Email
-            </label>
-            <div className={styles.inputWrapper}>
-              <Mail size={18} className={styles.inputIcon} />
-              <input
-                id="email"
-                type="email"
-                placeholder="your@email.com"
-                autoComplete="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-              />
-            </div>
-          </div>
-
-          <div className={styles.field}>
-            <label className={styles.fieldLabel} htmlFor="password">
-              Password
-            </label>
-            <div className={styles.inputWrapper}>
-              <Lock size={18} className={styles.inputIcon} />
-              <input
-                id="password"
-                type="password"
-                placeholder="••••••••"
-                autoComplete="current-password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-              />
-            </div>
-          </div>
-
-          <div className={styles.row}>
-            <label className={styles.remember}>
-              <input
-                type="checkbox"
-                className={styles.checkbox}
-                checked={remember}
-                onChange={(event) => setRemember(event.target.checked)}
-              />
-              Remember me
-            </label>
-            <a
-              className={styles.forgot}
-              href="https://app.supabase.com/"
-              target="_blank"
-              rel="noreferrer"
-            >
-              Forgot password?
-            </a>
-          </div>
-
-          {message.type !== "idle" && (
-            <div
-              className={`${styles.message} ${
-                message.type === "success"
-                  ? styles.messageSuccess
-                  : styles.messageError
-              }`}
-            >
-              {message.text}
-            </div>
-          )}
-
-          <button
-            type="submit"
-            className={styles.submitButton}
-            disabled={loading}
-          >
-            {loading ? (
-              <Loader2 size={18} className={styles.loader} />
-            ) : (
-              "Sign In"
-            )}
-          </button>
-        </form>
-
-        <footer className={styles.footer}>
-          <span>Don&apos;t have an account?</span>
-          <a href="/signup">Sign Up</a>
-        </footer>
-      </div>
-
-      <aside className={styles.accent}>
-        <div className={styles.glow} />
-        <Image
-          src="/grayaiwhite.svg"
-          alt="Gray AI emblem"
-          width={140}
-          height={140}
-          priority
-          className={styles.accentImage}
-        />
-      </aside>
+      </section>
     </div>
+  </div>
   );
 }

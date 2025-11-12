@@ -43,7 +43,19 @@ SUPABASE_URL=your_supabase_url_here
 SUPABASE_KEY=your_supabase_anon_key_here
 # Optional: comma separated list of frontend origins allowed to call the API
 # CORS_ALLOW_ORIGINS=https://your-frontend-domain.com,https://app.example.com
+# By default the API allows every origin for local development.
+# Set this flag to false if you want to fall back to the curated localhost list.
+# CORS_ALLOW_ALL_ORIGINS=false
 ```
+
+By default responses now stream as quickly as Gemini returns them. If you ever need to
+slow the token firehose (for example to match a UI animation), set
+`GRAY_STREAMING_TOKEN_DELAY_SECONDS` in your `.env` to the number of seconds to wait
+between streamed chunks (e.g. `0.02` for ~50 tokens/second).
+
+Thread titles are generated from the same Gemini call that produces the reply, so there is
+no extra round trip when a conversation starts. You can opt out by setting
+`GEMINI_AUTO_THREAD_TITLES=false` if you prefer manual naming.
 
 #### Getting API Keys
 
@@ -59,7 +71,7 @@ SUPABASE_KEY=your_supabase_anon_key_here
 4. Replace the placeholder values in your `.env` file
 
 **Set up Supabase Table:**
-In your Supabase project, go to the SQL Editor and run:
+The backend will automatically create the `public.conversations` table at startup whenever it has Supabase database credentials. If you prefer to provision it manually (or are running without direct database access), execute the following SQL in your Supabase SQL Editor:
 
 ```sql
 CREATE TABLE public.conversations (
@@ -69,6 +81,16 @@ CREATE TABLE public.conversations (
   history JSONB NULL,
   CONSTRAINT conversations_pkey PRIMARY KEY (id)
 );
+
+ALTER TABLE public.conversations ENABLE ROW LEVEL SECURITY;
+
+-- Only the backend (service_role key) should be able to touch this table directly.
+CREATE POLICY "conversations_service_role_full_access"
+  ON public.conversations
+  FOR ALL
+  TO service_role
+  USING (true)
+  WITH CHECK (true);
 ```
 
 ### 3. Run the Application
@@ -144,6 +166,7 @@ Visit [http://localhost:8000/docs](http://localhost:8000/docs) for the automatic
 ## Supabase quick start
 
 - Configure your Supabase project OAuth providers for Google and Discord to match the login buttons.
+- For local development add `http://gray.localhost:3000/callback` to the Supabase **Redirect URLs** list (`http://localhost:3000/callback` is optional if you also sign in from plain `localhost`).
 - The Next.js login form uses the helper in `src/lib/supabaseClient.ts` to create a browser client.
 - The FastAPI service uses `supabase-py` to expose lightweight data previews without shipping database credentials to the client.
 
