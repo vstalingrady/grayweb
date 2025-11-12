@@ -159,6 +159,8 @@ export const GENERAL_CHAT_SESSION_ID = GENERAL_SESSION_ID;
 const GENERAL_SESSION_TITLE = "General Chat";
 const DUPLICATE_THREAD_WINDOW_MS = 15000;
 const REMOTE_SESSION_MERGE_WINDOW_MS = 5 * 60 * 1000;
+const REMINDER_POLL_MIN_INTERVAL = 60_000;
+const REMINDER_POLL_SHORT_INTERVAL = 15_000;
 export const buildPersonalizedSystemPrompt = (user?: User | null) => {
   const sections: string[] = [];
 
@@ -2314,7 +2316,8 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
 
   useEffect(() => {
     const general = sessionsRef.current.find((session) => session.scope === "general");
-    if (!general || general.messages.length > 0 || generalGreetingRef.current) {
+    const hasAnyMessages = sessionsRef.current.some((session) => session.messages.length > 0);
+    if (!general || hasAnyMessages || generalGreetingRef.current) {
       return;
     }
     generalGreetingRef.current = true;
@@ -2339,12 +2342,38 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
     let cancelled = false;
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
+    const computeNextReminderPollDelay = (candidates: Reminder[]): number => {
+      if (!candidates.length) {
+        return REMINDER_POLL_MIN_INTERVAL;
+      }
+      const now = Date.now();
+      const delays = candidates
+        .map((reminder) => {
+          const remindAt = new Date(reminder.remind_at).getTime();
+          if (!Number.isFinite(remindAt)) {
+            return null;
+          }
+          return remindAt - now;
+        })
+        .filter((candidate): candidate is number => candidate !== null);
+      if (!delays.length) {
+        return REMINDER_POLL_MIN_INTERVAL;
+      }
+      const soonest = Math.min(...delays);
+      if (soonest <= 0) {
+        return REMINDER_POLL_SHORT_INTERVAL;
+      }
+      return Math.min(soonest, REMINDER_POLL_MIN_INTERVAL);
+    };
+
     const pollDueReminders = async () => {
       if (cancelled || !user?.id || !generalSessionId) {
         return;
       }
+      let fetchedReminders: Reminder[] = [];
       try {
         const reminders = await apiService.getUserReminders(user.id, { status: "pending", limit: 50 });
+        fetchedReminders = reminders;
         const now = Date.now();
         for (const reminder of reminders) {
           if (!reminder.id) {
@@ -2370,7 +2399,8 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
         console.error("Failed to poll reminders:", error);
       } finally {
         if (!cancelled) {
-          timeoutId = setTimeout(pollDueReminders, 15_000);
+          const nextDelay = computeNextReminderPollDelay(fetchedReminders);
+          timeoutId = setTimeout(pollDueReminders, nextDelay);
         }
       }
     };

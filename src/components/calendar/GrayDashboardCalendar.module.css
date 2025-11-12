@@ -982,6 +982,86 @@
   box-shadow: 0 24px 32px rgba(0, 0, 0, 0.4);
 }
 
+.eventCard[data-display-hint="line"] {
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+  border-radius: 0;
+  justify-content: flex-end;
+  pointer-events: none;
+}
+
+.eventCard[data-display-hint="line"]::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 2px;
+  transform: translateY(-1px);
+  background: var(--event-line-color, rgba(126, 178, 255, 0.9));
+  opacity: 0.9;
+}
+
+.eventCard[data-display-hint="line"][data-entry-type="reminder"] {
+  cursor: pointer;
+  background: transparent;
+  box-shadow: none;
+  border-radius: 0;
+  padding: 0;
+  pointer-events: auto;
+  outline: none;
+}
+
+.eventCard[data-display-hint="line"][data-entry-type="reminder"]::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 2px;
+  transform: translateY(-50%);
+  background: var(--event-line-color, rgba(111, 139, 255, 0.9));
+  border-radius: 999px;
+  opacity: 0.95;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+}
+
+.eventCard[data-display-hint="line"][data-entry-type="reminder"]::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  border: 2px solid var(--event-line-color, rgba(255, 255, 255, 0.9));
+  background:
+    radial-gradient(circle at center, var(--event-line-color, rgba(255, 255, 255, 0.9)) 48%, rgba(8, 8, 10, 0.85) 52%);
+  box-shadow:
+    0 6px 12px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.eventCard[data-display-hint="line"][data-entry-type="reminder"]:hover::after,
+.eventCard[data-display-hint="line"][data-entry-type="reminder"]:focus-visible::after {
+  transform: translate(-50%, -50%) scale(1.12);
+  box-shadow:
+    0 10px 18px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+.eventCard[data-display-hint="line"][data-entry-type="reminder"]:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.85);
+  outline-offset: 2px;
+}
+
 .eventCard[data-entry-type="task"] {
   border-style: dashed;
 }
