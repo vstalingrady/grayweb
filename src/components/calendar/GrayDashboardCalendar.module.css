@@ -991,6 +991,12 @@
   pointer-events: none;
 }
 
+.eventCard[data-display-hint="line"] .eventCardTime,
+.eventCard[data-display-hint="line"] .eventCardTitle,
+.eventCard[data-display-hint="line"] .eventCardDetails {
+  display: none;
+}
+
 .eventCard[data-display-hint="line"]::after {
   content: "";
   position: absolute;
