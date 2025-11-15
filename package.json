@@ -3,15 +3,22 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "backend": "cd backend && python3 start.py",
+    "mcp:build": "cd plans-habits-server && npm run build",
+    "mcp:plans-habits-server": "node plans-habits-server/dist/index.js",
+    "backend:with-mcp": "concurrently \"npm run backend\" \"npm run mcp:plans-habits-server\"",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "backend": "cd backend && python3 start.py",
-    "dev:full": "concurrently \"npm run backend\" \"npm run dev\""
+    "dev:full": "concurrently \"npm run backend:with-mcp\" \"npm run dev\""
   },
   "dependencies": {
+    "@paper-design/shaders-react": "^0.0.63",
+    "@react-three/fiber": "^9.4.0",
     "@supabase/supabase-js": "^2.76.1",
+    "framer-motion": "^12.23.24",
+    "katex": "^0.16.11",
     "lucide-react": "^0.548.0",
     "next": "16.0.0",
     "react": "19.2.0",
@@ -21,15 +28,18 @@
     "rehype-katex": "^7.0.0",
     "remark-gfm": "^4.0.1",
     "remark-math": "^6.0.0",
-    "katex": "^0.16.11"
+    "three": "^0.169.0"
   },
   "devDependencies": {
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "autoprefixer": "^10.4.21",
     "concurrently": "^8.2.2",
     "eslint": "^9",
     "eslint-config-next": "16.0.0",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^3.4.14",
     "typescript": "^5"
   }
 }

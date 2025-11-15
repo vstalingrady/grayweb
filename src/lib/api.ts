@@ -18,6 +18,18 @@ const shouldUseProxyBase = (candidateUrl?: string) => {
     return false;
   }
 
+  const currentOrigin = window.location?.origin;
+  if (currentOrigin) {
+    try {
+      const candidateOrigin = new URL(trimmed, currentOrigin).origin;
+      if (candidateOrigin !== currentOrigin) {
+        return true;
+      }
+    } catch {
+      // Fall back to existing heuristics when the candidate URL is malformed.
+    }
+  }
+
   const usesInsecureHttp = trimmed.toLowerCase().startsWith('http://');
   const isSecureContext = window.location?.protocol === 'https:';
 
@@ -26,13 +38,43 @@ const shouldUseProxyBase = (candidateUrl?: string) => {
 
 const stripTrailingSlashes = (value: string) => value.replace(/\/+$/, '');
 
+const LOCALHOST_HOSTNAMES = new Set(['localhost', '127.0.0.1', '0.0.0.0']);
+
+const adaptEnvBaseUrlForClientHost = (value: string): string => {
+  if (typeof window === 'undefined') {
+    return value;
+  }
+
+  let parsed: URL | null = null;
+  try {
+    parsed = new URL(value, window.location.origin);
+  } catch {
+    return value;
+  }
+
+  const normalizedHost = parsed.hostname?.toLowerCase();
+  const clientHost = window.location.hostname?.toLowerCase();
+  if (
+    normalizedHost &&
+    LOCALHOST_HOSTNAMES.has(normalizedHost) &&
+    clientHost &&
+    !LOCALHOST_HOSTNAMES.has(clientHost)
+  ) {
+    parsed.hostname = clientHost;
+    return stripTrailingSlashes(parsed.toString());
+  }
+
+  return value;
+};
+
 const resolveApiBaseUrl = () => {
   const envUrl = process.env.NEXT_PUBLIC_API_URL?.trim();
   if (envUrl) {
-    if (shouldUseProxyBase(envUrl)) {
+    const adaptedUrl = adaptEnvBaseUrlForClientHost(envUrl);
+    if (shouldUseProxyBase(adaptedUrl)) {
       return API_PROXY_PREFIX;
     }
-    return stripTrailingSlashes(envUrl);
+    return stripTrailingSlashes(adaptedUrl);
   }
 
   if (shouldUseProxyBase()) {
@@ -60,6 +102,26 @@ const resolveApiBaseUrl = () => {
   return stripTrailingSlashes(DEV_FALLBACK_API_URL);
 };
 
+class ApiError extends Error {
+  readonly status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+  }
+}
+
+class ApiNetworkError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ApiNetworkError';
+  }
+}
+
+export const isApiNetworkError = (value: unknown): value is ApiNetworkError =>
+  value instanceof ApiNetworkError;
+
 export interface User {
   id: number;
   email: string;
@@ -67,6 +129,10 @@ export interface User {
   profile_picture_url?: string;
   role: string;
   initials: string;
+  personalization_nickname?: string | null;
+  personalization_occupation?: string | null;
+  personalization_about?: string | null;
+  personalization_custom_instructions?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -105,6 +171,9 @@ export interface Plan {
   user_id: number;
   label: string;
   completed: boolean;
+  deadline?: string | null;
+  schedule_slot?: string | null;
+  description?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -115,8 +184,79 @@ export interface Habit {
   label: string;
   streak_label: string;
   previous_label: string;
+  description?: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export type ReminderStatus =
+  | "pending"
+  | "delivered"
+  | "completed"
+  | "cancelled"
+  | "failed";
+
+export interface Reminder {
+  id: number;
+  user_id: number;
+  label: string;
+  description?: string | null;
+  remind_at: string;
+  entity_type?: string | null;
+  entity_id?: number | null;
+  delivery_mode?: string | null;
+  summary?: string | null;
+  metadata?: Record<string, unknown> | null;
+  status: ReminderStatus;
+  created_at: string;
+  updated_at: string;
+  delivered_at?: string | null;
+}
+
+export interface ReminderCreatePayload {
+  label: string;
+  remind_at: string;
+  description?: string | null;
+  entity_type?: string | null;
+  entity_id?: number | null;
+  delivery_mode?: string | null;
+  summary?: string | null;
+  metadata?: Record<string, unknown> | null;
+}
+
+export interface ReminderUpdatePayload {
+  label?: string;
+  description?: string | null;
+  remind_at?: string;
+  status?: ReminderStatus;
+  delivery_mode?: string | null;
+  summary?: string | null;
+  metadata?: Record<string, unknown> | null;
+}
+
+export interface ProactivitySettings {
+  id: string;
+  label: string;
+  description?: string | null;
+  cadence: string;
+  time: string;
+  times?: string[] | null;
+  channels?: string[] | null;
+  timezone?: string | null;
+}
+
+export interface ProactivityNotification {
+  id: number;
+  user_id: number;
+  type: string;
+  title: string;
+  message: string;
+  metadata?: Record<string, unknown> | null;
+  due_at?: string | null;
+  sent_at: string;
+  read_at?: string | null;
+  completed_at?: string | null;
+  created_at: string;
 }
 
 export interface UserStreak {
@@ -128,18 +268,93 @@ export interface UserStreak {
   updated_at: string;
 }
 
-export interface ChatAttachment {
-  name: string;
-  uri: string;
-  mime_type: string;
-  display_name?: string;
-  size_bytes?: number;
+export interface ApiKey {
+  user_id: number;
+  service: string;
+  api_key: string;
+  created_at?: string;
+}
+
+export interface ApiKeyCreate {
+  user_id: number;
+  service: string;
+  api_key: string;
 }
 
 export interface ChatMessage {
   role: 'user' | 'model';
   text: string;
-  attachments?: ChatAttachment[];
+}
+
+export interface MediaUpload {
+  id: number;
+  user_id: number;
+  filename: string;
+  mime_type: string;
+  size: number;
+  created_at: string;
+  previewUrl?: string;
+}
+
+export interface ChatAttachmentRequest {
+  id: number;
+}
+
+export interface ContextCacheBase {
+  conversation_id?: string;
+  label?: string;
+  content: string;
+}
+
+export interface ContextCache extends ContextCacheBase {
+  id: number;
+  user_id: number;
+  created_at: string;
+}
+
+export interface GroundingChunkMaps {
+  uri?: string;
+  title?: string;
+  placeId?: string;
+  googleMapsUri?: string;
+}
+
+export interface GroundingChunkWeb {
+  uri?: string;
+  title?: string;
+  site?: string;
+  domain?: string;
+}
+
+export interface GroundingChunkRetrievedContext {
+  uri?: string;
+  title?: string;
+  text?: string;
+  document_name?: string;
+}
+
+export interface GroundingChunk {
+  maps?: GroundingChunkMaps;
+  web?: GroundingChunkWeb;
+  retrieved_context?: GroundingChunkRetrievedContext;
+}
+
+export interface GroundingSupport {
+  grounding_chunk_indices?: number[];
+  confidence_scores?: number[];
+}
+
+export interface GroundingSearchEntryPoint {
+  rendered_content?: string;
+  sdk_blob?: string;
+}
+
+export interface GroundingMetadata {
+  grounding_chunks?: GroundingChunk[];
+  grounding_supports?: GroundingSupport[];
+  google_maps_widget_context_token?: string;
+  web_search_queries?: string[];
+  search_entry_point?: GroundingSearchEntryPoint;
 }
 
 export interface ChatRequest {
@@ -148,12 +363,77 @@ export interface ChatRequest {
   user_id: number;
   system_prompt?: string;
   context?: string;
-  attachments?: ChatAttachment[];
+  time_context?: string;
+  model?: string;
+  attachments?: ChatAttachmentRequest[];
+  responseJsonSchema?: Record<string, unknown>;
+  responseMimeType?: string;
+  context_cache_id?: number;
+  maps_enabled?: boolean;
+  maps_latitude?: number;
+  maps_longitude?: number;
+  maps_widget?: boolean;
+  should_generate_title?: boolean;
 }
 
 export interface ChatResponse {
   response: string;
   conversation_id: string;
+  groundingMetadata?: GroundingMetadata;
+  title?: string | null;
+}
+
+export interface ConversationSummary {
+  id: string;
+  title?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ConversationUpdatePayload {
+  title?: string;
+  user_id?: number;
+}
+
+export interface ConversationUsage {
+  conversationId: string;
+  messageCount: number;
+  conversationTokens: number;
+  /**
+   * Maximum tokens available for this conversation.
+   *  - > 0: finite context window, derived from backend-provided limits or explicit overrides.
+   *  - 0 or negative: treated as "unlimited" / "no cap" by the UI.
+   */
+  limit: number;
+  provider: string;
+  modelName?: string | null;
+  modelLabel?: string | null;
+}
+
+export interface WorkspaceBackground {
+  id: number;
+  slug: string;
+  label: string;
+  description?: string | null;
+  preview_css: string;
+  backdrop_css: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WorkspaceBackgroundCreate {
+  slug?: string;
+  label: string;
+  description?: string | null;
+  preview_css: string;
+  backdrop_css: string;
+}
+
+export interface WorkspaceBackgroundAssetUploadResponse {
+  filename: string;
+  asset_path: string;
+  content_type: string;
+  size: number;
 }
 
 export type ChatStreamTokenEvent = {
@@ -161,10 +441,18 @@ export type ChatStreamTokenEvent = {
   delta: string;
 };
 
+export type ChatStreamTiming = {
+  totalMs: number;
+  firstTokenMs?: number;
+};
+
 export type ChatStreamEndEvent = {
   type: 'end';
   conversationId: string | null;
   response: string;
+  title?: string | null;
+  groundingMetadata?: GroundingMetadata | null;
+  timing?: ChatStreamTiming;
 };
 
 export type ChatStreamErrorEvent = {
@@ -174,25 +462,29 @@ export type ChatStreamErrorEvent = {
 
 export type ChatStreamEvent = ChatStreamTokenEvent | ChatStreamEndEvent | ChatStreamErrorEvent;
 
-export interface ChatTitleResponse {
-  title: string;
-}
+type StreamPayload = {
+  delta?: string;
+  token?: string;
+  text?: string;
+  conversation_id?: string;
+  conversationId?: string;
+  response?: string;
+  title?: string | null;
+  grounding_metadata?: GroundingMetadata | null;
+  groundingMetadata?: GroundingMetadata | null;
+  message?: string;
+  error?: string;
+  timing?: {
+    total_ms?: number;
+    first_token_ms?: number;
+    totalMs?: number;
+    firstTokenMs?: number;
+  };
+};
 
 export interface GoogleAuthResponse {
   authorization_url: string;
   state?: string;
-}
-
-export interface GeminiFileMetadata {
-  name: string;
-  display_name?: string;
-  mime_type?: string;
-  uri?: string;
-  download_uri?: string;
-  size_bytes?: number;
-  state?: string;
-  create_time?: string;
-  update_time?: string;
 }
 
 export interface UserCreate {
@@ -200,12 +492,20 @@ export interface UserCreate {
   full_name: string;
   profile_picture_url?: string;
   role?: string;
+  personalization_nickname?: string | null;
+  personalization_occupation?: string | null;
+  personalization_about?: string | null;
+  personalization_custom_instructions?: string | null;
 }
 
 export interface UserUpdate {
   full_name?: string;
   profile_picture_url?: string;
   role?: string;
+  personalization_nickname?: string | null;
+  personalization_occupation?: string | null;
+  personalization_about?: string | null;
+  personalization_custom_instructions?: string | null;
 }
 
 class ApiService {
@@ -213,6 +513,18 @@ class ApiService {
     const baseUrl = resolveApiBaseUrl();
     const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
     const url = `${baseUrl}${normalizedEndpoint}`;
+
+    // Debug: log resolved URLs for diagnosing "Failed to fetch" (especially reminders)
+    // This is lightweight and only logs in development builds.
+    if (process.env.NODE_ENV !== 'production') {
+      // eslint-disable-next-line no-console
+      console.debug('[ApiService.fetch]', {
+        endpoint,
+        baseUrl,
+        url,
+        usesProxy: baseUrl.startsWith('/api/'),
+      });
+    }
     const isFormDataBody = typeof FormData !== 'undefined' && options.body instanceof FormData;
     const headers = new Headers(options.headers ?? undefined);
     if (!isFormDataBody && !headers.has('Content-Type')) {
@@ -229,7 +541,10 @@ class ApiService {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+        throw new ApiError(
+          response.status,
+          errorData.detail || `HTTP error! status: ${response.status}`
+        );
       }
 
       if (response.status === 204) {
@@ -245,6 +560,10 @@ class ApiService {
     } catch (error) {
       const baseUrl = resolveApiBaseUrl();
 
+      if (error instanceof ApiError && error.status === 404) {
+        throw error;
+      }
+
       if (error instanceof TypeError) {
         const normalizedMessage = error.message.toLowerCase();
         const isNetworkFailure =
@@ -254,11 +573,13 @@ class ApiService {
           normalizedMessage.includes('network request failed');
 
         if (isNetworkFailure) {
-          console.error(`API network error (${endpoint} -> ${baseUrl}):`, error);
-          throw new Error(
-            `Unable to reach the API at ${baseUrl}. Verify that the backend service is running and accessible.`
-          );
+          const friendlyMessage = `Unable to reach the API at ${baseUrl}. Verify that the backend service is running and accessible.`;
+          throw new ApiNetworkError(friendlyMessage);
         }
+      }
+
+      if (error instanceof ApiNetworkError) {
+        throw error;
       }
 
       console.error(`API Error (${endpoint} -> ${baseUrl}):`, error);
@@ -293,6 +614,24 @@ class ApiService {
     });
   }
 
+  async storeUserApiKey(userId: number, payload: ApiKeyCreate): Promise<ApiKey> {
+    return this.fetch<ApiKey>(`/users/${userId}/api-keys`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async getUserApiKey(userId: number, service: string): Promise<ApiKey | null> {
+    try {
+      return await this.fetch<ApiKey>(`/users/${userId}/api-keys/${service}`);
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('404')) {
+        return null;
+      }
+      throw error;
+    }
+  }
+
   // Chat sessions
   async getUserChatSessions(userId: number): Promise<ChatSession[]> {
     return this.fetch<ChatSession[]>(`/users/${userId}/chat-sessions`);
@@ -323,6 +662,25 @@ class ApiService {
     });
   }
 
+  async updateCalendarEvent(userId: number, eventId: number, eventData: {
+    calendar_id?: number | null;
+    title?: string;
+    description?: string;
+    start_time?: string;
+    end_time?: string;
+  }): Promise<CalendarEvent> {
+    return this.fetch<CalendarEvent>(`/users/${userId}/calendar-events/${eventId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(eventData),
+    });
+  }
+
+  async deleteCalendarEvent(userId: number, eventId: number): Promise<void> {
+    return this.fetch<void>(`/users/${userId}/calendar-events/${eventId}`, {
+      method: 'DELETE',
+    });
+  }
+
   async getUserCalendars(userId: number): Promise<Calendar[]> {
     return this.fetch<Calendar[]>(`/users/${userId}/calendars`);
   }
@@ -339,10 +697,37 @@ class ApiService {
     return this.fetch<Plan[]>(`/users/${userId}/plans`);
   }
 
-  async updatePlan(userId: number, planId: number, updateData: Partial<Pick<Plan, 'label' | 'completed'>>): Promise<Plan> {
+  async updatePlan(
+    userId: number,
+    planId: number,
+    updateData: {
+      label?: string;
+      completed?: boolean;
+      deadline?: string | null;
+      scheduleSlot?: string | null;
+      description?: string | null;
+    }
+  ): Promise<Plan> {
+    const payload: Record<string, unknown> = {};
+    if (typeof updateData.label === "string") {
+      payload.label = updateData.label;
+    }
+    if (typeof updateData.completed === "boolean") {
+      payload.completed = updateData.completed;
+    }
+    if ("deadline" in updateData) {
+      payload.deadline = updateData.deadline ?? null;
+    }
+    if ("scheduleSlot" in updateData) {
+      payload.schedule_slot = updateData.scheduleSlot ?? null;
+    }
+    if ("description" in updateData) {
+      payload.description = updateData.description ?? null;
+    }
+
     return this.fetch<Plan>(`/users/${userId}/plans/${planId}`, {
-      method: 'PATCH',
-      body: JSON.stringify(updateData),
+      method: "PATCH",
+      body: JSON.stringify(payload),
     });
   }
 
@@ -352,10 +737,27 @@ class ApiService {
     });
   }
 
-  async createPlan(userId: number, planData: { label: string; completed?: boolean }): Promise<Plan> {
+  async createPlan(
+    userId: number,
+    planData: {
+      label: string;
+      completed?: boolean;
+      deadline?: string | null;
+      scheduleSlot?: string | null;
+      description?: string | null;
+    }
+  ): Promise<Plan> {
+    const payload = {
+      label: planData.label,
+      completed: planData.completed ?? false,
+      deadline: planData.deadline ?? null,
+      schedule_slot: planData.scheduleSlot ?? null,
+      description: planData.description ?? null,
+    };
+
     return this.fetch<Plan>(`/users/${userId}/plans`, {
-      method: 'POST',
-      body: JSON.stringify(planData),
+      method: "POST",
+      body: JSON.stringify(payload),
     });
   }
 
@@ -364,23 +766,228 @@ class ApiService {
     return this.fetch<Habit[]>(`/users/${userId}/habits`);
   }
 
-  async createHabit(userId: number, habitData: { label: string }): Promise<Habit> {
+  async createHabit(
+    userId: number,
+    habitData: {
+      label: string;
+      streak_label?: string | null;
+      previous_label?: string | null;
+      description?: string | null;
+    }
+  ): Promise<Habit> {
+    const payload = {
+      label: habitData.label,
+      streak_label: habitData.streak_label ?? "0 days",
+      previous_label: habitData.previous_label ?? "No history yet",
+      description: habitData.description ?? null,
+    };
+
     return this.fetch<Habit>(`/users/${userId}/habits`, {
-      method: 'POST',
-      body: JSON.stringify(habitData),
+      method: "POST",
+      body: JSON.stringify(payload),
     });
   }
 
-  async updateHabit(userId: number, habitId: number, updateData: Partial<Pick<Habit, 'label' | 'streak_label' | 'previous_label'>>): Promise<Habit> {
+  async updateHabit(
+    userId: number,
+    habitId: number,
+    updateData: {
+      label?: string;
+      streak_label?: string | null;
+      previous_label?: string | null;
+      description?: string | null;
+    }
+  ): Promise<Habit> {
+    const payload: Record<string, unknown> = {};
+    if (typeof updateData.label === "string") {
+      payload.label = updateData.label;
+    }
+    if ("streak_label" in updateData) {
+      payload.streak_label = updateData.streak_label ?? null;
+    }
+    if ("previous_label" in updateData) {
+      payload.previous_label = updateData.previous_label ?? null;
+    }
+    if ("description" in updateData) {
+      payload.description = updateData.description ?? null;
+    }
+
     return this.fetch<Habit>(`/users/${userId}/habits/${habitId}`, {
       method: 'PATCH',
-      body: JSON.stringify(updateData),
+      body: JSON.stringify(payload),
     });
   }
 
   async deleteHabit(userId: number, habitId: number): Promise<void> {
     await this.fetch<void>(`/users/${userId}/habits/${habitId}`, {
       method: 'DELETE',
+    });
+  }
+
+  // Reminders
+  async getUserReminders(
+    userId: number,
+    options: {
+      status?: ReminderStatus | string;
+      limit?: number;
+      deliveryMode?: string;
+      entityType?: string;
+      includeArchived?: boolean;
+    } = {},
+  ): Promise<Reminder[]> {
+    const params = new URLSearchParams();
+    if (options.status) {
+      params.set('status_filter', options.status);
+    }
+    if (typeof options.limit === 'number') {
+      params.set('limit', String(options.limit));
+    }
+    if (options.deliveryMode) {
+      params.set('delivery_mode', options.deliveryMode);
+    }
+    if (options.entityType) {
+      params.set('entity_type', options.entityType);
+    }
+    if (options.includeArchived) {
+      params.set('include_archived', 'true');
+    }
+    const suffix = params.toString();
+    const endpoint = suffix ? `/users/${userId}/reminders?${suffix}` : `/users/${userId}/reminders`;
+    return this.fetch<Reminder[]>(endpoint);
+  }
+
+  async createReminder(userId: number, payload: ReminderCreatePayload): Promise<Reminder> {
+    return this.fetch<Reminder>(`/users/${userId}/reminders`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async updateReminder(
+    userId: number,
+    reminderId: number,
+    payload: ReminderUpdatePayload,
+  ): Promise<Reminder> {
+    return this.fetch<Reminder>(`/users/${userId}/reminders/${reminderId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async deleteReminder(userId: number, reminderId: number): Promise<void> {
+    await this.fetch<void>(`/users/${userId}/reminders/${reminderId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async getProactivitySettings(userId: number): Promise<ProactivitySettings> {
+    return this.fetch<ProactivitySettings>(`/users/${userId}/proactivity/settings`);
+  }
+
+  async updateProactivitySettings(
+    userId: number,
+    settings: ProactivitySettings
+  ): Promise<ProactivitySettings> {
+    return this.fetch<ProactivitySettings>(`/users/${userId}/proactivity/settings`, {
+      method: 'PUT',
+      body: JSON.stringify(settings),
+    });
+  }
+
+  async getProactivityNotifications(
+    userId: number,
+    options?: { limit?: number; unreadOnly?: boolean }
+  ): Promise<ProactivityNotification[]> {
+    const params = new URLSearchParams();
+    if (options?.limit) {
+      params.set('limit', String(options.limit));
+    }
+    if (options?.unreadOnly) {
+      params.set('unread_only', 'true');
+    }
+    const suffix = params.toString();
+    const endpoint = suffix
+      ? `/users/${userId}/proactivity/notifications?${suffix}`
+      : `/users/${userId}/proactivity/notifications`;
+    return this.fetch<ProactivityNotification[]>(endpoint);
+  }
+
+  async markProactivityNotificationRead(
+    userId: number,
+    notificationId: number
+  ): Promise<ProactivityNotification> {
+    return this.fetch<ProactivityNotification>(
+      `/users/${userId}/proactivity/notifications/${notificationId}/read`,
+      {
+        method: 'POST',
+      }
+    );
+  }
+
+  async uploadMediaFile(userId: number, file: File): Promise<MediaUpload> {
+    const form = new FormData();
+    form.append('user_id', String(userId));
+    form.append('file', file);
+    return this.fetch<MediaUpload>('/api/uploads', {
+      method: 'POST',
+      body: form,
+    });
+  }
+
+  async createContextCache(userId: number, payload: ContextCacheBase): Promise<ContextCache> {
+    const params = new URLSearchParams({ user_id: String(userId) });
+    return this.fetch<ContextCache>(`/context-cache?${params.toString()}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async getContextCache(cacheId: number): Promise<ContextCache> {
+    return this.fetch<ContextCache>(`/context-cache/${cacheId}`);
+  }
+
+  async createFileSearchStore(displayName?: string): Promise<{ name: string; display_name?: string }> {
+    return this.fetch<{ name: string; display_name?: string }>('/api/file-search/stores', {
+      method: 'POST',
+      body: JSON.stringify({ display_name: displayName }),
+    });
+  }
+
+  async uploadToFileSearchStore(options: {
+    storeName: string;
+    file: File;
+    displayName?: string;
+    chunkingConfig?: Record<string, unknown>;
+  }): Promise<FileSearchUploadResponse> {
+    const form = new FormData();
+    form.append('store_name', options.storeName);
+    form.append('file', options.file);
+    if (options.displayName) {
+      form.append('display_name', options.displayName);
+    }
+    if (options.chunkingConfig) {
+      form.append('chunking_config', JSON.stringify(options.chunkingConfig));
+    }
+    return this.fetch<FileSearchUploadResponse>('/api/file-search/upload', {
+      method: 'POST',
+      body: form,
+    });
+  }
+
+  async importFileSearch(payload: {
+    storeName: string;
+    fileName: string;
+    chunkingConfig?: Record<string, unknown>;
+  }): Promise<FileSearchUploadResponse> {
+    return this.fetch<FileSearchUploadResponse>('/api/file-search/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        file_search_store_name: payload.storeName,
+        file_name: payload.fileName,
+        chunking_config: payload.chunkingConfig ?? undefined,
+      }),
     });
   }
 
@@ -452,6 +1059,9 @@ class ApiService {
         type: 'end',
         conversationId: payload?.conversation_id ?? payload?.conversationId ?? null,
         response: payload?.response ?? payload?.text ?? '',
+        title: payload?.title ?? null,
+        groundingMetadata:
+          payload?.grounding_metadata ?? payload?.groundingMetadata ?? null,
       };
       return;
     }
@@ -464,26 +1074,29 @@ class ApiService {
     const decoder = new TextDecoder();
     let buffer = '';
 
+    /* eslint-disable @typescript-eslint/no-explicit-any */
     const parseSseEvent = (chunk: string): ChatStreamEvent | null => {
-      const lines = chunk.split(/\r?\n/);
+      // Pre-compile regex for better performance
+      const newlineRegex = /\r?\n/;
+      const lines = chunk.split(newlineRegex);
       let eventType = 'message';
       const dataLines: string[] = [];
+      const dataPrefixLength = 'data:'.length;
+      const eventPrefixLength = 'event:'.length;
 
-      for (const line of lines) {
-        if (!line) {
-          continue;
-        }
-        if (line.startsWith(':')) {
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        if (!line || line[0] === ':') {
           continue;
         }
         if (line.startsWith('event:')) {
-          eventType = line.slice('event:'.length).trim() || eventType;
-          continue;
-        }
-        if (line.startsWith('data:')) {
-          const separatorIndex = line.indexOf(':');
-          const rawValue = separatorIndex >= 0 ? line.slice(separatorIndex + 1) : '';
-          const value = rawValue.startsWith(' ') ? rawValue.slice(1) : rawValue;
+          eventType = line.slice(eventPrefixLength).trim() || eventType;
+        } else if (line.startsWith('data:')) {
+          // Preserve the entire payload after the first "data:" prefix.
+          let value = line.slice(dataPrefixLength);
+          if (value.startsWith(' ')) {
+            value = value.slice(1);
+          }
           dataLines.push(value);
         }
       }
@@ -493,61 +1106,89 @@ class ApiService {
         return null;
       }
 
-      let payload: any = null;
+      let payload: StreamPayload;
       try {
         payload = JSON.parse(dataString);
       } catch {
         payload = { delta: dataString };
       }
 
+      // Early returns for better performance
       if (eventType === 'token') {
-        const delta = payload?.delta ?? payload?.token ?? payload?.text ?? '';
-        if (!delta) {
-          return null;
-        }
-        return {
-          type: 'token',
-          delta,
-        };
+        const delta = (payload as any).delta ?? (payload as any).token ?? (payload as any).text ?? '';
+        return delta ? { type: 'token', delta } : null;
       }
 
       if (eventType === 'end') {
         return {
           type: 'end',
-          conversationId: payload?.conversation_id ?? payload?.conversationId ?? null,
-          response: payload?.response ?? payload?.text ?? '',
+          conversationId: (payload as any).conversation_id ?? (payload as any).conversationId ?? null,
+          response: (payload as any).response ?? (payload as any).text ?? '',
+          title: (payload as any).title ?? null,
+          groundingMetadata:
+            (payload as any).grounding_metadata ?? (payload as any).groundingMetadata ?? null,
+          timing: (() => {
+            const rawTiming = (payload as any).timing;
+            if (!rawTiming) {
+              return undefined;
+            }
+            const totalMs =
+              typeof rawTiming.total_ms === 'number'
+                ? rawTiming.total_ms
+                : typeof rawTiming.totalMs === 'number'
+                ? rawTiming.totalMs
+                : undefined;
+            if (typeof totalMs !== 'number' || !Number.isFinite(totalMs)) {
+              return undefined;
+            }
+            const firstTokenMs =
+              typeof rawTiming.first_token_ms === 'number'
+                ? rawTiming.first_token_ms
+                : typeof rawTiming.firstTokenMs === 'number'
+                ? rawTiming.firstTokenMs
+                : undefined;
+            const timing: ChatStreamTiming = { totalMs };
+            if (typeof firstTokenMs === 'number' && Number.isFinite(firstTokenMs)) {
+              timing.firstTokenMs = firstTokenMs;
+            }
+            return timing;
+          })(),
         };
       }
 
       if (eventType === 'error') {
         return {
           type: 'error',
-          message: payload?.message ?? payload?.error ?? 'Stream error',
+          message: (payload as any).message ?? (payload as any).error ?? 'Stream error',
         };
       }
 
-      if (payload?.delta ?? payload?.token ?? payload?.text) {
-        return {
-          type: 'token',
-          delta: payload?.delta ?? payload?.token ?? payload?.text ?? '',
-        };
-      }
-
-      return null;
+      const fallbackDelta = (payload as any).delta ?? (payload as any).token ?? (payload as any).text;
+      return fallbackDelta ? { type: 'token', delta: fallbackDelta } : null;
     };
+    /* eslint-enable @typescript-eslint/no-explicit-any */
 
     const flushBuffer = (): ChatStreamEvent[] => {
       const events: ChatStreamEvent[] = [];
       while (true) {
-        let delimiterIndex = buffer.indexOf('\n\n');
+        // Optimized: check both delimiters in a single pass
+        const doubleNewlineIndex = buffer.indexOf('\n\n');
+        const doubleCRLFIndex = buffer.indexOf('\r\n\r\n');
+
+        let delimiterIndex = doubleNewlineIndex;
         let delimiterLength = 2;
-        if (delimiterIndex === -1) {
-          delimiterIndex = buffer.indexOf('\r\n\r\n');
-          delimiterLength = 4;
+
+        if (doubleCRLFIndex !== -1) {
+          if (delimiterIndex === -1 || doubleCRLFIndex < delimiterIndex) {
+            delimiterIndex = doubleCRLFIndex;
+            delimiterLength = 4;
+          }
         }
+
         if (delimiterIndex === -1) {
           break;
         }
+
         const rawEvent = buffer.slice(0, delimiterIndex);
         buffer = buffer.slice(delimiterIndex + delimiterLength);
         const parsed = parseSseEvent(rawEvent);
@@ -587,15 +1228,75 @@ class ApiService {
     }
   }
 
-  async generateChatTitle(message: string): Promise<ChatTitleResponse> {
-    return this.fetch<ChatTitleResponse>('/api/chat/title', {
+  async listUserConversations(userId: number, limit = 100): Promise<ConversationSummary[]> {
+    const params = new URLSearchParams({ limit: String(limit) });
+    return this.fetch<ConversationSummary[]>(`/users/${userId}/conversations?${params.toString()}`);
+  }
+
+  /**
+   * Permanently delete a conversation and its messages on the backend.
+   * Used when a user deletes a chat so it is removed from both local state
+   * and server-side context.
+   */
+  async deleteConversation(conversationId: string): Promise<void> {
+    await this.fetch<void>(`/api/conversation/${encodeURIComponent(conversationId)}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async overwriteConversationHistory(
+    conversationId: string,
+    messages: { role: 'user' | 'model'; text: string }[]
+  ): Promise<void> {
+    await this.fetch<void>(`/api/conversation/${encodeURIComponent(conversationId)}/history`, {
+      method: 'PUT',
+      body: JSON.stringify({ messages }),
+    });
+  }
+
+  async updateConversation(conversationId: string, payload: ConversationUpdatePayload): Promise<ConversationSummary> {
+    return this.fetch<ConversationSummary>(`/api/conversation/${encodeURIComponent(conversationId)}/metadata`, {
       method: 'POST',
-      body: JSON.stringify({ message }),
+      body: JSON.stringify(payload),
     });
   }
 
   async getConversation(conversationId: string): Promise<ChatMessage[]> {
     return this.fetch<ChatMessage[]>(`/api/conversation/${conversationId}`);
+  }
+
+  async getConversationUsage(conversationId: string): Promise<ConversationUsage | null> {
+    try {
+      const payload = await this.fetch<{
+        conversation_id: string;
+        message_count: number;
+        conversation_tokens: number;
+        limit: number;
+        provider: string;
+        model_name?: string | null;
+        model_label?: string | null;
+      }>(`/api/conversation/${conversationId}/usage`);
+
+      const normalizedLimit =
+        typeof payload.limit === "number" && Number.isFinite(payload.limit)
+          ? payload.limit
+          : 0;
+
+      return {
+        conversationId: payload.conversation_id,
+        messageCount: payload.message_count,
+        conversationTokens: payload.conversation_tokens,
+        limit: normalizedLimit,
+        provider: payload.provider ?? "local",
+        modelName: payload.model_name ?? null,
+        modelLabel: payload.model_label ?? null,
+      };
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) {
+        return null;
+      }
+      throw error;
+    }
   }
 
   async createConversation(title: string, userId: number): Promise<{ id: string; title: string; history: ChatMessage[] }> {
@@ -605,14 +1306,21 @@ class ApiService {
     });
   }
 
-  async uploadGeminiFile(file: File, displayName?: string): Promise<GeminiFileMetadata> {
+  async listWorkspaceBackgrounds(): Promise<WorkspaceBackground[]> {
+    return this.fetch<WorkspaceBackground[]>('/api/workspace-backgrounds');
+  }
+
+  async createWorkspaceBackground(payload: WorkspaceBackgroundCreate): Promise<WorkspaceBackground> {
+    return this.fetch<WorkspaceBackground>('/api/workspace-backgrounds', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async uploadWorkspaceBackgroundAsset(file: File): Promise<WorkspaceBackgroundAssetUploadResponse> {
     const formData = new FormData();
     formData.append('file', file);
-    if (displayName) {
-      formData.append('display_name', displayName);
-    }
-
-    return this.fetch<GeminiFileMetadata>('/api/files/upload', {
+    return this.fetch<WorkspaceBackgroundAssetUploadResponse>('/api/workspace-backgrounds/assets', {
       method: 'POST',
       body: formData,
     });

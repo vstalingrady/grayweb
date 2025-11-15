@@ -1,24 +1,22 @@
-from fastapi import FastAPI, HTTPException, Depends, status, UploadFile, File, Form
+import socket
+from fastapi import FastAPI, HTTPException, Depends, status, File, Form, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, EmailStr, Field, constr, validator
-from typing import Optional, List, Dict, Any, AsyncGenerator, Tuple, Union
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, validator
+from typing import Optional, List, Dict, Any, AsyncGenerator, Tuple, Union, Iterable, Set, Mapping
 import databases
 import sqlalchemy
 from datetime import datetime, timezone, date
 import os
 import json
 import asyncio
-import threading
-import tempfile
-import time
 import re
+import time
 from dotenv import load_dotenv
-import google.generativeai as genai
 from supabase import create_client, Client
+from uuid import UUID, uuid4
 from pathlib import Path
-from uuid import uuid4
 from google_calendar import (
     GoogleCalendarCredentials,
     GoogleCalendarInfo,
@@ -33,20 +31,13 @@ from google_calendar import (
     list_google_events,
     create_google_event
 )
+from google.genai import types
+from gemini_client import GeminiAttachment, GeminiService
+from anthropic_client import AnthropicService
+from backend.file_search import FileSearchService
 
-load_dotenv()
-
-# Database configuration
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./test.db")
-database = databases.Database(DATABASE_URL)
-metadata = sqlalchemy.MetaData()
-
-
-def _int_env(var_name: str, default: int) -> int:
-    try:
-        return int(os.getenv(var_name, default))
-    except (TypeError, ValueError):
-        return default
+ROOT_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(ROOT_DIR / ".env")
 
 
 def _float_env(var_name: str, default: float) -> float:
@@ -56,11 +47,67 @@ def _float_env(var_name: str, default: float) -> float:
         return default
 
 
-MAX_GEMINI_UPLOAD_MB = max(1, _int_env("GEMINI_MAX_UPLOAD_MB", 20))
-MAX_GEMINI_UPLOAD_BYTES = MAX_GEMINI_UPLOAD_MB * 1024 * 1024
-GEMINI_FILE_POLL_INTERVAL = max(0.25, _float_env("GEMINI_FILE_POLL_INTERVAL", 1.0))
-GEMINI_FILE_POLL_TIMEOUT = max(5.0, _float_env("GEMINI_FILE_POLL_TIMEOUT", 60.0))
+def _int_env(var_name: str, default: int) -> int:
+    try:
+        value = os.getenv(var_name)
+        if value is None or value.strip() == "":
+            return default
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+AI_PROVIDER = (os.getenv("AI_PROVIDER") or "gemini").strip().lower()
+
+GEMINI_SERVICE = GeminiService()
+ANTHROPIC_SERVICE = AnthropicService()
+VALIDATE_GEMINI_ON_STARTUP = os.getenv("VALIDATE_GEMINI_ON_STARTUP", "true").strip().lower() not in {
+    "0",
+    "false",
+    "no",
+    "off",
+}
+FILE_SEARCH_SERVICE: Optional[FileSearchService] = None
+FILE_SEARCH_ENABLED = bool(os.getenv("ENABLE_FILE_SEARCH", "false").lower() == "true")
+if FILE_SEARCH_ENABLED:
+    try:
+        FILE_SEARCH_SERVICE = FileSearchService(os.getenv("GEMINI_API_KEY"))
+    except ValueError as exc:
+        print(f"[FileSearch] Disabled: {exc}")
+
+
+FILE_SEARCH_MAX_TOKENS_PER_CHUNK = _int_env("FILE_SEARCH_MAX_TOKENS_PER_CHUNK", 200)
+FILE_SEARCH_MAX_OVERLAP_TOKENS = _int_env("FILE_SEARCH_MAX_OVERLAP_TOKENS", 20)
+FILE_SEARCH_CHUNKING_CONFIG: Optional[Dict[str, Any]] = {
+    "white_space_config": {
+        "max_tokens_per_chunk": FILE_SEARCH_MAX_TOKENS_PER_CHUNK,
+        "max_overlap_tokens": FILE_SEARCH_MAX_OVERLAP_TOKENS,
+    }
+}
+
+MEDIA_UPLOAD_DIR = Path(
+    os.getenv("MEDIA_UPLOAD_DIR")
+    or Path(__file__).resolve().parent / "media_uploads"
+)
+MEDIA_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+
+SEARCH_TOOL = types.Tool(
+    google_search=types.GoogleSearch(),
+)
+
+DEFAULT_CHAT_TOOLS = [SEARCH_TOOL]
+
+# Database configuration
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./test.db")
+database = databases.Database(DATABASE_URL)
+metadata = sqlalchemy.MetaData()
+
+
 STREAMING_TOKEN_DELAY = max(0.0, _float_env("GRAY_STREAMING_TOKEN_DELAY_SECONDS", 0.045))
+
+DEFAULT_DEV_ORIGIN_PORTS = (3000, 5173)
+
 
 def _split_env_list(value: Optional[str]) -> List[str]:
     if not value:
@@ -79,6 +126,31 @@ def _origin_variants(origin: str) -> List[str]:
     elif cleaned.startswith("https://"):
         variants.add(cleaned.replace("https://", "http://", 1))
     return list(variants)
+
+
+def _local_network_origins(ports: Iterable[int]) -> Set[str]:
+    origins: Set[str] = set()
+    try:
+        hostname = socket.gethostname()
+        addresses: Set[str] = set()
+        try:
+            addresses.update(info[4][0] for info in socket.getaddrinfo(hostname, None))
+        except OSError:
+            pass
+        try:
+            addresses.update(socket.gethostbyname_ex(hostname)[2])
+        except OSError:
+            pass
+
+        for addr in addresses:
+            if not addr or addr.startswith("127.") or addr.startswith("169.254") or addr == "0.0.0.0" or ":" in addr:
+                continue
+            for protocol in ("http", "https"):
+                for port in ports:
+                    origins.add(f"{protocol}://{addr}:{port}")
+    except OSError:
+        pass
+    return origins
 
 
 def _build_allowed_origins() -> List[str]:
@@ -108,9 +180,58 @@ def _build_allowed_origins() -> List[str]:
         for variant in _origin_variants(candidate or ""):
             default_origins.add(variant)
 
+    node_env = os.getenv("NODE_ENV", "").strip().lower()
+    environment = os.getenv("ENVIRONMENT", "").strip().lower()
+    is_production = node_env == "production" or environment == "production"
+    if not is_production:
+        for origin in _local_network_origins(DEFAULT_DEV_ORIGIN_PORTS):
+            default_origins.add(origin)
+
     return sorted(default_origins)
 
 
+LOCAL_NETWORK_ORIGIN_PATTERN = (
+    r"^https?://(?:(?:localhost|(?:[a-z0-9-]+\.)+localhost|127\.0\.0\.1)"
+    r"|(?:10(?:\.\d{1,3}){3})"
+    r"|(?:192\.168(?:\.\d{1,3}){2})"
+    r"|(?:172\.(?:1[6-9]|2\d|3[0-1])(?:\.\d{1,3}){2}))(?::\d+)?$"
+)
+
+
+def _local_network_origin_regex() -> Optional[str]:
+    node_env = os.getenv("NODE_ENV", "").strip().lower()
+    environment = os.getenv("ENVIRONMENT", "").strip().lower()
+    is_production = node_env == "production" or environment == "production"
+    if is_production:
+        return None
+    return LOCAL_NETWORK_ORIGIN_PATTERN
+
+
+def _row_get(row: Any, key: str, default: Any = None) -> Any:
+    """Safely retrieve a column from SQLAlchemy Row objects or dictionaries."""
+    if row is None:
+        return default
+    if isinstance(row, dict):
+        return row.get(key, default)
+    mapping = getattr(row, "_mapping", None)
+    if isinstance(mapping, Mapping):
+        return mapping.get(key, default)
+    try:
+        return row[key]  # type: ignore[index]
+    except (KeyError, TypeError):
+        return default
+
+
+def _parse_json_field(value: Optional[str]) -> Optional[Dict[str, Any]]:
+    if not value:
+        return None
+    try:
+        return json.loads(value)
+    except json.JSONDecodeError:
+        return None
+
+
+ALLOWED_ORIGIN_REGEX = _local_network_origin_regex()
 ALLOWED_ORIGINS = _build_allowed_origins()
 
 def _fallback_title_from_message(message: str) -> str:
@@ -243,6 +364,76 @@ proactivity_logs = sqlalchemy.Table(
     sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
 )
 
+
+file_search_stores = sqlalchemy.Table(
+    "file_search_stores",
+    metadata,
+    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True, index=True),
+    sqlalchemy.Column("user_id", sqlalchemy.ForeignKey("users.id"), unique=True),
+    sqlalchemy.Column("store_name", sqlalchemy.String, unique=True),
+    sqlalchemy.Column("display_name", sqlalchemy.String, nullable=True),
+    sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
+    sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
+)
+
+media_uploads = sqlalchemy.Table(
+    "media_uploads",
+    metadata,
+    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True, index=True),
+    sqlalchemy.Column("user_id", sqlalchemy.ForeignKey("users.id")),
+    sqlalchemy.Column("filename", sqlalchemy.String),
+    sqlalchemy.Column("mime_type", sqlalchemy.String),
+    sqlalchemy.Column("size", sqlalchemy.Integer),
+    sqlalchemy.Column("storage_path", sqlalchemy.String),
+    sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
+)
+
+# Context caching for long context reuse
+context_cache = sqlalchemy.Table(
+    "context_cache",
+    metadata,
+    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True, index=True),
+    sqlalchemy.Column("user_id", sqlalchemy.ForeignKey("users.id")),
+    sqlalchemy.Column("conversation_id", sqlalchemy.String, nullable=True),
+    sqlalchemy.Column("label", sqlalchemy.String, nullable=True),
+    sqlalchemy.Column("content", sqlalchemy.Text, nullable=False),
+    sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
+)
+
+DEFAULT_WORKSPACE_BACKGROUNDS: List[Dict[str, Any]] = [
+    {
+        "slug": "orbiter",
+        "label": "Orbiter",
+        "description": "STS-84 orbit glow.",
+        "preview_css": "linear-gradient(140deg, rgba(12, 18, 32, 0.88), rgba(24, 54, 92, 0.82))",
+        "backdrop_css": "linear-gradient(155deg, rgba(4, 6, 10, 0.96), rgba(18, 28, 52, 0.92))",
+    },
+    {
+        "slug": "orbit-walk",
+        "label": "Orbit Walk",
+        "description": "Quiet focus at zero-g.",
+        "preview_css": "linear-gradient(135deg, rgba(8, 12, 22, 0.92), rgba(16, 28, 54, 0.88))",
+        "backdrop_css": "linear-gradient(160deg, rgba(3, 5, 9, 0.96), rgba(12, 20, 38, 0.94))",
+    },
+]
+
+# Proactive notifications
+proactive_notifications = sqlalchemy.Table(
+    "proactive_notifications",
+    metadata,
+    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True, index=True),
+    sqlalchemy.Column("user_id", sqlalchemy.ForeignKey("users.id")),
+    sqlalchemy.Column("type", sqlalchemy.String),
+    sqlalchemy.Column("title", sqlalchemy.String),
+    sqlalchemy.Column("message", sqlalchemy.String),
+    sqlalchemy.Column("metadata", sqlalchemy.JSON, nullable=True),
+    sqlalchemy.Column("due_at", sqlalchemy.DateTime, nullable=True),
+    sqlalchemy.Column("sent_at", sqlalchemy.DateTime, default=datetime.utcnow),
+    sqlalchemy.Column("read_at", sqlalchemy.DateTime, nullable=True),
+    sqlalchemy.Column("completed_at", sqlalchemy.DateTime, nullable=True),
+    sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
+)
+
 google_calendar_credentials = sqlalchemy.Table(
     "google_calendar_credentials",
     metadata,
@@ -280,8 +471,7 @@ class User(UserBase):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 class ChatSessionBase(BaseModel):
     title: str
@@ -295,8 +485,7 @@ class ChatSession(ChatSessionBase):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 class CalendarBase(BaseModel):
     label: str
@@ -317,8 +506,7 @@ class Calendar(CalendarBase):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 class CalendarEventBase(BaseModel):
     title: str
@@ -334,8 +522,43 @@ class CalendarEvent(CalendarEventBase):
     user_id: int
     created_at: datetime
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
+
+class WorkspaceBackground(BaseModel):
+    slug: str
+    label: str
+    preview_css: str
+    backdrop_css: str
+    description: Optional[str] = None
+    id: Optional[int] = None
+
+WORKSPACE_BACKGROUNDS: List[WorkspaceBackground] = [
+    WorkspaceBackground(**{**payload, "id": index + 1})
+    for index, payload in enumerate(DEFAULT_WORKSPACE_BACKGROUNDS)
+]
+
+class ProactivitySettings(BaseModel):
+    id: Optional[str] = None
+    label: Optional[str] = None
+    description: Optional[str] = None
+    cadence: Optional[str] = None
+    time: Optional[str] = None
+    times: Optional[List[str]] = None
+    channels: Optional[List[str]] = None
+    timezone: Optional[str] = None
+
+PROACTIVITY_SETTINGS_STORE: Dict[int, ProactivitySettings] = {}
+
+DEFAULT_PROACTIVITY_SETTINGS = ProactivitySettings(
+    id="proactivity-default",
+    label="Check-ins",
+    description="Daily sync nudges for squad channels.",
+    cadence="Daily",
+    time="09:00",
+    times=["09:00"],
+    channels=["assistant"],
+    timezone="UTC",
+)
 
 class PlanBase(BaseModel):
     label: str
@@ -350,8 +573,7 @@ class Plan(PlanBase):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 class UserStreakBase(BaseModel):
     current_streak: int = 0
@@ -366,8 +588,7 @@ class UserStreak(UserStreakBase):
     created_at: datetime
     updated_at: Optional[datetime] = None
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 # Proactivity models
 class ProactivityLogBase(BaseModel):
@@ -396,8 +617,55 @@ class ProactivityLog(ProactivityLogBase):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ContextCacheBase(BaseModel):
+    label: Optional[str] = None
+    conversation_id: Optional[str] = None
+    content: str
+
+
+class ContextCache(ContextCacheBase):
+    id: int
+    user_id: int
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class MediaUploadBase(BaseModel):
+    filename: str
+    mime_type: str
+    size: int
+
+
+class MediaUpload(MediaUploadBase):
+    id: int
+    user_id: int
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ChatAttachment(BaseModel):
+    id: int
+
+
+class ProactivityNotification(BaseModel):
+    id: int
+    user_id: int
+    type: str
+    title: str
+    message: str
+    metadata: Optional[Dict[str, Any]] = None
+    due_at: Optional[datetime] = None
+    sent_at: datetime
+    read_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
 
 class PlanUpdate(BaseModel):
     label: Optional[str] = None
@@ -417,8 +685,7 @@ class Habit(HabitBase):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 class HabitUpdate(BaseModel):
     label: Optional[str] = None
@@ -449,7 +716,7 @@ class DashboardPulseProactivity(BaseModel):
 
 
 class DashboardPulseBase(BaseModel):
-    date_key: constr(regex=r"^\d{4}-\d{2}-\d{2}$")
+    date_key: str = Field(..., pattern=r"^\d{4}-\d{2}-\d{2}$")
     timestamp: Optional[int] = None
     plans: List[DashboardPulsePlanItem] = []
     habits: List[DashboardPulseHabitItem] = []
@@ -489,8 +756,7 @@ class DashboardPulse(DashboardPulseBase):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class DashboardProactivitySummary(BaseModel):
@@ -504,35 +770,41 @@ class DashboardSummary(BaseModel):
     pulses: List[DashboardPulse] = Field(default_factory=list)
     proactivity: DashboardProactivitySummary = Field(default_factory=DashboardProactivitySummary)
 
-# AI Chat models
-class GeminiAttachment(BaseModel):
-    name: str
-    uri: str
-    mime_type: str
-    display_name: Optional[str] = None
-    size_bytes: Optional[int] = None
-
-
 class ChatMessage(BaseModel):
     role: str  # 'user' or 'model'
     text: str
-    attachments: Optional[List[GeminiAttachment]] = None
 
-class ChatSessionCreate(BaseModel):
+class ConversationCreateRequest(BaseModel):
     title: str
     user_id: int
+
+class ConversationUpdateRequest(BaseModel):
+    title: Optional[str] = None
+    user_id: Optional[int] = None
 
 class ChatRequest(BaseModel):
     message: str
     conversation_id: Optional[str] = None
     user_id: int
     context: Optional[str] = None
+    time_context: Optional[str] = None
     system_prompt: Optional[str] = None
-    attachments: Optional[List[GeminiAttachment]] = None
+    model: Optional[str] = None
+    attachments: Optional[List[ChatAttachment]] = None
+    response_json_schema: Optional[Dict[str, Any]] = None
+    response_mime_type: Optional[str] = None
+    context_cache_id: Optional[int] = None
+    maps_enabled: bool = False
+    maps_latitude: Optional[float] = None
+    maps_longitude: Optional[float] = None
+    maps_widget: bool = False
+    should_generate_title: bool = False
 
 class ChatResponse(BaseModel):
     response: str
     conversation_id: str
+    grounding_metadata: Optional[Dict[str, Any]] = None
+    title: Optional[str] = None
 
 
 class ChatTitleRequest(BaseModel):
@@ -542,55 +814,37 @@ class ChatTitleRequest(BaseModel):
 class ChatTitleResponse(BaseModel):
     title: str
 
+# Supabase setup
+def _resolve_supabase_key() -> Tuple[Optional[str], Optional[str]]:
+    """Return the first configured Supabase key and the env var it came from."""
+    candidate_names = [
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "SUPABASE_SERVICE_KEY",
+        "SUPABASE_SECRET_KEY",
+        "SUPABASE_KEY",
+        "SUPABASE_ANON_KEY",
+    ]
+    for name in candidate_names:
+        value = os.getenv(name)
+        if value and value.strip() and "your_supabase_key_here" not in value.lower():
+            normalized = value.strip()
+            if name != "SUPABASE_KEY":
+                os.environ["SUPABASE_KEY"] = normalized
+            return normalized, name
+    return None, None
 
-class GeminiFile(BaseModel):
-    name: str
-    display_name: Optional[str] = None
-    mime_type: Optional[str] = None
-    uri: Optional[str] = None
-    download_uri: Optional[str] = None
-    size_bytes: Optional[int] = None
-    state: Optional[str] = None
-    create_time: Optional[str] = None
-    update_time: Optional[str] = None
 
-# Gemini AI and Supabase setup
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY")
-
-# Initialize Gemini
-if GEMINI_API_KEY and GEMINI_API_KEY != "your_gemini_api_key_here":
-    genai.configure(api_key=GEMINI_API_KEY)
-    try:
-        # Use gemini-flash-latest for normal use as specified
-        gemini_model = genai.GenerativeModel('models/gemini-flash-latest')
-        print("Gemini AI initialized successfully with models/gemini-flash-latest")
-    except Exception as e:
-        print(f"Failed to initialize models/gemini-flash-latest, trying fallback model: {e}")
-        try:
-            # Use gemini-flash-lite-latest for fallback as specified
-            gemini_model = genai.GenerativeModel('models/gemini-flash-lite-latest')
-            print("Gemini AI initialized successfully with models/gemini-flash-lite-latest (fallback)")
-        except Exception as e2:
-            print(f"Failed to initialize fallback model: {e2}")
-            gemini_model = None
-    try:
-        gemini_title_model = genai.GenerativeModel('models/gemini-flash-lite-latest')
-        print("Gemini title model initialized with models/gemini-flash-lite-latest")
-    except Exception as title_error:
-        print(f"Failed to initialize title model: {title_error}")
-        gemini_title_model = gemini_model
-else:
-    gemini_model = None
-    gemini_title_model = None
-    print("Warning: GEMINI_API_KEY not configured. AI responses will be simulated.")
+SUPABASE_KEY, SUPABASE_KEY_SOURCE = _resolve_supabase_key()
 
 # Initialize Supabase
 if SUPABASE_URL and SUPABASE_KEY and SUPABASE_URL != "your_supabase_url_here":
     try:
         supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-        print("Supabase client initialized successfully")
+        source_label = SUPABASE_KEY_SOURCE or "SUPABASE_KEY"
+        print(f"Supabase client initialized successfully (source: {source_label}).")
+        if SUPABASE_KEY_SOURCE == "SUPABASE_ANON_KEY":
+            print("Warning: Using SUPABASE_ANON_KEY may limit write operations; configure a service-role key for full functionality.")
     except Exception as e:
         print(f"Warning: Failed to initialize Supabase client: {e}")
         print("Conversation history will not be persisted.")
@@ -607,6 +861,7 @@ def _conversation_store_available() -> bool:
 
 
 LOCAL_CONVERSATION_STORE: Dict[str, List[Dict[str, Any]]] = {}
+LOCAL_CONVERSATION_METADATA: Dict[str, Dict[str, Any]] = {}
 LOCAL_CONVERSATION_LOCK = asyncio.Lock()
 
 
@@ -628,15 +883,45 @@ def _handle_conversation_store_error(context: str, error: Exception) -> None:
     normalized = (details or "").lower()
     if code == "PGRST205" or "could not find the table" in normalized:
         _disable_conversation_store("Supabase 'conversations' table missing; suppressing further requests.")
+    elif "permission denied" in normalized or "insufficient privilege" in normalized or "not authorized" in normalized:
+        _disable_conversation_store("Supabase conversation access denied; suppressing further requests.")
+
+
+def _is_valid_uuid(value: Optional[str]) -> bool:
+    if not value:
+        return False
+    try:
+        UUID(value)
+        return True
+    except (ValueError, TypeError):
+        return False
 
 
 # FastAPI app
 app = FastAPI(title="User Profile API with AI Chat", version="1.0.0")
 
+
+@app.on_event("startup")
+async def _validate_gemini_api_key_on_startup():
+    if AI_PROVIDER != "gemini" or not VALIDATE_GEMINI_ON_STARTUP:
+        return
+
+    if not GEMINI_SERVICE.available:
+        print("[Gemini] Validation skipped; no API key configured.")
+        return
+
+    print("[Gemini] Validating API key before accepting requests...")
+    try:
+        await GEMINI_SERVICE.validate_connection()
+        print("[Gemini] Validation succeeded.")
+    except Exception as exc:  # pragma: no cover - best effort logging
+        print(f"[Gemini] Validation failed: {exc}")
+
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
+    allow_origin_regex=ALLOWED_ORIGIN_REGEX,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -662,123 +947,6 @@ def generate_initials(full_name: str) -> str:
     elif len(parts) == 1:
         return parts[0][:2].upper()
     return "U"
-
-
-async def persist_upload_file(upload_file: UploadFile) -> str:
-    """Persist an uploaded file to a temporary path with size validation."""
-    suffix = ""
-    if upload_file.filename:
-        suffix = Path(upload_file.filename).suffix
-
-    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
-    written = 0
-    try:
-        while True:
-            chunk = await upload_file.read(1024 * 1024)
-            if not chunk:
-                break
-            written += len(chunk)
-            if written > MAX_GEMINI_UPLOAD_BYTES:
-                raise HTTPException(
-                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                    detail=f"File exceeds {MAX_GEMINI_UPLOAD_MB} MB limit.",
-                )
-            temp_file.write(chunk)
-        return temp_file.name
-    except Exception:
-        temp_path = temp_file.name
-        temp_file.close()
-        try:
-            os.unlink(temp_path)
-        except OSError:
-            pass
-        raise
-    finally:
-        temp_file.close()
-
-
-def wait_for_gemini_file_ready(file_resource):
-    """Poll the Gemini API until the uploaded file is ACTIVE."""
-    target_name = getattr(file_resource, "name", None)
-    if not target_name:
-        return file_resource
-
-    start_time = time.time()
-    while True:
-        current = genai.get_file(target_name)
-        state = getattr(current, "state", None)
-        state_name = getattr(state, "name", None) if hasattr(state, "name") else state
-        if isinstance(state_name, str):
-            state_name = state_name.upper()
-
-        if state_name == "ACTIVE":
-            return current
-        if state_name == "FAILED":
-            raise RuntimeError("Gemini file processing failed.")
-
-        elapsed = time.time() - start_time
-        if elapsed >= GEMINI_FILE_POLL_TIMEOUT:
-            raise TimeoutError("Timed out waiting for Gemini file to finish processing.")
-        time.sleep(GEMINI_FILE_POLL_INTERVAL)
-
-
-def upload_file_and_wait(path: str, display_name: Optional[str], mime_type: Optional[str]):
-    """Upload a file to Gemini and wait for processing to complete."""
-    upload_kwargs: Dict[str, Any] = {"path": path}
-    if display_name:
-        upload_kwargs["display_name"] = display_name
-    if mime_type:
-        upload_kwargs["mime_type"] = mime_type
-
-    uploaded = genai.upload_file(**upload_kwargs)
-    state = getattr(uploaded, "state", None)
-    state_name = getattr(state, "name", None) if hasattr(state, "name") else state
-    if isinstance(state_name, str) and state_name.upper() == "ACTIVE":
-        return uploaded
-    return wait_for_gemini_file_ready(uploaded)
-
-
-def serialize_gemini_file(file_obj: Any) -> GeminiFile:
-    """Convert a google.generativeai File into a serializable schema."""
-
-    def _to_int(value: Any) -> Optional[int]:
-        try:
-            return int(value)
-        except (TypeError, ValueError):
-            return None
-
-    def _to_str(value: Any) -> Optional[str]:
-        if isinstance(value, datetime):
-            return value.isoformat()
-        if value is None:
-            return None
-        return str(value)
-
-    state = getattr(file_obj, "state", None)
-    state_name = getattr(state, "name", None) if hasattr(state, "name") else state
-    if isinstance(state_name, str):
-        state_name = state_name.upper()
-
-    return GeminiFile(
-        name=getattr(file_obj, "name", ""),
-        display_name=getattr(file_obj, "display_name", None),
-        mime_type=getattr(file_obj, "mime_type", None),
-        uri=getattr(file_obj, "uri", None),
-        download_uri=getattr(file_obj, "download_uri", None),
-        size_bytes=_to_int(
-            getattr(file_obj, "size_bytes", None)
-            or getattr(file_obj, "sizeBytes", None)
-        ),
-        state=state_name,
-        create_time=_to_str(
-            getattr(file_obj, "create_time", None)
-            or getattr(file_obj, "createTime", None)
-        ),
-        update_time=_to_str(
-            getattr(file_obj, "update_time", None)
-            or getattr(file_obj, "updateTime", None)
-        ),
-    )
 
 
 def _timestamp_ms_to_datetime(timestamp_ms: Optional[int]) -> datetime:
@@ -903,6 +1071,370 @@ def _serialize_dashboard_pulse_record(record: Any) -> Optional[Dict[str, Any]]:
         "created_at": record["created_at"],
         "updated_at": record["updated_at"],
     }
+
+
+def _serialize_proactivity_notification(record: Any) -> Optional[Dict[str, Any]]:
+    if not record:
+        return None
+    return {
+        "id": record["id"],
+        "user_id": record["user_id"],
+        "type": record["type"],
+        "title": record["title"],
+        "message": record["message"],
+        "metadata": _row_get(record, "metadata"),
+        "due_at": _row_get(record, "due_at"),
+        "sent_at": record["sent_at"],
+        "read_at": _row_get(record, "read_at"),
+        "completed_at": _row_get(record, "completed_at"),
+        "created_at": record["created_at"],
+    }
+
+
+def _serialize_context_cache(record: Any) -> Optional[Dict[str, Any]]:
+    if not record:
+        return None
+    return {
+        "id": record["id"],
+        "user_id": record["user_id"],
+        "conversation_id": _row_get(record, "conversation_id"),
+        "label": _row_get(record, "label"),
+        "content": _row_get(record, "content") or "",
+        "created_at": record["created_at"],
+    }
+
+
+def _build_maps_tool_and_config(
+    maps_enabled: bool,
+    maps_latitude: Optional[float],
+    maps_longitude: Optional[float],
+    maps_widget: bool,
+) -> Tuple[List[types.Tool], Optional[types.ToolConfig]]:
+    if not maps_enabled:
+        return [], None
+
+    tool = types.Tool(
+        google_maps=types.GoogleMaps(enable_widget=maps_widget)
+    )
+
+    if maps_latitude is not None and maps_longitude is not None:
+        lat_lng = types.LatLng(
+            latitude=maps_latitude,
+            longitude=maps_longitude,
+        )
+        tool_config = types.ToolConfig(
+            retrieval_config=types.RetrievalConfig(lat_lng=lat_lng)
+        )
+    else:
+        tool_config = types.ToolConfig()
+
+    return [tool], tool_config
+
+
+async def _load_context_cache(cache_id: int, user_id: int, db: databases.Database) -> Optional[Dict[str, Any]]:
+    if cache_id is None:
+        return None
+    record = await db.fetch_one(
+        context_cache.select().where(
+            (context_cache.c.id == cache_id)
+            & (context_cache.c.user_id == user_id)
+        )
+    )
+    return record
+
+
+def _context_cache_contents(record: Optional[Dict[str, Any]]) -> Optional[List[types.Content]]:
+    if not record:
+        return None
+    content_text = _row_get(record, "content")
+    if not isinstance(content_text, str) or not content_text.strip():
+        return None
+    return [
+        types.Content(
+            role="user",
+            parts=[types.Part.from_text(text=content_text)],
+        )
+    ]
+
+
+GRAY_TITLE_INSTRUCTION = (
+    "When you can name this conversation, emit exactly one concise title using "
+    "the <graytitle>Example Title</graytitle> format (for example "
+    "<graytitle>Mamdani vs Cuomo New York</graytitle>). Keep the tag separate from "
+    "the rest of your reply, do not repeat it, and only include it when you feel "
+    "confident about the summary."
+)
+
+
+def _build_gray_title_instruction_contents(
+    should_generate_title: bool,
+) -> List[types.Content]:
+    if not should_generate_title:
+        return []
+    return [
+        types.Content(
+            role="user",
+            parts=[types.Part.from_text(text=GRAY_TITLE_INSTRUCTION)],
+        )
+    ]
+
+
+def _merge_extra_contents(*lists: Optional[List[types.Content]]) -> Optional[List[types.Content]]:
+    merged: List[types.Content] = []
+    for candidate in lists:
+        if candidate:
+            merged.extend(candidate)
+    return merged or None
+
+
+def _normalize_conversation_history(history: Optional[List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
+    if not history:
+        return []
+    normalized: List[Dict[str, Any]] = []
+    for entry in history:
+        raw_role = entry.get("role")
+        if not raw_role:
+            continue
+        role = "model" if raw_role == "assistant" else raw_role
+        if role not in {"user", "model"}:
+            continue
+        normalized.append(
+            {
+                "role": role,
+                "text": entry.get("text") or "",
+            }
+        )
+    return normalized
+
+
+async def _ensure_user_file_search_store(
+    db: databases.Database,
+    user_id: int,
+) -> Optional[str]:
+    if not FILE_SEARCH_ENABLED or not FILE_SEARCH_SERVICE:
+        return None
+
+    query = file_search_stores.select().where(file_search_stores.c.user_id == user_id)
+    existing = await db.fetch_one(query)
+    if existing:
+        return existing["store_name"]
+
+    display_name = f"Gray uploads for user {user_id}"
+    try:
+        store = await FILE_SEARCH_SERVICE.create_store(display_name=display_name)
+    except Exception as error:  # pragma: no cover - best effort logging
+        print(f"[FileSearch] Failed to create store for user {user_id}: {error}")
+        return None
+
+    try:
+        await db.execute(
+            file_search_stores.insert().values(
+                user_id=user_id,
+                store_name=store.name,
+                display_name=store.display_name,
+                created_at=datetime.utcnow(),
+                updated_at=datetime.utcnow(),
+            )
+        )
+    except sqlalchemy.exc.IntegrityError:
+        existing = await db.fetch_one(query)
+        if existing:
+            return existing["store_name"]
+        raise
+
+    return store.name
+
+
+async def _upload_file_search_document(
+    store_name: str,
+    file_path: Path,
+    display_name: Optional[str] = None,
+) -> None:
+    if not FILE_SEARCH_ENABLED or not FILE_SEARCH_SERVICE:
+        return
+
+    try:
+        operation = await FILE_SEARCH_SERVICE.upload_to_store(
+            file=str(file_path),
+            store_name=store_name,
+            display_name=display_name,
+            chunking_config=FILE_SEARCH_CHUNKING_CONFIG,
+        )
+        await _wait_for_operation(operation)
+    except Exception as error:  # pragma: no cover - best effort logging
+        print(
+            f"[FileSearch] Failed to upload {file_path.name} to {store_name}: {error}"
+        )
+
+
+async def _get_user_file_search_store_names(
+    db: Optional[databases.Database],
+    user_id: Optional[int],
+) -> List[str]:
+    if (
+        not FILE_SEARCH_ENABLED
+        or db is None
+        or user_id is None
+        or not FILE_SEARCH_SERVICE
+    ):
+        return []
+
+    rows = await db.fetch_all(
+        file_search_stores.select().where(file_search_stores.c.user_id == user_id)
+    )
+
+    return [row["store_name"] for row in rows if row and _row_get(row, "store_name")]
+
+
+async def _build_file_search_tools(
+    db: Optional[databases.Database],
+    user_id: Optional[int],
+) -> List[types.Tool]:
+    store_names = await _get_user_file_search_store_names(db, user_id)
+    if not store_names:
+        return []
+    return [
+        types.Tool(
+            file_search=types.FileSearch(
+                file_search_store_names=store_names,
+            )
+        )
+    ]
+
+
+async def _fetch_proactivity_summary(user_id: int, info_type: Optional[str], db: databases.Database) -> Dict[str, Any]:
+    query = (
+        dashboard_pulses.select()
+        .where(dashboard_pulses.c.user_id == user_id)
+        .order_by(dashboard_pulses.c.date_key.desc())
+        .limit(3)
+    )
+    rows = await db.fetch_all(query)
+    plan_labels: List[str] = []
+    habit_labels: List[str] = []
+    for row in rows:
+        for plan in _row_get(row, "plans") or []:
+            label = str(plan.get("label") or "").strip()
+            if label:
+                plan_labels.append(label)
+        for habit in _row_get(row, "habits") or []:
+            label = str(habit.get("label") or "").strip()
+            if label:
+                habit_labels.append(label)
+
+    plan_labels = plan_labels[:6]
+    habit_labels = habit_labels[:6]
+
+    cursor_date = rows[0]["date_key"] if rows else None
+
+    summary_parts = []
+    if plan_labels:
+        summary_parts.append(f"{len(plan_labels)} recent plans (e.g. {plan_labels[:2]})")
+    if habit_labels:
+        summary_parts.append(f"{len(habit_labels)} habit check-ins (e.g. {habit_labels[:2]})")
+    if not summary_parts:
+        summary_parts.append("No recorded plan or habit data yet.")
+
+    return {
+        "summary": " | ".join(summary_parts),
+        "focus": info_type or "general",
+        "plans": plan_labels,
+        "habits": habit_labels,
+        "latest_date": cursor_date,
+    }
+
+
+async def _execute_function_call(
+    function_call: types.FunctionCall,
+    user_id: int,
+    db: databases.Database,
+) -> Dict[str, Any]:
+    handler = {
+        "fetch_proactivity_summary": _fetch_proactivity_summary,
+    }.get(function_call.name)
+    if not handler:
+        raise HTTPException(status_code=501, detail=f"Unsupported function: {function_call.name}")
+
+    args = function_call.args or {}
+    info_type = args.get("info_type")
+    return await handler(user_id, info_type, db)
+
+
+def _build_function_call_contents(
+    function_call: types.FunctionCall,
+    result: Dict[str, Any],
+) -> List[types.Content]:
+    return [
+        types.Content(
+            role="model",
+            parts=[types.Part.from_function_call(name=function_call.name, args=function_call.args or {})],
+        ),
+        types.Content(
+            role="user",
+            parts=[types.Part.from_function_response(name=function_call.name, response=result)],
+        ),
+    ]
+
+
+def _extract_function_call(response: types.GenerateContentResponse) -> Optional[types.FunctionCall]:
+    calls = response.function_calls
+    if calls:
+        return calls[0]
+    return None
+
+
+async def _resolve_media_attachments(
+    db: databases.Database,
+    attachment_specs: Optional[List[ChatAttachment]],
+    user_id: int,
+) -> List[GeminiAttachment]:
+    if not attachment_specs:
+        return []
+
+    attachment_ids = [attachment.id for attachment in attachment_specs]
+    if not attachment_ids:
+        return []
+
+    query = media_uploads.select().where(
+        (media_uploads.c.id.in_(attachment_ids))
+        & (media_uploads.c.user_id == user_id)
+    )
+    rows = await db.fetch_all(query)
+    records = {row["id"]: row for row in rows}
+
+    missing = [str(attachment_id) for attachment_id in attachment_ids if attachment_id not in records]
+    if missing:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Attachment(s) not found: {', '.join(missing)}",
+        )
+
+    attachments: List[GeminiAttachment] = []
+    for attachment_id in attachment_ids:
+        record = records[attachment_id]
+        storage_path = Path(record["storage_path"])
+        if not storage_path.exists():
+            raise HTTPException(
+                status_code=status.HTTP_410_GONE,
+                detail="Attachment file is no longer available.",
+            )
+        try:
+            data = storage_path.read_bytes()
+        except OSError as error:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to read attachment: {error}",
+            ) from error
+
+        attachments.append(
+            GeminiAttachment(
+                data=data,
+                mime_type=record["mime_type"],
+                filename=record["filename"],
+            )
+        )
+
+    return attachments
 
 
 def _carry_forward_dashboard_entries(
@@ -1137,22 +1669,35 @@ async def root():
     return {"message": "User Profile API with AI Chat"}
 
 # AI Chat helper functions
-async def get_or_create_conversation(conversation_id: Optional[str], user_id: int) -> str:
+async def get_or_create_conversation(
+    conversation_id: Optional[str],
+    user_id: int,
+    *,
+    title: Optional[str] = None,
+) -> str:
     """Get existing conversation or create new one"""
-    if conversation_id and _conversation_store_available():
+    valid_id = conversation_id if _is_valid_uuid(conversation_id) else None
+    if valid_id and _conversation_store_available():
         try:
-            # Check if conversation exists
-            result = supabase.table("conversations").select("id, history").eq("id", conversation_id).execute()
+            # Check if conversation exists and belongs to this user
+            result = (
+                supabase.table("conversations")
+                .select("id, history")
+                .eq("id", valid_id)
+                .eq("user_id", user_id)
+                .execute()
+            )
             if result.data:
-                return conversation_id
+                return valid_id
         except Exception as error:
             _handle_conversation_store_error("Error checking conversation", error)
 
     if _conversation_store_available():
         try:
             result = supabase.table("conversations").insert({
-                "title": "New Conversation",
-                "history": []
+                "title": title or "New Conversation",
+                "history": [],
+                "user_id": user_id,
             }).execute()
             if result.data:
                 return result.data[0]["id"]
@@ -1160,15 +1705,30 @@ async def get_or_create_conversation(conversation_id: Optional[str], user_id: in
             _handle_conversation_store_error("Error creating conversation", error)
 
     # Fallback: return a mock ID
-    import uuid
-    candidate_id = conversation_id or str(uuid.uuid4())
+    candidate_id = conversation_id or str(uuid4())
+    now_iso = datetime.utcnow().isoformat() + "Z"
     async with LOCAL_CONVERSATION_LOCK:
         LOCAL_CONVERSATION_STORE.setdefault(candidate_id, [])
+        metadata = LOCAL_CONVERSATION_METADATA.setdefault(
+            candidate_id,
+            {
+                "id": candidate_id,
+                "title": title or "New Conversation",
+                "user_id": user_id,
+                "created_at": now_iso,
+                "updated_at": now_iso,
+            },
+        )
+        if title:
+            metadata["title"] = title
+        metadata["user_id"] = user_id
+        metadata.setdefault("created_at", now_iso)
+        metadata["updated_at"] = now_iso
     return candidate_id
 
 async def save_conversation_message(conversation_id: str, message: Dict[str, Any]):
     """Save message to conversation history"""
-    if not _conversation_store_available():
+    if not _conversation_store_available() or not _is_valid_uuid(conversation_id):
         async with LOCAL_CONVERSATION_LOCK:
             history = LOCAL_CONVERSATION_STORE.setdefault(conversation_id, [])
             history.append(message)
@@ -1203,161 +1763,11 @@ def _format_structured_ai_reply(user_message: str, thinking: str, ai_reply: str)
     )
 
 async def generate_chat_title_suggestion(message: str) -> Optional[str]:
-    """Generate a concise chat title using Gemini Flash Lite."""
+    """Generate a concise chat title locally."""
     trimmed = (message or "").strip()
     if not trimmed:
         return None
-    if not GEMINI_API_KEY or not gemini_title_model:
-        return None
-
-    prompt = (
-        "Generate a concise yet descriptive chat title summarizing the following user query. "
-        "Respond with Title Case, avoid quotes or trailing punctuation, and aim for 4-10 words "
-        "when it helps clarity (never exceed 12 words). Favor specific key concepts over generic greetings.\n\n"
-        f"User query:\n{trimmed}"
-    )
-
-    try:
-        response = gemini_title_model.generate_content(prompt)
-        text_response = getattr(response, "text", None) or ""
-        if not text_response:
-            candidates = getattr(response, "candidates", None) or []
-            for candidate in candidates:
-                content = getattr(candidate, "content", None)
-                parts = getattr(content, "parts", None) if content else None
-                if not parts:
-                    continue
-                text_parts = [
-                    getattr(part, "text", None)
-                    for part in parts
-                    if getattr(part, "text", None)
-                ]
-                if text_parts:
-                    text_response = " ".join(text_parts)
-                    break
-
-        cleaned = " ".join(text_response.strip().split())
-        if not cleaned:
-            return None
-
-        first_line = cleaned.split("\n", 1)[0].strip()
-        normalized = first_line.strip('"').strip("'")
-        normalized = normalized.rstrip(".")
-        if not normalized:
-            return None
-        # Cap overly long results to keep sidebar tidy
-        return normalized[:80].strip()
-    except Exception as error:  # pragma: no cover - best effort logging
-        print(f"Gemini title generation error: {error}")
-        return None
-
-
-def _prepare_gemini_contents(
-    message: str,
-    conversation_history: Optional[List[Dict[str, Any]]] = None,
-    workspace_context: Optional[str] = None,
-    system_prompt: Optional[str] = None,
-    attachments: Optional[List[GeminiAttachment]] = None,
-) -> List[Dict[str, Any]]:
-    """Build the Gemini content payload shared by streaming and non-streaming calls."""
-    history: List[Dict[str, Any]] = list((conversation_history or [])[-10:])
-    include_current = True
-    if history:
-        last_entry = history[-1]
-        if last_entry.get("role") == "user" and last_entry.get("text") == message:
-            include_current = False
-            if attachments and not last_entry.get("attachments"):
-                last_entry["attachments"] = [
-                    attachment.dict(exclude_none=True) for attachment in attachments
-                ]
-    if include_current:
-        history.append(
-            {
-                "role": "user",
-                "text": message,
-                "attachments": [
-                    attachment.dict(exclude_none=True) for attachment in attachments
-                ]
-                if attachments
-                else None,
-            }
-        )
-
-    def build_parts(entry: Dict[str, Any]) -> List[Dict[str, Any]]:
-        parts: List[Dict[str, Any]] = []
-        for attachment in entry.get("attachments") or []:
-            if not attachment:
-                continue
-            if isinstance(attachment, dict):
-                uri = attachment.get("uri")
-                mime_type = attachment.get("mime_type")
-            else:
-                uri = getattr(attachment, "uri", None)
-                mime_type = getattr(attachment, "mime_type", None)
-            if uri and mime_type:
-                parts.append(
-                    {
-                        "file_data": {
-                            "file_uri": uri,
-                            "mime_type": mime_type,
-                        }
-                    }
-                )
-        text = entry.get("text")
-        if text:
-            parts.append({"text": text})
-        return parts
-
-    contents: List[Dict[str, Any]] = []
-    system_parts: List[str] = []
-    if system_prompt:
-        trimmed_prompt = system_prompt.strip()
-        if trimmed_prompt:
-            system_parts.append(trimmed_prompt)
-    if workspace_context:
-        trimmed_context = workspace_context.strip()
-        if trimmed_context:
-            system_parts.append(f"Workspace context:\n{trimmed_context}")
-    if system_parts:
-        contents.append(
-            {
-                "role": "user",
-                "parts": [{"text": "\n\n".join(system_parts)}],
-            }
-        )
-
-    for entry in history:
-        parts = build_parts(entry)
-        if not parts:
-            continue
-        role = "user" if entry.get("role") == "user" else "model"
-        contents.append({"role": role, "parts": parts})
-
-    if not contents:
-        contents.append({"role": "user", "parts": [{"text": message}]})
-
-    return contents
-
-
-def _extract_response_text(candidate: Any) -> str:
-    """Extract text from a Gemini response or chunk."""
-    text_attr = getattr(candidate, "text", None)
-    if text_attr:
-        return text_attr
-    candidates = getattr(candidate, "candidates", None) or []
-    for entry in candidates:
-        content = getattr(entry, "content", None)
-        parts = getattr(content, "parts", None) if content else None
-        if not parts:
-            continue
-        texts = [
-            getattr(part, "text", None)
-            for part in parts
-            if getattr(part, "text", None)
-        ]
-        if texts:
-            return "\n".join(texts)
-    return ""
+    return _fallback_title_from_message(trimmed)
 
 
 async def stream_ai_response(
@@ -1365,73 +1775,97 @@ async def stream_ai_response(
     conversation_history: Optional[List[Dict[str, Any]]] = None,
     workspace_context: Optional[str] = None,
     system_prompt: Optional[str] = None,
-    attachments: Optional[List[GeminiAttachment]] = None,
-) -> AsyncGenerator[Tuple[str, str], None]:
-    """Stream Gemini response chunks, falling back to the legacy flow if streaming fails."""
-    if gemini_model and GEMINI_API_KEY:
+    time_context: Optional[str] = None,
+    model: Optional[str] = None,
+    attachments: Optional[List[ChatAttachment]] = None,
+    *,
+    user_id: int,
+    db: databases.Database,
+    context_cache_id: Optional[int] = None,
+    maps_enabled: bool = False,
+    maps_latitude: Optional[float] = None,
+    maps_longitude: Optional[float] = None,
+    maps_widget: bool = False,
+    should_generate_title: bool = False,
+) -> AsyncGenerator[Tuple[str, Any], None]:
+    """Yield token chunks using the configured AI provider."""
+    provider = AI_PROVIDER or "gemini"
+    conversation_history = _normalize_conversation_history(conversation_history)
+    cached_contents = None
+    cache_text_block: Optional[str] = None
+    if context_cache_id:
+        cache_record = await _load_context_cache(context_cache_id, user_id, db)
+        cached_contents = _context_cache_contents(cache_record)
+        cache_text = _row_get(cache_record, "content")
+        if isinstance(cache_text, str) and cache_text.strip():
+            cache_text_block = f"Context cache:\n{cache_text.strip()}"
+
+    workspace_with_cache = workspace_context
+    if cache_text_block:
+        workspace_with_cache = "\n\n".join(filter(None, [workspace_context, cache_text_block]))
+    title_instruction_contents = _build_gray_title_instruction_contents(should_generate_title)
+
+    if provider == "anthropic":
+        if not ANTHROPIC_SERVICE.available:
+            raise RuntimeError("Anthropic service unavailable")
+        accumulated = ""
+        async for fragment in ANTHROPIC_SERVICE.stream(
+            message,
+            conversation_history,
+            workspace_with_cache,
+            system_prompt,
+            time_context,
+            model,
+        ):
+            if not fragment:
+                continue
+            accumulated += fragment
+            yield ("delta", fragment)
+        yield ("final", {"text": accumulated, "grounding_metadata": None})
+        return
+
+    media_attachments = await _resolve_media_attachments(db, attachments, user_id)
+    maps_tools, maps_tool_config = _build_maps_tool_and_config(
+        maps_enabled,
+        maps_latitude,
+        maps_longitude,
+        maps_widget,
+    )
+    tool_list = [*DEFAULT_CHAT_TOOLS, *maps_tools]
+    grounding_metadata: Optional[Dict[str, Any]] = None
+    if GEMINI_SERVICE.available:
         try:
-            contents = _prepare_gemini_contents(
+            accumulated = ""
+            async for chunk in GEMINI_SERVICE.stream(
                 message,
                 conversation_history,
-                workspace_context,
+                workspace_with_cache,
                 system_prompt,
-                attachments,
-            )
-            loop = asyncio.get_running_loop()
-            queue: asyncio.Queue[Tuple[str, Any]] = asyncio.Queue()
+                time_context,
+                model,
+                attachments=media_attachments,
+                extra_contents=_merge_extra_contents(title_instruction_contents, cached_contents),
+                tools=tool_list,
+                tool_config=maps_tool_config,
+            ):
+                text_fragment = chunk.text or ""
+                if chunk.candidates:
+                    candidate = chunk.candidates[0]
+                    if candidate.grounding_metadata:
+                        grounding_metadata = candidate.grounding_metadata.model_dump(exclude_none=True)
+                accumulated += text_fragment
+                if text_fragment:
+                    yield ("delta", text_fragment)
+            final_payload = {"text": accumulated, "grounding_metadata": grounding_metadata}
+            if accumulated:
+                yield ("final", final_payload)
+                return
+            raise RuntimeError("AI response was empty")
+        except Exception as gemini_error:  # pragma: no cover - best effort logging
+            print(f"[Gemini] Streaming failed: {gemini_error}")
+            raise
 
-            def push(item: Tuple[str, Any]):
-                asyncio.run_coroutine_threadsafe(queue.put(item), loop)
-
-            def worker():
-                try:
-                    response = gemini_model.generate_content(contents, stream=True)
-                    for chunk in response:
-                        delta = _extract_response_text(chunk)
-                        if not delta:
-                            continue
-                        for piece in _chunk_response_text(delta):
-                            if piece:
-                                push(("delta", piece))
-                    try:
-                        response.resolve()
-                    except Exception:
-                        pass
-                    final_text = _extract_response_text(response)
-                    push(("final", final_text or ""))
-                except Exception as worker_error:
-                    push(("error", worker_error))
-                finally:
-                    push(("stop", ""))
-
-            threading.Thread(target=worker, daemon=True).start()
-
-            while True:
-                kind, payload = await queue.get()
-                if kind == "delta":
-                    yield ("delta", payload)
-                elif kind == "final":
-                    yield ("final", payload)
-                elif kind == "error":
-                    raise payload
-                elif kind == "stop":
-                    break
-            return
-        except Exception as streaming_error:
-            print(f"Gemini streaming error: {streaming_error}")
-
-    fallback_response = await generate_ai_response(
-        message,
-        conversation_history=conversation_history,
-        workspace_context=workspace_context,
-        system_prompt=system_prompt,
-        attachments=attachments,
-    )
-    visible = _extract_ai_section(fallback_response)
-    for fragment in _chunk_response_text(visible):
-        if fragment:
-            yield ("delta", fragment)
-    yield ("final", fallback_response)
+    raise RuntimeError("AI service unavailable")
 
 
 async def generate_ai_response(
@@ -1439,82 +1873,137 @@ async def generate_ai_response(
     conversation_history: List[Dict[str, Any]] = None,
     workspace_context: Optional[str] = None,
     system_prompt: Optional[str] = None,
-    attachments: Optional[List[GeminiAttachment]] = None,
-) -> str:
-    """Generate AI response using Gemini or fallback"""
-    if gemini_model and GEMINI_API_KEY:
+    time_context: Optional[str] = None,
+    model: Optional[str] = None,
+    attachments: Optional[List[ChatAttachment]] = None,
+    user_id: Optional[int] = None,
+    db: Optional[databases.Database] = None,
+    response_schema: Optional[Dict[str, Any]] = None,
+    response_mime_type: Optional[str] = None,
+    *,
+    context_cache_id: Optional[int] = None,
+    maps_enabled: bool = False,
+    maps_latitude: Optional[float] = None,
+    maps_longitude: Optional[float] = None,
+    maps_widget: bool = False,
+    should_generate_title: bool = False,
+) -> Tuple[str, Optional[Dict[str, Any]]]:
+    """Generate a structured response using the configured AI provider."""
+    conversation_history = _normalize_conversation_history(conversation_history)
+    provider = AI_PROVIDER or "gemini"
+
+    cached_contents = None
+    cache_text_block: Optional[str] = None
+    if context_cache_id:
+        if user_id is None or db is None:
+            raise HTTPException(status_code=400, detail="User context is required for cached contexts.")
+        cache_record = await _load_context_cache(context_cache_id, user_id, db)
+        cached_contents = _context_cache_contents(cache_record)
+        cache_text = _row_get(cache_record, "content")
+        if isinstance(cache_text, str) and cache_text.strip():
+            cache_text_block = f"Context cache:\n{cache_text.strip()}"
+
+    workspace_with_cache = workspace_context
+    if cache_text_block:
+        workspace_with_cache = "\n\n".join(filter(None, [workspace_context, cache_text_block]))
+    title_instruction_contents = _build_gray_title_instruction_contents(should_generate_title)
+
+    if provider == "anthropic":
+        if not ANTHROPIC_SERVICE.available:
+            raise HTTPException(status_code=503, detail="Anthropic service unavailable")
+        if attachments:
+            print("[Anthropic] Attachment support is not implemented; ignoring attachments for this request.")
+        response_text = await ANTHROPIC_SERVICE.generate(
+            message,
+            conversation_history,
+            workspace_with_cache,
+            system_prompt,
+            time_context,
+            model,
+        )
+        if not response_text:
+            raise RuntimeError("AI response was empty")
+        return response_text, None
+
+    attachment_payloads: List[GeminiAttachment] = []
+    if attachments:
+        if user_id is None or db is None:
+            raise HTTPException(status_code=400, detail="User information is required for attachments.")
+        attachment_payloads = await _resolve_media_attachments(db, attachments, user_id)
+
+    maps_tools, maps_tool_config = _build_maps_tool_and_config(
+        maps_enabled,
+        maps_latitude,
+        maps_longitude,
+        maps_widget,
+    )
+    tool_list = [*DEFAULT_CHAT_TOOLS, *maps_tools]
+    grounding_metadata: Optional[Dict[str, Any]] = None
+    if GEMINI_SERVICE.available:
         try:
-            contents = _prepare_gemini_contents(
+            response = await GEMINI_SERVICE.generate(
                 message,
                 conversation_history,
-                workspace_context,
+                workspace_with_cache,
                 system_prompt,
-                attachments,
+                time_context,
+                model,
+                attachments=attachment_payloads,
+                extra_contents=_merge_extra_contents(title_instruction_contents, cached_contents),
+                response_schema=response_schema,
+                response_mime_type=response_mime_type,
+                tools=tool_list,
+                tool_config=maps_tool_config,
             )
-            response = gemini_model.generate_content(contents)
-            extracted = _extract_response_text(response)
-            if extracted:
-                return extracted
-        except Exception as e:
-            print(f"Gemini API error: {e}")
+            if response.candidates:
+                candidate = response.candidates[0]
+                if candidate.grounding_metadata:
+                    grounding_metadata = candidate.grounding_metadata.model_dump(exclude_none=True)
+            attempts = 0
+            while attempts < 3:
+                function_call = _extract_function_call(response)
+                if not function_call:
+                    break
+                if user_id is None or db is None:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="User context is required to execute function calls.",
+                    )
+                tool_result = await _execute_function_call(function_call, user_id, db)
+                tool_contents = _build_function_call_contents(function_call, tool_result)
+                extra_payloads = _merge_extra_contents(
+                    title_instruction_contents,
+                    cached_contents,
+                    tool_contents,
+                )
+                response = await GEMINI_SERVICE.generate(
+                    message,
+                    conversation_history,
+                    workspace_with_cache,
+                    system_prompt,
+                    time_context,
+                    model,
+                    attachments=attachment_payloads,
+                    extra_contents=extra_payloads,
+                    response_schema=response_schema,
+                    response_mime_type=response_mime_type,
+                    tools=tool_list,
+                    tool_config=maps_tool_config,
+                )
+                if response.candidates:
+                    candidate = response.candidates[0]
+                    if candidate.grounding_metadata:
+                        grounding_metadata = candidate.grounding_metadata.model_dump(exclude_none=True)
+                attempts += 1
+            final_text = response.text or ""
+            if final_text:
+                return final_text, grounding_metadata
+            raise RuntimeError("AI response was empty")
+        except Exception as gemini_error:  # pragma: no cover - best effort logging
+            print(f"[Gemini] Unable to generate response: {gemini_error}")
+            raise
+    raise HTTPException(status_code=503, detail="AI service unavailable")
 
-    # Fallback response
-    fallback_options = [
-        (
-            "Reviewing the latest message to choose a helpful follow-up.",
-            "That's an interesting point! Could you tell me more about what you're thinking?",
-        ),
-        (
-            "Considering next steps the user might appreciate.",
-            "I appreciate you sharing that. Let me think about how I can best help you.",
-        ),
-        (
-            "Looking for the most useful direction to take the conversation.",
-            "Thanks for your message! What would you like to explore further?",
-        ),
-        (
-            "Assessing what resources or clarification might support the user.",
-            "I understand. How can I assist you with this topic?",
-        ),
-        (
-            "Gathering my thoughts to provide a concise suggestion.",
-            "That's a great question! Here's what comes to mind...",
-        ),
-    ]
-    import random
-    thinking, reply_text = random.choice(fallback_options)
-    return _format_structured_ai_reply(message, thinking, reply_text)
-
-
-AI_SECTION_PATTERN = re.compile(r"ai:\s*(.*)$", re.IGNORECASE | re.DOTALL)
-TOKEN_SPLIT_REGEX = re.compile(r"(\s+)")
-
-
-def _extract_ai_section(structured_text: str) -> str:
-    """Extract the AI-visible section from a structured response."""
-    if not structured_text:
-        return ""
-    match = AI_SECTION_PATTERN.search(structured_text)
-    if match:
-        return match.group(1)
-    return structured_text
-
-
-def _chunk_response_text(text: str, max_chunk_size: int = 48):
-    """Yield small chunks from the response text to simulate token-level streaming."""
-    if not text:
-        return
-
-    for fragment in TOKEN_SPLIT_REGEX.split(text):
-        if not fragment:
-            continue
-        if fragment.isspace():
-            yield fragment
-            continue
-        start = 0
-        while start < len(fragment):
-            yield fragment[start:start + max_chunk_size]
-            start += max_chunk_size
 
 
 def _sse_event(event: str, payload: Dict[str, Any]) -> str:
@@ -1522,43 +2011,10 @@ def _sse_event(event: str, payload: Dict[str, Any]) -> str:
     return f"event: {event}\ndata: {json.dumps(payload)}\n\n"
 
 
-# Gemini file endpoints
-@app.post("/api/files/upload", response_model=GeminiFile)
-async def upload_media_file(
-    file: UploadFile = File(...),
-    display_name: Optional[str] = Form(None),
-):
-    """Upload a media file to Gemini and return the processed metadata."""
-    if not GEMINI_API_KEY:
-        raise HTTPException(status_code=400, detail="Gemini API key is not configured.")
-
-    temp_path = await persist_upload_file(file)
-    try:
-        processed_file = await asyncio.to_thread(
-            upload_file_and_wait,
-            temp_path,
-            display_name or file.filename,
-            file.content_type,
-        )
-    except HTTPException:
-        raise
-    except TimeoutError as exc:
-        raise HTTPException(status_code=504, detail=str(exc)) from exc
-    except Exception as exc:  # pragma: no cover - best effort logging
-        raise HTTPException(status_code=500, detail=f"Gemini upload failed: {exc}") from exc
-    finally:
-        try:
-            os.unlink(temp_path)
-        except OSError:
-            pass
-
-    return serialize_gemini_file(processed_file)
-
-
 # AI Chat endpoints
 @app.post("/api/chat/title", response_model=ChatTitleResponse)
 async def create_chat_title(request: ChatTitleRequest):
-    """Generate a chat title suggestion using Gemini Flash Lite."""
+    """Generate a chat title suggestion using local heuristics."""
     suggestion: Optional[str] = None
     try:
         suggestion = await generate_chat_title_suggestion(request.message)
@@ -1569,45 +2025,254 @@ async def create_chat_title(request: ChatTitleRequest):
     return ChatTitleResponse(title=_fallback_title_from_message(request.message))
 
 
+@app.post("/context-cache", response_model=ContextCache)
+async def create_context_cache(
+    payload: ContextCacheBase,
+    user_id: int = Query(..., description="ID of the user creating the context cache"),
+    db: databases.Database = Depends(get_database),
+) -> ContextCache:
+    now = datetime.utcnow()
+    query = context_cache.insert().values(
+        user_id=user_id,
+        conversation_id=payload.conversation_id,
+        label=payload.label,
+        content=payload.content,
+        created_at=now,
+    )
+    cache_id = await db.execute(query)
+    return ContextCache(
+        id=cache_id,
+        user_id=user_id,
+        conversation_id=payload.conversation_id,
+        label=payload.label,
+        content=payload.content,
+        created_at=now,
+    )
+
+
+@app.get("/context-cache/{cache_id}", response_model=ContextCache)
+async def get_context_cache(cache_id: int, db: databases.Database = Depends(get_database)):
+    record = await db.fetch_one(
+        context_cache.select().where(context_cache.c.id == cache_id)
+    )
+    payload = _serialize_context_cache(record)
+    if not payload:
+        raise HTTPException(status_code=404, detail="Context cache not found.")
+    return ContextCache(**payload)
+
+
+class FileSearchStoreCreate(BaseModel):
+    display_name: Optional[str] = None
+
+
+class FileSearchUploadResponse(BaseModel):
+    operation_name: str
+    done: bool
+    result: Optional[Dict[str, Any]] = None
+
+
+class FileSearchImportPayload(BaseModel):
+    file_search_store_name: str
+    file_name: str
+    chunking_config: Optional[Dict[str, Any]] = None
+
+
+def _ensure_file_search_enabled():
+    if not FILE_SEARCH_ENABLED or not FILE_SEARCH_SERVICE:
+        raise HTTPException(status_code=503, detail="File Search is not enabled.")
+
+
+async def _wait_for_operation(operation: types.Operation) -> types.Operation:
+    while not operation.done:
+        await asyncio.sleep(2)
+        operation = await FILE_SEARCH_SERVICE.get_operation(operation.name)
+    return operation
+
+
+@app.post("/api/file-search/stores", response_model=Dict[str, Any])
+async def create_file_search_store(
+    payload: FileSearchStoreCreate,
+):
+    _ensure_file_search_enabled()
+    store = await FILE_SEARCH_SERVICE.create_store(payload.display_name)
+    return {"name": store.name, "display_name": store.display_name}
+
+
+@app.post("/api/file-search/upload", response_model=FileSearchUploadResponse)
+async def upload_to_file_search_store(
+    store_name: str = Form(...),
+    file: UploadFile = File(...),
+    display_name: Optional[str] = Form(None),
+    chunking_config: Optional[str] = Form(None),
+):
+    _ensure_file_search_enabled()
+    chunk_config = _parse_json_field(chunking_config)
+    temp_path = MEDIA_UPLOAD_DIR / f"filesearch-{uuid4().hex}{Path(file.filename or 'upload').suffix}"
+    data = await file.read()
+    temp_path.write_bytes(data)
+    try:
+        operation = await FILE_SEARCH_SERVICE.upload_to_store(
+            str(temp_path),
+            store_name,
+            display_name,
+            chunk_config,
+        )
+        result = await _wait_for_operation(operation)
+    finally:
+        try:
+            temp_path.unlink()
+        except OSError:
+            pass
+    return FileSearchUploadResponse(
+        operation_name=result.name,
+        done=result.done,
+        result=result.result.model_dump() if result.result else None,
+    )
+
+
+@app.post("/api/file-search/import", response_model=FileSearchUploadResponse)
+async def import_file_search(
+    payload: FileSearchImportPayload,
+):
+    _ensure_file_search_enabled()
+    operation = await FILE_SEARCH_SERVICE.import_file(
+        payload.file_search_store_name,
+        payload.file_name,
+        payload.chunking_config,
+    )
+    result = await _wait_for_operation(operation)
+    return FileSearchUploadResponse(
+        operation_name=result.name,
+        done=result.done,
+        result=result.result.model_dump() if result.result else None,
+    )
+
+
+@app.post("/api/uploads", response_model=MediaUpload)
+async def upload_media(
+    user_id: int = Form(...),
+    file: UploadFile = File(...),
+    db: databases.Database = Depends(get_database),
+):
+    """Upload an image or PDF for later chat use."""
+    content_type = (file.content_type or "").lower()
+    if not content_type:
+        raise HTTPException(status_code=400, detail="Missing content type for upload.")
+
+    if not (content_type.startswith("image/") or content_type == "application/pdf"):
+        raise HTTPException(status_code=400, detail="Only image and PDF media are supported.")
+
+    original_name = Path(file.filename or "").name or "upload"
+    extension = Path(original_name).suffix
+    media_id = uuid4().hex
+    storage_name = f"{media_id}{extension}"
+    storage_path = MEDIA_UPLOAD_DIR / storage_name
+
+    file_bytes = await file.read()
+    if not file_bytes:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+
+    try:
+        storage_path.write_bytes(file_bytes)
+    except OSError as error:
+        raise HTTPException(status_code=500, detail=f"Failed to store upload: {error}") from error
+
+    now = datetime.utcnow()
+    query = media_uploads.insert().values(
+        user_id=user_id,
+        filename=original_name,
+        mime_type=content_type,
+        size=len(file_bytes),
+        storage_path=str(storage_path),
+        created_at=now,
+    )
+    media_record_id = await db.execute(query)
+    if FILE_SEARCH_ENABLED and FILE_SEARCH_SERVICE:
+        store_name = await _ensure_user_file_search_store(db, user_id)
+        if store_name:
+            await _upload_file_search_document(store_name, storage_path, original_name)
+    return MediaUpload(
+        id=media_record_id,
+        user_id=user_id,
+        filename=original_name,
+        mime_type=content_type,
+        size=len(file_bytes),
+        created_at=now,
+    )
+
+
 @app.post("/api/chat", response_model=ChatResponse)
 async def chat_with_ai(request: ChatRequest, db: databases.Database = Depends(get_database)):
     """Send a message to AI and get a response"""
     try:
-        # Get or create conversation
-        conversation_id = await get_or_create_conversation(request.conversation_id, request.user_id)
+        # Generate a title for the chat session
+        title_request = ChatTitleRequest(message=request.message)
+        title_response = await create_chat_title(title_request)
+        session_title = title_response.title
 
-        # Save user message
+        # Create chat session
+        now = datetime.utcnow()
+        chat_session_query = chat_sessions.insert().values(
+            user_id=request.user_id,
+            title=session_title,
+            created_at=now,
+            updated_at=now
+        )
+        session_id = await db.execute(chat_session_query)
+
+        # Determine conversation_id, only using Supabase when provided ID is valid or unspecified
+        requested_conversation_id = request.conversation_id
+        valid_requested_conversation_id = _is_valid_uuid(requested_conversation_id)
+        if requested_conversation_id and not valid_requested_conversation_id:
+            conversation_id = requested_conversation_id
+        else:
+            conversation_id = await get_or_create_conversation(
+                requested_conversation_id if valid_requested_conversation_id else None,
+                request.user_id,
+                title=session_title,
+            )
+
+        # Save user message to local conversation store
         user_message_payload: Dict[str, Any] = {
             "role": "user",
             "text": request.message
         }
-        if request.attachments:
-            user_message_payload["attachments"] = [
-                attachment.dict(exclude_none=True) for attachment in request.attachments
-            ]
 
         await save_conversation_message(conversation_id, user_message_payload)
 
         # Get conversation history for context
-        conversation_history = []
-        if _conversation_store_available() and conversation_id:
+        conversation_history: List[Dict[str, Any]] = []
+        if _conversation_store_available() and _is_valid_uuid(conversation_id):
             try:
                 result = supabase.table("conversations").select("history").eq("id", conversation_id).execute()
                 if result.data:
                     conversation_history = result.data[0]["history"] or []
             except Exception as error:
                 _handle_conversation_store_error("Error getting conversation history", error)
-        elif conversation_id:
+                conversation_history = []
+        else:
             async with LOCAL_CONVERSATION_LOCK:
-                conversation_history = list(LOCAL_CONVERSATION_STORE.get(conversation_id, []))
+                conversation_history = list(LOCAL_CONVERSATION_STORE.get(conversation_id) or [])
 
         # Generate AI response
-        ai_response = await generate_ai_response(
+        ai_response, grounding_metadata = await generate_ai_response(
             request.message,
             conversation_history,
             request.context,
             request.system_prompt,
+            request.time_context,
+            request.model,
             request.attachments,
+            request.user_id,
+            db,
+            response_schema=request.response_json_schema,
+            response_mime_type=request.response_mime_type,
+            context_cache_id=request.context_cache_id,
+            maps_enabled=request.maps_enabled,
+            maps_latitude=request.maps_latitude,
+            maps_longitude=request.maps_longitude,
+            maps_widget=request.maps_widget,
+            should_generate_title=request.should_generate_title,
         )
 
         # Save AI response
@@ -1619,7 +2284,12 @@ async def chat_with_ai(request: ChatRequest, db: databases.Database = Depends(ge
         # Update user streak for daily activity
         await update_user_streak(request.user_id, db)
 
-        return ChatResponse(response=ai_response, conversation_id=conversation_id)
+        return ChatResponse(
+            response=ai_response,
+            conversation_id=conversation_id,
+            grounding_metadata=grounding_metadata,
+            title=session_title,
+        )
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Chat error: {str(e)}")
@@ -1629,21 +2299,41 @@ async def chat_with_ai(request: ChatRequest, db: databases.Database = Depends(ge
 async def chat_with_ai_stream(request: ChatRequest, db: databases.Database = Depends(get_database)):
     """Stream an AI response token-by-token using Server-Sent Events."""
     try:
-        conversation_id = await get_or_create_conversation(request.conversation_id, request.user_id)
+        # Generate a title for the chat session
+        title_request = ChatTitleRequest(message=request.message)
+        title_response = await create_chat_title(title_request)
+        session_title = title_response.title
+
+        # Create chat session
+        now = datetime.utcnow()
+        chat_session_query = chat_sessions.insert().values(
+            user_id=request.user_id,
+            title=session_title,
+            created_at=now,
+            updated_at=now
+        )
+        session_id = await db.execute(chat_session_query)
+
+        requested_conversation_id = request.conversation_id
+        valid_requested_conversation_id = _is_valid_uuid(requested_conversation_id)
+        if requested_conversation_id and not valid_requested_conversation_id:
+            conversation_id = requested_conversation_id
+        else:
+            conversation_id = await get_or_create_conversation(
+                requested_conversation_id if valid_requested_conversation_id else None,
+                request.user_id,
+                title=session_title,
+            )
 
         user_message_payload: Dict[str, Any] = {
             "role": "user",
             "text": request.message,
         }
-        if request.attachments:
-            user_message_payload["attachments"] = [
-                attachment.dict(exclude_none=True) for attachment in request.attachments
-            ]
 
         await save_conversation_message(conversation_id, user_message_payload)
 
         conversation_history: List[Dict[str, Any]] = []
-        if _conversation_store_available() and conversation_id:
+        if _conversation_store_available() and _is_valid_uuid(conversation_id):
             try:
                 result = supabase.table("conversations").select("history").eq("id", conversation_id).execute()
                 if result.data:
@@ -1655,19 +2345,34 @@ async def chat_with_ai_stream(request: ChatRequest, db: databases.Database = Dep
                 conversation_history = list(LOCAL_CONVERSATION_STORE.get(conversation_id, []))
 
         async def event_stream() -> AsyncGenerator[str, None]:
+            start_time = time.perf_counter()
+            first_token_time: Optional[float] = None
             try:
                 accumulated_visible = ""
                 final_response: Optional[str] = None
+                grounding_metadata_payload: Optional[Dict[str, Any]] = None
                 async for kind, payload in stream_ai_response(
                     request.message,
                     conversation_history,
                     request.context,
                     request.system_prompt,
-                    request.attachments,
+                    user_id=request.user_id,
+                    db=db,
+                    time_context=request.time_context,
+                    model=request.model,
+                    attachments=request.attachments,
+                    context_cache_id=request.context_cache_id,
+                    maps_enabled=request.maps_enabled,
+                    maps_latitude=request.maps_latitude,
+                    maps_longitude=request.maps_longitude,
+                    maps_widget=request.maps_widget,
+                    should_generate_title=request.should_generate_title,
                 ):
                     if kind == "delta":
                         if not payload:
                             continue
+                        if first_token_time is None:
+                            first_token_time = time.perf_counter()
                         accumulated_visible += payload
                         yield _sse_event("token", {"delta": payload})
                         if STREAMING_TOKEN_DELAY:
@@ -1675,7 +2380,10 @@ async def chat_with_ai_stream(request: ChatRequest, db: databases.Database = Dep
                         else:
                             await asyncio.sleep(0)
                     elif kind == "final":
-                        if payload:
+                        if isinstance(payload, dict):
+                            final_response = payload.get("text") or accumulated_visible
+                            grounding_metadata_payload = payload.get("grounding_metadata")
+                        elif payload:
                             final_response = payload
 
                 if final_response is None:
@@ -1691,13 +2399,21 @@ async def chat_with_ai_stream(request: ChatRequest, db: databases.Database = Dep
 
                 await update_user_streak(request.user_id, db)
 
-                yield _sse_event(
-                    "end",
-                    {
-                        "conversation_id": conversation_id,
-                        "response": final_response,
-                    },
-                )
+                end_payload: Dict[str, Any] = {
+                    "conversation_id": conversation_id,
+                    "response": final_response,
+                    "title": session_title,
+                }
+                if grounding_metadata_payload:
+                    end_payload["grounding_metadata"] = grounding_metadata_payload
+                final_time = time.perf_counter()
+                timing_payload: Dict[str, int] = {
+                    "total_ms": int(max(0.0, (final_time - start_time) * 1000)),
+                }
+                if first_token_time is not None:
+                    timing_payload["first_token_ms"] = int(max(0.0, (first_token_time - start_time) * 1000))
+                end_payload["timing"] = timing_payload
+                yield _sse_event("end", end_payload)
             except Exception as stream_error:  # pragma: no cover - best effort logging
                 yield _sse_event("error", {"message": str(stream_error)})
 
@@ -1717,7 +2433,7 @@ async def chat_with_ai_stream(request: ChatRequest, db: databases.Database = Dep
 async def get_conversation(conversation_id: str):
     """Get conversation history"""
     try:
-        if not _conversation_store_available():
+        if not _conversation_store_available() or not _is_valid_uuid(conversation_id):
             async with LOCAL_CONVERSATION_LOCK:
                 return list(LOCAL_CONVERSATION_STORE.get(conversation_id, []))
 
@@ -1735,18 +2451,24 @@ async def get_conversation(conversation_id: str):
         raise HTTPException(status_code=500, detail=f"Error fetching conversation: {str(e)}")
 
 @app.post("/api/conversation")
-async def create_conversation(request: ChatSessionCreate):
+async def create_conversation(request: ConversationCreateRequest):
     """Create a new conversation"""
     try:
         if not _conversation_store_available():
             # Fallback: return mock conversation
             import uuid
-            return {"id": str(uuid.uuid4()), "title": request.title, "history": []}
+            return {
+                "id": str(uuid.uuid4()),
+                "title": request.title,
+                "history": [],
+                "user_id": request.user_id,
+            }
 
         try:
             result = supabase.table("conversations").insert({
                 "title": request.title,
-                "history": []
+                "history": [],
+                "user_id": request.user_id,
             }).execute()
 
             if result.data:
@@ -1758,10 +2480,133 @@ async def create_conversation(request: ChatSessionCreate):
             _handle_conversation_store_error("Warning: Conversations table not found or inaccessible", supabase_error)
             # Fallback: return mock conversation
             import uuid
-            return {"id": str(uuid.uuid4()), "title": request.title, "history": []}
+            return {
+                "id": str(uuid.uuid4()),
+                "title": request.title,
+                "history": [],
+                "user_id": request.user_id,
+            }
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error creating conversation: {str(e)}")
+
+def _normalize_conversation_title(payload: ConversationUpdateRequest) -> str | None:
+    normalized_title: Optional[str] = None
+    if payload.title is not None:
+        normalized_title = payload.title.strip()
+        if not normalized_title:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Conversation title cannot be empty")
+    return normalized_title
+
+
+async def _apply_conversation_update(
+    conversation_id: str, payload: ConversationUpdateRequest
+) -> Dict[str, Any]:
+    normalized_title = _normalize_conversation_title(payload)
+    if normalized_title is None and payload.user_id is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No conversation fields provided")
+
+    updated_at_iso = datetime.utcnow().isoformat() + "Z"
+
+    if _conversation_store_available() and _is_valid_uuid(conversation_id):
+        update_values: Dict[str, Any] = {"updated_at": updated_at_iso}
+        if normalized_title is not None:
+            update_values["title"] = normalized_title
+        if payload.user_id is not None:
+            update_values["user_id"] = payload.user_id
+
+        try:
+            result = (
+                supabase.table("conversations")
+                .update(update_values)
+                .eq("id", conversation_id)
+                .select("id, title, created_at, updated_at")
+                .execute()
+            )
+            rows = result.data or []
+            if not rows:
+                secondary = (
+                    supabase.table("conversations")
+                    .select("id, title, created_at, updated_at")
+                    .eq("id", conversation_id)
+                    .limit(1)
+                    .execute()
+                )
+                rows = secondary.data or []
+
+            if rows:
+                row = rows[0]
+                return {
+                    "id": _row_get(row, "id") or conversation_id,
+                    "title": _row_get(row, "title"),
+                    "created_at": _row_get(row, "created_at"),
+                    "updated_at": _row_get(row, "updated_at"),
+                }
+
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
+        except HTTPException:
+            raise
+        except Exception as error:
+            _handle_conversation_store_error("Error updating conversation", error)
+            # Fall back to local storage if possible
+
+    now_iso = updated_at_iso
+    async with LOCAL_CONVERSATION_LOCK:
+        if (
+            conversation_id not in LOCAL_CONVERSATION_STORE
+            and conversation_id not in LOCAL_CONVERSATION_METADATA
+        ):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
+
+        metadata = LOCAL_CONVERSATION_METADATA.setdefault(
+            conversation_id,
+            {
+                "id": conversation_id,
+                "title": normalized_title or "New Conversation",
+                "created_at": now_iso,
+                "updated_at": now_iso,
+            },
+        )
+        if normalized_title is not None:
+            metadata["title"] = normalized_title
+        if payload.user_id is not None:
+            metadata["user_id"] = payload.user_id
+        metadata.setdefault("created_at", now_iso)
+        metadata["updated_at"] = now_iso
+
+        return {
+            "id": metadata["id"],
+            "title": metadata.get("title"),
+            "created_at": metadata.get("created_at"),
+            "updated_at": metadata.get("updated_at"),
+        }
+
+
+@app.patch("/api/conversation/{conversation_id}")
+async def update_conversation(conversation_id: str, payload: ConversationUpdateRequest):
+    """Update conversation metadata such as its title."""
+    return await _apply_conversation_update(conversation_id, payload)
+
+
+@app.post("/api/conversation/{conversation_id}/metadata")
+async def update_conversation_metadata(conversation_id: str, payload: ConversationUpdateRequest):
+    """Update metadata via POST for clients that cannot rely on PATCH."""
+    return await _apply_conversation_update(conversation_id, payload)
+
+@app.get("/api/conversation/{conversation_id}/usage")
+async def get_conversation_usage(conversation_id: str):
+    """Get conversation usage statistics"""
+    try:
+        # For now, return mock usage data
+        # TODO: Implement actual usage tracking based on conversation history
+        return {
+            "message_count": 0,
+            "token_count": 0,
+            "created_at": None,
+            "last_updated": None
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching conversation usage: {str(e)}")
 
 # User endpoints
 @app.post("/users/", response_model=User, status_code=status.HTTP_201_CREATED)
@@ -2067,9 +2912,60 @@ async def touch_user_streak(user_id: int, db: databases.Database = Depends(get_d
 
 @app.get("/users/{user_id}/calendar-events", response_model=List[CalendarEvent])
 async def get_user_calendar_events(user_id: int, db: databases.Database = Depends(get_database)):
-    # Fixed query to avoid calendar_id column references
     query = calendar_events.select().where(calendar_events.c.user_id == user_id).order_by(calendar_events.c.start_time)
-    return await db.fetch_all(query)
+    rows = await db.fetch_all(query)
+    now = datetime.utcnow()
+    normalized = []
+    for row in rows:
+        record = dict(row)
+        if record.get("created_at") is None:
+            record["created_at"] = now
+        normalized.append(record)
+    return normalized
+
+
+@app.get("/users/{user_id}/reminders", response_model=List[Dict[str, Any]])
+async def list_user_reminders(
+    user_id: int,
+    limit: Optional[int] = Query(None, ge=1),
+    status_filter: Optional[str] = None,
+    include_archived: bool = Query(False),
+):
+    return []
+
+
+@app.get("/users/{user_id}/conversations", response_model=List[Dict[str, Any]])
+async def list_user_conversations(
+    user_id: int,
+    limit: int = Query(100, ge=1, le=500),
+):
+    if not _conversation_store_available():
+        return []
+
+    try:
+        result = (
+            supabase.table("conversations")
+            .select("id, title, created_at, updated_at")
+            .eq("user_id", user_id)
+            .order("updated_at", desc=True)
+            .limit(limit)
+            .execute()
+        )
+        rows = result.data or []
+        normalized: List[Dict[str, Any]] = []
+        for row in rows:
+            normalized.append(
+                {
+                    "id": _row_get(row, "id"),
+                    "title": _row_get(row, "title"),
+                    "created_at": _row_get(row, "created_at"),
+                    "updated_at": _row_get(row, "updated_at"),
+                }
+            )
+        return normalized
+    except Exception as error:
+        _handle_conversation_store_error("Warning: Conversations table not found or inaccessible", error)
+        return []
 
 @app.post("/users/{user_id}/calendar-events", response_model=CalendarEvent, status_code=status.HTTP_201_CREATED)
 async def create_calendar_event(user_id: int, event: CalendarEventCreate, db: databases.Database = Depends(get_database)):
@@ -2423,6 +3319,94 @@ async def daily_proactivity_checkin(
 async def get_proactivity_streak(user_id: int, db: databases.Database = Depends(get_database)):
     """Get user's current proactivity streak"""
     return await _compute_proactivity_streak(db, user_id)
+
+
+@app.get(
+    "/users/{user_id}/proactivity/notifications",
+    response_model=List[ProactivityNotification]
+)
+async def get_proactivity_notifications(
+    user_id: int,
+    limit: Optional[int] = Query(None, ge=1),
+    unread_only: bool = Query(False),
+    db: databases.Database = Depends(get_database),
+) -> List[ProactivityNotification]:
+    """Fetch proactivity notifications for a user."""
+    query = proactive_notifications.select().where(proactive_notifications.c.user_id == user_id)
+    if unread_only:
+        query = query.where(proactive_notifications.c.read_at.is_(None))
+    query = query.order_by(proactive_notifications.c.sent_at.desc())
+    if limit:
+        query = query.limit(limit)
+    rows = await db.fetch_all(query)
+    return [
+        ProactivityNotification.model_validate(
+            _serialize_proactivity_notification(row)
+        )
+        for row in rows
+    ]
+
+
+@app.post(
+    "/users/{user_id}/proactivity/notifications/{notification_id}/read",
+    response_model=ProactivityNotification
+)
+async def mark_proactivity_notification_read(
+    user_id: int,
+    notification_id: int,
+    db: databases.Database = Depends(get_database),
+) -> ProactivityNotification:
+    """Mark a notification as read and return the updated record."""
+    select_query = proactive_notifications.select().where(
+        (proactive_notifications.c.user_id == user_id)
+        & (proactive_notifications.c.id == notification_id)
+    )
+    record = await db.fetch_one(select_query)
+    if not record:
+        raise HTTPException(status_code=404, detail="Notification not found.")
+
+    await db.execute(
+        proactive_notifications.update()
+        .where(proactive_notifications.c.id == notification_id)
+        .values(read_at=datetime.utcnow())
+    )
+    updated = await db.fetch_one(select_query)
+    return ProactivityNotification.model_validate(
+        _serialize_proactivity_notification(updated)
+    )
+
+
+@app.get("/users/{user_id}/proactivity/settings", response_model=ProactivitySettings)
+async def get_proactivity_settings_route(user_id: int):
+    return PROACTIVITY_SETTINGS_STORE.get(user_id, DEFAULT_PROACTIVITY_SETTINGS)
+
+
+@app.post("/users/{user_id}/proactivity/settings", response_model=ProactivitySettings)
+async def update_proactivity_settings_route(user_id: int, settings: ProactivitySettings):
+    PROACTIVITY_SETTINGS_STORE[user_id] = settings
+    return settings
+
+
+@app.get("/api/workspace-backgrounds", response_model=List[WorkspaceBackground])
+async def list_workspace_backgrounds():
+    return WORKSPACE_BACKGROUNDS
+
+
+@app.post("/api/workspace-backgrounds", response_model=WorkspaceBackground)
+async def create_workspace_background(background: WorkspaceBackground):
+    new_id = len(WORKSPACE_BACKGROUNDS) + 1
+    payload = background.model_dump(exclude_none=True)
+    return WorkspaceBackground(**{**payload, "id": new_id})
+
+
+@app.post("/api/workspace-backgrounds/assets")
+async def upload_workspace_background_asset(file: UploadFile = File(...)):
+    return {
+        "filename": file.filename,
+        "asset_path": f"/uploads/{file.filename}",
+        "content_type": file.content_type or "application/octet-stream",
+        "size": 0,
+    }
 
 # Google Calendar helpers
 
