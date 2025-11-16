@@ -8,12 +8,38 @@ import {
   useMemo,
   useRef,
   useState,
+  type ChangeEvent,
+  type RefObject,
   type ReactNode,
+  type SetStateAction,
 } from "react";
 import { useUser } from "@/contexts/UserContext";
-import { apiService, type ChatAttachment, type ConversationSummary, type Reminder, type User } from "@/lib/api";
+import {
+  apiService,
+  type ChatStreamTiming,
+  type ConversationSummary,
+  type ContextCache,
+  type ContextCacheBase,
+  type GroundingMetadata,
+  type MediaUpload,
+  type Reminder,
+  type User,
+} from "@/lib/api";
 import { buildLocalTimeContext } from "@/lib/timeContext";
 import { formatReminderDateLabel, formatReminderSlotLabel } from "./reminderTimeUtils";
+
+declare global {
+  interface Window {
+    endSearchTracking?: () => void;
+  }
+}
+
+const endSearchTracking = () => {
+  if (typeof window === "undefined") {
+    return;
+  }
+  window.endSearchTracking?.();
+};
 
 export type ChatRole = "user" | "assistant";
 
@@ -22,36 +48,29 @@ export type ChatMessage = {
   role: ChatRole;
   content: string;
   createdAt: number;
-  attachments?: ChatAttachment[];
   reminders?: GrayReminderCreatedPayload[];
+  groundingMetadata?: GroundingMetadata;
+  backendTimings?: ChatStreamTiming;
 };
 
 type ConversationHistoryEntryPayload = {
   role: "user" | "model";
   text: string;
-  attachments?: ChatAttachment[];
 };
 
 const buildConversationHistoryPayload = (messages: ChatMessage[]) => {
   return messages
     .map<ConversationHistoryEntryPayload | null>((message) => {
-      const attachments =
-        message.attachments && message.attachments.length > 0
-          ? message.attachments.map((attachment) => ({ ...attachment }))
-          : undefined;
-
       if (message.role === "user") {
         return {
           role: "user",
           text: message.content ?? "",
-          attachments,
         };
       }
       if (message.role === "assistant") {
         return {
           role: "model",
           text: message.content ?? "",
-          attachments,
         };
       }
       return null;
@@ -83,12 +102,11 @@ type ChatContextValue = {
       autoStream?: boolean;
     }
   ) => Promise<ChatSession>;
-  sendGeneralMessage: (content: string, attachments?: ChatAttachment[]) => Promise<string>;
+  sendGeneralMessage: (content: string) => Promise<string>;
   appendMessage: (
     sessionId: string,
     role: ChatRole,
     content: string,
-    attachments?: ChatAttachment[],
     tempId?: string
   ) => ChatMessage | null;
   updateMessage: (
@@ -110,6 +128,61 @@ type ChatContextValue = {
   markAutoStreamTriggered: (sessionId: string, messageId?: string | null) => void;
   resetAutoStreamState: (sessionId?: string | null) => void;
   personalizedSystemPrompt: string;
+  attachments: MediaUpload[];
+  isAttachmentUploading: boolean;
+  attachmentError: string | null;
+  uploadAttachments: (files: FileList | File[]) => Promise<void>;
+  removeAttachment: (id: number) => void;
+  clearAttachments: () => void;
+  mapsEnabled: boolean;
+  mapsWidgetEnabled: boolean;
+  mapsLatitude: string;
+  mapsLongitude: string;
+  setMapsEnabled: (value: boolean) => void;
+  setMapsWidgetEnabled: (value: boolean) => void;
+  setMapsLatitude: (value: string) => void;
+  setMapsLongitude: (value: string) => void;
+  mapPayload: Record<string, number | boolean | undefined>;
+  pendingLocationRequestMessage: string | null;
+  isRequestingLocation: boolean;
+  requestLocationShare: () => void;
+  skipLocationShare: () => void;
+  contextCaches: ContextCache[];
+  contextCacheLabel: string;
+  contextCacheContent: string;
+  selectedContextCacheId: number | null;
+  contextCacheMessage: string | null;
+  isContextCacheSaving: boolean;
+  createContextCache: (conversationId?: string) => Promise<void>;
+  selectContextCacheId: (cacheId: number | null) => void;
+  setContextCacheLabel: (value: string) => void;
+  setContextCacheContent: (value: string) => void;
+  webSearchEnabled: boolean;
+  setWebSearchEnabled: (value: boolean) => void;
+  fileSearchStores: { name: string; display_name?: string }[];
+  fileSearchDisplayName: string;
+  setFileSearchDisplayName: (value: string) => void;
+  fileSearchStatus: string | null;
+  isCreatingFileSearchStore: boolean;
+  handleCreateFileSearchStore: () => Promise<void>;
+  selectedFileSearchStore: string;
+  setSelectedFileSearchStore: (value: string) => void;
+  fileSearchUploadFile: File | null;
+  setFileSearchUploadFile: (value: File | null) => void;
+  fileSearchUploadStatus: string | null;
+  handleFileSearchUpload: () => Promise<void>;
+  fileSearchChunking: { maxTokensPerChunk: string; maxOverlapTokens: string };
+  setFileSearchChunking: (value: { maxTokensPerChunk: string; maxOverlapTokens: string }) => void;
+  fileSearchImportName: string;
+  setFileSearchImportName: (value: string) => void;
+  fileSearchImportStatus: string | null;
+  handleFileSearchImport: () => Promise<void>;
+  fileSearchUploadInputRef: RefObject<HTMLInputElement | null>;
+};
+
+type SaveContextCacheOptions = {
+  skipMessage?: boolean;
+  skipReset?: boolean;
 };
 
 const ChatContext = createContext<ChatContextValue | null>(null);
@@ -157,12 +230,26 @@ const FALLBACK_ASSISTANT_DELAY_MS = 150;
 const GENERAL_SESSION_ID = "general-session";
 export const GENERAL_CHAT_SESSION_ID = GENERAL_SESSION_ID;
 const GENERAL_SESSION_TITLE = "General Chat";
+const GENERAL_CONVERSATION_PREFIX = "general:";
+export const buildGeneralConversationId = (userId?: number | null) => {
+  if (typeof userId !== "number" || !Number.isFinite(userId)) {
+    return undefined;
+  }
+  return `${GENERAL_CONVERSATION_PREFIX}${userId}`;
+};
+const isGeneralConversationId = (value?: string | null): boolean =>
+  typeof value === "string" && value.startsWith(GENERAL_CONVERSATION_PREFIX);
 const DUPLICATE_THREAD_WINDOW_MS = 15000;
 const REMOTE_SESSION_MERGE_WINDOW_MS = 5 * 60 * 1000;
 const REMINDER_POLL_MIN_INTERVAL = 60_000;
 const REMINDER_POLL_SHORT_INTERVAL = 15_000;
-export const buildPersonalizedSystemPrompt = (user?: User | null) => {
+export const buildPersonalizedSystemPrompt = (user?: User | null, basePrompt?: string | null) => {
   const sections: string[] = [];
+
+  const trimmedBasePrompt = basePrompt?.trim();
+  if (trimmedBasePrompt) {
+    sections.push(trimmedBasePrompt);
+  }
 
   if (user) {
     const profileLines: string[] = [];
@@ -280,7 +367,11 @@ const buildReminderNotificationBody = (reminder: Reminder) => {
 };
 
 const sendReminderNotification = (reminder: Reminder) => {
-  if (typeof window === "undefined" || typeof Notification === "undefined") {
+  if (
+    typeof window === "undefined" ||
+    typeof Notification === "undefined" ||
+    (typeof window !== "undefined" && !window.isSecureContext)
+  ) {
     return;
   }
   if (!reminder.id) {
@@ -295,9 +386,8 @@ const sendReminderNotification = (reminder: Reminder) => {
       icon: REMINDER_NOTIFICATION_ICON,
       badge: REMINDER_NOTIFICATION_ICON,
       tag: `gray-reminder-${reminder.id}`,
-      renotify: true,
       requireInteraction: true,
-    });
+    } as any);
     notification.addEventListener("click", () => {
       if (typeof window !== "undefined" && window.focus) {
         window.focus();
@@ -309,16 +399,74 @@ const sendReminderNotification = (reminder: Reminder) => {
   }
 };
 
+const GREETING_PATTERN =
+  /^(?:hi|hey|hello|hiya|yo|sup|what'?s up|howdy|good (?:morning|afternoon|evening)|hola|h[ae]y there|hi there|hey there|gm|gn|good night)\b[^\w]*$/i;
+
+const LOW_SIGNAL_TITLE_WORDS = new Set<string>([
+  "hi",
+  "hi there",
+  "hey",
+  "hey there",
+  "hello",
+  "hola",
+  "yo",
+  "sup",
+  "gm",
+  "gn",
+  "good morning",
+  "good afternoon",
+  "good evening",
+  "good night",
+  "whats up",
+  "what's up",
+]);
+
+const isLowInformationTitle = (value: string | null | undefined): boolean => {
+  if (!value) {
+    return true;
+  }
+  const normalized = value.trim().toLowerCase().replace(/\s+/g, " ");
+  if (!normalized) {
+    return true;
+  }
+  if (LOW_SIGNAL_TITLE_WORDS.has(normalized)) {
+    return true;
+  }
+  if (normalized.length <= 3) {
+    return true;
+  }
+  const tokens = normalized.replace(/[^a-z0-9\s]/gi, " ").split(/\s+/).filter(Boolean);
+  if (!tokens.length) {
+    return true;
+  }
+  if (tokens.length <= 2 && tokens.every((token) => token.length <= 3)) {
+    return true;
+  }
+  return false;
+};
+
 const isGenericSessionTitle = (title: string | null | undefined): boolean => {
   if (!title) {
     return true;
   }
   const trimmed = title.trim();
-  return trimmed.length === 0 || trimmed.toLowerCase() === "new chat";
+  if (!trimmed) {
+    return true;
+  }
+  const normalized = trimmed.toLowerCase();
+  if (
+    normalized === "new chat" ||
+    normalized === "conversation start" ||
+    normalized === GENERAL_SESSION_TITLE.toLowerCase()
+  ) {
+    return true;
+  }
+  if (GREETING_PATTERN.test(trimmed)) {
+    return true;
+  }
+  return isLowInformationTitle(trimmed);
 };
 
-const GREETING_PATTERN =
-  /^(?:hi|hey|hello|hiya|yo|sup|what'?s up|howdy|good (?:morning|afternoon|evening)|hola|h[ae]y there)\b[^\w]*$/i;
 const WORKSPACE_CONTEXT_KEYWORDS = [
   "calendar",
   "schedule",
@@ -336,6 +484,10 @@ const WORKSPACE_CONTEXT_KEYWORDS = [
   "streak",
   "history",
 ];
+const MAP_TRIGGER_PATTERN =
+  /\b(?:nearby|around|directions|route|map|maps|location|locations|address|restaurant|cafe|coffee|diner|bar|hotel|airport|station|train|bus|metro|tram|park|museum|landmark|beach|mall|district|city|town|village|neighborhood|venue|street|trip|plan)\b/i;
+const MAP_TRIGGER_PHRASE =
+  /\b(?:near me|near here|around here|close to|within (?:a )?(?:mile|km|block|minute|minutes)|walking distance|driving distance|in (?:the )?(?:area|neighborhood|city))\b/i;
 const MIN_CONTEXT_MESSAGE_LENGTH = 48;
 
 const toTimestamp = (value?: string | number | Date | null): number => {
@@ -372,6 +524,14 @@ export const shouldIncludeWorkspaceContext = (message: string, context: string |
   }
 
   return WORKSPACE_CONTEXT_KEYWORDS.some((keyword) => punctuationTrimmed.includes(keyword));
+};
+
+const shouldAutoEnableMapsForMessage = (message: string) => {
+  const normalized = message.trim().toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+  return MAP_TRIGGER_PATTERN.test(normalized) || MAP_TRIGGER_PHRASE.test(normalized);
 };
 
 export const normalizeAssistantContent = (candidate: string | null | undefined, prompt: string) => {
@@ -440,6 +600,47 @@ const isFullReminderPayload = (candidate: Partial<GrayReminderCreatedPayload>): 
   );
 };
 
+const GRAY_TITLE_HTML_CAPTURE_REGEX = /<graytitle\b[^>]*>([\s\S]*?)<\/graytitle>/i;
+const GRAY_TITLE_HTML_STRIP_REGEX = /<graytitle\b[^>]*>[\s\S]*?<\/graytitle>/gi;
+const GRAY_TITLE_LEGACY_CAPTURE_REGEX = /<<gray-title>>([\s\S]*?)<<gray-title-end>>/i;
+const GRAY_TITLE_LEGACY_STRIP_REGEX = /<<gray-title>>[\s\S]*?<<gray-title-end>>/gi;
+
+export const parseGrayTitleMarkers = (
+  value: string | null | undefined
+): { cleanText: string; title: string | null } => {
+  const source = typeof value === "string" ? value : "";
+  let title: string | null = null;
+
+  const htmlMatch = source.match(GRAY_TITLE_HTML_CAPTURE_REGEX);
+  if (htmlMatch && typeof htmlMatch[1] === "string") {
+    const candidate = htmlMatch[1].trim();
+    if (candidate) {
+      title = candidate;
+    }
+  }
+
+  if (!title) {
+    const legacyMatch = source.match(GRAY_TITLE_LEGACY_CAPTURE_REGEX);
+    if (legacyMatch && typeof legacyMatch[1] === "string") {
+      const candidate = legacyMatch[1].trim();
+      if (candidate) {
+        title = candidate;
+      }
+    }
+  }
+
+  const cleanText = source
+    .replace(GRAY_TITLE_HTML_STRIP_REGEX, "")
+    .replace(GRAY_TITLE_LEGACY_STRIP_REGEX, "")
+    .trim();
+
+  return { cleanText, title };
+};
+
+export const stripGrayTitleMarkers = (value: string | null | undefined): string => {
+  return parseGrayTitleMarkers(value).cleanText;
+};
+
 const toNumber = (value: unknown): number | undefined => {
   if (typeof value === "number" && Number.isFinite(value)) {
     return value;
@@ -453,7 +654,13 @@ const toNumber = (value: unknown): number | undefined => {
 
 const coerceLegacyReminderPayload = (candidate: Record<string, unknown>): GrayReminderCreatedPayload | null => {
   const label = typeof candidate.label === "string" ? candidate.label : null;
-  const triggerTime = typeof candidate.trigger_time === "string" ? candidate.trigger_time : null;
+  const triggerTimeCandidate =
+    typeof candidate.trigger_time === "string"
+      ? candidate.trigger_time
+      : typeof candidate.remind_at === "string"
+        ? candidate.remind_at
+        : null;
+  const triggerTime = triggerTimeCandidate;
   if (!label && !triggerTime) {
     return null;
   }
@@ -487,7 +694,7 @@ const coerceLegacyReminderPayload = (candidate: Record<string, unknown>): GrayRe
 
   return {
     type: "gray.reminder",
-    source: "legacy/gray.reminder",
+    source: "mcp/plans-habits-server",
     status: "created",
     entity,
     delivery_mode: deliveryMode,
@@ -617,7 +824,7 @@ const unwrapToolCallCodeFences = (segment: string): string => {
       .filter((line: string) => line.length > 0);
     if (
       lines.length > 0 &&
-      lines.every((line) => TOOL_FENCE_LINE_PATTERNS.some((pattern) => pattern.test(line)))
+      lines.every((line: string) => TOOL_FENCE_LINE_PATTERNS.some((pattern) => pattern.test(line)))
     ) {
       return `${lines.join("\n")}\n`;
     }
@@ -742,9 +949,9 @@ export const extractGrayRemindersFromText = (
     seenReminders.add(key);
     reminders.push(block.reminder);
   }
-  const hasModernReminder = reminders.some((reminder) => reminder.source !== "legacy/gray.reminder");
+  const hasModernReminder = reminders.some((reminder) => reminder.source === "mcp/plans-habits-server");
   const filteredReminders = hasModernReminder
-    ? reminders.filter((reminder) => reminder.source !== "legacy/gray.reminder")
+    ? reminders.filter((reminder) => reminder.source === "mcp/plans-habits-server")
     : reminders;
   let cleanText = "";
   let cursor = 0;
@@ -795,7 +1002,12 @@ const normalizeAssistantMessage = (
   };
 };
 
-const makeMessage = (role: ChatRole, content: string, attachments?: ChatAttachment[], tempId?: string): ChatMessage => {
+const makeMessage = (
+  role: ChatRole,
+  content: string,
+  tempId?: string,
+  metadata?: GroundingMetadata
+): ChatMessage => {
   const id = tempId || (typeof crypto !== "undefined" && "randomUUID" in crypto
     ? crypto.randomUUID()
     : Math.random().toString(36).slice(2));
@@ -805,20 +1017,64 @@ const makeMessage = (role: ChatRole, content: string, attachments?: ChatAttachme
     role,
     content: normalized.content,
     createdAt: Date.now(),
-    attachments:
-      attachments && attachments.length > 0
-        ? attachments.map((attachment) => ({ ...attachment }))
-        : undefined,
     reminders: normalized.reminders,
+    groundingMetadata: metadata,
   };
 };
+
+export const formatConversationTitle = (raw: string): string => {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return "New Chat";
+  }
+  if (trimmed.length > 100) {
+    return trimmed.slice(0, 100).trim();
+  }
+  return trimmed;
+};
+
+const SMALL_TITLE_WORDS = new Set([
+  "a",
+  "an",
+  "the",
+  "and",
+  "or",
+  "but",
+  "in",
+  "on",
+  "at",
+  "to",
+  "for",
+  "of",
+  "with",
+  "by",
+]);
 
 export const deriveTitleFromMessage = (content: string) => {
   const trimmed = content.trim();
   if (!trimmed) {
     return "New Chat";
   }
-  return trimmed.length > 48 ? `${trimmed.slice(0, 45).trim()}…` : trimmed;
+  // Simple snippet of the first user message, no reformatting.
+  return trimmed.length > 80 ? `${trimmed.slice(0, 77).trim()}…` : trimmed;
+};
+
+const isSessionTitleSeedDerived = (session?: ChatSession | null): boolean => {
+  if (!session || session.scope !== "thread") {
+    return false;
+  }
+  const normalizedTitle = session.title?.trim();
+  if (!normalizedTitle) {
+    return false;
+  }
+  const firstMeaningfulUserMessage = (session.messages ?? []).find(
+    (message) => message.role === "user" && message.content.trim().length > 0
+  );
+  if (!firstMeaningfulUserMessage) {
+    return false;
+  }
+  const derivedSeedTitle = deriveTitleFromMessage(firstMeaningfulUserMessage.content).trim();
+  return derivedSeedTitle === normalizedTitle;
 };
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -834,20 +1090,50 @@ export const normalizeConversationIdValue = (value?: string | null): string | un
   return trimmed;
 };
 
-const GENERIC_TITLE_TOKENS = new Set(["new chat", "new conversation", "new thread", "new session"]);
+const coerceConversationIdForRequest = (value?: string | null): string | undefined => {
+  const normalized = normalizeConversationIdValue(value);
+  if (normalized) {
+    return normalized;
+  }
+  return isGeneralConversationId(value) ? value ?? undefined : undefined;
+};
+
+const GENERIC_TITLE_TOKENS = new Set([
+  "new chat",
+  "new conversation",
+  "new thread",
+  "new session",
+  "conversation start",
+]);
 
 export const isGenericTitle = (title: string | null | undefined): boolean => {
   if (!title) {
     return true;
   }
-  const normalized = title.trim().toLowerCase();
-  if (!normalized) {
+  const trimmed = title.trim();
+  if (!trimmed) {
     return true;
   }
-  return GENERIC_TITLE_TOKENS.has(normalized);
+  const normalized = trimmed.toLowerCase();
+  if (GENERIC_TITLE_TOKENS.has(normalized)) {
+    return true;
+  }
+  if (GREETING_PATTERN.test(trimmed)) {
+    return true;
+  }
+  return isLowInformationTitle(trimmed);
 };
 
-const createEmptyGeneralSession = (timestamp?: number): ChatSession => {
+export const shouldRequestAutoTitleForSession = (session?: ChatSession | null): boolean => {
+  if (!session) return true; // Generate title for new sessions
+  // Generate title if session has auto mode and a generic/placeholder title
+  if (session.titleMode === "auto") {
+    return isGenericTitle(session.title);
+  }
+  return false;
+};
+
+const createEmptyGeneralSession = (timestamp?: number, conversationId?: string | null): ChatSession => {
   const now = timestamp ?? Date.now();
   return {
     id: GENERAL_SESSION_ID,
@@ -858,6 +1144,7 @@ const createEmptyGeneralSession = (timestamp?: number): ChatSession => {
     messages: [],
     isResponding: false,
     scope: "general",
+    conversationId: conversationId ?? undefined,
     pendingAutoStream: false,
   };
 };
@@ -867,9 +1154,6 @@ const cloneSession = (session: ChatSession): ChatSession => ({
   titleMode: session.titleMode ?? (session.scope === "general" ? "manual" : "auto"),
   messages: session.messages.map((message) => ({
     ...message,
-    attachments: message.attachments
-      ? message.attachments.map((attachment) => ({ ...attachment }))
-      : undefined,
   })),
 });
 
@@ -998,136 +1282,10 @@ const normalizeSessionsList = (sessions: ChatSession[]): ChatSession[] =>
   withGeneralFirst(dedupeSessionsByTitleWindow(dedupeSessionsByConversation(sessions)));
 
 const loadStoredSessions = (
-  storageKeys: readonly string[]
+  _storageKeys: readonly string[]
 ): { key: string | null; sessions: ChatSession[] } => {
-  if (typeof window === "undefined") {
-    return { key: null, sessions: defaultSessions() };
-  }
-
-  for (const storageKey of storageKeys) {
-    if (!storageKey) {
-      continue;
-    }
-    try {
-      const raw = window.localStorage.getItem(storageKey);
-      if (!raw) {
-        continue;
-      }
-      const parsed = JSON.parse(raw) as Array<Partial<ChatSession> & Record<string, unknown>>;
-      if (!Array.isArray(parsed)) {
-        continue;
-      }
-      const sanitized = parsed.filter(
-        (session) =>
-          session &&
-          !PLACEHOLDER_SESSION_IDS.has((session.id as string) ?? "") &&
-          !PLACEHOLDER_TITLES.has((session.title as string) ?? "")
-      );
-
-      const normalized: ChatSession[] = sanitized.map((session) => {
-        const inferredScope =
-          session.id === GENERAL_SESSION_ID || session.scope === "general" ? "general" : "thread";
-        const scope: ChatSessionScope = inferredScope;
-        const id =
-          scope === "general"
-            ? GENERAL_SESSION_ID
-            : typeof session.id === "string" && session.id.trim().length > 0
-              ? session.id
-              : (typeof crypto !== "undefined" && "randomUUID" in crypto
-                  ? crypto.randomUUID()
-                  : Math.random().toString(36).slice(2));
-        const createdAt =
-          typeof session.createdAt === "number" ? session.createdAt : Date.now();
-        const updatedAt =
-          typeof session.updatedAt === "number" ? session.updatedAt : createdAt;
-        const title =
-          scope === "general"
-            ? GENERAL_SESSION_TITLE
-            : typeof session.title === "string" && session.title.trim().length > 0
-              ? session.title
-              : "New Chat";
-
-        const messageArray = Array.isArray(session.messages) ? session.messages : [];
-
-        const mappedMessages = messageArray.map((message) => {
-          const attachments = Array.isArray((message as ChatMessage)?.attachments)
-            ? (message as ChatMessage).attachments?.map((attachment) => ({ ...attachment }))
-            : undefined;
-          const reminders = Array.isArray((message as ChatMessage)?.reminders)
-            ? (message as ChatMessage).reminders?.map((reminder) => ({ ...reminder }))
-            : undefined;
-          return {
-            id:
-              typeof (message as ChatMessage)?.id === "string"
-                ? (message as ChatMessage).id
-                : typeof crypto !== "undefined" && "randomUUID" in crypto
-                  ? crypto.randomUUID()
-                  : Math.random().toString(36).slice(2),
-            role:
-              (message as ChatMessage)?.role === "assistant" ||
-              (message as { role?: string })?.role === "model"
-                ? "assistant"
-                : "user",
-            content: (message as ChatMessage)?.content ?? "",
-            createdAt:
-              typeof (message as ChatMessage)?.createdAt === "number"
-                ? (message as ChatMessage).createdAt
-                : Date.now(),
-            ...(attachments && { attachments }),
-            ...(reminders && reminders.length > 0 ? { reminders } : {}),
-          } satisfies ChatMessage;
-        });
-
-        const firstUserMessage = mappedMessages.find(
-          (message) => message.role === "user" && message.content.trim().length > 0
-        );
-        const storedMode = (session as { titleMode?: ChatTitleMode }).titleMode;
-        const derivedMatchesSeed =
-          Boolean(firstUserMessage) &&
-          deriveTitleFromMessage(firstUserMessage?.content ?? "").trim() === title.trim();
-        const titleMode: ChatTitleMode =
-          scope === "general"
-            ? "manual"
-            : storedMode === "manual"
-              ? "manual"
-              : storedMode === "auto"
-                ? "auto"
-                : derivedMatchesSeed || isGenericTitle(title)
-                  ? "auto"
-                  : "manual";
-
-        return {
-          id,
-          title,
-          titleMode,
-          createdAt,
-          updatedAt,
-          messages: mappedMessages,
-          isResponding: false,
-          scope,
-          conversationId: normalizeConversationIdValue(session.conversationId),
-          pendingAutoStream:
-            typeof (session as ChatSession)?.pendingAutoStream === "boolean"
-              ? (session as ChatSession).pendingAutoStream
-              : false,
-        } satisfies ChatSession;
-      });
-
-      const hasGeneral = normalized.some((session) => session.scope === "general");
-      if (!hasGeneral) {
-        normalized.unshift(createEmptyGeneralSession());
-      }
-
-      if (sanitized.length !== parsed.length) {
-        window.localStorage.setItem(storageKey, JSON.stringify(normalized));
-      }
-
-      return { key: storageKey, sessions: normalizeSessionsList(normalized) };
-    } catch (error) {
-      console.warn("Failed to read stored chat sessions:", error);
-    }
-  }
-
+  // All chat session state is now ephemeral in memory and backed by the
+  // database. We no longer hydrate from browser storage.
   return { key: null, sessions: defaultSessions() };
 };
 
@@ -1138,9 +1296,67 @@ type ChatProviderProps = {
 
 export function ChatProvider({ children, workspaceContext }: ChatProviderProps) {
   const { user, waitForUser } = useUser();
-  const personalizedSystemPrompt = useMemo(() => buildPersonalizedSystemPrompt(user), [user]);
-  const [sessions, setSessions] = useState<ChatSession[]>(defaultSessions);
-  const sessionsRef = useRef<ChatSession[]>(sessions);
+  const [defaultSystemPrompt, setDefaultSystemPrompt] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    const controller = new AbortController();
+
+    (async () => {
+      try {
+        const response = await fetch("/system-prompt.txt", { signal: controller.signal });
+        if (!response.ok) {
+          return;
+        }
+        const text = await response.text();
+        if (!isMounted) {
+          return;
+        }
+        const trimmed = text.trim();
+        setDefaultSystemPrompt(trimmed.length > 0 ? trimmed : null);
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return;
+        }
+        console.error("Failed to load system prompt:", error);
+      }
+    })();
+
+    return () => {
+      isMounted = false;
+      controller.abort();
+    };
+  }, []);
+
+  const personalizedSystemPrompt = useMemo(
+    () => buildPersonalizedSystemPrompt(user, defaultSystemPrompt),
+    [user, defaultSystemPrompt]
+  );
+  const [sessionsState, setSessionsState] = useState<ChatSession[]>(defaultSessions);
+  const sessionsRef = useRef<ChatSession[]>(sessionsState);
+  const setSessions = useCallback(
+    (updater: SetStateAction<ChatSession[]>) => {
+      setSessionsState((prev) => {
+        const next =
+          typeof updater === "function"
+            ? (updater as (value: ChatSession[]) => ChatSession[])(prev)
+            : updater;
+        sessionsRef.current = next;
+        return next;
+      });
+    },
+    []
+  );
+  const generalConversationId = useMemo(
+    () => buildGeneralConversationId(user?.id),
+    [user?.id]
+  );
+  const generalConversationIdRef = useRef<string | undefined>(generalConversationId);
+  useEffect(() => {
+    generalConversationIdRef.current = generalConversationId;
+  }, [generalConversationId]);
+
+  const sessions = sessionsState;
   const pendingTitleSyncRef = useRef<Map<string, string>>(new Map());
   const pendingThreadSeedsRef = useRef<Map<string, { sessionId: string; createdAt: number }>>(
     new Map()
@@ -1149,7 +1365,369 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
   const [workspaceContextValue, setWorkspaceContextValue] = useState<string | null>(
     workspaceContext ?? null
   );
-  const hasLoadedFromStorageRef = useRef(false);
+  const [selectedAttachments, setSelectedAttachments] = useState<MediaUpload[]>([]);
+  const attachmentsRef = useRef<MediaUpload[]>(selectedAttachments);
+  useEffect(() => {
+    attachmentsRef.current = selectedAttachments;
+  }, [selectedAttachments]);
+  useEffect(() => {
+    return () => {
+      attachmentsRef.current.forEach((attachment) => {
+        if (attachment?.previewUrl) {
+          URL.revokeObjectURL(attachment.previewUrl);
+        }
+      });
+    };
+  }, []);
+  const releaseAttachmentPreview = useCallback((attachment: MediaUpload) => {
+    if (attachment?.previewUrl) {
+      URL.revokeObjectURL(attachment.previewUrl);
+    }
+  }, []);
+  const [isAttachmentUploading, setIsAttachmentUploading] = useState(false);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
+  const [mapsEnabled, setMapsEnabled] = useState(false);
+  const [mapsWidgetEnabled, setMapsWidgetEnabled] = useState(false);
+  const [mapsLatitude, setMapsLatitude] = useState("");
+  const [mapsLongitude, setMapsLongitude] = useState("");
+  const [pendingLocationRequestMessage, setPendingLocationRequestMessage] = useState<string | null>(null);
+  const [isHandlingLocationRequest, setIsHandlingLocationRequest] = useState(false);
+  const pendingLocationRequestActionRef = useRef<(() => void) | null>(null);
+  const mapPayload = useMemo(() => {
+    const normalizedLatitude = mapsLatitude.trim();
+    const normalizedLongitude = mapsLongitude.trim();
+    const parsedLatitude = normalizedLatitude ? Number(normalizedLatitude) : undefined;
+    const parsedLongitude = normalizedLongitude ? Number(normalizedLongitude) : undefined;
+    const payload: {
+      maps_enabled: boolean;
+      maps_widget: boolean;
+      maps_latitude?: number;
+      maps_longitude?: number;
+    } = {
+      maps_enabled: mapsEnabled,
+      maps_widget: mapsWidgetEnabled,
+    };
+    if (normalizedLatitude && !Number.isNaN(parsedLatitude ?? NaN)) {
+      payload.maps_latitude = parsedLatitude;
+    }
+    if (normalizedLongitude && !Number.isNaN(parsedLongitude ?? NaN)) {
+      payload.maps_longitude = parsedLongitude;
+    }
+    return payload;
+  }, [mapsEnabled, mapsLatitude, mapsLongitude, mapsWidgetEnabled]);
+  const hasLocationCoordinates = Boolean(
+    mapPayload.maps_latitude != null && mapPayload.maps_longitude != null
+  );
+  const getGeolocation = (): Promise<{ latitude: number; longitude: number } | null> => {
+    return new Promise((resolve) => {
+      if (typeof window === "undefined" || !window.navigator?.geolocation) {
+        resolve(null);
+        return;
+      }
+      window.navigator.geolocation.getCurrentPosition(
+        (position) => {
+          resolve({
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+          });
+        },
+        () => resolve(null)
+      );
+    });
+  };
+  const runPendingLocationAction = () => {
+    const action = pendingLocationRequestActionRef.current;
+    pendingLocationRequestActionRef.current = null;
+    setTimeout(() => {
+      action?.();
+    }, 0);
+  };
+  const handleLocationConsent = async (shareLocation: boolean) => {
+    const action = pendingLocationRequestActionRef.current;
+    if (!action) {
+      setPendingLocationRequestMessage(null);
+      return;
+    }
+    if (!shareLocation) {
+      setPendingLocationRequestMessage(null);
+      runPendingLocationAction();
+      return;
+    }
+    setIsHandlingLocationRequest(true);
+    try {
+      const coords = await getGeolocation();
+      if (coords) {
+        setMapsLatitude(coords.latitude.toString());
+        setMapsLongitude(coords.longitude.toString());
+        setMapsEnabled(true);
+        setMapsWidgetEnabled(true);
+      }
+      setPendingLocationRequestMessage(null);
+      runPendingLocationAction();
+    } finally {
+      setIsHandlingLocationRequest(false);
+    }
+  };
+  const promptForLocationConsent = (message: string, sendAction: () => void) => {
+    if (
+      !shouldAutoEnableMapsForMessage(message) ||
+      mapsEnabled ||
+      hasLocationCoordinates ||
+      pendingLocationRequestMessage
+    ) {
+      void sendAction();
+      return true;
+    }
+    pendingLocationRequestActionRef.current = sendAction;
+    setPendingLocationRequestMessage(message);
+    return false;
+  };
+  const requestLocationShare = () => {
+    void handleLocationConsent(true);
+  };
+  const skipLocationShare = () => {
+    void handleLocationConsent(false);
+  };
+  const buildAutoMapPayload = useCallback(
+    (message: string) => {
+      const trimmedMessage = message.trim();
+      if (!trimmedMessage) {
+        return mapPayload;
+      }
+      if (mapPayload.maps_enabled) {
+        return mapPayload;
+      }
+      return shouldAutoEnableMapsForMessage(trimmedMessage)
+        ? {
+            ...mapPayload,
+            maps_enabled: true,
+            maps_widget: mapPayload.maps_widget || true,
+          }
+        : mapPayload;
+    },
+    [mapPayload]
+  );
+  const [contextCaches, setContextCaches] = useState<ContextCache[]>([]);
+  const [contextCacheLabel, setContextCacheLabel] = useState("");
+  const [contextCacheContent, setContextCacheContent] = useState("");
+  const [selectedContextCacheId, setSelectedContextCacheId] = useState<number | null>(null);
+  const [contextCacheMessage, setContextCacheMessage] = useState<string | null>(null);
+  const [isContextCacheSaving, setIsContextCacheSaving] = useState(false);
+  const [webSearchEnabled, setWebSearchEnabled] = useState(true);
+  const [fileSearchStores, setFileSearchStores] = useState<{ name: string; display_name?: string }[]>([]);
+  const [fileSearchDisplayName, setFileSearchDisplayName] = useState("");
+  const [fileSearchStatus, setFileSearchStatus] = useState<string | null>(null);
+  const [isCreatingFileSearchStore, setIsCreatingFileSearchStore] = useState(false);
+  const [selectedFileSearchStore, setSelectedFileSearchStore] = useState("");
+  const [fileSearchUploadFile, setFileSearchUploadFile] = useState<File | null>(null);
+  const [fileSearchUploadStatus, setFileSearchUploadStatus] = useState<string | null>(null);
+  const [fileSearchChunking, setFileSearchChunking] = useState({
+    maxTokensPerChunk: "",
+    maxOverlapTokens: "",
+  });
+  const [fileSearchImportName, setFileSearchImportName] = useState("");
+  const [fileSearchImportStatus, setFileSearchImportStatus] = useState<string | null>(null);
+  const fileSearchUploadInputRef = useRef<HTMLInputElement | null>(null);
+  const lastAutoCachedWorkspaceRef = useRef<string | null>(null);
+  const autoCacheInFlightRef = useRef(false);
+
+  // Web search preference is now kept in memory for the current session only.
+
+  const saveContextCache = useCallback(
+    async (
+      payload: ContextCacheBase,
+      options: SaveContextCacheOptions = {}
+    ): Promise<ContextCache | null> => {
+      if (!user?.id) {
+        if (!options.skipMessage) {
+          setContextCacheMessage("Sign in to cache context.");
+        }
+        return null;
+      }
+      const trimmedContent = payload.content.trim();
+      if (!trimmedContent) {
+        if (!options.skipMessage) {
+          setContextCacheMessage("Add context content before saving.");
+        }
+        return null;
+      }
+
+      const normalizedPayload: ContextCacheBase = {
+        content: trimmedContent,
+      };
+      const label = payload.label?.trim();
+      if (label) {
+        normalizedPayload.label = label;
+      }
+      if (payload.conversation_id) {
+        normalizedPayload.conversation_id = payload.conversation_id;
+      }
+
+      setIsContextCacheSaving(true);
+      if (!options.skipMessage) {
+        setContextCacheMessage(null);
+      }
+      try {
+        const created = await apiService.createContextCache(user.id, normalizedPayload);
+        setContextCaches((prev) => [created, ...prev]);
+        setSelectedContextCacheId(created.id);
+        if (!options.skipMessage) {
+          setContextCacheMessage("Context cached for reuse.");
+        }
+        if (!options.skipReset) {
+          setContextCacheLabel("");
+          setContextCacheContent("");
+        }
+        return created;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to cache context.";
+        if (!options.skipMessage) {
+          setContextCacheMessage(message);
+        }
+        console.error("Failed to cache context:", error);
+        return null;
+      } finally {
+        setIsContextCacheSaving(false);
+      }
+    },
+    [user?.id]
+  );
+
+  const createContextCache = useCallback(
+    async (conversationId?: string) => {
+      const normalizedConversationId = normalizeConversationIdValue(conversationId ?? undefined);
+      const payload: ContextCacheBase = {
+        content: contextCacheContent,
+      };
+      if (contextCacheLabel.trim()) {
+        payload.label = contextCacheLabel.trim();
+      }
+      if (normalizedConversationId) {
+        payload.conversation_id = normalizedConversationId;
+      }
+      await saveContextCache(payload);
+    },
+    [contextCacheContent, contextCacheLabel, saveContextCache]
+  );
+
+  useEffect(() => {
+    if (!user?.id) {
+      lastAutoCachedWorkspaceRef.current = null;
+      return;
+    }
+    const trimmedWorkspace = workspaceContextValue?.trim();
+    if (!trimmedWorkspace) {
+      lastAutoCachedWorkspaceRef.current = null;
+      return;
+    }
+    if (lastAutoCachedWorkspaceRef.current === trimmedWorkspace) {
+      return;
+    }
+    if (autoCacheInFlightRef.current) {
+      return;
+    }
+    autoCacheInFlightRef.current = true;
+    (async () => {
+      try {
+        const cached = await saveContextCache(
+          { content: trimmedWorkspace, label: "Workspace context" },
+          { skipMessage: true, skipReset: true }
+        );
+        if (cached) {
+          lastAutoCachedWorkspaceRef.current = trimmedWorkspace;
+        }
+      } catch (error) {
+        console.error("Failed to auto-cache workspace context:", error);
+      } finally {
+        autoCacheInFlightRef.current = false;
+      }
+    })();
+  }, [saveContextCache, user?.id, workspaceContextValue]);
+
+  const selectContextCacheId = useCallback((cacheId: number | null) => {
+    setSelectedContextCacheId(cacheId);
+  }, []);
+  const fileSearchChunkingConfig = useMemo(() => {
+    const maxTokens = Number(fileSearchChunking.maxTokensPerChunk);
+    const maxOverlap = Number(fileSearchChunking.maxOverlapTokens);
+    const whiteSpaceConfig: Record<string, number> = {};
+    if (!Number.isNaN(maxTokens) && maxTokens > 0) {
+      whiteSpaceConfig.max_tokens_per_chunk = maxTokens;
+    }
+    if (!Number.isNaN(maxOverlap) && maxOverlap >= 0) {
+      whiteSpaceConfig.max_overlap_tokens = maxOverlap;
+    }
+    if (!Object.keys(whiteSpaceConfig).length) {
+      return undefined;
+    }
+    return { white_space_config: whiteSpaceConfig };
+  }, [fileSearchChunking.maxTokensPerChunk, fileSearchChunking.maxOverlapTokens]);
+
+  const handleCreateFileSearchStore = useCallback(async () => {
+    setIsCreatingFileSearchStore(true);
+    setFileSearchStatus(null);
+    try {
+      const store = await apiService.createFileSearchStore(
+        fileSearchDisplayName.trim() || undefined
+      );
+      setFileSearchStores((prev) => [store, ...prev]);
+      setSelectedFileSearchStore(store.name);
+      setFileSearchDisplayName("");
+      setFileSearchStatus(
+        `Created ${store.display_name ?? store.name}.`
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to create file store.";
+      setFileSearchStatus(message);
+    } finally {
+      setIsCreatingFileSearchStore(false);
+    }
+  }, [fileSearchDisplayName]);
+
+  const handleFileSearchUpload = useCallback(async () => {
+    if (!selectedFileSearchStore || !fileSearchUploadFile) {
+      setFileSearchUploadStatus("Select a store and file first.");
+      return;
+    }
+    setFileSearchUploadStatus("Uploading...");
+    try {
+      await apiService.uploadToFileSearchStore({
+        storeName: selectedFileSearchStore,
+        file: fileSearchUploadFile,
+        displayName: fileSearchUploadFile.name,
+        chunkingConfig: fileSearchChunkingConfig,
+      });
+      setFileSearchUploadStatus("Upload queued.");
+      setFileSearchUploadFile(null);
+      if (fileSearchUploadInputRef.current) {
+        fileSearchUploadInputRef.current.value = "";
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "File Search upload failed.";
+      setFileSearchUploadStatus(message);
+    }
+  }, [fileSearchChunkingConfig, fileSearchUploadFile, selectedFileSearchStore]);
+
+  const handleFileSearchImport = useCallback(async () => {
+    if (!selectedFileSearchStore || !fileSearchImportName.trim()) {
+      setFileSearchImportStatus("Select store and specify file name.");
+      return;
+    }
+    setFileSearchImportStatus("Importing...");
+    try {
+      await apiService.importFileSearch({
+        storeName: selectedFileSearchStore,
+        fileName: fileSearchImportName.trim(),
+        chunkingConfig: fileSearchChunkingConfig,
+      });
+      setFileSearchImportStatus("Import started.");
+      setFileSearchImportName("");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "File Search import failed.";
+      setFileSearchImportStatus(message);
+    }
+  }, [fileSearchChunkingConfig, fileSearchImportName, selectedFileSearchStore]);
+  const hasLoadedFromStorageRef = useRef(true);
   const autoStreamTriggeredRef = useRef<Set<string>>(new Set());
   const pendingHistorySyncRef = useRef<Set<string>>(new Set());
   const sessionStorageKeyCandidates = useMemo(
@@ -1197,6 +1775,49 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
     },
     []
   );
+  const historySyncTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const enqueueHistorySync = useCallback(
+    (conversationId: string, payload: ConversationHistoryEntryPayload[]) => {
+      const existing = historySyncTimersRef.current.get(conversationId);
+      if (existing) {
+        clearTimeout(existing);
+      }
+      const timer = setTimeout(() => {
+        historySyncTimersRef.current.delete(conversationId);
+        scheduleHistorySync(conversationId, payload);
+      }, 250);
+      historySyncTimersRef.current.set(conversationId, timer);
+    },
+    [scheduleHistorySync]
+  );
+
+  useEffect(() => {
+    return () => {
+      historySyncTimersRef.current.forEach((timer) => clearTimeout(timer));
+      historySyncTimersRef.current.clear();
+    };
+  }, []);
+
+  // Ensure existing conversations are synced to the backend at least once so that
+  // any past local edits (including deletions that previously only affected
+  // localStorage) are reflected in the remote history.
+  const syncedHistoryRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const seen = syncedHistoryRef.current;
+    sessions.forEach((session) => {
+      const normalizedConversationId = normalizeConversationIdValue(session.conversationId ?? undefined);
+      if (!normalizedConversationId || seen.has(normalizedConversationId)) {
+        return;
+      }
+      if (!session.messages || session.messages.length === 0) {
+        // Skip syncing empty shells (e.g. shared links before hydration) so we don't wipe remote history.
+        return;
+      }
+      const payload = buildConversationHistoryPayload(session.messages);
+      enqueueHistorySync(normalizedConversationId, payload);
+      seen.add(normalizedConversationId);
+    });
+  }, [sessions, enqueueHistorySync]);
   const resolveChatUser = useCallback(async () => {
     if (user) {
       return user;
@@ -1223,59 +1844,106 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
     }, DUPLICATE_THREAD_WINDOW_MS);
   }, []);
 
+  const uploadAttachments = useCallback(
+    async (files: FileList | File[]) => {
+      const selectedFiles = Array.from(files ?? []);
+      if (selectedFiles.length === 0) {
+        return;
+      }
+
+      setAttachmentError(null);
+      setIsAttachmentUploading(true);
+
+      try {
+        const resolvedUser = await resolveChatUser();
+        if (!resolvedUser) {
+          throw new Error("Unable to upload without an authenticated user.");
+        }
+        const uploads: MediaUpload[] = [];
+        for (const file of selectedFiles) {
+          if (!file) {
+            continue;
+          }
+          const upload = await apiService.uploadMediaFile(resolvedUser.id, file);
+          const previewUrl = file.type?.toLowerCase().startsWith("image/")
+            ? URL.createObjectURL(file)
+            : undefined;
+          uploads.push({ ...upload, previewUrl });
+        }
+        if (uploads.length > 0) {
+          setSelectedAttachments((prev) => [...prev, ...uploads]);
+        }
+      } catch (error) {
+        console.error("Failed to upload attachments:", error);
+        if (error instanceof Error) {
+          setAttachmentError(error.message);
+        } else {
+          setAttachmentError("Failed to upload attachment.");
+        }
+      } finally {
+        setIsAttachmentUploading(false);
+      }
+    },
+    [resolveChatUser]
+  );
+
+  const removeAttachment = useCallback(
+    (id: number) => {
+      setSelectedAttachments((prev) => {
+        const next: MediaUpload[] = [];
+        prev.forEach((attachment) => {
+          if (attachment.id === id) {
+            releaseAttachmentPreview(attachment);
+            return;
+          }
+          next.push(attachment);
+        });
+        return next;
+      });
+    },
+    [releaseAttachmentPreview]
+  );
+
+  const clearAttachments = useCallback(() => {
+    setSelectedAttachments((prev) => {
+      prev.forEach(releaseAttachmentPreview);
+      return [];
+    });
+  }, [releaseAttachmentPreview]);
+
   useEffect(() => {
     if (workspaceContext !== undefined) {
       setWorkspaceContextValue(workspaceContext ?? null);
     }
   }, [workspaceContext]);
 
-  const persistSessions = useCallback((next: ChatSession[]) => {
-    if (typeof window === "undefined") {
-      return;
-    }
-    if (!sessionStorageKey) {
-      return;
-    }
-    try {
-      const normalized = normalizeSessionsList(next);
-      window.localStorage.setItem(sessionStorageKey, JSON.stringify(normalized));
-    } catch (error) {
-      console.warn("Failed to persist chat sessions:", error);
-    }
-  }, [sessionStorageKey]);
+  const persistSessions = useCallback((_next: ChatSession[]) => {
+    // Sessions are kept in React state only; persistence is handled by the
+    // backend via conversations and conversation_messages.
+  }, []);
 
   useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-    hasLoadedFromStorageRef.current = true;
-    if (!sessionStorageKey) {
-      previousSessionStorageKeyRef.current = null;
-      setSessions(defaultSessions());
-      return;
-    }
-
-    const { key: sourceKey, sessions: stored } = loadStoredSessions(sessionStorageKeyCandidates);
-    if (sessionStorageKey && sourceKey && sourceKey !== sessionStorageKey) {
-      persistSessions(stored);
-    }
     setSessions((prev) => {
-      if (previousSessionStorageKeyRef.current !== sessionStorageKey) {
-        previousSessionStorageKeyRef.current = sessionStorageKey;
-        return stored;
+      let changed = false;
+      const next = prev.map((session) => {
+        if (session.scope !== "general") {
+          return session;
+        }
+        const nextConversationId = generalConversationId ?? undefined;
+        if (session.conversationId === nextConversationId) {
+          return session;
+        }
+        changed = true;
+        return { ...session, conversationId: nextConversationId };
+      });
+      if (!changed) {
+        return prev;
       }
-      if (prev.length === 0) {
-        return stored;
-      }
-      const merged = normalizeSessionsList([...prev, ...stored]);
-      persistSessions(merged);
-      return merged;
+      const ordered = normalizeSessionsList(next);
+      persistSessions(ordered);
+      return ordered;
     });
-  }, [persistSessions, sessionStorageKey, sessionStorageKeyCandidates]);
-
-  useEffect(() => {
-    sessionsRef.current = sessions;
-  }, [sessions]);
+  }, [generalConversationId, persistSessions, setSessions]);
 
   useEffect(() => {
     if (!pendingHistorySyncRef.current.size) {
@@ -1305,10 +1973,14 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       if (!trimmed || !normalizedConversationId) {
         return;
       }
+      if (!user?.id) {
+        // Wait until we know the numeric user so the backend can create or update the row.
+        return;
+      }
       try {
         await apiService.updateConversation(normalizedConversationId, {
           title: trimmed,
-          ...(user?.id ? { user_id: user.id } : {}),
+          user_id: user.id,
         });
         pendingTitleSyncRef.current.delete(sessionId);
       } catch (error) {
@@ -1372,30 +2044,31 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
 
   const applyAutoTitle = useCallback(
     (sessionId: string, candidate?: string | null) => {
-      const trimmed = candidate?.trim();
-      if (!trimmed) {
+      const session = sessions.find((entry) => entry.id === sessionId);
+      if (!session || session.scope === "general" || session.titleMode === "manual") {
         return;
       }
-      const session = sessionsRef.current.find((entry) => entry.id === sessionId);
-      if (
-        !session ||
-        session.scope === "general" ||
-        session.titleMode === "manual" ||
-        !isGenericSessionTitle(session.title)
-      ) {
+      const rawTitle = (candidate ?? "").trim();
+      if (!rawTitle) {
         return;
       }
-      if (session.title?.trim() === trimmed) {
+      // Only replace placeholder / generic titles so we don't fight manual titles
+      // or backend-generated titles that are already set.
+      if (!isGenericSessionTitle(session.title)) {
         return;
       }
-      updateSession(sessionId, { title: trimmed, titleMode: "auto" });
-      queueConversationTitleSync(sessionId, trimmed);
+      if (session.title?.trim() === rawTitle) {
+        return;
+      }
+      updateSession(sessionId, { title: rawTitle, titleMode: "auto" });
+      queueConversationTitleSync(sessionId, rawTitle);
     },
-    [queueConversationTitleSync, updateSession]
+    [queueConversationTitleSync, sessions, updateSession]
   );
 
   const updateMessage = useCallback(
     (sessionId: string, messageId: string, partial: Partial<ChatMessage>) => {
+      let assistantAutoTitle: string | null = null;
       setSessions((prev) => {
         let didUpdate = false;
         const next = prev.map((session) => {
@@ -1409,12 +2082,16 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
             didUpdate = true;
             let nextPartial = partial;
             if (typeof partial.content === "string" && message.role === "assistant") {
-              const normalized = normalizeAssistantMessage(message.role, partial.content);
+              const parsedContent = parseGrayTitleMarkers(partial.content);
+              const normalized = normalizeAssistantMessage(message.role, parsedContent.cleanText);
               nextPartial = {
                 ...partial,
                 content: normalized.content,
                 reminders: normalized.reminders,
               };
+              if (parsedContent.title) {
+                assistantAutoTitle = parsedContent.title;
+              }
             }
             return { ...message, ...nextPartial };
           });
@@ -1433,8 +2110,12 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
         persistSessions(ordered);
         return ordered;
       });
+
+      if (assistantAutoTitle) {
+        applyAutoTitle(sessionId, assistantAutoTitle);
+      }
     },
-    [persistSessions]
+    [applyAutoTitle, persistSessions]
   );
 
   // Debounced version of updateMessage for streaming (reduces re-renders)
@@ -1450,6 +2131,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
 
       // Set new timeout
       const timeout = setTimeout(() => {
+        let assistantAutoTitle: string | null = null;
         debouncedUpdateTimeoutsRef.current.delete(key);
         // Use setSessions directly to avoid circular dependency
         setSessions((prev) => {
@@ -1465,12 +2147,16 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
               didUpdate = true;
               let nextPartial = partial;
               if (typeof partial.content === "string" && message.role === "assistant") {
-                const normalized = normalizeAssistantMessage(message.role, partial.content);
+                const parsedContent = parseGrayTitleMarkers(partial.content);
+                const normalized = normalizeAssistantMessage(message.role, parsedContent.cleanText);
                 nextPartial = {
                   ...partial,
                   content: normalized.content,
                   reminders: normalized.reminders,
                 };
+                if (parsedContent.title) {
+                  assistantAutoTitle = parsedContent.title;
+                }
               }
               return { ...message, ...nextPartial };
             });
@@ -1489,11 +2175,15 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
           persistSessions(ordered);
           return ordered;
         });
+
+        if (assistantAutoTitle) {
+          applyAutoTitle(sessionId, assistantAutoTitle);
+        }
       }, delay);
 
       debouncedUpdateTimeoutsRef.current.set(key, timeout);
     },
-    [persistSessions]  // Only depend on persistSessions
+    [applyAutoTitle, persistSessions]
   );
 
   // Cleanup timeouts on unmount
@@ -1521,18 +2211,14 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
           }
           didUpdate = true;
 
-          const normalizedConversationId =
-            normalizeConversationIdValue(session.conversationId ?? session.id) ??
-            (session.scope === "general" && typeof user?.id === "number"
-              ? `${GENERAL_SESSION_ID}-${user.id}`
-              : undefined);
+          const normalizedConversationId = normalizeConversationIdValue(session.conversationId);
           const payload = buildConversationHistoryPayload(filtered);
 
           if (normalizedConversationId) {
             conversationIdForSync = normalizedConversationId;
             historyPayload = payload;
             pendingHistorySyncRef.current.delete(session.id);
-          } else if (session.scope !== "general") {
+          } else if (session.scope === "thread") {
             pendingHistorySyncRef.current.add(session.id);
           }
 
@@ -1551,10 +2237,10 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       });
 
       if (conversationIdForSync && historyPayload) {
-        scheduleHistorySync(conversationIdForSync, historyPayload);
+        enqueueHistorySync(conversationIdForSync, historyPayload);
       }
     },
-    [persistSessions, scheduleHistorySync, user?.id]
+    [enqueueHistorySync, persistSessions, user?.id]
   );
 
   const renameSession = useCallback(
@@ -1567,42 +2253,95 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       if (target?.scope === "general") {
         return;
       }
-      updateSession(sessionId, { title: trimmed, titleMode: "manual" });
-      queueConversationTitleSync(sessionId, trimmed);
+      const normalized =
+        trimmed.length > 100
+          ? trimmed.slice(0, 100).trim()
+          : trimmed;
+      updateSession(sessionId, { title: normalized, titleMode: "manual" });
+      queueConversationTitleSync(sessionId, normalized);
     },
     [queueConversationTitleSync, updateSession]
   );
 
   const appendMessage = useCallback(
-    (sessionId: string, role: ChatRole, content: string, attachments?: ChatAttachment[], tempId?: string) => {
-      let createdMessage: ChatMessage | null = null;
+    (
+      sessionId: string,
+      role: ChatRole,
+      content: string,
+      tempId?: string,
+      metadata?: GroundingMetadata
+    ) => {
+      let assistantAutoTitle: string | null = null;
+      let normalizedContent = content;
+      if (role === "assistant") {
+        const parsedContent = parseGrayTitleMarkers(content);
+        normalizedContent = parsedContent.cleanText;
+        assistantAutoTitle = parsedContent.title;
+      }
+
+      // Create the message immediately instead of inside setState
+      const createdMessage = makeMessage(role, normalizedContent, tempId, metadata);
 
       setSessions((prev) => {
+        let didUpdate = false;
+
         const next = prev.map((session) => {
           if (session.id !== sessionId) {
             return session;
           }
 
-          const message = makeMessage(role, content, attachments, tempId);
-          createdMessage = message;
+          didUpdate = true;
 
           return {
             ...session,
-            messages: [...session.messages, message],
-            updatedAt: message.createdAt,
+            messages: [...session.messages, createdMessage],
+            updatedAt: createdMessage.createdAt,
             isResponding: role === "user",
             title: session.title,
           };
         });
 
-        const ordered = normalizeSessionsList(next);
+        if (didUpdate) {
+          const ordered = normalizeSessionsList(next);
+          persistSessions(ordered);
+          return ordered;
+        }
+
+        const fallbackScope = sessionId === GENERAL_SESSION_ID ? "general" : "thread";
+        const fallbackSession: ChatSession =
+          fallbackScope === "general"
+            ? {
+                ...createEmptyGeneralSession(createdMessage.createdAt, generalConversationIdRef.current),
+                messages: [createdMessage],
+                updatedAt: createdMessage.createdAt,
+                isResponding: role === "user",
+                pendingAutoStream: false,
+              }
+            : {
+                id: sessionId,
+                title: "New Chat",
+                titleMode: "auto",
+                createdAt: createdMessage.createdAt,
+                updatedAt: createdMessage.createdAt,
+                messages: [createdMessage],
+                isResponding: role === "user",
+                scope: "thread",
+                conversationId: undefined,
+                pendingAutoStream: false,
+              };
+
+        const ordered = normalizeSessionsList([fallbackSession, ...prev]);
         persistSessions(ordered);
         return ordered;
       });
 
+      if (role === "assistant" && assistantAutoTitle) {
+        applyAutoTitle(sessionId, assistantAutoTitle);
+      }
+
       return createdMessage;
     },
-    [persistSessions]
+    [applyAutoTitle, persistSessions]
   );
 
   const deleteSession = useCallback(
@@ -1643,7 +2382,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
     if (existing) {
       return existing;
     }
-    const created = createEmptyGeneralSession();
+    const created = createEmptyGeneralSession(undefined, generalConversationIdRef.current);
     setSessions((prev) => {
       const next = normalizeSessionsList([created, ...prev]);
       persistSessions(next);
@@ -1710,19 +2449,13 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
             record.title?.trim() && record.title.trim().length > 0 ? record.title.trim() : "New Chat";
           const createdAt = toTimestamp(record.created_at);
           const updatedAt = toTimestamp(record.updated_at ?? record.created_at);
-          const remoteIsGeneric = isGenericTitle(normalizedTitle);
           const existingIndex = findExistingIndex(conversationId);
-          const resolveTitle = (currentTitle: string) => {
-            const trimmed = currentTitle.trim();
-            const shouldFavorLocalTitle = remoteIsGeneric && trimmed.length > 0 && !isGenericTitle(currentTitle);
-            return shouldFavorLocalTitle ? currentTitle : normalizedTitle;
-          };
 
           if (typeof existingIndex === "number") {
             const current = next[existingIndex];
             const merged: ChatSession = {
               ...current,
-              title: resolveTitle(current.title),
+              // Preserve the local title as source of truth; only sync timestamps and ids.
               createdAt: Math.min(current.createdAt, createdAt),
               updatedAt: Math.max(current.updatedAt, updatedAt),
               conversationId,
@@ -1744,7 +2477,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
             const pending = next[pendingIndex];
             const merged: ChatSession = {
               ...pending,
-              title: resolveTitle(pending.title),
+              // Keep the pending session's title; attach the server conversation id and timestamps.
               createdAt: Math.min(pending.createdAt, createdAt),
               updatedAt: Math.max(pending.updatedAt, updatedAt),
               conversationId,
@@ -1759,7 +2492,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
           const newSession: ChatSession = {
             id: conversationId,
             title: normalizedTitle,
-            titleMode: remoteIsGeneric ? "auto" : "manual",
+            titleMode: isGenericTitle(normalizedTitle) ? "auto" : "manual",
             createdAt,
             updatedAt,
             messages: [],
@@ -1920,7 +2653,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
         messages: [],
         isResponding: false,
         scope: "thread",
-        conversationId: undefined,
+        conversationId: sessionId,
         pendingAutoStream: false,
       };
 
@@ -1964,101 +2697,122 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       );
       const contextPayload = useWorkspaceContext ? workspaceContextValue ?? undefined : undefined;
 
-      (async () => {
-        let assistantMessageId: string | null = null;
-        try {
-          const resolvedUser = await resolvedUserPromise;
+      const streamThreadResponse = () => {
+        (async () => {
+          let assistantMessageId: string | null = null;
+          try {
+            const resolvedUser = await resolvedUserPromise;
 
-          if (!resolvedUser) {
-            if (trimmedInitial && typeof window !== "undefined") {
-              window.setTimeout(() => {
-                appendMessage(sessionId, "assistant", buildAssistantReply(trimmedInitial));
-                updateSession(sessionId, { isResponding: false, pendingAutoStream: false });
-              }, FALLBACK_ASSISTANT_DELAY_MS);
-            }
-            return;
-          }
-
-          // Fast-path streaming:
-          // Immediately insert an empty assistant message so the user sees a reply start instantly.
-          const initialAssistant = appendMessage(sessionId, "assistant", "");
-          assistantMessageId = (initialAssistant as ChatMessage | null)?.id ?? null;
-          if (assistantMessageId) {
-            updateSession(sessionId, { isResponding: true, pendingAutoStream: false });
-          }
-          const streamingUserId = resolvedUser.id;
-
-          let accumulated = "";
-          let streamedConversationId: string | null =
-            normalizeConversationIdValue(baseSession.conversationId) ?? null;
-
-          const timeContext = buildLocalTimeContext();
-          for await (const event of apiService.sendMessageStream({
-            message: trimmedInitial,
-            system_prompt: personalizedSystemPrompt,
-            user_id: streamingUserId,
-            context: contextPayload,
-            conversation_id: streamedConversationId ?? undefined,
-            time_context: timeContext,
-          })) {
-            if (event.type === "token") {
-              accumulated += event.delta;
-              const content = accumulated;
-              if (assistantMessageId) {
-                // Use debounced version for streaming to reduce re-renders
-                updateMessageDebounced(sessionId, assistantMessageId, { content }, 100);
-              }
-              continue;
-            }
-
-            if (event.type === "end") {
-              streamedConversationId =
-                normalizeConversationIdValue(event.conversationId) ?? streamedConversationId;
-              const finalResponse = normalizeAssistantContent(
-                event.response ?? accumulated,
-                trimmedInitial
-              );
-              const content = finalResponse;
-              if (assistantMessageId) {
-                updateMessage(sessionId, assistantMessageId, { content });
-              }
-              updateSession(sessionId, {
-                conversationId: streamedConversationId ?? undefined,
-                isResponding: false,
-                pendingAutoStream: false,
-              });
-              if (event.title) {
-                applyAutoTitle(sessionId, event.title);
+            if (!resolvedUser) {
+              if (trimmedInitial && typeof window !== "undefined") {
+                window.setTimeout(() => {
+                  appendMessage(sessionId, "assistant", buildAssistantReply(trimmedInitial));
+                  updateSession(sessionId, { isResponding: false, pendingAutoStream: false });
+                }, FALLBACK_ASSISTANT_DELAY_MS);
               }
               return;
             }
 
-            if (event.type === "error") {
-              throw new Error(event.message);
+            const initialAssistant = appendMessage(sessionId, "assistant", "");
+            assistantMessageId = (initialAssistant as ChatMessage | null)?.id ?? null;
+            if (assistantMessageId) {
+              updateSession(sessionId, { isResponding: true, pendingAutoStream: false });
             }
-          }
+            const streamingUserId = resolvedUser.id;
 
-          // If stream ended without explicit "end" event, finalize content.
-          const finalFallback = normalizeAssistantContent(accumulated, trimmedInitial);
-          if (assistantMessageId) {
-            updateMessage(sessionId, assistantMessageId, { content: finalFallback });
+      let accumulated = "";
+      let streamedConversationId: string | null =
+        normalizeConversationIdValue(baseSession.conversationId) ?? sessionId;
+
+            const timeContext = buildLocalTimeContext();
+            const attachmentPayloads = attachmentsRef.current.map((attachment) => ({
+              id: attachment.id,
+            }));
+            const autoMapPayload = buildAutoMapPayload(trimmedInitial);
+            for await (const event of apiService.sendMessageStream({
+              message: trimmedInitial,
+              system_prompt: personalizedSystemPrompt,
+              user_id: streamingUserId,
+              context: contextPayload,
+              conversation_id: streamedConversationId ?? sessionId,
+              time_context: timeContext,
+              attachments: attachmentPayloads,
+              context_cache_id: selectedContextCacheId ?? undefined,
+              should_generate_title: shouldRequestAutoTitleForSession(baseSession),
+              ...autoMapPayload,
+              web_search_enabled: webSearchEnabled,
+            })) {
+              if (event.type === "token") {
+                const delta = event.delta;
+                accumulated = accumulated && delta.startsWith(accumulated)
+                  ? delta
+                  : accumulated + delta;
+                const content = accumulated;
+                if (assistantMessageId) {
+                  updateMessageDebounced(sessionId, assistantMessageId, { content }, 100);
+                }
+                continue;
+              }
+
+              if (event.type === "end") {
+                streamedConversationId =
+                  normalizeConversationIdValue(event.conversationId) ?? streamedConversationId;
+                const finalResponse = normalizeAssistantContent(
+                  event.response ?? accumulated,
+                  trimmedInitial
+                );
+                const content = finalResponse;
+                if (event.title) {
+                  applyAutoTitle(sessionId, event.title);
+                }
+                const timingUpdate = event.timing ? { backendTimings: event.timing } : undefined;
+                if (assistantMessageId) {
+                  updateMessage(sessionId, assistantMessageId, {
+                    content,
+                    ...(timingUpdate ?? {}),
+                  });
+                }
+                updateSession(sessionId, {
+                  conversationId: streamedConversationId ?? sessionId,
+                  isResponding: false,
+                  pendingAutoStream: false,
+                });
+                return;
+              }
+
+              if (event.type === "error") {
+                throw new Error(event.message);
+              }
+            }
+
+            const finalFallback = normalizeAssistantContent(accumulated, trimmedInitial);
+            if (assistantMessageId) {
+              updateMessage(sessionId, assistantMessageId, { content: finalFallback });
+            }
+            updateSession(sessionId, {
+              conversationId: streamedConversationId ?? sessionId,
+              isResponding: false,
+              pendingAutoStream: false,
+            });
+          } catch (error) {
+            console.error("Failed to create AI chat session:", error);
+            const fallback = buildAssistantReply(trimmedInitial);
+            if (assistantMessageId) {
+              updateMessage(sessionId, assistantMessageId, { content: fallback });
+            } else {
+              appendMessage(sessionId, "assistant", fallback);
+            }
+            updateSession(sessionId, { isResponding: false, pendingAutoStream: false });
+            clearAttachments();
           }
-          updateSession(sessionId, {
-            conversationId: streamedConversationId ?? undefined,
-            isResponding: false,
-            pendingAutoStream: false,
-          });
-        } catch (error) {
-          console.error("Failed to create AI chat session:", error);
-          const fallback = buildAssistantReply(trimmedInitial);
-          if (assistantMessageId) {
-            updateMessage(sessionId, assistantMessageId, { content: fallback });
-          } else {
-            appendMessage(sessionId, "assistant", fallback);
-          }
-          updateSession(sessionId, { isResponding: false, pendingAutoStream: false });
-        }
-      })();
+        })().finally(() => {
+          endSearchTracking();
+        });
+      };
+
+      if (!promptForLocationConsent(trimmedInitial, streamThreadResponse)) {
+        return baseSession;
+      }
 
       return baseSession;
     },
@@ -2075,24 +2829,29 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       schedulePendingSeedCleanup,
       personalizedSystemPrompt,
       markAutoStreamTriggered,
+      buildAutoMapPayload,
+      promptForLocationConsent,
+      webSearchEnabled,
     ]
   );
 
   const sendGeneralMessage = useCallback(
-    async (content: string, attachments?: ChatAttachment[]): Promise<string> => {
+    async (content: string): Promise<string> => {
       const trimmed = content.trim();
       const generalSession = ensureGeneralSession();
       const isGeneralScope = generalSession.scope === "general";
-      let requestConversationId = isGeneralScope
-        ? GENERAL_CHAT_SESSION_ID
-        : normalizeConversationIdValue(generalSession.conversationId) ?? undefined;
+      const resolvedGeneralConversationId =
+        coerceConversationIdForRequest(generalSession.conversationId) ??
+        coerceConversationIdForRequest(generalConversationIdRef.current);
+      let requestConversationId = resolvedGeneralConversationId;
 
-      if (!trimmed && (!attachments || attachments.length === 0)) {
+      if (!trimmed) {
         return generalSession.id;
       }
 
-      const attachmentPayload =
-        attachments && attachments.length > 0 ? attachments.map((item) => ({ ...item })) : undefined;
+      const attachmentPayloads = attachmentsRef.current.map((attachment) => ({
+        id: attachment.id,
+      }));
 
       // Create a temp message ID to prevent duplicate auto-streaming
       const tempUserMessageId = typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -2104,7 +2863,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       markAutoStreamTriggered(generalSession.id, tempUserMessageId);
 
       // 1) Optimistically append user message immediately with the temp ID
-      appendMessage(generalSession.id, "user", trimmed, attachmentPayload, tempUserMessageId);
+      appendMessage(generalSession.id, "user", trimmed, tempUserMessageId);
 
       // 2) Immediately insert an empty assistant message so UI shows instant response start.
       let assistantMessageId: string | null = null;
@@ -2132,100 +2891,125 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
 
       let streamedConversationId: string | null = requestConversationId ?? null;
 
-      if (isGeneralScope) {
-        requestConversationId = `${GENERAL_CHAT_SESSION_ID}-${resolvedUser.id}`;
-        streamedConversationId = requestConversationId;
-      }
-
       const useWorkspaceContext = shouldIncludeWorkspaceContext(
         trimmed,
         workspaceContextValue
       );
       const contextPayload = useWorkspaceContext ? workspaceContextValue ?? undefined : undefined;
 
-      let accumulated = "";
-      const streamingUserId = resolvedUser.id;
+      const streamGeneralResponse = () => {
+        (async () => {
+          let accumulated = "";
+          const streamingUserId = resolvedUser.id;
+          try {
+            const timeContext = buildLocalTimeContext();
+            const autoMapPayload = buildAutoMapPayload(trimmed);
+            for await (const event of apiService.sendMessageStream({
+              message: trimmed,
+              system_prompt: personalizedSystemPrompt,
+              user_id: streamingUserId,
+              context: contextPayload,
+              conversation_id: requestConversationId ?? undefined,
+              time_context: timeContext,
+              attachments: attachmentPayloads,
+              context_cache_id: selectedContextCacheId ?? undefined,
+              should_generate_title: shouldRequestAutoTitleForSession(generalSession),
+              ...autoMapPayload,
+              web_search_enabled: webSearchEnabled,
+            })) {
+              if (event.type === "token") {
+                const delta = event.delta;
+                accumulated = accumulated && delta.startsWith(accumulated)
+                  ? delta
+                  : accumulated + delta;
+                const extraction = extractGrayRemindersFromText(accumulated);
+                const content = extraction.cleanText;
+                if (assistantMessageId) {
+                  updateMessage(generalSession.id, assistantMessageId, { content });
+                }
+                continue;
+              }
 
-      try {
-        const timeContext = buildLocalTimeContext();
-        for await (const event of apiService.sendMessageStream({
-          message: trimmed,
-          system_prompt: personalizedSystemPrompt,
-          user_id: streamingUserId,
-          context: contextPayload,
-          attachments: attachmentPayload,
-          conversation_id: requestConversationId ?? undefined,
-          time_context: timeContext,
-        })) {
-          if (event.type === "token") {
-            accumulated += event.delta;
-            const extraction = extractGrayRemindersFromText(accumulated);
-            const content = extraction.cleanText;
-            if (assistantMessageId) {
-              updateMessage(generalSession.id, assistantMessageId, { content });
+              if (event.type === "end") {
+                streamedConversationId =
+                  coerceConversationIdForRequest(event.conversationId) ?? streamedConversationId;
+                const finalResponse = normalizeAssistantContent(event.response ?? accumulated, trimmed);
+                const content = finalResponse;
+                const metadata = event.groundingMetadata ?? undefined;
+                const timingUpdate = event.timing ? { backendTimings: event.timing } : undefined;
+
+                if (assistantMessageId) {
+                  updateMessage(generalSession.id, assistantMessageId, {
+                    content,
+                    groundingMetadata: metadata,
+                    ...(timingUpdate ?? {}),
+                  });
+                } else {
+                  const assistantMessage = appendMessage(
+                    generalSession.id,
+                    "assistant",
+                    content,
+                    undefined,
+                    metadata
+                  );
+                  assistantMessageId = (assistantMessage as ChatMessage | null)?.id ?? null;
+                  if (assistantMessageId && timingUpdate) {
+                    updateMessage(generalSession.id, assistantMessageId, timingUpdate);
+                  }
+                }
+
+                updateSession(generalSession.id, {
+                  conversationId: streamedConversationId ?? resolvedGeneralConversationId ?? undefined,
+                  isResponding: false,
+                  pendingAutoStream: false,
+                });
+                clearAttachments();
+                if (!isGeneralScope && event.title) {
+                  applyAutoTitle(generalSession.id, event.title);
+                }
+                return generalSession.id;
+              }
+
+              if (event.type === "error") {
+                throw new Error(event.message);
+              }
             }
-            continue;
-          }
 
-          if (event.type === "end") {
-            if (!isGeneralScope) {
-              streamedConversationId =
-                normalizeConversationIdValue(event.conversationId) ?? streamedConversationId;
-            }
-            const finalResponse = normalizeAssistantContent(event.response ?? accumulated, trimmed);
-            const content = finalResponse;
-
+            const finalFallback = normalizeAssistantContent(accumulated, trimmed);
             if (assistantMessageId) {
-              updateMessage(generalSession.id, assistantMessageId, { content });
+              updateMessage(generalSession.id, assistantMessageId, { content: finalFallback });
             } else {
-              const assistantMessage = appendMessage(generalSession.id, "assistant", content);
+              const assistantMessage = appendMessage(generalSession.id, "assistant", finalFallback);
               assistantMessageId = (assistantMessage as ChatMessage | null)?.id ?? null;
             }
-
             updateSession(generalSession.id, {
-              conversationId: isGeneralScope
-                ? GENERAL_CHAT_SESSION_ID
-                : streamedConversationId ?? undefined,
+              conversationId: streamedConversationId ?? resolvedGeneralConversationId ?? undefined,
               isResponding: false,
               pendingAutoStream: false,
             });
-            if (!isGeneralScope && event.title) {
-              applyAutoTitle(generalSession.id, event.title);
+          } catch (error) {
+            console.error("Failed to send general message:", error);
+            const fallback = buildAssistantReply(trimmed);
+            if (assistantMessageId) {
+              updateMessage(generalSession.id, assistantMessageId, { content: fallback });
+            } else {
+              appendMessage(generalSession.id, "assistant", fallback);
             }
-            return generalSession.id;
+            updateSession(generalSession.id, {
+              conversationId: streamedConversationId ?? resolvedGeneralConversationId ?? undefined,
+              isResponding: false,
+              pendingAutoStream: false,
+            });
+            clearAttachments();
+          } finally {
+            endSearchTracking();
           }
+          clearAttachments();
+        })();
+      };
 
-          if (event.type === "error") {
-            throw new Error(event.message);
-          }
-        }
-
-        // If stream ended without explicit "end" event, finalize content.
-        const finalFallback = normalizeAssistantContent(accumulated, trimmed);
-        if (assistantMessageId) {
-          updateMessage(generalSession.id, assistantMessageId, { content: finalFallback });
-        } else {
-          const assistantMessage = appendMessage(generalSession.id, "assistant", finalFallback);
-          assistantMessageId = (assistantMessage as ChatMessage | null)?.id ?? null;
-        }
-        updateSession(generalSession.id, {
-          conversationId: isGeneralScope ? GENERAL_CHAT_SESSION_ID : streamedConversationId ?? undefined,
-          isResponding: false,
-          pendingAutoStream: false,
-        });
-      } catch (error) {
-        console.error("Failed to send general message:", error);
-        const fallback = buildAssistantReply(trimmed);
-        if (assistantMessageId) {
-          updateMessage(generalSession.id, assistantMessageId, { content: fallback });
-        } else {
-          appendMessage(generalSession.id, "assistant", fallback);
-        }
-        updateSession(generalSession.id, {
-          conversationId: isGeneralScope ? GENERAL_CHAT_SESSION_ID : streamedConversationId ?? undefined,
-          isResponding: false,
-          pendingAutoStream: false,
-        });
+      if (!promptForLocationConsent(trimmed, streamGeneralResponse)) {
+        return generalSession.id;
       }
 
       return generalSession.id;
@@ -2240,13 +3024,17 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       personalizedSystemPrompt,
       markAutoStreamTriggered,
       applyAutoTitle,
+      clearAttachments,
+      buildAutoMapPayload,
+      promptForLocationConsent,
+      selectedContextCacheId,
+      webSearchEnabled,
     ]
   );
 
-  const getSession = useCallback(
-    (sessionId: string) => sessions.find((session) => session.id === sessionId),
-    [sessions]
-  );
+  const getSession = useCallback((sessionId: string) => {
+    return sessionsRef.current.find((session) => session.id === sessionId);
+  }, []);
 
   const ensureSession = useCallback(
     (sessionId: string, initializer: () => ChatSession): ChatSession => {
@@ -2278,9 +3066,6 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
         messages: Array.isArray(raw.messages)
           ? raw.messages.map((message) => ({
               ...message,
-              attachments: Array.isArray(message.attachments)
-                ? message.attachments.map((attachment) => ({ ...attachment }))
-                : undefined,
             }))
           : [],
         isResponding: Boolean(raw.isResponding),
@@ -2435,6 +3220,56 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       markAutoStreamTriggered,
       resetAutoStreamState,
       personalizedSystemPrompt,
+      attachments: selectedAttachments,
+      isAttachmentUploading,
+      attachmentError,
+      uploadAttachments,
+      removeAttachment,
+      clearAttachments,
+      mapsEnabled,
+      mapsWidgetEnabled,
+      mapsLatitude,
+      mapsLongitude,
+      setMapsEnabled,
+      setMapsWidgetEnabled,
+      setMapsLatitude,
+      setMapsLongitude,
+      mapPayload,
+      pendingLocationRequestMessage,
+      isRequestingLocation: isHandlingLocationRequest,
+      requestLocationShare,
+      skipLocationShare,
+      contextCaches,
+      contextCacheLabel,
+      contextCacheContent,
+      selectedContextCacheId,
+      contextCacheMessage,
+      isContextCacheSaving,
+      createContextCache,
+      selectContextCacheId,
+      setContextCacheLabel,
+      setContextCacheContent,
+      webSearchEnabled,
+      setWebSearchEnabled,
+      fileSearchStores,
+      fileSearchDisplayName,
+      setFileSearchDisplayName,
+      fileSearchStatus,
+      isCreatingFileSearchStore,
+      handleCreateFileSearchStore,
+      selectedFileSearchStore,
+      setSelectedFileSearchStore,
+      fileSearchUploadFile,
+      setFileSearchUploadFile,
+      fileSearchUploadStatus,
+      handleFileSearchUpload,
+      fileSearchChunking,
+      setFileSearchChunking,
+      fileSearchImportName,
+      setFileSearchImportName,
+      fileSearchImportStatus,
+      handleFileSearchImport,
+      fileSearchUploadInputRef,
     }),
     [
       appendMessage,
@@ -2455,6 +3290,56 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       markAutoStreamTriggered,
       resetAutoStreamState,
       personalizedSystemPrompt,
+      selectedAttachments,
+      isAttachmentUploading,
+      attachmentError,
+      uploadAttachments,
+      removeAttachment,
+      clearAttachments,
+      mapsEnabled,
+      mapsWidgetEnabled,
+      mapsLatitude,
+      mapsLongitude,
+      setMapsEnabled,
+      setMapsWidgetEnabled,
+      setMapsLatitude,
+      setMapsLongitude,
+      mapPayload,
+      pendingLocationRequestMessage,
+      isHandlingLocationRequest,
+      requestLocationShare,
+      skipLocationShare,
+      contextCaches,
+      contextCacheLabel,
+      contextCacheContent,
+      selectedContextCacheId,
+      contextCacheMessage,
+      isContextCacheSaving,
+      createContextCache,
+      selectContextCacheId,
+      setContextCacheLabel,
+      setContextCacheContent,
+      webSearchEnabled,
+      setWebSearchEnabled,
+      fileSearchStores,
+      fileSearchDisplayName,
+      setFileSearchDisplayName,
+      fileSearchStatus,
+      isCreatingFileSearchStore,
+      handleCreateFileSearchStore,
+      selectedFileSearchStore,
+      setSelectedFileSearchStore,
+      fileSearchUploadFile,
+      setFileSearchUploadFile,
+      fileSearchUploadStatus,
+      handleFileSearchUpload,
+      fileSearchChunking,
+      setFileSearchChunking,
+      fileSearchImportName,
+      setFileSearchImportName,
+      fileSearchImportStatus,
+      handleFileSearchImport,
+      fileSearchUploadInputRef,
     ]
   );
 
