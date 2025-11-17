@@ -2,118 +2,269 @@
 
 import {
   FormEvent,
+  memo,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
+  type ChangeEvent,
+  type CSSProperties,
   type ReactNode,
+  type RefObject,
 } from "react";
-import {
-  Loader2,
-  RefreshCw,
-  Copy,
-  Image as ImageIcon,
-  FileText,
-  X,
-  CheckCircle2,
-  Trash2,
-  SignalHigh,
-} from "lucide-react";
-import Image from "next/image";
+import { Loader2, RefreshCw, Copy, CheckCircle2, Trash2, SignalHigh, CalendarClock, Globe } from "lucide-react";
 import ReactMarkdown, { type Components } from "react-markdown";
+// Type definition for code component
+type CodeComponent = any;
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import styles from "@/app/gray/GrayPageClient.module.css";
-import { GrayChatBar } from "./ChatBar";
+import Image from "next/image";
+import { GrayChatComposer } from "./ChatComposer";
 import {
-  SYSTEM_PROMPT,
   useChatStore,
   buildAssistantReply,
   shouldIncludeWorkspaceContext,
+  shouldRequestAutoTitleForSession,
   normalizeAssistantContent,
   deriveTitleFromMessage,
+  normalizeConversationIdValue,
+  extractGrayRemindersFromText,
+  stripGrayTitleMarkers,
   type ChatMessage as ChatSessionMessage,
   type ChatRole,
+  type GrayReminderCreatedPayload,
+  type GrayReminderEntityType,
 } from "./ChatProvider";
-import { useUser } from "@/contexts/UserContext";
-import {
-  apiService,
-  type ChatAttachment,
-  type ConversationUsage,
-  type GeminiFileMetadata,
-} from "@/lib/api";
-import type { ContextUsageSummary } from "@/components/gray/types";
+import { formatReminderDisplayLabels } from "./reminderTimeUtils";
+import AttachmentTray from "./AttachmentTray";
 
+const LEGACY_REMINDER_SNIPPET_REGEX = /```[a-z0-9_-]*[\s\S]*?(gray[\s\S]{0,120}?reminder)[\s\S]*?```/gi;
+
+const MARKDOWN_PLUGINS: any = [
+  [remarkMath, { singleDollarTextMath: false }],
+  remarkGfm,
+];
+
+const INLINE_LATEX_REGEX = /\\\(([\s\S]+?)\\\)/g;
+const DISPLAY_LATEX_REGEX = /\\\[([\s\S]+?)\\\]/g;
+const MIN_TILDE_FENCE_LENGTH = 3;
+
+const normalizeLatexSegment = (segment: string): string => {
+  if (!segment) {
+    return segment;
+  }
+  let updated = segment;
+  updated = updated.replace(DISPLAY_LATEX_REGEX, (_match, content: string) => {
+    const normalized = content.trim();
+    if (!normalized) {
+      return "";
+    }
+    return `\n\n$$\n${normalized}\n$$\n\n`;
+  });
+  updated = updated.replace(INLINE_LATEX_REGEX, (_match, content: string) => {
+    const normalized = content.trim();
+    if (!normalized) {
+      return "";
+    }
+    return `$$${normalized}$$`;
+  });
+  return updated;
+};
+
+const normalizeLatexForDisplay = (value: string): string => {
+  if (!value || (value.indexOf("\\(") === -1 && value.indexOf("\\[") === -1)) {
+    return value;
+  }
+
+  type Segment = { type: "code" | "text"; value: string };
+  const segments: Segment[] = [];
+  let cursor = 0;
+
+  const findNextFenceIndex = (source: string, start: number) => {
+    const nextBacktick = source.indexOf("`", start);
+    const nextTilde = source.indexOf("~", start);
+    if (nextBacktick === -1) {
+      return nextTilde;
+    }
+    if (nextTilde === -1) {
+      return nextBacktick;
+    }
+    return Math.min(nextBacktick, nextTilde);
+  };
+
+  while (cursor < value.length) {
+    const nextFenceIndex = findNextFenceIndex(value, cursor);
+    if (nextFenceIndex === -1) {
+      segments.push({ type: "text", value: value.slice(cursor) });
+      break;
+    }
+
+    if (nextFenceIndex > cursor) {
+      segments.push({ type: "text", value: value.slice(cursor, nextFenceIndex) });
+    }
+
+    const fenceChar = value[nextFenceIndex];
+    if (fenceChar !== "`" && fenceChar !== "~") {
+      segments.push({ type: "text", value: fenceChar });
+      cursor = nextFenceIndex + 1;
+      continue;
+    }
+
+    let fenceLength = 1;
+    while (nextFenceIndex + fenceLength < value.length && value[nextFenceIndex + fenceLength] === fenceChar) {
+      fenceLength += 1;
+    }
+    const isBacktickFence = fenceChar === "`";
+    const isTildeFence = fenceChar === "~" && fenceLength >= MIN_TILDE_FENCE_LENGTH;
+    if (!isBacktickFence && !isTildeFence) {
+      segments.push({ type: "text", value: value.slice(nextFenceIndex, nextFenceIndex + fenceLength) });
+      cursor = nextFenceIndex + fenceLength;
+      continue;
+    }
+
+    const fenceToken = fenceChar.repeat(fenceLength);
+    const closingIndex = value.indexOf(fenceToken, nextFenceIndex + fenceLength);
+    if (closingIndex === -1) {
+      segments.push({ type: "text", value: value.slice(nextFenceIndex) });
+      break;
+    }
+
+    segments.push({
+      type: "code",
+      value: value.slice(nextFenceIndex, closingIndex + fenceLength),
+    });
+    cursor = closingIndex + fenceLength;
+  }
+
+  return segments
+    .map((segment) => (segment.type === "code" ? segment.value : normalizeLatexSegment(segment.value)))
+    .join("");
+};
+
+const normalizeAssistantMath = (value: string | null | undefined): string | null => {
+  if (typeof value !== "string" || !value) {
+    return value ?? null;
+  }
+  return normalizeLatexForDisplay(value);
+};
+
+const GrayStreamingSpinner = () => (
+  <div className={styles.chatStreamingInline}>
+    <Image
+      src="/grayaiwhite.svg"
+      alt="Gray logo"
+      width={18}
+      height={18}
+      className={styles.chatStreamingSpinner}
+    />
+  </div>
+);
+import { useUser } from "@/contexts/UserContext";
+import { apiService, type ConversationUsage, type GroundingMetadata } from "@/lib/api";
+import { buildLocalTimeContext } from "@/lib/timeContext";
+import type { ContextUsageSummary } from "@/components/gray/types";
 type GrayChatViewProps = {
   sessionId: string | null;
   introContent?: ReactNode;
   onContextUsageChange?: (summary: ContextUsageSummary | null) => void;
+  hideThinkingIndicator?: boolean;
 };
 
-const MAX_ATTACHMENTS = 5;
-const MAX_ATTACHMENT_SIZE_BYTES = 20 * 1024 * 1024;
-const FALLBACK_ASSISTANT_DELAY_MS = 0;
+const deriveGroundingSourceHost = (site?: string | null, uri?: string | null) => {
+  const normalizedSite = site?.trim();
+  if (normalizedSite) {
+    return normalizedSite;
+  }
+  if (!uri) {
+    return null;
+  }
+  try {
+    const parsed = new URL(uri);
+    return parsed.hostname.replace(/^www\./i, "");
+  } catch {
+    const cleaned = uri.replace(/^https?:\/\//i, "").split("/")[0];
+    return cleaned || null;
+  }
+};
 
-type ComposerAttachmentStatus = "uploading" | "uploaded" | "error";
+const buildGroundingSourceInitials = (text?: string | null) => {
+  if (!text) {
+    return "↗";
+  }
+  const letters = text
+    .replace(/[^a-z0-9]/gi, "")
+    .slice(0, 2)
+    .toUpperCase();
+  return letters || "↗";
+};
 
-type ComposerAttachment = {
+type DerivedGroundingSource = {
   id: string;
-  file: File;
-  status: ComposerAttachmentStatus;
-  previewUrl?: string;
-  uploaded?: ChatAttachment;
-  error?: string;
+  siteLabel: string;
+  title: string;
+  href?: string;
+  excerpt?: string;
+  isReferenced: boolean;
 };
 
-const formatFileSize = (bytes?: number) => {
-  if (!bytes || Number.isNaN(bytes)) {
-    return "";
+const buildGroundingSourceCards = (metadata: GroundingMetadata | undefined | null): DerivedGroundingSource[] => {
+  if (!metadata) {
+    return [];
   }
-  if (bytes < 1024) {
-    return `${bytes} B`;
+  const chunks =
+    metadata.grounding_chunks ??
+    (metadata as { groundingChunks?: GroundingMetadata["grounding_chunks"] })?.groundingChunks ??
+    [];
+  if (!chunks?.length) {
+    return [];
   }
-  if (bytes < 1024 * 1024) {
-    return `${(bytes / 1024).toFixed(1)} KB`;
-  }
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-};
-
-const mapGeminiFileToAttachment = (file: GeminiFileMetadata): ChatAttachment => {
-  return {
-    name: file.name,
-    uri: file.uri ?? file.download_uri ?? "",
-    mime_type: file.mime_type ?? "application/octet-stream",
-    display_name: file.display_name ?? file.name,
-    size_bytes: file.size_bytes,
-  };
-};
-
-const formatDisplayName = (value?: string | null): string => {
-  if (!value) {
-    return "";
-  }
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return "";
+  const referenced = new Set<number>();
+  const rawSupports =
+    metadata.grounding_supports ??
+    (metadata as { groundingSupports?: GroundingMetadata["grounding_supports"] })?.groundingSupports ??
+    [];
+  for (const support of rawSupports ?? []) {
+    for (const index of support.grounding_chunk_indices ?? []) {
+      referenced.add(index);
+    }
   }
 
-  const withoutPrefix = trimmed
-    .replace(/^models\//i, "")
-    .replace(/^openrouter\//i, "");
+  const sources: DerivedGroundingSource[] = [];
+  chunks.forEach((chunk, index) => {
+    const id = `chunk-${index}`;
+    const isReferenced = referenced.has(index);
+    if (chunk.web) {
+      const host = chunk.web.site ?? chunk.web.domain ?? deriveGroundingSourceHost(undefined, chunk.web.uri);
+      const siteLabel = host ?? "Web source";
+      sources.push({
+        id: `${id}-web`,
+        siteLabel,
+        title: chunk.web.title ?? siteLabel,
+        href: chunk.web.uri ?? undefined,
+        isReferenced,
+      });
+      return;
+    }
+    if (chunk.retrieved_context) {
+      const retrieved = chunk.retrieved_context;
+      const host = retrieved.document_name ?? deriveGroundingSourceHost(undefined, retrieved.uri);
+      const siteLabel = host ?? "Referenced context";
+      sources.push({
+        id: `${id}-retrieved`,
+        siteLabel,
+        title: retrieved.title || retrieved.text?.slice(0, 80) || siteLabel,
+        href: retrieved.uri ?? undefined,
+        excerpt: retrieved.text,
+        isReferenced,
+      });
+    }
+  });
 
-  const normalized = withoutPrefix
-    .replace(/[_/]+/g, " ")
-    .replace(/-/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-
-  if (!normalized) {
-    return "";
-  }
-
-  return normalized.replace(/\b\w/g, (char) => char.toUpperCase());
+  return sources.sort((a, b) => Number(b.isReferenced) - Number(a.isReferenced));
 };
 
 type CodeTokenType = "Plain" | "Keyword" | "String" | "Comment" | "Number" | "Builtin" | "Literal";
@@ -601,13 +752,9 @@ const tokenizeCode = (code: string, language: string): CodeLine[] => {
 
 const SINGLE_TOKEN_CODE_PATTERN = /^[\w.$-]+$/;
 
-const MarkdownCodeBlock: NonNullable<Components["code"]> = ({
-  className,
-  children,
-  ...props
-}) => {
+const MarkdownCodeBlock: CodeComponent = ({ inline, className, children, ...props }: any) => {
+  const isInline = Boolean(inline);
   const [copied, setCopied] = useState(false);
-  const inline = (props as any).inline;
   const raw = typeof children === "string" ? children : String(children ?? "");
   const language = getLanguageId(className?.replace("language-", "") ?? undefined);
   const { normalizedRaw, trimmedRaw, codeLines } = useMemo(() => {
@@ -620,7 +767,11 @@ const MarkdownCodeBlock: NonNullable<Components["code"]> = ({
     };
   }, [raw, language]);
 
-  if (inline) {
+  if (!isInline && !trimmedRaw) {
+    return null;
+  }
+
+  if (isInline) {
     return (
       <code className={className} {...props}>
         {children}
@@ -669,20 +820,18 @@ const MarkdownCodeBlock: NonNullable<Components["code"]> = ({
       className={`${styles.codeBlock} ${isCompactBlock ? styles.codeBlockCompact : ""}`}
       data-language={language}
     >
-      {isCompactBlock ? null : (
-        <div className={styles.codeHeader}>
-          <span className={styles.codeLanguage}>{language}</span>
-          <button
-            className={styles.codeCopyButton}
-            type="button"
-            onClick={handleCopy}
-            aria-label="Copy code"
-            data-copied={copied ? "true" : undefined}
-          >
-            {copied ? <CheckCircle2 size={13} /> : <Copy size={13} />}
-          </button>
-        </div>
-      )}
+      <div className={`${styles.codeHeader} ${isCompactBlock ? styles.codeHeaderCompact : ""}`}>
+        <span className={styles.codeLanguage}>{language}</span>
+        <button
+          className={styles.codeCopyButton}
+          type="button"
+          onClick={handleCopy}
+          aria-label="Copy code"
+          data-copied={copied ? "true" : undefined}
+        >
+          {copied ? <CheckCircle2 size={13} /> : <Copy size={13} />}
+        </button>
+      </div>
       <div
         className={`${styles.codeSurface} ${
           isMiniBlock ? styles.codeSurfaceMini : isCompactBlock ? styles.codeSurfaceCompact : ""
@@ -716,36 +865,549 @@ const MarkdownCodeBlock: NonNullable<Components["code"]> = ({
           </div>
         ))}
       </div>
-      {isCompactBlock && (
-        <div className={styles.codeCompactActions}>
-          <button
-            className={`${styles.codeCopyButton} ${styles.codeCopyButtonInline}`}
-            type="button"
-            onClick={handleCopy}
-            aria-label="Copy code"
-            data-copied={copied ? "true" : undefined}
-          >
-            {copied ? <CheckCircle2 size={12} /> : <Copy size={12} />}
-          </button>
-          <span className={styles.codeLanguageInline}>{language}</span>
-        </div>
-      )}
     </div>
   );
 };
 
-const GrayStreamingBadge = () => (
-  <div className={styles.chatStreamingInline}>
-    <Image
-      src="/grayaiwhite.svg"
-      alt="Gray logo"
-      width={18}
-      height={18}
-      className={styles.chatStreamingSpinner}
-    />
-    <span>Gray is thinking…</span>
-  </div>
+const REMINDER_STATUS_LABELS: Record<string, string> = {
+  pending: "Scheduled",
+  delivered: "Sent",
+  completed: "Completed",
+  cancelled: "Cancelled",
+  failed: "Failed",
+};
+
+const resolveReminderMode = (
+  deliveryMode?: string | null,
+  entity?: GrayReminderEntityType
+): "plan" | "habit" | "reminder" => {
+  const normalized = (deliveryMode ?? entity ?? "").toString().trim().toLowerCase();
+  if (normalized.startsWith("plan")) {
+    return "plan";
+  }
+  if (normalized.startsWith("habit")) {
+    return "habit";
+  }
+  return "reminder";
+};
+
+const resolveReminderStatusLabel = (status?: string | null) => {
+  if (!status) {
+    return REMINDER_STATUS_LABELS.pending;
+  }
+  const normalized = status.trim().toLowerCase();
+  return REMINDER_STATUS_LABELS[normalized as keyof typeof REMINDER_STATUS_LABELS] ?? status;
+};
+
+const ReminderCard = ({ reminder }: { reminder: GrayReminderCreatedPayload }) => {
+  const data = reminder.data;
+  const reminderRecord = (data.reminder as Record<string, unknown> | null | undefined) ?? null;
+  const rawRecord = (data.raw as Record<string, unknown> | null | undefined) ?? null;
+  const reminderTime =
+    reminderRecord && typeof reminderRecord["remind_at"] === "string"
+      ? (reminderRecord["remind_at"] as string)
+      : null;
+  const scheduleIso = reminderTime ?? data.time_iso ?? null;
+  const summaryCandidate =
+    data.summary ??
+    (rawRecord && typeof rawRecord["description"] === "string"
+      ? (rawRecord["description"] as string)
+      : undefined);
+  const statusLabel = resolveReminderStatusLabel(data.reminder_status);
+  const mode = resolveReminderMode(data.delivery_mode, reminder.entity);
+  const typeLabels: Record<"plan" | "habit" | "reminder", string> = {
+    plan: "Plan",
+    habit: "Habit",
+    reminder: "Reminder",
+  };
+  const { primary: scheduleLabel } = formatReminderDisplayLabels(scheduleIso);
+  const displayLabel = scheduleLabel ?? "Flexible timing";
+
+  return (
+      <article className={styles.reminderCard} data-mode={mode}>
+      <header className={styles.reminderCardHeader}>
+        <div>
+          <h4>{data.label || "Untitled reminder"}</h4>
+          <h2 className={styles.reminderCardType}>{typeLabels[mode]}</h2>
+          {summaryCandidate ? <p className={styles.reminderCardSummary}>{summaryCandidate}</p> : null}
+        </div>
+        <span className={styles.reminderCardStatus} data-status={data.reminder_status ?? "pending"}>
+          {statusLabel}
+        </span>
+      </header>
+      <div className={styles.reminderCardTimeRow}>
+        <div className={styles.reminderCardTimeIcon}>
+          <CalendarClock size={16} />
+        </div>
+        <div>
+          <strong>{displayLabel}</strong>
+        </div>
+      </div>
+    </article>
+  );
+};
+
+type ChatMessagesListProps = {
+  messages: ChatSessionMessage[];
+  activeStreamingMessageId: string | null;
+  latestAssistantMessageId: string | null;
+  regeneratingMessageId: string | null;
+  copiedMessageId: string | null;
+  markdownComponents: Components;
+  getResponseDurationLabel: (messageIndex: number) => string | null;
+  handleCopyMessage: (messageId: string, text: string) => void;
+  handleRegenerate: (messageId: string) => void;
+  handleRetryUserMessage: (messageId: string) => void;
+  handleDeleteMessage: (messageId: string) => void;
+  shouldShowPendingStreamIndicator: boolean;
+  scrollAnchorRef: RefObject<HTMLDivElement | null>;
+};
+
+const ChatMessagesList = memo(
+  ({
+    messages,
+    activeStreamingMessageId,
+    latestAssistantMessageId,
+    regeneratingMessageId,
+    copiedMessageId,
+    markdownComponents,
+    getResponseDurationLabel,
+    handleCopyMessage,
+    handleRegenerate,
+    handleRetryUserMessage,
+    handleDeleteMessage,
+    shouldShowPendingStreamIndicator,
+    scrollAnchorRef,
+  }: ChatMessagesListProps) => {
+    return (
+    <div
+      className={styles.chatMessages}
+      data-streaming={shouldShowPendingStreamIndicator ? "true" : undefined}
+    >
+        {messages.map((message, messageIndex) => {
+          const isUser = message.role === "user";
+          const isAssistant = !isUser;
+          const quickReplies: string[] = [];
+          const rawContent = message.content ?? "";
+          const assistantSections = isAssistant ? parseStructuredAssistantMessage(rawContent) : null;
+          const thinkingText = isAssistant ? assistantSections?.thinking ?? null : null;
+          const aiText = isAssistant ? assistantSections?.ai ?? rawContent : rawContent;
+          const assistantTextCandidate = isAssistant ? aiText : rawContent;
+          const sanitizedAssistantTextCandidate = stripGrayTitleMarkers(assistantTextCandidate);
+          const assistantTextAfterRemovals = isAssistant
+            ? sanitizedAssistantTextCandidate.replace(LEGACY_REMINDER_SNIPPET_REGEX, "").trim()
+            : sanitizedAssistantTextCandidate;
+          const visibleAssistantText = isAssistant
+            ? normalizeAssistantMath(assistantTextAfterRemovals) ?? ""
+            : assistantTextAfterRemovals;
+          const normalizedThinkingText = isAssistant ? normalizeAssistantMath(thinkingText) : thinkingText;
+          const fullText = isAssistant ? visibleAssistantText : rawContent;
+          const hasThinkingContent =
+            typeof normalizedThinkingText === "string" && normalizedThinkingText.trim().length > 0;
+          const isStreamingMessage = isAssistant && message.id === activeStreamingMessageId;
+          const hasTextContent = Boolean(visibleAssistantText.trim());
+          const assistantReminders = isAssistant && Array.isArray(message.reminders) ? message.reminders : [];
+          const showAssistantMarkdown = isAssistant && hasTextContent;
+          const hasVisibleContent =
+            hasThinkingContent || showAssistantMarkdown || assistantReminders.length > 0;
+          const isStreamingAssistantMessage = isAssistant && isStreamingMessage;
+          const isAwaitingStreamContent = isStreamingAssistantMessage && !hasVisibleContent;
+          const showStreamingIndicator = isStreamingAssistantMessage;
+          const shouldHideEmptyAssistantMessage = isAssistant && !hasVisibleContent && !isAwaitingStreamContent;
+          const messageTimestampIso =
+            typeof message.createdAt === "number" && Number.isFinite(message.createdAt)
+              ? new Date(message.createdAt).toISOString()
+              : undefined;
+          const timestampLabel = formatMessageTimestamp(message.createdAt);
+
+          if (shouldHideEmptyAssistantMessage) {
+            return null;
+          }
+
+          const responseDurationLabel = isAssistant ? getResponseDurationLabel(messageIndex) : null;
+          const tokenCount = isAssistant ? estimateTokenCount(rawContent) : null;
+          const hasTokenEstimate = typeof tokenCount === "number" && Number.isFinite(tokenCount) && tokenCount > 0;
+          const metadataTokenLabel = hasTokenEstimate ? `${tokenCount.toLocaleString()} tokens` : "—";
+          const metadataRows: { label: string; value: string }[] = [];
+          if (hasTokenEstimate) {
+            metadataRows.push({ label: "Tokens", value: metadataTokenLabel });
+          }
+          if (responseDurationLabel) {
+            metadataRows.push({ label: "Duration", value: responseDurationLabel });
+          }
+          const backendTimingLabel = formatBackendTimingLabel(message.backendTimings);
+          if (backendTimingLabel) {
+            metadataRows.push({ label: "Backend", value: backendTimingLabel });
+          }
+          const isMetadataAvailable = isAssistant && metadataRows.length > 0;
+          const isLatestAssistantMessage = isAssistant && message.id === latestAssistantMessageId;
+          const isRegenerating = regeneratingMessageId === message.id;
+          const messageBodyClassName = isUser
+            ? `${styles.chatBubble} ${styles.chatBubbleUser}`
+            : styles.chatAssistantBlock;
+          const footerSourceLabels: string[] = [];
+          if (isAssistant && message.groundingMetadata) {
+            const footerSources = buildGroundingSourceCards(message.groundingMetadata);
+            footerSources.forEach((source) => {
+              const siteLabel = source.siteLabel?.trim();
+              if (!siteLabel) {
+                return;
+              }
+              if (!footerSourceLabels.includes(siteLabel)) {
+                footerSourceLabels.push(siteLabel);
+              }
+            });
+          }
+
+          return (
+            <div
+              key={message.id}
+              className={styles.chatMessage}
+              data-role={isUser ? "user" : "assistant"}
+              data-streaming={isStreamingMessage ? "true" : undefined}
+            >
+              <div className={messageBodyClassName}>
+                {showStreamingIndicator ? <GrayStreamingSpinner /> : null}
+                {assistantReminders.length > 0 ? (
+                  <div className={styles.reminderCardList}>
+                    {assistantReminders.map((reminder, reminderIndex) => (
+                      <ReminderCard
+                        key={`${message.id}-reminder-${reminderIndex}-${reminder.data.reminder_id ?? reminder.data.id}`}
+                        reminder={reminder}
+                      />
+                    ))}
+                  </div>
+                ) : null}
+                {isAssistant && hasThinkingContent && (
+                  <div className={styles.chatThinkingBlock}>
+                    <div className={styles.chatThinkingLabel}>Chain of Thought</div>
+                    <div className={styles.chatThinkingBody}>
+                      <ReactMarkdown
+                        components={markdownComponents}
+                        remarkPlugins={MARKDOWN_PLUGINS}
+                        rehypePlugins={[[rehypeKatex, { strict: false }]]}
+                      >
+                        {normalizedThinkingText ?? ""}
+                      </ReactMarkdown>
+                    </div>
+                  </div>
+                )}
+                {hasTextContent && (
+                  <div className={styles.chatMarkdown}>
+                    <ReactMarkdown
+                      components={markdownComponents}
+                      remarkPlugins={MARKDOWN_PLUGINS}
+                      rehypePlugins={[[rehypeKatex, { strict: false }]]}
+                    >
+                      {visibleAssistantText}
+                    </ReactMarkdown>
+                  </div>
+                )}
+                {isAssistant && message.groundingMetadata ? (
+                  (() => {
+                    const metadata = message.groundingMetadata;
+                    const searchQueries =
+                      metadata.web_search_queries ??
+                      (metadata as { webSearchQueries?: string[] })?.webSearchQueries ??
+                      [];
+                    const searchEntryPoint =
+                      metadata.search_entry_point ??
+                      (metadata as { searchEntryPoint?: { rendered_content?: string; renderedContent?: string } })
+                        ?.searchEntryPoint ??
+                      null;
+                    const renderedSearchEntry =
+                      typeof searchEntryPoint?.rendered_content === "string"
+                        ? searchEntryPoint.rendered_content
+                        : typeof (searchEntryPoint as any)?.renderedContent === "string"
+                        ? (searchEntryPoint as any).renderedContent
+                        : null;
+                    const chunks =
+                      metadata.grounding_chunks ??
+                      (metadata as { groundingChunks?: GroundingMetadata["grounding_chunks"] })?.groundingChunks ??
+                      [];
+                    const sourceCards = buildGroundingSourceCards(metadata);
+                    const mapSources = chunks
+                      .map((chunk) => chunk?.maps)
+                      .filter((maps): maps is NonNullable<(typeof chunks)[number]["maps"]> => Boolean(maps));
+                    const hasWidget = Boolean(
+                      metadata.google_maps_widget_context_token ??
+                        (metadata as { googleMapsWidgetContextToken?: string })?.googleMapsWidgetContextToken
+                    );
+                    if (
+                      sourceCards.length === 0 &&
+                      mapSources.length === 0 &&
+                      searchQueries.length === 0 &&
+                      !hasWidget &&
+                      !renderedSearchEntry
+                    ) {
+                      return null;
+                    }
+                    return (
+                      <div className={styles.chatGroundingPanel}>
+                        {sourceCards.length > 0 ? (
+                          <div className={styles.chatGroundingSourceDeck}>
+                            <div className={styles.chatGroundingSourceDeckHeader}>
+                              <span>More on this</span>
+                              <span className={styles.chatGroundingSourceDeckBadge}>
+                                <Globe size={14} />
+                                Sources
+                              </span>
+                            </div>
+                            <div className={styles.chatGroundingSourceCards}>
+                              {sourceCards.map((source) => {
+                                const initials = buildGroundingSourceInitials(source.siteLabel ?? source.title);
+                                const cardContent = (
+                                  <>
+                                    <div className={styles.chatGroundingSourceCardMeta}>
+                                      <div className={styles.chatGroundingSourceCardAvatar}>{initials}</div>
+                                      <div className={styles.chatGroundingSourceCardSite}>
+                                        {source.siteLabel ?? "Referer"}
+                                      </div>
+                                    </div>
+                                    <div className={styles.chatGroundingSourceCardTitle}>
+                                      {source.title ?? "Referenced source"}
+                                    </div>
+                                    {source.excerpt ? (
+                                      <div className={styles.chatGroundingSourceCardExcerpt}>{source.excerpt}</div>
+                                    ) : null}
+                                  </>
+                                );
+                                if (source.href) {
+                                  return (
+                                    <a
+                                      key={source.id}
+                                      href={source.href}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className={styles.chatGroundingSourceCard}
+                                    >
+                                      {cardContent}
+                                    </a>
+                                  );
+                                }
+                                return (
+                                  <div
+                                    key={source.id}
+                                    className={styles.chatGroundingSourceCard}
+                                    data-clickable="false"
+                                  >
+                                    {cardContent}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ) : null}
+                        {renderedSearchEntry ? (
+                          <div className={styles.chatGroundingSearchEntryDeck}>
+                            <div className={styles.chatGroundingSourceDeckHeader}>
+                              <span>{sourceCards.length > 0 ? "Search results" : "Sources"}</span>
+                              <span className={styles.chatGroundingSourceDeckBadge}>
+                                <Globe size={14} />
+                                Sources
+                              </span>
+                            </div>
+                            <div
+                              className={styles.chatGroundingSearchEntry}
+                              dangerouslySetInnerHTML={{ __html: renderedSearchEntry }}
+                            />
+                          </div>
+                        ) : null}
+                        {searchQueries.length > 0 ? (
+                          <div className={styles.chatGroundingQueries}>
+                            <span>Search queries:</span>
+                            <div>
+                              {searchQueries.map((query) => (
+                                <span key={query} className={styles.chatGroundingQueryChip}>
+                                  {query}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null}
+                        {mapSources.length > 0 ? (
+                          <div className={styles.chatGroundingSources}>
+                            {mapSources.map((maps, index) => {
+                              const label = maps.title ?? maps.placeId ?? "Maps source";
+                              const href = maps.uri ?? maps.googleMapsUri ?? undefined;
+                              return (
+                                <div key={`${message.id}-maps-source-${index}`} className={styles.chatGroundingSource}>
+                                  {href ? (
+                                    <a
+                                      href={href}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className={styles.chatGroundingLink}
+                                    >
+                                      <span translate="no">Google Maps</span> · {label}
+                                    </a>
+                                  ) : (
+                                    <span className={styles.chatGroundingPlain}>
+                                      <span translate="no">Google Maps</span> · {label}
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : null}
+                        {metadata.google_maps_widget_context_token ? (
+                          <div className={styles.chatGroundingWidget}>
+                            <span>Widget token:</span>
+                            <code>{metadata.google_maps_widget_context_token}</code>
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })()
+                ) : null}
+              </div>
+              {!showStreamingIndicator && (
+                <div className={styles.chatMessageFooter}>
+                  <time className={styles.chatMessageTimestamp} dateTime={messageTimestampIso}>
+                    {timestampLabel}
+                  </time>
+                  <div className={styles.chatMessageFooterRight}>
+                    {isAssistant && footerSourceLabels.length > 0 ? (
+                      <div className={styles.chatSourcesFooter}>
+                        <span className={styles.chatSourcesFooterLabel}>Sources</span>
+                        {footerSourceLabels.slice(0, 4).map((label) => (
+                          <span
+                            key={label}
+                            className={styles.chatSourcesFooterBadge}
+                            aria-label={label}
+                            title={label}
+                          >
+                            {buildGroundingSourceInitials(label)}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
+                    <div className={styles.chatActionIconRow}>
+                      {isMetadataAvailable ? (
+                        <div className={styles.chatMetadataControl}>
+                          <button type="button" aria-label="Response details" tabIndex={0}>
+                            <SignalHigh size={15} />
+                          </button>
+                          <div className={styles.chatMetadataPopover} role="tooltip" aria-hidden="true">
+                            {metadataRows.map((row) => (
+                              <div key={row.label}>
+                                <span>{row.label}</span>
+                                <strong>{row.value}</strong>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+                      <button
+                        type="button"
+                        aria-label="Copy message"
+                        onClick={() => handleCopyMessage(message.id, isAssistant ? fullText : rawContent)}
+                        disabled={!(isAssistant ? fullText.trim() : rawContent.trim())}
+                      >
+                        {copiedMessageId === message.id ? <CheckCircle2 size={15} /> : <Copy size={15} />}
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="Retry message"
+                        onClick={() =>
+                          isAssistant ? handleRegenerate(message.id) : handleRetryUserMessage(message.id)
+                        }
+                        disabled={
+                          isAssistant ? !isLatestAssistantMessage || isRegenerating : !rawContent.trim()
+                        }
+                      >
+                        {isAssistant && isRegenerating ? <Loader2 size={15} /> : <RefreshCw size={15} />}
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="Delete message"
+                        onClick={() => handleDeleteMessage(message.id)}
+                        data-variant="danger"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
+                  </div>
+                  {isAssistant && quickReplies.length > 0 && (
+                    <div className={styles.chatQuickReplies}>
+                      {quickReplies.map((reply) => (
+                        <button key={reply} type="button">
+                          {reply}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+        <div ref={scrollAnchorRef} />
+      </div>
+    );
+  }
 );
+
+ChatMessagesList.displayName = "ChatMessagesList";
+
+const formatDurationLabel = (durationMs?: number): string | null => {
+  if (typeof durationMs !== "number" || !Number.isFinite(durationMs) || durationMs < 0) {
+    return null;
+  }
+  const seconds = durationMs / 1000;
+  if (seconds < 0.1) {
+    return "<0.1s";
+  }
+  if (seconds >= 10) {
+    return `${Math.round(seconds)}s`;
+  }
+  return `${seconds.toFixed(1)}s`;
+};
+
+const formatBackendTimingLabel = (
+  timing?: ChatSessionMessage["backendTimings"]
+): string | null => {
+  if (!timing) {
+    return null;
+  }
+  const totalLabel = formatDurationLabel(timing.totalMs);
+  if (!totalLabel) {
+    return null;
+  }
+  const firstTokenLabel = formatDurationLabel(timing.firstTokenMs);
+  if (firstTokenLabel) {
+    return `${totalLabel} (first token ${firstTokenLabel})`;
+  }
+  return totalLabel;
+};
+
+const formatMessageTimestamp = (timestamp: number | undefined): string => {
+  if (typeof timestamp !== "number" || !Number.isFinite(timestamp)) {
+    return "";
+  }
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startOfYesterday = new Date(startOfToday);
+  startOfYesterday.setDate(startOfToday.getDate() - 1);
+  const timeLabel = date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  if (date >= startOfToday) {
+    return timeLabel;
+  }
+  if (date >= startOfYesterday) {
+    return `Yesterday · ${timeLabel}`;
+  }
+  const dateLabel = date.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: date.getFullYear() === now.getFullYear() ? undefined : "numeric",
+  });
+  return `${dateLabel}, ${timeLabel}`;
+};
 
 type AssistantSections = {
   user: string | null;
@@ -754,7 +1416,17 @@ type AssistantSections = {
   isStructured: boolean;
 };
 
+// Memoized cache for parseStructuredAssistantMessage to avoid re-parsing same content
+const parseCache = new Map<string, AssistantSections>();
+const PARSE_CACHE_SIZE = 1000;
+
 const parseStructuredAssistantMessage = (content?: string | null): AssistantSections => {
+  const cacheKey = content ?? "";
+  const cached = parseCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
   const normalized = (content ?? "").replace(/\r\n/g, "\n");
   const trimmed = normalized.trim();
   const base: AssistantSections = {
@@ -839,6 +1511,16 @@ const parseStructuredAssistantMessage = (content?: string | null): AssistantSect
     base.ai = normalized.slice(afterThinkingIndex).trim();
   }
 
+  // Cache the result with LRU eviction
+  parseCache.set(cacheKey, base);
+  if (parseCache.size > PARSE_CACHE_SIZE) {
+    // Remove oldest entry (first key)
+    const firstKey = parseCache.keys().next().value;
+    if (firstKey !== undefined) {
+      parseCache.delete(firstKey);
+    }
+  }
+
   return base;
 };
 
@@ -857,40 +1539,115 @@ const estimateTokenCount = (content: string | null | undefined): number => {
   return Math.max(lengthBased, wordBased);
 };
 
-export function GrayChatView({ sessionId, introContent, onContextUsageChange }: GrayChatViewProps) {
+export function GrayChatView({
+  sessionId,
+  introContent,
+  onContextUsageChange,
+  hideThinkingIndicator = false,
+}: GrayChatViewProps) {
   const {
     getSession,
+    ensureSession,
     appendMessage,
     updateMessage,
     deleteMessage,
     updateSession,
     workspaceContext,
-    renameSession,
+    applyAutoTitle,
+    hasAutoStreamTriggered,
+    markAutoStreamTriggered,
+    resetAutoStreamState,
+    personalizedSystemPrompt,
+    attachments,
+    isAttachmentUploading,
+    attachmentError,
+    uploadAttachments,
+    removeAttachment,
+    clearAttachments,
+    mapsEnabled,
+    mapsWidgetEnabled,
+    mapsLatitude,
+    mapsLongitude,
+    setMapsEnabled,
+    setMapsWidgetEnabled,
+    setMapsLatitude,
+    setMapsLongitude,
+    mapPayload,
+    pendingLocationRequestMessage,
+    isRequestingLocation,
+    requestLocationShare,
+    skipLocationShare,
+    contextCaches,
+    contextCacheLabel,
+    contextCacheContent,
+    selectedContextCacheId,
+    contextCacheMessage,
+    isContextCacheSaving,
+    createContextCache,
+    selectContextCacheId,
+    setContextCacheLabel,
+    setContextCacheContent,
+    fileSearchStores,
+    fileSearchDisplayName,
+    setFileSearchDisplayName,
+    fileSearchStatus,
+    isCreatingFileSearchStore,
+    handleCreateFileSearchStore,
+    selectedFileSearchStore,
+    setSelectedFileSearchStore,
+    fileSearchUploadFile,
+    setFileSearchUploadFile,
+    fileSearchUploadStatus,
+    handleFileSearchUpload,
+    fileSearchChunking,
+    setFileSearchChunking,
+    fileSearchImportName,
+    setFileSearchImportName,
+    fileSearchImportStatus,
+    handleFileSearchImport,
+    fileSearchUploadInputRef,
+    webSearchEnabled,
   } = useChatStore();
   const session = sessionId ? getSession(sessionId) : undefined;
+  const sessionConversationId = session?.conversationId ?? null;
+  const sessionExists = Boolean(session);
   const { user, waitForUser } = useUser();
   const [draft, setDraft] = useState("");
   const [hasHydrated, setHasHydrated] = useState(false);
+  const [thinkingDots, setThinkingDots] = useState("");
   const replyTimeout = useRef<number | null>(null);
   const scrollAnchorRef = useRef<HTMLDivElement | null>(null);
   const isLoadingHistoryRef = useRef<string | null>(null);
-  const attachmentsRef = useRef<ComposerAttachment[]>([]);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const copyResetTimeoutRef = useRef<number | null>(null);
   const [regeneratingMessageId, setRegeneratingMessageId] = useState<string | null>(null);
   const [activeStreamingMessageId, setActiveStreamingMessageId] = useState<string | null>(null);
-  const autoStreamTriggeredRef = useRef<Set<string>>(new Set());
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
-  const [composerAttachments, setComposerAttachments] = useState<ComposerAttachment[]>([]);
   const [conversationUsage, setConversationUsage] = useState<ConversationUsage | null>(null);
-  const [isUsageLoading, setIsUsageLoading] = useState(false);
-  const revokePreviewUrl = useCallback((url?: string) => {
-    if (url) {
-      URL.revokeObjectURL(url);
-    }
+
+  const composerDockRef = useRef<HTMLDivElement | null>(null);
+  const [composerHeight, setComposerHeight] = useState(0);
+  const attachmentInputRef = useRef<HTMLInputElement | null>(null);
+  const handleAttachmentInputChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      const files = event.target.files;
+      if (!files || files.length === 0) {
+        return;
+      }
+      uploadAttachments(files);
+      event.target.value = "";
+    },
+    [uploadAttachments]
+  );
+  const openAttachmentPicker = useCallback(() => {
+    attachmentInputRef.current?.click();
   }, []);
   const activeSessionId = session?.id ?? null;
   const activeConversationId = session?.conversationId ?? null;
+  const buildAttachmentPayloads = useCallback(
+    () => attachments.map((attachment) => ({ id: attachment.id })),
+    [attachments]
+  );
   const resolveChatUser = useCallback(async () => {
     if (user) {
       return user;
@@ -898,151 +1655,95 @@ export function GrayChatView({ sessionId, introContent, onContextUsageChange }: 
     return waitForUser();
   }, [user, waitForUser]);
 
-  const messages = useMemo(
-    () => session?.messages ?? [],
-    [session?.messages]
-  );
+  const messages = useMemo(() => session?.messages ?? [], [session?.messages]);
+  const sessionAutoStreamId = session?.id ?? null;
+  const sessionConversationId = session?.conversationId ?? null;
+  const sessionPendingAutoStream = Boolean(session?.pendingAutoStream);
+  const isResponding = Boolean(session?.isResponding);
+  const locationRequestSummary = pendingLocationRequestMessage
+    ? pendingLocationRequestMessage.length > 120
+      ? `${pendingLocationRequestMessage.slice(0, 120)}…`
+      : pendingLocationRequestMessage
+    : "";
   const showIntro = Boolean(introContent) && (!session || messages.length === 0);
-  const clearComposerAttachments = useCallback(() => {
-    setComposerAttachments((prev) => {
-      if (!prev.length) {
-        return prev;
-      }
-      prev.forEach((attachment) => revokePreviewUrl(attachment.previewUrl));
-      return [];
-    });
-  }, [revokePreviewUrl]);
-  const uploadComposerAttachment = useCallback((attachmentId: string, file: File) => {
-    setComposerAttachments((prev) =>
-      prev.map((attachment) =>
-        attachment.id === attachmentId
-          ? { ...attachment, status: "uploading", error: undefined }
-          : attachment
-      )
-    );
-
-    apiService
-      .uploadGeminiFile(file, file.name)
-      .then((uploadedFile: GeminiFileMetadata) => {
-        const normalized = mapGeminiFileToAttachment(uploadedFile);
-        if (!normalized.uri) {
-          throw new Error("Gemini did not return a reusable file URI.");
-        }
-        setComposerAttachments((prev) =>
-          prev.map((attachment) =>
-            attachment.id === attachmentId
-              ? { ...attachment, status: "uploaded", uploaded: normalized, error: undefined }
-              : attachment
-          )
-        );
-      })
-      .catch((error: unknown) => {
-        console.error("Failed to upload attachment:", error);
-        const message =
-          error instanceof Error
-            ? error.message
-            : typeof error === "string"
-              ? error
-              : "File upload failed.";
-        setComposerAttachments((prev) =>
-          prev.map((attachment) =>
-            attachment.id === attachmentId
-              ? { ...attachment, status: "error", error: message }
-              : attachment
-          )
-        );
-      });
-  }, []);
-
-  const handleFilesSelected = useCallback(
-    (files: File[]) => {
-      if (!files.length) {
-        return;
-      }
-
-      const availableSlots = MAX_ATTACHMENTS - composerAttachments.length;
-      if (availableSlots <= 0) {
-        return;
-      }
-
-      const selection = files.slice(0, availableSlots);
-      const limitLabel = `${Math.round(MAX_ATTACHMENT_SIZE_BYTES / (1024 * 1024))} MB`;
-
-      selection.forEach((file) => {
-        const id =
-          typeof crypto !== "undefined" && "randomUUID" in crypto
-            ? crypto.randomUUID()
-            : `${Date.now()}-${file.name}`;
-
-        if (file.size > MAX_ATTACHMENT_SIZE_BYTES) {
-          setComposerAttachments((prev) => [
-            ...prev,
-            {
-              id,
-              file,
-              status: "error",
-              error: `File exceeds ${limitLabel}.`,
-            },
-          ]);
-          return;
-        }
-
-        const previewUrl = file.type.startsWith("image/")
-          ? URL.createObjectURL(file)
-          : undefined;
-        setComposerAttachments((prev) => [
-          ...prev,
-          {
-            id,
-            file,
-            status: "uploading",
-            previewUrl,
-          },
-        ]);
-        uploadComposerAttachment(id, file);
-      });
-    },
-    [composerAttachments.length, uploadComposerAttachment]
-  );
-
-  const handleRemoveAttachment = useCallback(
-    (attachmentId: string) => {
-      setComposerAttachments((prev) => {
-        const target = prev.find((attachment) => attachment.id === attachmentId);
-        if (target) {
-          revokePreviewUrl(target.previewUrl);
-        }
-        return prev.filter((attachment) => attachment.id !== attachmentId);
-      });
-    },
-    [revokePreviewUrl]
-  );
-
+  const showAttachmentTray = session?.scope === "general";
+  const attachmentTrayNode = showAttachmentTray ? (
+    <AttachmentTray
+      attachments={attachments}
+      isUploading={isAttachmentUploading}
+      error={attachmentError}
+      onAddAttachment={openAttachmentPicker}
+      onRemoveAttachment={removeAttachment}
+    />
+  ) : null;
+  const isAssistantThinking = isResponding;
+  const streamingStatusLabel = session?.pendingAutoStream ? "searching" : "thinking";
+  useEffect(() => {
+    if (!isAssistantThinking || hideThinkingIndicator) {
+      setThinkingDots("");
+      return;
+    }
+    if (typeof window === "undefined") {
+      return;
+    }
+    const frames = ["", ".", "..", "..."];
+    let index = 0;
+    const handle = window.setInterval(() => {
+      index = (index + 1) % frames.length;
+      setThinkingDots(frames[index]);
+    }, 400);
+    return () => {
+      window.clearInterval(handle);
+    };
+  }, [hideThinkingIndicator, isAssistantThinking]);
   useEffect(() => {
     setHasHydrated(true);
   }, []);
 
-  const handleRetryAttachment = useCallback(
-    (attachmentId: string) => {
-      const target = composerAttachments.find((attachment) => attachment.id === attachmentId);
-      if (!target) {
-        return;
-      }
-      uploadComposerAttachment(attachmentId, target.file);
-    },
-    [composerAttachments, uploadComposerAttachment]
-  );
+  const streamingContentSignature = useMemo(() => {
+    if (!activeStreamingMessageId) {
+      return null;
+    }
+    const target = messages.find((message) => message.id === activeStreamingMessageId);
+    if (!target) {
+      return null;
+    }
+    const contentLength = target.content?.length ?? 0;
+    return `${activeStreamingMessageId}:${contentLength}`;
+  }, [activeStreamingMessageId, messages]);
 
   useEffect(() => {
     if (!scrollAnchorRef.current) {
       return;
     }
-    scrollAnchorRef.current.scrollIntoView({ behavior: "smooth" });
+    scrollAnchorRef.current.scrollIntoView({ behavior: "auto" });
   }, [messages.length, session?.isResponding]);
 
   useEffect(() => {
-    attachmentsRef.current = composerAttachments;
-  }, [composerAttachments]);
+    if (!streamingContentSignature || !scrollAnchorRef.current) {
+      return;
+    }
+    scrollAnchorRef.current.scrollIntoView({ behavior: "auto" });
+  }, [streamingContentSignature]);
+
+  useLayoutEffect(() => {
+    const node = composerDockRef.current;
+    if (!node || typeof window === "undefined" || typeof ResizeObserver === "undefined") {
+      return;
+    }
+    const updateHeight = () => {
+      setComposerHeight(node.offsetHeight);
+    };
+    updateHeight();
+    const observer = new ResizeObserver(updateHeight);
+    observer.observe(node);
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
+
+  const chatViewStyle: CSSProperties | undefined =
+    composerHeight > 0 ? ({ "--chat-composer-height": `${composerHeight}px` } as CSSProperties) : undefined;
 
   useEffect(() => {
     setActiveStreamingMessageId(null);
@@ -1057,7 +1758,6 @@ export function GrayChatView({ sessionId, introContent, onContextUsageChange }: 
   useEffect(() => {
     if (!activeConversationId) {
       setConversationUsage(null);
-      setIsUsageLoading(false);
       return;
     }
 
@@ -1067,19 +1767,14 @@ export function GrayChatView({ sessionId, introContent, onContextUsageChange }: 
     );
     const loadUsage = async () => {
       try {
-        setIsUsageLoading(true);
         const usage = await apiService.getConversationUsage(activeConversationId);
         if (!cancelled) {
           setConversationUsage(usage);
         }
       } catch (error) {
         if (!cancelled) {
-          console.error("Failed to fetch conversation usage:", error);
+          console.info("Conversation usage unavailable:", error);
           setConversationUsage(null);
-        }
-      } finally {
-        if (!cancelled) {
-          setIsUsageLoading(false);
         }
       }
     };
@@ -1089,16 +1784,7 @@ export function GrayChatView({ sessionId, introContent, onContextUsageChange }: 
     return () => {
       cancelled = true;
     };
-  }, [activeConversationId, session?.messages.length, session?.isResponding]);
-
-  
-  useEffect(
-    () => () => {
-      attachmentsRef.current.forEach((attachment) => revokePreviewUrl(attachment.previewUrl));
-    },
-    [revokePreviewUrl]
-  );
-
+  }, [activeConversationId]);
   useEffect(
     () => () => {
       if (replyTimeout.current !== null) {
@@ -1117,10 +1803,6 @@ export function GrayChatView({ sessionId, introContent, onContextUsageChange }: 
   }, [session?.id]);
 
   useEffect(() => {
-    clearComposerAttachments();
-  }, [clearComposerAttachments, session?.id]);
-
-  useEffect(() => {
     return () => {
       if (copyResetTimeoutRef.current !== null) {
         window.clearTimeout(copyResetTimeoutRef.current);
@@ -1130,23 +1812,34 @@ export function GrayChatView({ sessionId, introContent, onContextUsageChange }: 
   }, []);
 
   useEffect(() => {
+    console.log('[ChatView] History loading effect running', {
+      activeSessionId,
+      activeConversationId,
+      sessionMessagesLength: session?.messages?.length,
+      isLoadingHistoryRef: isLoadingHistoryRef.current
+    });
+
     if (!activeSessionId || !activeConversationId) {
+      console.log('[ChatView] Skipping: no session ID or conversation ID');
       setIsHistoryLoading(false);
       isLoadingHistoryRef.current = null;
       return;
     }
 
-    // Avoid refetch if we already loaded this conversation for this session
     if (isLoadingHistoryRef.current === `${activeSessionId}:${activeConversationId}`) {
+      console.log('[ChatView] Skipping: already loading this conversation');
       return;
     }
 
-    // If the session already has messages, assume it's hydrated.
-    // This prevents overwriting existing local messages unnecessarily.
-    if (session && session.messages && session.messages.length > 0) {
+    // Skip loading if we already have messages AND they include assistant messages
+    // (user messages will appear before backend sends the response)
+    const hasAssistantMessages = session?.messages?.some((msg) => msg.role === "assistant");
+    if (hasAssistantMessages) {
+      console.log('[ChatView] Skipping: already has assistant messages');
       return;
     }
 
+    console.log('[ChatView] Loading conversation history for:', activeConversationId);
     let cancelled = false;
     setIsHistoryLoading(true);
     isLoadingHistoryRef.current = `${activeSessionId}:${activeConversationId}`;
@@ -1154,12 +1847,12 @@ export function GrayChatView({ sessionId, introContent, onContextUsageChange }: 
     (async () => {
       try {
         const history = await apiService.getConversation(activeConversationId);
+        console.log('[ChatView] Loaded history:', history?.length, 'messages');
         if (cancelled) {
           return;
         }
 
         if (!Array.isArray(history) || history.length === 0) {
-          // No backend history; keep session empty but valid so user can start chatting.
           updateSession(activeSessionId, {
             messages: [],
             updatedAt: Date.now(),
@@ -1170,15 +1863,29 @@ export function GrayChatView({ sessionId, introContent, onContextUsageChange }: 
 
         const mappedHistory: ChatSessionMessage[] = history.map((message, index) => {
           const role: ChatRole = message.role === "model" ? "assistant" : "user";
+          const rawText = message.text ?? "";
+          const normalizedText = role === "assistant" ? stripGrayTitleMarkers(rawText) : rawText;
+          const reminderExtraction =
+            role === "assistant"
+              ? extractGrayRemindersFromText(normalizedText)
+              : { cleanText: normalizedText, reminders: [] };
+          const normalizedMetadata =
+            (message as { grounding_metadata?: GroundingMetadata | null }).grounding_metadata ??
+            (message as { groundingMetadata?: GroundingMetadata | null }).groundingMetadata ??
+            null;
           return {
             id:
               typeof crypto !== "undefined" && "randomUUID" in crypto
                 ? crypto.randomUUID()
                 : `${activeConversationId}-${index}-${Date.now()}`,
             role,
-            content: message.text,
+            content: reminderExtraction.cleanText,
             createdAt: Date.now(),
-            attachments: Array.isArray(message.attachments) ? message.attachments : undefined,
+            reminders:
+              role === "assistant" && reminderExtraction.reminders.length
+                ? reminderExtraction.reminders
+                : undefined,
+            groundingMetadata: normalizedMetadata ?? undefined,
           };
         });
 
@@ -1187,23 +1894,8 @@ export function GrayChatView({ sessionId, introContent, onContextUsageChange }: 
           updatedAt: Date.now(),
           isResponding: false,
         });
-
-        const firstUserMessage = mappedHistory.find(
-          (entry) => entry.role === "user" && entry.content.trim().length > 0
-        );
-        const currentTitle = (session?.title ?? "").trim();
-        const shouldAutoRename =
-          session?.scope === "thread" && (!currentTitle || currentTitle.toLowerCase() === "new chat");
-
-        if (shouldAutoRename && firstUserMessage) {
-          const derivedTitle = deriveTitleFromMessage(firstUserMessage.content);
-          if (derivedTitle && derivedTitle !== currentTitle) {
-            renameSession(activeSessionId, derivedTitle);
-          }
-        }
       } catch (error) {
         console.error("Failed to load conversation history:", error);
-        // On error, still ensure the session exists so UI isn't blank.
         updateSession(activeSessionId, {
           messages: session?.messages ?? [],
           updatedAt: Date.now(),
@@ -1219,22 +1911,13 @@ export function GrayChatView({ sessionId, introContent, onContextUsageChange }: 
     return () => {
       cancelled = true;
     };
-  }, [
-    activeConversationId,
-    activeSessionId,
-    renameSession,
-    session?.messages,
-    session?.scope,
-    session?.title,
-    updateSession,
-  ]);
+  }, [activeConversationId, activeSessionId, session, updateSession]);
 
   const streamAssistantReply = useCallback(
     async (
       targetSessionId: string,
       prompt: string,
       conversationId: string | null,
-      attachments?: ChatAttachment[],
       existingAssistantId?: string | null
     ) => {
       updateSession(targetSessionId, { isResponding: true, pendingAutoStream: false });
@@ -1251,24 +1934,34 @@ export function GrayChatView({ sessionId, introContent, onContextUsageChange }: 
       let assistantMessageId: string | null = existingAssistantId ?? null;
       let streamingMessageId: string | null = assistantMessageId ?? null;
       let accumulated = "";
-      let streamedConversationId: string | null = conversationId;
+      let streamedConversationId: string | null = normalizeConversationIdValue(conversationId) ?? null;
       let didReceiveToken = false;
       const streamingUserId = resolvedUser.id;
+      const requestTitleHint = shouldRequestAutoTitleForSession(session);
+      if (!assistantMessageId) {
+        const placeholderAssistant = appendMessage(targetSessionId, "assistant", "");
+        assistantMessageId = (placeholderAssistant as ChatSessionMessage | null)?.id ?? null;
+        streamingMessageId = assistantMessageId;
+      }
       if (streamingMessageId) {
         setActiveStreamingMessageId(streamingMessageId);
       }
       try {
+        const timeContext = buildLocalTimeContext();
         for await (const event of apiService.sendMessageStream({
           message: prompt,
-          conversation_id: conversationId ?? undefined,
-          system_prompt: SYSTEM_PROMPT,
+          conversation_id: streamedConversationId ?? undefined,
+          system_prompt: personalizedSystemPrompt,
           user_id: streamingUserId,
           context: contextPayload,
-          attachments: attachments && attachments.length ? attachments : undefined,
+          time_context: timeContext,
+          attachments: buildAttachmentPayloads(),
+          should_generate_title: requestTitleHint,
         })) {
           if (event.type === "token") {
             didReceiveToken = true;
-            accumulated += event.delta;
+            const delta = event.delta;
+            accumulated = accumulated + delta;
             if (!assistantMessageId) {
               const assistantMessage = appendMessage(targetSessionId, "assistant", accumulated);
               assistantMessageId = (assistantMessage as { id: string } | null)?.id ?? null;
@@ -1286,9 +1979,13 @@ export function GrayChatView({ sessionId, introContent, onContextUsageChange }: 
           }
 
           if (event.type === "end") {
-            streamedConversationId = event.conversationId ?? streamedConversationId;
+            streamedConversationId =
+              normalizeConversationIdValue(event.conversationId) ?? streamedConversationId;
             const finalResponse = normalizeAssistantContent(event.response ?? accumulated, prompt);
             accumulated = finalResponse;
+            if (event.title) {
+              applyAutoTitle(targetSessionId, event.title);
+            }
             if (!assistantMessageId) {
               const assistantMessage = appendMessage(targetSessionId, "assistant", finalResponse);
               assistantMessageId = (assistantMessage as { id: string } | null)?.id ?? null;
@@ -1304,6 +2001,7 @@ export function GrayChatView({ sessionId, introContent, onContextUsageChange }: 
               isResponding: false,
               pendingAutoStream: false,
             });
+            clearAttachments();
             return finalResponse;
           }
 
@@ -1327,24 +2025,42 @@ export function GrayChatView({ sessionId, introContent, onContextUsageChange }: 
           isResponding: false,
           pendingAutoStream: false,
         });
+        clearAttachments();
         return accumulated;
       } catch (error) {
         console.error("Failed to stream assistant reply:", error);
         try {
           const fallbackResponse = await apiService.sendMessage({
             message: prompt,
-            conversation_id: conversationId ?? undefined,
-            system_prompt: SYSTEM_PROMPT,
+            conversation_id: streamedConversationId ?? undefined,
+            system_prompt: personalizedSystemPrompt,
             user_id: streamingUserId,
             context: contextPayload,
-            attachments: attachments && attachments.length ? attachments : undefined,
+            time_context: buildLocalTimeContext(),
+            attachments: buildAttachmentPayloads(),
+            context_cache_id: selectedContextCacheId ?? undefined,
+            web_search_enabled: webSearchEnabled,
+            should_generate_title: requestTitleHint,
+            ...mapPayload,
           });
-          streamedConversationId = fallbackResponse.conversation_id ?? streamedConversationId;
+          streamedConversationId =
+            normalizeConversationIdValue(fallbackResponse.conversation_id) ?? streamedConversationId;
           const finalResponse = normalizeAssistantContent(fallbackResponse.response, prompt);
+          const fallbackMetadata = fallbackResponse.groundingMetadata ?? undefined;
+          if (fallbackResponse.title) {
+            applyAutoTitle(targetSessionId, fallbackResponse.title);
+          }
           if (assistantMessageId) {
-            updateMessage(targetSessionId, assistantMessageId, { content: finalResponse });
+            updateMessage(targetSessionId, assistantMessageId, {
+              content: finalResponse,
+              groundingMetadata: fallbackMetadata,
+            });
           } else {
-            const assistantMessage = appendMessage(targetSessionId, "assistant", finalResponse);
+            const assistantMessage = appendMessage(
+              targetSessionId,
+              "assistant",
+              finalResponse
+            );
             assistantMessageId = assistantMessage?.id ?? null;
             if (!didReceiveToken && assistantMessageId && !streamingMessageId) {
               streamingMessageId = assistantMessageId;
@@ -1356,6 +2072,7 @@ export function GrayChatView({ sessionId, introContent, onContextUsageChange }: 
             isResponding: false,
             pendingAutoStream: false,
           });
+          clearAttachments();
           return finalResponse;
         } catch (fallbackError) {
           console.error("Fallback chat request failed:", fallbackError);
@@ -1371,6 +2088,7 @@ export function GrayChatView({ sessionId, introContent, onContextUsageChange }: 
             }
           }
           updateSession(targetSessionId, { isResponding: false, pendingAutoStream: false });
+          clearAttachments();
           return fallback;
         }
       } finally {
@@ -1384,28 +2102,36 @@ export function GrayChatView({ sessionId, introContent, onContextUsageChange }: 
     [
       appendMessage,
       resolveChatUser,
-      shouldIncludeWorkspaceContext,
       updateMessage,
       updateSession,
       workspaceContext,
+      personalizedSystemPrompt,
+      applyAutoTitle,
+      session,
     ]
   );
 
   useEffect(() => {
     if (!session) {
-      autoStreamTriggeredRef.current.clear();
+      if (sessionId) {
+        resetAutoStreamState(sessionId);
+      }
+      return;
+    }
+
+    if (!sessionAutoStreamId) {
       return;
     }
 
     // If this session was created as a shell for a /c/{conversationId} URL and has
     // no local messages yet, skip auto-streaming. History hydration (below) will
     // populate messages if the backend knows this conversation.
-    if (session.conversationId && session.messages.length === 0) {
+    if (sessionConversationId && messages.length === 0) {
       return;
     }
 
     // Only ever auto-respond to genuine user messages, never to assistant output.
-    const hasPendingAutoStream = Boolean(session.pendingAutoStream);
+    const hasPendingAutoStream = sessionPendingAutoStream;
     const lastUserMessage =
       [...messages].reverse().find((message) => message.role === "user") ?? null;
     const lastAssistantMessage =
@@ -1413,10 +2139,8 @@ export function GrayChatView({ sessionId, introContent, onContextUsageChange }: 
 
     // Some flows (e.g., createThreadSession) seed an empty assistant message before
     // the actual stream starts. If navigation interrupts that stream we end up with
-    // a blank assistant entry, so treat it as “awaiting” unless it has real content.
-    const assistantHasContent =
-      Boolean(lastAssistantMessage?.content?.trim()) ||
-      Boolean(lastAssistantMessage?.attachments && lastAssistantMessage.attachments.length > 0);
+    // a blank assistant entry, so treat it as "awaiting" unless it has real content.
+    const assistantHasContent = Boolean(lastAssistantMessage?.content?.trim());
 
     const isAwaitingAssistant =
       Boolean(lastUserMessage) &&
@@ -1425,8 +2149,7 @@ export function GrayChatView({ sessionId, introContent, onContextUsageChange }: 
         !assistantHasContent);
 
     const hasAlreadyTriggeredForLastUser =
-      lastUserMessage != null &&
-      autoStreamTriggeredRef.current.has(`${session.id}:${lastUserMessage.id}`);
+      lastUserMessage != null && hasAutoStreamTriggered(sessionAutoStreamId, lastUserMessage.id);
 
     // Do not rely on session.isResponding here—some surfaces (like createThreadSession)
     // mark sessions as responding while their own stream is active, and we do not want
@@ -1447,69 +2170,84 @@ export function GrayChatView({ sessionId, introContent, onContextUsageChange }: 
     }
 
     // Mark that we've handled this specific user message so we don't re-trigger.
-    autoStreamTriggeredRef.current.add(`${session.id}:${safeLastUserMessage.id}`);
-
-    const attachments = lastUserMessage.attachments ?? [];
+    markAutoStreamTriggered(sessionAutoStreamId, safeLastUserMessage.id);
 
     if (hasPendingAutoStream) {
-      updateSession(session.id, { pendingAutoStream: false });
+      updateSession(sessionAutoStreamId, { pendingAutoStream: false });
     }
 
     const placeholderAssistantId =
       !assistantHasContent && lastAssistantMessage ? lastAssistantMessage.id : null;
 
     void streamAssistantReply(
-      session.id,
+      sessionAutoStreamId,
       lastUserMessage.content,
-      session.conversationId ?? null,
-      attachments.length ? attachments : undefined,
+      sessionConversationId ?? null,
       placeholderAssistantId
     );
-  }, [appendMessage, messages, session, streamAssistantReply, updateSession]);
+  }, [
+    hasAutoStreamTriggered,
+    markAutoStreamTriggered,
+    messages,
+    sessionId,
+    session,
+    resetAutoStreamState,
+    sessionAutoStreamId,
+    sessionConversationId,
+    sessionPendingAutoStream,
+    streamAssistantReply,
+    updateSession,
+  ]);
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!session) {
+    let targetSession = session;
+    if (!targetSession && sessionId) {
+      const nowTs = Date.now();
+      targetSession = ensureSession(sessionId, () => ({
+        id: sessionId,
+        title: "New Chat",
+        titleMode: "auto",
+        createdAt: nowTs,
+        updatedAt: nowTs,
+        messages: [],
+        isResponding: false,
+        scope: "thread",
+        conversationId: undefined,
+        pendingAutoStream: false,
+      }));
+    }
+    if (!targetSession) {
       return;
     }
     const content = draft.trim();
-    const readyAttachments = composerAttachments.filter(
-      (attachment) => attachment.status === "uploaded" && attachment.uploaded
-    );
-    const attachmentPayload = readyAttachments.map((attachment) => attachment.uploaded!) as ChatAttachment[];
-    const hasMessageBody = Boolean(content) || attachmentPayload.length > 0;
-    const hasPendingAttachments = composerAttachments.some(
-      (attachment) => attachment.status !== "uploaded"
-    );
-
-    if (!hasMessageBody || hasPendingAttachments) {
+    if (!content) {
       return;
     }
 
-    const userMessage = appendMessage(
-      session.id,
-      "user",
-      content,
-      attachmentPayload.length ? attachmentPayload : undefined
-    );
+    // Generate a temp ID and mark it as already triggered BEFORE appending
+    // This prevents the auto-stream effect from racing with our own streaming
+    const tempUserMessageId = typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : Math.random().toString(36).slice(2);
+    markAutoStreamTriggered(targetSession.id, tempUserMessageId);
+
+    const userMessage = appendMessage(targetSession.id, "user", content, tempUserMessageId);
     setDraft("");
-    clearComposerAttachments();
     if (replyTimeout.current !== null) {
       window.clearTimeout(replyTimeout.current);
     }
 
     if (userMessage) {
-      autoStreamTriggeredRef.current.add(`${session.id}:${userMessage.id}`);
       void streamAssistantReply(
-        session.id,
+        targetSession.id,
         content,
-        session.conversationId ?? null,
-        attachmentPayload.length ? attachmentPayload : undefined
+        targetSession.conversationId ?? null
       );
       return;
     }
 
-    appendMessage(session.id, "assistant", buildAssistantReply(content));
+    appendMessage(targetSession.id, "assistant", buildAssistantReply(content));
     replyTimeout.current = null;
   };
 
@@ -1539,14 +2277,7 @@ export function GrayChatView({ sessionId, introContent, onContextUsageChange }: 
           if (!Number.isFinite(diffMs)) {
             return null;
           }
-          const diffSeconds = diffMs / 1000;
-          if (diffSeconds < 0.1) {
-            return "<0.1s";
-          }
-          if (diffSeconds >= 10) {
-            return `${Math.round(diffSeconds)}s`;
-          }
-          return `${diffSeconds.toFixed(1)}s`;
+          return formatDurationLabel(diffMs);
         }
       }
       return null;
@@ -1586,6 +2317,8 @@ export function GrayChatView({ sessionId, introContent, onContextUsageChange }: 
       if (!session) {
         return;
       }
+      const targetIndex = messages.findIndex((message) => message.id === messageId);
+      const targetMessage = targetIndex >= 0 ? messages[targetIndex] : null;
       if (activeStreamingMessageId === messageId) {
         setActiveStreamingMessageId(null);
       }
@@ -1593,8 +2326,35 @@ export function GrayChatView({ sessionId, introContent, onContextUsageChange }: 
         setCopiedMessageId(null);
       }
       deleteMessage(session.id, messageId);
+      if (!targetMessage) {
+        return;
+      }
+      if (targetMessage.role === "assistant") {
+        const precedingUser = [...messages]
+          .slice(0, targetIndex)
+          .reverse()
+          .find((message) => message.role === "user");
+        if (precedingUser) {
+          markAutoStreamTriggered(session.id, precedingUser.id);
+        }
+        updateSession(session.id, { pendingAutoStream: false, isResponding: false });
+        return;
+      }
+      if (targetMessage.role === "user") {
+        markAutoStreamTriggered(session.id, targetMessage.id);
+        updateSession(session.id, { pendingAutoStream: false, isResponding: false });
+        return;
+      }
     },
-    [activeStreamingMessageId, copiedMessageId, deleteMessage, session]
+    [
+      activeStreamingMessageId,
+      copiedMessageId,
+      deleteMessage,
+      markAutoStreamTriggered,
+      messages,
+      session,
+      updateSession,
+    ]
   );
 
   const handleRetryUserMessage = useCallback(
@@ -1607,14 +2367,14 @@ export function GrayChatView({ sessionId, introContent, onContextUsageChange }: 
         return;
       }
       const content = target.content;
-      const attachments = target.attachments ?? [];
 
-      const retriedUser = appendMessage(
-        session.id,
-        "user",
-        content,
-        attachments.length ? attachments : undefined
-      );
+      // Generate a temp ID and mark it as already triggered BEFORE appending
+      const tempMessageId = typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : Math.random().toString(36).slice(2);
+      markAutoStreamTriggered(session.id, tempMessageId);
+
+      const retriedUser = appendMessage(session.id, "user", content, tempMessageId);
 
       if (replyTimeout.current !== null) {
         window.clearTimeout(replyTimeout.current);
@@ -1622,19 +2382,13 @@ export function GrayChatView({ sessionId, introContent, onContextUsageChange }: 
       }
 
       if (retriedUser) {
-        autoStreamTriggeredRef.current.add(`${session.id}:${retriedUser.id}`);
-        void streamAssistantReply(
-          session.id,
-          content,
-          session.conversationId ?? null,
-          attachments.length ? attachments : undefined
-        );
+        void streamAssistantReply(session.id, content, session.conversationId ?? null);
         return;
       }
 
       appendMessage(session.id, "assistant", buildAssistantReply(content));
     },
-    [appendMessage, messages, session, streamAssistantReply]
+    [appendMessage, markAutoStreamTriggered, messages, session, streamAssistantReply]
   );
 
   const handleRegenerate = useCallback(
@@ -1668,7 +2422,6 @@ export function GrayChatView({ sessionId, introContent, onContextUsageChange }: 
       }
 
       const userMessage = messages[userIndex];
-      const attachments = userMessage.attachments ?? [];
       const preservedMessages = messages.slice(0, userIndex);
 
       setRegeneratingMessageId(assistantMessage.id);
@@ -1681,12 +2434,13 @@ export function GrayChatView({ sessionId, introContent, onContextUsageChange }: 
         pendingAutoStream: false,
       });
 
-      const retriedUser = appendMessage(
-        session.id,
-        "user",
-        userMessage.content,
-        attachments.length ? attachments : undefined
-      );
+      // Generate a temp ID and mark it as already triggered BEFORE appending
+      const tempMessageId = typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : Math.random().toString(36).slice(2);
+      markAutoStreamTriggered(session.id, tempMessageId);
+
+      const retriedUser = appendMessage(session.id, "user", userMessage.content, tempMessageId);
 
       if (!retriedUser) {
         appendMessage(session.id, "assistant", buildAssistantReply(userMessage.content));
@@ -1694,15 +2448,12 @@ export function GrayChatView({ sessionId, introContent, onContextUsageChange }: 
         return;
       }
 
-      autoStreamTriggeredRef.current.add(`${session.id}:${retriedUser.id}`);
-
       void (async () => {
         try {
           await streamAssistantReply(
             session.id,
             userMessage.content,
-            session.conversationId ?? null,
-            attachments.length ? attachments : undefined
+            session.conversationId ?? null
           );
         } finally {
           setRegeneratingMessageId(null);
@@ -1713,43 +2464,56 @@ export function GrayChatView({ sessionId, introContent, onContextUsageChange }: 
       appendMessage,
       activeStreamingMessageId,
       latestAssistantMessageId,
+      markAutoStreamTriggered,
       messages,
       session,
       updateSession,
       streamAssistantReply,
-      buildAssistantReply,
     ]
   );
 
-  const contextLimit = conversationUsage?.limit ?? 0;
+  // Respect the backend as the single source of truth for context limits.
+  // If limit > 0, use it. If limit is 0/undefined, treat as "unlimited" and let
+  // downstream consumers decide how to present that (e.g. "Unlimited context").
+  const contextLimit =
+    typeof conversationUsage?.limit === "number" && conversationUsage.limit > 0
+      ? conversationUsage.limit
+      : 0;
   const fallbackConversationTokens = useMemo(() => {
     if (!session) {
       return 0;
     }
     return session.messages.reduce((total, message) => {
       const contentTokens = estimateTokenCount(message.content);
-      const attachmentTokens =
-        Array.isArray(message.attachments) && message.attachments.length > 0
-          ? message.attachments.length * 120
-          : 0;
-      return total + contentTokens + attachmentTokens;
+      return total + contentTokens;
     }, 0);
   }, [session]);
 
   const conversationContextStats = useMemo(() => {
     const limit = contextLimit;
+
+    // Count messages participating in the current session context.
     const messageCount =
-      conversationUsage?.messageCount ?? session?.messages.length ?? 0;
+      typeof conversationUsage?.messageCount === "number" && conversationUsage.messageCount >= 0
+        ? conversationUsage.messageCount
+        : session?.messages.length ?? 0;
+
+    // Prefer backend-accurate token usage; otherwise estimate from all session messages.
     const conversationTokens =
-      conversationUsage?.conversationTokens ?? fallbackConversationTokens;
-    const workspaceTokens = workspaceContext ? estimateTokenCount(workspaceContext) : 0;
+      typeof conversationUsage?.conversationTokens === "number" && conversationUsage.conversationTokens >= 0
+        ? conversationUsage.conversationTokens
+        : fallbackConversationTokens;
+
+    // Workspace context: include the FULL workspace summary so the user sees its impact.
+    const workspaceTokens = estimateTokenCount(workspaceContext);
+
     const totalTokens = conversationTokens + workspaceTokens;
     const percentUsed =
       limit > 0 ? Math.max(0, Math.min(100, (totalTokens / limit) * 100)) : 0;
     const tokensRemaining = limit > 0 ? Math.max(0, limit - totalTokens) : 0;
 
     return {
-      provider: conversationUsage?.provider ?? "gemini",
+      provider: conversationUsage?.provider ?? "local",
       modelName: conversationUsage?.modelName ?? null,
       modelLabel: conversationUsage?.modelLabel ?? null,
       limit,
@@ -1760,39 +2524,32 @@ export function GrayChatView({ sessionId, introContent, onContextUsageChange }: 
       percentUsed,
       tokensRemaining,
     };
-  }, [
-    contextLimit,
-    conversationUsage?.conversationTokens,
-    conversationUsage?.limit,
-    conversationUsage?.messageCount,
-    conversationUsage?.modelLabel,
-    conversationUsage?.modelName,
-    conversationUsage?.provider,
-    fallbackConversationTokens,
-    session?.messages.length,
-    workspaceContext,
-  ]);
+  }, [contextLimit, conversationUsage, fallbackConversationTokens, session?.messages.length, workspaceContext]);
 
   const markdownComponents = useMemo<Components>(
     () => ({
       code: MarkdownCodeBlock,
       // Render <pre> as a fragment so our custom code renderer controls layout.
       // Use full props to avoid narrowing issues with react-markdown's types.
-      pre: (props) => <>{props.children}</>,
+      pre: (props: any) => <>{props.children}</>,
     }),
     []
   );
 
+  const lastUsageSummaryRef = useRef<string | null>(null);
   useEffect(() => {
     if (!onContextUsageChange) {
       return;
     }
-    if (!session) {
-      onContextUsageChange(null);
+    if (!sessionExists) {
+      if (lastUsageSummaryRef.current !== null) {
+        lastUsageSummaryRef.current = null;
+        onContextUsageChange(null);
+      }
       return;
     }
     const summary: ContextUsageSummary = {
-      conversationId: session.conversationId ?? null,
+      conversationId: sessionConversationId,
       messageCount: conversationContextStats.messageCount,
       conversationTokens: conversationContextStats.conversationTokens,
       workspaceTokens: conversationContextStats.workspaceTokens,
@@ -1803,9 +2560,17 @@ export function GrayChatView({ sessionId, introContent, onContextUsageChange }: 
       modelName: conversationContextStats.modelName,
       modelLabel: conversationContextStats.modelLabel,
     };
+    const serialized = JSON.stringify(summary);
+    if (serialized === lastUsageSummaryRef.current) {
+      return;
+    }
+    lastUsageSummaryRef.current = serialized;
     onContextUsageChange(summary);
     return () => {
-      onContextUsageChange(null);
+      if (lastUsageSummaryRef.current === serialized) {
+        lastUsageSummaryRef.current = null;
+        onContextUsageChange(null);
+      }
     };
   }, [
     conversationContextStats.conversationTokens,
@@ -1818,12 +2583,13 @@ export function GrayChatView({ sessionId, introContent, onContextUsageChange }: 
     conversationContextStats.tokensRemaining,
     conversationContextStats.workspaceTokens,
     onContextUsageChange,
-    session,
+    sessionConversationId,
+    sessionExists,
   ]);
 
   if (!hasHydrated) {
     return (
-      <div className={styles.chatView} aria-live="polite">
+      <div className={styles.chatView} aria-live="polite" style={chatViewStyle}>
         <div className={styles.chatViewport}>
           <div className={styles.chatFade} aria-hidden="true" />
         </div>
@@ -1831,7 +2597,7 @@ export function GrayChatView({ sessionId, introContent, onContextUsageChange }: 
     );
   }
 
-  if (!session) {
+  if (!session && !sessionId) {
     return (
       <div className={styles.chatViewEmpty}>
         <div>
@@ -1842,18 +2608,27 @@ export function GrayChatView({ sessionId, introContent, onContextUsageChange }: 
     );
   }
 
-  const isResponding = session.isResponding;
   const trimmedDraft = draft.trim();
-  const hasUploadedAttachments = composerAttachments.some((attachment) => attachment.status === "uploaded");
-  const hasPendingAttachments = composerAttachments.some((attachment) => attachment.status !== "uploaded");
-  const composerHasContent = Boolean(trimmedDraft) || hasUploadedAttachments;
-  const isSendDisabled = isResponding || !composerHasContent || hasPendingAttachments;
-  const hasActiveStream = Boolean(activeStreamingMessageId);
-  const shouldShowPendingStreamIndicator = isResponding && !hasActiveStream;
+  const composerHasContent = Boolean(trimmedDraft);
+  const isSendDisabled = isResponding || !composerHasContent;
+  const shouldShowPendingStreamIndicator = !hideThinkingIndicator && isResponding;
 
   return (
-    <div className={styles.chatView} aria-live="polite">
+    <div className={styles.chatView} aria-live="polite" style={chatViewStyle}>
       <div className={styles.chatViewport}>
+        {shouldShowPendingStreamIndicator && (
+          <div className={styles.chatThinkingIndicator}>
+            <div className={styles.chatStreamingStatus} role="status" aria-live="polite">
+              <GrayStreamingSpinner />
+              <span className={styles.chatStreamingStatusText}>
+                {streamingStatusLabel}
+                <span className={styles.chatThinkingDots} aria-hidden="true">
+                  {thinkingDots || "..."}
+                </span>
+              </span>
+            </div>
+          </div>
+        )}
         <div className={styles.chatFade} aria-hidden="true" />
         {showIntro ? (
           <div className={styles.chatIntro}>
@@ -1861,270 +2636,67 @@ export function GrayChatView({ sessionId, introContent, onContextUsageChange }: 
             <div ref={scrollAnchorRef} aria-hidden="true" />
           </div>
         ) : (
-          <div className={styles.chatMessages}>
-            {messages.map((message, messageIndex) => {
-            const isUser = message.role === "user";
-            const isAssistant = !isUser;
-            const quickReplies: string[] = [];
-            const rawContent = message.content ?? "";
-            const assistantSections = isAssistant ? parseStructuredAssistantMessage(rawContent) : null;
-            const thinkingText = isAssistant ? assistantSections?.thinking ?? null : null;
-            const aiText = isAssistant ? assistantSections?.ai ?? rawContent : rawContent;
-            const fullText = isAssistant ? aiText : rawContent;
-            const animatedText = isAssistant ? aiText : rawContent;
-            const hasThinkingContent = Boolean(thinkingText && thinkingText.trim().length > 0);
-            const isStreamingMessage = isAssistant && message.id === activeStreamingMessageId;
-            const hasTextContent = Boolean(animatedText.trim());
-            const messageAttachments = message.attachments ?? [];
-            const hasMessageAttachments = messageAttachments.length > 0;
-            const hasVisibleContent = hasThinkingContent || hasTextContent || hasMessageAttachments;
-            const isAwaitingStreamContent = isAssistant && isStreamingMessage && !hasVisibleContent;
-            const showStreamingIndicator = isAwaitingStreamContent;
-            const shouldHideEmptyAssistantMessage =
-              isAssistant && !hasVisibleContent && !isAwaitingStreamContent;
-
-            if (shouldHideEmptyAssistantMessage) {
-              return null;
-            }
-
-            const responseDurationLabel = isAssistant
-              ? getResponseDurationLabel(messageIndex)
-              : null;
-            const tokenCount = isAssistant ? estimateTokenCount(rawContent) : null;
-            const hasTokenEstimate =
-              typeof tokenCount === "number" && Number.isFinite(tokenCount) && tokenCount > 0;
-            const hasDuration = Boolean(responseDurationLabel);
-            const isMetadataAvailable = isAssistant && (hasTokenEstimate || hasDuration);
-            const metadataTokenLabel = hasTokenEstimate ? `${tokenCount.toLocaleString()} tokens` : "—";
-            const metadataDurationLabel = responseDurationLabel ?? "—";
-            const isLatestAssistantMessage = isAssistant && message.id === latestAssistantMessageId;
-            const isRegenerating = regeneratingMessageId === message.id;
-            const messageBodyClassName = isUser
-              ? `${styles.chatBubble} ${styles.chatBubbleUser}`
-              : styles.chatAssistantBlock;
-            return (
-              <div
-                key={message.id}
-                className={styles.chatMessage}
-                data-role={isUser ? "user" : "assistant"}
-                data-streaming={isStreamingMessage ? "true" : undefined}
-              >
-                <div className={messageBodyClassName}>
-                  {showStreamingIndicator ? <GrayStreamingBadge /> : null}
-                  {isAssistant && hasThinkingContent && (
-                    <div className={styles.chatThinkingBlock}>
-                      <div className={styles.chatThinkingLabel}>Chain of Thought</div>
-                      <div className={styles.chatThinkingBody}>
-                        <ReactMarkdown
-                          components={markdownComponents}
-                          remarkPlugins={[remarkMath, remarkGfm]}
-                          rehypePlugins={[[rehypeKatex, { strict: false }]]}
-                        >
-                          {thinkingText ?? ""}
-                        </ReactMarkdown>
-                      </div>
-                    </div>
-                  )}
-                  {hasTextContent && (
-                    <div className={styles.chatMarkdown}>
-                      <ReactMarkdown
-                        components={markdownComponents}
-                        remarkPlugins={[remarkMath, remarkGfm]}
-                        rehypePlugins={[[rehypeKatex, { strict: false }]]}
-                      >
-                        {animatedText}
-                      </ReactMarkdown>
-                    </div>
-                  )}
-                  {hasMessageAttachments && (
-                    <div className={styles.chatMessageAttachments}>
-                      {messageAttachments.map((attachment) => {
-                        const isImage = attachment.mime_type?.startsWith("image/");
-                        const sizeLabel = formatFileSize(attachment.size_bytes);
-                        return (
-                          <div
-                            key={`${message.id}-${attachment.name}`}
-                            className={styles.chatMessageAttachment}
-                          >
-                            <div className={styles.chatMessageAttachmentIcon}>
-                              {isImage ? <ImageIcon size={16} /> : <FileText size={16} />}
-                            </div>
-                            <div className={styles.chatMessageAttachmentMeta}>
-                              <span>{attachment.display_name ?? attachment.name}</span>
-                              <div>
-                                {sizeLabel && <span>{sizeLabel}</span>}
-                                <span className={styles.chatMessageAttachmentHint}>
-                                  Stored in Gemini
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-                {!showStreamingIndicator && (
-                  <div className={styles.chatMessageFooter}>
-                    <div className={styles.chatActionIconRow}>
-                      {isMetadataAvailable ? (
-                        <div className={styles.chatMetadataControl}>
-                          <button
-                            type="button"
-                            aria-label="Response details"
-                            tabIndex={0}
-                          >
-                            <SignalHigh size={15} />
-                          </button>
-                          <div
-                            className={styles.chatMetadataPopover}
-                            role="tooltip"
-                            aria-hidden="true"
-                          >
-                            <div>
-                              <span>Tokens</span>
-                              <strong>{metadataTokenLabel}</strong>
-                            </div>
-                            <div>
-                              <span>Duration</span>
-                              <strong>{metadataDurationLabel}</strong>
-                            </div>
-                          </div>
-                        </div>
-                      ) : null}
-                      <button
-                        type="button"
-                        aria-label="Copy message"
-                        onClick={() => handleCopyMessage(message.id, isAssistant ? fullText : rawContent)}
-                        disabled={!(isAssistant ? fullText.trim() : rawContent.trim())}
-                      >
-                        {copiedMessageId === message.id ? <CheckCircle2 size={15} /> : <Copy size={15} />}
-                      </button>
-                      <button
-                        type="button"
-                        aria-label="Retry message"
-                        onClick={() =>
-                          isAssistant ? handleRegenerate(message.id) : handleRetryUserMessage(message.id)
-                        }
-                        disabled={
-                          isAssistant
-                            ? !isLatestAssistantMessage || isRegenerating
-                            : !rawContent.trim() && !(message.attachments?.length)
-                        }
-                      >
-                        {isAssistant && isRegenerating ? <Loader2 size={15} /> : <RefreshCw size={15} />}
-                      </button>
-                      <button
-                        type="button"
-                        aria-label="Delete message"
-                        onClick={() => handleDeleteMessage(message.id)}
-                        data-variant="danger"
-                      >
-                        <Trash2 size={15} />
-                      </button>
-                    </div>
-                    {isAssistant && quickReplies.length > 0 && (
-                      <div className={styles.chatQuickReplies}>
-                        {quickReplies.map((reply) => (
-                          <button key={reply} type="button">
-                            {reply}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-            {shouldShowPendingStreamIndicator ? (
-              <div className={styles.chatMessage} data-role="assistant" data-streaming="true">
-                <div className={styles.chatAssistantBlock}>
-                  <GrayStreamingBadge />
-                </div>
-              </div>
-            ) : null}
-            <div ref={scrollAnchorRef} />
-          </div>
+          <ChatMessagesList
+            messages={messages}
+            activeStreamingMessageId={activeStreamingMessageId}
+            latestAssistantMessageId={latestAssistantMessageId}
+            regeneratingMessageId={regeneratingMessageId}
+            copiedMessageId={copiedMessageId}
+            markdownComponents={markdownComponents}
+            getResponseDurationLabel={getResponseDurationLabel}
+            handleCopyMessage={handleCopyMessage}
+            handleRegenerate={handleRegenerate}
+            handleRetryUserMessage={handleRetryUserMessage}
+            handleDeleteMessage={handleDeleteMessage}
+            shouldShowPendingStreamIndicator={shouldShowPendingStreamIndicator}
+            scrollAnchorRef={scrollAnchorRef}
+          />
         )}
       </div>
-
-      <div className={styles.chatComposerDock}>
-        {composerAttachments.length > 0 && (
-          <div className={styles.chatAttachmentList}>
-            {composerAttachments.map((attachment) => {
-              const isImage = attachment.file.type.startsWith("image/");
-              const sizeLabel = formatFileSize(attachment.file.size);
-              return (
-                <div
-                  key={attachment.id}
-                  className={styles.chatAttachmentItem}
-                  data-status={attachment.status}
-                >
-                  <div className={styles.chatAttachmentPreview}>
-                    {isImage && attachment.previewUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={attachment.previewUrl} alt={attachment.file.name} />
-                    ) : (
-                      <FileText size={16} />
-                    )}
-                  </div>
-                  <div className={styles.chatAttachmentMeta}>
-                    <span className={styles.chatAttachmentName}>{attachment.file.name}</span>
-                    <span className={styles.chatAttachmentDetails}>
-                      {sizeLabel}
-                      {sizeLabel && attachment.status !== "uploaded" ? " • " : ""}
-                      {attachment.status === "uploading" && "Uploading"}
-                      {attachment.status === "uploaded" && "Ready"}
-                      {attachment.status === "error" && "Failed"}
-                    </span>
-                    {attachment.error && (
-                      <span className={styles.chatAttachmentError}>{attachment.error}</span>
-                    )}
-                  </div>
-                  <div className={styles.chatAttachmentActions}>
-                    {attachment.status === "uploading" && (
-                      <Loader2 size={16} className={styles.chatAttachmentSpinner} />
-                    )}
-                    {attachment.status === "uploaded" && <CheckCircle2 size={16} />}
-                    {attachment.status === "error" && (
-                      <button
-                        type="button"
-                        className={styles.chatAttachmentRetry}
-                        onClick={() => handleRetryAttachment(attachment.id)}
-                      >
-                        Retry
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      className={styles.chatAttachmentRemove}
-                      aria-label="Remove attachment"
-                      onClick={() => handleRemoveAttachment(attachment.id)}
-                    >
-                      <X size={14} />
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
+      <div className={styles.chatComposerDock} ref={composerDockRef}>
+        <input
+          ref={attachmentInputRef}
+          type="file"
+          multiple
+          accept="image/*,.pdf"
+          className={styles.chatAttachmentInput}
+          onChange={handleAttachmentInputChange}
+        />
+        {pendingLocationRequestMessage ? (
+          <div className={styles.chatLocationRequestBanner}>
+            <p>
+              <strong>Gray needs your location</strong> to answer “{locationRequestSummary}”.
+            </p>
+            <div className={styles.chatLocationRequestButtons}>
+              <button
+                type="button"
+                className={styles.chatLocationRequestButton}
+                onClick={requestLocationShare}
+                disabled={isRequestingLocation}
+              >
+                {isRequestingLocation ? "Sharing location…" : "Share location"}
+              </button>
+              <button
+                type="button"
+                className={styles.chatLocationRequestButton}
+                data-secondary="true"
+                onClick={skipLocationShare}
+                disabled={isRequestingLocation}
+              >
+                Continue without location
+              </button>
+            </div>
           </div>
-        )}
-        <div className={styles.generalChatComposer}>
-          <div className={`${styles.chatBarRow} ${styles.generalChatBarRow}`}>
-            <GrayChatBar
-              value={draft}
-              onChange={setDraft}
-              onSubmit={handleSubmit}
-              onSelectFiles={handleFilesSelected}
-              isSubmitDisabled={isSendDisabled}
-              isSubmitting={isResponding}
-              fileAccept="image/*,application/pdf,text/plain,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,.csv,.md,.json"
-            />
-            <div className={styles.chatBarUnderline} aria-hidden="true" />
-          </div>
-          <p className={styles.chatDisclaimer}>Gray can make mistakes. Check important info.</p>
-        </div>
+        ) : null}
+        <GrayChatComposer
+          value={draft}
+          onChange={setDraft}
+          onSubmit={handleSubmit}
+          isSubmitDisabled={isSendDisabled}
+          isSubmitting={isResponding}
+          onAddAttachment={openAttachmentPicker}
+          attachmentTray={attachmentTrayNode}
+        />
       </div>
     </div>
   );
