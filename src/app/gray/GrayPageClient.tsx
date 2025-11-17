@@ -1,19 +1,28 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import dynamic from "next/dynamic";
+import { ChangeEvent, FormEvent, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Gem, MessageSquarePlus, LayoutDashboard, History, Search } from "lucide-react";
 import { GrayEnhancedSidebar } from "@/components/gray/EnhancedSidebar";
-import { GrayDashboardView } from "@/components/gray/DashboardView";
-import { GrayGeneralView } from "@/components/gray/GeneralView";
 import { AddPlanHabitModal } from "@/components/gray/AddPlanHabitModal";
-import { GrayHistoryView } from "@/components/gray/HistoryView";
 import { GrayChatBar, type GrayChatBarProps } from "@/components/gray/ChatBar";
 import { GrayChatComposer } from "@/components/gray/ChatComposer";
-import { GrayChatView } from "@/components/gray/ChatView";
 import { FirstChatOnboarding, type FirstChatOnboardingResult } from "@/components/gray/FirstChatOnboarding";
-import { UserProvider, useUser } from "@/contexts/UserContext";
-import { apiService, type ProactivityNotification, type ProactivitySettings, type Reminder, type User } from "@/lib/api";
+import AttachmentTray from "@/components/gray/AttachmentTray";
+import { useUser } from "@/contexts/UserContext";
+import {
+  apiService,
+  resolveApiBaseUrl,
+  type DashboardPulse,
+  type DashboardPulsePlanItem,
+  type DashboardPulseHabitItem,
+  type DashboardPulseProactivity,
+  type ProactivityNotification,
+  type ProactivitySettings,
+  type Reminder,
+  type User,
+} from "@/lib/api";
 import { formatDisplayName } from "@/lib/names";
 import { clearAuthCookies } from "@/lib/auth/cookies";
 import { getSupabaseClient } from "@/lib/supabaseClient";
@@ -33,22 +42,53 @@ import {
 } from "@/components/gray/types";
 import type { CalendarEvent, CalendarInfo } from "@/components/calendar/types";
 import {
-  ChatProvider,
   useChatStore,
   GENERAL_CHAT_SESSION_ID,
   deriveTitleFromMessage,
+  normalizeConversationIdValue,
   type ChatSession,
   type GrayReminderCreatedPayload,
 } from "@/components/gray/ChatProvider";
 import { DEFAULT_HISTORY_SECTIONS } from "@/components/gray/historySeed";
 import { GrayWorkspaceHeader } from "@/components/gray/WorkspaceHeader";
 import {
-  PersonalizationPanel,
   type WorkspaceBackgroundOption,
   type WorkspaceBackgroundDraft,
   GREAT_WAVE_BACKGROUND,
 } from "@/components/gray/PersonalizationPanel";
-import { SettingsModal } from "@/components/gray/SettingsModal";
+
+const GrayDashboardView = dynamic(
+  () => import("@/components/gray/DashboardView").then((mod) => mod.GrayDashboardView),
+  { loading: () => null }
+);
+
+const GrayGeneralView = dynamic(
+  () => import("@/components/gray/GeneralView").then((mod) => mod.GrayGeneralView),
+  { loading: () => null }
+);
+
+const GrayHistoryView = dynamic(
+  () => import("@/components/gray/HistoryView").then((mod) => mod.GrayHistoryView),
+  { loading: () => null }
+);
+
+const GrayChatView = dynamic(
+  () => import("@/components/gray/ChatView").then((mod) => mod.GrayChatView),
+  { loading: () => null }
+);
+
+const PersonalizationPanel = dynamic(
+  () =>
+    import("@/components/gray/PersonalizationPanel").then((mod) => ({
+      default: mod.PersonalizationPanel,
+    })),
+  { loading: () => null }
+);
+
+const SettingsModal = dynamic(
+  () => import("@/components/gray/SettingsModal").then((mod) => mod.SettingsModal),
+  { loading: () => null }
+);
 const PROACTIVITY_SEED: ProactivityItem = {
   id: "proactivity-1",
   label: "Check-ins",
@@ -74,6 +114,9 @@ const SIDEBAR_EXPANDED_STORAGE_KEY = "gray-sidebar-expanded";
 const DEFAULT_EVENT_COLOR = "#4f63ff";
 const REMINDER_RETENTION_WINDOW_MS = 24 * 60 * 60 * 1000;
 
+// Enable automatic assistant proactivity messages in chat and as browser notifications.
+const ENABLE_ASSISTANT_PROACTIVITY_NOTIFICATIONS = true;
+
 const sanitizeEventColor = (value?: string | null): string => {
   if (!value) {
     return DEFAULT_EVENT_COLOR;
@@ -87,6 +130,19 @@ const sanitizeEventColor = (value?: string | null): string => {
   }
   return trimmed;
 };
+
+const buildGeneralChatSession = (): ChatSession => ({
+  id: GENERAL_CHAT_SESSION_ID,
+  title: "General Chat",
+  titleMode: "auto",
+  createdAt: Date.now(),
+  updatedAt: Date.now(),
+  messages: [],
+  isResponding: false,
+  scope: "general",
+  conversationId: undefined,
+  pendingAutoStream: false,
+});
 
 const deriveReminderScheduleIso = (reminder: GrayReminderCreatedPayload): string | null => {
   const reminderRecord = (reminder.data.reminder as Record<string, unknown> | null | undefined) ?? null;
@@ -224,7 +280,8 @@ const normalizeProactivityTimes = (
 
   const normalized = sourceTimes
     .map((value) => normalizeTimeValue(value))
-    .filter((value, index, array) => array.indexOf(value) === index);
+    .filter((value, index, array) => array.indexOf(value) === index)
+    .sort();
 
   return normalized.length > 0 ? normalized : [normalizeTimeValue(null)];
 };
@@ -249,12 +306,18 @@ const isGenericSessionTitle = (title: string | null | undefined): boolean => {
     return true;
   }
   const trimmed = title.trim();
-  return trimmed.length === 0 || trimmed.toLowerCase() === "new chat";
+  if (!trimmed) {
+    return true;
+  }
+  const normalized = trimmed.toLowerCase();
+  return normalized === "new chat" || normalized === "conversation start";
 };
 
 const HISTORY_DUPLICATE_WINDOW_MS = 8000;
 
 type PlanCarrierUser = User & { plan_tier?: string | null };
+
+const PROACTIVITY_STORAGE_KEY_BASE = "gray-proactivity-settings-v1";
 
 const derivePlanTierLabel = (candidate?: PlanCarrierUser | null): string => {
   if (!candidate) {
@@ -286,14 +349,9 @@ const getSessionSeedFingerprint = (session: ChatSession): string | null => {
 };
 
 const getReadableSessionTitle = (session: ChatSession): string => {
-  if (!isGenericSessionTitle(session.title)) {
-    return session.title.trim();
-  }
-  const firstMeaningfulUserMessage = session.messages.find(
-    (message) => message.role === "user" && message.content.trim().length > 0
-  );
-  if (firstMeaningfulUserMessage) {
-    return deriveTitleFromMessage(firstMeaningfulUserMessage.content);
+  const title = session.title?.trim();
+  if (title && title.length > 0) {
+    return title;
   }
   return "New Chat";
 };
@@ -318,31 +376,6 @@ const cloneHabits = (habits: HabitItem[]): HabitItem[] =>
     completed: Boolean(habit.completed),
   }));
 
-const cloneProactivity = (item: ProactivityItem | null | undefined): ProactivityItem | null =>
-  item
-    ? {
-        id: item.id,
-        label: item.label,
-        description: item.description,
-        cadence: item.cadence,
-        times: normalizeProactivityTimes(item.times ?? null, item.time),
-        time: primaryProactivityTime(item.times ?? null, item.time),
-        channels: normalizeProactivityChannels(item.channels ?? null),
-        timezone: item.timezone ?? null,
-      }
-    : null;
-
-const manualProactivityTemplate = (): ProactivityItem => ({
-  id: "proactivity-manual",
-  label: "Manual Only",
-  description: "Gray stays quiet until you ask.",
-  cadence: "Manual",
-  time: "09:00",
-  times: ["09:00"],
-  channels: ["assistant"],
-  timezone: null,
-});
-
 const REMINDER_PLAN_ID_PREFIX = "reminder-";
 
 const parseReminderPlanId = (planId: string): number | null => {
@@ -359,7 +392,7 @@ const parseReminderPlanId = (planId: string): number | null => {
 
 const mapSettingsToProactivity = (settings?: ProactivitySettings | null): ProactivityItem | null => {
   if (!settings) {
-    return cloneProactivity(PROACTIVITY_SEED);
+    return null;
   }
   const normalizedTimes = normalizeProactivityTimes(settings.times ?? null, settings.time);
   const cadenceValue = settings.cadence ?? PROACTIVITY_SEED.cadence;
@@ -385,19 +418,26 @@ const buildProactivitySettingsPayload = (
   candidate: ProactivityItem | null,
   timezone: string
 ): ProactivitySettings => {
-  const normalizedSource =
-    cloneProactivity(candidate ?? manualProactivityTemplate()) ?? cloneProactivity(PROACTIVITY_SEED)!;
-  const times = normalizeProactivityTimes(normalizedSource.times ?? null, normalizedSource.time);
-  const channels = normalizeProactivityChannels(normalizedSource.channels ?? null);
+  if (!candidate) {
+    return {
+      id: PROACTIVITY_SEED.id,
+      label: PROACTIVITY_SEED.label,
+      description: PROACTIVITY_SEED.description,
+      cadence: "Manual",
+      timezone,
+    };
+  }
+  const times = normalizeProactivityTimes(candidate.times ?? null, candidate.time).sort();
+  const channels = normalizeProactivityChannels(candidate.channels ?? null);
   return {
-    id: normalizedSource.id,
-    label: normalizedSource.label,
-    description: normalizedSource.description,
-    cadence: candidate ? normalizedSource.cadence : "Manual",
-    time: primaryProactivityTime(times, normalizedSource.time),
+    id: candidate.id,
+    label: candidate.label,
+    description: candidate.description,
+    cadence: candidate.cadence,
+    time: primaryProactivityTime(times, candidate.time),
     times,
     channels,
-    timezone: normalizedSource.timezone ?? timezone,
+    timezone: candidate.timezone ?? timezone,
   };
 };
 
@@ -425,7 +465,7 @@ const createPulseSnapshot = (
   timestamp: referenceDate.getTime(),
   plans: clonePlans(plans),
   habits: cloneHabits(habits),
-  proactivity: cloneProactivity(proactivity),
+  proactivity: proactivity ? { ...proactivity } : null,
 });
 
 const arePlanListsEqual = (a: PlanItem[], b: PlanItem[]) =>
@@ -527,9 +567,7 @@ const sanitizePulseEntry = (raw: Partial<PulseEntry> | null | undefined): PulseE
 
   const rawProactivity = raw.proactivity;
   let proactivity: ProactivityItem | null;
-  if (rawProactivity === undefined) {
-    proactivity = cloneProactivity(PROACTIVITY_SEED);
-  } else if (rawProactivity === null) {
+  if (rawProactivity === undefined || rawProactivity === null) {
     proactivity = null;
   } else {
     proactivity = {
@@ -576,6 +614,93 @@ const sanitizePulseEntries = (raw: unknown): PulseEntry[] => {
     .map((entry) => sanitizePulseEntry(entry))
     .filter((entry): entry is PulseEntry => entry !== null)
     .sort((a, b) => b.timestamp - a.timestamp);
+};
+
+const mapDashboardPulseToEntry = (pulse: DashboardPulse): PulseEntry => ({
+  id: String(pulse.id),
+  dateKey: pulse.date_key,
+  timestamp: pulse.timestamp,
+  plans: pulse.plans.map((plan) => ({
+    id: plan.id,
+    label: plan.label,
+    completed: plan.completed,
+  })),
+  habits: pulse.habits.map((habit) => ({
+    id: habit.id,
+    label: habit.label,
+    streakLabel: habit.streak_label ?? "",
+    previousLabel: habit.previous_label ?? "",
+    completed: habit.completed,
+  })),
+  proactivity: {
+    id: pulse.proactivity.id,
+    label: pulse.proactivity.label,
+    description: pulse.proactivity.description ?? "",
+    cadence: pulse.proactivity.cadence,
+    time: pulse.proactivity.time,
+    times: [pulse.proactivity.time],
+    channels: [],
+    timezone: null,
+  },
+});
+
+const buildDashboardPulsePayloadFromEntry = (
+  entry: PulseEntry,
+  resolvedTimezone: string
+): {
+  date_key: string;
+  timestamp: number;
+  plans: DashboardPulsePlanItem[];
+  habits: DashboardPulseHabitItem[];
+  proactivity: DashboardPulseProactivity;
+} => {
+  const normalizedProactivity: ProactivityItem = entry.proactivity
+    ? {
+        ...entry.proactivity,
+        times: normalizeProactivityTimes(entry.proactivity.times ?? null, entry.proactivity.time),
+        time: primaryProactivityTime(entry.proactivity.times ?? null, entry.proactivity.time),
+        channels: normalizeProactivityChannels(entry.proactivity.channels ?? null),
+        timezone: entry.proactivity.timezone ?? resolvedTimezone,
+      }
+    : {
+        id: PROACTIVITY_SEED.id,
+        label: PROACTIVITY_SEED.label,
+        description: PROACTIVITY_SEED.description,
+        cadence: PROACTIVITY_SEED.cadence,
+        time: PROACTIVITY_SEED.time,
+        times: normalizeProactivityTimes(PROACTIVITY_SEED.times ?? null, PROACTIVITY_SEED.time),
+        channels: normalizeProactivityChannels(PROACTIVITY_SEED.channels ?? null),
+        timezone: resolvedTimezone,
+      };
+
+  const primaryTime = primaryProactivityTime(
+    normalizedProactivity.times ?? null,
+    normalizedProactivity.time
+  );
+
+  return {
+    date_key: entry.dateKey,
+    timestamp: entry.timestamp,
+    plans: entry.plans.map((plan) => ({
+      id: plan.id,
+      label: plan.label,
+      completed: plan.completed,
+    })),
+    habits: entry.habits.map((habit) => ({
+      id: habit.id,
+      label: habit.label,
+      streak_label: habit.streakLabel,
+      previous_label: habit.previousLabel,
+      completed: Boolean(habit.completed),
+    })),
+    proactivity: {
+      id: normalizedProactivity.id,
+      label: normalizedProactivity.label,
+      description: normalizedProactivity.description,
+      cadence: normalizedProactivity.cadence,
+      time: primaryTime,
+    },
+  };
 };
 
 const arePulseEntriesEqual = (a: PulseEntry[], b: PulseEntry[]) =>
@@ -649,7 +774,6 @@ const greetingForDate = (date: Date) => {
 
 type GrayPageClientProps = {
   initialTimestamp: number;
-  viewerEmail: string | null;
   activeNav?: SidebarNavKey;
   variant?: "general" | "dashboard" | "chat";
   activeChatId?: string | null;
@@ -666,12 +790,14 @@ type ChatDraftInputProps = Omit<GrayChatBarProps, "value" | "onChange" | "onSubm
   variant: "composer" | "bar";
   onSubmitMessage: (draft: string, controls: ChatDraftControls) => void;
   showUnderline?: boolean;
+  attachmentTray?: ReactNode;
 };
 
 const ChatDraftInput = ({
   variant,
   onSubmitMessage,
   showUnderline = true,
+  attachmentTray,
   ...rest
 }: ChatDraftInputProps) => {
   const [value, setValue] = useState("");
@@ -709,6 +835,7 @@ const ChatDraftInput = ({
         onChange={handleChange}
         onSubmit={handleSubmit}
         showUnderline={showUnderline}
+        attachmentTray={attachmentTray}
       />
     );
   }
@@ -728,7 +855,7 @@ function GrayPageClientInner({
   activeNav,
   variant = "general",
   activeChatId = null,
-}: Omit<GrayPageClientProps, 'viewerEmail'>) {
+}: GrayPageClientProps) {
   const { user, loading } = useUser();
   const router = useRouter();
   const [now, setNow] = useState(() => new Date(initialTimestamp));
@@ -736,9 +863,7 @@ function GrayPageClientInner({
   const [habits, setHabits] = useState<HabitItem[]>([]);
   const [reminderPlans, setReminderPlans] = useState<PlanItem[]>([]);
   const [habitEditorTarget, setHabitEditorTarget] = useState<HabitItem | null>(null);
-  const [proactivity, setProactivity] = useState<ProactivityItem | null>(() =>
-    cloneProactivity(PROACTIVITY_SEED)
-  );
+  const [proactivity, setProactivity] = useState<ProactivityItem | null>(null);
   const [planTab, setPlanTab] = useState<"plans" | "habits">("plans");
   const chatSubmitInFlightRef = useRef(false);
   const [hasSeenGeneralChat, setHasSeenGeneralChat] = useState(false);
@@ -772,6 +897,11 @@ function GrayPageClientInner({
     getSession,
     ensureSession,
     appendMessage,
+    uploadAttachments,
+    attachments,
+    isAttachmentUploading,
+    attachmentError,
+    removeAttachment,
   } = useChatStore();
   const reminderEventKeysRef = useRef<Set<string>>(new Set());
   const resolvedTimezone = useMemo(() => {
@@ -784,11 +914,11 @@ function GrayPageClientInner({
   const supportsInlineChat = variant !== "chat";
   const shouldShowDashboardChatBar = variant !== "dashboard";
   const [currentChatId, setCurrentChatId] = useState<string | null>(() => activeChatId ?? null);
-  const [pendingRedirectChatId, setPendingRedirectChatId] = useState<string | null>(null);
   const userId = typeof user?.id === "number" ? user.id : null;
   const [isCompactLayout, setIsCompactLayout] = useState(false);
   const ensureSessionRef = useRef(ensureSession);
-  const proactivityDeliveredRef = useRef<Set<number>>(new Set());
+  const proactivityDeliveredRef = useRef<Set<string>>(new Set());
+  const [isProactivityStreamActive, setProactivityStreamActive] = useState(false);
   const buildSettingsPayload = useCallback(
     (candidate: ProactivityItem | null) => buildProactivitySettingsPayload(candidate, resolvedTimezone),
     [resolvedTimezone]
@@ -804,14 +934,48 @@ function GrayPageClientInner({
     ensureSessionRef.current = ensureSession;
   }, [ensureSession]);
 
+  const getOrCreateGeneralSessionId = useCallback(() => {
+    if (generalSessionId) {
+      return generalSessionId;
+    }
+    const ensureSessionFn = ensureSessionRef.current ?? ensureSession;
+    const ensured = ensureSessionFn(GENERAL_CHAT_SESSION_ID, buildGeneralChatSession);
+    return ensured.id;
+  }, [generalSessionId, ensureSession]);
+
+  const attachmentInputRef = useRef<HTMLInputElement | null>(null);
+  const handleAttachmentInputChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      const files = event.target.files;
+      if (!files || files.length === 0) {
+        return;
+      }
+      uploadAttachments(files);
+      if (attachmentInputRef.current) {
+        attachmentInputRef.current.value = "";
+      }
+    },
+    [uploadAttachments]
+  );
+  const openAttachmentPicker = useCallback(() => {
+    attachmentInputRef.current?.click();
+  }, []);
+
   const persistProactivitySettings = useCallback(
     async (next: ProactivityItem | null) => {
       if (!userId) {
+        console.warn("Cannot persist proactivity settings: userId not available");
         return;
       }
       const payload = buildSettingsPayload(next);
       try {
+        if (process.env.NODE_ENV === 'development') {
+          console.log("Persisting proactivity settings:", { userId, payload });
+        }
         const response = await apiService.updateProactivitySettings(userId, payload);
+        if (process.env.NODE_ENV === 'development') {
+          console.log("Proactivity settings response:", response);
+        }
         const normalized = mapSettingsToProactivity(response);
         setProactivity((previous) => {
           if (normalized === null) {
@@ -823,66 +987,19 @@ function GrayPageClientInner({
           return normalized;
         });
       } catch (error) {
-        console.error("Failed to save proactivity settings:", error);
+        console.error("Failed to save proactivity settings:", {
+          error,
+          userId,
+          payload,
+          errorMessage: error instanceof Error ? error.message : String(error),
+        });
       }
     },
     [userId, buildSettingsPayload]
   );
 
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-    try {
-      const storedBackground = window.localStorage.getItem(WORKSPACE_BACKGROUND_STORAGE_KEY);
-      if (storedBackground) {
-        setWorkspaceBackgroundId(storedBackground);
-      }
-    } catch (error) {
-      console.warn("Failed to load workspace background preference:", error);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-    try {
-      const stored = window.localStorage.getItem(SIDEBAR_EXPANDED_STORAGE_KEY);
-      if (stored === "true" || stored === "false") {
-        setIsSidebarExpanded(stored === "true");
-      }
-    } catch (error) {
-      console.warn("Failed to load sidebar state:", error);
-    } finally {
-      setHasLoadedSidebarPref(true);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!hasLoadedSidebarPref || typeof window === "undefined") {
-      return;
-    }
-    try {
-      window.localStorage.setItem(
-        SIDEBAR_EXPANDED_STORAGE_KEY,
-        isSidebarExpanded ? "true" : "false"
-      );
-    } catch (error) {
-      console.warn("Failed to persist sidebar state:", error);
-    }
-  }, [hasLoadedSidebarPref, isSidebarExpanded]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-    try {
-      window.localStorage.setItem(WORKSPACE_BACKGROUND_STORAGE_KEY, workspaceBackgroundId);
-    } catch (error) {
-      console.warn("Failed to persist workspace background preference:", error);
-    }
-  }, [workspaceBackgroundId]);
+  // Dashboard appearance preferences (sidebar + background) are now per-session
+  // only, so we no longer read from or write to localStorage here.
 
   const loadWorkspaceBackgrounds = useCallback(async () => {
     setWorkspaceBackgroundsLoading(true);
@@ -973,7 +1090,7 @@ function GrayPageClientInner({
   });
 
   const effectiveManualViewMode =
-    activeNav === "general" || activeNav === "dashboard" || activeNav === "threads"
+    activeNav === "general" || activeNav === "dashboard"
       ? null
       : manualViewMode;
 
@@ -981,6 +1098,142 @@ function GrayPageClientInner({
     baseViewMode === "chat"
       ? "chat"
       : effectiveManualViewMode ?? (activeNav === "history" ? "history" : baseViewMode);
+  const renderPrimaryView = () => {
+    if (isDashboardView) {
+      return (
+        <GrayDashboardView
+          pulseEntries={pulseEntries}
+          currentPulse={activePulse}
+          isCurrentPulseEditable={Boolean(isActivePulseEditable)}
+          livePlans={derivedPlans}
+          onSelectPulse={setActivePulseId}
+          proactivityFallback={proactivity}
+          onProactivitySelect={selectProactivityPreset}
+          onProactivityRemove={removeProactivity}
+          onTogglePlan={togglePlan}
+          onToggleHabit={toggleHabit}
+          onSavePlan={savePlan}
+          onDeletePlan={deletePlan}
+          activeTab={dashboardTab}
+          onSelectTab={setDashboardTab}
+          currentDate={now}
+          calendars={derivedCalendars}
+          onCalendarsChange={handleCalendarsChange}
+          calendarEvents={derivedEvents}
+          onCalendarEventsChange={handleEventsChange}
+          calendarSelectedDate={calendarSelectedDate}
+          onCalendarSelectedDateChange={setCalendarSelectedDate}
+          onEditHabit={editHabit}
+          onDeleteHabit={deleteHabit}
+          onIntegrationAction={handleCalendarIntegration}
+          onRefreshData={refreshPlansAndHabits}
+          chatBar={
+            shouldShowDashboardChatBar ? (
+              <ChatDraftInput variant="bar" onSubmitMessage={handleChatSubmit} />
+            ) : undefined
+          }
+          isCompactLayout={isCompactLayout}
+          userId={userId}
+          reminderPlans={reminderPlans}
+        />
+      );
+    }
+    if (isChatView) {
+      return (
+        <GrayChatView
+          sessionId={currentChatId ?? null}
+          onContextUsageChange={setContextUsageSummary}
+          hideThinkingIndicator={hideChatThinkingIndicator}
+          introContent={
+            activeNav !== "threads" &&
+            supportsInlineChat &&
+            !hasSeenGeneralChat &&
+            currentChatId &&
+            generalSessionId &&
+            currentChatId === generalSessionId ? (
+              <div className={styles.introStack}>
+                <GrayWorkspaceHeader
+                  streakCount={streakCount}
+                  planLabel={viewerPlanLabel}
+                  onUpgradeClick={handleUpgradePlan}
+                >
+                  {renderWorkspaceGreeting()}
+                </GrayWorkspaceHeader>
+                <FirstChatOnboarding
+                  viewerName={viewerName}
+                  onComplete={handleFirstChatOnboardingDone}
+                  onSkip={handleFirstChatOnboardingDone}
+                />
+              </div>
+            ) : null
+          }
+        />
+      );
+    }
+    if (isHistoryView) {
+      return (
+        <GrayHistoryView
+          sections={historySections}
+          onOpenEntry={handleOpenHistoryEntry}
+          activeEntryId={currentChatId ?? null}
+          onOpenEntryExternal={handleOpenHistoryEntryExternal}
+          onRenameEntry={handleRenameHistoryEntry}
+          onDeleteEntry={handleDeleteHistoryEntry}
+        />
+      );
+    }
+    return (
+      <div className={styles.generalViewSection}>
+        <GrayGeneralView
+          greeting={greeting}
+          dateLabel={workspaceDateLabel}
+          calendarEvents={derivedEvents}
+          plans={derivedPlans}
+          habits={derivedHabits}
+          activeTab={planTab}
+          onChangeTab={setPlanTab}
+          onTogglePlan={togglePlan}
+          onToggleHabit={toggleHabit}
+          onSavePlan={savePlan}
+          onDeletePlan={deletePlan}
+          currentDate={now}
+          calendars={derivedCalendars}
+          onCalendarsChange={handleCalendarsChange}
+          onCalendarEventsChange={handleEventsChange}
+          calendarSelectedDate={calendarSelectedDate}
+          onCalendarSelectedDateChange={setCalendarSelectedDate}
+          isCompactLayout={isCompactLayout}
+          onEditHabit={editHabit}
+          onDeleteHabit={deleteHabit}
+          onRefreshData={refreshPlansAndHabits}
+          showGreeting={false}
+          userId={user?.id ?? null}
+          onReminderMove={handleReminderMove}
+        />
+      </div>
+    );
+  };
+  const renderMainSurface = () => {
+    if (viewMode === "general") {
+      return (
+        <div
+          className={styles.mainContent}
+          data-view={viewMode}
+          data-compact={isCompactLayout ? "true" : "false"}
+        >
+          <GrayWorkspaceHeader
+            streakCount={streakCount}
+            planLabel={viewerPlanLabel}
+            onUpgradeClick={handleUpgradePlan}
+          >
+            {renderWorkspaceGreeting()}
+          </GrayWorkspaceHeader>
+          {renderPrimaryView()}
+        </div>
+      );
+    }
+    return renderPrimaryView();
+  };
 
   useEffect(() => {
     if (baseViewMode === "chat") {
@@ -998,7 +1251,7 @@ function GrayPageClientInner({
     setPlans([]);
     setHabits([]);
     setReminderPlans([]);
-    setProactivity(cloneProactivity(PROACTIVITY_SEED));
+    setProactivity(null);
     setPulseEntries([]);
     setActivePulseId(null);
     setCalendarCalendars([]);
@@ -1036,9 +1289,15 @@ function GrayPageClientInner({
     let cancelled = false;
     const loadProactivitySettings = async () => {
       try {
+        if (process.env.NODE_ENV === 'development') {
+          console.log("Loading proactivity settings for userId:", userId);
+        }
         const settings = await apiService.getProactivitySettings(userId);
         if (cancelled) {
           return;
+        }
+        if (process.env.NODE_ENV === 'development') {
+          console.log("Loaded proactivity settings:", settings);
         }
         const normalized = mapSettingsToProactivity(settings);
         setProactivity((previous) => {
@@ -1051,7 +1310,11 @@ function GrayPageClientInner({
           return normalized;
         });
       } catch (error) {
-        console.error("Failed to load proactivity settings:", error);
+        console.error("Failed to load proactivity settings:", {
+          error,
+          userId,
+          errorMessage: error instanceof Error ? error.message : String(error),
+        });
       }
     };
     void loadProactivitySettings();
@@ -1082,7 +1345,12 @@ function GrayPageClientInner({
 
   const showBrowserNotification = useCallback(
     (notification: ProactivityNotification, permission: NotificationPermission) => {
-      if (permission !== "granted" || typeof window === "undefined" || !notification) {
+      if (
+        permission !== "granted" ||
+        typeof window === "undefined" ||
+        !notification ||
+        (typeof window !== "undefined" && !window.isSecureContext)
+      ) {
         return;
       }
       const title = notification.title?.trim()
@@ -1104,7 +1372,6 @@ function GrayPageClientInner({
         new Notification(title, {
           body,
           tag: `gray-reminder-${notification.id}`,
-          timestamp: notification.due_at ? Date.parse(notification.due_at) : Date.now(),
         });
       } catch (error) {
         console.error("Failed to show reminder browser notification:", error);
@@ -1114,7 +1381,183 @@ function GrayPageClientInner({
   );
 
   useEffect(() => {
+    if (!ENABLE_ASSISTANT_PROACTIVITY_NOTIFICATIONS) {
+      setProactivityStreamActive(false);
+      return;
+    }
     if (!userId) {
+      setProactivityStreamActive(false);
+      return;
+    }
+    if (typeof window === "undefined" || typeof window.EventSource === "undefined") {
+      setProactivityStreamActive(false);
+      return;
+    }
+
+    let cancelled = false;
+    let eventSource: EventSource | null = null;
+    let reconnectTimer: number | null = null;
+    const streamPath = `/users/${userId}/proactivity/stream`;
+
+    const buildStreamUrl = () => {
+      const base = resolveApiBaseUrl();
+      const normalizedBase = base.replace(/\/+$/, "");
+      if (!normalizedBase) {
+        return streamPath;
+      }
+      return `${normalizedBase}${streamPath}`;
+    };
+
+    const updateStreamState = (next: boolean) => {
+      if (!cancelled) {
+        setProactivityStreamActive(next);
+      }
+    };
+
+    const closeStream = () => {
+      if (eventSource) {
+        eventSource.close();
+        eventSource = null;
+      }
+    };
+
+    const handleProactivityMessage = async (event: MessageEvent) => {
+      let payload: Record<string, unknown> | null = null;
+      try {
+        payload = event.data ? JSON.parse(event.data as string) : null;
+      } catch (error) {
+        if (process.env.NODE_ENV !== "production") {
+          console.warn("[GrayPageClient] Failed to parse proactivity payload", error);
+        }
+        return;
+      }
+      if (!payload) {
+        return;
+      }
+      const payloadRecord = payload as Record<string, unknown>;
+      const rawMessage = payloadRecord["message"];
+      const message = typeof rawMessage === "string" ? rawMessage.trim() : "";
+      if (!message) {
+        return;
+      }
+      const sessionId = getOrCreateGeneralSessionId();
+      appendMessage(sessionId, "assistant", message);
+
+      const sentAtRaw = payloadRecord["sent_at"];
+      const sentAtIso = typeof sentAtRaw === "string" && sentAtRaw ? sentAtRaw : new Date().toISOString();
+      const sentAtDate = new Date(sentAtIso);
+      if (!Number.isNaN(sentAtDate.getTime())) {
+        const dedupeKey = `${toDateKey(sentAtDate)}T${String(sentAtDate.getHours()).padStart(2, "0")}:${String(
+          sentAtDate.getMinutes()
+        ).padStart(2, "0")}`;
+        proactivityDeliveredRef.current.add(dedupeKey);
+      }
+
+      try {
+        const permission = await requestNotificationPermission();
+        const cadenceRaw = payloadRecord["cadence"];
+        const cadenceLabel =
+          typeof cadenceRaw === "string" && cadenceRaw.trim().length > 0
+            ? cadenceRaw.trim()
+            : "Check-in";
+        const sourceRaw = payloadRecord["source"];
+        const timezoneRaw = payloadRecord["timezone"];
+        const eventNameRaw = payloadRecord["event"];
+        const notification: ProactivityNotification = {
+          id: sentAtDate.getTime() || Date.now(),
+          user_id: userId,
+          type: "proactivity_message",
+          title: `🔔 ${cadenceLabel} Check-in`,
+          message,
+          metadata: {
+            source: typeof sourceRaw === "string" && sourceRaw ? sourceRaw : "proactivity_engine",
+            timezone: typeof timezoneRaw === "string" && timezoneRaw ? timezoneRaw : null,
+            event: typeof eventNameRaw === "string" && eventNameRaw ? eventNameRaw : "proactivity_message",
+          },
+          due_at: sentAtIso,
+          sent_at: sentAtIso,
+          read_at: null,
+          completed_at: null,
+          created_at: sentAtIso,
+        };
+        showBrowserNotification(notification, permission);
+      } catch (error) {
+        if (process.env.NODE_ENV !== "production") {
+          console.warn("[GrayPageClient] Failed to show proactivity notification", error);
+        }
+      }
+    };
+
+    function scheduleReconnect() {
+      if (cancelled) {
+        return;
+      }
+      updateStreamState(false);
+      if (reconnectTimer) {
+        window.clearTimeout(reconnectTimer);
+      }
+      reconnectTimer = window.setTimeout(() => {
+        reconnectTimer = null;
+        connect();
+      }, 3000);
+    }
+
+    function handleError(event?: Event) {
+      if (process.env.NODE_ENV !== "production") {
+        console.warn("[GrayPageClient] Proactivity stream error", event);
+      }
+      closeStream();
+      scheduleReconnect();
+    }
+
+    function connect() {
+      if (cancelled) {
+        return;
+      }
+      const url = buildStreamUrl();
+      try {
+        eventSource = new EventSource(url, { withCredentials: true });
+      } catch (error) {
+        if (process.env.NODE_ENV !== "production") {
+          console.error("[GrayPageClient] Failed to initialize proactivity stream", error);
+        }
+        scheduleReconnect();
+        return;
+      }
+      eventSource.addEventListener("open", () => updateStreamState(true));
+      eventSource.addEventListener("error", handleError as EventListener);
+      eventSource.addEventListener("ready", () => updateStreamState(true));
+      eventSource.addEventListener("proactivity_message", (event) => {
+        void handleProactivityMessage(event as MessageEvent);
+      });
+    }
+
+    connect();
+
+    return () => {
+      cancelled = true;
+      setProactivityStreamActive(false);
+      if (reconnectTimer) {
+        window.clearTimeout(reconnectTimer);
+      }
+      closeStream();
+    };
+  }, [
+    userId,
+    appendMessage,
+    getOrCreateGeneralSessionId,
+    requestNotificationPermission,
+    showBrowserNotification,
+  ]);
+
+  useEffect(() => {
+    if (!ENABLE_ASSISTANT_PROACTIVITY_NOTIFICATIONS) {
+      return;
+    }
+    if (!userId) {
+      return;
+    }
+    if (isProactivityStreamActive) {
       return;
     }
     if (typeof window === "undefined") {
@@ -1125,48 +1568,143 @@ function GrayPageClientInner({
 
     const deliverNotifications = async () => {
       try {
-        const notifications = await apiService.getProactivityNotifications(userId, {
-          limit: 5,
-          unreadOnly: true,
-        });
-        if (cancelled || !notifications || notifications.length === 0) {
+        const permission = await requestNotificationPermission();
+        if (cancelled) {
           return;
         }
-        const permission = await requestNotificationPermission();
+        if (!proactivity) {
+          return;
+        }
+        const channels = Array.isArray(proactivity.channels) ? proactivity.channels : [];
+        if (channels.length > 0 && !channels.includes("assistant")) {
+          return;
+        }
+        const times = normalizeProactivityTimes(proactivity.times ?? null, proactivity.time).sort();
+        if (!times.length) {
+          return;
+        }
+        const now = new Date();
+        const nowMs = now.getTime();
+        const todayKey = toDateKey(now);
         const delivered = proactivityDeliveredRef.current;
-        const targetSessionId =
-          generalSessionId ??
-          ensureSession(GENERAL_CHAT_SESSION_ID, () => ({
-            id: GENERAL_CHAT_SESSION_ID,
-            title: "General Chat",
-            titleMode: "auto",
-            createdAt: Date.now(),
-            updatedAt: Date.now(),
-            messages: [],
-            isResponding: false,
-            scope: "general",
-            conversationId: undefined,
-            pendingAutoStream: false,
-          })).id;
-        for (const notification of notifications) {
-          if (delivered.has(notification.id)) {
+        const targetSessionId = getOrCreateGeneralSessionId();
+        const WINDOW_MS = 5 * 60 * 1000;
+        const snapshot =
+          pulseEntries.find((entry) => entry.dateKey === todayKey) ??
+          pulseEntries[0] ??
+          null;
+
+        const buildMessage = () => {
+          const cadenceLabel = (proactivity.cadence || "Daily").trim();
+          const pieces: string[] = [];
+          const todayLabel = now.toLocaleDateString([], {
+            weekday: "short",
+            month: "short",
+            day: "numeric",
+          });
+          pieces.push(
+            `🗓️ ${cadenceLabel} check-in — ${todayLabel}.`
+          );
+
+          if (snapshot) {
+            const activePlans = snapshot.plans.filter((plan) => !plan.completed);
+            const completedPlans = snapshot.plans.filter((plan) => plan.completed);
+            const habitsTotal = snapshot.habits.length;
+            const habitsCompleted = snapshot.habits.filter((habit) =>
+              Boolean(habit.completed)
+            );
+
+            if (activePlans.length || completedPlans.length) {
+              const planLines: string[] = [];
+              if (activePlans.length) {
+                planLines.push(
+                  `Active plans (${activePlans.length}):` +
+                    "\n" +
+                    activePlans
+                      .slice(0, 3)
+                      .map((plan) => `• ${plan.label}`)
+                      .join("\n")
+                );
+              }
+              if (completedPlans.length) {
+                planLines.push(
+                  `Recently completed (${completedPlans.length}):` +
+                    "\n" +
+                    completedPlans
+                      .slice(0, 3)
+                      .map((plan) => `• ${plan.label}`)
+                      .join("\n")
+                );
+              }
+              if (planLines.length) {
+                pieces.push(planLines.join("\n\n"));
+              }
+            }
+
+            if (habitsTotal > 0) {
+              pieces.push(
+                `Habits: ${habitsCompleted.length}/${habitsTotal} checked in.`
+              );
+            }
+          } else {
+            pieces.push(
+              "You don't have any plans or habits logged yet — this is a good moment to add one small thing you want to move forward."
+            );
+          }
+
+          pieces.push(
+            "How are you feeling about your day right now? Reply here and we can map the next move together."
+          );
+
+          return pieces.join("\n\n");
+        };
+
+        for (const time of times) {
+          const [rawHour, rawMinute] = time.split(":").map((value) =>
+            Number.parseInt(value, 10)
+          );
+          if (!Number.isFinite(rawHour) || !Number.isFinite(rawMinute)) {
             continue;
           }
-          delivered.add(notification.id);
-          appendMessage(
-            targetSessionId,
-            "assistant",
-            formatProactivityNotificationContent(notification)
-          );
-          showBrowserNotification(notification, permission);
-          try {
-            await apiService.markProactivityNotificationRead(userId, notification.id);
-          } catch (error) {
-            console.error("Failed to mark proactivity notification read:", error);
+          const scheduled = new Date(now);
+          scheduled.setHours(rawHour, rawMinute, 0, 0);
+          const scheduledMs = scheduled.getTime();
+          const diff = nowMs - scheduledMs;
+          if (diff < 0 || diff > WINDOW_MS) {
+            continue;
           }
+          const key = `${todayKey}T${String(rawHour).padStart(2, "0")}:${String(
+            rawMinute
+          ).padStart(2, "0")}`;
+          if (delivered.has(key)) {
+            continue;
+          }
+          delivered.add(key);
+          const message = buildMessage();
+          appendMessage(targetSessionId, "assistant", message);
+
+          const notification: ProactivityNotification = {
+            id: nowMs,
+            user_id: userId,
+            type: "daily_checkin",
+            title: "Daily Check-in",
+            message,
+            metadata: {
+              date_key: todayKey,
+              time,
+              cadence: proactivity.cadence ?? "Daily",
+              source: "local-client",
+            },
+            due_at: scheduled.toISOString(),
+            sent_at: now.toISOString(),
+            read_at: null,
+            completed_at: null,
+            created_at: now.toISOString(),
+          };
+          showBrowserNotification(notification, permission);
         }
       } catch (error) {
-        console.error("Failed to fetch proactivity notifications:", error);
+        console.error("Failed to deliver proactivity notifications:", error);
       }
     };
 
@@ -1183,73 +1721,49 @@ function GrayPageClientInner({
     };
   }, [
     userId,
-    generalSessionId,
+    proactivity,
+    pulseEntries,
+    isProactivityStreamActive,
     appendMessage,
-    ensureSession,
+    getOrCreateGeneralSessionId,
     requestNotificationPermission,
     showBrowserNotification,
   ]);
 
 
   useEffect(() => {
-    if (!user?.id) {
-      return;
-    }
-    if (typeof window === "undefined") {
-      return;
-    }
-    const storageKey = `${PULSE_STORAGE_KEY_PREFIX}${user.id}`;
-    try {
-      const stored = window.localStorage.getItem(storageKey);
-      if (!stored) {
-        setPulseEntries([]);
-        setActivePulseId(null);
-        setProactivity(cloneProactivity(PROACTIVITY_SEED));
-        return;
-      }
-      const parsed = JSON.parse(stored) as unknown;
-      const sanitized = sanitizePulseEntries(parsed).slice(0, MAX_PULSE_HISTORY);
-      setPulseEntries((previous) => {
-        if (arePulseEntriesEqual(previous, sanitized)) {
-          return previous;
-        }
-        return sanitized;
-      });
-      setActivePulseId((previous) => {
-        if (previous && sanitized.some((entry) => entry.id === previous)) {
-          return previous;
-        }
-        return sanitized[0]?.id ?? null;
-      });
-      const nextProactivity = sanitized[0]?.proactivity ?? cloneProactivity(PROACTIVITY_SEED);
-      setProactivity((previous) => {
-        if (areProactivityItemsEqual(previous, nextProactivity ?? null)) {
-          return previous;
-        }
-        return cloneProactivity(nextProactivity) ?? null;
-      });
-    } catch (error) {
-      console.error("Failed to load pulse history:", error);
+    if (!userId) {
       setPulseEntries([]);
       setActivePulseId(null);
-      setProactivity(cloneProactivity(PROACTIVITY_SEED));
+      return;
     }
-  }, [user?.id]);
 
-  useEffect(() => {
-    if (!user?.id) {
-      return;
-    }
-    if (typeof window === "undefined") {
-      return;
-    }
-    const storageKey = `${PULSE_STORAGE_KEY_PREFIX}${user.id}`;
-    try {
-      window.localStorage.setItem(storageKey, JSON.stringify(pulseEntries));
-    } catch (error) {
-      console.error("Failed to persist pulse history:", error);
-    }
-  }, [pulseEntries, user?.id]);
+    let cancelled = false;
+
+    const loadPulses = async () => {
+      try {
+        const pulses = await apiService.getDashboardPulses(userId, MAX_PULSE_HISTORY);
+        if (cancelled) {
+          return;
+        }
+        const mapped = pulses.map((pulse) => mapDashboardPulseToEntry(pulse));
+        setPulseEntries(mapped);
+        setActivePulseId((previous) => {
+          if (previous && mapped.some((entry) => entry.id === previous)) {
+            return previous;
+          }
+          return mapped[0]?.id ?? null;
+        });
+      } catch (error) {
+        console.error("Failed to load dashboard pulses:", error);
+      }
+    };
+
+    void loadPulses();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
 
   useEffect(() => {
     if (variant === "chat" || loading || userId === null) {
@@ -1424,7 +1938,17 @@ function GrayPageClientInner({
     return deriveInitials(user?.full_name ?? viewerName) || "OP";
   }, [user, loading, viewerName]);
   const historySections = useMemo<SidebarHistorySection[]>(() => {
-    const threadSessions = sessions.filter((session) => session.scope === "thread");
+    // Only show conversations that are bound to a *normalized*
+    // conversationId so we don't duplicate entries with both
+    // the raw user prompt and the refined AI title or temporary
+    // local-only thread shells.
+    const threadSessions = sessions.filter((session) => {
+      if (session.scope !== "thread") {
+        return false;
+      }
+      const normalizedConversationId = normalizeConversationIdValue(session.conversationId);
+      return typeof normalizedConversationId === "string" && normalizedConversationId.length > 0;
+    });
     const dedupeMap = new Map<string, ChatSession>();
 
     const registerSession = (key: string, session: ChatSession) => {
@@ -1656,6 +2180,50 @@ function GrayPageClientInner({
     () => new Map(reminderPlans.map((plan) => [plan.id, plan])),
     [reminderPlans]
   );
+  const currentChatSession = useMemo(() => {
+    if (!currentChatId) {
+      return null;
+    }
+    return sessions.find((session) => session.id === currentChatId) ?? null;
+  }, [currentChatId, sessions]);
+
+  const documentTitle = useMemo(() => {
+    if (viewMode === "chat") {
+      if (currentChatId && generalSessionId && currentChatId === generalSessionId) {
+        return "General";
+      }
+      if (currentChatSession?.title?.trim()) {
+        return currentChatSession.title.trim();
+      }
+      return "Chat";
+    }
+
+    if (viewMode === "dashboard" || activeNav === "dashboard") {
+      return "Dashboard";
+    }
+    if (viewMode === "history" || activeNav === "history") {
+      return "History";
+    }
+    if (activeNav === "threads") {
+      return "Threads";
+    }
+    if (activeNav === "general") {
+      return "General";
+    }
+    if (viewMode === "general") {
+      return "General";
+    }
+
+    return "Gray";
+  }, [activeNav, currentChatId, currentChatSession, generalSessionId, viewMode]);
+
+  useEffect(() => {
+    if (typeof document !== "undefined") {
+      const label = documentTitle?.trim() || "Gray";
+      document.title = `${label} • Gray`;
+    }
+  }, [documentTitle]);
+
   const derivedPlans = user ? plans : [];
   const derivedHabits = user ? habits : [];
   const derivedCalendars = user ? calendarCalendars : [];
@@ -1707,11 +2275,7 @@ function GrayPageClientInner({
     }
 
     const hasWorkspaceDetails = sections.length > 0;
-    const defaultProactivity = cloneProactivity(PROACTIVITY_SEED);
-    const shouldIncludeProactivity =
-      hasWorkspaceDetails &&
-      proactivity !== null &&
-      !areProactivityItemsEqual(proactivity, defaultProactivity);
+    const shouldIncludeProactivity = hasWorkspaceDetails && proactivity !== null;
 
     if (shouldIncludeProactivity && proactivity) {
       sections.push(
@@ -1851,22 +2415,6 @@ function GrayPageClientInner({
   }, [sessions, calendarCalendars, setCalendarEvents, userId]);
 
   useEffect(() => {
-    if (!pendingRedirectChatId) {
-      return;
-    }
-    const pendingSession = sessions.find((session) => session.id === pendingRedirectChatId);
-    if (!pendingSession || pendingSession.isResponding) {
-      return;
-    }
-    setPendingRedirectChatId(null);
-    const generalId = generalSessionId ?? GENERAL_CHAT_SESSION_ID;
-    if (pendingSession.id === generalId) {
-      router.push("/g");
-    } else {
-      router.push(`/c/${pendingSession.id}`);
-    }
-  }, [generalSessionId, pendingRedirectChatId, router, sessions]);
-  useEffect(() => {
     if (activeNav === "threads") {
       return;
     }
@@ -1901,14 +2449,18 @@ function GrayPageClientInner({
       return;
     }
 
-    // Already selected the right session.
-    if (currentChatId === activeChatId) {
+    const directSession = sessions.find((session) => session.id === activeChatId);
+    console.log('[GrayPageClient] Looking for session:', activeChatId, 'found:', directSession?.id, 'messages:', directSession?.messages?.length);
+    console.log('[GrayPageClient] All sessions:', sessions.map(s => ({ id: s.id, msgCount: s.messages?.length })));
+
+    // Already selected the right session and it exists.
+    if (currentChatId === activeChatId && directSession) {
       return;
     }
 
     // 1) Exact local session id match (/c/{session.id}).
-    const directSession = sessions.find((session) => session.id === activeChatId);
     if (directSession) {
+      console.log('[GrayPageClient] Found direct session, setting as current');
       if (currentChatId !== directSession.id) {
         setCurrentChatId(directSession.id);
       }
@@ -1943,11 +2495,12 @@ function GrayPageClientInner({
         messages: [],
         isResponding: false,
         scope: "thread",
+        // Set conversationId to the activeChatId - it might be a conversation ID
+        // The history loading effect will try to load it, and if it exists, great!
+        // If not, it will remain undefined until the first message creates a conversation
         conversationId: activeChatId,
         pendingAutoStream: false,
       }));
-    } else if (!resolved.conversationId) {
-      updateSession(resolved.id, { conversationId: activeChatId });
     }
 
     setCurrentChatId(resolved?.id ?? activeChatId);
@@ -2042,19 +2595,21 @@ function GrayPageClientInner({
         return;
       }
       const nextCompleted = !targetPlan.completed;
-      const updated = previousReminderPlans.map((plan) =>
-        plan.id === id
-          ? {
-              ...plan,
-              completed: nextCompleted,
-              reminderStatus: nextCompleted ? "completed" : "pending",
-            }
-          : plan
-      );
+      const newStatus: "delivered" | "pending" = nextCompleted ? "delivered" : "pending";
+      const updated = previousReminderPlans.map((plan) => {
+        if (plan.id === id) {
+          return {
+            ...plan,
+            completed: nextCompleted,
+            reminderStatus: newStatus,
+          };
+        }
+        return plan;
+      });
       setReminderPlans(updated);
       apiService
         .updateReminder(user.id, reminderId, {
-          status: nextCompleted ? "completed" : "pending",
+          status: nextCompleted ? "delivered" : "pending",
         })
         .catch((error) => {
           console.error("Failed to update reminder:", error);
@@ -2505,6 +3060,41 @@ function GrayPageClientInner({
     }
   };
 
+  const handleReminderMove = useCallback(
+    async (reminderId: number, range: { start: Date; end: Date }) => {
+      if (!user) {
+        return;
+      }
+
+      const previousReminderPlans = reminderPlans;
+      const previousCalendarEvents = calendarEvents;
+      const isoTime = range.start.toISOString();
+
+      const updatedReminderPlans = previousReminderPlans.map((plan) =>
+        plan.reminderId === reminderId ? { ...plan, deadline: isoTime } : plan
+      );
+      const updatedCalendarEvents = previousCalendarEvents.map((event) =>
+        event.reminderId === reminderId
+          ? { ...event, start: new Date(range.start), end: new Date(range.end) }
+          : event
+      );
+
+      setReminderPlans(updatedReminderPlans);
+      setCalendarEvents(updatedCalendarEvents);
+
+      try {
+        await apiService.updateReminder(user.id, reminderId, {
+          remind_at: isoTime,
+        });
+      } catch (error) {
+        console.error("Failed to move reminder:", error);
+        setReminderPlans(previousReminderPlans);
+        setCalendarEvents(previousCalendarEvents);
+      }
+    },
+    [user, reminderPlans, calendarEvents]
+  );
+
   const handleCalendarIntegration = useCallback(async () => {
     if (!user) {
       console.warn("Unable to start Google Calendar integration without a user.");
@@ -2548,7 +3138,7 @@ function GrayPageClientInner({
         Boolean(generalSessionId) &&
         currentChatId === generalSessionId;
 
-      const isGeneralSurface = viewMode === "general" && activeNav === "general";
+      const isGeneralSurface = activeNav === "general";
       const shouldStartStandaloneThread =
         !isGeneralSurface && (!currentChatId || isGeneralChatActive);
 
@@ -2560,9 +3150,14 @@ function GrayPageClientInner({
         const session = await createThreadSession(normalizedDraft);
         setHasSeenGeneralChat(true);
         setCurrentChatId(session.id);
-
-        // Push directly instead of prefetch-then-lazy-redirect.
-        router.push(`/c/${session.id}`);
+        if (supportsInlineChat) {
+          setManualViewMode("chat");
+          if (typeof window !== "undefined") {
+            window.history.pushState(null, "", `/c/${session.id}`);
+          }
+        } else {
+          router.push(`/c/${session.id}`);
+        }
         return;
       }
 
@@ -2577,7 +3172,9 @@ function GrayPageClientInner({
         // Switch layout immediately to chat mode so the user sees the reply begin
         // without waiting for an asynchronous redirect effect chain.
         setManualViewMode("chat");
-        setPendingRedirectChatId(null);
+        if (!isGeneralSession && typeof window !== "undefined") {
+          window.history.pushState(null, "", `/c/${sessionId}`);
+        }
       } else if (isGeneralSession) {
         router.push("/g");
       } else if (activeChatId !== sessionId) {
@@ -2598,6 +3195,25 @@ function GrayPageClientInner({
     [setHasSeenGeneralChat]
   );
 
+  useEffect(() => {
+    if (!supportsInlineChat || typeof window === "undefined" || activeNav !== "threads") {
+      return;
+    }
+    const pathname = window.location.pathname;
+    const isGeneralSessionActive =
+      Boolean(currentChatId) && Boolean(generalSessionId) && currentChatId === generalSessionId;
+    if (manualViewMode === "chat" && currentChatId && !isGeneralSessionActive) {
+      const targetPath = `/c/${currentChatId}`;
+      if (pathname !== targetPath) {
+        window.history.replaceState(null, "", targetPath);
+      }
+      return;
+    }
+    if (pathname !== "/") {
+      window.history.replaceState(null, "", "/");
+    }
+  }, [activeNav, currentChatId, generalSessionId, manualViewMode, supportsInlineChat]);
+
   const handleOpenHistoryEntry = (entry: SidebarHistoryEntry) => {
     if (!entry.href || entry.href === "#") {
       return;
@@ -2605,6 +3221,11 @@ function GrayPageClientInner({
     if (supportsInlineChat) {
       setCurrentChatId(entry.id);
       setManualViewMode("chat");
+      // Keep the URL in sync so the current conversation can be refreshed or shared.
+      if (typeof window !== "undefined") {
+        const nextHref = entry.href && entry.href !== "#" ? entry.href : `/c/${entry.id}`;
+        window.history.pushState(null, "", nextHref);
+      }
       return;
     }
     setManualViewMode(null);
@@ -2638,6 +3259,7 @@ function GrayPageClientInner({
   };
 
   const greeting = `Good ${greetingForDate(now)}, ${viewerName}`;
+  const hideChatThinkingIndicator = variant === "chat" && activeNav === "general";
   const renderWorkspaceGreeting = useCallback(
     () => (
       <div className={styles.greetingStack}>
@@ -2650,12 +3272,27 @@ function GrayPageClientInner({
   const dashboardTabAttr = isDashboardView ? dashboardTab : undefined;
 
   const shouldShowWorkspaceBackground = viewMode === "general";
+  const generalAttachmentsActive =
+    viewMode === "general" && (attachments.length > 0 || isAttachmentUploading);
+  const generalAttachmentTray = viewMode === "general"
+    ? (
+        <AttachmentTray
+          attachments={attachments}
+          isUploading={isAttachmentUploading}
+          error={attachmentError}
+          onAddAttachment={openAttachmentPicker}
+          onRemoveAttachment={removeAttachment}
+        />
+      )
+    : null;
 
   return (
-    <div
+    <>
+      <div
       className={styles.page}
       data-dashboard-tab={dashboardTabAttr}
       data-compact={isCompactLayout ? "true" : "false"}
+      data-general-attachments={generalAttachmentsActive ? "true" : "false"}
     >
       {shouldShowWorkspaceBackground ? (
         <>
@@ -2687,139 +3324,38 @@ function GrayPageClientInner({
             onOpenPersonalization={handleOpenPersonalization}
             onOpenSettings={handleOpenSettings}
             onOpenHelp={handleOpenHelp}
-            onUpgradePlan={handleUpgradePlan}
-            onLogOut={handleLogOut}
-          />
+          onUpgradePlan={handleUpgradePlan}
+          onLogOut={handleLogOut}
+        />
 
-          <div
-            className={styles.main}
-            data-dashboard={isDashboardView ? "true" : "false"}
-            data-view={viewMode}
-            data-dashboard-tab={dashboardTabAttr}
-            data-compact={isCompactLayout ? "true" : "false"}
-          >
-            <div
-              className={styles.mainContent}
-              data-view={viewMode}
-              data-compact={isCompactLayout ? "true" : "false"}
-            >
-              {viewMode === "general" && (
-                <GrayWorkspaceHeader
-                  streakCount={streakCount}
-                  planLabel={viewerPlanLabel}
-                  onUpgradeClick={handleUpgradePlan}
-                >
-                  {renderWorkspaceGreeting()}
-                </GrayWorkspaceHeader>
-              )}
-              {isDashboardView ? (
-              <GrayDashboardView
-                pulseEntries={pulseEntries}
-                currentPulse={activePulse}
-                isCurrentPulseEditable={Boolean(isActivePulseEditable)}
-                  onSelectPulse={setActivePulseId}
-                  proactivityFallback={proactivity}
-                  onProactivitySelect={selectProactivityPreset}
-                  onProactivityRemove={removeProactivity}
-                  onTogglePlan={togglePlan}
-                  onToggleHabit={toggleHabit}
-                  onSavePlan={savePlan}
-                onDeletePlan={deletePlan}
-                activeTab={dashboardTab}
-                onSelectTab={setDashboardTab}
-                currentDate={now}
-                  calendars={derivedCalendars}
-                  onCalendarsChange={handleCalendarsChange}
-                  calendarEvents={derivedEvents}
-                  onCalendarEventsChange={handleEventsChange}
-                  calendarSelectedDate={calendarSelectedDate}
-                  onCalendarSelectedDateChange={setCalendarSelectedDate}
-                  onEditHabit={editHabit}
-                  onDeleteHabit={deleteHabit}
-                onIntegrationAction={handleCalendarIntegration}
-                onRefreshData={refreshPlansAndHabits}
-                chatBar={
-                  shouldShowDashboardChatBar ? (
-                    <ChatDraftInput variant="bar" onSubmitMessage={handleChatSubmit} />
-                  ) : undefined
-                }
-                isCompactLayout={isCompactLayout}
-                userId={userId}
-                reminderPlans={reminderPlans}
-              />
-              ) : isChatView ? (
-                <GrayChatView
-                  sessionId={currentChatId ?? null}
-                  onContextUsageChange={setContextUsageSummary}
-                  introContent={
-                    activeNav !== "threads" &&
-                    supportsInlineChat &&
-                    !hasSeenGeneralChat &&
-                    currentChatId &&
-                    generalSessionId &&
-                    currentChatId === generalSessionId ? (
-                      <div className={styles.introStack}>
-                        <GrayWorkspaceHeader
-                          streakCount={streakCount}
-                          planLabel={viewerPlanLabel}
-                          onUpgradeClick={handleUpgradePlan}
-                        >
-                          {renderWorkspaceGreeting()}
-                        </GrayWorkspaceHeader>
-                        <FirstChatOnboarding
-                          viewerName={viewerName}
-                          onComplete={handleFirstChatOnboardingDone}
-                          onSkip={handleFirstChatOnboardingDone}
-                        />
-                      </div>
-                    ) : null
-                  }
-                />
-              ) : isHistoryView ? (
-                <GrayHistoryView
-                  sections={historySections}
-                  onOpenEntry={handleOpenHistoryEntry}
-                  activeEntryId={currentChatId ?? null}
-                  onOpenEntryExternal={handleOpenHistoryEntryExternal}
-                  onRenameEntry={handleRenameHistoryEntry}
-                  onDeleteEntry={handleDeleteHistoryEntry}
-                />
-              ) : (
-                <div className={styles.generalViewSection}>
-                  <GrayGeneralView
-                    greeting={greeting}
-                    dateLabel={workspaceDateLabel}
-                    calendarEvents={derivedEvents}
-                    plans={derivedPlans}
-                    habits={derivedHabits}
-                    activeTab={planTab}
-                    onChangeTab={setPlanTab}
-                    onTogglePlan={togglePlan}
-                    onToggleHabit={toggleHabit}
-                    onSavePlan={savePlan}
-                    onDeletePlan={deletePlan}
-                    currentDate={now}
-                    calendars={derivedCalendars}
-                    onCalendarsChange={handleCalendarsChange}
-                    onCalendarEventsChange={handleEventsChange}
-                    calendarSelectedDate={calendarSelectedDate}
-                    onCalendarSelectedDateChange={setCalendarSelectedDate}
-                    isCompactLayout={isCompactLayout}
-                    onEditHabit={editHabit}
-                    onDeleteHabit={deleteHabit}
-                    onRefreshData={refreshPlansAndHabits}
-                    showGreeting={false}
-                    userId={user?.id ?? null}
-                  />
-                </div>
-              )}
-            </div>
+        <div
+          className={styles.main}
+          data-dashboard={isDashboardView ? "true" : "false"}
+          data-view={viewMode}
+          data-dashboard-tab={dashboardTabAttr}
+          data-compact={isCompactLayout ? "true" : "false"}
+          data-general-attachments={generalAttachmentsActive ? "true" : "false"}
+          data-dashboard-free="true"
+        >
+            {isDashboardView ? renderPrimaryView() : renderMainSurface()}
             {viewMode === "general" ? (
-              <ChatDraftInput
-                variant="composer"
-                onSubmitMessage={handleChatSubmit}
-                showUnderline={false}
-              />
+              <>
+                <ChatDraftInput
+                  variant="composer"
+                  onSubmitMessage={handleChatSubmit}
+                  showUnderline={false}
+                  onAddAttachment={openAttachmentPicker}
+                  attachmentTray={generalAttachmentTray}
+                />
+                <input
+                  ref={attachmentInputRef}
+                  type="file"
+                  multiple
+                  accept="image/*,.pdf"
+                  className={styles.chatAttachmentInput}
+                  onChange={handleAttachmentInputChange}
+                />
+              </>
             ) : null}
         </div>
       </div>
@@ -2859,28 +3395,16 @@ function GrayPageClientInner({
         <SettingsModal isOpen={isSettingsOpen} onClose={handleCloseSettings} />
       )}
     </div>
+    </>
   );
 }
 
-// Wrapper component that provides the UserContext
-export default function GrayPageClient({
-  initialTimestamp,
-  viewerEmail,
-  activeNav,
-  variant = "general",
-  activeChatId = null,
-}: GrayPageClientProps) {
+export default function GrayPageClient(props: GrayPageClientProps) {
+  const { variant = "general", activeChatId = null } = props;
   return (
-    <UserProvider userEmail={viewerEmail ?? undefined}>
-      <ChatProvider>
-        <GrayPageClientInner
-          key={variant === "chat" ? `chat-${activeChatId ?? "new"}` : "gray-root"}
-          initialTimestamp={initialTimestamp}
-          activeNav={activeNav}
-          variant={variant}
-          activeChatId={activeChatId}
-        />
-      </ChatProvider>
-    </UserProvider>
+    <GrayPageClientInner
+      key={variant === "chat" ? `chat-${activeChatId ?? "new"}` : "gray-root"}
+      {...props}
+    />
   );
 }

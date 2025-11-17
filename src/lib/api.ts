@@ -40,6 +40,17 @@ const stripTrailingSlashes = (value: string) => value.replace(/\/+$/, '');
 
 const LOCALHOST_HOSTNAMES = new Set(['localhost', '127.0.0.1', '0.0.0.0']);
 
+const isLocalLikeHostname = (hostname: string | null | undefined): boolean => {
+  if (!hostname) {
+    return false;
+  }
+  const normalized = hostname.toLowerCase();
+  if (LOCALHOST_HOSTNAMES.has(normalized)) {
+    return true;
+  }
+  return normalized.endsWith('.localhost');
+};
+
 const adaptEnvBaseUrlForClientHost = (value: string): string => {
   if (typeof window === 'undefined') {
     return value;
@@ -54,12 +65,7 @@ const adaptEnvBaseUrlForClientHost = (value: string): string => {
 
   const normalizedHost = parsed.hostname?.toLowerCase();
   const clientHost = window.location.hostname?.toLowerCase();
-  if (
-    normalizedHost &&
-    LOCALHOST_HOSTNAMES.has(normalizedHost) &&
-    clientHost &&
-    !LOCALHOST_HOSTNAMES.has(clientHost)
-  ) {
+  if (normalizedHost && isLocalLikeHostname(normalizedHost) && clientHost && !isLocalLikeHostname(clientHost)) {
     parsed.hostname = clientHost;
     return stripTrailingSlashes(parsed.toString());
   }
@@ -67,7 +73,7 @@ const adaptEnvBaseUrlForClientHost = (value: string): string => {
   return value;
 };
 
-const resolveApiBaseUrl = () => {
+export const resolveApiBaseUrl = () => {
   const envUrl = process.env.NEXT_PUBLIC_API_URL?.trim();
   if (envUrl) {
     const adaptedUrl = adaptEnvBaseUrlForClientHost(envUrl);
@@ -100,6 +106,30 @@ const resolveApiBaseUrl = () => {
   }
 
   return stripTrailingSlashes(DEV_FALLBACK_API_URL);
+};
+
+const isDevEnv = () => process.env.NODE_ENV !== 'production';
+
+const buildBodyPreview = (body: unknown): string | undefined => {
+  if (!body) {
+    return undefined;
+  }
+  if (typeof FormData !== 'undefined' && body instanceof FormData) {
+    return '[FormData body]';
+  }
+  if (typeof body === 'string') {
+    const trimmed = body.trim();
+    if (!trimmed) {
+      return undefined;
+    }
+    return trimmed.length > 400 ? `${trimmed.slice(0, 400)}…` : trimmed;
+  }
+  try {
+    const serialized = JSON.stringify(body);
+    return serialized.length > 400 ? `${serialized.slice(0, 400)}…` : serialized;
+  } catch {
+    return '[Unserializable body]';
+  }
 };
 
 class ApiError extends Error {
@@ -189,6 +219,40 @@ export interface Habit {
   updated_at: string;
 }
 
+export interface DashboardPulsePlanItem {
+  id: string;
+  label: string;
+  completed: boolean;
+}
+
+export interface DashboardPulseHabitItem {
+  id: string;
+  label: string;
+  streak_label?: string | null;
+  previous_label?: string | null;
+  completed: boolean;
+}
+
+export interface DashboardPulseProactivity {
+  id: string;
+  label: string;
+  description?: string | null;
+  cadence: string;
+  time: string;
+}
+
+export interface DashboardPulse {
+  id: number;
+  user_id: number;
+  date_key: string;
+  timestamp: number;
+  plans: DashboardPulsePlanItem[];
+  habits: DashboardPulseHabitItem[];
+  proactivity: DashboardPulseProactivity;
+  created_at: string;
+  updated_at: string;
+}
+
 export type ReminderStatus =
   | "pending"
   | "delivered"
@@ -235,11 +299,11 @@ export interface ReminderUpdatePayload {
 }
 
 export interface ProactivitySettings {
-  id: string;
-  label: string;
+  id?: string | null;
+  label?: string | null;
   description?: string | null;
-  cadence: string;
-  time: string;
+  cadence?: string | null;
+  time?: string | null;
   times?: string[] | null;
   channels?: string[] | null;
   timezone?: string | null;
@@ -284,6 +348,8 @@ export interface ApiKeyCreate {
 export interface ChatMessage {
   role: 'user' | 'model';
   text: string;
+  grounding_metadata?: GroundingMetadata | null;
+  groundingMetadata?: GroundingMetadata | null;
 }
 
 export interface MediaUpload {
@@ -373,6 +439,7 @@ export interface ChatRequest {
   maps_latitude?: number;
   maps_longitude?: number;
   maps_widget?: boolean;
+  web_search_enabled?: boolean;
   should_generate_title?: boolean;
 }
 
@@ -381,6 +448,23 @@ export interface ChatResponse {
   conversation_id: string;
   groundingMetadata?: GroundingMetadata;
   title?: string | null;
+}
+
+export interface ChatStarterRequest {
+  user_id: number;
+  name?: string | null;
+  nickname?: string | null;
+  occupation?: string | null;
+  about?: string | null;
+  custom_instructions?: string | null;
+  workspace_context?: string | null;
+  system_prompt?: string | null;
+  time_context?: string | null;
+}
+
+export interface ChatStarterResponse {
+  message: string;
+  used_fallback?: boolean;
 }
 
 export interface ConversationSummary {
@@ -510,21 +594,43 @@ export interface UserUpdate {
 
 class ApiService {
   private async fetch<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+    const startTime = performance.now();
     const baseUrl = resolveApiBaseUrl();
     const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
     const url = `${baseUrl}${normalizedEndpoint}`;
 
-    // Debug: log resolved URLs for diagnosing "Failed to fetch" (especially reminders)
-    // This is lightweight and only logs in development builds.
-    if (process.env.NODE_ENV !== 'production') {
-      // eslint-disable-next-line no-console
-      console.debug('[ApiService.fetch]', {
-        endpoint,
-        baseUrl,
-        url,
-        usesProxy: baseUrl.startsWith('/api/'),
+    const requestId =
+      typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? crypto.randomUUID()
+        : Math.random().toString(36).slice(2);
+
+    // Enhanced logging configuration
+    // - Always log errors in development.
+    // - Only log verbose per-request start/success details when the explicit flag is enabled.
+    const logLevel = process.env.NODE_ENV === 'development' ? 'debug' : 'info';
+    const shouldLogVerbose = process.env.NEXT_PUBLIC_ENABLE_API_LOGGING === 'true';
+    const shouldLogErrors = isDevEnv() || shouldLogVerbose;
+
+    const logData = {
+      requestId,
+      endpoint,
+      baseUrl,
+      url,
+      method: options.method ?? 'GET',
+      usesProxy: baseUrl.startsWith('/api/'),
+      bodyPreview: buildBodyPreview(options.body),
+      userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'server-side',
+      timestamp: new Date().toISOString(),
+    };
+
+    if (shouldLogVerbose) {
+      console.log(`[${logLevel.toUpperCase()}][ApiService.fetch:start]`, {
+        ...logData,
+        eventType: 'api_request_start',
+        performance_start: startTime,
       });
     }
+
     const isFormDataBody = typeof FormData !== 'undefined' && options.body instanceof FormData;
     const headers = new Headers(options.headers ?? undefined);
     if (!isFormDataBody && !headers.has('Content-Type')) {
@@ -541,6 +647,24 @@ class ApiService {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
+        const responseTime = performance.now() - startTime;
+
+        if (shouldLogErrors) {
+          console.error(`[ERROR][ApiService.fetch:response-error]`, {
+            requestId,
+            endpoint,
+            url,
+            method: config.method ?? 'GET',
+            status: response.status,
+            statusText: response.statusText,
+            errorDetail: (errorData as { detail?: unknown })?.detail ?? null,
+            responseTimeMs: responseTime,
+            contentType: response.headers.get('content-type'),
+            timestamp: new Date().toISOString(),
+            eventType: 'api_response_error',
+          });
+        }
+
         throw new ApiError(
           response.status,
           errorData.detail || `HTTP error! status: ${response.status}`
@@ -548,19 +672,72 @@ class ApiService {
       }
 
       if (response.status === 204) {
+        const responseTime = performance.now() - startTime;
+        if (shouldLogVerbose) {
+          console.log(`[${logLevel.toUpperCase()}][ApiService.fetch:success]`, {
+            requestId,
+            endpoint,
+            status: response.status,
+            responseTimeMs: responseTime,
+            contentType: 'no-content',
+            timestamp: new Date().toISOString(),
+            eventType: 'api_response_success_no_content',
+          });
+        }
         return undefined as T;
       }
 
       const contentType = response.headers.get('content-type');
       if (!contentType || !contentType.includes('application/json')) {
+        const responseTime = performance.now() - startTime;
+        if (shouldLogVerbose) {
+          console.log(`[${logLevel.toUpperCase()}][ApiService.fetch:success]`, {
+            requestId,
+            endpoint,
+            status: response.status,
+            responseTimeMs: responseTime,
+            contentType: contentType || 'unknown',
+            timestamp: new Date().toISOString(),
+            eventType: 'api_response_success_non_json',
+          });
+        }
         return undefined as T;
       }
 
-      return await response.json();
+      const responseData = await response.json();
+      const responseTime = performance.now() - startTime;
+
+      if (shouldLogVerbose) {
+        console.log(`[${logLevel.toUpperCase()}][ApiService.fetch:success]`, {
+          requestId,
+          endpoint,
+          status: response.status,
+          responseTimeMs: responseTime,
+          contentType,
+          responseDataSize: JSON.stringify(responseData).length,
+          timestamp: new Date().toISOString(),
+          eventType: 'api_response_success_json',
+        });
+      }
+
+      return responseData;
     } catch (error) {
+      const errorTime = performance.now() - startTime;
       const baseUrl = resolveApiBaseUrl();
 
       if (error instanceof ApiError && error.status === 404) {
+        if (shouldLogErrors) {
+          console.log(`[${logLevel.toUpperCase()}][ApiService.fetch:404-error]`, {
+            requestId,
+            endpoint,
+            url,
+            method: config.method ?? 'GET',
+            responseTimeMs: errorTime,
+            error: error.message,
+            timestamp: new Date().toISOString(),
+            eventType: 'api_404_error',
+          });
+        }
         throw error;
       }
 
@@ -574,15 +751,60 @@ class ApiService {
 
         if (isNetworkFailure) {
           const friendlyMessage = `Unable to reach the API at ${baseUrl}. Verify that the backend service is running and accessible.`;
+
+          if (shouldLogErrors) {
+            console.error(`[ERROR][ApiService.fetch:network-error]`, {
+              requestId,
+              endpoint,
+              url,
+              method: config.method ?? 'GET',
+              responseTimeMs: errorTime,
+              originalError: error.message,
+              friendlyMessage,
+              baseUrl,
+              timestamp: new Date().toISOString(),
+              eventType: 'api_network_error',
+            });
+          }
+
           throw new ApiNetworkError(friendlyMessage);
         }
       }
 
       if (error instanceof ApiNetworkError) {
+        if (shouldLogErrors) {
+          console.error(`[ERROR][ApiService.fetch:network-error-rethrow]`, {
+            requestId,
+            endpoint,
+            url,
+            method: config.method ?? 'GET',
+            responseTimeMs: errorTime,
+            message: error.message,
+            timestamp: new Date().toISOString(),
+            eventType: 'api_network_error_rethrow',
+          });
+        }
         throw error;
       }
 
-      console.error(`API Error (${endpoint} -> ${baseUrl}):`, error);
+      // Unexpected error logging
+      if (shouldLogErrors) {
+        console.error(`[ERROR][ApiService.fetch:unexpected-error]`, {
+          requestId,
+          endpoint,
+          url,
+          method: config.method ?? 'GET',
+          baseUrl,
+          error: error instanceof Error ? {
+            name: error.name,
+            message: error.message,
+            stack: error.stack,
+          } : error,
+          responseTimeMs: errorTime,
+          timestamp: new Date().toISOString(),
+          eventType: 'api_unexpected_error',
+        });
+      }
       if (error instanceof Error) {
         throw error;
       }
@@ -614,6 +836,12 @@ class ApiService {
     });
   }
 
+  async deleteUser(userId: number): Promise<void> {
+    await this.fetch<void>(`/users/${userId}`, {
+      method: 'DELETE',
+    });
+  }
+
   async storeUserApiKey(userId: number, payload: ApiKeyCreate): Promise<ApiKey> {
     return this.fetch<ApiKey>(`/users/${userId}/api-keys`, {
       method: 'POST',
@@ -641,6 +869,29 @@ class ApiService {
     return this.fetch<ChatSession>(`/users/${userId}/chat-sessions`, {
       method: 'POST',
       body: JSON.stringify(sessionData),
+    });
+  }
+
+  // Dashboard pulses
+  async getDashboardPulses(userId: number, limit = 30): Promise<DashboardPulse[]> {
+    const params = new URLSearchParams({ limit: String(limit) });
+    return this.fetch<DashboardPulse[]>(`/users/${userId}/dashboard/pulses?${params.toString()}`);
+  }
+
+  async createOrUpdateDashboardPulse(
+    userId: number,
+    payload: {
+      date_key: string;
+      timestamp: number;
+      plans: DashboardPulsePlanItem[];
+      habits: DashboardPulseHabitItem[];
+      proactivity: DashboardPulseProactivity;
+      carry_forward?: boolean;
+    }
+  ): Promise<DashboardPulse> {
+    return this.fetch<DashboardPulse>(`/users/${userId}/dashboard/pulses`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
     });
   }
 
@@ -880,8 +1131,8 @@ class ApiService {
     });
   }
 
-  async getProactivitySettings(userId: number): Promise<ProactivitySettings> {
-    return this.fetch<ProactivitySettings>(`/users/${userId}/proactivity/settings`);
+  async getProactivitySettings(userId: number): Promise<ProactivitySettings | null> {
+    return this.fetch<ProactivitySettings | null>(`/users/${userId}/proactivity/settings`);
   }
 
   async updateProactivitySettings(
@@ -1021,6 +1272,13 @@ class ApiService {
     });
   }
 
+  async requestChatStarter(payload: ChatStarterRequest): Promise<ChatStarterResponse> {
+    return this.fetch<ChatStarterResponse>('/api/chat/starter', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
   async *sendMessageStream(
     request: ChatRequest,
     options?: { signal?: AbortSignal }
@@ -1029,6 +1287,23 @@ class ApiService {
     const endpoint = '/api/chat/stream';
     const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
     const url = `${baseUrl}${normalizedEndpoint}`;
+    const requestId =
+      typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? crypto.randomUUID()
+        : Math.random().toString(36).slice(2);
+
+    if (isDevEnv()) {
+      // eslint-disable-next-line no-console
+      console.debug('[ApiService.sendMessageStream:start]', {
+        requestId,
+        endpoint,
+        baseUrl,
+        url,
+        usesProxy: baseUrl.startsWith('/api/'),
+        bodyPreview: buildBodyPreview(request),
+      });
+    }
+
     const response = await fetch(url, {
       method: 'POST',
       headers: {
@@ -1048,6 +1323,17 @@ class ApiService {
         }
       } catch {
         // Best effort - non JSON payloads fall back to default message.
+      }
+      if (isDevEnv()) {
+        // eslint-disable-next-line no-console
+        console.error('[ApiService.sendMessageStream:response-error]', {
+          requestId,
+          endpoint,
+          url,
+          status: response.status,
+          statusText: response.statusText,
+          detail,
+        });
       }
       throw new Error(detail);
     }
