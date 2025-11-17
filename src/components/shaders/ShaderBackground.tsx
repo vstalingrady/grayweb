@@ -56,16 +56,15 @@ export default function ShaderBackground({ children, className, fullHeight = tru
       <MeshGradient
         className={styles.layer}
         colors={["#020202", "#101010", "#242424", "#3a3a3a", "#5c5c5c"]}
-        speed={0.18}
-        backgroundColor="#010101"
+        speed={1}
+        style={{ backgroundColor: "#010101" }}
         {...sharedShaderProps}
       />
       <MeshGradient
         className={styles.wireframeLayer}
         colors={["#000000", "#1a1a1a", "#2f2f2f", "#5a5a5a"]}
-        speed={0.12}
-        wireframe
-        backgroundColor="transparent"
+        speed={1}
+        style={{ backgroundColor: "transparent" }}
         {...sharedShaderProps}
       />
 

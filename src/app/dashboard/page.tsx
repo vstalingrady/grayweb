@@ -1,8 +1,13 @@
 import { redirect } from "next/navigation";
+import type { Metadata } from "next";
 import GrayPageClient from "@/app/gray/GrayPageClient";
 import { readServerSession } from "@/lib/auth/server";
 
 const DEFAULT_REDIRECT = "/login?redirect=/dashboard";
+
+export const metadata: Metadata = {
+  title: "Dashboard",
+};
 
 export default async function DashboardPage() {
   const session = await readServerSession();
@@ -18,7 +23,6 @@ export default async function DashboardPage() {
   return (
     <GrayPageClient
       initialTimestamp={initialTimestamp}
-      viewerEmail={session?.email ?? null}
       activeNav="dashboard"
       variant="dashboard"
     />

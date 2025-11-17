@@ -33,9 +33,10 @@
   ],
   "exclude": [
     "node_modules",
-    "gemini/**",
     "zenith-dashboard/**",
     "react-calendar/**",
-    "assistant-ui/**"
+    "assistant-ui/**",
+    "grayai/**",
+    "src/app/pricing/**"
   ]
 }

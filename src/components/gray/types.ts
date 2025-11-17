@@ -1,8 +1,9 @@
 import { type ComponentType } from "react";
+import type { ReminderStatus } from "@/lib/api";
 
 export type SidebarNavKey =
   | "general"
-  | "new-thread"
+  | "threads"
   | "dashboard"
   | "history"
   | "search";
@@ -35,6 +36,18 @@ export type PlanItem = {
   id: string;
   label: string;
   completed: boolean;
+  deadline?: string | null;
+  scheduleSlot?: string | null;
+  details?: string | null;
+  reminderId?: number;
+  reminderStatus?: ReminderStatus;
+};
+
+export type PlanUpdates = {
+  label: string;
+  details?: string | null;
+  deadline?: string | null;
+  scheduleSlot?: string | null;
 };
 
 export type HabitItem = {
@@ -43,6 +56,14 @@ export type HabitItem = {
   streakLabel: string;
   previousLabel: string;
   completed?: boolean;
+  details?: string | null;
+};
+
+export type HabitUpdates = {
+  label: string;
+  details?: string | null;
+  streakLabel?: string | null;
+  previousLabel?: string | null;
 };
 
 export type DayEvent = {
@@ -58,6 +79,9 @@ export type ProactivityItem = {
   description: string;
   cadence: string;
   time: string;
+  times?: string[];
+  channels?: string[];
+  timezone?: string | null;
 };
 
 export type CalendarDisplayEvent = {
@@ -74,5 +98,18 @@ export type PulseEntry = {
   timestamp: number;
   plans: PlanItem[];
   habits: HabitItem[];
-  proactivity: ProactivityItem;
+  proactivity: ProactivityItem | null;
+};
+
+export type ContextUsageSummary = {
+  conversationId: string | null;
+  messageCount: number;
+  conversationTokens: number;
+  workspaceTokens: number;
+  totalTokens: number;
+  tokensRemaining: number;
+  limit: number;
+  provider: string;
+  modelName: string | null;
+  modelLabel: string | null;
 };

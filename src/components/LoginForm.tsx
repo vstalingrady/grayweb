@@ -313,13 +313,18 @@ export default function LoginForm({ initialMode = "signin" }: LoginFormProps) {
     const { hostname, protocol, port } = window.location;
     const workspaceHost = resolveWorkspaceHost(hostname);
     const workspaceOrigin = resolveWorkspaceOrigin(hostname, protocol, port);
+    const shouldUseFallback = !workspaceHost && isLocalHostname(hostname);
+    const fallbackWorkspaceHost = "gray.localhost";
+    const fallbackWorkspaceOrigin = `${protocol}//${fallbackWorkspaceHost}${port ? `:${port}` : ""}`;
+    const effectiveHost = workspaceHost ?? (shouldUseFallback ? fallbackWorkspaceHost : undefined);
+    const effectiveOrigin = workspaceOrigin ?? (shouldUseFallback ? fallbackWorkspaceOrigin : undefined);
 
-    if (workspaceHost && workspaceOrigin) {
-      const normalizedPath = normalizeWorkspaceRedirect(destination, workspaceHost);
+    if (effectiveHost && effectiveOrigin) {
+      const normalizedPath = normalizeWorkspaceRedirect(destination, effectiveHost);
       const finalPath = normalizedPath.startsWith("/")
         ? normalizedPath
         : `/${normalizedPath}`;
-      window.location.href = `${workspaceOrigin}${finalPath}`;
+      window.location.href = `${effectiveOrigin}${finalPath}`;
       return;
     }
 
@@ -499,7 +504,7 @@ export default function LoginForm({ initialMode = "signin" }: LoginFormProps) {
                 <div className={styles.authVisual}>
                   <div className={styles.authOrb}>
                     <Image
-                      src="/grayaiwhite.svg"
+                      src="/grayaiwhitenotspinning.svg"
                       alt="Gray emblem"
                       width={180}
                       height={180}

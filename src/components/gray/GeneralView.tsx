@@ -1,82 +1,48 @@
-import { useState } from "react";
+import { useMemo, useState, useCallback } from "react";
 import { CheckSquare, Square, Flame, Pencil, Trash2 } from "lucide-react";
 import styles from "@/app/gray/GrayPageClient.module.css";
 import { GrayDashboardCalendar } from "@/components/calendar/GrayDashboardCalendar";
 import { AddPlanHabitModal } from "./AddPlanHabitModal";
-import type { CalendarEvent, CalendarInfo } from "@/components/calendar/types";
-import { type HabitItem, type PlanItem } from "./types";
+import type { CalendarEvent, CalendarInfo, PositionedEvent } from "@/components/calendar/types";
+import { type HabitItem, type PlanItem, type PlanUpdates } from "./types";
+import { mapPlansToCalendarEvents, PLAN_EVENT_ID_PREFIX } from "./planCalendarUtils";
 
 const PANEL_HEIGHT =
-  "clamp(480px, calc(100vh - (220px + var(--gray-chat-bar-clearance, 160px))), 840px)";
+  "clamp(360px, calc(100vh - (320px + var(--gray-chat-bar-clearance, 112px))), 660px)";
 const COMPACT_CALENDAR_HOUR_HEIGHT = 56;
-
-const formatPlanMeta = (plan: { scheduleSlot?: string | null; deadline?: string | null }) => {
-  const parts: string[] = [];
-  if (plan.scheduleSlot) {
-    const [startRaw, endRaw] = plan.scheduleSlot.split("-").map((value) => value?.trim() ?? "");
-    const parseTime = (time: string) => {
-      const [h, m] = time.split(":").map((value) => Number.parseInt(value, 10));
-      if (Number.isNaN(h) || Number.isNaN(m)) {
-        return null;
-      }
-      const date = new Date();
-      date.setHours(h, m, 0, 0);
-      return date;
-    };
-    const startTime = parseTime(startRaw);
-    const endTime = parseTime(endRaw);
-    if (startTime && endTime) {
-      parts.push(
-        `Slot ${startTime.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })} – ${endTime.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`
-      );
-    } else if (startTime) {
-      parts.push(`Slot ${startTime.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`);
-    } else {
-      parts.push(`Slot ${plan.scheduleSlot}`);
-    }
-  }
-
-  if (plan.deadline) {
-    const deadlineDate = new Date(plan.deadline);
-    if (!Number.isNaN(deadlineDate.getTime())) {
-      parts.push(
-        `Due ${deadlineDate.toLocaleDateString([], {
-          month: "short",
-          day: "numeric",
-        })}`
-      );
-    } else {
-      parts.push(`Due ${plan.deadline}`);
-    }
-  }
-
-  return parts.join(" • ");
-};
 
 type PlanTab = "plans" | "habits";
 
 type GrayGeneralViewProps = {
   greeting: string;
+  dateLabel: string;
   plans: PlanItem[];
   habits: HabitItem[];
   activeTab: PlanTab;
   onChangeTab: (tab: PlanTab) => void;
   onTogglePlan: (id: string) => void;
   onToggleHabit: (id: string) => void;
-  onEditPlan: (plan: PlanItem) => void;
+  onSavePlan: (planId: string, updates: PlanUpdates) => Promise<void> | void;
   onDeletePlan: (plan: PlanItem) => void;
   currentDate: Date;
   calendars: CalendarInfo[];
   onCalendarsChange: (calendars: CalendarInfo[]) => void;
   calendarEvents: CalendarEvent[];
   onCalendarEventsChange: (events: CalendarEvent[]) => void;
+  calendarSelectedDate?: Date;
+  onCalendarSelectedDateChange?: (date: Date) => void;
   onEditHabit: (habit: HabitItem) => void;
   onDeleteHabit: (habit: HabitItem) => void;
   onRefreshData: () => Promise<void>;
+  isCompactLayout?: boolean;
+  showGreeting?: boolean;
+  userId?: number | null;
+  onReminderMove?: (reminderId: number, range: { start: Date; end: Date }) => Promise<void> | void;
 };
 
 export function GrayGeneralView({
   greeting,
+  dateLabel,
   calendarEvents,
   plans,
   habits,
@@ -84,20 +50,85 @@ export function GrayGeneralView({
   onChangeTab,
   onTogglePlan,
   onToggleHabit,
-  onEditPlan,
+  onSavePlan,
   onDeletePlan,
   currentDate,
   calendars,
   onCalendarsChange,
   onCalendarEventsChange,
+  calendarSelectedDate,
+  onCalendarSelectedDateChange,
   onEditHabit,
   onDeleteHabit,
   onRefreshData,
+  onReminderMove,
+  isCompactLayout = false,
+  showGreeting = true,
+  userId,
 }: GrayGeneralViewProps) {
   const [modalState, setModalState] = useState<{ isOpen: boolean; type: "plan" | "habit" | null }>({
     isOpen: false,
     type: null,
   });
+  const [planEditorTarget, setPlanEditorTarget] = useState<PlanItem | null>(null);
+  const planCalendarEvents = useMemo(() => mapPlansToCalendarEvents(plans), [plans]);
+
+  const resolvePlanFromEvent = useCallback(
+    (eventId: string) => {
+      if (!eventId.startsWith(PLAN_EVENT_ID_PREFIX)) {
+        return null;
+      }
+      const planId = eventId.slice(PLAN_EVENT_ID_PREFIX.length);
+      return plans.find((plan) => plan.id === planId) ?? null;
+    },
+    [plans]
+  );
+
+  const handleCalendarTaskToggle = useCallback(
+    (event: CalendarEvent) => {
+      if (!event.id.startsWith(PLAN_EVENT_ID_PREFIX)) {
+        return;
+      }
+      onTogglePlan(event.id.slice(PLAN_EVENT_ID_PREFIX.length));
+    },
+    [onTogglePlan]
+  );
+
+  const handleCalendarEventMove = useCallback(
+    (event: CalendarEvent, range: { start: Date; end: Date }) => {
+      if (event.entryType === "reminder" && onReminderMove) {
+        const segments = event.id.split("-");
+        const reminderIdValue = Number(segments[segments.length - 1]);
+        if (!Number.isNaN(reminderIdValue)) {
+          void onReminderMove(reminderIdValue, range);
+        }
+        return;
+      }
+
+      if (!event.id.startsWith(PLAN_EVENT_ID_PREFIX)) {
+        return;
+      }
+
+      const planId = event.id.slice(PLAN_EVENT_ID_PREFIX.length);
+      const targetPlan = plans.find((plan) => plan.id === planId);
+      if (!targetPlan) {
+        return;
+      }
+
+      const formatTime = (value: Date) =>
+        `${String(value.getHours()).padStart(2, "0")}:${String(value.getMinutes()).padStart(2, "0")}`;
+
+      const scheduleSlot = `${formatTime(range.start)}-${formatTime(range.end)}`;
+
+      void onSavePlan(planId, {
+        label: targetPlan.label,
+        details: targetPlan.details ?? null,
+        deadline: targetPlan.deadline ?? null,
+        scheduleSlot,
+      });
+    },
+    [onSavePlan, onReminderMove, plans]
+  );
 
   const openModal = (type: "plan" | "habit") => {
     setModalState({ isOpen: true, type });
@@ -114,32 +145,52 @@ export function GrayGeneralView({
 
   return (
     <>
-      <h1 className={styles.greeting}>{greeting}</h1>
-
-      <section className={styles.mainGrid}>
-        <div className={`${styles.primaryColumn} ${styles.primaryColumnSlim}`}>
-          <GrayDashboardCalendar
-            initialDate={currentDate}
-            viewModeLocked="day"
-            showSidebar={false}
-            showSurfaceLabel={false}
-            showSurfaceHeading={false}
-            compactSurface
-            showHeaderControls={false}
-            showHeaderDates={false}
-            calendars={calendars}
-            events={calendarEvents}
-            onCalendarsChange={onCalendarsChange}
-            onEventsChange={onCalendarEventsChange}
-            maxHeight={PANEL_HEIGHT}
-            hourHeight={COMPACT_CALENDAR_HOUR_HEIGHT}
-          />
+      {showGreeting ? (
+        <div className={styles.greetingStack}>
+          <h1 className={styles.greeting}>{greeting}</h1>
+          <p className={styles.greetingDate}>{dateLabel}</p>
         </div>
+      ) : null}
+
+      <section
+        className={styles.mainGrid}
+        data-compact={isCompactLayout ? "true" : "false"}
+      >
+        {!isCompactLayout ? (
+          <div className={`${styles.primaryColumn} ${styles.primaryColumnSlim}`}>
+            <GrayDashboardCalendar
+              initialDate={currentDate}
+              viewModeLocked="day"
+              showSidebar={false}
+              showSurfaceLabel={false}
+              showSurfaceHeading={false}
+              compactSurface
+              showHeaderControls={false}
+              showHeaderDates={false}
+              calendars={calendars}
+              events={calendarEvents}
+              supplementalEvents={planCalendarEvents}
+              onCalendarsChange={onCalendarsChange}
+              onEventsChange={onCalendarEventsChange}
+              onEventMove={handleCalendarEventMove}
+              onTaskToggle={handleCalendarTaskToggle}
+              selectedDate={calendarSelectedDate}
+              onSelectedDateChange={onCalendarSelectedDateChange}
+              maxHeight={PANEL_HEIGHT}
+              hourHeight={COMPACT_CALENDAR_HOUR_HEIGHT}
+            />
+          </div>
+        ) : null}
 
         <div className={`${styles.secondaryColumn} ${styles.secondaryColumnSlim}`}>
           <div
             className={`${styles.planPanel} ${styles.planPanelSlim}`}
-            style={{ minHeight: PANEL_HEIGHT, height: PANEL_HEIGHT }}
+            style={
+              isCompactLayout
+                ? undefined
+                : { minHeight: PANEL_HEIGHT, height: PANEL_HEIGHT }
+            }
+            data-match-calendar-height={isCompactLayout ? "false" : "true"}
           >
             <div className={styles.tabBar}>
               <button
@@ -174,9 +225,6 @@ export function GrayGeneralView({
                           </span>
                           <span className={styles.planLabelGroup}>
                             <span className={styles.planLabel}>{plan.label}</span>
-                            {(plan.scheduleSlot || plan.deadline) && (
-                              <span className={styles.planMeta}>{formatPlanMeta(plan)}</span>
-                            )}
                           </span>
                         </button>
                         <span className={styles.listItemActions}>
@@ -186,9 +234,10 @@ export function GrayGeneralView({
                             onClick={(event) => {
                               event.preventDefault();
                               event.stopPropagation();
-                              onEditPlan(plan);
+                              setPlanEditorTarget(plan);
                             }}
                             aria-label={`Edit plan ${plan.label}`}
+                            disabled={!onSavePlan}
                           >
                             <Pencil size={14} />
                           </button>
@@ -228,38 +277,39 @@ export function GrayGeneralView({
                           </span>
                           <span className={styles.habitContent}>
                             <span className={styles.habitLabel}>{habit.label}</span>
-                            <span className={styles.habitMeta}>Prev: {habit.previousLabel}</span>
                           </span>
                         </button>
-                        <span className={styles.habitStreak}>
-                          <Flame size={12} aria-hidden="true" />
-                          <span>{habit.streakLabel}</span>
-                        </span>
-                        <span className={styles.listItemActions}>
-                          <button
-                            type="button"
-                            className={styles.listItemActionButton}
-                            onClick={(event) => {
-                              event.preventDefault();
-                              event.stopPropagation();
-                              onEditHabit(habit);
-                            }}
-                            aria-label={`Edit habit ${habit.label}`}
-                          >
-                            <Pencil size={14} />
-                          </button>
-                          <button
-                            type="button"
-                            className={styles.listItemActionButton}
-                            onClick={(event) => {
-                              event.preventDefault();
-                              event.stopPropagation();
-                              onDeleteHabit(habit);
-                            }}
-                            aria-label={`Delete habit ${habit.label}`}
-                          >
-                            <Trash2 size={14} />
-                          </button>
+                        <span className={styles.habitRightSection}>
+                          <span className={styles.listItemActions}>
+                            <button
+                              type="button"
+                              className={styles.listItemActionButton}
+                              onClick={(event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                onEditHabit(habit);
+                              }}
+                              aria-label={`Edit habit ${habit.label}`}
+                            >
+                              <Pencil size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              className={styles.listItemActionButton}
+                              onClick={(event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                onDeleteHabit(habit);
+                              }}
+                              aria-label={`Delete habit ${habit.label}`}
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </span>
+                          <span className={styles.habitStreak}>
+                            <Flame size={12} aria-hidden="true" />
+                            <span>{habit.streakLabel}</span>
+                          </span>
                         </span>
                       </li>
                     ))}
@@ -282,6 +332,21 @@ export function GrayGeneralView({
           onSuccess={handleModalSuccess}
         />
       )}
+      {planEditorTarget && onSavePlan ? (
+        <AddPlanHabitModal
+          isOpen={Boolean(planEditorTarget)}
+          onClose={() => setPlanEditorTarget(null)}
+          type="plan"
+          onSuccess={handleModalSuccess}
+          planToEdit={planEditorTarget}
+          onSubmitPlan={async (planId, updates) => {
+            if (!planId) {
+              return;
+            }
+            await onSavePlan(planId, updates);
+          }}
+        />
+          ) : null}
     </>
   );
 }

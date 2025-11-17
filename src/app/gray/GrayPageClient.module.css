@@ -2834,6 +2834,46 @@
   padding: 0.9rem 1rem;
 }
 
+.chatFooterSources {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.75rem;
+  color: rgba(215, 215, 215, 0.9);
+}
+
+.chatFooterSourcesLabel {
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.7rem;
+  opacity: 0.9;
+}
+
+.chatFooterSourcesList {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.chatFooterSourceLink,
+.chatFooterSourceText {
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.03);
+  white-space: nowrap;
+}
+
+.chatFooterSourceLink {
+  color: rgba(235, 235, 255, 0.95);
+}
+
+.chatFooterSourceLink:hover {
+  background: rgba(255, 255, 255, 0.08);
+  text-decoration: none;
+}
+
 .chatStreamingInline {
   display: inline-flex;
   align-items: center;
@@ -4458,6 +4498,53 @@ h1.greeting {
   gap: clamp(12px, 2vw, 24px);
 }
 
+.dashboardSection {
+  width: min(1160px, 100%);
+  margin: clamp(18px, 3vh, 32px) auto;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(12px, 2vh, 20px);
+}
+
+.dashboardCompact .dashboardSection {
+  width: 100%;
+  margin: clamp(12px, 2vh, 18px) 0;
+}
+
+.dashboardSectionHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dashboardSectionEyebrow {
+  font-size: 0.66rem;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: rgba(216, 216, 220, 0.6);
+}
+
+.dashboardSectionHeader h3 {
+  margin: 0;
+  font-size: clamp(1.1rem, 2vw, 1.45rem);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(245, 245, 245, 0.94);
+}
+
+.dashboardSectionCard {
+  width: 100%;
+}
+
+.dashboardSectionCard > * {
+  width: 100%;
+}
+
+.dashboardSectionCompact {
+  width: 100%;
+  margin: clamp(12px, 3vh, 20px) 0;
+}
+
 .calendarSidebarExtras {
   margin-top: clamp(8px, 1.5vh, 16px);
   display: flex;
@@ -4555,6 +4642,7 @@ h1.greeting {
   gap: clamp(20px, 2.8vw, 32px);
   min-height: 0;
   flex: 1 1 auto;
+  padding-left: clamp(8px, 1vw, 16px);
 }
 
 .pulseBoardContent {
@@ -4565,6 +4653,27 @@ h1.greeting {
   overflow-y: auto;
   padding-right: clamp(6px, 1vw, 14px);
   flex: 1 1 auto;
+}
+
+.calendarProactivityColumn {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(20px, 3vw, 32px);
+  overflow-y: auto;
+}
+
+.calendarSidebarColumn {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(18px, 3vw, 26px);
+  min-height: 0;
+  align-self: stretch;
+  width: 100%;
+}
+
+.calendarSidebarColumn > * {
+  width: 100%;
 }
 
 .pulseHeaderActions {
@@ -5071,6 +5180,67 @@ h1.greeting {
   min-height: clamp(220px, 32vh, 300px);
 }
 
+.dashboardSignalCard {
+  background: rgba(10, 10, 10, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.dashboardSignalStats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: clamp(12px, 2vw, 18px);
+}
+
+.dashboardSignalStats div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dashboardSignalStats strong {
+  font-size: 1.4rem;
+  letter-spacing: 0.06em;
+  color: rgba(247, 247, 247, 0.95);
+}
+
+.dashboardSignalStats span {
+  font-size: 0.72rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(214, 214, 214, 0.65);
+}
+
+.dashboardSignalStatus {
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+  color: rgba(220, 220, 220, 0.76);
+  margin-bottom: clamp(4px, 0.8vh, 8px);
+}
+
+.dashboardSignalButton {
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  padding: 6px 14px;
+  background: transparent;
+  color: rgba(245, 245, 245, 0.86);
+  font-size: 0.65rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+.dashboardSignalButton:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+.dashboardSignalButton:disabled,
+.dashboardSignalButton[data-disabled="true"] {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .dashboardCardHeader {
   display: flex;
   align-items: center;
@@ -5092,14 +5262,6 @@ h1.greeting {
 
 .dashboardHabitList {
   max-height: none;
-}
-
-.proactivityCard {
-  gap: 14px;
-}
-
-.proactivityCard .dashboardCardBody {
-  gap: 14px;
 }
 
 .sidebarProactivityCard {
@@ -5475,10 +5637,10 @@ h1.greeting {
   display: flex;
   flex-direction: column;
   gap: 18px;
-  padding: 20px;
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: #070708;
+  padding: 0;
+  border-radius: 0;
+  border: none;
+  background: transparent;
   box-shadow: none;
 }
 
@@ -5783,7 +5945,7 @@ h1.greeting {
 }
 
 .dashboardCalendarSurface .calendarSurfaceBody {
-  padding: clamp(10px, 1.4vw, 16px);
+  padding: 0;
   padding-bottom: clamp(14px, 2vw, 22px);
   border-top: none;
   gap: clamp(8px, 1.4vw, 14px);
@@ -5889,9 +6051,6 @@ h1.greeting {
 }
 
 .dashboardCalendarSurface .calendarSidebarPanel {
-  border-right: 1px solid rgba(255, 255, 255, 0.06);
-  margin-right: clamp(8px, 1.5vw, 16px);
-  padding-right: clamp(8px, 1.5vw, 16px);
   align-self: stretch;
   height: 100%;
   overflow-y: auto;
@@ -7090,6 +7249,138 @@ h1.greeting {
   width: 100%;
 }
 
+.proactivityCard {
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  gap: 0;
+}
+
+.proactivityCard .dashboardCardHeader {
+  padding: 0;
+  margin: 0;
+  margin-bottom: 12px;
+}
+
+.proactivityCard .dashboardCardBody {
+  gap: 10px;
+  padding: 0;
+  min-height: 0;
+  justify-content: flex-start;
+}
+
+.proactivityCard .planList {
+  gap: 6px;
+  padding: 0;
+  max-height: none;
+}
+
+.proactivityCard .planListItem {
+  border: none !important;
+  background: transparent !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  gap: 10px;
+  min-height: 0;
+  box-shadow: none !important;
+  width: 100%;
+}
+
+.proactivityCard .planListItem + .planListItem {
+  margin-top: 0;
+}
+
+.proactivityCard .listEmptyMessage {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: rgba(235, 235, 235, 0.7);
+  font-size: 0.82rem;
+  letter-spacing: 0.16em;
+}
+
+.proactivityCard .listEmptyMessage {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: rgba(235, 235, 235, 0.75);
+  font-size: 0.82rem;
+  letter-spacing: 0.16em;
+}
+
+.proactivityNotificationBanner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 14px;
+  border: 1px dashed rgba(255, 255, 255, 0.18);
+  background: rgba(12, 12, 14, 0.82);
+  color: rgba(235, 235, 235, 0.86);
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+}
+
+.proactivityNotificationBanner p {
+  margin: 0;
+  flex: 1;
+}
+
+.proactivityNotificationButton {
+  flex-shrink: 0;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 999px;
+  padding: 6px 14px;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 0.62rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.proactivityNotificationButton:hover {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.proactivityNotificationButton:disabled,
+.proactivityNotificationButton[data-disabled="true"] {
+  opacity: 0.6;
+  cursor: not-allowed;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.proactivitySetupButton {
+  padding: 6px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 0.65rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease;
+  align-self: flex-start;
+  border-radius: 999px;
+  margin-top: 12px;
+  margin-left: 0;
+}
+
+.proactivitySetupButton[data-disabled="true"],
+.proactivitySetupButton:disabled {
+  border-color: rgba(255, 255, 255, 0.15);
+  opacity: 0.6;
+}
+
 .planItemButton {
   flex: 1;
   display: flex;
@@ -7493,18 +7784,20 @@ h1.greeting {
 
 .generalChatComposer {
   position: fixed;
-  left: calc(50% + var(--chat-bar-horizontal-shift, 0px));
+  left: 0;
+  right: 0;
   bottom: env(safe-area-inset-bottom, 0px);
-  transform: translateX(-50%);
-  width: min(
-    var(--chat-column-max-width, 828px),
-    calc(100vw - clamp(32px, 8vw, 120px))
-  );
+  transform: none;
+  width: auto;
+  max-width: none;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: clamp(14px, 2vh, 26px);
-  padding: 0;
+  padding-left: calc(var(--gray-sidebar-width, 72px) + clamp(12px, 3vw, 24px));
+  padding-right: clamp(12px, 3vw, 24px);
+  box-sizing: border-box;
+  pointer-events: none;
   z-index: 80;
 }
 
@@ -7525,6 +7818,9 @@ h1.greeting {
 
 .generalChatComposer > * {
   width: 100%;
+  max-width: min(var(--chat-column-max-width, 828px), 100%);
+  margin: 0 auto;
+  pointer-events: auto;
 }
 
  .generalChatComposer .chatDisclaimer,

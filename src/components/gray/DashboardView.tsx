@@ -13,12 +13,29 @@ import { createPortal } from "react-dom";
 import { Check, Square, Flame, X, Plus, ChevronDown, Pencil, Trash2 } from "lucide-react";
 import styles from "@/app/gray/GrayPageClient.module.css";
 import { GrayDashboardCalendar } from "@/components/calendar/GrayDashboardCalendar";
-import type { CalendarEvent, CalendarInfo } from "@/components/calendar/types";
-import { type ProactivityItem, type PulseEntry, type PlanItem, type HabitItem } from "./types";
+import type { CalendarEvent, CalendarInfo, PositionedEvent } from "@/components/calendar/types";
+import { type ProactivityItem, type PulseEntry, type PlanItem, type HabitItem, type PlanUpdates } from "./types";
 import { CalendarSidebar } from "@/components/calendar/CalendarSidebar";
 import calendarStyles from "@/components/calendar/GrayDashboardCalendar.module.css";
 import { DashboardHeader } from "./DashboardHeader";
 import { AddPlanHabitModal } from "./AddPlanHabitModal";
+import { mapPlansToCalendarEvents, PLAN_EVENT_ID_PREFIX } from "./planCalendarUtils";
+import { formatPlanTimeLabel } from "./planUtils";
+import { requestNotificationPermission } from "@/lib/notificationUtils";
+
+const isSameDay = (a: Date, b: Date) =>
+  a.getFullYear() === b.getFullYear() &&
+  a.getMonth() === b.getMonth() &&
+  a.getDate() === b.getDate();
+
+const formatTimeSlotLabel = (start: Date, end?: Date | null) => {
+  const startLabel = start.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  if (!end) {
+    return startLabel;
+  }
+  const endLabel = end.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  return `${startLabel}-${endLabel}`;
+};
 
 const CALENDAR_PANEL_MAX_HEIGHT_WITH_CHAT =
   "clamp(360px, calc(100vh - (320px + var(--gray-chat-bar-clearance, 112px))), 660px)";
@@ -74,49 +91,6 @@ const toDateKey = (date: Date) => {
   return `${year}-${month}-${day}`;
 };
 
-const formatPlanMeta = (plan: { scheduleSlot?: string | null; deadline?: string | null }) => {
-  const parts: string[] = [];
-  if (plan.scheduleSlot) {
-    const [startRaw, endRaw] = plan.scheduleSlot.split("-").map((value) => value?.trim() ?? "");
-    const parseTime = (time: string) => {
-      const [h, m] = time.split(":").map((value) => Number.parseInt(value, 10));
-      if (Number.isNaN(h) || Number.isNaN(m)) {
-        return null;
-      }
-      const date = new Date();
-      date.setHours(h, m, 0, 0);
-      return date;
-    };
-    const startTime = parseTime(startRaw);
-    const endTime = parseTime(endRaw);
-    if (startTime && endTime) {
-      parts.push(
-        `Slot ${startTime.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })} – ${endTime.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`
-      );
-    } else if (startTime) {
-      parts.push(`Slot ${startTime.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`);
-    } else {
-      parts.push(`Slot ${plan.scheduleSlot}`);
-    }
-  }
-
-  if (plan.deadline) {
-    const deadlineDate = new Date(plan.deadline);
-    if (!Number.isNaN(deadlineDate.getTime())) {
-      parts.push(
-        `Due ${deadlineDate.toLocaleDateString([], {
-          month: "short",
-          day: "numeric",
-        })}`
-      );
-    } else {
-      parts.push(`Due ${plan.deadline}`);
-    }
-  }
-
-  return parts.join(" • ");
-};
-
 const DEFAULT_PROACTIVITY_TIME = "09:00";
 
 type ProactivityPreset = {
@@ -131,6 +105,8 @@ type ProactivityPreset = {
   recommendedFor: string;
 };
 
+const CUSTOM_PROACTIVITY_ID = "proactivity-custom";
+
 const PROACTIVITY_PRESETS: ProactivityPreset[] = [
   {
     id: "proactivity-frequent",
@@ -140,8 +116,8 @@ const PROACTIVITY_PRESETS: ProactivityPreset[] = [
     description: "Built for launch mode. Morning, midday, and evening nudges to keep momentum compounding.",
     summary: "Three structured touchpoints each day with action follow-ups.",
     recommendedFor: "Teams sprinting toward a release window or coordinating across time zones.",
-    defaultTime: "08:00",
-    defaultTimes: ["08:00", "12:30", "18:30"],
+    defaultTime: "09:00",
+    defaultTimes: ["09:00", "12:00", "18:00"],
   },
   {
     id: "proactivity-daily",
@@ -175,42 +151,20 @@ const PROACTIVITY_PRESETS: ProactivityPreset[] = [
   },
 ];
 
-type CustomChannelValue = "assistant" | "email" | "browser";
-
 type CustomSettingsState = {
   times: string[];
-  channels: CustomChannelValue[];
 };
-
-const ALL_CUSTOM_CHANNELS: CustomChannelValue[] = ["assistant", "email", "browser"];
-
-const CUSTOM_CHANNEL_OPTIONS: Array<{
-  value: CustomChannelValue;
-  label: string;
-  helper: string;
-}> = [
-  {
-    value: "assistant",
-    label: "In-app assistant",
-    helper: "Notifications inside Gray with quick actions.",
-  },
-  {
-    value: "email",
-    label: "Email digest",
-    helper: "A summary sent to your inbox.",
-  },
-  {
-    value: "browser",
-    label: "Browser notifications",
-    helper: "Web push notifications directly to your browser.",
-  },
-];
-
-const DEFAULT_CUSTOM_CHANNELS: CustomChannelValue[] = ["assistant"];
 
 const DEFAULT_CUSTOM_SETTINGS: CustomSettingsState = {
   times: [DEFAULT_PROACTIVITY_TIME],
-  channels: [...DEFAULT_CUSTOM_CHANNELS],
+};
+
+type DashboardSectionSpec = {
+  id: string;
+  title: string;
+  subtitle: string;
+  layout?: "stacked";
+  cards: Array<{ id: string; element: ReactNode }>;
 };
 
 const formatCustomTimeLabel = (time: string) => {
@@ -223,7 +177,7 @@ const formatCustomTimeLabel = (time: string) => {
   }
   const date = new Date();
   date.setHours(rawHour, rawMinute, 0, 0);
-  return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 };
 
 const normalizeTimeForInput = (value: string | null | undefined) => {
@@ -252,10 +206,78 @@ const normalizeTimeForInput = (value: string | null | undefined) => {
   return `${String(clampedHours).padStart(2, "0")}:${String(clampedMinutes).padStart(2, "0")}`;
 };
 
+type TimePickerPeriod = "AM" | "PM";
+
+const TIME_PICKER_HOURS = Array.from({ length: 12 }, (_, index) => String(index + 1).padStart(2, "0"));
+const TIME_PICKER_MINUTES = Array.from({ length: 60 }, (_, index) => String(index).padStart(2, "0"));
+const TIME_PICKER_PERIODS: TimePickerPeriod[] = ["AM", "PM"];
+const TIME_PICKER_SUGGESTIONS: { label: string; times: string[] }[] = [
+  { label: "Morning", times: ["06:30", "07:30", "09:00", "10:30"] },
+  { label: "Midday", times: ["11:30", "12:00", "13:00"] },
+  { label: "Afternoon", times: ["15:00", "16:00", "17:30"] },
+  { label: "Evening", times: ["18:00", "19:00", "20:30"] },
+];
+
+const toTimePickerParts = (value: string) => {
+  const normalized = normalizeTimeForInput(value);
+  const [rawHour, rawMinute] = normalized.split(":").map((part) => Number.parseInt(part, 10));
+  if (Number.isNaN(rawHour) || Number.isNaN(rawMinute)) {
+    return { hour: "09", minute: "00", period: "AM" as TimePickerPeriod };
+  }
+  const period: TimePickerPeriod = rawHour >= 12 ? "PM" : "AM";
+  let hour12 = rawHour % 12;
+  if (hour12 === 0) {
+    hour12 = 12;
+  }
+  return {
+    hour: String(hour12).padStart(2, "0"),
+    minute: String(rawMinute).padStart(2, "0"),
+    period,
+  };
+};
+
+const fromTimePickerParts = (hour: string, minute: string, period: TimePickerPeriod) => {
+  let hourNumber = Number.parseInt(hour, 10);
+  if (Number.isNaN(hourNumber) || hourNumber < 1 || hourNumber > 12) {
+    hourNumber = 12;
+  }
+  let resolvedHour = hourNumber % 12;
+  if (period === "PM") {
+    resolvedHour += 12;
+  }
+  const minuteNumber = Number.parseInt(minute, 10);
+  const resolvedMinute = Math.max(0, Math.min(59, Number.isNaN(minuteNumber) ? 0 : minuteNumber));
+  return `${String(resolvedHour).padStart(2, "0")}:${String(resolvedMinute).padStart(2, "0")}`;
+};
+
 const dedupeTimes = (times: string[]) =>
   times
     .map((value) => normalizeTimeForInput(value))
-    .filter((value, index, array) => array.indexOf(value) === index);
+    .filter((value, index, array) => array.indexOf(value) === index)
+    .sort();
+
+const findNextCustomTime = (existingTimes: string[]): string => {
+  const normalizedExisting = dedupeTimes(existingTimes);
+  const existingSet = new Set(normalizedExisting);
+  const base = normalizedExisting[normalizedExisting.length - 1] ?? DEFAULT_PROACTIVITY_TIME;
+  const [baseHour, baseMinute] = base.split(":").map((value) => Number.parseInt(value, 10));
+  const baseTotalMinutes =
+    (Number.isFinite(baseHour) && Number.isFinite(baseMinute) ? baseHour * 60 + baseMinute : 9 * 60) %
+    (24 * 60);
+  const stepMinutes = 90;
+
+  for (let index = 1; index <= Math.ceil((24 * 60) / stepMinutes); index += 1) {
+    const totalMinutes = (baseTotalMinutes + index * stepMinutes) % (24 * 60);
+    const hour = Math.floor(totalMinutes / 60);
+    const minute = totalMinutes % 60;
+    const candidate = `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+    if (!existingSet.has(candidate)) {
+      return candidate;
+    }
+  }
+
+  return DEFAULT_PROACTIVITY_TIME;
+};
 
 const getProactivityTimes = (item: ProactivityItem | null | undefined) => {
   if (!item) {
@@ -270,29 +292,19 @@ const getProactivityTimes = (item: ProactivityItem | null | undefined) => {
   return [DEFAULT_PROACTIVITY_TIME];
 };
 
-const sanitizeCustomChannels = (channels?: (string | CustomChannelValue)[] | null) => {
-  if (!Array.isArray(channels)) {
-    return [...DEFAULT_CUSTOM_CHANNELS];
-  }
-  const filtered = channels
-    .map((channel) => channel as CustomChannelValue)
-    .filter((channel): channel is CustomChannelValue => ALL_CUSTOM_CHANNELS.includes(channel));
-  const unique = filtered.filter((channel, index, array) => array.indexOf(channel) === index);
-  return unique.length > 0 ? unique : [...DEFAULT_CUSTOM_CHANNELS];
-};
-
 type GrayDashboardViewProps = {
   pulseEntries: PulseEntry[];
   currentPulse: PulseEntry | null;
   isCurrentPulseEditable: boolean;
+  livePlans?: PlanItem[];
   onSelectPulse: (id: string) => void;
   proactivityFallback: ProactivityItem | null;
   onProactivitySelect?: (next: ProactivityItem) => void;
   onProactivityRemove?: () => void;
   onTogglePlan: (id: string) => void;
   onToggleHabit?: (id: string) => void;
-  onEditPlan?: (plan: { id: string; label: string; completed: boolean }) => void;
-  onDeletePlan?: (plan: { id: string; label: string; completed: boolean }) => void;
+  onSavePlan?: (planId: string, updates: PlanUpdates) => Promise<void> | void;
+  onDeletePlan?: (plan: PlanItem) => void;
   activeTab: "pulse" | "calendar";
   onSelectTab: (tab: "pulse" | "calendar") => void;
   currentDate: Date;
@@ -308,18 +320,22 @@ type GrayDashboardViewProps = {
   onRefreshData: () => Promise<void>;
   chatBar?: ReactNode;
   isCompactLayout?: boolean;
+  userId?: number | null;
+  reminderPlans?: PlanItem[];
+  proactivityDeliveryKeys?: ReadonlySet<string>;
 };
 
 export function GrayDashboardView({
   pulseEntries,
   currentPulse,
   isCurrentPulseEditable,
+  livePlans,
   onSelectPulse,
   proactivityFallback,
   onProactivitySelect,
   onProactivityRemove,
   onTogglePlan,
-  onEditPlan,
+  onSavePlan,
   onDeletePlan,
   onToggleHabit,
   activeTab,
@@ -337,21 +353,75 @@ export function GrayDashboardView({
   onRefreshData,
   chatBar,
   isCompactLayout = false,
+  userId,
+  reminderPlans,
+  proactivityDeliveryKeys,
 }: GrayDashboardViewProps) {
   const hasPulseData = Boolean(currentPulse && pulseEntries.length > 0);
-  const displayPlans = hasPulseData ? currentPulse?.plans ?? [] : [];
-  const displayHabits = hasPulseData ? currentPulse?.habits ?? [] : [];
-  const displayProactivity = hasPulseData
-    ? currentPulse?.proactivity ?? proactivityFallback
-    : proactivityFallback;
+  const displayPlans = useMemo(() => {
+    const fallbackPlans = currentPulse?.plans ?? [];
+    if (isCurrentPulseEditable) {
+      return livePlans ?? fallbackPlans;
+    }
+    if (hasPulseData) {
+      return fallbackPlans;
+    }
+    return livePlans ?? [];
+  }, [currentPulse, hasPulseData, isCurrentPulseEditable, livePlans]);
   const [pulseSelectedDate, setPulseSelectedDate] = useState<Date>(() => new Date(currentDate));
   const [pulseMonthDate, setPulseMonthDate] = useState<Date>(() => new Date(currentDate));
+  const lastCurrentDayRef = useRef<Date>(normalizeToStartOfDay(currentDate));
+  const derivedTaskPlans = useMemo(() => {
+    if (!calendarEvents.length) {
+      return [];
+    }
+    return calendarEvents
+      .filter(
+        (event) =>
+          event.entryType === "task" &&
+          isSameDay(event.start, pulseSelectedDate)
+      )
+      .map<PlanItem>((event) => ({
+        id: `task-${event.id}`,
+        label: event.title?.trim() || "Untitled task",
+        completed: false,
+        deadline: event.end ? event.end.toISOString() : null,
+        scheduleSlot: formatTimeSlotLabel(event.start, event.end),
+        details: event.description ?? null,
+      }));
+  }, [calendarEvents, pulseSelectedDate]);
+
+  const displayHabits = hasPulseData ? currentPulse?.habits ?? [] : [];
+  const derivedReminderPlans = reminderPlans ?? [];
+  const visiblePlans = useMemo(
+    () => [...displayPlans, ...derivedTaskPlans, ...derivedReminderPlans],
+    [displayPlans, derivedTaskPlans, derivedReminderPlans]
+  );
+  const visibleHabits = useMemo(() => [...displayHabits], [displayHabits]);
+  const derivedReminderIds = useMemo(
+    () => new Set(derivedReminderPlans.map((plan) => plan.id)),
+    [derivedReminderPlans]
+  );
+  const planCalendarEvents = useMemo(() => mapPlansToCalendarEvents(displayPlans), [displayPlans]);
+  const handleCalendarTaskToggle = useCallback(
+    (event: CalendarEvent) => {
+      if (!event.id.startsWith(PLAN_EVENT_ID_PREFIX)) {
+        return;
+      }
+      onTogglePlan(event.id.slice(PLAN_EVENT_ID_PREFIX.length));
+    },
+    [onTogglePlan]
+  );
+  const displayProactivity =
+    hasPulseData && isCurrentPulseEditable
+      ? currentPulse?.proactivity ?? proactivityFallback
+      : proactivityFallback;
   const [modalState, setModalState] = useState<{ isOpen: boolean; type: "plan" | "habit" | null }>({
     isOpen: false,
     type: null,
   });
+  const [planEditorTarget, setPlanEditorTarget] = useState<PlanItem | null>(null);
   const [isProactivityModalOpen, setIsProactivityModalOpen] = useState(false);
-  const [isProactivityChannelDropdownOpen, setIsProactivityChannelDropdownOpen] = useState(false);
   const fallbackProactivityTimes = useMemo(
     () => getProactivityTimes(proactivityFallback),
     [proactivityFallback]
@@ -435,10 +505,6 @@ export function GrayDashboardView({
     [pulseSelectedDate, currentDate]
   );
   const activeProactivityId = displayProactivity?.id ?? proactivityFallback?.id ?? null;
-  const activeProactivityCadence =
-    displayProactivity?.cadence ?? proactivityFallback?.cadence ?? null;
-  const proactivityButtonLabel = displayProactivity ? "Configure" : "Setup";
-  const proactivityTimes = activeProactivityTimes;
   const timezoneLabel = useMemo(() => {
     try {
       return Intl.DateTimeFormat().resolvedOptions().timeZone ?? "UTC";
@@ -446,68 +512,78 @@ export function GrayDashboardView({
       return "UTC";
     }
   }, []);
-  const proactivityChannels = useMemo(
-    () =>
-      sanitizeCustomChannels(
-        displayProactivity?.channels ?? proactivityFallback?.channels ?? null
-      ),
-    [displayProactivity?.channels, proactivityFallback?.channels]
-  );
-  const [isCustomExpanded, setIsCustomExpanded] = useState(false);
+
   const [customSettings, setCustomSettings] = useState<CustomSettingsState>(() => ({
     times: activeProactivityTimes.length > 0 ? activeProactivityTimes : [...DEFAULT_CUSTOM_SETTINGS.times],
-    channels: sanitizeCustomChannels(
-      displayProactivity?.channels ?? proactivityFallback?.channels ?? null
-    ),
   }));
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | "unsupported">(() => {
+    if (typeof window === "undefined" || typeof Notification === "undefined") {
+      return "unsupported";
+    }
+    return Notification.permission;
+  });
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof Notification === "undefined") {
+      return;
+    }
+    setNotificationPermission(Notification.permission);
+  }, []);
+  const handleNotificationEnable = useCallback(async () => {
+    const permission = await requestNotificationPermission();
+    if (permission) {
+      setNotificationPermission(permission);
+    }
+  }, []);
   const [selectedPresetId, setSelectedPresetId] = useState<string>(() => {
     if (activeProactivityId && PROACTIVITY_PRESETS.some((preset) => preset.id === activeProactivityId)) {
       return activeProactivityId;
     }
+    if (activeProactivityId === CUSTOM_PROACTIVITY_ID) {
+      return CUSTOM_PROACTIVITY_ID;
+    }
     return "";
   });
   const customTimes = customSettings.times;
-  const customChannels = customSettings.channels;
-  const customTimeInputRefs = useRef<(HTMLInputElement | null)[]>([]);
-  const proactivityChannelDropdownRef = useRef<HTMLDivElement>(null);
-  const customChannelSummary = useMemo(() => {
-    return customChannels
-      .map(
-        (channel) =>
-          CUSTOM_CHANNEL_OPTIONS.find((option) => option.value === channel)?.label ?? channel
-      )
-      .join(" · ");
-  }, [customChannels]);
+  const [editingCustomTimeIndex, setEditingCustomTimeIndex] = useState<number | null>(null);
+  const [editingCustomTimeDraft, setEditingCustomTimeDraft] = useState<string>("");
   const formattedProactivityTimes = useMemo(
-    () => proactivityTimes.map((time) => formatCustomTimeLabel(time)),
-    [proactivityTimes]
+    () => activeProactivityTimes.map((time) => formatCustomTimeLabel(time)),
+    [activeProactivityTimes]
   );
-  const proactivitySummaryTokens = useMemo(() => {
-    const tokens: string[] = [];
-    if (displayProactivity?.cadence) {
-      tokens.push(displayProactivity.cadence);
+  const proactivityScheduleEntries = useMemo(() => {
+    const todayKey = toDateKey(currentDate);
+    const keySet = proactivityDeliveryKeys;
+    if (activeProactivityTimes.length > 0) {
+      return activeProactivityTimes.map((time, index) => ({
+        time,
+        label: formattedProactivityTimes[index] ?? formatCustomTimeLabel(time),
+        delivered: keySet?.has(`${todayKey}T${time}`) ?? false,
+      }));
     }
-    if (proactivityChannels.length > 0) {
-      tokens.push(
-        proactivityChannels
-          .map(
-            (channel) =>
-              CUSTOM_CHANNEL_OPTIONS.find((option) => option.value === channel)?.label ?? channel
-          )
-          .join(" / ")
-      );
+    if (activeProactivityTime) {
+      return [
+        {
+          time: activeProactivityTime,
+          label: formatCustomTimeLabel(activeProactivityTime),
+          delivered: keySet?.has(`${todayKey}T${activeProactivityTime}`) ?? false,
+        },
+      ];
     }
-    if (formattedProactivityTimes.length > 0) {
-      tokens.push(formattedProactivityTimes.join(" • "));
-    }
-    return tokens;
-  }, [displayProactivity?.cadence, formattedProactivityTimes, proactivityChannels]);
-  const canApplyCustom = customChannels.length > 0 && customTimes.length > 0;
-  const canOpenProactivityModal = Boolean(isCurrentPulseEditable && onProactivitySelect);
+    return [];
+  }, [activeProactivityTimes, formattedProactivityTimes, activeProactivityTime, proactivityDeliveryKeys, currentDate]);
+  const proactivityButtonLabel = displayProactivity ? "Configure" : "Setup";
+  const canApplyCustom = customTimes.length > 0;
+  const canOpenProactivityModal = Boolean(onProactivitySelect);
   const showModalRemoveButton = Boolean(
     onProactivityRemove && (displayProactivity ?? proactivityFallback)
   );
   const modalRemoveLabel = displayProactivity ? "Remove proactivity" : "Skip for now";
+  const shouldShowNotificationBanner =
+    notificationPermission !== "granted" && notificationPermission !== "unsupported";
+  const notificationBannerLabel =
+    notificationPermission === "denied"
+      ? "Desktop alerts are blocked in your browser settings."
+      : "Enable desktop alerts so Gray can nudge you when check-ins land.";
   const pulseEntriesByDate = useMemo(() => {
     const map = new Map<string, PulseEntry>();
     pulseEntries.forEach((entry) => {
@@ -520,10 +596,31 @@ export function GrayDashboardView({
     () => PROACTIVITY_PRESETS.find((preset) => preset.id === selectedPresetId) ?? null,
     [selectedPresetId]
   );
+  const isCustomPresetSelected = selectedPresetId === CUSTOM_PROACTIVITY_ID;
 
   useEffect(() => {
-    setPulseSelectedDate(new Date(currentDate));
-    setPulseMonthDate(new Date(currentDate));
+    const nextCurrentDay = normalizeToStartOfDay(currentDate);
+    const previousCurrentDay = lastCurrentDayRef.current;
+
+    if (
+      previousCurrentDay.getFullYear() === nextCurrentDay.getFullYear() &&
+      previousCurrentDay.getMonth() === nextCurrentDay.getMonth() &&
+      previousCurrentDay.getDate() === nextCurrentDay.getDate()
+    ) {
+      return;
+    }
+
+    lastCurrentDayRef.current = nextCurrentDay;
+
+    setPulseSelectedDate((previous) =>
+      isSameDay(previous, previousCurrentDay) ? new Date(currentDate) : previous
+    );
+    setPulseMonthDate((previous) =>
+      previous.getFullYear() === previousCurrentDay.getFullYear() &&
+      previous.getMonth() === previousCurrentDay.getMonth()
+        ? new Date(currentDate)
+        : previous
+    );
   }, [currentDate]);
 
   useEffect(() => {
@@ -535,14 +632,10 @@ export function GrayDashboardView({
         activeProactivityTimes.length > 0
           ? activeProactivityTimes
           : [...DEFAULT_CUSTOM_SETTINGS.times],
-      channels: sanitizeCustomChannels(
-        (displayProactivity?.channels ??
-          proactivityFallback?.channels ??
-          prev.channels) as (string | CustomChannelValue)[] | null
-      ),
     }));
-    setIsCustomExpanded(activeProactivityId === "proactivity-custom");
-    if (activeProactivityId && PROACTIVITY_PRESETS.some((preset) => preset.id === activeProactivityId)) {
+    if (activeProactivityId === CUSTOM_PROACTIVITY_ID) {
+      setSelectedPresetId(CUSTOM_PROACTIVITY_ID);
+    } else if (activeProactivityId && PROACTIVITY_PRESETS.some((preset) => preset.id === activeProactivityId)) {
       setSelectedPresetId(activeProactivityId);
     } else {
       setSelectedPresetId("");
@@ -554,33 +647,22 @@ export function GrayDashboardView({
       }
     };
 
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        isProactivityChannelDropdownOpen &&
-        proactivityChannelDropdownRef.current &&
-        !proactivityChannelDropdownRef.current.contains(event.target as Node)
-      ) {
-        setIsProactivityChannelDropdownOpen(false);
-      }
-    };
-
     window.addEventListener("keydown", handleKeyDown);
-    document.addEventListener("mousedown", handleClickOutside);
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
-      document.removeEventListener("mousedown", handleClickOutside);
     };
   }, [
     activeProactivityId,
     activeProactivityTimes,
-    displayProactivity?.channels,
     isProactivityModalOpen,
-    proactivityFallback?.channels,
   ]);
 
   useEffect(() => {
-    customTimeInputRefs.current.length = customTimes.length;
-  }, [customTimes.length]);
+    if (!isProactivityModalOpen) {
+      setEditingCustomTimeIndex(null);
+      setEditingCustomTimeDraft("");
+    }
+  }, [isProactivityModalOpen]);
 
   const handleCustomReset = useCallback(() => {
     setCustomSettings({
@@ -588,90 +670,107 @@ export function GrayDashboardView({
         activeProactivityTimes.length > 0
           ? activeProactivityTimes
           : [...DEFAULT_CUSTOM_SETTINGS.times],
-      channels: sanitizeCustomChannels(
-        (displayProactivity?.channels ?? proactivityFallback?.channels ?? DEFAULT_CUSTOM_CHANNELS) as
-          | (string | CustomChannelValue)[]
-          | null
-      ),
     });
-    setIsCustomExpanded(true);
-  }, [
-    activeProactivityTimes,
-    displayProactivity?.channels,
-    proactivityFallback?.channels,
-  ]);
+    setEditingCustomTimeIndex(null);
+    setEditingCustomTimeDraft("");
+  }, [activeProactivityTimes]);
+
+  const applyCustomProactivity = useCallback(
+    (nextTimes: string[]) => {
+      if (!onProactivitySelect) {
+        return;
+      }
+      const sortedTimes = dedupeTimes(nextTimes);
+      const firstTime = sortedTimes[0] ?? DEFAULT_PROACTIVITY_TIME;
+      const formattedTimes = sortedTimes.map((time) => formatCustomTimeLabel(time)).join(", ");
+      const descriptionParts = [`${sortedTimes.length} touchpoints`, formattedTimes];
+      onProactivitySelect({
+        id: CUSTOM_PROACTIVITY_ID,
+        label: "Custom plan",
+        description: descriptionParts.join(" • "),
+        cadence: "Custom",
+        time: firstTime,
+        times: sortedTimes,
+      });
+    },
+    [onProactivitySelect]
+  );
 
   const handleCustomApply = useCallback(() => {
-    if (!onProactivitySelect) {
-      return;
-    }
-    const sortedTimes = dedupeTimes(customTimes);
-    const firstTime = sortedTimes[0] ?? DEFAULT_PROACTIVITY_TIME;
-    const formattedTimes = sortedTimes.map((time) => formatCustomTimeLabel(time)).join(", ");
-    const channelSummary = customChannelSummary || "selected channels";
-    const descriptionParts = [`${sortedTimes.length} touchpoints`, formattedTimes, `via ${channelSummary}`];
-    onProactivitySelect({
-      id: "proactivity-custom",
-      label: "Custom plan",
-      description: descriptionParts.join(" • "),
-      cadence: "Custom",
-      time: firstTime,
-      times: sortedTimes,
-      channels: customChannels,
-    });
+    applyCustomProactivity(customTimes);
     setIsProactivityModalOpen(false);
+    setEditingCustomTimeIndex(null);
+    setEditingCustomTimeDraft("");
   }, [
-    customChannels,
+    applyCustomProactivity,
     customTimes,
-    customChannelSummary,
-    onProactivitySelect,
   ]);
 
-  const handleCustomTimeChange = useCallback((index: number, value: string) => {
-    setCustomSettings((prev) => {
-      const nextTimes = [...prev.times];
-      nextTimes[index] = normalizeTimeForInput(value);
-      return {
-        ...prev,
-        times: dedupeTimes(nextTimes),
-      };
-    });
-  }, []);
-  const handleCustomTimeEdit = useCallback((index: number) => {
-    const input = customTimeInputRefs.current[index];
-    if (!input) {
-      return;
-    }
-    const enhancedInput = input as HTMLInputElement & {
-      showPicker?: () => void;
-    };
-    if (typeof enhancedInput.showPicker === "function") {
-      enhancedInput.showPicker();
-      return;
-    }
-    input.focus();
+  const handleCustomTimeChange = useCallback((value: string) => {
+    setEditingCustomTimeDraft(value);
   }, []);
 
+  const commitCustomTimeEdit = useCallback(
+    (index: number, draftValue: string) => {
+      // Update local custom settings state.
+      setCustomSettings((prev) => {
+        const nextTimes = [...prev.times];
+        const previousValue = nextTimes[index] ?? DEFAULT_PROACTIVITY_TIME;
+        const normalized = normalizeTimeForInput(draftValue || previousValue);
+        nextTimes[index] = normalized;
+        return {
+          ...prev,
+          times: dedupeTimes(nextTimes),
+        };
+      });
+      setEditingCustomTimeIndex(null);
+      setEditingCustomTimeDraft("");
+      // Notify parent about the updated schedule using the latest customTimes snapshot.
+      const baseTimes = customTimes;
+      const previousValue = baseTimes[index] ?? DEFAULT_PROACTIVITY_TIME;
+      const normalized = normalizeTimeForInput(draftValue || previousValue);
+      const nextTimes = [...baseTimes];
+      nextTimes[index] = normalized;
+      const deduped = dedupeTimes(nextTimes);
+      applyCustomProactivity(deduped);
+    },
+    [applyCustomProactivity, customTimes]
+  );
+  const handleCustomTimeEdit = useCallback((index: number) => {
+    setEditingCustomTimeIndex(index);
+    setEditingCustomTimeDraft(customTimes[index] ?? DEFAULT_PROACTIVITY_TIME);
+  }, [customTimes]);
+
   const handleCustomTimeAdd = useCallback(() => {
+    const nextTime = findNextCustomTime(customTimes);
     setCustomSettings((prev) => ({
       ...prev,
-      times: [...prev.times, DEFAULT_PROACTIVITY_TIME],
+      times: [...prev.times, nextTime],
     }));
-  }, []);
+    const nextTimes = [...customTimes, nextTime];
+    setEditingCustomTimeIndex(nextTimes.length - 1);
+    setEditingCustomTimeDraft(nextTime);
+    applyCustomProactivity(nextTimes);
+  }, [applyCustomProactivity, customTimes]);
 
   const handleCustomTimeRemove = useCallback((index: number) => {
     setCustomSettings((prev) => {
       if (prev.times.length <= 1) {
         return prev;
       }
-      customTimeInputRefs.current.splice(index, 1);
       const nextTimes = prev.times.filter((_, currentIndex) => currentIndex !== index);
+      const finalTimes = nextTimes.length > 0 ? nextTimes : [...DEFAULT_CUSTOM_SETTINGS.times];
       return {
         ...prev,
-        times: nextTimes.length > 0 ? nextTimes : [...DEFAULT_CUSTOM_SETTINGS.times],
+        times: finalTimes,
       };
     });
-  }, []);
+    setEditingCustomTimeIndex(null);
+    setEditingCustomTimeDraft("");
+    const nextTimes = customTimes.filter((_, currentIndex) => currentIndex !== index);
+    const finalTimes = nextTimes.length > 0 ? nextTimes : [...DEFAULT_CUSTOM_SETTINGS.times];
+    applyCustomProactivity(finalTimes);
+  }, [applyCustomProactivity, customTimes]);
 
   const handlePulseDateSelect = useCallback(
     (nextDate: Date) => {
@@ -703,17 +802,6 @@ export function GrayDashboardView({
       return next;
     });
   }, []);
-
-  const handlePulseGoToday = useCallback(() => {
-    const today = new Date(currentDate);
-    setPulseSelectedDate(today);
-    setPulseMonthDate(today);
-    const key = toDateKey(today);
-    const matchingEntry = pulseEntriesByDate.get(key);
-    if (matchingEntry) {
-      onSelectPulse(matchingEntry.id);
-    }
-  }, [currentDate, onSelectPulse, pulseEntriesByDate]);
 
   const handleCalendarVisibilityToggle = useCallback(
     (calendarId: string) => {
@@ -747,11 +835,11 @@ export function GrayDashboardView({
   }, [onRefreshData]);
 
   const handleOpenProactivityModal = useCallback(() => {
-    if (!isCurrentPulseEditable || !onProactivitySelect) {
+    if (!onProactivitySelect) {
       return;
     }
     setIsProactivityModalOpen(true);
-  }, [isCurrentPulseEditable, onProactivitySelect]);
+  }, [onProactivitySelect]);
 
   const handleProactivityPresetSelect = useCallback(
     (preset: ProactivityPreset) => {
@@ -770,22 +858,22 @@ export function GrayDashboardView({
         cadence: preset.cadence,
         time: primaryTime,
         times: presetTimes,
-        channels: proactivityChannels,
       });
     },
-    [activeProactivityTime, onProactivitySelect, proactivityChannels]
+    [activeProactivityTime, onProactivitySelect]
   );
 
   const handleCloseProactivityModal = useCallback(() => {
     setIsProactivityModalOpen(false);
-    setIsProactivityChannelDropdownOpen(false);
+    setEditingCustomTimeIndex(null);
+    setEditingCustomTimeDraft("");
   }, []);
 
   const handlePresetSelectChange = useCallback(
     (event: ChangeEvent<HTMLSelectElement>) => {
       const nextPresetId = event.target.value;
       setSelectedPresetId(nextPresetId);
-      if (!nextPresetId) {
+      if (!nextPresetId || nextPresetId === CUSTOM_PROACTIVITY_ID) {
         return;
       }
       const preset = PROACTIVITY_PRESETS.find((option) => option.id === nextPresetId);
@@ -796,33 +884,49 @@ export function GrayDashboardView({
     [handleProactivityPresetSelect]
   );
 
-  const handleActiveChannelToggle = useCallback(
-    (channel: CustomChannelValue) => {
-      if (!displayProactivity || !onProactivitySelect || !isCurrentPulseEditable) {
-        return;
-      }
-      const hasChannel = proactivityChannels.includes(channel);
-      if (hasChannel && proactivityChannels.length === 1) {
-        return;
-      }
-      const nextChannels = hasChannel
-        ? proactivityChannels.filter((value) => value !== channel)
-        : [...proactivityChannels, channel];
-      onProactivitySelect({
-        ...displayProactivity,
-        channels: nextChannels,
-      });
-    },
-    [displayProactivity, isCurrentPulseEditable, onProactivitySelect, proactivityChannels]
-  );
-
   const handleModalProactivityRemove = useCallback(() => {
-    if (!onProactivityRemove || !isCurrentPulseEditable) {
+    if (!onProactivityRemove) {
       return;
     }
     onProactivityRemove();
     setIsProactivityModalOpen(false);
-  }, [isCurrentPulseEditable, onProactivityRemove]);
+  }, [onProactivityRemove]);
+
+  const handleProactivityTimeRemove = useCallback(
+    (index: number) => {
+      const baseTimes =
+        activeProactivityTimes.length > 0
+          ? activeProactivityTimes
+          : activeProactivityTime
+            ? [activeProactivityTime]
+            : [];
+
+      if (baseTimes.length <= 1) {
+        handleModalProactivityRemove();
+        return;
+      }
+
+      if (!onProactivitySelect) {
+        handleModalProactivityRemove();
+        return;
+      }
+
+      const nextTimes = baseTimes.filter((_, currentIndex) => currentIndex !== index);
+      if (nextTimes.length === 0) {
+        handleModalProactivityRemove();
+        return;
+      }
+
+      applyCustomProactivity(nextTimes);
+    },
+    [
+      activeProactivityTimes,
+      activeProactivityTime,
+      applyCustomProactivity,
+      handleModalProactivityRemove,
+      onProactivitySelect,
+    ]
+  );
 
   const handlePlanToggle = (planId: string) => {
     if (!isCurrentPulseEditable) {
@@ -838,14 +942,15 @@ export function GrayDashboardView({
     onToggleHabit(habitId);
   };
 
-  const handlePlanEdit = useCallback(
-    (plan: PlanItem) => {
-      if (!isCurrentPulseEditable || !onEditPlan) {
-        return;
+  const resolvePlanFromEvent = useCallback(
+    (eventId: string) => {
+      if (!eventId.startsWith(PLAN_EVENT_ID_PREFIX)) {
+        return null;
       }
-      onEditPlan(plan);
+      const planId = eventId.slice(PLAN_EVENT_ID_PREFIX.length);
+      return displayPlans.find((plan) => plan.id === planId) ?? null;
     },
-    [isCurrentPulseEditable, onEditPlan]
+    [displayPlans]
   );
 
   const handlePlanDelete = useCallback(
@@ -878,11 +983,12 @@ export function GrayDashboardView({
     [isCurrentPulseEditable, onDeleteHabit]
   );
 
-  const showPlansList = displayPlans.length > 0;
-  const showHabitsList = displayHabits.length > 0;
+  const showPlansList = visiblePlans.length > 0;
+  const showHabitsList = visibleHabits.length > 0;
 
   const headerClassName = styles.pulseSurfaceHeader;
-  const canManagePlans = isCurrentPulseEditable && Boolean(onEditPlan || onDeletePlan);
+  const canManagePlans =
+    isCurrentPulseEditable && Boolean(onSavePlan || onDeletePlan);
   const canManageHabits = isCurrentPulseEditable && Boolean(onToggleHabit || onEditHabit || onDeleteHabit);
   const [isMounted, setIsMounted] = useState(false);
 
@@ -915,137 +1021,35 @@ export function GrayDashboardView({
             <X size={16} />
           </button>
         </header>
-        <div className={styles.proactivityModalMeta}>
-          <span>
-            <span className={styles.proactivityModalMetaLabel}>Current</span>
-            <span className={styles.proactivityModalMetaValue}>
-              {activeProactivityCadence ?? "Not set"}
-            </span>
-          </span>
-          <span>
-            <span className={styles.proactivityModalMetaLabel}>Timezone</span>
-            <span className={styles.proactivityModalMetaValue}>{timezoneLabel}</span>
-          </span>
-        </div>
-        <div className={styles.proactivityChannelsLabel}>
-          <label className={styles.proactivityChannelDropdownLabel}>
-            Notification channels
-          </label>
-          <div className={styles.proactivityChannelDropdown} ref={proactivityChannelDropdownRef}>
-            <button
-              type="button"
-              className={styles.proactivityChannelDropdownButton}
-              onClick={() => setIsProactivityChannelDropdownOpen(!isProactivityChannelDropdownOpen)}
-              disabled={!isCurrentPulseEditable || !onProactivitySelect}
-            >
-              <span className={styles.proactivityChannelDropdownSummary}>
-                {proactivityChannels.length > 0
-                  ? proactivityChannels
-                      .map(
-                        (channel) =>
-                          CUSTOM_CHANNEL_OPTIONS.find((option) => option.value === channel)?.label ?? channel
-                      )
-                      .join(", ")
-                  : "Select channels"}
-              </span>
-              <ChevronDown
-                size={14}
-                className={`${styles.proactivityChannelDropdownIcon} ${
-                  isProactivityChannelDropdownOpen ? styles.proactivityChannelDropdownIconOpen : ""
-                }`}
-                aria-hidden="true"
-              />
-            </button>
-            {isProactivityChannelDropdownOpen && (
-              <div className={styles.proactivityChannelDropdownMenu}>
-                {CUSTOM_CHANNEL_OPTIONS.map((option) => {
-                  const isActive = proactivityChannels.includes(option.value);
-                  return (
-                    <label
-                      key={option.value}
-                      className={styles.proactivityChannelDropdownItem}
-                    >
-                      <input
-                        type="checkbox"
-                        className={styles.proactivityChannelDropdownCheckbox}
-                        checked={isActive}
-                        onChange={() => handleActiveChannelToggle(option.value)}
-                      />
-                      <span className={styles.proactivityChannelDropdownItemContent}>
-                        <span className={styles.proactivityChannelDropdownItemLabel}>{option.label}</span>
-                        <span className={styles.proactivityChannelDropdownItemHelper}>{option.helper}</span>
-                      </span>
-                    </label>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-        <div className={styles.proactivityModalActions}>
-          <section className={styles.proactivityPresetMenu} aria-labelledby="proactivityPresetLabel">
-            <label
-              id="proactivityPresetLabel"
-              htmlFor="proactivityPresetSelect"
-              className={styles.proactivityPresetLabel}
-            >
-              Preset cadence
-            </label>
-            <div className={styles.proactivityPresetSelectWrapper}>
-              <select
-                id="proactivityPresetSelect"
-                className={styles.proactivityPresetSelect}
-                value={selectedPresetId}
-                onChange={handlePresetSelectChange}
-              >
-                <option value="">Select a preset</option>
-                {PROACTIVITY_PRESETS.map((preset) => (
-                  <option key={preset.id} value={preset.id}>
-                    {preset.title}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown size={14} className={styles.proactivityPresetSelectIcon} aria-hidden="true" />
-            </div>
-            {selectedPreset ? (
-              <div className={styles.proactivityPresetDetails}>
-                <div className={styles.proactivityPresetHeader}>
-                  <span className={styles.proactivityPresetTitle}>{selectedPreset.title}</span>
-                  <span className={styles.proactivityPresetBadge}>{selectedPreset.cadence}</span>
-                </div>
-                <span className={styles.proactivityPresetSummary}>{selectedPreset.summary}</span>
-              </div>
-            ) : (
-              <p className={styles.proactivityPresetPlaceholder}>Select a preset to preview it.</p>
-            )}
-          </section>
-          <button
-            type="button"
-            className={styles.proactivityCustomTrigger}
-            data-active={isCustomExpanded ? "true" : "false"}
-            onClick={() => setIsCustomExpanded((value) => !value)}
+        <label
+          id="proactivityPresetLabel"
+          htmlFor="proactivityPresetSelect"
+          className={styles.proactivityPresetLabel}
+        >
+          Preset cadence
+        </label>
+        <div className={styles.proactivityPresetSelectWrapper}>
+          <select
+            id="proactivityPresetSelect"
+            className={styles.proactivityPresetSelect}
+            value={selectedPresetId}
+            onChange={handlePresetSelectChange}
           >
-            <span className={styles.proactivityPresetHeader}>
-              <span className={styles.proactivityPresetTitle}>Custom cadence</span>
-              <span className={styles.proactivityPresetBadge}>
-                {isCustomExpanded ? "Open" : "Configure"}
-              </span>
-            </span>
-            <span className={styles.proactivityPresetSummary}>
-              {customTimes.length} touchpoint{customTimes.length === 1 ? "" : "s"} •{" "}
-              {customTimes.map((time) => formatCustomTimeLabel(time)).join(", ")}
-            </span>
-            <span className={styles.proactivityPresetMeta}>
-              {customChannelSummary || "Select channels"}
-            </span>
-          </button>
+            <option value="">Select a preset</option>
+            {PROACTIVITY_PRESETS.map((preset) => (
+              <option key={preset.id} value={preset.id}>
+                {preset.title}
+              </option>
+            ))}
+            <option value={CUSTOM_PROACTIVITY_ID}>Custom</option>
+          </select>
+          <ChevronDown size={14} className={styles.proactivityPresetSelectIcon} aria-hidden="true" />
         </div>
-        {isCustomExpanded ? (
+        {isCustomPresetSelected ? (
           <section className={styles.proactivityCustomSection}>
             <header className={styles.proactivityCustomHeader}>
               <div>
                 <span className={styles.proactivityCustomEyebrow}>Custom setup</span>
-                <h4 className={styles.proactivityCustomTitle}>Build your own cadence</h4>
               </div>
               <button
                 type="button"
@@ -1055,22 +1059,37 @@ export function GrayDashboardView({
                 Reset
               </button>
             </header>
-            <p className={styles.proactivityCustomCopy}>
-              Set the exact moments Gray nudges you and choose where those prompts appear.
-            </p>
             <div className={styles.proactivityCustomControls}>
               <div className={styles.proactivityCustomField}>
-                <span className={styles.proactivityCustomLabel}>Touchpoints</span>
                 <div className={styles.proactivityTimes}>
                   {customTimes.map((time, index) => (
                     <div key={`${time}-${index}`} className={styles.proactivityTimeListItem}>
-                      <button
-                        type="button"
-                        className={styles.proactivityTimeListButton}
-                        onClick={() => handleCustomTimeEdit(index)}
-                      >
-                        <span className={styles.proactivityTimeLabel}>{formatCustomTimeLabel(time)}</span>
-                      </button>
+                      {editingCustomTimeIndex === index ? (
+                        <input
+                          type="time"
+                          value={editingCustomTimeDraft}
+                          onChange={(event) => handleCustomTimeChange(event.target.value)}
+                          className={styles.proactivityTimeInput}
+                          autoFocus
+                          step={300}
+                          onBlur={() => commitCustomTimeEdit(index, editingCustomTimeDraft)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === "Escape") {
+                              event.preventDefault();
+                              commitCustomTimeEdit(index, editingCustomTimeDraft);
+                            }
+                          }}
+                          aria-label={`Edit custom start time ${time}`}
+                        />
+                      ) : (
+                        <button
+                          type="button"
+                          className={styles.proactivityTimeListButton}
+                          onClick={() => handleCustomTimeEdit(index)}
+                        >
+                          <span className={styles.proactivityTimeLabel}>{formatCustomTimeLabel(time)}</span>
+                        </button>
+                      )}
                       <div className={styles.proactivityTimeActions}>
                         <button
                           type="button"
@@ -1090,17 +1109,6 @@ export function GrayDashboardView({
                           <X size={12} />
                         </button>
                       </div>
-                      <input
-                        type="time"
-                        value={time}
-                        ref={(element) => {
-                          customTimeInputRefs.current[index] = element;
-                        }}
-                        onChange={(event) => handleCustomTimeChange(index, event.target.value)}
-                        className={styles.proactivityTimeHiddenInput}
-                        aria-hidden="true"
-                        tabIndex={-1}
-                      />
                     </div>
                   ))}
                   <button
@@ -1113,16 +1121,6 @@ export function GrayDashboardView({
                   </button>
                 </div>
               </div>
-            </div>
-            <div className={styles.proactivityCustomActions}>
-              <button
-                type="button"
-                className={styles.proactivityCustomApply}
-                onClick={handleCustomApply}
-                disabled={!canApplyCustom}
-              >
-                Apply custom settings
-              </button>
             </div>
           </section>
         ) : null}
@@ -1167,14 +1165,61 @@ export function GrayDashboardView({
         <span>Proactivity</span>
       </header>
       <div className={styles.dashboardCardBody}>
-        {displayProactivity ? (
-          <div className={styles.proactivitySummaryInline}>
-            {proactivitySummaryTokens.length > 0
-              ? proactivitySummaryTokens.map((token, index) => (
-                  <span key={`${token}-${index}`}>{token}</span>
-                ))
-              : <span>—</span>}
+        {shouldShowNotificationBanner ? (
+          <div className={styles.proactivityNotificationBanner}>
+            <p>{notificationBannerLabel}</p>
+            {notificationPermission !== "denied" ? (
+              <button type="button" onClick={handleNotificationEnable} className={styles.proactivityNotificationButton}>
+                Enable alerts
+              </button>
+            ) : null}
           </div>
+        ) : null}
+        {displayProactivity ? (
+          <ul className={styles.planList}>
+            {proactivityScheduleEntries.length > 0 ? (
+              proactivityScheduleEntries.map(({ label, delivered }, index) => (
+                <li key={`${label}-${index}`} className={styles.planListItem}>
+                  <span className={styles.planCheckbox} aria-hidden="true">
+                    {delivered ? <Check size={14} /> : <Square size={14} />}
+                  </span>
+                  <span className={styles.planLabelGroup}>
+                    <span className={styles.planLabel}>{label}</span>
+                  </span>
+                  {canOpenProactivityModal || showModalRemoveButton ? (
+                    <span className={styles.listItemActions}>
+                      {canOpenProactivityModal ? (
+                        <button
+                          type="button"
+                          className={styles.listItemActionButton}
+                          onClick={handleOpenProactivityModal}
+                          aria-label="Edit proactivity schedule"
+                          disabled={!canOpenProactivityModal}
+                        >
+                          <Pencil size={12} />
+                        </button>
+                      ) : null}
+                      {showModalRemoveButton ? (
+                        <button
+                          type="button"
+                          className={styles.listItemActionButton}
+                          onClick={() => handleProactivityTimeRemove(index)}
+                          aria-label={`Remove proactivity time ${label}`}
+                          disabled={!showModalRemoveButton}
+                        >
+                          <X size={12} />
+                        </button>
+                      ) : null}
+                    </span>
+                  ) : null}
+                </li>
+              ))
+            ) : (
+              <li className={styles.listEmptyMessage}>
+                <span>No schedule yet.</span>
+              </li>
+            )}
+          </ul>
         ) : (
           <div className={styles.cardEmptyMessage}>
             <span>Not configured</span>
@@ -1182,7 +1227,7 @@ export function GrayDashboardView({
         )}
         <button
           type="button"
-          className={styles.secondaryAction}
+          className={`${styles.secondaryAction} ${styles.proactivitySetupButton}`}
           disabled={!canOpenProactivityModal}
           data-disabled={!canOpenProactivityModal ? "true" : "false"}
           onClick={handleOpenProactivityModal}
@@ -1193,19 +1238,22 @@ export function GrayDashboardView({
     </article>
   );
 
-  const sidebarProactivityCard = renderProactivityCard(styles.sidebarProactivityCard);
   const proactivityCard = renderProactivityCard();
 
-  const plansCard = (
+const plansCard = (
     <article className={styles.dashboardCard}>
       <header className={styles.dashboardCardHeader}>
         <span>Plans</span>
       </header>
       <div className={styles.dashboardCardBody}>
         <ul className={styles.planList}>
-          {showPlansList
-            ? displayPlans.map((plan) => (
-                <li key={plan.id} className={styles.planListItem}>
+                {showPlansList
+            ? visiblePlans.map((plan) => {
+                const isDerivedReminder = derivedReminderIds.has(plan.id);
+                const timeLabel = formatPlanTimeLabel(plan);
+                const tagLabel = isDerivedReminder ? "Reminder" : "Plan";
+                return (
+                  <li key={plan.id} className={styles.planListItem}>
                   <button
                     type="button"
                     className={styles.planItemButton}
@@ -1213,55 +1261,59 @@ export function GrayDashboardView({
                     onClick={() => handlePlanToggle(plan.id)}
                     disabled={!isCurrentPulseEditable}
                   >
-                    <span className={styles.planCheckbox} aria-hidden="true">
-                      {plan.completed ? <Check size={14} /> : <Square size={14} />}
-                    </span>
-                    <span className={styles.planLabelGroup}>
+                      <span className={styles.planCheckbox} aria-hidden="true">
+                        {plan.completed ? <Check size={14} /> : <Square size={14} />}
+                      </span>
+                      <span className={styles.planLabelGroup}>
                       <span className={styles.planLabel}>{plan.label}</span>
-                      {plan.details ? (
+                      {!isDerivedReminder && plan.details ? (
                         <span className={styles.planDetails}>{plan.details}</span>
                       ) : null}
-                      {(plan.scheduleSlot || plan.deadline) && (
-                        <span className={styles.planMeta}>{formatPlanMeta(plan)}</span>
-                      )}
-                    </span>
-                  </button>
-                  {canManagePlans ? (
-                    <span className={styles.listItemActions}>
-                      {onEditPlan ? (
-                        <button
-                          type="button"
-                          className={styles.listItemActionButton}
-                          onClick={(event) => {
-                            event.preventDefault();
-                            event.stopPropagation();
-                            handlePlanEdit(plan);
-                          }}
-                          aria-label={`Edit plan ${plan.label}`}
-                          disabled={!isCurrentPulseEditable}
-                        >
-                          <Pencil size={14} />
-                        </button>
+                      {timeLabel ? (
+                        <span className={styles.planTime}>
+                          <time dateTime={plan.deadline ?? undefined}>{timeLabel}</time>
+                        </span>
                       ) : null}
-                      {onDeletePlan ? (
-                        <button
-                          type="button"
-                          className={styles.listItemActionButton}
-                          onClick={(event) => {
-                            event.preventDefault();
-                            event.stopPropagation();
-                            handlePlanDelete(plan);
-                          }}
-                          aria-label={`Delete plan ${plan.label}`}
-                          disabled={!isCurrentPulseEditable}
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      ) : null}
+                      <span className={styles.planDerivedTag}>{tagLabel}</span>
                     </span>
-                  ) : null}
-                </li>
-              ))
+                    </button>
+                    {canManagePlans ? (
+                      <span className={styles.listItemActions}>
+                        {onSavePlan ? (
+                          <button
+                            type="button"
+                            className={styles.listItemActionButton}
+                            onClick={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              setPlanEditorTarget(plan);
+                            }}
+                            aria-label={`Edit plan ${plan.label}`}
+                            disabled={!isCurrentPulseEditable}
+                          >
+                            <Pencil size={14} />
+                          </button>
+                        ) : null}
+                        {onDeletePlan ? (
+                          <button
+                            type="button"
+                            className={styles.listItemActionButton}
+                            onClick={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              handlePlanDelete(plan);
+                            }}
+                            aria-label={`Delete plan ${plan.label}`}
+                            disabled={!isCurrentPulseEditable}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        ) : null}
+                      </span>
+                    ) : null}
+                  </li>
+                );
+              })
             : (
               <li className={styles.listEmptyMessage}>
                 <span>No plans captured yet.</span>
@@ -1289,7 +1341,7 @@ export function GrayDashboardView({
       <div className={styles.dashboardCardBody}>
         <ul className={`${styles.habitList} ${styles.dashboardHabitList}`}>
           {showHabitsList
-            ? displayHabits.map((habit) => (
+            ? visibleHabits.map((habit) => (
                 <li key={habit.id} className={styles.habitListItem}>
                   <button
                     type="button"
@@ -1368,6 +1420,67 @@ export function GrayDashboardView({
       </div>
     </article>
   );
+  const dashboardSections = useMemo<DashboardSectionSpec[]>(
+    () => [
+      {
+        id: "execution",
+        title: "Execution",
+        subtitle: "Plans and habits shaping today's pulse",
+        layout: "stacked",
+        cards: [
+          { id: "plans", element: plansCard },
+          { id: "habits", element: habitsCard },
+        ],
+      },
+    ],
+    [plansCard, habitsCard]
+  );
+  const renderDashboardSections = useCallback(
+    (variant: "default" | "compact" = "default") => {
+      const sections =
+        variant === "compact"
+          ? [
+              ...dashboardSections,
+              {
+                id: "compact-automation",
+                title: "Signals & Automation",
+                subtitle: "Reminders, notifications, and proactive nudges",
+                cards: [{ id: "proactivity", element: proactivityCard }],
+              },
+            ]
+          : dashboardSections;
+      return sections.map((section) => {
+        const gridClass =
+          variant === "compact"
+            ? styles.dashboardCompactGrid
+            : section.layout === "stacked"
+              ? `${styles.dashboardGrid} ${styles.pulseGridStacked}`
+              : styles.dashboardGrid;
+        const showHeader = variant === "compact";
+        return (
+          <section
+            key={section.id}
+            className={`${styles.dashboardSection} ${variant === "compact" ? styles.dashboardSectionCompact : ""}`}
+          >
+            {showHeader ? (
+              <header className={styles.dashboardSectionHeader}>
+                <p className={styles.dashboardSectionEyebrow}>{section.subtitle}</p>
+                <h3>{section.title}</h3>
+              </header>
+            ) : null}
+            <div className={gridClass}>
+              {section.cards.map(({ id, element }) => (
+                <div key={`${section.id}-${id}`} className={styles.dashboardSectionCard}>
+                  {element}
+                </div>
+              ))}
+            </div>
+          </section>
+        );
+      });
+    },
+    [dashboardSections, proactivityCard]
+  );
 
   const pulseMonthLabel = pulseMonthDate.toLocaleDateString(undefined, {
     month: "long",
@@ -1386,39 +1499,34 @@ export function GrayDashboardView({
       <DashboardHeader
         activeTab={activeTab}
         onSelectTab={onSelectTab}
-        onPrevRange={() => handlePulseShiftDay(-1)}
-        onNextRange={() => handlePulseShiftDay(1)}
-        onGoToday={handlePulseGoToday}
-        todayButtonLabel={pulseTodayButtonLabel}
         className={headerClassName}
       />
-      <div className={calendarStyles.calendarSurfaceBody} data-has-sidebar="true">
-        <div className={calendarStyles.calendarSidebarPanel}>
-          <CalendarSidebar
-            monthDate={pulseMonthDate}
-            selectedDate={pulseSelectedDate}
-            onSelectDate={handlePulseDateSelect}
-            onNavigateMonth={handlePulseMonthNavigate}
-            calendars={calendars}
-            onToggleCalendar={handleCalendarVisibilityToggle}
-            showSelectedDateLabel={false}
-            showMonthNavigation
-            className={calendarStyles.calendarSidebarIntegrated}
-            showCalendarList={false}
-            showCreateAction={false}
-            onIntegrationAction={onIntegrationAction}
-          >
-            <div className={styles.calendarSidebarExtras}>{sidebarProactivityCard}</div>
-          </CalendarSidebar>
+      <div
+        className={calendarStyles.calendarSurfaceBody}
+        data-has-sidebar="true"
+      >
+        <div className={styles.calendarSidebarColumn}>
+          <div className={calendarStyles.calendarSidebarPanel}>
+            <CalendarSidebar
+              monthDate={pulseMonthDate}
+              selectedDate={pulseSelectedDate}
+              onSelectDate={handlePulseDateSelect}
+              onNavigateMonth={handlePulseMonthNavigate}
+              calendars={calendars}
+              onToggleCalendar={handleCalendarVisibilityToggle}
+              showSelectedDateLabel={false}
+              showMonthNavigation
+              className={calendarStyles.calendarSidebarIntegrated}
+              showCalendarList={false}
+              showCreateAction={false}
+              onIntegrationAction={onIntegrationAction}
+            />
+          </div>
+          <div className={styles.calendarProactivityColumn}>{proactivityCard}</div>
         </div>
         <div className={`${calendarStyles.calendarBoard} ${styles.pulseBoard}`}>
           <div className={calendarStyles.calendarGrid}>
-            <div className={styles.pulseBoardContent}>
-              <section className={`${styles.dashboardGrid} ${styles.pulseGridStacked}`}>
-                {plansCard}
-                {habitsCard}
-              </section>
-            </div>
+            <div className={styles.pulseBoardContent}>{renderDashboardSections()}</div>
           </div>
         </div>
       </div>
@@ -1431,10 +1539,6 @@ export function GrayDashboardView({
       <DashboardHeader
         activeTab={activeTab}
         onSelectTab={onSelectTab}
-        onPrevRange={() => handlePulseShiftDay(-1)}
-        onNextRange={() => handlePulseShiftDay(1)}
-        onGoToday={handlePulseGoToday}
-        todayButtonLabel={pulseTodayButtonLabel}
         className={headerClassName}
       />
       <div className={styles.dashboardCompact}>
@@ -1442,25 +1546,25 @@ export function GrayDashboardView({
           <span className={styles.dashboardCompactRange}>{pulseRangeLabel}</span>
           <span className={styles.dashboardCompactTimezone}>{timezoneLabel}</span>
         </div>
-        <div className={styles.dashboardCompactGrid}>
-          {plansCard}
-          {habitsCard}
-          {proactivityCard}
-        </div>
+        <div className={styles.dashboardCompactGrid}>{renderDashboardSections("compact")}</div>
       </div>
     </>
   );
 
   const calendarContent = (
-    <GrayDashboardCalendar
-      initialDate={currentDate}
-      currentDate={currentDate}
-      showSidebar={true}
-      showSelectedDateLabel={false}
+      <GrayDashboardCalendar
+        initialDate={currentDate}
+        currentDate={currentDate}
+        showSidebar={true}
+        showHeaderDates={true}
+        showSelectedDateLabel={false}
       calendars={calendars}
       events={calendarEvents}
+      supplementalEvents={planCalendarEvents}
       onCalendarsChange={onCalendarsChange}
       onEventsChange={onCalendarEventsChange}
+      onTaskToggle={handleCalendarTaskToggle}
+      canToggleTasks={isCurrentPulseEditable}
       selectedDate={calendarSelectedDate}
       onSelectedDateChange={onCalendarSelectedDateChange}
       hourHeight={CALENDAR_PANEL_HOUR_HEIGHT}
@@ -1469,9 +1573,13 @@ export function GrayDashboardView({
       onSelectDashboardTab={onSelectTab}
       renderHeader={(headerProps) => (
         <DashboardHeader
-          {...headerProps}
-          onPrevRange={undefined}
-          onNextRange={undefined}
+          activeTab={headerProps.activeTab}
+          onSelectTab={headerProps.onSelectTab}
+          onGoToday={headerProps.onGoToday}
+          viewMode={headerProps.viewMode}
+          onViewModeChange={headerProps.onViewModeChange}
+          viewModeOptions={headerProps.viewModeOptions}
+          rangeNavigationLabel={headerProps.rangeNavigationLabel}
           label={undefined}
           title={undefined}
           rangeLabel={undefined}
@@ -1479,6 +1587,7 @@ export function GrayDashboardView({
         />
       )}
       embedWithinParentSurface
+      maxHeight={panelMaxHeightPx !== null ? `${panelMaxHeightPx}px` : undefined}
       surfaceClassName={styles.dashboardCalendarInnerSurface}
     />
   );
@@ -1549,6 +1658,21 @@ export function GrayDashboardView({
           onSuccess={handleModalSuccess}
         />
       )}
+      {planEditorTarget && onSavePlan ? (
+        <AddPlanHabitModal
+          isOpen={Boolean(planEditorTarget)}
+          onClose={() => setPlanEditorTarget(null)}
+          type="plan"
+          onSuccess={handleModalSuccess}
+          planToEdit={planEditorTarget}
+          onSubmitPlan={async (planId, updates) => {
+            if (!planId) {
+              return;
+            }
+            await onSavePlan(planId, updates);
+          }}
+        />
+      ) : null}
     </>
   );
 }

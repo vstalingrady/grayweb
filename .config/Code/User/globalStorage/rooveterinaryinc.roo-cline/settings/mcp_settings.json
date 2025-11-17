@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "plans-habits-server": {
+      "command": "node",
+      "args": [
+        "/home/vstaln/.local/share/Roo-Code/MCP/plans-habits-server/dist/index.js"
+      ],
+      "env": {
+        "PLANS_BACKEND_BASE_URL": "http://localhost:8000",
+        "PLANS_HABITS_API_KEY": ""
+      },
+      "disabled": false,
+      "timeout": 60,
+      "alwaysAllow": [],
+      "disabledTools": []
+    }
+  }
+}

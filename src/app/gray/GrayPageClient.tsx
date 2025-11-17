@@ -18,7 +18,6 @@ import {
   type DashboardPulsePlanItem,
   type DashboardPulseHabitItem,
   type DashboardPulseProactivity,
-  type ProactivityNotification,
   type ProactivitySettings,
   type Reminder,
   type User,
@@ -57,6 +56,8 @@ import {
   type WorkspaceBackgroundDraft,
   GREAT_WAVE_BACKGROUND,
 } from "@/components/gray/PersonalizationPanel";
+import { useProactivityNotifications } from "@/components/gray/ProactivityNotificationProvider";
+import { GrayChatView } from "@/components/gray/ChatView";
 
 const GrayDashboardView = dynamic(
   () => import("@/components/gray/DashboardView").then((mod) => mod.GrayDashboardView),
@@ -70,11 +71,6 @@ const GrayGeneralView = dynamic(
 
 const GrayHistoryView = dynamic(
   () => import("@/components/gray/HistoryView").then((mod) => mod.GrayHistoryView),
-  { loading: () => null }
-);
-
-const GrayChatView = dynamic(
-  () => import("@/components/gray/ChatView").then((mod) => mod.GrayChatView),
   { loading: () => null }
 );
 
@@ -114,9 +110,6 @@ const SIDEBAR_EXPANDED_STORAGE_KEY = "gray-sidebar-expanded";
 
 const DEFAULT_EVENT_COLOR = "#4f63ff";
 const REMINDER_RETENTION_WINDOW_MS = 24 * 60 * 60 * 1000;
-
-// Enable automatic assistant proactivity messages in chat and as browser notifications.
-const ENABLE_ASSISTANT_PROACTIVITY_NOTIFICATIONS = true;
 
 const sanitizeEventColor = (value?: string | null): string => {
   if (!value) {
@@ -440,18 +433,6 @@ const buildProactivitySettingsPayload = (
     channels,
     timezone: candidate.timezone ?? timezone,
   };
-};
-
-const formatProactivityNotificationContent = (notification: ProactivityNotification): string => {
-  const type = (notification.type || "").toLowerCase();
-  const emoji = type === "weekly_review" ? "📅" : type === "habit_nudge" ? "🔥" : "🗓️";
-  const heading = notification.title?.trim() || "Proactivity Ping";
-  const sections: string[] = [`${emoji} **${heading}**`];
-  const body = notification.message?.trim();
-  if (body) {
-    sections.push(body);
-  }
-  return sections.join("\n\n");
 };
 
 const createPulseSnapshot = (
@@ -918,8 +899,7 @@ function GrayPageClientInner({
   const userId = typeof user?.id === "number" ? user.id : null;
   const [isCompactLayout, setIsCompactLayout] = useState(false);
   const ensureSessionRef = useRef(ensureSession);
-  const proactivityDeliveredRef = useRef<Set<string>>(new Set());
-  const [isProactivityStreamActive, setProactivityStreamActive] = useState(false);
+  const { deliveredKeys: deliveredProactivityKeys } = useProactivityNotifications();
   const buildSettingsPayload = useCallback(
     (candidate: ProactivityItem | null) => buildProactivitySettingsPayload(candidate, resolvedTimezone),
     [resolvedTimezone]
@@ -1133,6 +1113,7 @@ function GrayPageClientInner({
           isCompactLayout={isCompactLayout}
           userId={userId}
           reminderPlans={reminderPlans}
+          proactivityDeliveryKeys={deliveredProactivityKeys}
         />
       );
     }
@@ -1324,413 +1305,6 @@ function GrayPageClientInner({
       cancelled = true;
     };
   }, [userId]);
-
-  const notificationPermissionRef = useRef<NotificationPermission>("default");
-
-  const requestNotificationPermission = useCallback(async (): Promise<NotificationPermission> => {
-    if (typeof window === "undefined" || !("Notification" in window)) {
-      notificationPermissionRef.current = "denied";
-      return "denied";
-    }
-    const nativePermission = Notification.permission;
-    if (nativePermission !== "default") {
-      notificationPermissionRef.current = nativePermission;
-      return nativePermission;
-    }
-    if (notificationPermissionRef.current !== "default") {
-      return notificationPermissionRef.current;
-    }
-    const permission = await Notification.requestPermission();
-    notificationPermissionRef.current = permission;
-    return permission;
-  }, []);
-
-  const showBrowserNotification = useCallback(
-    (notification: ProactivityNotification, permission: NotificationPermission) => {
-      if (
-        permission !== "granted" ||
-        typeof window === "undefined" ||
-        !notification ||
-        (typeof window !== "undefined" && !window.isSecureContext)
-      ) {
-        return;
-      }
-      const title = notification.title?.trim()
-        ? `Reminder: ${notification.title.trim()}`
-        : "Reminder from Gray";
-      const parts: string[] = [];
-      if (notification.message?.trim()) {
-        parts.push(notification.message.trim());
-      }
-      if (notification.due_at) {
-        const dueDate = new Date(notification.due_at);
-        if (!Number.isNaN(dueDate.getTime())) {
-          parts.push(`Due ${dueDate.toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}`);
-        }
-      }
-      const body = parts.join("\n") || "You have a reminder waiting. Just say the word.";
-      try {
-        // eslint-disable-next-line no-new
-        new Notification(title, {
-          body,
-          tag: `gray-reminder-${notification.id}`,
-        });
-      } catch (error) {
-        console.error("Failed to show reminder browser notification:", error);
-      }
-    },
-    []
-  );
-
-  useEffect(() => {
-    if (!ENABLE_ASSISTANT_PROACTIVITY_NOTIFICATIONS) {
-      setProactivityStreamActive(false);
-      return;
-    }
-    if (!userId) {
-      setProactivityStreamActive(false);
-      return;
-    }
-    if (typeof window === "undefined" || typeof window.EventSource === "undefined") {
-      setProactivityStreamActive(false);
-      return;
-    }
-
-    let cancelled = false;
-    let eventSource: EventSource | null = null;
-    let reconnectTimer: number | null = null;
-    const streamPath = `/users/${userId}/proactivity/stream`;
-
-    const buildStreamUrl = () => {
-      const base = resolveApiBaseUrl();
-      const normalizedBase = base.replace(/\/+$/, "");
-      if (!normalizedBase) {
-        return streamPath;
-      }
-      return `${normalizedBase}${streamPath}`;
-    };
-
-    const updateStreamState = (next: boolean) => {
-      if (!cancelled) {
-        setProactivityStreamActive(next);
-      }
-    };
-
-    const closeStream = () => {
-      if (eventSource) {
-        eventSource.close();
-        eventSource = null;
-      }
-    };
-
-    const handleProactivityMessage = async (event: MessageEvent) => {
-      let payload: Record<string, unknown> | null = null;
-      try {
-        payload = event.data ? JSON.parse(event.data as string) : null;
-      } catch (error) {
-        if (process.env.NODE_ENV !== "production") {
-          console.warn("[GrayPageClient] Failed to parse proactivity payload", error);
-        }
-        return;
-      }
-      if (!payload) {
-        return;
-      }
-      const payloadRecord = payload as Record<string, unknown>;
-      const rawMessage = payloadRecord["message"];
-      const message = typeof rawMessage === "string" ? rawMessage.trim() : "";
-      if (!message) {
-        return;
-      }
-      const sessionId = getOrCreateGeneralSessionId();
-      appendMessage(sessionId, "assistant", message);
-
-      const sentAtRaw = payloadRecord["sent_at"];
-      const sentAtIso = typeof sentAtRaw === "string" && sentAtRaw ? sentAtRaw : new Date().toISOString();
-      const sentAtDate = new Date(sentAtIso);
-      if (!Number.isNaN(sentAtDate.getTime())) {
-        const dedupeKey = `${toDateKey(sentAtDate)}T${String(sentAtDate.getHours()).padStart(2, "0")}:${String(
-          sentAtDate.getMinutes()
-        ).padStart(2, "0")}`;
-        proactivityDeliveredRef.current.add(dedupeKey);
-      }
-
-      try {
-        const permission = await requestNotificationPermission();
-        const cadenceRaw = payloadRecord["cadence"];
-        const cadenceLabel =
-          typeof cadenceRaw === "string" && cadenceRaw.trim().length > 0
-            ? cadenceRaw.trim()
-            : "Check-in";
-        const sourceRaw = payloadRecord["source"];
-        const timezoneRaw = payloadRecord["timezone"];
-        const eventNameRaw = payloadRecord["event"];
-        const notification: ProactivityNotification = {
-          id: sentAtDate.getTime() || Date.now(),
-          user_id: userId,
-          type: "proactivity_message",
-          title: `🔔 ${cadenceLabel} Check-in`,
-          message,
-          metadata: {
-            source: typeof sourceRaw === "string" && sourceRaw ? sourceRaw : "proactivity_engine",
-            timezone: typeof timezoneRaw === "string" && timezoneRaw ? timezoneRaw : null,
-            event: typeof eventNameRaw === "string" && eventNameRaw ? eventNameRaw : "proactivity_message",
-          },
-          due_at: sentAtIso,
-          sent_at: sentAtIso,
-          read_at: null,
-          completed_at: null,
-          created_at: sentAtIso,
-        };
-        showBrowserNotification(notification, permission);
-      } catch (error) {
-        if (process.env.NODE_ENV !== "production") {
-          console.warn("[GrayPageClient] Failed to show proactivity notification", error);
-        }
-      }
-    };
-
-    function scheduleReconnect() {
-      if (cancelled) {
-        return;
-      }
-      updateStreamState(false);
-      if (reconnectTimer) {
-        window.clearTimeout(reconnectTimer);
-      }
-      reconnectTimer = window.setTimeout(() => {
-        reconnectTimer = null;
-        connect();
-      }, 3000);
-    }
-
-    function handleError(event?: Event) {
-      if (process.env.NODE_ENV !== "production") {
-        console.warn("[GrayPageClient] Proactivity stream error", event);
-      }
-      closeStream();
-      scheduleReconnect();
-    }
-
-    function connect() {
-      if (cancelled) {
-        return;
-      }
-      const url = buildStreamUrl();
-      try {
-        eventSource = new EventSource(url, { withCredentials: true });
-      } catch (error) {
-        if (process.env.NODE_ENV !== "production") {
-          console.error("[GrayPageClient] Failed to initialize proactivity stream", error);
-        }
-        scheduleReconnect();
-        return;
-      }
-      eventSource.addEventListener("open", () => updateStreamState(true));
-      eventSource.addEventListener("error", handleError as EventListener);
-      eventSource.addEventListener("ready", () => updateStreamState(true));
-      eventSource.addEventListener("proactivity_message", (event) => {
-        void handleProactivityMessage(event as MessageEvent);
-      });
-    }
-
-    connect();
-
-    return () => {
-      cancelled = true;
-      setProactivityStreamActive(false);
-      if (reconnectTimer) {
-        window.clearTimeout(reconnectTimer);
-      }
-      closeStream();
-    };
-  }, [
-    userId,
-    appendMessage,
-    getOrCreateGeneralSessionId,
-    requestNotificationPermission,
-    showBrowserNotification,
-  ]);
-
-  useEffect(() => {
-    if (!ENABLE_ASSISTANT_PROACTIVITY_NOTIFICATIONS) {
-      return;
-    }
-    if (!userId) {
-      return;
-    }
-    if (isProactivityStreamActive) {
-      return;
-    }
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    let cancelled = false;
-
-    const deliverNotifications = async () => {
-      try {
-        const permission = await requestNotificationPermission();
-        if (cancelled) {
-          return;
-        }
-        if (!proactivity) {
-          return;
-        }
-        const channels = Array.isArray(proactivity.channels) ? proactivity.channels : [];
-        if (channels.length > 0 && !channels.includes("assistant")) {
-          return;
-        }
-        const times = normalizeProactivityTimes(proactivity.times ?? null, proactivity.time).sort();
-        if (!times.length) {
-          return;
-        }
-        const now = new Date();
-        const nowMs = now.getTime();
-        const todayKey = toDateKey(now);
-        const delivered = proactivityDeliveredRef.current;
-        const targetSessionId = getOrCreateGeneralSessionId();
-        const WINDOW_MS = 5 * 60 * 1000;
-        const snapshot =
-          pulseEntries.find((entry) => entry.dateKey === todayKey) ??
-          pulseEntries[0] ??
-          null;
-
-        const buildMessage = () => {
-          const cadenceLabel = (proactivity.cadence || "Daily").trim();
-          const pieces: string[] = [];
-          const todayLabel = now.toLocaleDateString([], {
-            weekday: "short",
-            month: "short",
-            day: "numeric",
-          });
-          pieces.push(
-            `🗓️ ${cadenceLabel} check-in — ${todayLabel}.`
-          );
-
-          if (snapshot) {
-            const activePlans = snapshot.plans.filter((plan) => !plan.completed);
-            const completedPlans = snapshot.plans.filter((plan) => plan.completed);
-            const habitsTotal = snapshot.habits.length;
-            const habitsCompleted = snapshot.habits.filter((habit) =>
-              Boolean(habit.completed)
-            );
-
-            if (activePlans.length || completedPlans.length) {
-              const planLines: string[] = [];
-              if (activePlans.length) {
-                planLines.push(
-                  `Active plans (${activePlans.length}):` +
-                    "\n" +
-                    activePlans
-                      .slice(0, 3)
-                      .map((plan) => `• ${plan.label}`)
-                      .join("\n")
-                );
-              }
-              if (completedPlans.length) {
-                planLines.push(
-                  `Recently completed (${completedPlans.length}):` +
-                    "\n" +
-                    completedPlans
-                      .slice(0, 3)
-                      .map((plan) => `• ${plan.label}`)
-                      .join("\n")
-                );
-              }
-              if (planLines.length) {
-                pieces.push(planLines.join("\n\n"));
-              }
-            }
-
-            if (habitsTotal > 0) {
-              pieces.push(
-                `Habits: ${habitsCompleted.length}/${habitsTotal} checked in.`
-              );
-            }
-          } else {
-            pieces.push(
-              "You don't have any plans or habits logged yet — this is a good moment to add one small thing you want to move forward."
-            );
-          }
-
-          pieces.push(
-            "How are you feeling about your day right now? Reply here and we can map the next move together."
-          );
-
-          return pieces.join("\n\n");
-        };
-
-        for (const time of times) {
-          const [rawHour, rawMinute] = time.split(":").map((value) =>
-            Number.parseInt(value, 10)
-          );
-          if (!Number.isFinite(rawHour) || !Number.isFinite(rawMinute)) {
-            continue;
-          }
-          const scheduled = new Date(now);
-          scheduled.setHours(rawHour, rawMinute, 0, 0);
-          const scheduledMs = scheduled.getTime();
-          const diff = nowMs - scheduledMs;
-          if (diff < 0 || diff > WINDOW_MS) {
-            continue;
-          }
-          const key = `${todayKey}T${String(rawHour).padStart(2, "0")}:${String(
-            rawMinute
-          ).padStart(2, "0")}`;
-          if (delivered.has(key)) {
-            continue;
-          }
-          delivered.add(key);
-          const message = buildMessage();
-          appendMessage(targetSessionId, "assistant", message);
-
-          const notification: ProactivityNotification = {
-            id: nowMs,
-            user_id: userId,
-            type: "daily_checkin",
-            title: "Daily Check-in",
-            message,
-            metadata: {
-              date_key: todayKey,
-              time,
-              cadence: proactivity.cadence ?? "Daily",
-              source: "local-client",
-            },
-            due_at: scheduled.toISOString(),
-            sent_at: now.toISOString(),
-            read_at: null,
-            completed_at: null,
-            created_at: now.toISOString(),
-          };
-          showBrowserNotification(notification, permission);
-        }
-      } catch (error) {
-        console.error("Failed to deliver proactivity notifications:", error);
-      }
-    };
-
-    void deliverNotifications();
-    const intervalId = window.setInterval(() => {
-      if (cancelled) {
-        return;
-      }
-      void deliverNotifications();
-    }, 60_000);
-    return () => {
-      cancelled = true;
-      window.clearInterval(intervalId);
-    };
-  }, [
-    userId,
-    proactivity,
-    pulseEntries,
-    isProactivityStreamActive,
-    appendMessage,
-    getOrCreateGeneralSessionId,
-    requestNotificationPermission,
-    showBrowserNotification,
-  ]);
 
 
   useEffect(() => {
@@ -2222,7 +1796,7 @@ function GrayPageClientInner({
   useEffect(() => {
     if (typeof document !== "undefined") {
       const label = documentTitle?.trim() || "Gray";
-      document.title = `${label} • Gray`;
+      document.title = label;
     }
   }, [documentTitle]);
 
@@ -3198,23 +2772,18 @@ function GrayPageClientInner({
   );
 
   useEffect(() => {
-    if (!supportsInlineChat || typeof window === "undefined" || activeNav !== "threads") {
+    if (!supportsInlineChat || typeof window === "undefined") {
+      return;
+    }
+    if (manualViewMode !== "chat" || !currentChatId) {
       return;
     }
     const pathname = window.location.pathname;
-    const isGeneralSessionActive =
-      Boolean(currentChatId) && Boolean(generalSessionId) && currentChatId === generalSessionId;
-    if (manualViewMode === "chat" && currentChatId && !isGeneralSessionActive) {
-      const targetPath = `/c/${currentChatId}`;
-      if (pathname !== targetPath) {
-        window.history.replaceState(null, "", targetPath);
-      }
-      return;
+    const targetPath = `/c/${currentChatId}`;
+    if (pathname !== targetPath) {
+      window.history.replaceState(null, "", targetPath);
     }
-    if (pathname !== "/") {
-      window.history.replaceState(null, "", "/");
-    }
-  }, [activeNav, currentChatId, generalSessionId, manualViewMode, supportsInlineChat]);
+  }, [currentChatId, manualViewMode, supportsInlineChat]);
 
   const handleOpenHistoryEntry = (entry: SidebarHistoryEntry) => {
     if (!entry.href || entry.href === "#") {
@@ -3261,7 +2830,7 @@ function GrayPageClientInner({
   };
 
   const greeting = `Good ${greetingForDate(now)}, ${viewerName}`;
-  const hideChatThinkingIndicator = variant === "chat" && activeNav === "general";
+  const hideChatThinkingIndicator = false;
   const renderWorkspaceGreeting = useCallback(
     () => (
       <div className={styles.greetingStack}>

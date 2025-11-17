@@ -17,6 +17,10 @@ This project integrates a FastAPI backend with a Next.js frontend to replace pla
 - **Chat Sessions**: Real chat history stored in database
 - **Calendar Events**: User-specific calendar events from database
 - **Automatic User Creation**: Creates new users automatically when they first visit
+- **Gemini Multimodal**: Supports image and PDF inputs so Gray can caption media or summarize documents using the same Flash models (see `docs/gemini-multimodal.md` for details)
+- **Function Calling & Structured Output**: Gemini can invoke retrievers or tools and return schema-guaranteed JSON, so you can expose precise, parsable RAG results and actions (details in `docs/gemini-multimodal.md`).
+- **Grounding with Google Maps**: Enable Gemini’s Maps grounding tool to inject accurate location-aware context, citations, and optional widgets whenever the user asks about places (also covered in `docs/gemini-multimodal.md`).
+- **Long Context**: Gemini’s 1M+ token context window lets Gray keep entire project histories, documents, and media in a single prompt, avoiding clever truncation or RAG tricks for many workflows (see `docs/gemini-long-context.md` for details).
 
 ## Getting Started
 
@@ -46,6 +50,7 @@ SUPABASE_KEY=your_supabase_anon_key_here
 # By default the API allows every origin for local development.
 # Set this flag to false if you want to fall back to the curated localhost list.
 # CORS_ALLOW_ALL_ORIGINS=false
+# Switch providers by setting AI_PROVIDER=anthropic and providing ANTHROPIC_API_KEY
 ```
 
 By default responses now stream as quickly as Gemini returns them. If you ever need to
@@ -64,11 +69,27 @@ no extra round trip when a conversation starts. You can opt out by setting
 2. Create a new API key
 3. Replace `your_gemini_api_key_here` with your key
 
+> **Tip:** The backend will look for the first non-placeholder value in
+> `GEMINI_API_KEY`, `GEMINI_API_KEY_SECONDARY`, `GEMINI_API_KEY_TERTIARY`, or `GOOGLE_API_KEY`
+> and keeps that secret synchronized on both variables so either name can hold the active key.
+
+**Anthropic Claude (optional):**
+1. Create an API key at [console.anthropic.com](https://console.anthropic.com/)
+2. Add `ANTHROPIC_API_KEY` to your `.env`
+3. Set `AI_PROVIDER=anthropic` to route chat and streaming requests through Claude instead of Gemini.
+   (Leave it unset or `gemini` to keep using Gemini.)
+
+Both the backend and frontend now read exclusively from the repo root `.env`, and the loader forces those values to override any pre-existing environment variables, so update the Gemini key (and other secrets) in that single file and restart the processes to pick up the change.
+
+The backend now validates that key on startup by issuing a brief prompt through `GeminiService`. Set `VALIDATE_GEMINI_ON_STARTUP=false` in `.env` if you need to skip the validation call (e.g., to avoid extra quota while iterating locally).
+
 **Supabase (Optional - for chat persistence):**
 1. Create a free account at [supabase.com](https://supabase.com)
 2. Create a new project
 3. Go to Settings > API to get your URL and anon key
 4. Replace the placeholder values in your `.env` file
+
+> **Note:** The backend looks for `SUPABASE_KEY` (service role) but will automatically fall back to `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_SECRET_KEY`, or even `SUPABASE_ANON_KEY` if that's all you have configured. Using the anon key works for read-only access, but some write operations (like persisting conversations) may be limited until you provide the service-role secret.
 
 **Set up Supabase Table:**
 The backend will automatically create the `public.conversations` table at startup whenever it has Supabase database credentials. If you prefer to provision it manually (or are running without direct database access), execute the following SQL in your Supabase SQL Editor:

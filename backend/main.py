@@ -1,5 +1,7 @@
+import logging
 import socket
-from fastapi import FastAPI, HTTPException, Depends, status, File, Form, Query, UploadFile
+import asyncio
+from fastapi import FastAPI, HTTPException, Depends, status, File, Form, Query, UploadFile, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import StreamingResponse
@@ -7,16 +9,28 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field, validator
 from typing import Optional, List, Dict, Any, AsyncGenerator, Tuple, Union, Iterable, Set, Mapping
 import databases
 import sqlalchemy
-from datetime import datetime, timezone, date
+from datetime import datetime, timezone, date, timedelta
+from zoneinfo import ZoneInfo
 import os
 import json
-import asyncio
+from asyncio import TimeoutError, wait_for, sleep
 import re
 import time
 from dotenv import load_dotenv
-from supabase import create_client, Client
+from supabase import Client
+# Support both package and module import contexts
+try:
+    from backend.supabase_utils import create_supabase_client, resolve_supabase_credentials  # type: ignore
+except Exception:  # When running with backend/ on sys.path directly (tests)
+    from supabase_utils import create_supabase_client, resolve_supabase_credentials  # type: ignore
 from uuid import UUID, uuid4
 from pathlib import Path
+
+# Enhanced logging imports
+from logging_config import (
+    setup_logging, create_logger, set_request_context, clear_request_context,
+    RequestLoggingMiddleware, log_performance, log_database_query, log_api_call
+)
 from google_calendar import (
     GoogleCalendarCredentials,
     GoogleCalendarInfo,
@@ -35,9 +49,40 @@ from google.genai import types
 from gemini_client import GeminiAttachment, GeminiService
 from anthropic_client import AnthropicService
 from backend.file_search import FileSearchService
+from ai_message_generator import AIMessageGenerator
+from proactivity_engine import (
+    ProactivityEngine,
+    ProactivityRealtimeBroker,
+    ProactivitySchedulerManager,
+)
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(ROOT_DIR / ".env")
+
+# Initialize enhanced logging system
+app_logger = setup_logging(
+    log_level=logging.DEBUG,
+    enable_console=True,
+    enable_file=True,
+    structured_format=os.getenv("ENVIRONMENT") == "production"
+)
+
+# Create specific loggers
+db_logger = create_logger("backend.database")
+api_logger = create_logger("backend.api")
+auth_logger = create_logger("backend.auth")
+ai_logger = create_logger("backend.ai")
+file_logger = create_logger("backend.files")
+
+# Suppress uvicorn access logs (we handle this ourselves with our middleware)
+logging.getLogger("uvicorn.access").disabled = True
+
+app_logger.info("Backend application starting up", extra={
+    "event_type": "application_startup",
+    "environment": os.getenv("ENVIRONMENT", "development"),
+    "ai_provider": os.getenv("AI_PROVIDER", "gemini"),
+    "file_search_enabled": os.getenv("ENABLE_FILE_SEARCH", "false").lower() == "true"
+})
 
 
 def _float_env(var_name: str, default: float) -> float:
@@ -74,6 +119,8 @@ if FILE_SEARCH_ENABLED:
         FILE_SEARCH_SERVICE = FileSearchService(os.getenv("GEMINI_API_KEY"))
     except ValueError as exc:
         print(f"[FileSearch] Disabled: {exc}")
+
+AI_MESSAGE_GENERATOR = AIMessageGenerator()
 
 
 FILE_SEARCH_MAX_TOKENS_PER_CHUNK = _int_env("FILE_SEARCH_MAX_TOKENS_PER_CHUNK", 200)
@@ -307,6 +354,9 @@ plans = sqlalchemy.Table(
     sqlalchemy.Column("user_id", sqlalchemy.ForeignKey("users.id")),
     sqlalchemy.Column("label", sqlalchemy.String),
     sqlalchemy.Column("completed", sqlalchemy.Boolean, default=False),
+    sqlalchemy.Column("deadline", sqlalchemy.String, nullable=True),
+    sqlalchemy.Column("schedule_slot", sqlalchemy.String, nullable=True),
+    sqlalchemy.Column("description", sqlalchemy.String, nullable=True),
     sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
     sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
 )
@@ -319,8 +369,28 @@ habits = sqlalchemy.Table(
     sqlalchemy.Column("label", sqlalchemy.String),
     sqlalchemy.Column("streak_label", sqlalchemy.String),
     sqlalchemy.Column("previous_label", sqlalchemy.String),
+    sqlalchemy.Column("description", sqlalchemy.String, nullable=True),
     sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
     sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
+)
+
+reminders = sqlalchemy.Table(
+    "reminders",
+    metadata,
+    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True, index=True),
+    sqlalchemy.Column("user_id", sqlalchemy.ForeignKey("users.id"), nullable=False),
+    sqlalchemy.Column("entity_type", sqlalchemy.String, nullable=True),
+    sqlalchemy.Column("entity_id", sqlalchemy.Integer, nullable=True),
+    sqlalchemy.Column("delivery_mode", sqlalchemy.String, nullable=True),
+    sqlalchemy.Column("label", sqlalchemy.String, nullable=False),
+    sqlalchemy.Column("description", sqlalchemy.String, nullable=True),
+    sqlalchemy.Column("summary", sqlalchemy.String, nullable=True),
+    sqlalchemy.Column("remind_at", sqlalchemy.DateTime, nullable=False),
+    sqlalchemy.Column("status", sqlalchemy.String, default="pending"),
+    sqlalchemy.Column("metadata", sqlalchemy.JSON, nullable=True),
+    sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
+    sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
+    sqlalchemy.Column("delivered_at", sqlalchemy.DateTime, nullable=True),
 )
 
 dashboard_pulses = sqlalchemy.Table(
@@ -336,6 +406,27 @@ dashboard_pulses = sqlalchemy.Table(
     sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
     sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
     sqlalchemy.UniqueConstraint("user_id", "date_key", name="uq_dashboard_pulses_user_date"),
+)
+
+proactivity_settings = sqlalchemy.Table(
+    "proactivity_settings",
+    metadata,
+    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True, index=True),
+    sqlalchemy.Column("user_id", sqlalchemy.ForeignKey("users.id"), unique=True),
+    sqlalchemy.Column("payload", sqlalchemy.JSON, nullable=False, default=dict),
+    sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
+    sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
+)
+proactivity_push_subscriptions = sqlalchemy.Table(
+    "proactivity_push_subscriptions",
+    metadata,
+    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True, index=True),
+    sqlalchemy.Column("user_id", sqlalchemy.ForeignKey("users.id"), nullable=False),
+    sqlalchemy.Column("endpoint", sqlalchemy.String, nullable=False, unique=True),
+    sqlalchemy.Column("p256dh", sqlalchemy.String, nullable=False),
+    sqlalchemy.Column("auth", sqlalchemy.String, nullable=False),
+    sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
+    sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
 )
 
 user_streaks = sqlalchemy.Table(
@@ -400,22 +491,7 @@ context_cache = sqlalchemy.Table(
     sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
 )
 
-DEFAULT_WORKSPACE_BACKGROUNDS: List[Dict[str, Any]] = [
-    {
-        "slug": "orbiter",
-        "label": "Orbiter",
-        "description": "STS-84 orbit glow.",
-        "preview_css": "linear-gradient(140deg, rgba(12, 18, 32, 0.88), rgba(24, 54, 92, 0.82))",
-        "backdrop_css": "linear-gradient(155deg, rgba(4, 6, 10, 0.96), rgba(18, 28, 52, 0.92))",
-    },
-    {
-        "slug": "orbit-walk",
-        "label": "Orbit Walk",
-        "description": "Quiet focus at zero-g.",
-        "preview_css": "linear-gradient(135deg, rgba(8, 12, 22, 0.92), rgba(16, 28, 54, 0.88))",
-        "backdrop_css": "linear-gradient(160deg, rgba(3, 5, 9, 0.96), rgba(12, 20, 38, 0.94))",
-    },
-]
+DEFAULT_WORKSPACE_BACKGROUNDS: List[Dict[str, Any]] = []
 
 # Proactive notifications
 proactive_notifications = sqlalchemy.Table(
@@ -547,22 +623,12 @@ class ProactivitySettings(BaseModel):
     channels: Optional[List[str]] = None
     timezone: Optional[str] = None
 
-PROACTIVITY_SETTINGS_STORE: Dict[int, ProactivitySettings] = {}
-
-DEFAULT_PROACTIVITY_SETTINGS = ProactivitySettings(
-    id="proactivity-default",
-    label="Check-ins",
-    description="Daily sync nudges for squad channels.",
-    cadence="Daily",
-    time="09:00",
-    times=["09:00"],
-    channels=["assistant"],
-    timezone="UTC",
-)
-
 class PlanBase(BaseModel):
     label: str
     completed: bool = False
+    deadline: Optional[str] = None
+    schedule_slot: Optional[str] = None
+    description: Optional[str] = None
 
 class PlanCreate(PlanBase):
     pass
@@ -665,16 +731,45 @@ class ProactivityNotification(BaseModel):
     completed_at: Optional[datetime] = None
     created_at: datetime
 
+
+class ReminderBase(BaseModel):
+    label: str
+    remind_at: datetime
+    description: Optional[str] = None
+    entity_type: Optional[str] = None
+    entity_id: Optional[int] = None
+    delivery_mode: Optional[str] = None
+    summary: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
+
+
+class ReminderCreate(ReminderBase):
+    pass
+
+
+class ReminderUpdate(BaseModel):
+    label: Optional[str] = None
+    description: Optional[str] = None
+    remind_at: Optional[datetime] = None
+    status: Optional[str] = None
+    delivery_mode: Optional[str] = None
+    summary: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
+
     model_config = ConfigDict(from_attributes=True)
 
 class PlanUpdate(BaseModel):
     label: Optional[str] = None
     completed: Optional[bool] = None
+    deadline: Optional[str] = None
+    schedule_slot: Optional[str] = None
+    description: Optional[str] = None
 
 class HabitBase(BaseModel):
     label: str
     streak_label: str
     previous_label: str
+    description: Optional[str] = None
 
 class HabitCreate(HabitBase):
     pass
@@ -691,6 +786,7 @@ class HabitUpdate(BaseModel):
     label: Optional[str] = None
     streak_label: Optional[str] = None
     previous_label: Optional[str] = None
+    description: Optional[str] = None
 
 
 class DashboardPulsePlanItem(BaseModel):
@@ -798,6 +894,7 @@ class ChatRequest(BaseModel):
     maps_latitude: Optional[float] = None
     maps_longitude: Optional[float] = None
     maps_widget: bool = False
+    web_search_enabled: bool = True
     should_generate_title: bool = False
 
 class ChatResponse(BaseModel):
@@ -805,6 +902,23 @@ class ChatResponse(BaseModel):
     conversation_id: str
     grounding_metadata: Optional[Dict[str, Any]] = None
     title: Optional[str] = None
+
+
+class ChatStarterRequest(BaseModel):
+    user_id: int
+    name: Optional[str] = None
+    nickname: Optional[str] = None
+    occupation: Optional[str] = None
+    about: Optional[str] = None
+    custom_instructions: Optional[str] = None
+    workspace_context: Optional[str] = None
+    system_prompt: Optional[str] = None
+    time_context: Optional[str] = None
+
+
+class ChatStarterResponse(BaseModel):
+    message: str
+    used_fallback: bool = False
 
 
 class ChatTitleRequest(BaseModel):
@@ -815,76 +929,353 @@ class ChatTitleResponse(BaseModel):
     title: str
 
 # Supabase setup
-def _resolve_supabase_key() -> Tuple[Optional[str], Optional[str]]:
-    """Return the first configured Supabase key and the env var it came from."""
-    candidate_names = [
-        "SUPABASE_SERVICE_ROLE_KEY",
-        "SUPABASE_SERVICE_KEY",
-        "SUPABASE_SECRET_KEY",
-        "SUPABASE_KEY",
-        "SUPABASE_ANON_KEY",
-    ]
-    for name in candidate_names:
-        value = os.getenv(name)
-        if value and value.strip() and "your_supabase_key_here" not in value.lower():
-            normalized = value.strip()
-            if name != "SUPABASE_KEY":
-                os.environ["SUPABASE_KEY"] = normalized
-            return normalized, name
-    return None, None
+SUPABASE_URL, SUPABASE_KEY, SUPABASE_KEY_SOURCE = resolve_supabase_credentials()
 
-
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY, SUPABASE_KEY_SOURCE = _resolve_supabase_key()
-
-# Initialize Supabase
+# Initialize Supabase using unified helper
+supabase: Optional[Client] = None
 if SUPABASE_URL and SUPABASE_KEY and SUPABASE_URL != "your_supabase_url_here":
-    try:
-        supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+    supabase = create_supabase_client()
+    if supabase is not None:
         source_label = SUPABASE_KEY_SOURCE or "SUPABASE_KEY"
         print(f"Supabase client initialized successfully (source: {source_label}).")
         if SUPABASE_KEY_SOURCE == "SUPABASE_ANON_KEY":
             print("Warning: Using SUPABASE_ANON_KEY may limit write operations; configure a service-role key for full functionality.")
-    except Exception as e:
-        print(f"Warning: Failed to initialize Supabase client: {e}")
-        print("Conversation history will not be persisted.")
-        supabase = None
+    else:
+        print("Warning: Failed to initialize Supabase client via helper; conversation history disabled.")
 else:
-    supabase = None
     print("Warning: Supabase credentials not configured. Conversation history will not be persisted.")
 
 SUPABASE_CONVERSATIONS_ENABLED = supabase is not None
 
+GENERAL_CONVERSATION_PREFIX = "general:"
+_USER_DATA_CACHE: Dict[int, int] = {}
+
 
 def _conversation_store_available() -> bool:
-    return supabase is not None and SUPABASE_CONVERSATIONS_ENABLED
-
-
-LOCAL_CONVERSATION_STORE: Dict[str, List[Dict[str, Any]]] = {}
-LOCAL_CONVERSATION_METADATA: Dict[str, Dict[str, Any]] = {}
-LOCAL_CONVERSATION_LOCK = asyncio.Lock()
+  return supabase is not None and SUPABASE_CONVERSATIONS_ENABLED
 
 
 def _disable_conversation_store(reason: str) -> None:
-    global SUPABASE_CONVERSATIONS_ENABLED
-    if SUPABASE_CONVERSATIONS_ENABLED:
-        SUPABASE_CONVERSATIONS_ENABLED = False
-        print(f"Conversation storage disabled: {reason}")
+  global SUPABASE_CONVERSATIONS_ENABLED
+  if SUPABASE_CONVERSATIONS_ENABLED:
+    SUPABASE_CONVERSATIONS_ENABLED = False
+    print(f"Conversation storage disabled: {reason}")
 
 
 def _handle_conversation_store_error(context: str, error: Exception) -> None:
-    code = getattr(error, "code", None)
-    message = getattr(error, "message", None)
-    if isinstance(error, dict):
-        code = error.get("code")
-        message = error.get("message")
-    details = message or str(error)
+  code = getattr(error, "code", None)
+  message = getattr(error, "message", None)
+  if isinstance(error, dict):
+    code = error.get("code")
+    message = error.get("message")
+  details = message or str(error)
+  print(f"{context}: {details}")
+  normalized = (details or "").lower()
+  if code == "PGRST205" or "could not find the table" in normalized:
+    _disable_conversation_store("Supabase user chat tables missing; suppressing further requests.")
+  elif (
+    "permission denied" in normalized
+    or "insufficient privilege" in normalized
+    or "not authorized" in normalized
+  ):
+    _disable_conversation_store("Supabase conversation access denied; suppressing further requests.")
+
+
+def _handle_supabase_table_error(context: str, error: Exception) -> None:
+    details = getattr(error, "message", None) or str(error)
     print(f"{context}: {details}")
-    normalized = (details or "").lower()
-    if code == "PGRST205" or "could not find the table" in normalized:
-        _disable_conversation_store("Supabase 'conversations' table missing; suppressing further requests.")
-    elif "permission denied" in normalized or "insufficient privilege" in normalized or "not authorized" in normalized:
-        _disable_conversation_store("Supabase conversation access denied; suppressing further requests.")
+
+
+def _general_conversation_user_id(conversation_id: Optional[str]) -> Optional[int]:
+    if (
+        not conversation_id
+        or not isinstance(conversation_id, str)
+        or not conversation_id.startswith(GENERAL_CONVERSATION_PREFIX)
+    ):
+        return None
+    try:
+        return int(conversation_id.split(":", 1)[1])
+    except (ValueError, IndexError):
+        return None
+
+
+def _load_general_conversation_history(user_id: int) -> List[Dict[str, Any]]:
+    if not supabase:
+        return []
+    try:
+        result = (
+            supabase.table("general_chat_messages")
+            .select("role, content, grounding_metadata")
+            .eq("user_id", user_id)
+            .order("created_at", desc=False)
+            .execute()
+        )
+    except Exception as error:
+        _handle_conversation_store_error("Warning: General chat history unavailable", error)
+        return []
+    rows = result.data or []
+    history: List[Dict[str, Any]] = []
+    for row in rows:
+        role = row.get("role")
+        if role not in {"user", "model"}:
+            continue
+        entry: Dict[str, Any] = {
+            "role": role,
+            "text": row.get("content") or "",
+        }
+        grounding_metadata = row.get("grounding_metadata")
+        if grounding_metadata is not None:
+            entry["grounding_metadata"] = grounding_metadata
+        history.append(entry)
+    return history
+
+
+def _insert_general_conversation_message(
+    *,
+    user_id: int,
+    role: str,
+    text: str,
+    grounding_metadata: Optional[Any] = None,
+    attachments: Optional[Any] = None,
+) -> None:
+    if not supabase:
+        return
+    user_data_id = _ensure_user_data_record(user_id)
+    if user_data_id is None:
+        return
+    payload: Dict[str, Any] = {
+        "user_id": user_id,
+        "user_data_id": user_data_id,
+        "role": role,
+        "content": text,
+    }
+    if grounding_metadata is not None:
+        payload["grounding_metadata"] = grounding_metadata
+    if attachments is not None:
+        payload["attachments"] = attachments
+    try:
+        supabase.table("general_chat_messages").insert(payload).execute()
+    except Exception as error:
+        _handle_conversation_store_error("Error saving general conversation message", error)
+
+
+def _replace_general_conversation_history(user_id: int, history: List[Dict[str, Any]]) -> None:
+    if not supabase:
+        return
+    try:
+        user_data_id = _ensure_user_data_record(user_id)
+        if user_data_id is None:
+            return
+        supabase.table("general_chat_messages").delete().eq("user_id", user_id).execute()
+        if history:
+            rows: List[Dict[str, Any]] = []
+            for entry in history:
+                rows.append(
+                    {
+                        "user_id": user_id,
+                        "user_data_id": user_data_id,
+                        "role": entry.get("role"),
+                        "content": entry.get("text") or "",
+                        "grounding_metadata": entry.get("grounding_metadata"),
+                    }
+                )
+            if rows:
+                supabase.table("general_chat_messages").insert(rows).execute()
+    except Exception as error:
+        _handle_conversation_store_error("Error replacing general conversation history", error)
+
+
+def _delete_general_conversation_history(user_id: int) -> None:
+    if not supabase:
+        return
+    try:
+        supabase.table("general_chat_messages").delete().eq("user_id", user_id).execute()
+    except Exception as error:
+        _handle_conversation_store_error("Error deleting general conversation history", error)
+
+
+def _delete_supabase_user_records(user_id: int) -> None:
+    if not supabase:
+        return
+
+    delete_targets: List[Tuple[str, str]] = [
+        ("general_chat_messages", "user_id"),
+        ("user_chat_threads", "user_identifier"),
+        ("user_data", "user_identifier"),
+        ("plans", "user_id"),
+        ("habits", "user_id"),
+        ("reminders", "user_id"),
+        ("calendars", "user_id"),
+        ("calendar_events", "user_id"),
+        ("dashboard_pulses", "user_id"),
+        ("user_streaks", "user_id"),
+        ("context_cache", "user_id"),
+        ("file_search_stores", "user_id"),
+        ("media_uploads", "user_id"),
+        ("proactivity_logs", "user_id"),
+        ("proactivity_settings", "user_id"),
+        ("proactive_notifications", "user_id"),
+        ("google_calendar_credentials", "user_id"),
+    ]
+
+    for table_name, column in delete_targets:
+        try:
+            supabase.table(table_name).delete().eq(column, user_id).execute()
+        except Exception as error:
+            _handle_supabase_table_error(
+                f"Warning: Failed to delete Supabase data for user {user_id} in {table_name}",
+                error,
+            )
+
+
+def _ensure_user_data_record(user_identifier: int) -> Optional[int]:
+    """Return the user_data.id for the provided identifier, creating it if needed."""
+    if user_identifier is None or not _conversation_store_available() or supabase is None:
+        return None
+
+    cached = _USER_DATA_CACHE.get(user_identifier)
+    if cached is not None:
+        return cached
+
+    try:
+        result = (
+            supabase.table("user_data")
+            .select("id")
+            .eq("user_identifier", user_identifier)
+            .limit(1)
+            .execute()
+        )
+        rows = result.data or []
+        if rows:
+            row = rows[0]
+            user_data_id = _row_get(row, "id")
+            if isinstance(user_data_id, int):
+                _USER_DATA_CACHE[user_identifier] = user_data_id
+                return user_data_id
+    except Exception as error:
+        _handle_conversation_store_error("Error loading user data record", error)
+        return None
+
+    try:
+        created = supabase.table("user_data").insert({"user_identifier": user_identifier}).execute()
+        rows = created.data or []
+        if not rows:
+            lookup = (
+                supabase.table("user_data")
+                .select("id")
+                .eq("user_identifier", user_identifier)
+                .limit(1)
+                .execute()
+            )
+            rows = lookup.data or []
+        if rows:
+            user_data_id = _row_get(rows[0], "id")
+            if isinstance(user_data_id, int):
+                _USER_DATA_CACHE[user_identifier] = user_data_id
+                return user_data_id
+    except Exception as error:
+        _handle_conversation_store_error("Error creating user data record", error)
+    return None
+
+
+def _deserialize_proactivity_settings_payload(payload: Any) -> Optional[ProactivitySettings]:
+    if payload is None:
+        return None
+    candidate: Any = payload
+    if isinstance(candidate, str):
+        candidate = _parse_json_field(candidate)
+    if not isinstance(candidate, dict):
+        return None
+    try:
+        return ProactivitySettings.model_validate(candidate)
+    except Exception as e:
+        # Log deserialization errors for debugging
+        api_logger.warning(f"Failed to deserialize proactivity settings: {e}", extra={
+            "event_type": "proactivity_settings_deserialization_error",
+            "payload": candidate,
+            "error": str(e)
+        })
+        return None
+
+
+def _fetch_supabase_proactivity_settings(user_id: int) -> Optional[ProactivitySettings]:
+    if not supabase:
+        return None
+    try:
+        result = (
+            supabase.table("proactivity_settings")
+            .select("payload")
+            .eq("user_id", user_id)
+            .limit(1)
+            .execute()
+        )
+    except Exception as error:
+        api_logger.warning(f"Failed to fetch proactivity settings from Supabase for user {user_id}: {error}", extra={
+            "event_type": "proactivity_settings_supabase_fetch_error",
+            "user_id": user_id,
+            "error": str(error)
+        })
+        _handle_supabase_table_error(
+            "Warning: Proactivity settings table not found or inaccessible",
+            error,
+        )
+        return None
+    rows = getattr(result, "data", None)
+    if not rows:
+        api_logger.debug(f"No proactivity settings found in Supabase for user {user_id}", extra={
+            "event_type": "proactivity_settings_supabase_not_found",
+            "user_id": user_id
+        })
+        return None
+    payload = rows[0].get("payload")
+    api_logger.debug(f"Retrieved proactivity settings from Supabase for user {user_id}", extra={
+        "event_type": "proactivity_settings_supabase_fetched",
+        "user_id": user_id,
+        "payload": payload
+    })
+    return _deserialize_proactivity_settings_payload(payload)
+
+
+def _upsert_supabase_proactivity_settings(user_id: int, payload: Dict[str, Any]) -> None:
+    if not supabase:
+        api_logger.debug(f"Supabase not configured, skipping proactivity settings sync for user {user_id}", extra={
+            "event_type": "proactivity_settings_supabase_skip",
+            "user_id": user_id
+        })
+        return
+    timestamp = datetime.utcnow().isoformat()
+    try:
+        api_logger.debug(f"Upserting proactivity settings to Supabase for user {user_id}", extra={
+            "event_type": "proactivity_settings_supabase_upsert_start",
+            "user_id": user_id,
+            "payload": payload
+        })
+        (
+            supabase.table("proactivity_settings")
+            .upsert(
+                {
+                    "user_id": user_id,
+                    "payload": payload,
+                    "updated_at": timestamp,
+                },
+                on_conflict="user_id",
+            )
+            .execute()
+        )
+        api_logger.debug(f"Successfully upserted proactivity settings to Supabase for user {user_id}", extra={
+            "event_type": "proactivity_settings_supabase_upsert_success",
+            "user_id": user_id
+        })
+    except Exception as error:
+        api_logger.warning(f"Failed to upsert proactivity settings to Supabase for user {user_id}: {error}", extra={
+            "event_type": "proactivity_settings_supabase_upsert_error",
+            "user_id": user_id,
+            "error": str(error)
+        })
+        _handle_supabase_table_error(
+            "Warning: Failed to upsert proactivity settings",
+            error,
+        )
 
 
 def _is_valid_uuid(value: Optional[str]) -> bool:
@@ -900,22 +1291,113 @@ def _is_valid_uuid(value: Optional[str]) -> bool:
 # FastAPI app
 app = FastAPI(title="User Profile API with AI Chat", version="1.0.0")
 
+# Temporarily disable request logging middleware to debug 422 errors
+# app.add_middleware(RequestLoggingMiddleware, logger=api_logger)
+
+app_logger.info("FastAPI application created with enhanced logging middleware", extra={
+    "event_type": "fastapi_created",
+    "title": "User Profile API with AI Chat",
+    "version": "1.0.0"
+})
+
+# Global proactivity services
+proactivity_engine: Optional[ProactivityEngine] = None
+proactivity_scheduler: Optional[ProactivitySchedulerManager] = None
+proactivity_realtime_broker = ProactivityRealtimeBroker()
+
+
+@app.on_event("startup")
+async def _initialize_proactivity_engine():
+    """Initialize the hybrid proactivity engine + scheduler."""
+    global proactivity_engine, proactivity_scheduler
+
+    try:
+        app_logger.info("Initializing proactivity engine", extra={
+            "event_type": "proactivity_engine_init_start"
+        })
+
+        proactivity_engine = ProactivityEngine(
+            database,
+            supabase,
+            proactivity_realtime_broker,
+            AI_MESSAGE_GENERATOR,
+        )
+        proactivity_scheduler = ProactivitySchedulerManager(proactivity_engine)
+        await proactivity_scheduler.start()
+
+        app_logger.info("Proactivity engine initialized successfully", extra={
+            "event_type": "proactivity_engine_init_success"
+        })
+    except Exception as e:
+        app_logger.error(
+            f"Failed to initialize proactivity engine: {e}",
+            exc_info=True,
+            extra={
+                "event_type": "proactivity_engine_init_error",
+                "error": str(e),
+            },
+        )
+
+
+@app.on_event("shutdown")
+async def _shutdown_proactivity_engine():
+    """Stop the APScheduler + clean up."""
+    global proactivity_scheduler
+
+    try:
+        if proactivity_scheduler:
+            await proactivity_scheduler.shutdown()
+
+        app_logger.info("Proactivity engine stopped", extra={
+            "event_type": "proactivity_engine_shutdown"
+        })
+    except Exception as e:
+        app_logger.error(f"Error stopping proactivity engine: {e}", extra={
+            "event_type": "proactivity_engine_shutdown_error",
+            "error": str(e)
+        })
+
 
 @app.on_event("startup")
 async def _validate_gemini_api_key_on_startup():
+    app_logger.info("Starting application startup validation", extra={
+        "event_type": "startup_validation_start",
+        "ai_provider": AI_PROVIDER,
+        "validation_enabled": VALIDATE_GEMINI_ON_STARTUP
+    })
+
     if AI_PROVIDER != "gemini" or not VALIDATE_GEMINI_ON_STARTUP:
+        app_logger.info("Gemini validation skipped", extra={
+            "event_type": "gemini_validation_skipped",
+            "reason": "not_gemini_provider_or_validation_disabled"
+        })
         return
 
     if not GEMINI_SERVICE.available:
-        print("[Gemini] Validation skipped; no API key configured.")
+        app_logger.warning("Gemini validation skipped; no API key configured", extra={
+            "event_type": "gemini_validation_skipped",
+            "reason": "no_api_key"
+        })
         return
 
-    print("[Gemini] Validating API key before accepting requests...")
+    app_logger.info("Starting Gemini API key validation", extra={
+        "event_type": "gemini_validation_start"
+    })
+
     try:
         await GEMINI_SERVICE.validate_connection()
-        print("[Gemini] Validation succeeded.")
+        app_logger.info("Gemini API validation succeeded", extra={
+            "event_type": "gemini_validation_success"
+        })
     except Exception as exc:  # pragma: no cover - best effort logging
-        print(f"[Gemini] Validation failed: {exc}")
+        app_logger.error(
+            f"Gemini API validation failed: {exc}",
+            exc_info=True,
+            extra={
+                "event_type": "gemini_validation_failure",
+                "error": str(exc),
+            },
+        )
 
 # CORS middleware
 app.add_middleware(
@@ -927,16 +1409,54 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app_logger.info("CORS middleware configured", extra={
+    "event_type": "cors_configured",
+    "allowed_origins": ALLOWED_ORIGINS[:3] if len(ALLOWED_ORIGINS) > 3 else ALLOWED_ORIGINS,  # Limit logging
+    "origin_regex_enabled": bool(ALLOWED_ORIGIN_REGEX)
+})
+
 # Security
 security = HTTPBearer()
 
 # Database dependency
 async def get_database():
-    await database.connect()
+    db_logger.debug("Database connection requested", extra={
+        "event_type": "database_connection_requested"
+    })
+
+    start_time = datetime.utcnow()
     try:
-        yield database
-    finally:
-        await database.disconnect()
+        await database.connect()
+        connection_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+
+        db_logger.info("Database connection established", extra={
+            "event_type": "database_connected",
+            "connection_time_ms": connection_time
+        })
+
+        try:
+            yield database
+        finally:
+            disconnect_start = datetime.utcnow()
+            await database.disconnect()
+            disconnect_time = (datetime.utcnow() - disconnect_start).total_seconds() * 1000
+
+            db_logger.debug("Database connection closed", extra={
+                "event_type": "database_disconnected",
+                "disconnect_time_ms": disconnect_time
+            })
+
+    except Exception as e:
+        db_logger.error(
+            f"Database connection failed: {e}",
+            exc_info=True,
+            extra={
+                "event_type": "database_connection_failed",
+                "error": str(e),
+                "connection_time_ms": (datetime.utcnow() - start_time).total_seconds() * 1000,
+            },
+        )
+        raise
 
 # Helper functions
 def generate_initials(full_name: str) -> str:
@@ -960,7 +1480,20 @@ def _timestamp_ms_to_datetime(timestamp_ms: Optional[int]) -> datetime:
 
 
 def _datetime_to_ms(value: Optional[datetime]) -> int:
-    base = value or datetime.utcnow()
+    base: datetime
+    if isinstance(value, datetime):
+        base = value
+    elif isinstance(value, str):
+        candidate = value.strip()
+        if candidate:
+            try:
+                base = datetime.fromisoformat(candidate.replace("Z", "+00:00"))
+            except ValueError:
+                base = datetime.utcnow()
+        else:
+            base = datetime.utcnow()
+    else:
+        base = datetime.utcnow()
     if base.tzinfo is None:
         aware = base.replace(tzinfo=timezone.utc)
     else:
@@ -1104,6 +1637,78 @@ def _serialize_context_cache(record: Any) -> Optional[Dict[str, Any]]:
     }
 
 
+def _candidate_grounding_payload(candidate: Any) -> Optional[Dict[str, Any]]:
+    """
+    Normalize grounding information from a Gemini candidate into a JSON-serializable dict.
+
+    Prefer the official grounding_metadata field when present, but fall back to
+    citation_metadata so the UI can still render a Sources panel even when the
+    Search tool only returns citations.
+    """
+    grounding: Optional[Dict[str, Any]] = None
+
+    # Preferred: explicit grounding_metadata from the model.
+    candidate_grounding = getattr(candidate, "grounding_metadata", None)
+    if candidate_grounding is not None:
+        try:
+            grounding = candidate_grounding.model_dump(exclude_none=True)
+        except Exception:
+            grounding = None
+
+    # Fallback: synthesize grounding chunks/supports from citation_metadata.
+    citation_metadata = getattr(candidate, "citation_metadata", None)
+    citations = getattr(citation_metadata, "citations", None)
+    if citations:
+        chunks: List[Dict[str, Any]] = []
+        supports: List[Dict[str, Any]] = []
+        for index, citation in enumerate(citations):
+            uri = getattr(citation, "uri", None)
+            title = getattr(citation, "title", None)
+            start_index = getattr(citation, "start_index", None)
+            end_index = getattr(citation, "end_index", None)
+            if not uri:
+                continue
+            chunks.append(
+                {
+                    "web": {
+                        "uri": uri,
+                        "title": title or uri,
+                    }
+                }
+            )
+            if isinstance(start_index, int) and isinstance(end_index, int) and end_index > start_index:
+                supports.append(
+                    {
+                        "segment": {
+                            "start_index": start_index,
+                            "end_index": end_index,
+                        },
+                        "grounding_chunk_indices": [index],
+                    }
+                )
+
+        if chunks:
+            synthesized = {
+                "grounding_chunks": chunks,
+            }
+            if supports:
+                synthesized["grounding_supports"] = supports
+
+            if grounding:
+                # Merge, giving precedence to explicit grounding metadata.
+                merged = dict(grounding)
+                merged.setdefault("grounding_chunks", []).extend(synthesized.get("grounding_chunks", []))
+                if "grounding_supports" in synthesized:
+                    merged.setdefault("grounding_supports", []).extend(
+                        synthesized.get("grounding_supports", [])
+                    )
+                grounding = merged
+            else:
+                grounding = synthesized
+
+    return grounding
+
+
 def _build_maps_tool_and_config(
     maps_enabled: bool,
     maps_latitude: Optional[float],
@@ -1162,7 +1767,8 @@ GRAY_TITLE_INSTRUCTION = (
     "the <graytitle>Example Title</graytitle> format (for example "
     "<graytitle>Mamdani vs Cuomo New York</graytitle>). Keep the tag separate from "
     "the rest of your reply, do not repeat it, and only include it when you feel "
-    "confident about the summary."
+    "confident about the summary. Keep the title short (ideally under 50 characters "
+    "and no more than 6–8 words)."
 )
 
 
@@ -1180,31 +1786,77 @@ def _build_gray_title_instruction_contents(
 
 
 def _merge_extra_contents(*lists: Optional[List[types.Content]]) -> Optional[List[types.Content]]:
-    merged: List[types.Content] = []
-    for candidate in lists:
-        if candidate:
-            merged.extend(candidate)
-    return merged or None
+  merged: List[types.Content] = []
+  for candidate in lists:
+    if candidate:
+      merged.extend(candidate)
+  return merged or None
 
 
 def _normalize_conversation_history(history: Optional[List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
-    if not history:
-        return []
-    normalized: List[Dict[str, Any]] = []
-    for entry in history:
-        raw_role = entry.get("role")
-        if not raw_role:
-            continue
-        role = "model" if raw_role == "assistant" else raw_role
-        if role not in {"user", "model"}:
-            continue
-        normalized.append(
-            {
-                "role": role,
-                "text": entry.get("text") or "",
-            }
-        )
-    return normalized
+  if not history:
+    return []
+  normalized: List[Dict[str, Any]] = []
+  for entry in history:
+    raw_role = entry.get("role")
+    if not raw_role:
+      continue
+    role = "model" if raw_role == "assistant" else raw_role
+    if role not in {"user", "model"}:
+      continue
+    normalized.append(
+      {
+        "role": role,
+        "text": entry.get("text") or "",
+      }
+    )
+  return normalized
+
+
+async def _load_conversation_history(conversation_id: str) -> List[Dict[str, Any]]:
+  """Load a conversation's messages from the user-centric Supabase tables."""
+  general_user_id = _general_conversation_user_id(conversation_id)
+  if general_user_id is not None:
+    return _load_general_conversation_history(general_user_id)
+
+  if not _conversation_store_available():
+    return []
+
+  if not _is_valid_uuid(conversation_id) or supabase is None:
+    return []
+
+  try:
+    result = (
+      supabase.table("user_chat_messages")
+      .select("role, text, grounding_metadata, attachments")
+      .eq("thread_id", conversation_id)
+      .order("created_at", desc=False)
+      .execute()
+    )
+    rows = result.data or []
+    history: List[Dict[str, Any]] = []
+    for row in rows:
+      role = row.get("role")
+      if not role:
+        continue
+      entry: Dict[str, Any] = {
+        "role": role,
+        "text": row.get("text") or "",
+      }
+      grounding_metadata = row.get("grounding_metadata")
+      if grounding_metadata is not None:
+        entry["grounding_metadata"] = grounding_metadata
+      attachments = row.get("attachments")
+      if attachments is not None:
+        entry["attachments"] = attachments
+      history.append(entry)
+    return history
+  except Exception as error:
+    _handle_conversation_store_error(
+      "Warning: User chat messages table not found or inaccessible",
+      error,
+    )
+    return []
 
 
 async def _ensure_user_file_search_store(
@@ -1303,35 +1955,80 @@ async def _build_file_search_tools(
 
 
 async def _fetch_proactivity_summary(user_id: int, info_type: Optional[str], db: databases.Database) -> Dict[str, Any]:
-    query = (
-        dashboard_pulses.select()
-        .where(dashboard_pulses.c.user_id == user_id)
-        .order_by(dashboard_pulses.c.date_key.desc())
-        .limit(3)
-    )
-    rows = await db.fetch_all(query)
+    """
+    Build a lightweight proactivity summary based only on the current plans and habits
+    stored for this user, not on any local dashboard snapshots.
+
+    This avoids leaking or double-counting historical/local data and keeps the
+    assistant's view aligned with the canonical per-user records.
+    """
     plan_labels: List[str] = []
     habit_labels: List[str] = []
-    for row in rows:
-        for plan in _row_get(row, "plans") or []:
-            label = str(plan.get("label") or "").strip()
+
+    # Prefer Supabase-backed tables when available so the view matches the
+    # rest of the app's plan/habit APIs.
+    if supabase:
+        try:
+            plan_result = (
+                supabase.table("plans")
+                .select("label")
+                .eq("user_id", user_id)
+                .order("created_at", desc=False)
+                .execute()
+            )
+            for row in getattr(plan_result, "data", []) or []:
+                label = str(_row_get(row, "label") or "").strip()
+                if label:
+                    plan_labels.append(label)
+        except Exception as error:
+            _handle_supabase_table_error("Warning: Proactivity summary could not load plans from Supabase", error)
+
+        try:
+            habit_result = (
+                supabase.table("habits")
+                .select("label")
+                .eq("user_id", user_id)
+                .order("created_at", desc=False)
+                .execute()
+            )
+            for row in getattr(habit_result, "data", []) or []:
+                label = str(_row_get(row, "label") or "").strip()
+                if label:
+                    habit_labels.append(label)
+        except Exception as error:
+            _handle_supabase_table_error("Warning: Proactivity summary could not load habits from Supabase", error)
+
+    # Fallback: use the local relational tables only if Supabase isn't configured.
+    if not plan_labels:
+        rows = await db.fetch_all(
+            plans.select()
+            .where(plans.c.user_id == user_id)
+            .order_by(plans.c.created_at)
+        )
+        for row in rows:
+            label = str(_row_get(row, "label") or "").strip()
             if label:
                 plan_labels.append(label)
-        for habit in _row_get(row, "habits") or []:
-            label = str(habit.get("label") or "").strip()
+
+    if not habit_labels:
+        rows = await db.fetch_all(
+            habits.select()
+            .where(habits.c.user_id == user_id)
+            .order_by(habits.c.created_at)
+        )
+        for row in rows:
+            label = str(_row_get(row, "label") or "").strip()
             if label:
                 habit_labels.append(label)
 
     plan_labels = plan_labels[:6]
     habit_labels = habit_labels[:6]
 
-    cursor_date = rows[0]["date_key"] if rows else None
-
-    summary_parts = []
+    summary_parts: List[str] = []
     if plan_labels:
-        summary_parts.append(f"{len(plan_labels)} recent plans (e.g. {plan_labels[:2]})")
+        summary_parts.append(f"{len(plan_labels)} active plans")
     if habit_labels:
-        summary_parts.append(f"{len(habit_labels)} habit check-ins (e.g. {habit_labels[:2]})")
+        summary_parts.append(f"{len(habit_labels)} tracked habits")
     if not summary_parts:
         summary_parts.append("No recorded plan or habit data yet.")
 
@@ -1340,7 +2037,7 @@ async def _fetch_proactivity_summary(user_id: int, info_type: Optional[str], db:
         "focus": info_type or "general",
         "plans": plan_labels,
         "habits": habit_labels,
-        "latest_date": cursor_date,
+        "latest_date": None,
     }
 
 
@@ -1497,6 +2194,26 @@ def _carry_forward_dashboard_entries(
 
 
 async def _load_dashboard_pulse_by_date(db: databases.Database, user_id: int, date_key: str):
+    # Prefer Supabase when available.
+    if supabase:
+        try:
+            result = (
+                supabase.table("dashboard_pulses")
+                .select("*")
+                .eq("user_id", user_id)
+                .eq("date_key", date_key)
+                .limit(1)
+                .execute()
+            )
+            rows = result.data or []
+            if rows:
+                return rows[0]
+        except Exception as error:
+            _handle_supabase_table_error(
+                f"Warning: Failed to load dashboard pulse from Supabase for user {user_id}",
+                error,
+            )
+
     query = (
         dashboard_pulses.select()
         .where(
@@ -1509,6 +2226,27 @@ async def _load_dashboard_pulse_by_date(db: databases.Database, user_id: int, da
 
 
 async def _load_previous_dashboard_pulse(db: databases.Database, user_id: int, date_key: str):
+    # Prefer Supabase when available.
+    if supabase:
+        try:
+            result = (
+                supabase.table("dashboard_pulses")
+                .select("*")
+                .eq("user_id", user_id)
+                .lt("date_key", date_key)
+                .order("date_key", desc=True)
+                .limit(1)
+                .execute()
+            )
+            rows = result.data or []
+            if rows:
+                return rows[0]
+        except Exception as error:
+            _handle_supabase_table_error(
+                f"Warning: Failed to load previous dashboard pulse from Supabase for user {user_id}",
+                error,
+            )
+
     query = (
         dashboard_pulses.select()
         .where(
@@ -1605,11 +2343,48 @@ async def _compute_proactivity_streak(db: databases.Database, user_id: int) -> D
 # Streak helper functions
 async def get_or_create_user_streak(user_id: int, db: databases.Database) -> UserStreak:
     """Get existing user streak or create new one"""
+    # Supabase-first streak lookup.
+    if supabase:
+        try:
+            result = (
+                supabase.table("user_streaks")
+                .select("*")
+                .eq("user_id", user_id)
+                .limit(1)
+                .execute()
+            )
+            rows = result.data or []
+            if rows:
+                return rows[0]
+
+            now = datetime.utcnow().isoformat()
+            created = (
+                supabase.table("user_streaks")
+                .insert(
+                    {
+                        "user_id": user_id,
+                        "current_streak": 0,
+                        "last_activity_date": None,
+                        "created_at": now,
+                        "updated_at": now,
+                    }
+                )
+                .select("*")
+                .single()
+                .execute()
+            )
+            if created.data:
+                return created.data
+        except Exception as error:
+            _handle_supabase_table_error(
+                f"Warning: Failed to load or create user streak in Supabase for user {user_id}",
+                error,
+            )
+
+    # Fallback to local SQLite.
     query = user_streaks.select().where(user_streaks.c.user_id == user_id)
     streak = await db.fetch_one(query)
     if not streak:
-        # Create new streak record with explicit timestamps
-        from datetime import datetime
         now = datetime.utcnow()
         create_query = user_streaks.insert().values(
             user_id=user_id,
@@ -1648,7 +2423,33 @@ async def update_user_streak(user_id: int, db: databases.Database):
         # First activity ever
         new_streak = 1
 
-    # Update streak record
+    # Supabase-first update.
+    if supabase:
+        try:
+            now = datetime.utcnow().isoformat()
+            updated = (
+                supabase.table("user_streaks")
+                .update(
+                    {
+                        "current_streak": new_streak,
+                        "last_activity_date": now,
+                        "updated_at": now,
+                    }
+                )
+                .eq("user_id", user_id)
+                .select("*")
+                .single()
+                .execute()
+            )
+            if updated.data:
+                return updated.data
+        except Exception as error:
+            _handle_supabase_table_error(
+                f"Warning: Failed to update user streak in Supabase for user {user_id}",
+                error,
+            )
+
+    # Fallback to local SQLite.
     update_query = user_streaks.update().where(
         user_streaks.c.user_id == user_id
     ).values(
@@ -1657,7 +2458,6 @@ async def update_user_streak(user_id: int, db: databases.Database):
     )
     await db.execute(update_query)
 
-    # Return updated streak
     select_query = user_streaks.select().where(user_streaks.c.user_id == user_id)
     updated_streak = await db.fetch_one(select_query)
     return updated_streak
@@ -1670,83 +2470,133 @@ async def root():
 
 # AI Chat helper functions
 async def get_or_create_conversation(
-    conversation_id: Optional[str],
-    user_id: int,
-    *,
-    title: Optional[str] = None,
+  conversation_id: Optional[str],
+  user_id: int,
+  *,
+  title: Optional[str] = None,
 ) -> str:
-    """Get existing conversation or create new one"""
-    valid_id = conversation_id if _is_valid_uuid(conversation_id) else None
-    if valid_id and _conversation_store_available():
-        try:
-            # Check if conversation exists and belongs to this user
-            result = (
-                supabase.table("conversations")
-                .select("id, history")
-                .eq("id", valid_id)
-                .eq("user_id", user_id)
-                .execute()
-            )
-            if result.data:
-                return valid_id
-        except Exception as error:
-            _handle_conversation_store_error("Error checking conversation", error)
+  """Get existing conversation or create a new one in Supabase."""
+  if not _conversation_store_available():
+    raise HTTPException(status_code=503, detail="Conversation storage is not available.")
 
-    if _conversation_store_available():
-        try:
-            result = supabase.table("conversations").insert({
-                "title": title or "New Conversation",
-                "history": [],
-                "user_id": user_id,
-            }).execute()
-            if result.data:
-                return result.data[0]["id"]
-        except Exception as error:
-            _handle_conversation_store_error("Error creating conversation", error)
-
-    # Fallback: return a mock ID
-    candidate_id = conversation_id or str(uuid4())
-    now_iso = datetime.utcnow().isoformat() + "Z"
-    async with LOCAL_CONVERSATION_LOCK:
-        LOCAL_CONVERSATION_STORE.setdefault(candidate_id, [])
-        metadata = LOCAL_CONVERSATION_METADATA.setdefault(
-            candidate_id,
-            {
-                "id": candidate_id,
-                "title": title or "New Conversation",
-                "user_id": user_id,
-                "created_at": now_iso,
-                "updated_at": now_iso,
-            },
-        )
-        if title:
-            metadata["title"] = title
-        metadata["user_id"] = user_id
-        metadata.setdefault("created_at", now_iso)
-        metadata["updated_at"] = now_iso
-    return candidate_id
-
-async def save_conversation_message(conversation_id: str, message: Dict[str, Any]):
-    """Save message to conversation history"""
-    if not _conversation_store_available() or not _is_valid_uuid(conversation_id):
-        async with LOCAL_CONVERSATION_LOCK:
-            history = LOCAL_CONVERSATION_STORE.setdefault(conversation_id, [])
-            history.append(message)
-        return
-
+  valid_id = conversation_id if _is_valid_uuid(conversation_id) else None
+  if valid_id:
     try:
-        # Get current history
-        result = supabase.table("conversations").select("history").eq("id", conversation_id).execute()
-        if result.data:
-            history = result.data[0]["history"] or []
-            history.append(message)
-
-            # Update conversation
-            supabase.table("conversations").update({
-                "history": history
-            }).eq("id", conversation_id).execute()
+      # Check if conversation exists and belongs to this user
+      result = (
+        supabase.table("user_chat_threads")
+        .select("id")
+        .eq("id", valid_id)
+        .eq("user_identifier", user_id)
+        .limit(1)
+        .execute()
+      )
+      if result.data:
+        return valid_id
     except Exception as error:
-        _handle_conversation_store_error("Error saving message", error)
+      _handle_conversation_store_error("Error checking conversation", error)
+      raise HTTPException(status_code=503, detail="Conversation storage is not available.")
+
+  user_data_id: Optional[int] = None
+  try:
+    user_data_id = _ensure_user_data_record(user_id)
+    if user_data_id is None:
+      raise HTTPException(status_code=503, detail="User metadata storage is not available.")
+    result = (
+      supabase.table("user_chat_threads")
+      .insert(
+        {
+          "title": title or "New Conversation",
+          "user_identifier": user_id,
+          "user_data_id": user_data_id,
+          "context_snapshot": [],
+          "metadata": {},
+        }
+      )
+      .execute()
+    )
+    rows = result.data or []
+    if not rows:
+      fallback = (
+        supabase.table("user_chat_threads")
+        .select("id")
+        .eq("user_identifier", user_id)
+        .order("created_at", desc=True)
+        .limit(1)
+        .execute()
+      )
+      rows = fallback.data or []
+    if rows:
+      conversation_row = rows[0]
+      conversation_id = _row_get(conversation_row, "id")
+      if isinstance(conversation_id, str):
+        return conversation_id
+  except Exception as error:
+    _handle_conversation_store_error("Error creating conversation", error)
+    raise HTTPException(status_code=503, detail="Conversation storage is not available.")
+
+  raise HTTPException(status_code=500, detail="Failed to create conversation.")
+
+
+async def save_conversation_message(
+  conversation_id: str,
+  message: Dict[str, Any],
+  *,
+  user_id: Optional[int] = None,
+) -> None:
+  """Persist a single message for a conversation."""
+  # Normalize the payload we write to storage so that rows are tidy and
+  # consistent.
+  raw_role = message.get("role")
+  if not raw_role:
+    return
+  role = "model" if raw_role == "assistant" else raw_role
+  if role not in {"user", "model"}:
+    return
+  text = message.get("text") or ""
+  grounding_metadata = message.get("grounding_metadata") or message.get("groundingMetadata")
+
+  general_user_id = _general_conversation_user_id(conversation_id)
+  if general_user_id is not None:
+      _insert_general_conversation_message(
+          user_id=general_user_id,
+          role=role,
+          text=text,
+          grounding_metadata=grounding_metadata,
+          attachments=message.get("attachments"),
+      )
+      return
+
+  if not _conversation_store_available() or not _is_valid_uuid(conversation_id):
+    # If the conversation store is unavailable or the identifier is not a real
+    # UUID, skip persistence rather than falling back to in-memory storage.
+    return
+
+  try:
+    insert_payload: Dict[str, Any] = {
+      "thread_id": conversation_id,
+      "role": role,
+      "text": text,
+    }
+    if grounding_metadata is not None:
+      insert_payload["grounding_metadata"] = grounding_metadata
+    attachments = message.get("attachments")
+    if attachments is not None:
+      insert_payload["attachments"] = attachments
+
+    supabase.table("user_chat_messages").insert(insert_payload).execute()
+
+    # Keep the parent conversation's updated_at fresh so the list endpoint
+    # naturally sorts by most recent activity.
+    updated_at_iso = datetime.utcnow().isoformat() + "Z"
+    supabase.table("user_chat_threads").update(
+      {
+        "updated_at": updated_at_iso,
+        "last_message_at": updated_at_iso,
+      }
+    ).eq("id", conversation_id).execute()
+  except Exception as error:
+    _handle_conversation_store_error("Error saving message", error)
 
 
 def _format_structured_ai_reply(user_message: str, thinking: str, ai_reply: str) -> str:
@@ -1770,6 +2620,41 @@ async def generate_chat_title_suggestion(message: str) -> Optional[str]:
     return _fallback_title_from_message(trimmed)
 
 
+def _extract_title_from_response(response: str) -> Optional[str]:
+    """Extract title from AI response using <graytitle> tags."""
+    if not response:
+        return None
+
+    # Try to match <graytitle>...</graytitle> tags
+    match = re.search(r'<graytitle\b[^>]*>([\s\S]*?)<\/graytitle>', response, re.IGNORECASE)
+    if match:
+        title = match.group(1).strip()
+        if title:
+            return title
+
+    # Try legacy format <<gray-title>>...<<gray-title-end>>
+    match = re.search(r'<<gray-title>>([\s\S]*?)<<gray-title-end>>', response, re.IGNORECASE)
+    if match:
+        title = match.group(1).strip()
+        if title:
+            return title
+
+    return None
+
+
+async def _update_conversation_title(conversation_id: str, title: str) -> None:
+    """Update the title of a conversation in Supabase."""
+    if not _conversation_store_available() or not _is_valid_uuid(conversation_id):
+        return
+
+    try:
+        supabase.table("user_chat_threads").update(
+            {"title": title}
+        ).eq("id", conversation_id).execute()
+    except Exception as error:
+        _handle_conversation_store_error("Error updating conversation title", error)
+
+
 async def stream_ai_response(
     message: str,
     conversation_history: Optional[List[Dict[str, Any]]] = None,
@@ -1786,6 +2671,7 @@ async def stream_ai_response(
     maps_latitude: Optional[float] = None,
     maps_longitude: Optional[float] = None,
     maps_widget: bool = False,
+    search_enabled: bool = True,
     should_generate_title: bool = False,
 ) -> AsyncGenerator[Tuple[str, Any], None]:
     """Yield token chunks using the configured AI provider."""
@@ -1831,7 +2717,8 @@ async def stream_ai_response(
         maps_longitude,
         maps_widget,
     )
-    tool_list = [*DEFAULT_CHAT_TOOLS, *maps_tools]
+    base_tools: List[types.Tool] = DEFAULT_CHAT_TOOLS if search_enabled else []
+    tool_list = [*base_tools, *maps_tools]
     grounding_metadata: Optional[Dict[str, Any]] = None
     if GEMINI_SERVICE.available:
         try:
@@ -1851,8 +2738,9 @@ async def stream_ai_response(
                 text_fragment = chunk.text or ""
                 if chunk.candidates:
                     candidate = chunk.candidates[0]
-                    if candidate.grounding_metadata:
-                        grounding_metadata = candidate.grounding_metadata.model_dump(exclude_none=True)
+                    payload = _candidate_grounding_payload(candidate)
+                    if payload:
+                        grounding_metadata = payload
                 accumulated += text_fragment
                 if text_fragment:
                     yield ("delta", text_fragment)
@@ -1886,6 +2774,7 @@ async def generate_ai_response(
     maps_latitude: Optional[float] = None,
     maps_longitude: Optional[float] = None,
     maps_widget: bool = False,
+    search_enabled: bool = True,
     should_generate_title: bool = False,
 ) -> Tuple[str, Optional[Dict[str, Any]]]:
     """Generate a structured response using the configured AI provider."""
@@ -1937,7 +2826,8 @@ async def generate_ai_response(
         maps_longitude,
         maps_widget,
     )
-    tool_list = [*DEFAULT_CHAT_TOOLS, *maps_tools]
+    base_tools: List[types.Tool] = DEFAULT_CHAT_TOOLS if search_enabled else []
+    tool_list = [*base_tools, *maps_tools]
     grounding_metadata: Optional[Dict[str, Any]] = None
     if GEMINI_SERVICE.available:
         try:
@@ -1992,8 +2882,9 @@ async def generate_ai_response(
                 )
                 if response.candidates:
                     candidate = response.candidates[0]
-                    if candidate.grounding_metadata:
-                        grounding_metadata = candidate.grounding_metadata.model_dump(exclude_none=True)
+                    payload = _candidate_grounding_payload(candidate)
+                    if payload:
+                        grounding_metadata = payload
                 attempts += 1
             final_text = response.text or ""
             if final_text:
@@ -2009,6 +2900,86 @@ async def generate_ai_response(
 def _sse_event(event: str, payload: Dict[str, Any]) -> str:
     """Serialize an SSE event."""
     return f"event: {event}\ndata: {json.dumps(payload)}\n\n"
+
+
+def _starter_profile_context(payload: ChatStarterRequest) -> str:
+    lines: List[str] = []
+    if payload.nickname and payload.nickname.strip():
+        lines.append(f"Preferred name: {payload.nickname.strip()}")
+    elif payload.name and payload.name.strip():
+        lines.append(f"Name: {payload.name.strip()}")
+    if payload.occupation and payload.occupation.strip():
+        lines.append(f"Occupation: {payload.occupation.strip()}")
+    if payload.about and payload.about.strip():
+        lines.append(f"About: {payload.about.strip()}")
+    if payload.custom_instructions and payload.custom_instructions.strip():
+        lines.append(f"Tone guidance: {payload.custom_instructions.strip()}")
+    return "\n".join(lines)
+
+
+def _starter_fallback_message(payload: ChatStarterRequest) -> str:
+    preferred = (payload.nickname or payload.name or "there").strip() or "there"
+    return (
+        f"Hey {preferred}, I’m Gray. "
+        "To get things rolling you can tell me what’s on deck today, ask for ideas, or just jot a reminder. "
+        "If nothing’s urgent, I can still help you plan the next move."
+    )
+
+
+def _build_starter_prompt(payload: ChatStarterRequest, profile_context: str) -> str:
+    prompt_parts = [
+        "You are Gray, a pragmatic alignment coach who speaks in first person.",
+        "Write one short greeting (two sentences max) to kick off a chat.",
+        "Reference the person’s preferred name if provided.",
+        "Invite them to share what’s on their mind without sounding generic.",
+    ]
+    if profile_context:
+        prompt_parts.append(f"Profile hints:\n{profile_context}")
+    return "\n\n".join(part for part in prompt_parts if part.strip())
+
+
+@app.post("/api/chat/starter", response_model=ChatStarterResponse)
+async def generate_chat_starter(request: ChatStarterRequest) -> ChatStarterResponse:
+    """Return an AI-authored greeting for the General workspace."""
+    profile_context = _starter_profile_context(request)
+    prompt = _build_starter_prompt(request, profile_context)
+    fallback_message = _starter_fallback_message(request)
+    try:
+        ai_logger.info(
+            "Generating chat starter",
+            extra={
+                "event_type": "chat_starter_request",
+                "user_id": request.user_id,
+                "has_profile_context": bool(profile_context),
+            },
+        )
+        response_text, _ = await generate_ai_response(
+            prompt,
+            conversation_history=[],
+            workspace_context=request.workspace_context,
+            system_prompt=request.system_prompt,
+            time_context=request.time_context,
+            model=None,
+            attachments=None,
+            user_id=request.user_id,
+            db=database,
+            search_enabled=False,
+            should_generate_title=False,
+        )
+        cleaned = (response_text or "").strip()
+        if not cleaned:
+            raise RuntimeError("Starter response was empty")
+        return ChatStarterResponse(message=cleaned, used_fallback=False)
+    except Exception as error:  # pragma: no cover - best effort logging
+        ai_logger.error(
+            "Chat starter generation failed",
+            extra={
+                "event_type": "chat_starter_error",
+                "user_id": request.user_id,
+            },
+            exc_info=True,
+        )
+        return ChatStarterResponse(message=fallback_message, used_fallback=True)
 
 
 # AI Chat endpoints
@@ -2084,7 +3055,7 @@ def _ensure_file_search_enabled():
 
 async def _wait_for_operation(operation: types.Operation) -> types.Operation:
     while not operation.done:
-        await asyncio.sleep(2)
+        await sleep(2)
         operation = await FILE_SEARCH_SERVICE.get_operation(operation.name)
     return operation
 
@@ -2204,11 +3175,51 @@ async def upload_media(
 @app.post("/api/chat", response_model=ChatResponse)
 async def chat_with_ai(request: ChatRequest, db: databases.Database = Depends(get_database)):
     """Send a message to AI and get a response"""
+    start_time = datetime.utcnow()
+
+    # Set request context for logging
+    correlation_id = str(uuid4())
+    set_request_context(correlation_id, str(request.user_id)[:8])
+
+    api_logger.info("Chat request received", extra={
+        "event_type": "chat_request_start",
+        "user_id": request.user_id,
+        "message_length": len(request.message),
+        "conversation_id": request.conversation_id,
+        "model": request.model,
+        "correlation_id": correlation_id
+    })
+
     try:
-        # Generate a title for the chat session
-        title_request = ChatTitleRequest(message=request.message)
-        title_response = await create_chat_title(title_request)
-        session_title = title_response.title
+        # Generate a title for the chat session (only if requested)
+        session_title = None
+        if request.should_generate_title:
+            try:
+                title_request = ChatTitleRequest(message=request.message)
+                # Add timeout to prevent title generation from blocking
+                title_response = await wait_for(
+                    create_chat_title(title_request),
+                    timeout=3.0
+                )
+                session_title = title_response.title
+            except TimeoutError:
+                api_logger.warning("Title generation timeout, using fallback", extra={
+                    "event_type": "title_generation_timeout",
+                    "user_id": request.user_id,
+                    "correlation_id": correlation_id
+                })
+                session_title = _fallback_title_from_message(request.message)
+            except Exception as title_error:
+                api_logger.warning(f"Title generation failed: {title_error}", extra={
+                    "event_type": "title_generation_error",
+                    "user_id": request.user_id,
+                    "error": str(title_error),
+                    "correlation_id": correlation_id
+                })
+                session_title = _fallback_title_from_message(request.message)
+
+        if not session_title:
+            session_title = _fallback_title_from_message(request.message)
 
         # Create chat session
         now = datetime.utcnow()
@@ -2232,27 +3243,16 @@ async def chat_with_ai(request: ChatRequest, db: databases.Database = Depends(ge
                 title=session_title,
             )
 
-        # Save user message to local conversation store
+        # Get conversation history for context
+        conversation_history: List[Dict[str, Any]] = await _load_conversation_history(conversation_id)
+
+        # Save user message to local conversation store (after capturing prior history)
         user_message_payload: Dict[str, Any] = {
             "role": "user",
             "text": request.message
         }
 
-        await save_conversation_message(conversation_id, user_message_payload)
-
-        # Get conversation history for context
-        conversation_history: List[Dict[str, Any]] = []
-        if _conversation_store_available() and _is_valid_uuid(conversation_id):
-            try:
-                result = supabase.table("conversations").select("history").eq("id", conversation_id).execute()
-                if result.data:
-                    conversation_history = result.data[0]["history"] or []
-            except Exception as error:
-                _handle_conversation_store_error("Error getting conversation history", error)
-                conversation_history = []
-        else:
-            async with LOCAL_CONVERSATION_LOCK:
-                conversation_history = list(LOCAL_CONVERSATION_STORE.get(conversation_id) or [])
+        await save_conversation_message(conversation_id, user_message_payload, user_id=request.user_id)
 
         # Generate AI response
         ai_response, grounding_metadata = await generate_ai_response(
@@ -2272,14 +3272,27 @@ async def chat_with_ai(request: ChatRequest, db: databases.Database = Depends(ge
             maps_latitude=request.maps_latitude,
             maps_longitude=request.maps_longitude,
             maps_widget=request.maps_widget,
+            search_enabled=request.web_search_enabled,
             should_generate_title=request.should_generate_title,
         )
 
-        # Save AI response
-        await save_conversation_message(conversation_id, {
+        # Save AI response (including grounding metadata for downstream UI)
+        assistant_message_payload: Dict[str, Any] = {
             "role": "model",
-            "text": ai_response
-        })
+            "text": ai_response,
+        }
+        if grounding_metadata:
+            assistant_message_payload["grounding_metadata"] = grounding_metadata
+        await save_conversation_message(conversation_id, assistant_message_payload, user_id=request.user_id)
+
+        # Extract title from AI response if title generation was requested
+        extracted_title: Optional[str] = None
+        if request.should_generate_title:
+            extracted_title = _extract_title_from_response(ai_response)
+            if extracted_title:
+                # Update the title in the database with the AI-generated one
+                await _update_conversation_title(conversation_id, extracted_title)
+                session_title = extracted_title
 
         # Update user streak for daily activity
         await update_user_streak(request.user_id, db)
@@ -2298,11 +3311,51 @@ async def chat_with_ai(request: ChatRequest, db: databases.Database = Depends(ge
 @app.post("/api/chat/stream")
 async def chat_with_ai_stream(request: ChatRequest, db: databases.Database = Depends(get_database)):
     """Stream an AI response token-by-token using Server-Sent Events."""
+    start_time = datetime.utcnow()
+
+    # Set request context for logging
+    correlation_id = str(uuid4())
+    set_request_context(correlation_id, str(request.user_id)[:8])
+
+    api_logger.info("Chat stream request received", extra={
+        "event_type": "chat_stream_request_start",
+        "user_id": request.user_id,
+        "message_length": len(request.message),
+        "conversation_id": request.conversation_id,
+        "model": request.model,
+        "correlation_id": correlation_id
+    })
+
     try:
-        # Generate a title for the chat session
-        title_request = ChatTitleRequest(message=request.message)
-        title_response = await create_chat_title(title_request)
-        session_title = title_response.title
+        # Generate a title for the chat session (only if requested)
+        session_title = None
+        if request.should_generate_title:
+            try:
+                title_request = ChatTitleRequest(message=request.message)
+                # Add timeout to prevent title generation from blocking the stream
+                title_response = await wait_for(
+                    create_chat_title(title_request),
+                    timeout=3.0
+                )
+                session_title = title_response.title
+            except TimeoutError:
+                api_logger.warning("Title generation timeout, using fallback", extra={
+                    "event_type": "title_generation_timeout",
+                    "user_id": request.user_id,
+                    "correlation_id": correlation_id
+                })
+                session_title = _fallback_title_from_message(request.message)
+            except Exception as title_error:
+                api_logger.warning(f"Title generation failed: {title_error}", extra={
+                    "event_type": "title_generation_error",
+                    "user_id": request.user_id,
+                    "error": str(title_error),
+                    "correlation_id": correlation_id
+                })
+                session_title = _fallback_title_from_message(request.message)
+
+        if not session_title:
+            session_title = _fallback_title_from_message(request.message)
 
         # Create chat session
         now = datetime.utcnow()
@@ -2325,26 +3378,19 @@ async def chat_with_ai_stream(request: ChatRequest, db: databases.Database = Dep
                 title=session_title,
             )
 
+        conversation_history: List[Dict[str, Any]] = []
+        if conversation_id:
+            conversation_history = await _load_conversation_history(conversation_id)
+
         user_message_payload: Dict[str, Any] = {
             "role": "user",
             "text": request.message,
         }
 
-        await save_conversation_message(conversation_id, user_message_payload)
-
-        conversation_history: List[Dict[str, Any]] = []
-        if _conversation_store_available() and _is_valid_uuid(conversation_id):
-            try:
-                result = supabase.table("conversations").select("history").eq("id", conversation_id).execute()
-                if result.data:
-                    conversation_history = result.data[0]["history"] or []
-            except Exception as supabase_error:  # pragma: no cover - logging
-                _handle_conversation_store_error("Error getting conversation history", supabase_error)
-        elif conversation_id:
-            async with LOCAL_CONVERSATION_LOCK:
-                conversation_history = list(LOCAL_CONVERSATION_STORE.get(conversation_id, []))
+        await save_conversation_message(conversation_id, user_message_payload, user_id=request.user_id)
 
         async def event_stream() -> AsyncGenerator[str, None]:
+            nonlocal session_title
             start_time = time.perf_counter()
             first_token_time: Optional[float] = None
             try:
@@ -2366,6 +3412,7 @@ async def chat_with_ai_stream(request: ChatRequest, db: databases.Database = Dep
                     maps_latitude=request.maps_latitude,
                     maps_longitude=request.maps_longitude,
                     maps_widget=request.maps_widget,
+                    search_enabled=request.web_search_enabled,
                     should_generate_title=request.should_generate_title,
                 ):
                     if kind == "delta":
@@ -2376,9 +3423,9 @@ async def chat_with_ai_stream(request: ChatRequest, db: databases.Database = Dep
                         accumulated_visible += payload
                         yield _sse_event("token", {"delta": payload})
                         if STREAMING_TOKEN_DELAY:
-                            await asyncio.sleep(STREAMING_TOKEN_DELAY)
+                            await sleep(STREAMING_TOKEN_DELAY)
                         else:
-                            await asyncio.sleep(0)
+                            await sleep(0)
                     elif kind == "final":
                         if isinstance(payload, dict):
                             final_response = payload.get("text") or accumulated_visible
@@ -2389,13 +3436,22 @@ async def chat_with_ai_stream(request: ChatRequest, db: databases.Database = Dep
                 if final_response is None:
                     final_response = accumulated_visible
 
-                await save_conversation_message(
-                    conversation_id,
-                    {
-                        "role": "model",
-                        "text": final_response,
-                    },
-                )
+                assistant_message_payload: Dict[str, Any] = {
+                    "role": "model",
+                    "text": final_response,
+                }
+                if grounding_metadata_payload:
+                    assistant_message_payload["grounding_metadata"] = grounding_metadata_payload
+                await save_conversation_message(conversation_id, assistant_message_payload, user_id=request.user_id)
+
+                # Extract title from AI response if title generation was requested
+                extracted_title: Optional[str] = None
+                if request.should_generate_title:
+                    extracted_title = _extract_title_from_response(final_response)
+                    if extracted_title:
+                        # Update the title in the database with the AI-generated one
+                        await _update_conversation_title(conversation_id, extracted_title)
+                        session_title = extracted_title
 
                 await update_user_streak(request.user_id, db)
 
@@ -2422,33 +3478,48 @@ async def chat_with_ai_stream(request: ChatRequest, db: databases.Database = Dep
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no",
         }
+
+        # Log successful completion
+        total_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+        api_logger.info("Chat request completed successfully", extra={
+            "event_type": "chat_request_complete",
+            "user_id": request.user_id,
+            "conversation_id": conversation_id,
+            "total_time_ms": total_time,
+            "response_length": len(final_response) if 'final_response' in locals() else 0,
+            "correlation_id": correlation_id
+        })
+
+        clear_request_context()
         return StreamingResponse(event_stream(), media_type="text/event-stream", headers=headers)
     except Exception as error:
+        total_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+        api_logger.error(
+            f"Chat stream request failed: {error}",
+            exc_info=True,
+            extra={
+                "event_type": "chat_stream_request_error",
+                "user_id": request.user_id,
+                "error": str(error),
+                "total_time_ms": total_time,
+                "correlation_id": correlation_id,
+            },
+        )
+
         async def error_stream() -> AsyncGenerator[str, None]:
             yield _sse_event("error", {"message": str(error)})
 
+        clear_request_context()
         return StreamingResponse(error_stream(), status_code=500, media_type="text/event-stream")
 
 @app.get("/api/conversation/{conversation_id}")
 async def get_conversation(conversation_id: str):
-    """Get conversation history"""
-    try:
-        if not _conversation_store_available() or not _is_valid_uuid(conversation_id):
-            async with LOCAL_CONVERSATION_LOCK:
-                return list(LOCAL_CONVERSATION_STORE.get(conversation_id, []))
-
-        try:
-            result = supabase.table("conversations").select("history").eq("id", conversation_id).execute()
-            if result.data:
-                return result.data[0]["history"] or []
-            return []
-        except Exception as supabase_error:
-            # Handle missing table gracefully
-            _handle_conversation_store_error("Warning: Conversations table not found or inaccessible", supabase_error)
-            return []
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error fetching conversation: {str(e)}")
+  """Get conversation history."""
+  try:
+    history = await _load_conversation_history(conversation_id)
+    return history
+  except Exception as e:
+    raise HTTPException(status_code=500, detail=f"Error fetching conversation: {str(e)}")
 
 @app.post("/api/conversation")
 async def create_conversation(request: ConversationCreateRequest):
@@ -2465,14 +3536,42 @@ async def create_conversation(request: ConversationCreateRequest):
             }
 
         try:
-            result = supabase.table("conversations").insert({
-                "title": request.title,
-                "history": [],
-                "user_id": request.user_id,
-            }).execute()
+            user_data_id = _ensure_user_data_record(request.user_id)
+            if user_data_id is None:
+                raise HTTPException(status_code=503, detail="User metadata storage is not available.")
+            result = (
+                supabase.table("user_chat_threads")
+                .insert(
+                    {
+                        "title": request.title or "New Conversation",
+                        "user_identifier": request.user_id,
+                        "user_data_id": user_data_id,
+                        "context_snapshot": [],
+                        "metadata": {},
+                    }
+                )
+                .execute()
+            )
 
-            if result.data:
-                return result.data[0]
+            rows = result.data or []
+            if not rows:
+                fallback = (
+                    supabase.table("user_chat_threads")
+                    .select("id, title, created_at, updated_at")
+                    .eq("user_identifier", request.user_id)
+                    .order("created_at", desc=True)
+                    .limit(1)
+                    .execute()
+                )
+                rows = fallback.data or []
+
+            if rows:
+                row = rows[0]
+                return {
+                    **row,
+                    "history": [],
+                    "user_id": request.user_id,
+                }
             else:
                 raise HTTPException(status_code=500, detail="Failed to create conversation")
         except Exception as supabase_error:
@@ -2489,6 +3588,89 @@ async def create_conversation(request: ConversationCreateRequest):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error creating conversation: {str(e)}")
+
+
+@app.delete("/api/conversation/{conversation_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_conversation(conversation_id: str):
+    """Delete a conversation and all of its stored messages.
+
+    This is used by the frontend when a user deletes an entire chat.
+    It mirrors the behavior of other conversation helpers by updating
+    both Supabase (when available) and the in-memory fallback store.
+    """
+    try:
+        general_user_id = _general_conversation_user_id(conversation_id)
+        if general_user_id is not None:
+            _delete_general_conversation_history(general_user_id)
+            return
+
+        if _conversation_store_available() and _is_valid_uuid(conversation_id):
+            try:
+                supabase.table("user_chat_threads").delete().eq("id", conversation_id).execute()
+            except Exception as error:
+                _handle_conversation_store_error("Error deleting conversation", error)
+        # When storage is unavailable or the ID is not a UUID, there is nothing to delete.
+    except Exception as error:
+        raise HTTPException(status_code=500, detail=f"Error deleting conversation: {str(error)}")
+
+
+class ConversationHistoryPayload(BaseModel):
+    messages: List[Dict[str, Any]]
+
+
+@app.put("/api/conversation/{conversation_id}/history")
+async def overwrite_conversation_history(conversation_id: str, payload: ConversationHistoryPayload):
+    """Replace the full message history for a conversation.
+
+    The frontend uses this when the user deletes individual messages so that
+    server-side history matches the locally edited conversation.
+    """
+    try:
+        normalized_history = _normalize_conversation_history(payload.messages)
+        updated_at_iso = datetime.utcnow().isoformat() + "Z"
+
+        general_user_id = _general_conversation_user_id(conversation_id)
+        if general_user_id is not None:
+            _replace_general_conversation_history(general_user_id, normalized_history)
+            return {
+                "id": conversation_id,
+                "message_count": len(normalized_history),
+            }
+
+        # Write to Supabase when available and the conversation_id is a real UUID.
+        if _conversation_store_available() and _is_valid_uuid(conversation_id):
+            try:
+                supabase.table("user_chat_messages").delete().eq("thread_id", conversation_id).execute()
+                if normalized_history:
+                    rows: List[Dict[str, Any]] = []
+                    for entry in normalized_history:
+                        rows.append(
+                            {
+                                "thread_id": conversation_id,
+                                "role": entry.get("role"),
+                                "text": entry.get("text") or "",
+                            }
+                        )
+                    supabase.table("user_chat_messages").insert(rows).execute()
+
+                supabase.table("user_chat_threads").update({
+                    "updated_at": updated_at_iso,
+                    "last_message_at": updated_at_iso,
+                }).eq("id", conversation_id).execute()
+            except Exception as error:
+                _handle_conversation_store_error("Error overwriting conversation history", error)
+
+        return {
+            "id": conversation_id,
+            "message_count": len(normalized_history),
+        }
+    except HTTPException:
+        raise
+    except Exception as error:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error overwriting conversation history: {str(error)}",
+        )
 
 def _normalize_conversation_title(payload: ConversationUpdateRequest) -> str | None:
     normalized_title: Optional[str] = None
@@ -2507,26 +3689,33 @@ async def _apply_conversation_update(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No conversation fields provided")
 
     updated_at_iso = datetime.utcnow().isoformat() + "Z"
+    storage_available = _conversation_store_available()
+    valid_conversation_id = _is_valid_uuid(conversation_id)
 
-    if _conversation_store_available() and _is_valid_uuid(conversation_id):
+    user_data_id_for_update: Optional[int] = None
+    if payload.user_id is not None:
+        user_data_id_for_update = _ensure_user_data_record(payload.user_id)
+
+    if storage_available and valid_conversation_id:
         update_values: Dict[str, Any] = {"updated_at": updated_at_iso}
         if normalized_title is not None:
             update_values["title"] = normalized_title
         if payload.user_id is not None:
-            update_values["user_id"] = payload.user_id
+            update_values["user_identifier"] = payload.user_id
+            if user_data_id_for_update is not None:
+                update_values["user_data_id"] = user_data_id_for_update
 
         try:
             result = (
-                supabase.table("conversations")
+                supabase.table("user_chat_threads")
                 .update(update_values)
                 .eq("id", conversation_id)
-                .select("id, title, created_at, updated_at")
                 .execute()
             )
             rows = result.data or []
             if not rows:
                 secondary = (
-                    supabase.table("conversations")
+                    supabase.table("user_chat_threads")
                     .select("id, title, created_at, updated_at")
                     .eq("id", conversation_id)
                     .limit(1)
@@ -2543,43 +3732,81 @@ async def _apply_conversation_update(
                     "updated_at": _row_get(row, "updated_at"),
                 }
 
+            if payload.user_id is not None:
+                seed_title = normalized_title or "New Conversation"
+                if user_data_id_for_update is None:
+                    user_data_id_for_update = _ensure_user_data_record(payload.user_id)
+                if user_data_id_for_update is None:
+                    raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="User metadata storage is not available.")
+                try:
+                    created = (
+                        supabase.table("user_chat_threads")
+                        .insert(
+                            {
+                                "id": conversation_id,
+                                "user_identifier": payload.user_id,
+                                "user_data_id": user_data_id_for_update,
+                                "title": seed_title,
+                                "context_snapshot": [],
+                                "metadata": {},
+                                "created_at": updated_at_iso,
+                                "updated_at": updated_at_iso,
+                            }
+                        )
+                        .execute()
+                    )
+                    created_rows = created.data or []
+                    if not created_rows:
+                        fallback_created = (
+                            supabase.table("user_chat_threads")
+                            .select("id, title, created_at, updated_at")
+                            .eq("id", conversation_id)
+                            .limit(1)
+                            .execute()
+                        )
+                        created_rows = fallback_created.data or []
+                    if created_rows:
+                        row = created_rows[0]
+                        return {
+                            "id": _row_get(row, "id") or conversation_id,
+                            "title": _row_get(row, "title"),
+                            "created_at": _row_get(row, "created_at"),
+                            "updated_at": _row_get(row, "updated_at"),
+                        }
+                except Exception as error:
+                    _handle_conversation_store_error("Error creating missing conversation", error)
+
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
         except HTTPException:
             raise
         except Exception as error:
             _handle_conversation_store_error("Error updating conversation", error)
+            storage_available = _conversation_store_available()
             # Fall back to local storage if possible
 
-    now_iso = updated_at_iso
-    async with LOCAL_CONVERSATION_LOCK:
-        if (
-            conversation_id not in LOCAL_CONVERSATION_STORE
-            and conversation_id not in LOCAL_CONVERSATION_METADATA
-        ):
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
+    fallback_payload = {
+        "id": conversation_id,
+        "title": normalized_title,
+        "created_at": updated_at_iso,
+        "updated_at": updated_at_iso,
+    }
 
-        metadata = LOCAL_CONVERSATION_METADATA.setdefault(
-            conversation_id,
-            {
-                "id": conversation_id,
-                "title": normalized_title or "New Conversation",
-                "created_at": now_iso,
-                "updated_at": now_iso,
-            },
+    if not storage_available:
+        # Best-effort acknowledgement when conversation storage is disabled.
+        return fallback_payload
+
+    if not valid_conversation_id:
+        app_logger.warning(
+            "Received conversation metadata update with invalid identifier; acknowledging without persistence.",
+            extra={"conversation_id": conversation_id}
         )
-        if normalized_title is not None:
-            metadata["title"] = normalized_title
-        if payload.user_id is not None:
-            metadata["user_id"] = payload.user_id
-        metadata.setdefault("created_at", now_iso)
-        metadata["updated_at"] = now_iso
+        return fallback_payload
 
-        return {
-            "id": metadata["id"],
-            "title": metadata.get("title"),
-            "created_at": metadata.get("created_at"),
-            "updated_at": metadata.get("updated_at"),
-        }
+    app_logger.warning(
+        "Conversation metadata update failed after retries; acknowledging without persistence.",
+        extra={"conversation_id": conversation_id, "user_id": payload.user_id}
+    )
+    return fallback_payload
 
 
 @app.patch("/api/conversation/{conversation_id}")
@@ -2679,17 +3906,17 @@ async def create_user(user: UserCreate, db: databases.Database = Depends(get_dat
         "updated_at": now
     }
 
-@app.get("/users/{user_id}", response_model=User)
-async def get_user(user_id: int, db: databases.Database = Depends(get_database)):
-    query = users.select().where(users.c.id == user_id)
+@app.get("/users/email/{email}", response_model=User)
+async def get_user_by_email(email: str, db: databases.Database = Depends(get_database)):
+    query = users.select().where(users.c.email == email)
     user = await db.fetch_one(query)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     return user
 
-@app.get("/users/email/{email}", response_model=User)
-async def get_user_by_email(email: str, db: databases.Database = Depends(get_database)):
-    query = users.select().where(users.c.email == email)
+@app.get("/users/{user_id}", response_model=User)
+async def get_user(user_id: int, db: databases.Database = Depends(get_database)):
+    query = users.select().where(users.c.id == user_id)
     user = await db.fetch_one(query)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -2716,6 +3943,38 @@ async def update_user(user_id: int, user_update: UserUpdate, db: databases.Datab
     # Return updated user
     query = users.select().where(users.c.id == user_id)
     return await db.fetch_one(query)
+
+
+@app.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_user_account(user_id: int, db: databases.Database = Depends(get_database)):
+    existing = await db.fetch_one(users.select().where(users.c.id == user_id))
+    if not existing:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    _delete_supabase_user_records(user_id)
+
+    deletion_tables = [
+        chat_sessions,
+        calendar_events,
+        calendars,
+        plans,
+        habits,
+        reminders,
+        dashboard_pulses,
+        user_streaks,
+        context_cache,
+        file_search_stores,
+        media_uploads,
+        proactivity_logs,
+        proactivity_settings,
+        proactive_notifications,
+        google_calendar_credentials,
+    ]
+
+    for table in deletion_tables:
+        await db.execute(table.delete().where(table.c.user_id == user_id))
+
+    await db.execute(users.delete().where(users.c.id == user_id))
 
 @app.get("/users/{user_id}/chat-sessions", response_model=List[ChatSession])
 async def get_user_chat_sessions(user_id: int, db: databases.Database = Depends(get_database)):
@@ -2778,17 +4037,51 @@ async def update_calendar(user_id: int, calendar_id: int, calendar_update: Calen
 
 @app.get("/users/{user_id}/plans", response_model=List[Plan])
 async def get_user_plans(user_id: int, db: databases.Database = Depends(get_database)):
+    if supabase:
+        try:
+            result = (
+                supabase.table("plans")
+                .select("*")
+                .eq("user_id", user_id)
+                .order("created_at", desc=False)
+                .execute()
+            )
+            if result.data is not None:
+                return result.data
+        except Exception as error:
+            _handle_supabase_table_error("Warning: Plans table not found or inaccessible", error)
     query = plans.select().where(plans.c.user_id == user_id).order_by(plans.c.created_at)
     return await db.fetch_all(query)
 
 @app.post("/users/{user_id}/plans", response_model=Plan, status_code=status.HTTP_201_CREATED)
 async def create_plan(user_id: int, plan: PlanCreate, db: databases.Database = Depends(get_database)):
+    base_values = {
+        "user_id": user_id,
+        "label": plan.label,
+        "completed": plan.completed,
+        "deadline": plan.deadline,
+        "schedule_slot": plan.schedule_slot,
+        "description": plan.description,
+    }
+    if supabase:
+        try:
+            timestamp = datetime.utcnow().isoformat()
+            payload = {**base_values, "created_at": timestamp, "updated_at": timestamp}
+            result = (
+                supabase.table("plans")
+                .insert(payload)
+                .select("*")
+                .single()
+                .execute()
+            )
+            if result.data:
+                return result.data
+        except Exception as error:
+            _handle_supabase_table_error("Warning: Failed to create plan", error)
     now = datetime.utcnow()
     plan_id = await db.execute(
         plans.insert().values(
-            user_id=user_id,
-            label=plan.label,
-            completed=plan.completed,
+            **base_values,
             created_at=now,
             updated_at=now,
         )
@@ -2798,6 +4091,48 @@ async def create_plan(user_id: int, plan: PlanCreate, db: databases.Database = D
 
 @app.patch("/users/{user_id}/plans/{plan_id}", response_model=Plan)
 async def update_plan(user_id: int, plan_id: int, plan_update: PlanUpdate, db: databases.Database = Depends(get_database)):
+    update_data = plan_update.dict(exclude_unset=True)
+    if supabase:
+        try:
+            existing = (
+                supabase.table("plans")
+                .select("id")
+                .eq("id", plan_id)
+                .eq("user_id", user_id)
+                .limit(1)
+                .execute()
+            )
+            if not existing.data:
+                raise HTTPException(status_code=404, detail="Plan not found")
+            if not update_data:
+                plan_record = (
+                    supabase.table("plans")
+                    .select("*")
+                    .eq("id", plan_id)
+                    .eq("user_id", user_id)
+                    .single()
+                    .execute()
+                )
+                return plan_record.data
+            update_payload = {
+                **update_data,
+                "updated_at": datetime.utcnow().isoformat(),
+            }
+            result = (
+                supabase.table("plans")
+                .update(update_payload)
+                .eq("id", plan_id)
+                .eq("user_id", user_id)
+                .select("*")
+                .single()
+                .execute()
+            )
+            if result.data:
+                return result.data
+        except HTTPException:
+            raise
+        except Exception as error:
+            _handle_supabase_table_error("Warning: Failed to update plan", error)
     existing = await db.fetch_one(
         plans.select().where(
             (plans.c.id == plan_id) & (plans.c.user_id == user_id)
@@ -2805,13 +4140,9 @@ async def update_plan(user_id: int, plan_id: int, plan_update: PlanUpdate, db: d
     )
     if not existing:
         raise HTTPException(status_code=404, detail="Plan not found")
-
-    update_data = plan_update.dict(exclude_unset=True)
     if not update_data:
         return existing
-
     update_data["updated_at"] = datetime.utcnow()
-
     await db.execute(
         plans.update()
         .where((plans.c.id == plan_id) & (plans.c.user_id == user_id))
@@ -2822,16 +4153,30 @@ async def update_plan(user_id: int, plan_id: int, plan_update: PlanUpdate, db: d
 
 @app.delete("/users/{user_id}/plans/{plan_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_plan(user_id: int, plan_id: int, db: databases.Database = Depends(get_database)):
-    # Check if plan exists and belongs to user
+    if supabase:
+        try:
+            existing = (
+                supabase.table("plans")
+                .select("id")
+                .eq("id", plan_id)
+                .eq("user_id", user_id)
+                .limit(1)
+                .execute()
+            )
+            if not existing.data:
+                raise HTTPException(status_code=404, detail="Plan not found")
+            supabase.table("plans").delete().eq("id", plan_id).eq("user_id", user_id).execute()
+            return None
+        except HTTPException:
+            raise
+        except Exception as error:
+            _handle_supabase_table_error("Warning: Failed to delete plan", error)
     query = plans.select().where(
         (plans.c.id == plan_id) & (plans.c.user_id == user_id)
     )
     existing = await db.fetch_one(query)
-
     if not existing:
         raise HTTPException(status_code=404, detail="Plan not found")
-
-    # Delete the plan
     delete_query = plans.delete().where(
         (plans.c.id == plan_id) & (plans.c.user_id == user_id)
     )
@@ -2840,18 +4185,50 @@ async def delete_plan(user_id: int, plan_id: int, db: databases.Database = Depen
 
 @app.get("/users/{user_id}/habits", response_model=List[Habit])
 async def get_user_habits(user_id: int, db: databases.Database = Depends(get_database)):
+    if supabase:
+        try:
+            result = (
+                supabase.table("habits")
+                .select("*")
+                .eq("user_id", user_id)
+                .order("created_at", desc=False)
+                .execute()
+            )
+            if result.data is not None:
+                return result.data
+        except Exception as error:
+            _handle_supabase_table_error("Warning: Habits table not found or inaccessible", error)
     query = habits.select().where(habits.c.user_id == user_id).order_by(habits.c.created_at)
     return await db.fetch_all(query)
 
 @app.post("/users/{user_id}/habits", response_model=Habit, status_code=status.HTTP_201_CREATED)
 async def create_habit(user_id: int, habit: HabitCreate, db: databases.Database = Depends(get_database)):
+    base_values = {
+        "user_id": user_id,
+        "label": habit.label,
+        "streak_label": habit.streak_label,
+        "previous_label": habit.previous_label,
+        "description": habit.description,
+    }
+    if supabase:
+        try:
+            timestamp = datetime.utcnow().isoformat()
+            payload = {**base_values, "created_at": timestamp, "updated_at": timestamp}
+            result = (
+                supabase.table("habits")
+                .insert(payload)
+                .select("*")
+                .single()
+                .execute()
+            )
+            if result.data:
+                return result.data
+        except Exception as error:
+            _handle_supabase_table_error("Warning: Failed to create habit", error)
     now = datetime.utcnow()
     habit_id = await db.execute(
         habits.insert().values(
-            user_id=user_id,
-            label=habit.label,
-            streak_label=habit.streak_label,
-            previous_label=habit.previous_label,
+            **base_values,
             created_at=now,
             updated_at=now,
         )
@@ -2861,6 +4238,48 @@ async def create_habit(user_id: int, habit: HabitCreate, db: databases.Database 
 
 @app.patch("/users/{user_id}/habits/{habit_id}", response_model=Habit)
 async def update_habit(user_id: int, habit_id: int, habit_update: HabitUpdate, db: databases.Database = Depends(get_database)):
+    update_data = habit_update.dict(exclude_unset=True)
+    if supabase:
+        try:
+            existing = (
+                supabase.table("habits")
+                .select("id")
+                .eq("id", habit_id)
+                .eq("user_id", user_id)
+                .limit(1)
+                .execute()
+            )
+            if not existing.data:
+                raise HTTPException(status_code=404, detail="Habit not found")
+            if not update_data:
+                habit_row = (
+                    supabase.table("habits")
+                    .select("*")
+                    .eq("id", habit_id)
+                    .eq("user_id", user_id)
+                    .single()
+                    .execute()
+                )
+                return habit_row.data
+            update_payload = {
+                **update_data,
+                "updated_at": datetime.utcnow().isoformat(),
+            }
+            result = (
+                supabase.table("habits")
+                .update(update_payload)
+                .eq("id", habit_id)
+                .eq("user_id", user_id)
+                .select("*")
+                .single()
+                .execute()
+            )
+            if result.data:
+                return result.data
+        except HTTPException:
+            raise
+        except Exception as error:
+            _handle_supabase_table_error("Warning: Failed to update habit", error)
     existing = await db.fetch_one(
         habits.select().where(
             (habits.c.id == habit_id) & (habits.c.user_id == user_id)
@@ -2868,13 +4287,9 @@ async def update_habit(user_id: int, habit_id: int, habit_update: HabitUpdate, d
     )
     if not existing:
         raise HTTPException(status_code=404, detail="Habit not found")
-
-    update_data = habit_update.dict(exclude_unset=True)
     if not update_data:
         return existing
-
     update_data["updated_at"] = datetime.utcnow()
-
     await db.execute(
         habits.update()
         .where((habits.c.id == habit_id) & (habits.c.user_id == user_id))
@@ -2885,16 +4300,30 @@ async def update_habit(user_id: int, habit_id: int, habit_update: HabitUpdate, d
 
 @app.delete("/users/{user_id}/habits/{habit_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_habit(user_id: int, habit_id: int, db: databases.Database = Depends(get_database)):
-    # Check if habit exists and belongs to user
+    if supabase:
+        try:
+            existing = (
+                supabase.table("habits")
+                .select("id")
+                .eq("id", habit_id)
+                .eq("user_id", user_id)
+                .limit(1)
+                .execute()
+            )
+            if not existing.data:
+                raise HTTPException(status_code=404, detail="Habit not found")
+            supabase.table("habits").delete().eq("id", habit_id).eq("user_id", user_id).execute()
+            return None
+        except HTTPException:
+            raise
+        except Exception as error:
+            _handle_supabase_table_error("Warning: Failed to delete habit", error)
     query = habits.select().where(
         (habits.c.id == habit_id) & (habits.c.user_id == user_id)
     )
     existing = await db.fetch_one(query)
-
     if not existing:
         raise HTTPException(status_code=404, detail="Habit not found")
-
-    # Delete the habit
     delete_query = habits.delete().where(
         (habits.c.id == habit_id) & (habits.c.user_id == user_id)
     )
@@ -2912,6 +4341,32 @@ async def touch_user_streak(user_id: int, db: databases.Database = Depends(get_d
 
 @app.get("/users/{user_id}/calendar-events", response_model=List[CalendarEvent])
 async def get_user_calendar_events(user_id: int, db: databases.Database = Depends(get_database)):
+    # Supabase-first for calendar events.
+    if supabase:
+        try:
+            result = (
+                supabase.table("calendar_events")
+                .select("*")
+                .eq("user_id", user_id)
+                .order("start_time", desc=False)
+                .execute()
+            )
+            rows = result.data or []
+            now = datetime.utcnow().isoformat()
+            normalized = []
+            for row in rows:
+                record = dict(row)
+                if record.get("created_at") is None:
+                    record["created_at"] = now
+                normalized.append(record)
+            return normalized
+        except Exception as error:
+            _handle_supabase_table_error(
+                f"Warning: Failed to fetch calendar events from Supabase for user {user_id}",
+                error,
+            )
+
+    # Fallback to local SQLite.
     query = calendar_events.select().where(calendar_events.c.user_id == user_id).order_by(calendar_events.c.start_time)
     rows = await db.fetch_all(query)
     now = datetime.utcnow()
@@ -2924,14 +4379,253 @@ async def get_user_calendar_events(user_id: int, db: databases.Database = Depend
     return normalized
 
 
+def _serialize_reminder_row(row: Any) -> Dict[str, Any]:
+  record = dict(row)
+  for key in ("remind_at", "created_at", "updated_at", "delivered_at"):
+      value = record.get(key)
+      if isinstance(value, datetime):
+          record[key] = value.isoformat()
+  return record
+
+
 @app.get("/users/{user_id}/reminders", response_model=List[Dict[str, Any]])
 async def list_user_reminders(
     user_id: int,
     limit: Optional[int] = Query(None, ge=1),
     status_filter: Optional[str] = None,
+    delivery_mode: Optional[str] = None,
+    entity_type: Optional[str] = None,
     include_archived: bool = Query(False),
+    db: databases.Database = Depends(get_database),
 ):
-    return []
+    if supabase:
+        try:
+            builder = (
+                supabase.table("reminders")
+                .select("*")
+                .eq("user_id", user_id)
+            )
+            if status_filter:
+                builder = builder.eq("status", status_filter)
+            elif not include_archived:
+                builder = builder.in_("status", ["pending", "delivered"])
+            if delivery_mode:
+                builder = builder.eq("delivery_mode", delivery_mode)
+            if entity_type:
+                builder = builder.eq("entity_type", entity_type)
+            builder = builder.order("remind_at", desc=False)
+            if limit is not None:
+                builder = builder.limit(limit)
+            result = builder.execute()
+            if result.data is not None:
+                return [_serialize_reminder_row(row) for row in result.data]
+        except Exception as error:
+            _handle_supabase_table_error("Warning: Reminders table not found or inaccessible", error)
+
+    query = reminders.select().where(reminders.c.user_id == user_id)
+
+    if status_filter:
+        query = query.where(reminders.c.status == status_filter)
+    elif not include_archived:
+        query = query.where(reminders.c.status.in_(["pending", "delivered"]))
+
+    if delivery_mode:
+        query = query.where(reminders.c.delivery_mode == delivery_mode)
+
+    if entity_type:
+        query = query.where(reminders.c.entity_type == entity_type)
+
+    query = query.order_by(reminders.c.remind_at.asc())
+
+    if limit is not None:
+        query = query.limit(limit)
+
+    rows = await db.fetch_all(query)
+    return [_serialize_reminder_row(row) for row in rows]
+
+
+@app.post(
+    "/users/{user_id}/reminders",
+    response_model=Dict[str, Any],
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_user_reminder(
+    user_id: int,
+    payload: ReminderCreate,
+    db: databases.Database = Depends(get_database),
+):
+    now = datetime.utcnow()
+    values = {
+        "user_id": user_id,
+        "label": payload.label,
+        "description": payload.description,
+        "summary": payload.summary,
+        "remind_at": payload.remind_at.isoformat(),
+        "entity_type": payload.entity_type,
+        "entity_id": payload.entity_id,
+        "delivery_mode": payload.delivery_mode,
+        "metadata": payload.metadata,
+        "status": "pending",
+        "created_at": now.isoformat(),
+        "updated_at": now.isoformat(),
+    }
+    if supabase:
+        try:
+            result = (
+                supabase.table("reminders")
+                .insert(values)
+                .select("*")
+                .single()
+                .execute()
+            )
+            if result.data:
+                return _serialize_reminder_row(result.data)
+        except Exception as error:
+            _handle_supabase_table_error("Warning: Failed to create reminder", error)
+
+    sqlite_values = {
+        **values,
+        "remind_at": payload.remind_at,
+        "created_at": now,
+        "updated_at": now,
+    }
+    reminder_id = await db.execute(reminders.insert().values(sqlite_values))
+    row = await db.fetch_one(reminders.select().where(reminders.c.id == reminder_id))
+    if not row:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to create reminder")
+    return _serialize_reminder_row(row)
+
+
+@app.patch("/users/{user_id}/reminders/{reminder_id}", response_model=Dict[str, Any])
+async def update_user_reminder(
+    user_id: int,
+    reminder_id: int,
+    payload: ReminderUpdate,
+    db: databases.Database = Depends(get_database),
+):
+    update_values: Dict[str, Any] = {}
+    if payload.label is not None:
+        update_values["label"] = payload.label
+    if payload.description is not None:
+        update_values["description"] = payload.description
+    if payload.summary is not None:
+        update_values["summary"] = payload.summary
+    if payload.remind_at is not None:
+        update_values["remind_at"] = payload.remind_at.isoformat()
+    if payload.status is not None:
+        update_values["status"] = payload.status
+    if payload.delivery_mode is not None:
+        update_values["delivery_mode"] = payload.delivery_mode
+    if payload.metadata is not None:
+        update_values["metadata"] = payload.metadata
+
+    if supabase:
+        try:
+            existing = (
+                supabase.table("reminders")
+                .select("*")
+                .eq("id", reminder_id)
+                .eq("user_id", user_id)
+                .single()
+                .execute()
+            )
+            if not existing.data:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reminder not found")
+            if not update_values:
+                return _serialize_reminder_row(existing.data)
+            update_payload = {
+                **update_values,
+                "updated_at": datetime.utcnow().isoformat(),
+            }
+            result = (
+                supabase.table("reminders")
+                .update(update_payload)
+                .eq("id", reminder_id)
+                .eq("user_id", user_id)
+                .select("*")
+                .single()
+                .execute()
+            )
+            if result.data:
+                return _serialize_reminder_row(result.data)
+        except HTTPException:
+            raise
+        except Exception as error:
+            _handle_supabase_table_error("Warning: Failed to update reminder", error)
+
+    existing = await db.fetch_one(
+        reminders.select().where(
+            reminders.c.id == reminder_id,
+            reminders.c.user_id == user_id,
+        )
+    )
+    if not existing:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reminder not found")
+
+    if not update_values:
+        return _serialize_reminder_row(existing)
+
+    update_values["updated_at"] = datetime.utcnow()
+
+    await db.execute(
+        reminders.update()
+        .where(reminders.c.id == reminder_id, reminders.c.user_id == user_id)
+        .values(**update_values)
+    )
+    row = await db.fetch_one(
+        reminders.select().where(
+            reminders.c.id == reminder_id,
+            reminders.c.user_id == user_id,
+        )
+    )
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reminder not found after update")
+    return _serialize_reminder_row(row)
+
+
+@app.delete(
+    "/users/{user_id}/reminders/{reminder_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_user_reminder(
+    user_id: int,
+    reminder_id: int,
+    db: databases.Database = Depends(get_database),
+):
+    if supabase:
+        try:
+            existing = (
+                supabase.table("reminders")
+                .select("id")
+                .eq("id", reminder_id)
+                .eq("user_id", user_id)
+                .limit(1)
+                .execute()
+            )
+            if not existing.data:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reminder not found")
+            supabase.table("reminders").delete().eq("id", reminder_id).eq("user_id", user_id).execute()
+            return
+        except HTTPException:
+            raise
+        except Exception as error:
+            _handle_supabase_table_error("Warning: Failed to delete reminder", error)
+
+    existing = await db.fetch_one(
+        reminders.select().where(
+            reminders.c.id == reminder_id,
+            reminders.c.user_id == user_id,
+        )
+    )
+    if not existing:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reminder not found")
+
+    await db.execute(
+        reminders.delete().where(
+            reminders.c.id == reminder_id,
+            reminders.c.user_id == user_id,
+        )
+    )
 
 
 @app.get("/users/{user_id}/conversations", response_model=List[Dict[str, Any]])
@@ -2944,10 +4638,10 @@ async def list_user_conversations(
 
     try:
         result = (
-            supabase.table("conversations")
-            .select("id, title, created_at, updated_at")
-            .eq("user_id", user_id)
-            .order("updated_at", desc=True)
+            supabase.table("user_chat_threads")
+            .select("id, title, created_at, updated_at, last_message_at")
+            .eq("user_identifier", user_id)
+            .order("last_message_at", desc=True)
             .limit(limit)
             .execute()
         )
@@ -2960,6 +4654,7 @@ async def list_user_conversations(
                     "title": _row_get(row, "title"),
                     "created_at": _row_get(row, "created_at"),
                     "updated_at": _row_get(row, "updated_at"),
+                    "last_message_at": _row_get(row, "last_message_at"),
                 }
             )
         return normalized
@@ -2969,6 +4664,35 @@ async def list_user_conversations(
 
 @app.post("/users/{user_id}/calendar-events", response_model=CalendarEvent, status_code=status.HTTP_201_CREATED)
 async def create_calendar_event(user_id: int, event: CalendarEventCreate, db: databases.Database = Depends(get_database)):
+    now = datetime.utcnow()
+    # Supabase-first create.
+    if supabase:
+        try:
+            payload = {
+                "user_id": user_id,
+                "calendar_id": None,
+                "title": event.title,
+                "description": event.description,
+                "start_time": event.start_time.isoformat(),
+                "end_time": event.end_time.isoformat(),
+                "created_at": now.isoformat(),
+            }
+            result = (
+                supabase.table("calendar_events")
+                .insert(payload)
+                .select("*")
+                .single()
+                .execute()
+            )
+            if result.data:
+                return result.data
+        except Exception as error:
+            _handle_supabase_table_error(
+                f"Warning: Failed to create calendar event in Supabase for user {user_id}",
+                error,
+            )
+
+    # Fallback to local SQLite.
     query = calendar_events.insert().values(
         user_id=user_id,
         title=event.title,
@@ -2988,13 +4712,34 @@ async def list_dashboard_pulses(
     db: databases.Database = Depends(get_database),
 ):
     safe_limit = max(1, min(limit, MAX_DASHBOARD_PULSE_HISTORY))
-    query = (
-        dashboard_pulses.select()
-        .where(dashboard_pulses.c.user_id == user_id)
-        .order_by(dashboard_pulses.c.date_key.desc())
-        .limit(safe_limit)
-    )
-    records = await db.fetch_all(query)
+
+    records: List[Any] = []
+    # Prefer Supabase when available.
+    if supabase:
+        try:
+            result = (
+                supabase.table("dashboard_pulses")
+                .select("*")
+                .eq("user_id", user_id)
+                .order("date_key", desc=True)
+                .limit(safe_limit)
+                .execute()
+            )
+            records = result.data or []
+        except Exception as error:
+            _handle_supabase_table_error(
+                f"Warning: Failed to list dashboard pulses from Supabase for user {user_id}",
+                error,
+            )
+
+    if not records:
+        query = (
+            dashboard_pulses.select()
+            .where(dashboard_pulses.c.user_id == user_id)
+            .order_by(dashboard_pulses.c.date_key.desc())
+            .limit(safe_limit)
+        )
+        records = await db.fetch_all(query)
     pulses: List[DashboardPulse] = []
     for record in records:
         payload = _serialize_dashboard_pulse_record(record)
@@ -3041,6 +4786,66 @@ async def create_dashboard_pulse(
         )
 
     now = datetime.utcnow()
+
+    # Supabase-first implementation.
+    if supabase:
+        try:
+            existing = await _load_dashboard_pulse_by_date(db, user_id, pulse.date_key)
+            if existing and isinstance(existing, dict):
+                pulse_id = existing.get("id")
+                update_payload = {
+                    "timestamp": timestamp_dt.isoformat(),
+                    "plans": plans_payload,
+                    "habits": habits_payload,
+                    "proactivity": proactivity_payload,
+                    "updated_at": now.isoformat(),
+                }
+                result = (
+                    supabase.table("dashboard_pulses")
+                    .update(update_payload)
+                    .eq("id", pulse_id)
+                    .eq("user_id", user_id)
+                    .select("*")
+                    .single()
+                    .execute()
+                )
+                record = result.data
+            else:
+                insert_payload = {
+                    "user_id": user_id,
+                    "date_key": pulse.date_key,
+                    "timestamp": timestamp_dt.isoformat(),
+                    "plans": plans_payload,
+                    "habits": habits_payload,
+                    "proactivity": proactivity_payload,
+                    "created_at": now.isoformat(),
+                    "updated_at": now.isoformat(),
+                }
+                result = (
+                    supabase.table("dashboard_pulses")
+                    .insert(insert_payload)
+                    .select("*")
+                    .single()
+                    .execute()
+                )
+                record = result.data
+
+            payload = _serialize_dashboard_pulse_record(record)
+            if not payload:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Failed to persist dashboard pulse",
+                )
+            return DashboardPulse(**payload)
+        except HTTPException:
+            raise
+        except Exception as error:
+            _handle_supabase_table_error(
+                f"Warning: Failed to create dashboard pulse in Supabase for user {user_id}",
+                error,
+            )
+
+    # Fallback to local SQLite.
     existing = await _load_dashboard_pulse_by_date(db, user_id, pulse.date_key)
 
     if existing:
@@ -3088,14 +4893,35 @@ async def update_dashboard_pulse(
     pulse_update: DashboardPulseUpdate,
     db: databases.Database = Depends(get_database),
 ):
-    existing = await db.fetch_one(
-        dashboard_pulses.select().where(
-            (dashboard_pulses.c.id == pulse_id) & (dashboard_pulses.c.user_id == user_id)
+    existing: Any = None
+    # Supabase-first lookup.
+    if supabase:
+        try:
+            result = (
+                supabase.table("dashboard_pulses")
+                .select("*")
+                .eq("id", pulse_id)
+                .eq("user_id", user_id)
+                .limit(1)
+                .execute()
+            )
+            rows = result.data or []
+            if rows:
+                existing = rows[0]
+        except Exception as error:
+            _handle_supabase_table_error(
+                f"Warning: Failed to load dashboard pulse from Supabase for user {user_id}",
+                error,
+            )
+
+    if existing is None:
+        existing = await db.fetch_one(
+            dashboard_pulses.select().where(
+                (dashboard_pulses.c.id == pulse_id) & (dashboard_pulses.c.user_id == user_id)
+            )
         )
-    )
     if not existing:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pulse entry not found")
-
     update_data: Dict[str, Any] = {}
     if pulse_update.timestamp is not None:
         update_data["timestamp"] = _timestamp_ms_to_datetime(pulse_update.timestamp)
@@ -3112,6 +4938,39 @@ async def update_dashboard_pulse(
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to load dashboard pulse")
         return DashboardPulse(**payload)
 
+    # Supabase-first update path.
+    if supabase:
+        try:
+            update_payload = {
+                **update_data,
+                "updated_at": datetime.utcnow().isoformat(),
+            }
+            result = (
+                supabase.table("dashboard_pulses")
+                .update(update_payload)
+                .eq("id", pulse_id)
+                .eq("user_id", user_id)
+                .select("*")
+                .single()
+                .execute()
+            )
+            record = result.data
+            payload = _serialize_dashboard_pulse_record(record)
+            if not payload:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Failed to update dashboard pulse",
+                )
+            return DashboardPulse(**payload)
+        except HTTPException:
+            raise
+        except Exception as error:
+            _handle_supabase_table_error(
+                f"Warning: Failed to update dashboard pulse in Supabase for user {user_id}",
+                error,
+            )
+
+    # Fallback to local SQLite.
     update_data["updated_at"] = datetime.utcnow()
     await db.execute(
         dashboard_pulses.update()
@@ -3131,6 +4990,30 @@ async def delete_dashboard_pulse(
     pulse_id: int,
     db: databases.Database = Depends(get_database),
 ):
+    # Supabase-first delete.
+    if supabase:
+        try:
+            existing = (
+                supabase.table("dashboard_pulses")
+                .select("id")
+                .eq("id", pulse_id)
+                .eq("user_id", user_id)
+                .limit(1)
+                .execute()
+            )
+            rows = existing.data or []
+            if not rows:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pulse entry not found")
+            supabase.table("dashboard_pulses").delete().eq("id", pulse_id).eq("user_id", user_id).execute()
+            return None
+        except HTTPException:
+            raise
+        except Exception as error:
+            _handle_supabase_table_error(
+                f"Warning: Failed to delete dashboard pulse in Supabase for user {user_id}",
+                error,
+            )
+
     existing = await db.fetch_one(
         dashboard_pulses.select().where(
             (dashboard_pulses.c.id == pulse_id) & (dashboard_pulses.c.user_id == user_id)
@@ -3150,13 +5033,33 @@ async def get_dashboard_summary(
     user_id: int,
     db: databases.Database = Depends(get_database),
 ):
-    pulses_query = (
-        dashboard_pulses.select()
-        .where(dashboard_pulses.c.user_id == user_id)
-        .order_by(dashboard_pulses.c.date_key.desc())
-        .limit(MAX_DASHBOARD_PULSE_HISTORY)
-    )
-    pulse_records = await db.fetch_all(pulses_query)
+    pulse_records: List[Any] = []
+    # Supabase-first for dashboard pulses.
+    if supabase:
+        try:
+            result = (
+                supabase.table("dashboard_pulses")
+                .select("*")
+                .eq("user_id", user_id)
+                .order("date_key", desc=True)
+                .limit(MAX_DASHBOARD_PULSE_HISTORY)
+                .execute()
+            )
+            pulse_records = result.data or []
+        except Exception as error:
+            _handle_supabase_table_error(
+                f"Warning: Failed to fetch dashboard pulses from Supabase for user {user_id}",
+                error,
+            )
+
+    if not pulse_records:
+        pulses_query = (
+            dashboard_pulses.select()
+            .where(dashboard_pulses.c.user_id == user_id)
+            .order_by(dashboard_pulses.c.date_key.desc())
+            .limit(MAX_DASHBOARD_PULSE_HISTORY)
+        )
+        pulse_records = await db.fetch_all(pulses_query)
 
     pulse_items: List[DashboardPulse] = []
     for record in pulse_records:
@@ -3169,12 +5072,32 @@ async def get_dashboard_summary(
     today_entry = next((pulse for pulse in pulse_items if pulse.date_key == today_key), None)
     recent_entries = pulse_items[:7]
 
-    proactivity_records = await db.fetch_all(
-        proactivity_logs.select()
-        .where(proactivity_logs.c.user_id == user_id)
-        .order_by(proactivity_logs.c.activity_date.desc())
-        .limit(10)
-    )
+    # Supabase-first for proactivity logs.
+    proactivity_records: List[Any] = []
+    if supabase:
+        try:
+            result = (
+                supabase.table("proactivity_logs")
+                .select("*")
+                .eq("user_id", user_id)
+                .order("activity_date", desc=True)
+                .limit(10)
+                .execute()
+            )
+            proactivity_records = result.data or []
+        except Exception as error:
+            _handle_supabase_table_error(
+                f"Warning: Failed to fetch proactivity logs from Supabase for user {user_id}",
+                error,
+            )
+
+    if not proactivity_records:
+        proactivity_records = await db.fetch_all(
+            proactivity_logs.select()
+            .where(proactivity_logs.c.user_id == user_id)
+            .order_by(proactivity_logs.c.activity_date.desc())
+            .limit(10)
+        )
     proactivity_logs_payload: List[ProactivityLog] = []
     for record in proactivity_records:
         proactivity_logs_payload.append(
@@ -3230,6 +5153,49 @@ async def get_user_proactivity(user_id: int, db: databases.Database = Depends(ge
 
     return formatted_results
 
+
+@app.get("/users/{user_id}/proactivity/stream")
+async def stream_user_proactivity(user_id: int):
+    """
+    SSE endpoint used by /g so active sessions can trigger evaluations and get notified.
+    """
+    global proactivity_engine, proactivity_realtime_broker
+
+    if not proactivity_engine:
+        raise HTTPException(status_code=503, detail="Proactivity engine not initialized")
+
+    queue = await proactivity_realtime_broker.register(user_id)
+
+    async def event_stream() -> AsyncGenerator[str, None]:
+        try:
+            yield _sse_event("ready", {"user_id": user_id})
+            # For realtime sessions, respect the duplicate guard so reconnects
+            # (e.g., on backend restarts) don't re-send the same ping each time.
+            await proactivity_engine.dispatch_user_if_due(user_id, source="realtime")
+
+            while True:
+                try:
+                    payload = await asyncio.wait_for(queue.get(), timeout=25)
+                except asyncio.TimeoutError:
+                    yield _sse_event("ping", {"user_id": user_id})
+                    continue
+
+                if not isinstance(payload, dict):
+                    continue
+                event_name = payload.get("event") or "message"
+                yield _sse_event(event_name, payload)
+        finally:
+            await proactivity_realtime_broker.unregister(user_id, queue)
+
+    headers = {
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+        "X-Accel-Buffering": "no",
+    }
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream", headers=headers)
+
+
 @app.post("/users/{user_id}/proactivity", response_model=ProactivityLog, status_code=status.HTTP_201_CREATED)
 async def create_proactivity_log(user_id: int, proactivity: ProactivityLogCreate, db: databases.Database = Depends(get_database)):
     """Create a new proactivity log entry"""
@@ -3244,7 +5210,115 @@ async def create_proactivity_log(user_id: int, proactivity: ProactivityLogCreate
         notes=proactivity.notes
     )
     log_id = await db.execute(query)
-    return {**proactivity.dict(), "id": log_id, "user_id": user_id}
+    result = await db.fetch_one(proactivity_logs.select().where(proactivity_logs.c.id == log_id))
+    return {
+        "id": result.id,
+        "user_id": result.user_id,
+        "activity_date": result.activity_date,
+        "tasks_completed": result.tasks_completed,
+        "total_tasks": result.total_tasks,
+        "score": result.score,
+        "notes": result.notes,
+        "created_at": result.created_at,
+        "updated_at": result.updated_at,
+    }
+
+
+@app.get("/users/{user_id}/proactivity/deliveries")
+async def list_proactivity_deliveries(user_id: int, db: databases.Database = Depends(get_database)):
+    """
+    Return recent proactivity deliveries for a user so the client can hydrate
+    which time slots have already fired.
+    """
+    now = datetime.utcnow()
+    since = now - timedelta(days=1)
+
+    # Prefer Supabase for proactivity deliveries when available.
+    if supabase:
+        try:
+            result = (
+                supabase.table("proactive_notifications")
+                .select("sent_at")
+                .eq("user_id", user_id)
+                .eq("type", "check_in")
+                .gte("sent_at", since.isoformat())
+                .order("sent_at", desc=False)
+                .execute()
+            )
+            rows = result.data or []
+            sent_at_values = []
+            for row in rows:
+                value = row.get("sent_at")
+                if isinstance(value, datetime):
+                    sent_at_values.append(value.isoformat())
+                elif isinstance(value, str):
+                    sent_at_values.append(value)
+            return {"sent_at": sent_at_values}
+        except Exception as error:
+            _handle_supabase_table_error(
+                f"Warning: Failed to load proactivity deliveries from Supabase for user {user_id}",
+                error,
+            )
+
+    # Fallback to local SQLite.
+    query = """
+        SELECT sent_at
+        FROM proactive_notifications
+        WHERE user_id = :user_id
+          AND type = :type
+          AND sent_at >= :since
+        ORDER BY sent_at ASC
+    """
+    rows = await db.fetch_all(query, {"user_id": user_id, "type": "check_in", "since": since})
+    sent_at_values = []
+    for row in rows:
+        value = row["sent_at"]
+        if isinstance(value, datetime):
+            sent_at_values.append(value.isoformat())
+        elif isinstance(value, str):
+            sent_at_values.append(value)
+    return {"sent_at": sent_at_values}
+
+
+@app.post("/users/{user_id}/proactivity/subscription", status_code=status.HTTP_204_NO_CONTENT)
+async def upsert_proactivity_push_subscription(
+    user_id: int,
+    subscription: Dict[str, Any],
+    db: databases.Database = Depends(get_database),
+):
+    endpoint = subscription.get("endpoint")
+    keys = subscription.get("keys") or {}
+    p256dh = keys.get("p256dh")
+    auth_key = keys.get("auth")
+
+    if not endpoint or not p256dh or not auth_key:
+        raise HTTPException(status_code=400, detail="Invalid subscription payload")
+
+    query_existing = proactivity_push_subscriptions.select().where(
+        (proactivity_push_subscriptions.c.user_id == user_id)
+        & (proactivity_push_subscriptions.c.endpoint == endpoint)
+    )
+    existing = await db.fetch_one(query_existing)
+
+    if existing:
+        update_query = (
+            proactivity_push_subscriptions.update()
+            .where(proactivity_push_subscriptions.c.id == existing["id"])
+            .values(p256dh=p256dh, auth=auth_key, updated_at=datetime.utcnow())
+        )
+        await db.execute(update_query)
+    else:
+        insert_query = proactivity_push_subscriptions.insert().values(
+            user_id=user_id,
+            endpoint=endpoint,
+            p256dh=p256dh,
+            auth=auth_key,
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+        )
+        await db.execute(insert_query)
+
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 @app.post("/users/{user_id}/proactivity/daily-checkin", response_model=ProactivityLog)
 async def daily_proactivity_checkin(
@@ -3332,6 +5406,35 @@ async def get_proactivity_notifications(
     db: databases.Database = Depends(get_database),
 ) -> List[ProactivityNotification]:
     """Fetch proactivity notifications for a user."""
+    # Prefer Supabase when available.
+    if supabase:
+        try:
+            query = (
+                supabase.table("proactive_notifications")
+                .select("*")
+                .eq("user_id", user_id)
+            )
+            if unread_only:
+                query = query.is_("read_at", None)
+            query = query.order("sent_at", desc=True)
+            if limit:
+                query = query.limit(limit)
+            result = query.execute()
+            rows = result.data or []
+            return [
+                ProactivityNotification.model_validate(
+                    _serialize_proactivity_notification(row)
+                )
+                for row in rows
+                if _serialize_proactivity_notification(row) is not None
+            ]
+        except Exception as error:
+            _handle_supabase_table_error(
+                f"Warning: Failed to fetch proactivity notifications from Supabase for user {user_id}",
+                error,
+            )
+
+    # Fallback to local SQLite.
     query = proactive_notifications.select().where(proactive_notifications.c.user_id == user_id)
     if unread_only:
         query = query.where(proactive_notifications.c.read_at.is_(None))
@@ -3357,6 +5460,43 @@ async def mark_proactivity_notification_read(
     db: databases.Database = Depends(get_database),
 ) -> ProactivityNotification:
     """Mark a notification as read and return the updated record."""
+    # Prefer Supabase when available.
+    if supabase:
+        try:
+            # Verify the notification belongs to the user.
+            existing = (
+                supabase.table("proactive_notifications")
+                .select("*")
+                .eq("id", notification_id)
+                .eq("user_id", user_id)
+                .limit(1)
+                .execute()
+            )
+            rows = existing.data or []
+            if not rows:
+                raise HTTPException(status_code=404, detail="Notification not found.")
+
+            updated = (
+                supabase.table("proactive_notifications")
+                .update({"read_at": datetime.utcnow().isoformat()})
+                .eq("id", notification_id)
+                .eq("user_id", user_id)
+                .execute()
+            )
+            data = (updated.data or rows)[0]
+            payload = _serialize_proactivity_notification(data)
+            if not payload:
+                raise HTTPException(status_code=500, detail="Failed to serialize notification")
+            return ProactivityNotification.model_validate(payload)
+        except HTTPException:
+            raise
+        except Exception as error:
+            _handle_supabase_table_error(
+                f"Warning: Failed to mark proactivity notification read in Supabase for user {user_id}",
+                error,
+            )
+
+    # Fallback to local SQLite.
     select_query = proactive_notifications.select().where(
         (proactive_notifications.c.user_id == user_id)
         & (proactive_notifications.c.id == notification_id)
@@ -3376,15 +5516,118 @@ async def mark_proactivity_notification_read(
     )
 
 
-@app.get("/users/{user_id}/proactivity/settings", response_model=ProactivitySettings)
-async def get_proactivity_settings_route(user_id: int):
-    return PROACTIVITY_SETTINGS_STORE.get(user_id, DEFAULT_PROACTIVITY_SETTINGS)
+@app.get("/users/{user_id}/proactivity/settings", response_model=Optional[ProactivitySettings])
+async def get_proactivity_settings_route(
+    user_id: int,
+    db: databases.Database = Depends(get_database),
+):
+    supabase_settings = _fetch_supabase_proactivity_settings(user_id)
+    if supabase_settings:
+        api_logger.debug(f"Retrieved proactivity settings from Supabase for user {user_id}", extra={
+            "event_type": "proactivity_settings_retrieved_supabase",
+            "user_id": user_id,
+            "settings": supabase_settings.model_dump(exclude_none=True)
+        })
+        return supabase_settings
 
-
-@app.post("/users/{user_id}/proactivity/settings", response_model=ProactivitySettings)
-async def update_proactivity_settings_route(user_id: int, settings: ProactivitySettings):
-    PROACTIVITY_SETTINGS_STORE[user_id] = settings
+    record = await db.fetch_one(
+        proactivity_settings.select().where(proactivity_settings.c.user_id == user_id)
+    )
+    if not record:
+        api_logger.debug(f"No proactivity settings found for user {user_id}", extra={
+            "event_type": "proactivity_settings_not_found",
+            "user_id": user_id
+        })
+        return None
+    payload = _row_get(record, "payload")
+    api_logger.debug(f"Retrieved proactivity settings payload from database for user {user_id}", extra={
+        "event_type": "proactivity_settings_retrieved_db",
+        "user_id": user_id,
+        "payload": payload
+    })
+    settings = _deserialize_proactivity_settings_payload(payload)
+    if settings:
+        # Backfill Supabase when local sqlite contains the canonical value.
+        _upsert_supabase_proactivity_settings(user_id, settings.model_dump(exclude_none=True))
     return settings
+
+
+@app.api_route(
+    "/users/{user_id}/proactivity/settings",
+    methods=["POST", "PUT"],
+    response_model=ProactivitySettings
+)
+async def update_proactivity_settings_route(
+    user_id: int,
+    settings: ProactivitySettings,
+    db: databases.Database = Depends(get_database),
+):
+    payload = settings.model_dump(exclude_none=True)
+    now = datetime.utcnow()
+
+    api_logger.debug(f"Saving proactivity settings for user {user_id}", extra={
+        "event_type": "proactivity_settings_save_start",
+        "user_id": user_id,
+        "payload": payload
+    })
+
+    try:
+        existing = await db.fetch_one(
+            proactivity_settings.select().where(proactivity_settings.c.user_id == user_id)
+        )
+        if existing:
+            await db.execute(
+                proactivity_settings.update()
+                .where(proactivity_settings.c.user_id == user_id)
+                .values(payload=payload, updated_at=now)
+            )
+        else:
+            await db.execute(
+                proactivity_settings.insert().values(
+                    user_id=user_id,
+                    payload=payload,
+                    created_at=now,
+                    updated_at=now,
+                )
+            )
+    except Exception as db_error:
+        api_logger.error(
+            f"Database error saving proactivity settings: {db_error}",
+            exc_info=True,
+            extra={
+                "event_type": "proactivity_settings_db_error",
+                "user_id": user_id,
+                "error": str(db_error),
+            },
+        )
+        raise HTTPException(status_code=500, detail=f"Failed to save proactivity settings: {str(db_error)}")
+
+    try:
+        _upsert_supabase_proactivity_settings(user_id, payload)
+    except Exception as supabase_error:
+        # Log but don't fail the request for Supabase errors (it's a backup)
+        api_logger.warning(f"Failed to sync proactivity settings to Supabase: {supabase_error}", extra={
+            "event_type": "proactivity_settings_supabase_error",
+            "user_id": user_id,
+            "error": str(supabase_error)
+        })
+
+    api_logger.debug(f"Successfully saved proactivity settings for user {user_id}", extra={
+        "event_type": "proactivity_settings_save_success",
+        "user_id": user_id
+    })
+
+    if proactivity_scheduler:
+        try:
+            await proactivity_scheduler.refresh_jobs()
+        except Exception as scheduler_error:
+            api_logger.warning(f"Failed to refresh proactivity scheduler jobs: {scheduler_error}", extra={
+                "event_type": "proactivity_scheduler_refresh_error",
+                "user_id": user_id,
+                "error": str(scheduler_error)
+            })
+
+    return ProactivitySettings.model_validate(payload)
 
 
 @app.get("/api/workspace-backgrounds", response_model=List[WorkspaceBackground])
@@ -3545,6 +5788,65 @@ async def create_google_calendar_event(user_id: int, calendar_id: str, event_dat
     except HTTPException as e:
         raise e
 
+
+# Proactivity scheduler endpoints
+@app.post("/api/proactivity/evaluate")
+async def trigger_proactivity_evaluation():
+    """
+    Manually trigger proactivity evaluation for all users.
+    Returns a summary of actions taken.
+    """
+    global proactivity_engine
+
+    if not proactivity_engine:
+        raise HTTPException(status_code=503, detail="Proactivity engine not initialized")
+
+    try:
+        results = await proactivity_engine.dispatch_all_due(source="manual")
+        return {"status": "success", "evaluation_results": results}
+    except Exception as e:
+        api_logger.error(
+            f"Error evaluating proactivity: {e}",
+            exc_info=True,
+            extra={
+                "event_type": "proactivity_evaluation_manual_error",
+                "error": str(e),
+            },
+        )
+        raise HTTPException(status_code=500, detail=f"Evaluation failed: {str(e)}")
+
+
+@app.post("/users/{user_id}/proactivity/evaluate")
+async def trigger_proactivity_for_user(user_id: int):
+    """
+    Manually trigger proactivity message generation for a specific user.
+    """
+    global proactivity_engine
+
+    if not proactivity_engine:
+        raise HTTPException(status_code=503, detail="Proactivity engine not initialized")
+
+    try:
+        result = await proactivity_engine.dispatch_user_if_due(user_id, source="manual", force=True)
+        if result:
+            return {"status": "success", "message": "Proactivity message sent"}
+        raise HTTPException(status_code=404, detail="No proactivity settings found for user")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        api_logger.error(
+            f"Error triggering proactivity for user {user_id}: {e}",
+            exc_info=True,
+            extra={
+                "event_type": "proactivity_user_manual_error",
+                "user_id": user_id,
+                "error": str(e),
+            },
+        )
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8000, access_log=False)

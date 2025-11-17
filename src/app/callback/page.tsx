@@ -1,220 +1,246 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import Image from "next/image";
+import { Suspense, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import { persistAuthCookies } from "@/lib/auth/cookies";
+import {
+  normalizeWorkspaceRedirect,
+  resolveDefaultWorkspacePath,
+  resolveWorkspaceHost,
+  resolveWorkspaceOrigin,
+} from "@/lib/grayRouting";
 import styles from "./page.module.css";
 
-type Status = "processing" | "success" | "error";
+const Spinner = () => (
+  <div className={styles.wrapper}>
+    <div className={styles.logoShell}>
+      <div className={styles.logoGlow} />
+      <div className={styles.logoOuter}>
+        <div className={styles.logoInner}>
+          <Image src="/grayaiwhite.svg" alt="Gray logo" fill priority sizes="320px" />
+        </div>
+      </div>
+    </div>
+  </div>
+);
 
 export default function GrayCallbackPage() {
   return (
-    <Suspense fallback={<ProcessingFallback />}>
+    <Suspense fallback={<Spinner />}>
       <GrayCallbackContent />
     </Suspense>
-  );
-}
-
-function ProcessingFallback() {
-  return (
-    <main className={styles.wrapper}>
-      <div className={styles.card}>
-        <div className={styles.glow} />
-        <h1>gray_aligned</h1>
-        <p className={styles.status} data-state="processing">
-          Finalizing your login…
-        </p>
-      </div>
-    </main>
   );
 }
 
 function GrayCallbackContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [status, setStatus] = useState<Status>("processing");
-  const [message, setMessage] = useState<string>("Finalizing your login…");
 
   useEffect(() => {
-    let isMounted = true;
+    let isActive = true;
+
+    const decodeParam = (value: string | null): string | null => {
+      if (!value) {
+        return null;
+      }
+      try {
+        return decodeURIComponent(value);
+      } catch {
+        return value;
+      }
+    };
+
+    const redirectToLogin = () => {
+      if (!isActive) {
+        return;
+      }
+      router.replace("/login");
+      router.refresh();
+    };
 
     const processSession = async () => {
-      // Check if we've already processed tokens in this session
-      if (typeof window !== "undefined") {
-        const processed = sessionStorage.getItem('auth-callback-processed');
-        if (processed) {
-          console.log('Auth callback already processed, redirecting to final destination');
-          const redirectTarget = new URLSearchParams(window.location.search).get("redirect")?.trim() || "/";
-          router.replace(redirectTarget);
-          router.refresh();
-          return;
-        }
-      }
-      const supabase = getSupabaseClient();
-      if (!supabase) {
-        if (!isMounted) {
-          return;
-        }
-        setStatus("error");
-        setMessage("Supabase client is not configured. Check environment.");
+      if (typeof window === "undefined") {
         return;
       }
 
-      const redirectTarget = searchParams.get("redirect")?.trim() || "/";
+      const supabase = getSupabaseClient();
+      if (!supabase) {
+        redirectToLogin();
+        return;
+      }
+
+      const currentHost = window.location.hostname;
+      const workspaceHost = resolveWorkspaceHost(currentHost) ?? currentHost;
+      const workspaceOrigin = resolveWorkspaceOrigin(
+        currentHost,
+        window.location.protocol,
+        window.location.port
+      );
+      const rawRedirect = searchParams.get("redirect")?.trim() || "";
+      const defaultRedirect = resolveDefaultWorkspacePath(workspaceHost);
+      const initialRedirect =
+        rawRedirect && rawRedirect.startsWith("/")
+          ? rawRedirect
+          : defaultRedirect;
+      const redirectTarget = normalizeWorkspaceRedirect(
+        initialRedirect,
+        workspaceHost
+      );
+
+      const navigateToDestination = () => {
+        if (!isActive) {
+          return;
+        }
+
+        const normalized =
+          redirectTarget.startsWith("/") ? redirectTarget : `/${redirectTarget}`;
+
+        if (workspaceOrigin) {
+          window.location.href = `${workspaceOrigin}${normalized}`;
+          return;
+        }
+
+        router.replace(normalized);
+        router.refresh();
+      };
 
       try {
-        if (!isMounted) {
+        const currentUrl = new URL(window.location.href);
+        const rawHash = currentUrl.hash.startsWith("#")
+          ? currentUrl.hash.slice(1)
+          : currentUrl.hash;
+        const hashParams = new URLSearchParams(rawHash);
+        const queryParams = new URLSearchParams(currentUrl.search);
+
+        const stateParam =
+          hashParams.get("state") || queryParams.get("state") || "";
+        if (stateParam) {
+          const processedState = sessionStorage.getItem(
+            "auth-callback-processed"
+          );
+          if (processedState === stateParam) {
+            navigateToDestination();
+            return;
+          }
+        }
+
+        const rawError =
+          hashParams.get("error_description") ||
+          queryParams.get("error_description") ||
+          hashParams.get("error") ||
+          queryParams.get("error");
+
+        const resolvedError = decodeParam(rawError);
+        if (resolvedError) {
+          redirectToLogin();
           return;
         }
 
-        console.log('Current URL:', window.location.href);
-        console.log('Hash:', window.location.hash);
-        console.log('Search params:', window.location.search);
-
-        // Check hash parameters first
-        const hash = window.location.hash.startsWith("#")
-          ? window.location.hash.slice(1)
-          : window.location.hash;
-        console.log('Processed hash:', hash);
-
-        let params = new URLSearchParams(hash);
-        console.log('URLSearchParams keys from hash:', Array.from(params.keys()));
-
-        let accessToken = params.get("access_token");
-        let refreshToken = params.get("refresh_token");
-
-        // If no tokens in hash, check URL search parameters
-        if (!accessToken && !refreshToken) {
-          console.log('No tokens in hash, checking URL search params...');
-          params = new URLSearchParams(window.location.search);
-          console.log('URLSearchParams keys from search:', Array.from(params.keys()));
-
-          accessToken = params.get("access_token");
-          refreshToken = params.get("refresh_token");
-        }
-
-        // If we found tokens in URL, store them for potential later use
-        if (accessToken && refreshToken && typeof window !== "undefined") {
-          sessionStorage.setItem('oauth_access_token', accessToken);
-          sessionStorage.setItem('oauth_refresh_token', refreshToken);
-          console.log('Stored tokens in sessionStorage');
-        }
-
-        console.log('Final access token present:', !!accessToken);
-        console.log('Final refresh token present:', !!refreshToken);
-
-        // If no tokens found in current URL, check sessionStorage (in case we stored them)
-        if (!accessToken && !refreshToken && typeof window !== "undefined") {
-          accessToken = sessionStorage.getItem('oauth_access_token');
-          refreshToken = sessionStorage.getItem('oauth_refresh_token');
-          console.log('Retrieved tokens from sessionStorage - Access token present:', !!accessToken);
-        }
+        let accessToken =
+          hashParams.get("access_token") || queryParams.get("access_token");
+        let refreshToken =
+          hashParams.get("refresh_token") || queryParams.get("refresh_token");
 
         if (!accessToken || !refreshToken) {
-          setStatus("error");
-          setMessage("Missing auth tokens in callback.");
-          return;
+          accessToken =
+            sessionStorage.getItem("oauth_access_token") ?? accessToken ?? null;
+          refreshToken =
+            sessionStorage.getItem("oauth_refresh_token") ?? refreshToken ?? null;
         }
 
-        window.history.replaceState(
-          {},
-          document.title,
-          window.location.pathname + window.location.search
-        );
+        const authCode = hashParams.get("code") || queryParams.get("code");
 
-        const { data, error } = await supabase.auth.setSession({
-          access_token: accessToken,
-          refresh_token: refreshToken,
-        });
+        let email: string | undefined;
 
-        if (!isMounted) {
-          return;
+        if (authCode) {
+          const { data, error } = await supabase.auth.exchangeCodeForSession(authCode);
+
+          if (!isActive) {
+            return;
+          }
+
+          if (error) {
+            redirectToLogin();
+            return;
+          }
+
+          email = data.session?.user?.email ?? data.user?.email ?? undefined;
+        } else if (accessToken && refreshToken) {
+          const { data, error } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+
+          if (!isActive) {
+            return;
+          }
+
+          if (error) {
+            redirectToLogin();
+            return;
+          }
+
+          email = data.session?.user?.email ?? data.user?.email ?? undefined;
+        } else {
+          const { data, error } = await supabase.auth.getSession();
+
+          if (!isActive) {
+            return;
+          }
+
+          if (error) {
+            redirectToLogin();
+            return;
+          }
+
+          const session = data.session ?? null;
+          if (session) {
+            email = session.user?.email ?? undefined;
+          } else {
+            redirectToLogin();
+            return;
+          }
         }
 
-        if (error) {
-          setStatus("error");
-          setMessage(error.message);
-          return;
-        }
-
-        let email = data?.user?.email;
         if (!email) {
           const { data: userData } = await supabase.auth.getUser();
-          email = userData.user?.email;
+          if (!isActive) {
+            return;
+          }
+          email = userData.user?.email ?? undefined;
         }
 
-        const expiration = new Date();
-        expiration.setDate(expiration.getDate() + 30);
-        const baseAttributes = [
-          "path=/",
-          "sameSite=Lax",
-          `expires=${expiration.toUTCString()}`,
-        ];
-        if (window.location.protocol === "https:") {
-          baseAttributes.push("secure");
-        }
-        document.cookie = ["gray-auth=1", ...baseAttributes].join("; ");
+        persistAuthCookies(email);
 
-        if (email) {
-          document.cookie = [
-            `gray-auth-email=${encodeURIComponent(email)}`,
-            ...baseAttributes,
-          ].join("; ");
+        sessionStorage.removeItem("oauth_access_token");
+        sessionStorage.removeItem("oauth_refresh_token");
+        if (stateParam) {
+          sessionStorage.setItem("auth-callback-processed", stateParam);
+        } else {
+          sessionStorage.removeItem("auth-callback-processed");
         }
 
-        setStatus("success");
-        setMessage("Signed in. Taking you to your workspace…");
+        window.history.replaceState({}, document.title, currentUrl.pathname);
 
-        // Clean up stored tokens and mark as processed
-        if (typeof window !== "undefined") {
-          sessionStorage.removeItem('oauth_access_token');
-          sessionStorage.removeItem('oauth_refresh_token');
-          sessionStorage.setItem('auth-callback-processed', 'true');
+        navigateToDestination();
+      } catch {
+        try {
+          sessionStorage.removeItem("auth-callback-processed");
+        } catch {
+          // Ignore storage access issues
         }
-
-        setTimeout(() => {
-          router.replace(redirectTarget);
-          router.refresh();
-        }, 1200);
-      } catch (error) {
-        if (!isMounted) {
-          return;
-        }
-
-        setStatus("error");
-        setMessage(
-          error instanceof Error
-            ? error.message
-            : "Unable to verify Supabase session."
-        );
+        redirectToLogin();
       }
     };
 
     void processSession();
 
     return () => {
-      isMounted = false;
+      isActive = false;
     };
   }, [router, searchParams]);
 
-  return (
-    <main className={styles.wrapper}>
-      <div className={styles.card}>
-        <div className={styles.glow} />
-        <h1>gray_aligned</h1>
-        <p className={styles.status} data-state={status}>
-          {message}
-        </p>
-        {status === "error" && (
-          <button
-            className={styles.retry}
-            type="button"
-            onClick={() => router.replace("/login")}
-          >
-            Back to sign in
-          </button>
-        )}
-      </div>
-    </main>
-  );
+  return <Spinner />;
 }

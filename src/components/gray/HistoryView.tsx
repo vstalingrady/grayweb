@@ -87,17 +87,68 @@ export function GrayHistoryView({
               const hasLink = Boolean(entry.href && entry.href !== "#");
               const isActive = entry.id === activeEntryId;
 
+              const isGenericTitle =
+                entry.title.trim().toLowerCase() === "new chat" ||
+                entry.title.trim().toLowerCase() === "new conversation";
+
               const content = (
+                <div className={styles.historyRowTitle}>
+                  <span>{entry.title}</span>
+                  {isGenericTitle && (
+                    <span className={styles.historyRowBadge}>Untitled</span>
+                  )}
+                  {entry.sectionLabel ? (
+                    <span className={styles.historyRowSection}>{entry.sectionLabel}</span>
+                  ) : null}
+                </div>
+              );
+
+              const renderActions = (
                 <>
-                  <div className={styles.historyRowTitle}>
-                    <span>{entry.title}</span>
-                    {entry.sectionLabel ? (
-                      <span className={styles.historyRowSection}>{entry.sectionLabel}</span>
-                    ) : null}
-                  </div>
-                  <span className={styles.historyRowDate}>{entry.dateLabel}</span>
+                  {hasLink && onOpenEntryExternal && (
+                    <button
+                      type="button"
+                      aria-label="Open in new tab"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onOpenEntryExternal(entry);
+                      }}
+                    >
+                      <ExternalLink size={14} />
+                    </button>
+                  )}
+                  {onRenameEntry && (
+                    <button
+                      type="button"
+                      aria-label="Rename conversation"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onRenameEntry(entry);
+                      }}
+                    >
+                      <Pencil size={14} />
+                    </button>
+                  )}
+                  {onDeleteEntry && (
+                    <button
+                      type="button"
+                      aria-label="Delete conversation"
+                      className={styles.historyRowDelete}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onDeleteEntry(entry);
+                      }}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  )}
                 </>
               );
+
+              const hasActions =
+                (hasLink && Boolean(onOpenEntryExternal)) ||
+                Boolean(onRenameEntry) ||
+                Boolean(onDeleteEntry);
 
               return (
                 <li key={entry.id} data-active={isActive ? "true" : "false"}>
@@ -115,44 +166,11 @@ export function GrayHistoryView({
                       {content}
                     </div>
                   )}
-                  <div className={styles.historyRowActions}>
-                    {hasLink && onOpenEntryExternal && (
-                      <button
-                        type="button"
-                        aria-label="Open in new tab"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          onOpenEntryExternal(entry);
-                        }}
-                      >
-                        <ExternalLink size={14} />
-                      </button>
-                    )}
-                    {onRenameEntry && (
-                      <button
-                        type="button"
-                        aria-label="Rename conversation"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          onRenameEntry(entry);
-                        }}
-                      >
-                        <Pencil size={14} />
-                      </button>
-                    )}
-                    {onDeleteEntry && (
-                      <button
-                        type="button"
-                        aria-label="Delete conversation"
-                        className={styles.historyRowDelete}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          onDeleteEntry(entry);
-                        }}
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    )}
+                  <div className={styles.historyRowMeta}>
+                    {hasActions ? (
+                      <div className={styles.historyRowActions}>{renderActions}</div>
+                    ) : null}
+                    <span className={styles.historyRowDate}>{entry.dateLabel}</span>
                   </div>
                 </li>
               );
@@ -160,7 +178,11 @@ export function GrayHistoryView({
           </ul>
         ) : (
           <div className={styles.historyEmptyState}>
-            No history entries match “{query}”.
+            {query.trim() ? (
+              <>No history entries match "{query}".</>
+            ) : (
+              <>No history yet. Start a new conversation to see it here.</>
+            )}
           </div>
         )}
       </div>

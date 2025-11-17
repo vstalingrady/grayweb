@@ -7,14 +7,15 @@ type CalendarSidebarProps = {
   monthDate: Date;
   selectedDate: Date;
   onSelectDate: (date: Date) => void;
-  onNavigateMonth: (offset: number) => void;
+  onNavigateMonth?: (offset: number) => void;
   calendars: CalendarInfo[];
   onToggleCalendar: (calendarId: string) => void;
   isCollapsed?: boolean;
-  onToggleCollapse?: () => void;
   showSelectedDateLabel?: boolean;
-  showCreateAction?: boolean;
   showMonthNavigation?: boolean;
+  showTodayButton?: boolean;
+  onGoToday?: () => void;
+  showCreateAction?: boolean;
   integrationActionLabel?: string;
   onIntegrationAction?: () => void;
   className?: string;
@@ -36,10 +37,11 @@ export function CalendarSidebar({
   calendars,
   onToggleCalendar,
   isCollapsed,
-  onToggleCollapse,
   showSelectedDateLabel = true,
-  showCreateAction = true,
-  showMonthNavigation = true,
+  showMonthNavigation = false,
+  showTodayButton = false,
+  onGoToday,
+  showCreateAction = false,
   integrationActionLabel = "Add Google Calendar integration",
   onIntegrationAction,
   className,
@@ -49,6 +51,11 @@ export function CalendarSidebar({
   const sidebarClassName = [styles.calendarSidebar, className]
     .filter(Boolean)
     .join(" ");
+  const shouldShowMonthNav = Boolean(showMonthNavigation && onNavigateMonth);
+  const shouldShowToday = Boolean(showTodayButton && onGoToday);
+  const shouldShowCreate = Boolean(showCreateAction);
+  const shouldRenderHeaderActions =
+    shouldShowMonthNav || shouldShowToday || shouldShowCreate;
 
   return (
     <aside className={sidebarClassName}>
@@ -66,43 +73,45 @@ export function CalendarSidebar({
             </span>
           ) : null}
         </div>
-        {(showMonthNavigation || showCreateAction || onToggleCollapse) && (
+        {shouldRenderHeaderActions ? (
           <div className={styles.calendarSidebarHeaderActions}>
-            {showMonthNavigation && (
-              <>
+            {shouldShowMonthNav ? (
+              <div className={styles.calendarSurfaceNavArrows}>
                 <button
                   type="button"
-                  aria-label="Show previous month"
-                  onClick={() => onNavigateMonth(-1)}
+                  aria-label="Previous month"
+                  onClick={() => onNavigateMonth?.(-1)}
                 >
                   ‹
                 </button>
                 <button
                   type="button"
-                  aria-label="Show next month"
-                  onClick={() => onNavigateMonth(1)}
+                  aria-label="Next month"
+                  onClick={() => onNavigateMonth?.(1)}
                 >
                   ›
                 </button>
-              </>
-            )}
-            {showCreateAction && (
-              <button type="button" className={styles.calendarSidebarCreate}>
-                + Create
-              </button>
-            )}
-            {onToggleCollapse && (
+              </div>
+            ) : null}
+            {shouldShowToday ? (
               <button
                 type="button"
-                className={styles.calendarSidebarCollapse}
-                aria-pressed={isCollapsed ? "true" : "false"}
-                onClick={onToggleCollapse}
+                className={styles.calendarSurfaceButton}
+                onClick={() => onGoToday?.()}
               >
-                {isCollapsed ? "Expand" : "Collapse"}
+                Today
               </button>
-            )}
+            ) : null}
+            {shouldShowCreate ? (
+              <button
+                type="button"
+                className={styles.calendarSidebarCreate}
+              >
+                + Create
+              </button>
+            ) : null}
           </div>
-        )}
+        ) : null}
       </header>
 
       <div
@@ -117,10 +126,6 @@ export function CalendarSidebar({
 
         {showCalendarList ? (
           <section className={styles.calendarSidebarList}>
-            <header>
-              <span>My calendars</span>
-              <button type="button">+</button>
-            </header>
             <ul>
               {calendars.map((calendar) => (
                 <li key={calendar.id}>
@@ -139,7 +144,7 @@ export function CalendarSidebar({
                   </button>
                 </li>
               ))}
-              {onIntegrationAction ? (
+              {/* {onIntegrationAction ? (
                 <li className={styles.calendarSidebarIntegration}>
                   <button
                     type="button"
@@ -149,7 +154,7 @@ export function CalendarSidebar({
                     {integrationActionLabel}
                   </button>
                 </li>
-              ) : null}
+              ) : null} */}
             </ul>
           </section>
         ) : null}

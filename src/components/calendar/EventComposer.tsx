@@ -1,12 +1,23 @@
-import { FormEvent, useEffect, useMemo, useReducer, useRef } from "react";
+import {
+  FormEvent,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+} from "react";
+import type { MouseEvent } from "react";
 
 import styles from "./GrayDashboardCalendar.module.css";
 import {
   CalendarEntryType,
   CalendarEvent,
   CalendarInfo,
+  CalendarEventDisplayHint,
 } from "./types";
-import { Clock3, X } from "lucide-react";
+import { Plus, X } from "lucide-react";
 
 export type EventComposerPayload = {
   id?: string;
@@ -17,6 +28,14 @@ export type EventComposerPayload = {
   entryType: CalendarEntryType;
   calendarId: string;
   description?: string;
+  displayHint?: CalendarEventDisplayHint;
+};
+
+type AnchorRect = {
+  top: number;
+  left: number;
+  width: number;
+  height: number;
 };
 
 type EventComposerProps = {
@@ -27,6 +46,8 @@ type EventComposerProps = {
   calendars: CalendarInfo[];
   onRequestClose: () => void;
   onSubmit: (payload: EventComposerPayload) => void;
+  onDelete?: (eventId: string) => void;
+  anchorRect?: AnchorRect | null;
 };
 
 type ComposerState = {
@@ -36,6 +57,7 @@ type ComposerState = {
   color: string;
   entryType: CalendarEntryType;
   calendarId: string;
+  details: string;
 };
 
 type ComposerAction =
@@ -45,12 +67,22 @@ type ComposerAction =
 const COLOR_SWATCHES = ["#4C6FFF", "#0AD5B0", "#F6A623", "#D075FF", "#E36D7D", "#CDD1D5"] as const;
 
 const DEFAULT_STATE: ComposerState = {
-  title: "",
+  title: "New event",
   startTime: "09:00",
   endTime: "10:00",
   color: "#5b8def",
   entryType: "event",
   calendarId: "default",
+  details: "",
+};
+
+export const DEFAULT_EVENT_DURATION_MINUTES = 60;
+
+const ENTRY_TYPES: CalendarEntryType[] = ["event", "task", "reminder"];
+const ENTRY_TYPE_LABELS: Record<CalendarEntryType, string> = {
+  event: "Event",
+  task: "Task",
+  reminder: "Reminder",
 };
 
 const composerReducer = (state: ComposerState, action: ComposerAction): ComposerState => {
@@ -83,6 +115,7 @@ const resolveStateFromEvent = (
   color: event.color,
   entryType: event.entryType,
   calendarId: event.calendarId ?? fallbackCalendarId,
+  details: event.description ?? "",
 });
 
 const combineDateWithTime = (date: Date, timeValue: string) => {
@@ -100,6 +133,8 @@ export function EventComposer({
   calendars,
   onRequestClose,
   onSubmit,
+  onDelete,
+  anchorRect = null,
 }: EventComposerProps) {
   const calendarFallbackId = useMemo(
     () => calendars[0]?.id ?? "default",
@@ -111,6 +146,11 @@ export function EventComposer({
     calendarId: calendarFallbackId,
   });
   const customColorInputRef = useRef<HTMLInputElement | null>(null);
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  const formRef = useRef<HTMLFormElement | null>(null);
+  const [anchoredPosition, setAnchoredPosition] = useState<{ top: number; left: number } | null>(null);
+  const [anchorSide, setAnchorSide] = useState<"left" | "right" | null>(null);
+  const activeEventId = activeEvent?.id;
 
   useEffect(() => {
     if (!isOpen) {
@@ -130,6 +170,7 @@ export function EventComposer({
           calendarId: calendarFallbackId,
           startTime: formatTimeInput(initialRange.start),
           endTime: formatTimeInput(initialRange.end),
+          details: "",
         },
       });
       return;
@@ -140,35 +181,92 @@ export function EventComposer({
       payload: {
         ...DEFAULT_STATE,
         calendarId: calendarFallbackId,
+        details: "",
       },
     });
   }, [activeEvent, calendarFallbackId, initialRange, isOpen]);
 
-  const formattedRangeLabel = useMemo(() => {
-    const start = combineDateWithTime(referenceDate, state.startTime);
-    const end = combineDateWithTime(referenceDate, state.endTime);
-    const datePart = start.toLocaleDateString(undefined, {
-      weekday: "short",
-      month: "long",
-      day: "numeric",
-    });
-    const startLabel = start.toLocaleTimeString(undefined, {
-      hour: "numeric",
-      minute: "2-digit",
-    });
-    const endLabel = end.toLocaleTimeString(undefined, {
-      hour: "numeric",
-      minute: "2-digit",
-    });
-    return `${datePart} - ${startLabel} to ${endLabel}`;
-  }, [referenceDate, state.startTime, state.endTime]);
+  useLayoutEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    if (!isOpen || !anchorRect) {
+      setAnchoredPosition(null);
+      setAnchorSide(null);
+      return;
+    }
 
-  const handleSubmit = (event: FormEvent) => {
+    const updatePosition = () => {
+      if (!anchorRect) {
+        setAnchoredPosition(null);
+        setAnchorSide(null);
+        return;
+      }
+
+      const card = cardRef.current;
+      const cardRect = card?.getBoundingClientRect();
+      const cardWidth = cardRect?.width ?? 360;
+      const cardHeight = cardRect?.height ?? 420;
+      const padding = 16;
+      const maxLeft = Math.max(padding, window.innerWidth - padding - cardWidth);
+      const preferredRight = anchorRect.left + anchorRect.width + padding;
+      let left = Math.min(preferredRight, maxLeft);
+      let side: "left" | "right" = "right";
+
+      if (preferredRight > maxLeft) {
+        const altLeft = anchorRect.left - cardWidth - padding;
+        left = Math.min(Math.max(padding, altLeft), maxLeft);
+        side = "left";
+      } else {
+        left = Math.max(padding, left);
+      }
+
+      let top = anchorRect.top + anchorRect.height / 2 - cardHeight / 2;
+      const maxTop = Math.max(padding, window.innerHeight - padding - cardHeight);
+      top = Math.min(Math.max(padding, top), maxTop);
+
+      setAnchoredPosition({ top, left });
+      setAnchorSide(side);
+    };
+
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    return () => window.removeEventListener("resize", updatePosition);
+  }, [anchorRect, isOpen, state.entryType, state.startTime, state.endTime, state.details, state.title]);
+
+  const isReminder = state.entryType === "reminder";
+
+  const handleSelectEntryType = (nextType: CalendarEntryType) => {
+    if (state.entryType === nextType) {
+      return;
+    }
+    const payload: Partial<ComposerState> = { entryType: nextType };
+    if (nextType === "reminder") {
+      payload.endTime = state.startTime;
+    }
+    dispatch({ type: "update", payload });
+  };
+
+  const currentStart = useMemo(
+    () => combineDateWithTime(referenceDate, state.startTime),
+    [referenceDate, state.startTime]
+  );
+  const currentEnd = useMemo(() => {
+    if (isReminder) {
+      return currentStart;
+    }
+    return combineDateWithTime(referenceDate, state.endTime);
+  }, [currentStart, referenceDate, state.endTime, isReminder]);
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    const start = combineDateWithTime(referenceDate, state.startTime);
-    const end = combineDateWithTime(referenceDate, state.endTime);
-    const normalizedEnd = end <= start ? new Date(start.getTime() + 30 * 60000) : end;
+    const start = currentStart;
+    const rawEnd = isReminder ? new Date(start) : currentEnd;
+    const normalizedEnd = isReminder
+      ? new Date(start)
+      : rawEnd <= start
+        ? new Date(start.getTime() + DEFAULT_EVENT_DURATION_MINUTES * 60000)
+        : rawEnd;
 
     onSubmit({
       id: activeEvent?.id,
@@ -178,9 +276,42 @@ export function EventComposer({
       color: state.color,
       entryType: state.entryType,
       calendarId: state.calendarId,
+      description: state.details.trim() ? state.details.trim() : undefined,
+      displayHint: isReminder ? "line" : undefined,
     });
     onRequestClose();
   };
+
+  const handleDelete = useCallback(() => {
+    if (!activeEventId) {
+      return;
+    }
+    onDelete?.(activeEventId);
+  }, [activeEventId, onDelete]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return undefined;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Delete" && activeEventId) {
+        event.preventDefault();
+        handleDelete();
+        return;
+      }
+      if (event.key === "Enter") {
+        if (event.target instanceof HTMLTextAreaElement) {
+          return;
+        }
+        event.preventDefault();
+        formRef.current?.requestSubmit();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [activeEventId, handleDelete, isOpen]);
 
   if (!isOpen) {
     return null;
@@ -194,39 +325,129 @@ export function EventComposer({
     customColorInputRef.current?.click();
   };
 
-  const isTask = state.entryType === "task";
+  const overlayClassName = [
+    styles.composerOverlay,
+    anchoredPosition ? styles.composerOverlayAnchored : null,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  const handleOverlayClick = (event: MouseEvent<HTMLDivElement>) => {
+    if (event.target === event.currentTarget) {
+      onRequestClose();
+    }
+  };
+
+  const isSyntheticEvent =
+    Boolean(activeEvent?.calendarId === "plan") ||
+    (typeof activeEvent?.id === "string" && activeEvent.id.startsWith("reminder-"));
 
   return (
-    <div className={styles.composerOverlay} role="dialog" aria-modal="true">
-      <div className={styles.composerCard}>
-        <header className={styles.composerHeader}>
+    <div
+      className={overlayClassName}
+      role="dialog"
+      aria-modal="true"
+      onClick={handleOverlayClick}
+    >
+      <div
+        ref={cardRef}
+        className={styles.composerCard}
+        data-anchored={anchoredPosition ? "true" : "false"}
+        data-anchor-side={anchorSide ?? undefined}
+        style={
+          anchoredPosition
+            ? {
+                position: "fixed",
+                top: `${anchoredPosition.top}px`,
+                left: `${anchoredPosition.left}px`,
+              }
+            : undefined
+        }
+      >
+        <div className={styles.composerHeader}>
           <div>
-            <p className={styles.composerEyebrow}>{activeEvent ? "Edit" : "Add"} event</p>
-            <h2>{activeEvent ? "Edit event" : "Add event"}</h2>
+          <h2 className={styles.composerHeaderTitle}>
+            {activeEvent ? "Edit event" : "Create event"}
+          </h2>
           </div>
-          <button type="button" onClick={onRequestClose} aria-label="Close dialog">
+          <button
+            type="button"
+            onClick={onRequestClose}
+            aria-label="Close dialog"
+            className={styles.composerCloseButton}
+          >
             <X size={18} />
           </button>
-        </header>
+        </div>
 
-        <form onSubmit={handleSubmit} className={styles.composerForm}>
-          <div className={styles.composerSummary}>{formattedRangeLabel}</div>
+        <form ref={formRef} onSubmit={handleSubmit} className={styles.composerForm}>
 
-          <label className={styles.composerField}>
-            <span>Title</span>
+          <label className={styles.composerTitleRow}>
+            <span className={styles.composerTitleLabel}>Title</span>
             <input
               type="text"
               value={state.title}
               onChange={(event) =>
                 dispatch({ type: "update", payload: { title: event.target.value } })
               }
-              placeholder="Event title"
+              placeholder="Add title"
+              className={styles.composerTitleInput}
             />
           </label>
 
-          <div className={styles.composerDualField}>
+          <label className={styles.composerField}>
+            <span>Type</span>
+            <div className={styles.composerTypeSelectShell}>
+              <select
+                className={styles.composerTypeSelect}
+                value={state.entryType}
+                onChange={(event) =>
+                  handleSelectEntryType(event.target.value as CalendarEntryType)
+                }
+              >
+                {ENTRY_TYPES.map((type) => (
+                  <option key={type} value={type}>
+                    {ENTRY_TYPE_LABELS[type]}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </label>
+
+          {!isReminder ? (
+            <div className={styles.composerDualField}>
+              <label className={styles.composerField}>
+                <span>Start</span>
+                <div className={styles.composerInputShell}>
+                  <input
+                    type="time"
+                    value={state.startTime}
+                    onChange={(event) =>
+                      dispatch({ type: "update", payload: { startTime: event.target.value } })
+                    }
+                    step={300}
+                    required
+                  />
+                </div>
+              </label>
+              <label className={styles.composerField}>
+                <span>End</span>
+                <div className={styles.composerInputShell}>
+                  <input
+                    type="time"
+                    value={state.endTime}
+                    onChange={(event) =>
+                      dispatch({ type: "update", payload: { endTime: event.target.value } })
+                    }
+                    step={300}
+                    required
+                  />
+                </div>
+              </label>
+            </div>
+          ) : (
             <label className={styles.composerField}>
-              <span>Start</span>
+              <span>Reminder time</span>
               <div className={styles.composerInputShell}>
                 <input
                   type="time"
@@ -237,39 +458,21 @@ export function EventComposer({
                   step={300}
                   required
                 />
-                <Clock3 size={16} />
               </div>
             </label>
-            <label className={styles.composerField}>
-              <span>End</span>
-              <div className={styles.composerInputShell}>
-                <input
-                  type="time"
-                  value={state.endTime}
-                  onChange={(event) =>
-                    dispatch({ type: "update", payload: { endTime: event.target.value } })
-                  }
-                  step={300}
-                  required
-                />
-                <Clock3 size={16} />
-              </div>
-            </label>
-          </div>
+          )}
 
-          <button
-            type="button"
-            className={styles.composerTaskToggle}
-            data-active={isTask ? "true" : "false"}
-            onClick={() =>
-              dispatch({
-                type: "update",
-                payload: { entryType: isTask ? "event" : "task" },
-              })
-            }
-          >
-            <span>Task</span>
-          </button>
+          <label className={styles.composerField}>
+            <span>Details</span>
+            <textarea
+              value={state.details}
+              onChange={(event) =>
+                dispatch({ type: "update", payload: { details: event.target.value } })
+              }
+              placeholder="Add context, agenda, or notes"
+              rows={3}
+            />
+          </label>
 
           <div className={styles.composerField}>
             <span>Color</span>
@@ -294,7 +497,7 @@ export function EventComposer({
                 onClick={handlePickCustomColor}
                 aria-label="Pick custom color"
               >
-                <span>+</span>
+                <Plus size={18} strokeWidth={2.5} aria-hidden="true" />
               </button>
               <input
                 ref={customColorInputRef}
@@ -306,26 +509,13 @@ export function EventComposer({
             </div>
           </div>
 
-          <label className={styles.composerField}>
-            <span>Calendar</span>
-            <select
-              value={state.calendarId}
-              onChange={(event) =>
-                dispatch({ type: "update", payload: { calendarId: event.target.value } })
-              }
-            >
-              {calendars.map((calendar) => (
-                <option key={calendar.id} value={calendar.id}>
-                  {calendar.label}
-                </option>
-              ))}
-            </select>
-          </label>
 
           <footer className={styles.composerFooter}>
-            <button type="button" onClick={onRequestClose}>
-              Cancel
-            </button>
+            {activeEvent && !isSyntheticEvent ? (
+              <button type="button" className={styles.composerDeleteButton} onClick={handleDelete}>
+                Delete
+              </button>
+            ) : null}
             <button type="submit">{activeEvent ? "Save changes" : "Add event"}</button>
           </footer>
         </form>

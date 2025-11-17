@@ -78,84 +78,13 @@ export function GrayEnhancedSidebar({
     }
 
     const sortedEntries = [...allEntries].sort((a, b) => b.createdAt - a.createdAt);
-    const now = new Date();
-    const startOfDay = (date: Date) => {
-      const copy = new Date(date);
-      copy.setHours(0, 0, 0, 0);
-      return copy;
-    };
-
-    const startToday = startOfDay(now);
-    const startYesterday = new Date(startToday);
-    startYesterday.setDate(startYesterday.getDate() - 1);
-    const startWeek = new Date(startToday);
-    startWeek.setDate(startWeek.getDate() - startWeek.getDay());
-    const startMonth = new Date(startToday);
-    startMonth.setDate(1);
-
-    type HistoryGroupInternal = {
-      id: string;
-      label: string;
-      order: number;
-      items: SidebarHistoryEntry[];
-    };
-
-    const baseOrder: Record<string, number> = {
-      today: 0,
-      yesterday: 1,
-      "this-week": 2,
-      "this-month": 3,
-    };
-
-    const groups = new Map<string, HistoryGroupInternal>();
-
-    sortedEntries.forEach((entry) => {
-      const entryDate = new Date(entry.createdAt);
-      const entryStart = startOfDay(entryDate);
-      let groupId: string;
-      let label: string;
-      let order: number;
-
-      if (entryStart >= startToday) {
-        groupId = "today";
-        label = "Today";
-        order = baseOrder[groupId];
-      } else if (entryStart >= startYesterday) {
-        groupId = "yesterday";
-        label = "Yesterday";
-        order = baseOrder[groupId];
-      } else if (entryStart >= startWeek) {
-        groupId = "this-week";
-        label = "This Week";
-        order = baseOrder[groupId];
-      } else if (entryStart >= startMonth) {
-        groupId = "this-month";
-        label = "This Month";
-        order = baseOrder[groupId];
-      } else {
-        const monthKey = `${entryDate.getFullYear()}-${entryDate.getMonth()}`;
-        groupId = `month-${monthKey}`;
-        const monthsSince =
-          (now.getFullYear() - entryDate.getFullYear()) * 12 + (now.getMonth() - entryDate.getMonth());
-        order = 4 + Math.max(monthsSince, 0);
-        label =
-          entryDate.getFullYear() === now.getFullYear()
-            ? entryDate.toLocaleDateString([], { month: "long" })
-            : entryDate.toLocaleDateString([], { month: "long", year: "numeric" });
-      }
-
-      const bucket = groups.get(groupId) ?? { id: groupId, label, order, items: [] };
-      bucket.items.push(entry);
-      groups.set(groupId, bucket);
-    });
-
-    return Array.from(groups.values())
-      .sort((a, b) => a.order - b.order)
-      .map(({ id, label, items }) => ({
-        id,
-        label,
-        items,
-      }));
+    return [
+      {
+        id: "recent",
+        label: "Recent",
+        items: sortedEntries,
+      },
+    ];
   }, [historySections]);
 
   useEffect(() => {
@@ -423,7 +352,7 @@ export function GrayEnhancedSidebar({
                                 <span className={styles.profileMenuIcon}>
                                   <Star size={16} />
                                 </span>
-                                <span className={styles.profileMenuLabel}>Upgrade to Depth</span>
+                                <span className={styles.profileMenuLabel}>Upgrade</span>
                               </span>
                             </button>
                             <span className={styles.profileMenuDivider} aria-hidden="true" />

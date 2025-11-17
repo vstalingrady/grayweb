@@ -1,8 +1,17 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useMemo,
+  useRef,
+  useCallback,
+  ReactNode,
+} from 'react';
 import { AuthApiError } from '@supabase/supabase-js';
-import { apiService, User } from '@/lib/api';
+import { apiService, User, isApiNetworkError } from '@/lib/api';
 import { humanizeIdentifier } from '@/lib/names';
 import { getSupabaseClient } from '@/lib/supabaseClient';
 import { clearSupabaseAuthStorage } from '@/lib/supabaseStorage';
@@ -12,8 +21,18 @@ interface UserContextType {
   loading: boolean;
   error: string | null;
   createUser: (userData: { email: string; full_name: string; profile_picture_url?: string }) => Promise<User>;
-  updateUser: (userData: { full_name?: string; profile_picture_url?: string; role?: string }) => Promise<void>;
+  updateUser: (userData: {
+    full_name?: string;
+    profile_picture_url?: string;
+    role?: string;
+    personalization_nickname?: string | null;
+    personalization_occupation?: string | null;
+    personalization_about?: string | null;
+    personalization_custom_instructions?: string | null;
+  }) => Promise<void>;
   refreshUser: () => Promise<void>;
+  waitForUser: () => Promise<User | null>;
+  deleteUserAccount: () => Promise<void>;
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
@@ -23,10 +42,127 @@ interface UserProviderProps {
   userEmail?: string;
 }
 
+const USER_CACHE_KEY_PREFIX = 'gray-user-cache:';
+const USER_CACHE_VERSION = 1;
+const USER_CACHE_MAX_AGE_MS = 1000 * 60 * 60 * 12;
+
+const isMissingUserError = (error: unknown): boolean => {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+  const maybeStatus = typeof (error as { status?: number }).status === 'number'
+    ? (error as { status: number }).status
+    : null;
+  if (maybeStatus && (maybeStatus === 404 || maybeStatus === 422)) {
+    return true;
+  }
+  if (error instanceof Error) {
+    const normalized = error.message.toLowerCase();
+    return (
+      normalized.includes('user not found') ||
+      normalized.includes('failed to fetch user') ||
+      normalized.includes('validation error') ||
+      normalized.includes('422')
+    );
+  }
+  return false;
+};
+
+type CachedUserPayload = {
+  version: number;
+  timestamp: number;
+  user: User;
+};
+
+const sanitizeCachedUser = (value: unknown): { user: User; timestamp: number } | null => {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  const payload = value as Partial<CachedUserPayload>;
+
+  if (payload.version !== USER_CACHE_VERSION) {
+    return null;
+  }
+
+  if (typeof payload.timestamp !== 'number' || !Number.isFinite(payload.timestamp)) {
+    return null;
+  }
+
+  const userValue = payload.user;
+  if (!userValue || typeof userValue !== 'object') {
+    return null;
+  }
+  const raw = userValue as Partial<User>;
+
+  if (typeof raw.id !== 'number' || !Number.isFinite(raw.id)) {
+    return null;
+  }
+  if (typeof raw.email !== 'string' || raw.email.trim().length === 0) {
+    return null;
+  }
+  if (typeof raw.full_name !== 'string' || raw.full_name.trim().length === 0) {
+    return null;
+  }
+
+  const user: User = {
+    id: raw.id,
+    email: raw.email,
+    full_name: raw.full_name,
+    profile_picture_url:
+      typeof raw.profile_picture_url === 'string' && raw.profile_picture_url.trim().length > 0
+        ? raw.profile_picture_url
+        : undefined,
+    role: typeof raw.role === 'string' && raw.role.trim().length > 0 ? raw.role : 'user',
+    initials: typeof raw.initials === 'string' && raw.initials.trim().length > 0 ? raw.initials : 'OP',
+    personalization_nickname:
+      typeof raw.personalization_nickname === 'string' && raw.personalization_nickname.length > 0
+        ? raw.personalization_nickname
+        : null,
+    personalization_occupation:
+      typeof raw.personalization_occupation === 'string' && raw.personalization_occupation.length > 0
+        ? raw.personalization_occupation
+        : null,
+    personalization_about:
+      typeof raw.personalization_about === 'string' && raw.personalization_about.length > 0
+        ? raw.personalization_about
+        : null,
+    personalization_custom_instructions:
+      typeof raw.personalization_custom_instructions === 'string' &&
+      raw.personalization_custom_instructions.length > 0
+        ? raw.personalization_custom_instructions
+        : null,
+    created_at:
+      typeof raw.created_at === 'string' && raw.created_at.trim().length > 0
+        ? raw.created_at
+        : new Date(payload.timestamp).toISOString(),
+    updated_at:
+      typeof raw.updated_at === 'string' && raw.updated_at.trim().length > 0
+        ? raw.updated_at
+        : new Date(payload.timestamp).toISOString(),
+  };
+
+  return { user, timestamp: payload.timestamp };
+};
+
+const getUserCacheKey = (email: string) => `${USER_CACHE_KEY_PREFIX}${email.toLowerCase()}`;
+
+const readCachedUser = (_email?: string | null): { user: User; timestamp: number } | null => null;
+
+const persistCachedUser = (_email: string, _user: User) => {
+  // User profile caching is now handled exclusively by the backend.
+};
+
+const removeCachedUser = (_email?: string | null) => {
+  // No-op: user cache is not stored in browser storage anymore.
+};
+
 export function UserProvider({ children, userEmail }: UserProviderProps) {
+  const cachedUser = useMemo(() => readCachedUser(userEmail ?? null)?.user ?? null, [userEmail]);
   const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => Boolean(userEmail));
   const [error, setError] = useState<string | null>(null);
+  const pendingUserResolversRef = useRef<Set<(value: User | null) => void>>(new Set());
 
   const deriveNameFromEmail = (email: string) => humanizeIdentifier(email) ?? 'Operator';
 
@@ -97,17 +233,26 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
     }
   };
 
-  const loadUser = async (email: string) => {
+  const loadUser = async (email: string, options?: { silent?: boolean }) => {
+    const silent = Boolean(options?.silent);
     try {
-      setLoading(true);
+      if (!silent) {
+        setLoading(true);
+      }
       setError(null);
+
+      console.log('loadUser: Starting to load user with email:', email);
 
       const supabaseProfile = await fetchSupabaseProfile();
       const preferredName = supabaseProfile?.fullName ?? deriveNameFromEmail(email);
       const preferredAvatar = supabaseProfile?.avatarUrl ?? undefined;
 
+      console.log('loadUser: Preferred name:', preferredName, 'Avatar:', preferredAvatar);
+
       try {
+        console.log('loadUser: Attempting to get user by email from API...');
         const userData = await apiService.getUserByEmail(email);
+        console.log('loadUser: User data retrieved:', userData);
 
         const updates: { full_name?: string; profile_picture_url?: string } = {};
         if (preferredName && preferredName !== userData.full_name) {
@@ -119,18 +264,24 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
 
         if (Object.keys(updates).length > 0) {
           try {
+            console.log('loadUser: Updating user profile with:', updates);
             const updatedUser = await apiService.updateUser(userData.id, updates);
             setUser(updatedUser);
+            persistCachedUser(updatedUser.email, updatedUser);
           } catch (updateError) {
             console.error('Error updating user profile:', updateError);
             setUser(userData);
+            persistCachedUser(userData.email, userData);
           }
         } else {
           setUser(userData);
+          persistCachedUser(userData.email, userData);
         }
       } catch (userError) {
+        console.log('loadUser: Error getting user, checking if user not found...');
         // If user doesn't exist, create them
-        if (userError instanceof Error && userError.message.includes('User not found')) {
+        if (isMissingUserError(userError)) {
+          console.log('loadUser: User not found, creating new user...');
           const defaultUserData = {
             email,
             full_name: preferredName,
@@ -138,16 +289,27 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
             role: 'user',
           };
           const newUser = await apiService.createUser(defaultUserData);
+          console.log('loadUser: New user created:', newUser);
           setUser(newUser);
+          persistCachedUser(newUser.email, newUser);
         } else {
+          console.error('loadUser: Unexpected error getting user:', userError);
           throw userError;
         }
       }
     } catch (err) {
+      console.error('loadUser: General error:', err);
       setError(err instanceof Error ? err.message : 'Failed to load user');
-      console.error('Error loading user:', err);
+      const shouldSkipLog = isApiNetworkError(err);
+      if (!shouldSkipLog) {
+        console.error('Error loading user:', err);
+      } else if (process.env.NODE_ENV !== 'production') {
+        console.debug('API unreachable while loading user profile:', err);
+      }
     } finally {
-      setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
     }
   };
 
@@ -155,6 +317,7 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
     try {
       const newUser = await apiService.createUser(userData);
       setUser(newUser);
+      persistCachedUser(newUser.email, newUser);
       return newUser;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to create user';
@@ -163,12 +326,62 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
     }
   };
 
-  const updateUser = async (userData: { full_name?: string; profile_picture_url?: string; role?: string }) => {
+  const updateUser = async (userData: {
+    full_name?: string;
+    profile_picture_url?: string;
+    role?: string;
+    personalization_nickname?: string | null;
+    personalization_occupation?: string | null;
+    personalization_about?: string | null;
+    personalization_custom_instructions?: string | null;
+  }) => {
     if (!user) throw new Error('No user logged in');
 
+    // Build a sanitized payload restricted to fields the backend schema knows.
+    const payload: {
+      full_name?: string;
+      profile_picture_url?: string;
+      role?: string;
+      personalization_nickname?: string | null;
+      personalization_occupation?: string | null;
+      personalization_about?: string | null;
+      personalization_custom_instructions?: string | null;
+    } = {};
+
+    if (typeof userData.full_name === 'string') {
+      payload.full_name = userData.full_name;
+    }
+    if (typeof userData.profile_picture_url === 'string') {
+      payload.profile_picture_url = userData.profile_picture_url;
+    }
+    if (typeof userData.role === 'string') {
+      payload.role = userData.role;
+    }
+    if (Object.prototype.hasOwnProperty.call(userData, 'personalization_nickname')) {
+      payload.personalization_nickname = userData.personalization_nickname ?? null;
+    }
+    if (Object.prototype.hasOwnProperty.call(userData, 'personalization_occupation')) {
+      payload.personalization_occupation = userData.personalization_occupation ?? null;
+    }
+    if (Object.prototype.hasOwnProperty.call(userData, 'personalization_about')) {
+      payload.personalization_about = userData.personalization_about ?? null;
+    }
+    if (Object.prototype.hasOwnProperty.call(userData, 'personalization_custom_instructions')) {
+      payload.personalization_custom_instructions =
+        userData.personalization_custom_instructions ?? null;
+    }
+
+    if (Object.keys(payload).length === 0) {
+      return;
+    }
+
     try {
-      const updatedUser = await apiService.updateUser(user.id, userData);
+      const updatedUser = await apiService.updateUser(user.id, payload);
+
+      // Ensure local state reflects latest profile so viewerName and panel baselines
+      // immediately pick up nickname / full_name changes.
       setUser(updatedUser);
+      persistCachedUser(updatedUser.email, updatedUser);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to update user';
       setError(errorMessage);
@@ -182,26 +395,111 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
     try {
       const updatedUser = await apiService.getUser(user.id);
       setUser(updatedUser);
+      persistCachedUser(updatedUser.email, updatedUser);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to refresh user');
     }
   };
 
+  const deleteUserAccount = async () => {
+    if (!user) {
+      throw new Error('No user logged in');
+    }
+
+    try {
+      await apiService.deleteUser(user.id);
+      const supabaseClient = getSupabaseClient();
+      if (supabaseClient) {
+        try {
+          await supabaseClient.auth.signOut({ scope: 'local' });
+        } catch (supabaseError) {
+          console.warn('Failed to sign out after account deletion:', supabaseError);
+        }
+      }
+      clearSupabaseAuthStorage();
+      removeCachedUser(user.email);
+      setUser(null);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to delete user account';
+      setError(errorMessage);
+      throw new Error(errorMessage);
+    }
+  };
+
+  const waitForUser = useCallback((): Promise<User | null> => {
+    if (user) {
+      return Promise.resolve(user);
+    }
+    if (!loading) {
+      return Promise.resolve(null);
+    }
+    return new Promise((resolve) => {
+      pendingUserResolversRef.current.add(resolve);
+    });
+  }, [loading, user]);
+
+  useEffect(() => {
+    if (user || !loading) {
+      const pending = Array.from(pendingUserResolversRef.current);
+      pendingUserResolversRef.current.clear();
+      pending.forEach((resolve) => resolve(user ?? null));
+    }
+  }, [loading, user]);
+
+  useEffect(
+    () => () => {
+      const pending = Array.from(pendingUserResolversRef.current);
+      pendingUserResolversRef.current.clear();
+      pending.forEach((resolve) => resolve(null));
+    },
+    []
+  );
+
+  useEffect(() => {
+    if (!userEmail) {
+      return;
+    }
+    if (cachedUser) {
+      setUser(cachedUser);
+      setLoading(false);
+    } else {
+      setUser(null);
+      setLoading(true);
+    }
+  }, [cachedUser, userEmail]);
+
   useEffect(() => {
     if (userEmail) {
-      loadUser(userEmail);
+      console.log('UserContext: Loading user with email:', userEmail);
+      loadUser(userEmail, { silent: Boolean(user) }).catch((err) => {
+        console.error('Failed to load user profile:', err);
+        if (!isApiNetworkError(err)) {
+          console.error('User load error details:', err);
+        }
+      });
     } else {
+      console.log('UserContext: No userEmail provided');
+      setUser(null);
       setLoading(false);
+      removeCachedUser(null);
     }
   }, [userEmail]);
 
+  useEffect(() => {
+    if (user && userEmail) {
+      persistCachedUser(userEmail, user);
+    }
+  }, [user, userEmail]);
+
   const value: UserContextType = {
     user,
+    waitForUser,
     loading,
     error,
     createUser,
     updateUser,
     refreshUser,
+    deleteUserAccount,
   };
 
   return (

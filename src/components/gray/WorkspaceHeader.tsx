@@ -1,34 +1,57 @@
+import { memo, type ReactNode } from "react";
 import { Flame } from "lucide-react";
 import styles from "@/app/gray/GrayPageClient.module.css";
 
 type GrayWorkspaceHeaderProps = {
-  timeLabel: string;
-  dateLabel: string;
   streakCount: number;
+  planLabel: string;
+  onUpgradeClick?: () => void;
+  children?: ReactNode;
 };
 
-export function GrayWorkspaceHeader({
-  timeLabel,
-  dateLabel,
+function GrayWorkspaceHeader({
   streakCount,
+  planLabel,
+  onUpgradeClick,
+  children,
 }: GrayWorkspaceHeaderProps) {
   const normalizedStreak = Number.isFinite(streakCount)
     ? Math.max(0, Math.trunc(streakCount))
     : 0;
+  const isDepthMember = planLabel.trim().toLowerCase() === "depth";
+
+  const handlePlanBadgeClick = () => {
+    if (isDepthMember) {
+      return;
+    }
+    onUpgradeClick?.();
+  };
   return (
     <header className={styles.header}>
-      <div className={styles.timeGroup}>
-        <span className={styles.time}>{timeLabel}</span>
-        <span className={styles.date}>{dateLabel}</span>
-      </div>
-      {normalizedStreak > 0 && (
-        <div className={styles.headerRight}>
-          <div className={styles.streakBadge}>
+      {children ? <div className={styles.headerLeft}>{children}</div> : null}
+      <div className={styles.headerRight}>
+        <button
+          type="button"
+          className={styles.planBadge}
+          data-state={isDepthMember ? "active" : "cta"}
+          aria-label={isDepthMember ? `${planLabel} plan` : "Upgrade to Depth"}
+          aria-disabled={isDepthMember ? "true" : "false"}
+          onClick={handlePlanBadgeClick}
+        >
+          <span className={styles.planBadgeLabel}>
+            {isDepthMember ? planLabel : "Upgrade"}
+          </span>
+        </button>
+        {normalizedStreak > 0 ? (
+          <div className={styles.streakBadge} aria-label={`${normalizedStreak} day streak`}>
             <Flame size={12} />
-            <span>{String(normalizedStreak).padStart(2, "0")} day streak</span>
+            <span>{normalizedStreak}</span>
           </div>
-        </div>
-      )}
+        ) : null}
+      </div>
     </header>
   );
 }
+
+export { GrayWorkspaceHeader };
+export default memo(GrayWorkspaceHeader);

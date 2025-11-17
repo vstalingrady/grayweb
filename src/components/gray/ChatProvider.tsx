@@ -3189,6 +3189,19 @@ const mergeRemoteConversations = useCallback(
     const deliverStarterMessage = async () => {
       const fallback = fallbackGreeting();
       try {
+        // Only show a starter if the backend has no existing general history.
+        const generalConversationId = buildGeneralConversationId(user.id);
+        if (generalConversationId) {
+          try {
+            const history = await apiService.getConversation(generalConversationId);
+            if (Array.isArray(history) && history.length > 0) {
+              return;
+            }
+          } catch (historyError) {
+            console.error("Failed to load general conversation history for starter check:", historyError);
+          }
+        }
+
         const timeContext = buildLocalTimeContext();
         const response = await apiService.requestChatStarter({
           user_id: user.id,

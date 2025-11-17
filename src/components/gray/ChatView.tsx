@@ -45,12 +45,16 @@ import AttachmentTray from "./AttachmentTray";
 const LEGACY_REMINDER_SNIPPET_REGEX = /```[a-z0-9_-]*[\s\S]*?(gray[\s\S]{0,120}?reminder)[\s\S]*?```/gi;
 
 const MARKDOWN_PLUGINS: any = [
+  // Rely on explicit math markers (`\(…\)`, `\[…\]`) and our own
+  // `$…$` pre-processing to avoid treating currency like `$20` as math.
   [remarkMath, { singleDollarTextMath: false }],
   remarkGfm,
 ];
 
 const INLINE_LATEX_REGEX = /\\\(([\s\S]+?)\\\)/g;
 const DISPLAY_LATEX_REGEX = /\\\[([\s\S]+?)\\\]/g;
+const INLINE_DOLLAR_LATEX_REGEX = /\$([^\n$]+?)\$/g;
+const DISPLAY_DOLLAR_LATEX_REGEX = /\$\$([\s\S]+?)\$\$/g;
 const MIN_TILDE_FENCE_LENGTH = 3;
 
 const normalizeLatexSegment = (segment: string): string => {
@@ -58,25 +62,53 @@ const normalizeLatexSegment = (segment: string): string => {
     return segment;
   }
   let updated = segment;
+
+  // Normalize block math written as `$$ ... $$` into `\[ ... \]`
+  // so remark-math / rehype-katex can render it reliably.
+  updated = updated.replace(DISPLAY_DOLLAR_LATEX_REGEX, (_match, content: string) => {
+    const normalized = content.trim();
+    if (!normalized) {
+      return "";
+    }
+    return `\n\n\\[${normalized}\\]\n\n`;
+  });
+
+  // Normalize inline math written as `$ ... $` into `\( ... \)`.
+  // This only touches *paired* dollar markers, so bare currency
+  // amounts like `$20` remain untouched.
+  updated = updated.replace(INLINE_DOLLAR_LATEX_REGEX, (_match, content: string) => {
+    const normalized = content.trim();
+    if (!normalized) {
+      return "";
+    }
+    return `\\(${normalized}\\)`;
+  });
+
+  // Clean up any existing `\(...\)` / `\[...\]` markers by trimming
+  // inner whitespace and ensuring they are on their own lines when
+  // used as display math.
   updated = updated.replace(DISPLAY_LATEX_REGEX, (_match, content: string) => {
     const normalized = content.trim();
     if (!normalized) {
       return "";
     }
-    return `\n\n$$\n${normalized}\n$$\n\n`;
+    return `\n\n\\[${normalized}\\]\n\n`;
   });
   updated = updated.replace(INLINE_LATEX_REGEX, (_match, content: string) => {
     const normalized = content.trim();
     if (!normalized) {
       return "";
     }
-    return `$$${normalized}$$`;
+    return `\\(${normalized}\\)`;
   });
   return updated;
 };
 
 const normalizeLatexForDisplay = (value: string): string => {
-  if (!value || (value.indexOf("\\(") === -1 && value.indexOf("\\[") === -1)) {
+  if (
+    !value ||
+    (value.indexOf("\\(") === -1 && value.indexOf("\\[") === -1 && value.indexOf("$") === -1)
+  ) {
     return value;
   }
 
@@ -1007,6 +1039,9 @@ const ChatMessagesList = memo(
           const isStreamingMessage = isAssistant && message.id === activeStreamingMessageId;
           const hasTextContent = Boolean(visibleAssistantText.trim());
           const assistantReminders = isAssistant && Array.isArray(message.reminders) ? message.reminders : [];
+          const sourceCards = isAssistant && message.groundingMetadata
+            ? buildGroundingSourceCards(message.groundingMetadata)
+            : [];
           const showAssistantMarkdown = isAssistant && hasTextContent;
           const hasVisibleContent =
             hasThinkingContent || showAssistantMarkdown || assistantReminders.length > 0;
@@ -1045,19 +1080,6 @@ const ChatMessagesList = memo(
           const messageBodyClassName = isUser
             ? `${styles.chatBubble} ${styles.chatBubbleUser}`
             : styles.chatAssistantBlock;
-          const footerSourceLabels: string[] = [];
-          if (isAssistant && message.groundingMetadata) {
-            const footerSources = buildGroundingSourceCards(message.groundingMetadata);
-            footerSources.forEach((source) => {
-              const siteLabel = source.siteLabel?.trim();
-              if (!siteLabel) {
-                return;
-              }
-              if (!footerSourceLabels.includes(siteLabel)) {
-                footerSourceLabels.push(siteLabel);
-              }
-            });
-          }
 
           return (
             <div
@@ -1103,7 +1125,7 @@ const ChatMessagesList = memo(
                     </ReactMarkdown>
                   </div>
                 )}
-                {isAssistant && message.groundingMetadata ? (
+                {false && isAssistant && message.groundingMetadata ? (
                   (() => {
                     const metadata = message.groundingMetadata;
                     const searchQueries =
@@ -1125,7 +1147,6 @@ const ChatMessagesList = memo(
                       metadata.grounding_chunks ??
                       (metadata as { groundingChunks?: GroundingMetadata["grounding_chunks"] })?.groundingChunks ??
                       [];
-                    const sourceCards = buildGroundingSourceCards(metadata);
                     const mapSources = chunks
                       .map((chunk) => chunk?.maps)
                       .filter((maps): maps is NonNullable<(typeof chunks)[number]["maps"]> => Boolean(maps));
@@ -1133,10 +1154,30 @@ const ChatMessagesList = memo(
                       metadata.google_maps_widget_context_token ??
                         (metadata as { googleMapsWidgetContextToken?: string })?.googleMapsWidgetContextToken
                     );
+                    const previousUserMessage = (() => {
+                      for (let index = messageIndex - 1; index >= 0; index -= 1) {
+                        const prior = messages[index];
+                        if (prior && prior.role === "user" && typeof prior.content === "string") {
+                          return prior.content.trim().toLowerCase();
+                        }
+                      }
+                      return null;
+                    })();
+                    const filteredQueries =
+                      searchQueries.filter((query) => {
+                        const trimmed = query.trim();
+                        if (!trimmed) {
+                          return false;
+                        }
+                        if (previousUserMessage && trimmed.toLowerCase() === previousUserMessage) {
+                          return false;
+                        }
+                        return true;
+                      }) ?? [];
                     if (
                       sourceCards.length === 0 &&
                       mapSources.length === 0 &&
-                      searchQueries.length === 0 &&
+                      filteredQueries.length === 0 &&
                       !hasWidget &&
                       !renderedSearchEntry
                     ) {
@@ -1213,11 +1254,11 @@ const ChatMessagesList = memo(
                             />
                           </div>
                         ) : null}
-                        {searchQueries.length > 0 ? (
+                        {filteredQueries.length > 0 ? (
                           <div className={styles.chatGroundingQueries}>
                             <span>Search queries:</span>
                             <div>
-                              {searchQueries.map((query) => (
+                              {filteredQueries.map((query) => (
                                 <span key={query} className={styles.chatGroundingQueryChip}>
                                   {query}
                                 </span>
@@ -1264,26 +1305,39 @@ const ChatMessagesList = memo(
               </div>
               {!showStreamingIndicator && (
                 <div className={styles.chatMessageFooter}>
-                  <time className={styles.chatMessageTimestamp} dateTime={messageTimestampIso}>
-                    {timestampLabel}
-                  </time>
-                  <div className={styles.chatMessageFooterRight}>
-                    {isAssistant && footerSourceLabels.length > 0 ? (
-                      <div className={styles.chatSourcesFooter}>
-                        <span className={styles.chatSourcesFooterLabel}>Sources</span>
-                        {footerSourceLabels.slice(0, 4).map((label) => (
-                          <span
-                            key={label}
-                            className={styles.chatSourcesFooterBadge}
-                            aria-label={label}
-                            title={label}
-                          >
-                            {buildGroundingSourceInitials(label)}
+              <time className={styles.chatMessageTimestamp} dateTime={messageTimestampIso}>
+                {timestampLabel}
+              </time>
+              <div className={styles.chatMessageFooterRight}>
+                {isAssistant && sourceCards.length > 0 ? (
+                  <div className={styles.chatFooterSources}>
+                    <span className={styles.chatFooterSourcesLabel}>Sources</span>
+                    <div className={styles.chatFooterSourcesList}>
+                      {sourceCards.slice(0, 2).map((source) => {
+                        const label = source.siteLabel || source.title || "Source";
+                        if (source.href) {
+                          return (
+                            <a
+                              key={source.id}
+                              href={source.href}
+                              target="_blank"
+                              rel="noreferrer"
+                              className={styles.chatFooterSourceLink}
+                            >
+                              {label}
+                            </a>
+                          );
+                        }
+                        return (
+                          <span key={source.id} className={styles.chatFooterSourceText}>
+                            {label}
                           </span>
-                        ))}
-                      </div>
-                    ) : null}
-                    <div className={styles.chatActionIconRow}>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : null}
+                <div className={styles.chatActionIconRow}>
                       {isMetadataAvailable ? (
                         <div className={styles.chatMetadataControl}>
                           <button type="button" aria-label="Response details" tabIndex={0}>
@@ -1609,7 +1663,6 @@ export function GrayChatView({
     webSearchEnabled,
   } = useChatStore();
   const session = sessionId ? getSession(sessionId) : undefined;
-  const sessionConversationId = session?.conversationId ?? null;
   const sessionExists = Boolean(session);
   const { user, waitForUser } = useUser();
   const [draft, setDraft] = useState("");
@@ -1676,8 +1729,8 @@ export function GrayChatView({
       onRemoveAttachment={removeAttachment}
     />
   ) : null;
-  const isAssistantThinking = isResponding;
-  const streamingStatusLabel = session?.pendingAutoStream ? "searching" : "thinking";
+  const isAssistantThinking = isResponding || sessionPendingAutoStream;
+  const streamingStatusLabel = sessionPendingAutoStream ? "searching" : "thinking";
   useEffect(() => {
     if (!isAssistantThinking || hideThinkingIndicator) {
       setThinkingDots("");
@@ -1834,7 +1887,9 @@ export function GrayChatView({
     // Skip loading if we already have messages AND they include assistant messages
     // (user messages will appear before backend sends the response)
     const hasAssistantMessages = session?.messages?.some((msg) => msg.role === "assistant");
-    if (hasAssistantMessages) {
+    const isGeneralConversation =
+      typeof activeConversationId === "string" && activeConversationId.startsWith("general:");
+    if (hasAssistantMessages && !isGeneralConversation) {
       console.log('[ChatView] Skipping: already has assistant messages');
       return;
     }
@@ -2611,7 +2666,8 @@ export function GrayChatView({
   const trimmedDraft = draft.trim();
   const composerHasContent = Boolean(trimmedDraft);
   const isSendDisabled = isResponding || !composerHasContent;
-  const shouldShowPendingStreamIndicator = !hideThinkingIndicator && isResponding;
+  const shouldShowPendingStreamIndicator =
+    !hideThinkingIndicator && (isResponding || sessionPendingAutoStream);
 
   return (
     <div className={styles.chatView} aria-live="polite" style={chatViewStyle}>

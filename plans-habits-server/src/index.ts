@@ -142,6 +142,126 @@ const HabitIdSchema = z
   .positive()
   .describe("Numeric habit id from the backend.");
 
+const ReminderIdSchema = z
+  .number()
+  .int()
+  .positive()
+  .describe("Numeric reminder id from the backend.");
+
+const ReminderIsoSchema = z
+  .string()
+  .min(1)
+  .describe(
+    "Reminder time as an ISO 8601 datetime string in the user's local timezone."
+  );
+
+function buildGrayReminderPayload(created: any, userId: number) {
+  const idRaw = created?.id ?? created?.reminder_id;
+  const id =
+    typeof idRaw === "number"
+      ? idRaw
+      : Number.parseInt(String(idRaw ?? ""), 10) || Date.now();
+  const remindAt =
+    typeof created?.remind_at === "string"
+      ? created.remind_at
+      : created?.remindAt ?? created?.time_iso ?? null;
+  const label = (
+    created?.label ?? created?.summary ?? created?.description ?? "Reminder"
+  ).toString();
+  const status = (created?.status ?? "pending").toString();
+  const deliveryMode = (created?.delivery_mode ?? "reminder").toString();
+
+  const summary =
+    typeof created?.summary === "string"
+      ? created.summary
+      : typeof created?.description === "string"
+        ? created.description
+        : null;
+
+  const reminderRecord: Record<string, unknown> = {
+    id,
+    remind_at: remindAt,
+    status,
+    description: created?.description ?? null,
+    summary,
+  };
+
+  return {
+    type: "gray.reminder",
+    source: "mcp/plans-habits-server",
+    status: "created",
+    entity: "plan",
+    delivery_mode: deliveryMode,
+    data: {
+      id,
+      user_id:
+        typeof created?.user_id === "number" ? created.user_id : userId,
+      label,
+      time_iso: remindAt,
+      raw: created ?? {},
+      delivery_mode: deliveryMode,
+      summary,
+      reminder_id: id,
+      reminder_status: status,
+      reminder: reminderRecord,
+    },
+  };
+}
+
+const ReminderIdSchema = z
+  .number()
+  .int()
+  .positive()
+  .describe("Numeric reminder id from the backend.");
+
+const ReminderIsoSchema = z
+  .string()
+  .min(1)
+  .describe("Reminder time as an ISO 8601 datetime string in the user's local timezone.");
+
+function buildGrayReminderPayload(created: any, userId: number) {
+  const id = typeof created?.id === "number" ? created.id : Number.parseInt(String(created?.id ?? 0), 10) || Date.now();
+  const remindAt = typeof created?.remind_at === "string" ? created.remind_at : created?.remindAt ?? created?.time_iso ?? null;
+  const label = (created?.label ?? created?.summary ?? created?.description ?? "Reminder").toString();
+  const status = (created?.status ?? "pending").toString();
+  const deliveryMode = (created?.delivery_mode ?? "reminder").toString();
+
+  const summary =
+    typeof created?.summary === "string"
+      ? created.summary
+      : typeof created?.description === "string"
+        ? created.description
+        : null;
+
+  const reminderRecord: Record<string, unknown> = {
+    id,
+    remind_at: remindAt,
+    status,
+    description: created?.description ?? null,
+    summary,
+  };
+
+  return {
+    type: "gray.reminder",
+    source: "mcp/plans-habits-server",
+    status: "created",
+    entity: "plan",
+    delivery_mode: deliveryMode,
+    data: {
+      id,
+      user_id: typeof created?.user_id === "number" ? created.user_id : userId,
+      label,
+      time_iso: remindAt,
+      raw: created ?? {},
+      delivery_mode: deliveryMode,
+      summary,
+      reminder_id: id,
+      reminder_status: status,
+      reminder: reminderRecord,
+    },
+  };
+}
+
 /**
  * Tools: Plans
  */
@@ -611,6 +731,259 @@ server.tool(
 );
 
 /**
+ * Tools: Reminders
+ */
+
+server.tool(
+  "list_reminders",
+  {
+    user_id: UserIdSchema,
+    status: z
+      .string()
+      .optional()
+      .describe('Optional status filter such as "pending" or "delivered".'),
+    limit: z
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .describe("Maximum number of reminders to return."),
+    delivery_mode: z
+      .string()
+      .optional()
+      .describe('Optional delivery mode filter such as "reminder".'),
+    entity_type: z
+      .string()
+      .optional()
+      .describe('Optional entity type filter such as "plan" or "habit".'),
+    include_archived: z
+      .boolean()
+      .optional()
+      .describe("Whether to include completed/cancelled reminders."),
+  },
+  async ({
+    user_id,
+    status,
+    limit,
+    delivery_mode,
+    entity_type,
+    include_archived,
+  }) => {
+    const params = new URLSearchParams();
+    if (status) params.set("status_filter", status);
+    if (typeof limit === "number") params.set("limit", String(limit));
+    if (delivery_mode) params.set("delivery_mode", delivery_mode);
+    if (entity_type) params.set("entity_type", entity_type);
+    if (include_archived) params.set("include_archived", "true");
+    const suffix = params.toString();
+    const data = await backendFetch(
+      suffix
+        ? `/users/${user_id}/reminders?${suffix}`
+        : `/users/${user_id}/reminders`,
+      {
+        method: "GET",
+      }
+    );
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify(
+            {
+              user_id,
+              reminders: data ?? [],
+            },
+            null,
+            2
+          ),
+        },
+      ],
+    };
+  }
+);
+
+server.tool(
+  "create_reminder",
+  {
+    user_id: UserIdSchema,
+    label: z
+      .string()
+      .min(1)
+      .describe("Description of what to be reminded about."),
+    remind_at: ReminderIsoSchema,
+    description: z
+      .string()
+      .nullable()
+      .optional()
+      .describe("Optional longer description for the reminder."),
+    entity_type: z
+      .string()
+      .nullable()
+      .optional()
+      .describe('Optional originating entity type such as "plan" or "habit".'),
+    entity_id: z
+      .number()
+      .int()
+      .nullable()
+      .optional()
+      .describe(
+        "Optional originating entity id, if this reminder is tied to a plan or habit."
+      ),
+    delivery_mode: z
+      .string()
+      .nullable()
+      .optional()
+      .describe('Optional delivery mode such as "reminder".'),
+    summary: z
+      .string()
+      .nullable()
+      .optional()
+      .describe("Optional short summary for UI surfaces."),
+    metadata: z
+      .record(z.any())
+      .nullable()
+      .optional()
+      .describe("Optional free-form metadata object to store with the reminder."),
+  },
+  async ({
+    user_id,
+    label,
+    remind_at,
+    description = null,
+    entity_type = null,
+    entity_id = null,
+    delivery_mode = null,
+    summary = null,
+    metadata = null,
+  }) => {
+    const payload: Record<string, unknown> = {
+      label,
+      remind_at,
+      description,
+      entity_type,
+      entity_id,
+      delivery_mode,
+      summary,
+      metadata,
+    };
+
+    const created = await backendFetch(`/users/${user_id}/reminders`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+
+    const grayReminder = buildGrayReminderPayload(created, user_id);
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify(grayReminder, null, 2),
+        },
+      ],
+    };
+  }
+);
+
+server.tool(
+  "update_reminder",
+  {
+    user_id: UserIdSchema,
+    reminder_id: ReminderIdSchema,
+    label: z
+      .string()
+      .optional()
+      .describe("New label (omit to keep existing)."),
+    description: z
+      .string()
+      .nullable()
+      .optional()
+      .describe("New description or null to clear."),
+    remind_at: ReminderIsoSchema.optional().describe(
+      "New reminder time as ISO 8601 string."
+    ),
+    status: z
+      .string()
+      .optional()
+      .describe(
+        'New status such as "pending", "completed", or "cancelled" (omit to keep existing).'
+      ),
+    delivery_mode: z
+      .string()
+      .nullable()
+      .optional()
+      .describe("New delivery mode or null to clear."),
+    summary: z
+      .string()
+      .nullable()
+      .optional()
+      .describe("New summary or null to clear."),
+    metadata: z
+      .record(z.any())
+      .nullable()
+      .optional()
+      .describe("Updated metadata object, or null to clear."),
+  },
+  async (args) => {
+    const { user_id, reminder_id, ...rest } = args;
+    const payload: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(rest)) {
+      if (value !== undefined) {
+        payload[key] = value;
+      }
+    }
+
+    const updated = await backendFetch(
+      `/users/${user_id}/reminders/${reminder_id}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(payload),
+      }
+    );
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify(
+            {
+              user_id,
+              reminder_id,
+              reminder: updated,
+            },
+            null,
+            2
+          ),
+        },
+      ],
+    };
+  }
+);
+
+server.tool(
+  "delete_reminder",
+  {
+    user_id: UserIdSchema,
+    reminder_id: ReminderIdSchema,
+  },
+  async ({ user_id, reminder_id }) => {
+    await backendFetch(`/users/${user_id}/reminders/${reminder_id}`, {
+      method: "DELETE",
+    });
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Deleted reminder ${reminder_id} for user ${user_id}.`,
+        },
+      ],
+    };
+  }
+);
+
+/**
  * bootstrap_status
  * - Simple diagnostic to confirm server wiring from the AI side.
  */
@@ -636,6 +1009,10 @@ server.tool(
                 "create_habit",
                 "update_habit",
                 "delete_habit",
+                "list_reminders",
+                "create_reminder",
+                "update_reminder",
+                "delete_reminder",
               ],
             },
             null,

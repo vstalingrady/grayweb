@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "backend": "cd backend && python3 start.py",
+    "backend": "DATABASE_URL=\"sqlite:///./users.db\" cd backend && python3 start.py",
     "mcp:build": "cd plans-habits-server && npm run build",
     "mcp:plans-habits-server": "node plans-habits-server/dist/index.js",
     "backend:with-mcp": "concurrently \"npm run backend\" \"npm run mcp:plans-habits-server\"",
@@ -11,7 +11,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "dev:full": "concurrently \"npm run backend:with-mcp\" \"npm run dev\""
+    "dev:full": "node scripts/dev-full.js"
   },
   "dependencies": {
     "@paper-design/shaders-react": "^0.0.63",
@@ -28,12 +28,14 @@
     "rehype-katex": "^7.0.0",
     "remark-gfm": "^4.0.1",
     "remark-math": "^6.0.0",
-    "three": "^0.169.0"
+    "three": "^0.169.0",
+    "tiktoken": "^1.0.22"
   },
   "devDependencies": {
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/three": "^0.181.0",
     "autoprefixer": "^10.4.21",
     "concurrently": "^8.2.2",
     "eslint": "^9",

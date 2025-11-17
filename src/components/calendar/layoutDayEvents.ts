@@ -154,8 +154,10 @@ export const layoutDayEvents = (
       minutesBetween(dayStart, event.end)
     );
     const durationMinutes = Math.max(endMinutes - startMinutes, 5);
-    const height = Math.max(durationMinutes * minuteHeight, minimumHeight);
-    const top = startMinutes * minuteHeight;
+    const isLineEvent = event.displayHint === "line";
+    const baseHeight = Math.max(durationMinutes * minuteHeight, minimumHeight);
+    const height = isLineEvent ? 2 : baseHeight;
+    const top = isLineEvent ? Math.max(startMinutes * minuteHeight - 1, 0) : startMinutes * minuteHeight;
 
     if (!meta) {
       return {

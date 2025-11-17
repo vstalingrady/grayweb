@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import "katex/dist/katex.min.css";
+import ApiNetworkErrorHandler from "@/components/ApiNetworkErrorHandler";
+import { readServerSession } from "@/lib/auth/server";
+import { GrayProviders } from "@/components/GrayProviders";
 
 const resolveMetadataBase = (): URL | undefined => {
   const candidate =
@@ -19,8 +22,8 @@ const resolveMetadataBase = (): URL | undefined => {
 export const metadata: Metadata = {
   metadataBase: resolveMetadataBase(),
   title: {
-    default: "alignment.id",
-    template: "%s • alignment.id",
+    default: "Gray",
+    template: "%s",
   },
   description: "alignment.id — exploring tools for intentionality and focus in a world engineered for distraction.",
   icons: {
@@ -44,11 +47,12 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const session = await readServerSession();
   const reactDevtoolsHotfix = `
     (function() {
       if (typeof window === "undefined") {
@@ -122,12 +126,15 @@ export default function RootLayout({
         />
       </head>
       <body>
-        <svg style={{ display: "none" }} aria-hidden focusable="false">
-          <filter id="grainy-noise">
-            <feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="3" stitchTiles="stitch" />
-          </filter>
-        </svg>
-        {children}
+        <GrayProviders viewerEmail={session?.email ?? null}>
+          <ApiNetworkErrorHandler />
+          <svg style={{ display: "none" }} aria-hidden focusable="false">
+            <filter id="grainy-noise">
+              <feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="3" stitchTiles="stitch" />
+            </filter>
+          </svg>
+          {children}
+        </GrayProviders>
       </body>
     </html>
   );
