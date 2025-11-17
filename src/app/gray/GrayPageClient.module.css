@@ -19,7 +19,20 @@
   display: flex;
   justify-content: flex-start;
   padding: 0;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.page[data-workspace-background="true"] {
+  background: transparent;
+}
+
+.page[data-workspace-background="true"] .main {
+  background: transparent;
+}
+
+.page[data-workspace-background="true"] .mainContent[data-view="general"] {
+  background: transparent;
 }
 
 .page[data-dashboard-tab="pulse"] {
@@ -29,7 +42,8 @@
 }
 
 .page[data-dashboard-tab="calendar"] {
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   height: 100vh;
   max-height: 100vh;
 }
@@ -47,7 +61,7 @@
 .overlay {
   position: fixed;
   inset: 0;
-  background: linear-gradient(160deg, rgba(2, 2, 2, 0.94), rgba(2, 2, 2, 0.98));
+  background: rgba(0, 0, 0, 0.64);
   pointer-events: none;
 }
 
@@ -255,6 +269,8 @@
 }
 
 .sidebarPanel {
+  position: absolute;
+  inset: 0;
   flex: 1;
   width: 0;
   overflow: hidden;
@@ -299,13 +315,12 @@
   position: absolute;
   left: 0;
   right: 0;
-  bottom: calc(100% + 14px);
+  bottom: calc(100% + 6px);
   width: 100%;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 16px 20px 22px;
+  padding: 5px 5px;
   border-radius: 18px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(12, 12, 14, 0.96);
@@ -314,6 +329,7 @@
     inset 0 0 0 1px rgba(255, 255, 255, 0.04);
   backdrop-filter: blur(14px);
   z-index: 2;
+  gap: 0;
 }
 
 .profileMenu::before {
@@ -339,24 +355,41 @@
 
 .profileMenuItem {
   display: block;
-  padding: 14px 16px;
   width: 100%;
-  border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.04);
-  background: rgba(16, 16, 20, 0.9);
+  padding: 0;
+  border: none;
+  background: transparent;
   cursor: pointer;
 }
 
 .profileMenuItemContent {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+  width: 100%;
+  padding: 6px 14px;
+  border-radius: 14px;
+  min-height: 32px;
+  background: transparent;
 }
 
-.profileMenuItem:hover,
-.profileMenuItem:focus-visible {
-  background: rgba(36, 36, 42, 0.98);
-  transition: none;
+.profileMenuItem:hover .profileMenuItemContent,
+.profileMenuItem:focus-visible .profileMenuItemContent {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.profileMenuUpgrade {
+  padding: 0;
+}
+
+.profileMenuUpgrade .profileMenuItemContent {
+  background: transparent;
+  box-shadow: none;
+}
+
+.profileMenuUpgrade:hover .profileMenuItemContent,
+.profileMenuUpgrade:focus-visible .profileMenuItemContent {
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .profileMenuIcon {
@@ -409,8 +442,15 @@
 }
 
 .profileMenuLogout {
-  background: linear-gradient(135deg, rgba(84, 18, 18, 0.6), rgba(32, 6, 6, 0.9));
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  padding: 0;
+}
+
+.profileMenuLogout .profileMenuItemContent {
+  background: transparent;
+  box-shadow: none;
+}
+
+.profileMenuLogout .profileMenuLabel {
   color: rgba(255, 216, 216, 0.92);
 }
 
@@ -422,28 +462,28 @@
   position: fixed;
   inset: 0;
   z-index: 60;
-  background: rgba(4, 4, 6, 0.82);
-  backdrop-filter: blur(22px);
+  background: transparent;
   display: flex;
   align-items: center;
-  justify-content: center;
-  padding: clamp(24px, 6vw, 64px);
+  justify-content: flex-end;
+  padding: clamp(16px, 4vw, 28px);
 }
 
 .personalizationPanel {
-  width: min(1040px, 100%);
-  max-height: calc(100vh - 120px);
+  width: min(480px, 92vw);
+  max-height: calc(100vh - 40px);
   overflow: auto;
-  border-radius: clamp(22px, 4vw, 32px);
+  border-radius: clamp(16px, 2.5vw, 24px);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(10, 10, 14, 0.94);
+  background: rgba(10, 10, 14, 0.98);
   box-shadow:
-    0 60px 120px rgba(0, 0, 0, 0.56),
+    0 40px 80px rgba(0, 0, 0, 0.6),
     inset 0 0 0 1px rgba(255, 255, 255, 0.03);
   display: flex;
   flex-direction: column;
-  gap: clamp(26px, 4vh, 36px);
-  padding: clamp(26px, 4vw, 38px);
+  gap: clamp(16px, 2.5vh, 24px);
+  padding: clamp(18px, 2.5vw, 24px);
+  margin-top: 0;
 }
 
 .personalizationPanelHeader {
@@ -489,27 +529,31 @@
   background: rgba(255, 255, 255, 0.08);
   color: rgba(250, 250, 252, 0.86);
   cursor: pointer;
-  transition:
-    background 0.2s ease,
-    transform 0.2s ease;
 }
 
-.personalizationClose:hover {
-  background: rgba(255, 255, 255, 0.18);
-  transform: translateY(-1px);
+.personalizationPanel button {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.25);
+  color: rgba(246, 246, 248, 0.92);
+  box-shadow: none;
+}
+
+.personalizationPanel button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.45);
 }
 
 .personalizationGrid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  display: flex;
+  flex-direction: column;
   gap: clamp(20px, 3vw, 32px);
-  align-items: start;
 }
 
 .personalizationColumn {
   display: flex;
   flex-direction: column;
   gap: clamp(14px, 2.6vh, 24px);
+  width: 100%;
 }
 
 .personalizationCard {
@@ -571,20 +615,12 @@
   padding: 6px 12px;
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.16);
-  background: rgba(18, 18, 22, 0.8);
+  background: transparent;
   color: rgba(240, 240, 244, 0.88);
   font-size: 0.72rem;
   letter-spacing: 0.18em;
   text-transform: uppercase;
   cursor: pointer;
-  transition:
-    background 0.2s ease,
-    border 0.2s ease;
-}
-
-.personalizationLink:hover {
-  background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.32);
 }
 
 .personalizationChipRow {
@@ -638,7 +674,7 @@
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: linear-gradient(135deg, rgba(96, 114, 255, 0.9), rgba(60, 72, 180, 0.85));
+  background: rgba(255, 255, 255, 0.45);
 }
 
 .personalizationFieldGroup {
@@ -664,6 +700,71 @@
   line-height: 1.4;
 }
 
+.reminderCheckboxRow {
+  display: flex;
+  align-items: center;
+}
+
+.reminderCheckboxLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.75rem;
+  letter-spacing: 0.35em;
+  text-transform: uppercase;
+  color: rgba(215, 215, 228, 0.78);
+}
+
+.reminderCheckboxInput {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.26);
+  background: rgba(255, 255, 255, 0.02);
+  position: relative;
+  transition: border 0.2s ease, background 0.2s ease;
+}
+
+.reminderCheckboxInput::after {
+  content: "";
+  position: absolute;
+  inset: 4px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0);
+  transform: scale(0.6);
+  opacity: 0;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.reminderCheckboxInput:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.7);
+  outline-offset: 2px;
+}
+
+.reminderCheckboxInput:checked {
+  border-color: rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.reminderCheckboxInput:checked::after {
+  opacity: 1;
+  transform: scale(1);
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.reminderDatePicker {
+  margin-top: 6px;
+  min-height: 44px;
+  transition: opacity 0.2s ease;
+}
+
+.reminderDatePicker[data-hidden="true"] {
+  opacity: 0;
+  visibility: hidden;
+}
+
 .personalizationToggleList {
   display: flex;
   flex-direction: column;
@@ -678,24 +779,16 @@
   padding: 12px 16px;
   border-radius: 14px;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(16, 16, 22, 0.72);
+  background: rgba(255, 255, 255, 0.03);
   color: rgba(234, 234, 244, 0.88);
   font-size: 0.85rem;
   letter-spacing: 0.02em;
   cursor: pointer;
-  transition:
-    background 0.18s ease,
-    border 0.18s ease,
-    transform 0.18s ease;
 }
 
 .personalizationToggle[data-active="true"] {
-  background: rgba(78, 102, 255, 0.2);
-  border-color: rgba(96, 120, 255, 0.45);
-}
-
-.personalizationToggle:hover {
-  transform: translateY(-1px);
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.32);
 }
 
 .personalizationToggleHint {
@@ -709,13 +802,10 @@
   height: 26px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.12);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.26);
   display: inline-flex;
   align-items: center;
   padding: 3px;
-  transition:
-    background 0.2s ease,
-    border 0.2s ease;
 }
 
 .personalizationSwitch span {
@@ -724,12 +814,11 @@
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.8);
   transform: translateX(0);
-  transition: transform 0.2s ease;
 }
 
 .personalizationSwitch[data-active="true"] {
-  background: rgba(90, 110, 255, 0.35);
-  border-color: rgba(118, 134, 255, 0.52);
+  background: rgba(255, 255, 255, 0.32);
+  border-color: rgba(255, 255, 255, 0.4);
 }
 
 .personalizationSwitch[data-active="true"] span {
@@ -751,20 +840,12 @@
   font-size: 0.8rem;
   letter-spacing: 0.02em;
   cursor: pointer;
-  transition:
-    background 0.18s ease,
-    border 0.18s ease,
-    transform 0.18s ease;
 }
 
 .personalizationPersonaChip[data-active="true"] {
-  background: rgba(90, 110, 255, 0.28);
-  border-color: rgba(118, 134, 255, 0.52);
-  color: rgba(244, 244, 252, 0.9);
-}
-
-.personalizationPersonaChip:hover {
-  transform: translateY(-1px);
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.4);
+  color: rgba(255, 255, 255, 0.9);
 }
 
 .personalizationSelect {
@@ -778,11 +859,6 @@
   gap: 6px;
   font-size: 0.8rem;
   text-transform: none;
-}
-
-.personalizationSelect:hover {
-  border-color: rgba(118, 134, 255, 0.52);
-  color: rgba(255, 255, 255, 0.92);
 }
 
 .personalizationBackgroundGrid {
@@ -842,8 +918,8 @@
 
 .personalizationBackgroundTextInput:focus-visible {
   outline: none;
-  border-color: rgba(118, 134, 255, 0.52);
-  box-shadow: 0 0 0 2px rgba(118, 134, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.35);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.35);
 }
 
 .personalizationBackgroundSub {
@@ -851,6 +927,41 @@
   font-size: 0.7rem;
   color: rgba(205, 208, 222, 0.62);
   line-height: 1.5;
+}
+
+.personalizationBackgroundFileRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 2px 0;
+}
+
+.personalizationBackgroundFileButton {
+  position: relative;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(25, 30, 44, 0.9);
+  color: rgba(236, 236, 246, 0.88);
+  padding: 10px 16px;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  cursor: pointer;
+}
+
+.personalizationBackgroundFileInput {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.personalizationBackgroundFileName {
+  font-size: 0.78rem;
+  color: rgba(205, 208, 222, 0.7);
+  max-width: 220px;
+  word-break: break-word;
 }
 
 .personalizationBackgroundSub code {
@@ -869,8 +980,9 @@
   gap: 12px;
   padding: 12px;
   border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(16, 16, 20, 0.86);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.02);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
   cursor: pointer;
   transition:
     background 0.2s ease,
@@ -879,12 +991,9 @@
 }
 
 .personalizationBackgroundCard[data-active="true"] {
-  background: rgba(90, 110, 255, 0.22);
-  border-color: rgba(118, 134, 255, 0.52);
-}
-
-.personalizationBackgroundCard:hover {
-  transform: translateY(-1px);
+  border-color: rgba(118, 134, 255, 0.8);
+  background: rgba(118, 134, 255, 0.1);
+  box-shadow: 0 0 0 2px rgba(118, 134, 255, 0.35), 0 25px 45px rgba(0, 0, 0, 0.55);
 }
 
 .personalizationBackgroundThumb {
@@ -917,6 +1026,57 @@
   color: rgba(210, 210, 224, 0.62);
 }
 
+.personalizationFileUpload {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.personalizationFileUpload label {
+  font-size: 0.72rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(210, 210, 220, 0.6);
+}
+
+.personalizationFileHint {
+  margin: 0;
+  font-size: 0.8rem;
+  color: rgba(210, 210, 220, 0.65);
+}
+
+.personalizationFileInput {
+  border-radius: 12px;
+  border: 1px dashed rgba(255, 255, 255, 0.28);
+  padding: 10px 14px;
+  background: rgba(16, 16, 22, 0.78);
+  color: rgba(245, 245, 245, 0.9);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.personalizationFileInput:focus-visible {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.35);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.35);
+}
+
+.personalizationFileInput::-webkit-file-upload-button {
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+}
+
+.personalizationFileName {
+  margin: 0;
+  font-size: 0.82rem;
+  color: rgba(205, 200, 181, 0.85);
+}
+
 .personalizationTextarea {
   min-height: 160px;
   border-radius: 16px;
@@ -931,12 +1091,18 @@
 
 .personalizationTextarea:focus {
   outline: none;
-  border-color: rgba(118, 134, 255, 0.52);
-  box-shadow: 0 0 0 1px rgba(118, 134, 255, 0.42);
+  border-color: rgba(255, 255, 255, 0.35);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.35);
 }
 
 .personalizationAboutCard {
   gap: 18px;
+}
+
+.personalizationForm {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
 .personalizationAboutList {
@@ -985,22 +1151,58 @@
   color: rgba(238, 238, 246, 0.9);
   font-size: 0.85rem;
   padding: 10px 14px;
-  transition:
-    border-color 0.18s ease,
-    box-shadow 0.18s ease;
 }
 
 .personalizationAboutInput:focus-visible,
 .personalizationAboutTextarea:focus-visible {
   outline: none;
-  border-color: rgba(118, 134, 255, 0.52);
-  box-shadow: 0 0 0 2px rgba(118, 134, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.35);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.35);
 }
 
 .personalizationAboutTextarea {
   min-height: 64px;
   resize: vertical;
   line-height: 1.5;
+}
+
+.personalizationFormActions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+}
+
+.personalizationFormStatus {
+  font-size: 0.78rem;
+  color: rgba(203, 206, 220, 0.8);
+}
+
+.personalizationFormStatus[data-status="success"] {
+  color: rgba(136, 214, 176, 0.95);
+}
+
+.personalizationFormStatus[data-status="error"] {
+  color: rgba(255, 146, 146, 0.95);
+}
+
+.personalizationFormButton {
+  border-radius: 999px;
+  padding: 10px 20px;
+  font-size: 0.78rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  color: rgba(244, 244, 250, 0.92);
+  cursor: pointer;
+  transition: none;
+}
+
+.personalizationFormButton:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
 }
 
 .personalizationMemoryCard {
@@ -1024,7 +1226,7 @@
 .personalizationMemoryTrack span {
   display: block;
   height: 100%;
-  background: linear-gradient(90deg, #ff7a7a, #ff3d3d);
+  background: rgba(255, 255, 255, 0.6);
 }
 
 .personalizationMemoryStats {
@@ -1061,6 +1263,26 @@
   gap: 12px;
 }
 
+.personalizationContextPercentRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.personalizationContextPercent {
+  font-size: clamp(1.2rem, 3vw, 2rem);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.personalizationContextPercentHint {
+  font-size: 0.82rem;
+  color: rgba(235, 235, 235, 0.7);
+  text-align: right;
+}
+
 .personalizationContextStats {
   display: flex;
   flex-wrap: wrap;
@@ -1073,7 +1295,7 @@
   width: 100%;
   height: 6px;
   border-radius: 999px;
-  background: rgba(235, 235, 235, 0.12);
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02));
   position: relative;
   overflow: hidden;
 }
@@ -1083,7 +1305,7 @@
   inset: 0;
   width: 0%;
   border-radius: inherit;
-  background: linear-gradient(90deg, rgba(126, 189, 255, 0.65), rgba(100, 126, 255, 0.95));
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.8), rgba(120, 120, 120, 0.95));
 }
 
 .personalizationContextFooter {
@@ -1097,10 +1319,13 @@
 
 @media (max-width: 960px) {
   .personalizationOverlay {
-    padding: clamp(18px, 8vw, 32px);
+    padding: clamp(12px, 6vw, 24px);
+    align-items: flex-start;
+    justify-content: flex-end;
   }
 
   .personalizationPanel {
+    width: min(420px, 100%);
     max-height: calc(100vh - 60px);
     padding: clamp(20px, 6vw, 32px);
   }
@@ -1427,7 +1652,7 @@
 .historyViewHeader h1 {
   font-size: clamp(1.8rem, 3vw, 2.2rem);
   letter-spacing: 0.06em;
-  text-transform: uppercase;
+  text-transform: none;
   font-weight: 600;
 }
 
@@ -1488,6 +1713,20 @@
   display: flex;
   align-items: center;
   gap: 12px;
+  width: 100%;
+  position: relative;
+  background: transparent;
+  transition: background 0.2s ease;
+}
+
+.historyListShell li:hover,
+.historyListShell li:focus-within {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.historyListShell li[data-active="true"] {
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 18px 30px rgba(0, 0, 0, 0.35);
 }
 
 .historyListButton {
@@ -1505,22 +1744,38 @@
   font-size: 0.98rem;
   line-height: 1.4;
   cursor: pointer;
-  transition:
-    background 0.2s ease,
-    color 0.2s ease;
+  transition: color 0.2s ease;
 }
 
-.historyListButton:hover,
-.historyListButton:focus-visible {
-  background: rgba(255, 255, 255, 0.08);
+.historyRowTitle {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.historyRowBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  font-size: 0.66rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(215, 215, 215, 0.8);
+  background: rgba(18, 18, 18, 0.9);
+}
+
+.historyListShell li:hover .historyListButton,
+.historyListShell li:focus-within .historyListButton {
   color: rgba(255, 255, 255, 0.95);
   outline: none;
 }
 
-.historyListButton[data-active="true"] {
-  background: rgba(255, 255, 255, 0.12);
+.historyListShell li[data-active="true"] .historyListButton {
   color: rgba(255, 255, 255, 0.98);
-  box-shadow: 0 18px 30px rgba(0, 0, 0, 0.35);
 }
 
 .historyListButtonStatic {
@@ -1822,6 +2077,7 @@
   overflow: hidden;
   --gray-sidebar-width: 72px;
   --chat-bar-horizontal-shift: calc(var(--gray-sidebar-width) / 2);
+  background: var(--background, #050505);
 }
 
 .main::-webkit-scrollbar-button {
@@ -1884,20 +2140,18 @@
   min-height: 0 !important;
 }
 
-.main[data-dashboard="true"] {
+.main[data-dashboard="true"][data-dashboard-free="true"] {
   grid-template-rows: minmax(0, 1fr);
-  row-gap: clamp(12px, 2vh, 20px);
-  padding-top: clamp(8px, 1.6vh, 16px);
-  padding-bottom: clamp(6px, 1.4vh, 16px);
+  row-gap: 0;
+  padding: clamp(16px, 3vh, 36px) clamp(18px, 3vw, 64px);
   justify-items: stretch;
   height: 100%;
   max-height: none;
   overflow: visible;
+  background: var(--background, #050505);
 }
 
-/* When Pulse tab is active, tighten bottom padding further */
-.page[data-dashboard-tab="pulse"] .main[data-dashboard="true"] {
-  padding-bottom: 0;
+.page[data-dashboard-tab="pulse"] .main[data-dashboard="true"][data-dashboard-free="true"] {
   overflow-y: auto;
   overflow-x: hidden;
 }
@@ -1915,13 +2169,19 @@
 
 .main[data-view="general"] {
   --gray-chat-bar-clearance: clamp(0px, 1.5vh, 16px);
-  height: auto;
-  align-self: flex-start;
-  grid-template-rows: auto auto;
+  height: 100%;
+  min-height: 0;
+  align-self: stretch;
+  justify-items: start;
+  grid-template-rows: minmax(0, 1fr) auto;
   row-gap: 0;
-  --chat-column-max-width: min(840px, 100%);
-  padding-bottom: env(safe-area-inset-bottom, 0px);
-  overflow: visible;
+  --chat-column-max-width: min(828px, 100%);
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + clamp(64px, 10vh, 120px));
+  overflow: hidden;
+}
+
+.page[data-general-attachments="true"] .main[data-view="general"] {
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + clamp(160px, 26vh, 280px));
 }
 
 .page[data-compact="true"] .main {
@@ -1998,12 +2258,15 @@
 }
 
 .mainContent[data-view="general"] {
-  height: auto;
-  min-height: auto;
+  height: 100%;
+  min-height: 0;
+  align-items: flex-start;
   justify-content: flex-start;
   gap: clamp(18px, 3.5vh, 36px);
   padding-top: clamp(24px, 5vh, 56px);
   padding-bottom: 0;
+  overflow-y: auto;
+  scrollbar-gutter: stable both-edges;
 }
 
 .mainContent[data-compact="true"] {
@@ -2013,16 +2276,20 @@
 
 
 .generalViewSection {
-  width: 100%;
-  max-width: none;
-  margin: 0;
-  padding: 0;
+  width: min(var(--gray-general-max-width, 1220px), 100%);
+  max-width: var(--gray-general-max-width, 1220px);
+  margin: 0 auto;
+  padding: 0 var(--gray-general-inline-gutter, clamp(16px, 4vw, 36px));
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
   gap: clamp(18px, 3vh, 32px);
   align-items: stretch;
   padding-bottom: 0;
+}
+
+.page[data-general-attachments="true"] .generalViewSection {
+  padding-bottom: clamp(24px, 5vh, 48px);
 }
 
 .page[data-compact="true"] .generalViewSection {
@@ -2057,13 +2324,6 @@
   margin-right: auto;
 }
 
-.mainContent[data-view="general"] {
-  overflow-y: auto;
-  padding-bottom: 0;
-  display: flex;
-  flex-direction: column;
-}
-
 .mainContent > .chatView,
 .mainContent > .chatViewEmpty {
   width: min(960px, 100%);
@@ -2080,7 +2340,7 @@
 .chatView {
   display: flex;
   flex-direction: column;
-  gap: clamp(12px, 2.5vh, 20px);
+  gap: clamp(4px, 1.2vh, 12px);
   width: 100%;
   min-height: clamp(520px, 70vh, 900px);
   flex: 1 1 auto;
@@ -2090,9 +2350,10 @@
   background: transparent;
   box-shadow: none;
   position: relative;
-  --chat-column-max-width: min(920px, 100%);
+  --chat-column-max-width: min(828px, 100%);
   --chat-bubble-max-width: min(70ch, 100%);
   --chat-composer-overlap: calc(var(--gray-chat-bar-clearance) + clamp(10px, 2vh, 18px));
+  --chat-composer-height: clamp(112px, 16vh, 180px);
   overflow: visible;
 }
 
@@ -2144,22 +2405,22 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  justify-content: flex-start;
+  justify-content: flex-end;
   gap: clamp(18px, 3.5vh, 28px);
   min-height: 100%;
   padding:
     clamp(8px, 2vh, 18px)
     0
-    calc(var(--chat-composer-overlap) + clamp(6px, 1vh, 10px))
+    calc(
+      env(safe-area-inset-bottom, 0px)
+        + clamp(96px, 10vh, 140px)
+    )
     0;
-  overflow: visible;
+
+  overflow: auto;
   scroll-behavior: smooth;
   width: min(var(--chat-column-max-width), 100%);
   margin: 0 auto;
-}
-
-.main[data-view="chat"] .chatMessages {
-  padding-bottom: var(--chat-composer-overlap);
 }
 
 .chatMessages::before {
@@ -2291,6 +2552,179 @@
   margin-top: 0.3em;
 }
 
+.chatAssistantStructured {
+  padding: 18px 24px 20px;
+  border-radius: 26px;
+  background: linear-gradient(180deg, rgba(15, 15, 15, 0.95), rgba(6, 6, 6, 0.85));
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 28px 60px rgba(0, 0, 0, 0.65);
+  position: relative;
+  overflow: hidden;
+}
+
+.chatAssistantStructured::after {
+  content: "";
+  position: absolute;
+  inset: auto auto 12px 50px;
+  width: 180px;
+  height: 180px;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.2), transparent 60%);
+  transform: translate3d(20px, 0, 0);
+  pointer-events: none;
+  opacity: 0.35;
+}
+
+.chatAssistantStructured :global(p) {
+  color: rgba(245, 245, 245, 0.96);
+  line-height: 1.7;
+}
+
+.reminderCardList {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  margin: 6px 0 -8px;
+}
+
+.reminderCard {
+  border-radius: 20px;
+  padding: 24px 28px 26px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(5, 5, 5, 0.92);
+  box-shadow:
+    0 28px 48px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(255, 255, 255, 0.02);
+  position: relative;
+  overflow: hidden;
+}
+
+.reminderCard[data-mode="plan"],
+.reminderCard[data-mode="habit"],
+.reminderCard[data-mode="reminder"] {
+  box-shadow: none;
+}
+
+.reminderCardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.reminderCardHeader h4 {
+  margin: 0;
+  font-size: 1.02rem;
+  color: rgba(255, 255, 255, 0.96);
+}
+
+.reminderCardType {
+  margin: 4px 0 0;
+  font-size: 0.62rem;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: rgba(235, 235, 235, 0.6);
+}
+
+.reminderCardStatus {
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.82);
+  border: none;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.reminderCardStatus[data-status="completed"] {
+  background: rgba(141, 255, 197, 0.85);
+  color: rgba(28, 45, 35, 0.95);
+  border-color: transparent;
+}
+
+.reminderCardStatus[data-status="cancelled"],
+.reminderCardStatus[data-status="failed"] {
+  background: rgba(255, 133, 157, 0.9);
+  color: rgba(60, 9, 16, 0.95);
+  border-color: transparent;
+}
+
+.reminderCardSlotLabel {
+  margin: 12px 0 0;
+  font-size: 0.68rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(235, 235, 235, 0.5);
+}
+
+.reminderCardSummary {
+  margin: 4px 0 0;
+  color: rgba(235, 235, 235, 0.68);
+  line-height: 1.5;
+}
+
+.reminderCardTimeRow {
+  margin-top: 18px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 18px;
+  border-radius: 20px;
+  background: rgba(12, 12, 14, 0.96);
+  border: none;
+  box-shadow: none;
+}
+
+.reminderCardTimeIcon {
+  width: 40px;
+  height: 40px;
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.reminderCardTimeRow strong {
+  display: block;
+  color: rgba(255, 255, 255, 0.95);
+  font-size: 1rem;
+  letter-spacing: 0.04em;
+}
+
+.reminderCardTimeRow span {
+  display: block;
+  font-size: 0.78rem;
+  color: rgba(235, 235, 235, 0.62);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.chatStructuredBanner {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 0.6rem;
+  letter-spacing: 0.4em;
+  text-transform: uppercase;
+  font-weight: 600;
+  width: fit-content;
+}
+
+.chatStructuredBanner strong {
+  font-size: 0.6rem;
+  font-weight: 500;
+  letter-spacing: 0.22em;
+}
+
 .chatMessage[data-role="assistant"] .chatMarkdown,
 .chatMessage[data-role="assistant"] .chatMarkdownGenerating,
 .chatMessage[data-role="assistant"] .chatMessageAttachments {
@@ -2309,6 +2743,97 @@
   font-size: 0.95rem;
 }
 
+.chatMarkdown :where(h1, h2, h3, h4, h5, h6) {
+  margin: 0.85em 0 0.4em;
+  line-height: 1.35;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.chatMarkdown :where(h1) {
+  font-size: 1.6rem;
+}
+
+.chatMarkdown :where(h2) {
+  font-size: 1.35rem;
+}
+
+.chatMarkdown :where(h3) {
+  font-size: 1.15rem;
+}
+
+.chatMarkdown :where(p) {
+  margin: 0.6em 0;
+  line-height: 1.6;
+  color: rgba(235, 235, 235, 0.92);
+}
+
+.chatMarkdown :where(ul, ol) {
+  margin: 0.5em 0 0.65em 1.25em;
+  padding: 0;
+  color: rgba(235, 235, 235, 0.9);
+  list-style-position: outside;
+}
+
+.chatMarkdown :where(ul) {
+  list-style-type: disc;
+}
+
+.chatMarkdown :where(ol) {
+  list-style-type: decimal;
+}
+
+.chatMarkdown :where(ul ul) {
+  list-style-type: circle;
+}
+
+.chatMarkdown :where(ol ol) {
+  list-style-type: lower-alpha;
+}
+
+.chatMarkdown li {
+  margin: 0.25em 0;
+  line-height: 1.5;
+}
+
+.chatMarkdown table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.75em 0;
+  font-size: 0.9rem;
+  overflow: hidden;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.chatMarkdown th,
+.chatMarkdown td {
+  padding: 0.65rem 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  text-align: left;
+}
+
+.chatMarkdown th {
+  background: rgba(255, 255, 255, 0.08);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+}
+
+.chatMarkdown code {
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+  padding: 0.1rem 0.35rem;
+  font-size: 0.85rem;
+}
+
+.chatMarkdown pre code {
+  display: block;
+  padding: 0.9rem 1rem;
+}
+
 .chatStreamingInline {
   display: inline-flex;
   align-items: center;
@@ -2319,6 +2844,7 @@
   color: rgba(255, 255, 255, 0.82);
   padding: 0;
   width: fit-content;
+  margin-bottom: clamp(4px, 1vh, 10px);
 }
 
 .chatStreamingSpinner {
@@ -2327,6 +2853,38 @@
   animation: spin 1s linear infinite;
   filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.25));
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  margin-bottom: -2px;
+}
+
+.chatStreamingStatus {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-bottom: clamp(4px, 1vh, 10px);
+  height: 18px;
+  line-height: 18px;
+}
+
+.chatStreamingStatusText {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  font-size: 0.78rem;
+  font-family: var(--font-mono, "IBM Plex Mono", "SFMono-Regular", Menlo, monospace);
+  color: rgba(255, 255, 255, 0.78);
+  letter-spacing: 0.08em;
+  line-height: 1;
+  transform: translateY(1px);
+}
+
+.chatThinkingDots {
+  font-family: var(--font-mono, "IBM Plex Mono", "SFMono-Regular", Menlo, monospace);
+  letter-spacing: 0.15em;
+  display: inline-flex;
+  align-items: center;
 }
 
 .chatMetadataControl {
@@ -2472,6 +3030,8 @@
 .chatMarkdown :global(h6) {
   margin: 0;
   font-weight: 600;
+  font-family: var(--font-sans), "Plus Jakarta Sans", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
   letter-spacing: 0.04em;
 }
 
@@ -2500,6 +3060,25 @@
   padding-left: 1.2em;
   display: grid;
   gap: 6px;
+  list-style-position: outside;
+}
+
+.chatMarkdown :global(ul) {
+  list-style-type: disc;
+}
+
+.chatMarkdown :global(ol) {
+  list-style-type: decimal;
+}
+
+.chatMarkdown :global(ul ul) {
+  list-style-type: circle;
+  padding-left: 1.2em;
+}
+
+.chatMarkdown :global(ol ol) {
+  list-style-type: lower-alpha;
+  padding-left: 1.2em;
 }
 
 .chatMarkdown :global(code) {
@@ -2616,19 +3195,13 @@
 }
 
 .codeBlockCompact {
-  border-radius: 10px;
+  border-radius: 12px;
   margin: clamp(6px, 1vh, 10px) 0;
-  padding: 8px 10px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
   background: rgba(5, 5, 5, 0.96);
 }
 
 .codeBlockCompact .codeSurface {
-  padding: 0;
-  background: transparent;
-  flex: 1;
+  padding: 6px 10px;
 }
 
 .codeBlockCompact .codeLine {
@@ -2640,24 +3213,10 @@
   display: none;
 }
 
-.codeCompactActions {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 4px;
-  margin-left: 10px;
-}
-
-.codeCopyButtonInline {
-  width: 26px;
-  height: 26px;
-}
-
-.codeLanguageInline {
+.codeHeaderCompact {
+  padding: 6px 12px;
   font-size: 0.5rem;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.55);
+  letter-spacing: 0.14em;
 }
 
 .inlineCodeToken {
@@ -2765,7 +3324,56 @@
   margin-top: 4px;
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
+}
+
+.chatMessageFooterRight {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.chatMessageTimestamp {
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  color: rgba(185, 188, 198, 0.78);
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 160ms ease;
+}
+
+.chatMessage:hover .chatMessageTimestamp,
+.chatMessage:focus-within .chatMessageTimestamp {
+  opacity: 1;
+}
+
+.chatSourcesFooter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding-right: 4px;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(185, 188, 198, 0.85);
+}
+
+.chatSourcesFooterLabel {
+  opacity: 0.9;
+}
+
+.chatSourcesFooterBadge {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.62rem;
+  font-weight: 600;
+  color: rgba(235, 235, 235, 0.96);
 }
 
 /* Icon-only actions: hidden until message hover */
@@ -2922,7 +3530,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: clamp(12px, 1.8vh, 22px);
+  gap: 4px;
   padding: 0;
   padding-bottom: env(safe-area-inset-bottom, 0px);
   background: transparent;
@@ -2939,16 +3547,324 @@
 }
 
 .chatComposerDock .chatBarRow {
-  width: min(
-    var(--chat-column-max-width, 920px),
-    calc(100vw - clamp(32px, 8vw, 120px))
-  );
+  width: min(var(--chat-column-max-width, 828px), 100%);
   margin: 0 auto;
 }
 
 .chatComposerDock .generalChatBarRow {
-  width: min(var(--chat-column-max-width, 720px), calc(100% - clamp(24px, 8vw, 80px)));
+  width: min(var(--chat-column-max-width, 576px), calc(100% - clamp(24px, 8vw, 80px)));
   max-width: none;
+}
+
+/* removed legacy chat tools */
+
+
+.chatLocationRequestBanner {
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.03);
+  padding: 0.85rem 1rem;
+  margin-bottom: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.chatLocationRequestBanner p {
+  margin: 0;
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.85);
+  line-height: 1.4;
+}
+
+.chatLocationRequestButtons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.chatLocationRequestButton {
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.08);
+  color: inherit;
+  padding: 0.45rem 0.9rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.chatLocationRequestButton[data-secondary="true"] {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.chatLocationRequestButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.chatGroundingPanel {
+  margin-top: 0.5rem;
+  padding: 0.45rem 0.6rem;
+  border-radius: 0.6rem;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.chatGroundingSourceDeck {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  margin-bottom: 0.6rem;
+}
+
+.chatGroundingSearchEntryDeck {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  margin-bottom: 0.6rem;
+}
+
+.chatGroundingSourceDeckHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.chatGroundingSourceDeckHeader > span:first-child {
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.chatGroundingSourceDeckBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  text-transform: uppercase;
+  font-size: 0.65rem;
+  letter-spacing: 0.08em;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.chatGroundingSourceCards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.chatGroundingSourceCard {
+  flex: 1 1 220px;
+  min-width: 180px;
+  max-width: 320px;
+  padding: 0.75rem;
+  border-radius: 0.65rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.025);
+  text-decoration: none;
+  color: inherit;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  transition: border 0.2s ease, transform 0.2s ease;
+}
+
+.chatGroundingSourceCard:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: translateY(-1px);
+}
+
+.chatGroundingSourceCard[data-clickable="false"] {
+  cursor: default;
+}
+
+.chatGroundingSourceCardMeta {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.chatGroundingSourceCardAvatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 0.6rem;
+  background: rgba(255, 255, 255, 0.08);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.chatGroundingSourceCardSite {
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.chatGroundingSourceCardTitle {
+  font-size: 0.85rem;
+  line-height: 1.35;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.chatGroundingSourceCardExcerpt {
+  font-size: 0.74rem;
+  line-height: 1.3;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.chatGroundingSearchEntry {
+  margin-top: 0.4rem;
+  border-radius: 0.65rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.015);
+  padding: 0.75rem;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 0.9rem;
+}
+
+.chatGroundingSearchEntry :global(a) {
+  color: rgba(135, 178, 255, 0.95);
+  text-decoration: none;
+}
+
+.chatGroundingSearchEntry :global(a:hover) {
+  text-decoration: underline;
+}
+
+.chatGroundingQueries {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-bottom: 0.5rem;
+}
+
+.chatGroundingQueries > span {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.chatGroundingQueries > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.chatGroundingQueryChip {
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 0.2rem 0.55rem;
+  font-size: 0.75rem;
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.chatGroundingSources {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.chatGroundingSource {
+  font-size: 0.75rem;
+}
+
+.chatGroundingLink {
+  color: rgba(255, 255, 255, 0.8);
+  text-decoration: underline;
+}
+
+.chatGroundingPlain {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.chatGroundingWidget {
+  margin-top: 0.4rem;
+  font-size: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.chatGroundingWidget code {
+  font-family: "IBM Plex Mono", menlo, monospace;
+  font-size: 0.7rem;
+  padding: 0.2rem 0.35rem;
+  border-radius: 0.35rem;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.chatAttachmentTray {
+  width: min(
+    var(--chat-column-max-width, 828px),
+    calc(100vw - clamp(32px, 8vw, 120px))
+  );
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.generalChatComposer .chatAttachmentTray {
+  width: 100%;
+  margin-bottom: 0;
+}
+
+.chatAttachmentError {
+  margin: 0;
+  font-size: 0.78rem;
+  color: #f37c6d;
+}
+
+.chatAttachmentUploadStatus {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.78rem;
+  color: rgba(235, 235, 235, 0.75);
+}
+
+.chatAttachmentList {
+  width: min(
+    var(--chat-column-max-width, 828px),
+    calc(100vw - clamp(32px, 8vw, 120px))
+  );
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: clamp(10px, 1.6vw, 18px);
+}
+
+.generalChatComposer .chatAttachmentList {
+  width: 100%;
+  max-height: clamp(220px, 32vh, 320px);
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
+.generalChatComposer .chatAttachmentList::-webkit-scrollbar {
+  width: 6px;
+}
+
+.generalChatComposer .chatAttachmentList::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: 999px;
+}
+
+.generalChatComposer .chatAttachmentList::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.chatAttachmentInput {
+  display: none;
 }
 
 .contextUsageRow {
@@ -2991,105 +3907,103 @@
   transition: width 0.3s ease;
 }
 
-.chatAttachmentList {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  width: min(var(--chat-column-max-width), 680px);
-  margin: 0 auto;
-  margin-top: clamp(6px, 1vh, 10px);
-}
-
 .chatAttachmentItem {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
-  border-radius: 16px;
-  background: rgba(8, 8, 8, 0.82);
+  position: relative;
+  margin: 0;
+  padding: 14px;
+  border-radius: 26px;
+  background: rgba(6, 6, 10, 0.92);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
-  flex: 1 1 calc(50% - 10px);
-  min-width: clamp(220px, 45%, 320px);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 210px;
 }
 
 .chatAttachmentItem[data-status="error"] {
   border-color: rgba(255, 107, 138, 0.6);
-  background: rgba(255, 107, 138, 0.08);
+  background: rgba(255, 107, 138, 0.12);
 }
 
 .chatAttachmentPreview {
-  width: 42px;
-  height: 42px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.06);
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  border-radius: 20px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.05);
   display: flex;
   align-items: center;
   justify-content: center;
-  overflow: hidden;
 }
 
-.chatAttachmentPreview img {
+.chatAttachmentPreviewImage {
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
 
+.chatAttachmentPreviewLabel {
+  font-size: 0.8rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.82);
+}
+
 .chatAttachmentMeta {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  max-width: 220px;
+  gap: 4px;
 }
 
 .chatAttachmentName {
-  font-size: 0.85rem;
-  color: rgba(255, 255, 255, 0.92);
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.94);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .chatAttachmentDetails {
-  font-size: 0.75rem;
-  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.76rem;
+  color: rgba(235, 235, 235, 0.64);
 }
 
-.chatAttachmentError {
-  font-size: 0.72rem;
-  color: rgba(255, 138, 161, 0.9);
-}
-
-.chatAttachmentActions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.chatAttachmentRemove,
-.chatAttachmentRetry {
+.chatAttachmentRemove {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
   border: none;
-  background: transparent;
-  color: rgba(255, 255, 255, 0.7);
+  background: rgba(0, 0, 0, 0.65);
+  color: rgba(255, 255, 255, 0.95);
+  font-size: 1.1rem;
+  line-height: 1;
   cursor: pointer;
-  padding: 2px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: color 0.2s ease;
-  font-size: 0.75rem;
+  transition: background 0.2s ease, transform 0.2s ease;
+  padding: 0;
 }
 
-.chatAttachmentRemove:hover,
-.chatAttachmentRetry:hover {
-  color: rgba(255, 255, 255, 1);
+.chatAttachmentRemove:hover {
+  background: rgba(0, 0, 0, 0.85);
+  transform: scale(1.05);
 }
 
 .chatAttachmentSpinner {
   animation: spin 1s linear infinite;
-  color: rgba(255, 255, 255, 0.8);
+  color: rgba(255, 255, 255, 0.85);
 }
 
 @media (max-width: 720px) {
-  .chatAttachmentItem {
-    min-width: 100%;
+  .chatAttachmentList {
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   }
 }
 
@@ -3098,6 +4012,164 @@
   flex-direction: column;
   gap: 8px;
   margin-top: 8px;
+}
+
+.chatReminderList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.reminderHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.reminderModeSwitch {
+  display: inline-flex;
+  padding: 3px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.02);
+  gap: 4px;
+}
+
+.reminderModeSwitch button {
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border-radius: 999px;
+  padding: 6px 12px;
+}
+
+.reminderModeSwitch button[data-active="true"] {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.chatReminderCard {
+  width: 100%;
+  border-radius: 12px;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: #050505;
+}
+
+.chatReminderCard[data-entity="plan"],
+.chatReminderCard[data-entity="habit"] {
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.chatReminderHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.chatReminderBadge {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.chatReminderStatus {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  color: rgba(210, 210, 210, 0.85);
+}
+
+.chatReminderTitle {
+  font-size: 0.85rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.5);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: 6px;
+}
+
+.chatReminderLabel {
+  margin-top: 10px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: rgba(245, 245, 245, 0.95);
+}
+
+.chatReminderTime {
+  margin-top: 6px;
+  font-size: 0.88rem;
+  color: rgba(210, 210, 210, 0.85);
+}
+
+.chatReminderTime strong {
+  color: rgba(255, 255, 255, 0.98);
+}
+
+.chatReminderMetaRow {
+  margin-top: 6px;
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(210, 210, 210, 0.65);
+}
+
+.reminderBadge {
+  display: inline-flex;
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  padding: 3px 8px;
+}
+
+.reminderModeToggle {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.reminderModeToggle button {
+  text-align: left;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  padding: 10px 12px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.75);
+  transition: border 0.2s ease, color 0.2s ease, background 0.2s ease;
+}
+
+.reminderModeToggle button small {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.reminderModeToggle button[data-active="true"] {
+  border-color: rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.95);
 }
 
 .chatMessageAttachment {
@@ -3167,7 +4239,7 @@
 
 .chatDisclaimer {
   width: min(
-    var(--chat-column-max-width, 920px),
+    var(--chat-column-max-width, 828px),
     calc(100vw - clamp(32px, 8vw, 120px))
   );
   text-align: center;
@@ -3176,11 +4248,13 @@
   line-height: 1.4;
   letter-spacing: 0.08em;
   color: rgba(235, 235, 235, 0.72);
-  margin: 4px auto 0;
+  margin: clamp(8px, 1.4vh, 16px) auto 0;
   padding: 0 clamp(6px, 1vw, 12px);
   pointer-events: none;
-  text-shadow: 0 8px 18px rgba(0, 0, 0, 0.55);
+  text-shadow: 0 10px 24px rgba(0, 0, 0, 0.65);
   background: transparent;
+  position: relative;
+  z-index: 1;
 }
 
 .generalChatComposer .chatDisclaimer {
@@ -3190,11 +4264,11 @@
 
 .chatComposerDock .chatDisclaimer {
   width: min(
-    var(--chat-column-max-width, 920px),
+    var(--chat-column-max-width, 828px),
     calc(100vw - clamp(32px, 8vw, 120px))
   );
   max-width: 720px;
-  margin-bottom: clamp(8px, 1.4vh, 14px);
+  margin-bottom: env(safe-area-inset-bottom, 0px);
   padding: 0 clamp(10px, 2vw, 18px);
 }
 
@@ -3231,42 +4305,65 @@
 .header {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
   gap: 18px;
   width: min(1160px, 100%);
+  flex-wrap: wrap;
 }
 
-.timeGroup {
+.headerLeft {
+  flex: 1 1 360px;
+  min-width: clamp(240px, 50%, 520px);
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  font-family: var(
-      --font-mono,
-      "IBM Plex Mono",
-      "IBM Plex Mono",
-      SFMono-Regular,
-      Consolas,
-      "Liberation Mono",
-      Menlo,
-      monospace
-    );
+  gap: 8px;
 }
 
-.time {
-  font-size: clamp(1rem, 2vw, 1.2rem);
-  letter-spacing: 0.18em;
-}
-
-.date {
-  font-size: clamp(0.58rem, 1.4vw, 0.72rem);
-  letter-spacing: 0.32em;
-  color: rgba(230, 230, 230, 0.6);
+.headerLeft > * {
+  width: 100%;
 }
 
 .headerRight {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
+  margin-left: auto;
+  flex: 0 0 auto;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.planBadge {
+  display: inline-flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 22px;
+  border-radius: 999px;
+  border: none;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(248, 248, 248, 0.92);
+  letter-spacing: 0.28em;
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.planBadge[data-state="active"] {
+  cursor: default;
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow: none;
+}
+
+.planBadgeLabel {
+  font-size: 0.6rem;
+}
+
+.planBadgeHint {
+  font-size: 0.5rem;
+  letter-spacing: 0.32em;
+  color: rgba(255, 255, 255, 0.68);
 }
 
 .configTrigger {
@@ -3301,11 +4398,11 @@
   gap: 8px;
   padding: 6px 12px;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(12, 12, 12, 0.7);
+  background: rgba(255, 255, 255, 0.06);
   font-size: 0.62rem;
   letter-spacing: 0.24em;
   text-transform: uppercase;
+  color: rgba(248, 248, 248, 0.92);
 }
 
 .notificationChip {
@@ -3322,12 +4419,20 @@
   color: rgba(235, 235, 235, 0.7);
 }
 
+.greetingStack {
+  width: min(1160px, 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
 .greeting {
   font-size: clamp(1.6rem, 3vw, 2.1rem);
   font-weight: 500;
   letter-spacing: 0.04em;
   color: rgba(245, 245, 245, 0.92);
-  width: min(1160px, 100%);
+  width: 100%;
   text-align: left;
   margin: 0;
 }
@@ -3337,12 +4442,20 @@ h1.greeting {
   margin: 0;
 }
 
+.greetingDate {
+  margin: 0;
+  font-size: 0.9rem;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: rgba(210, 210, 210, 0.65);
+}
+
 .dashboardGrid {
   display: grid;
   width: min(1160px, 100%);
   margin: clamp(12px, 2.2vw, 28px) auto 0;
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: clamp(20px, 3vw, 36px);
+  gap: clamp(12px, 2vw, 24px);
 }
 
 .calendarSidebarExtras {
@@ -4000,10 +5113,6 @@ h1.greeting {
   text-align: left;
 }
 
-.sidebarProactivityCard .proactivitySummaryInline {
-  justify-content: flex-start;
-}
-
 .sidebarProactivityCard .secondaryAction {
   align-self: flex-start;
   margin-left: 0;
@@ -4011,7 +5120,7 @@ h1.greeting {
 
 .proactivityControls {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  grid-template-columns: 1fr;
   gap: 14px;
 }
 
@@ -4034,220 +5143,6 @@ h1.greeting {
   display: flex;
   flex-direction: column;
   gap: 10px;
-}
-
-.proactivityChannelsLabel {
-  grid-column: 1 / -1;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.proactivitySummaryInline {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  font-size: 0.76rem;
-  letter-spacing: 0.04em;
-  color: rgba(230, 230, 235, 0.85);
-}
-
-.proactivitySummaryInline > span {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 4px 10px;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  background: rgba(16, 16, 20, 0.78);
-}
-
-.proactivityChannelSwitches {
-  display: grid;
-  gap: 6px;
-}
-
-.proactivityChannelSwitch {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  padding: 10px 14px;
-  border-radius: 18px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(12, 12, 14, 0.78);
-  color: rgba(220, 220, 230, 0.82);
-  font-size: 0.7rem;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  cursor: pointer;
-  transition:
-    background 0.2s ease,
-    border-color 0.2s ease,
-    color 0.2s ease,
-    transform 0.2s ease;
-}
-
-.proactivityChannelSwitch[data-active="true"] {
-  border-color: rgba(118, 139, 255, 0.4);
-  background: rgba(18, 20, 40, 0.92);
-  color: rgba(245, 245, 255, 0.95);
-}
-
-.proactivityChannelSwitch:hover:not(:disabled) {
-  border-color: rgba(255, 255, 255, 0.16);
-  color: rgba(255, 255, 255, 0.94);
-}
-
-.proactivityChannelSwitch:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px rgba(118, 139, 255, 0.26);
-}
-
-.proactivityChannelSwitch:disabled {
-  cursor: not-allowed;
-  opacity: 0.45;
-}
-
-.proactivityChannelSwitchTrack {
-  position: relative;
-  width: 44px;
-  height: 24px;
-  border-radius: 999px;
-  background: rgba(70, 70, 80, 0.5);
-  transition: background 0.2s ease;
-}
-
-.proactivityChannelSwitch[data-active="true"] .proactivityChannelSwitchTrack {
-  background: rgba(118, 139, 255, 0.82);
-}
-
-.proactivityChannelSwitchThumb {
-  position: absolute;
-  top: 3px;
-  left: 4px;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.92);
-  transition: transform 0.2s ease;
-}
-
-.proactivityChannelSwitch[data-active="true"] .proactivityChannelSwitchThumb {
-  transform: translateX(18px);
-}
-
-.proactivityChannelDropdownLabel {
-  display: block;
-  font-size: 0.75rem;
-  font-weight: 500;
-  color: rgba(220, 220, 230, 0.65);
-  margin-bottom: 8px;
-  letter-spacing: 0.02em;
-}
-
-.proactivityChannelDropdown {
-  position: relative;
-}
-
-.proactivityChannelDropdownButton {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  padding: 12px 14px;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(12, 12, 14, 0.78);
-  color: rgba(235, 235, 245, 0.9);
-  font-size: 0.9rem;
-  cursor: pointer;
-  transition: border-color 0.2s ease, background 0.2s ease;
-}
-
-.proactivityChannelDropdownButton:hover:not(:disabled) {
-  border-color: rgba(255, 255, 255, 0.16);
-  background: rgba(16, 16, 18, 0.82);
-}
-
-.proactivityChannelDropdownButton:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px rgba(118, 139, 255, 0.26);
-}
-
-.proactivityChannelDropdownButton:disabled {
-  cursor: not-allowed;
-  opacity: 0.45;
-}
-
-.proactivityChannelDropdownSummary {
-  flex: 1;
-  text-align: left;
-}
-
-.proactivityChannelDropdownIcon {
-  transition: transform 0.2s ease;
-}
-
-.proactivityChannelDropdownIconOpen {
-  transform: rotate(180deg);
-}
-
-.proactivityChannelDropdownMenu {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  right: 0;
-  z-index: 50;
-  background: rgba(18, 18, 22, 0.98);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 12px;
-  padding: 6px;
-  box-shadow:
-    0 4px 16px rgba(0, 0, 0, 0.4),
-    0 0 0 1px rgba(255, 255, 255, 0.04) inset;
-  backdrop-filter: blur(12px);
-}
-
-.proactivityChannelDropdownItem {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 10px 8px;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: background 0.15s ease;
-}
-
-.proactivityChannelDropdownItem:hover {
-  background: rgba(255, 255, 255, 0.06);
-}
-
-.proactivityChannelDropdownCheckbox {
-  margin: 0;
-  width: 18px;
-  height: 18px;
-  accent-color: #768bff;
-  cursor: pointer;
-}
-
-.proactivityChannelDropdownItemContent {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.proactivityChannelDropdownItemLabel {
-  font-size: 0.9rem;
-  color: rgba(235, 235, 245, 0.9);
-  font-weight: 500;
-}
-
-.proactivityChannelDropdownItemHelper {
-  font-size: 0.75rem;
-  color: rgba(220, 220, 230, 0.6);
-  line-height: 1.3;
 }
 
 .proactivityTimeAdd {
@@ -4274,20 +5169,29 @@ h1.greeting {
   height: 14px;
 }
 
-.proactivityTimeAdd:hover:not(:disabled) {
-  border-color: rgba(255, 255, 255, 0.2);
-  color: rgba(240, 240, 240, 0.82);
-  transform: translateY(-1px);
-}
-
 .proactivityTimeAdd:disabled {
   opacity: 0.45;
   cursor: not-allowed;
   transform: none;
 }
 
-.proactivityTimeInput:focus {
-  opacity: 1;
+.proactivityTimeInput {
+  min-width: 96px;
+  max-width: 120px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(10, 10, 14, 0.96);
+  color: rgba(240, 240, 240, 0.96);
+  padding: 6px 10px;
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.proactivityTimeInput:focus-visible {
+  outline: none;
+  border-color: rgba(136, 186, 255, 0.7);
+  box-shadow: 0 0 0 1px rgba(136, 186, 255, 0.4);
 }
 
 .proactivityModalBackdrop {
@@ -4297,8 +5201,8 @@ h1.greeting {
   align-items: center;
   justify-content: center;
   padding: clamp(20px, 6vw, 48px);
-  background: rgba(6, 6, 10, 0.72);
-  backdrop-filter: blur(16px);
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: none;
   z-index: 60;
 }
 
@@ -4306,12 +5210,12 @@ h1.greeting {
   width: min(560px, 100%);
   border-radius: 24px;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(8, 8, 10, 0.94);
-  box-shadow: 0 32px 64px rgba(0, 0, 0, 0.6);
-  padding: clamp(20px, 4vw, 32px);
+  background: #050506;
+  box-shadow: none;
+  padding: clamp(18px, 3.4vw, 26px);
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 12px;
   color: rgba(240, 240, 240, 0.92);
   max-height: min(82vh, 760px);
   overflow-y: auto;
@@ -4342,10 +5246,11 @@ h1.greeting {
 }
 
 .proactivityModalEyebrow {
-  font-size: 0.68rem;
-  letter-spacing: 0.26em;
-  text-transform: uppercase;
-  color: rgba(235, 235, 235, 0.52);
+  font-size: clamp(1.1rem, 2.6vw, 1.4rem);
+  letter-spacing: 0.02em;
+  text-transform: none;
+  color: rgba(255, 255, 255, 0.92);
+  font-weight: 600;
 }
 
 .proactivityModalTitle {
@@ -4355,79 +5260,35 @@ h1.greeting {
 }
 
 .proactivityModalClose {
-  width: 38px;
-  height: 38px;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(18, 18, 22, 0.9);
+  border: none;
+  background: none;
   color: rgba(235, 235, 235, 0.76);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   transition:
-    background 0.2s ease,
     color 0.2s ease,
     transform 0.2s ease;
 }
 
-.proactivityModalClose:hover {
-  background: rgba(28, 28, 32, 0.95);
-  color: rgba(255, 255, 255, 0.9);
-  transform: translateY(-1px);
-}
-
-.proactivityModalMeta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 18px;
-  margin-bottom: 4px;
-}
-
-.proactivityModalMeta span {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.proactivityModalMetaLabel {
-  font-size: 0.66rem;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: rgba(225, 225, 225, 0.48);
-}
-
-.proactivityModalMetaValue {
-  font-size: 0.88rem;
-  letter-spacing: 0.05em;
-  color: rgba(255, 255, 255, 0.88);
-}
-
-.proactivityModalActions {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-}
-
-.proactivityPresetMenu {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  padding: 20px;
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(10, 10, 12, 0.96);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
-}
-
 .proactivityPresetLabel {
+  display: block;
+  margin-top: 20px;
+  margin-bottom: 10px;
   font-size: 0.66rem;
   letter-spacing: 0.2em;
   text-transform: uppercase;
   color: rgba(225, 225, 225, 0.5);
 }
 
+.proactivityPresetLabel,
 .proactivityPresetSelectWrapper {
+  display: none;
+}
+
+.proactivityPresetSelectWrapper {
+  margin-bottom: 20px;
   position: relative;
   display: flex;
   align-items: center;
@@ -4439,20 +5300,24 @@ h1.greeting {
   padding: 12px 42px 12px 14px;
   border-radius: 14px;
   border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(12, 12, 14, 0.88);
+  background: #050506;
   color: rgba(240, 240, 240, 0.88);
   font-size: 0.82rem;
   letter-spacing: 0.04em;
   cursor: pointer;
   transition:
-    border-color 0.2s ease,
-    box-shadow 0.2s ease;
+    border-color 0.2s ease;
 }
 
 .proactivityPresetSelect:focus-visible {
   outline: none;
-  border-color: rgba(118, 139, 255, 0.55);
-  box-shadow: 0 0 0 2px rgba(118, 139, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.3);
+  box-shadow: none;
+}
+
+.proactivityPresetSelect option {
+  background: rgba(10, 10, 12, 0.98);
+  color: rgba(235, 235, 235, 0.92);
 }
 
 .proactivityPresetSelectIcon {
@@ -4499,12 +5364,6 @@ h1.greeting {
     transform 0.2s ease;
 }
 
-.proactivityPresetApply:hover {
-  transform: translateY(-1px);
-  background: rgba(12, 12, 12, 0.92);
-  border-color: rgba(148, 167, 255, 0.7);
-}
-
 .proactivityPresetApply[disabled] {
   cursor: not-allowed;
   opacity: 0.6;
@@ -4539,11 +5398,6 @@ h1.greeting {
   background: rgba(18, 18, 18, 0.92);
   box-shadow: 0 14px 32px rgba(0, 0, 0, 0.35);
   color: rgba(255, 255, 255, 0.95);
-}
-
-.proactivityPresetButton:hover {
-  transform: translateY(-1px);
-  border-color: rgba(255, 255, 255, 0.18);
 }
 
 .proactivityPresetHeader {
@@ -4582,13 +5436,6 @@ h1.greeting {
   color: rgba(180, 180, 180, 0.75);
 }
 
-.proactivityPresetMeta {
-  font-size: 0.68rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: rgba(155, 155, 155, 0.5);
-}
-
 .proactivityModalFooter {
   display: flex;
   justify-content: flex-end;
@@ -4617,69 +5464,22 @@ h1.greeting {
   color: rgba(255, 158, 158, 0.9);
 }
 
-.proactivityModalSecondary:hover {
-  background: rgba(40, 14, 20, 0.86);
-  color: rgba(255, 188, 188, 0.95);
-  transform: translateY(-1px);
-}
-
 .proactivityModalDismiss {
   border: 1px solid rgba(255, 255, 255, 0.14);
   background: rgba(20, 20, 26, 0.85);
   color: rgba(235, 235, 235, 0.85);
 }
 
-.proactivityModalDismiss:hover {
-  background: rgba(28, 28, 34, 0.92);
-  color: rgba(255, 255, 255, 0.94);
-  transform: translateY(-1px);
-}
-
-.proactivityCustomTrigger {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 18px 20px;
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(12, 12, 14, 0.88);
-  color: rgba(235, 235, 235, 0.88);
-  text-align: left;
-  cursor: pointer;
-  transition:
-    transform 0.2s ease,
-    border-color 0.2s ease,
-    box-shadow 0.2s ease,
-    background 0.2s ease;
-}
-
-.proactivityCustomTrigger:hover {
-  transform: translateY(-1px);
-  border-color: rgba(255, 255, 255, 0.14);
-}
-
-.proactivityCustomTrigger:focus-visible {
-  outline: none;
-  border-color: rgba(118, 139, 255, 0.55);
-  box-shadow: 0 0 0 2px rgba(118, 139, 255, 0.2);
-}
-
-.proactivityCustomTrigger[data-active="true"] {
-  border-color: rgba(255, 255, 255, 0.18);
-  background: rgba(16, 16, 16, 0.94);
-  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.35);
-}
-
 .proactivityCustomSection {
-  margin-top: 16px;
+  margin-top: 0;
   display: flex;
   flex-direction: column;
   gap: 18px;
   padding: 20px;
   border-radius: 16px;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(10, 10, 12, 0.96);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
+  background: #070708;
+  box-shadow: none;
 }
 
 .proactivityCustomHeader {
@@ -4725,12 +5525,6 @@ h1.greeting {
     color 0.2s ease;
 }
 
-.proactivityCustomReset:hover {
-  transform: translateY(-1px);
-  background: rgba(28, 28, 28, 0.9);
-  color: rgba(255, 255, 255, 0.88);
-}
-
 .proactivityCustomControls {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -4745,10 +5539,7 @@ h1.greeting {
 }
 
 .proactivityCustomLabel {
-  font-size: 0.68rem;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: rgba(180, 180, 180, 0.6);
+  display: none;
 }
 
 .proactivityCustomActions {
@@ -4770,12 +5561,6 @@ h1.greeting {
     transform 0.2s ease,
     background 0.2s ease,
     border-color 0.2s ease;
-}
-
-.proactivityCustomApply:hover:not(:disabled) {
-  transform: translateY(-1px);
-  background: rgba(26, 26, 26, 0.94);
-  border-color: rgba(255, 255, 255, 0.2);
 }
 
 .proactivityCustomApply:disabled {
@@ -4925,7 +5710,7 @@ h1.greeting {
 .dashboardCalendarShell {
   position: relative;
   width: 100%;
-  border-radius: 28px;
+  border-radius: 0;
   background: transparent;
   border: none;
   box-shadow: none;
@@ -4966,9 +5751,9 @@ h1.greeting {
 }
 
 .dashboardCalendarSurface {
-  background: rgba(10, 10, 10, 0.92);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 28px;
+  background: var(--background, #050505);
+  border: none;
+  border-radius: 0;
   box-shadow: none;
   display: flex;
   flex-direction: column;
@@ -5121,8 +5906,7 @@ h1.greeting {
   padding: 0;
   height: 100%;
   flex: 1 1 auto;
-  display: flex;
-  flex-direction: column;
+  display: grid;
   overflow: visible;
 }
 
@@ -5175,7 +5959,7 @@ h1.greeting {
 }
 
 .calendarViewport::-webkit-scrollbar {
-  width: 5px;
+  width: 3px;
 }
 
 .calendarViewport::-webkit-scrollbar-thumb {
@@ -5687,7 +6471,7 @@ h1.greeting {
   background: rgba(10, 10, 10, 0.3);
 }
 
-.calendarBoardColumn span:first-child {
+.calendarBoardColumn span:first-of-type {
   border-top: none;
 }
 
@@ -5709,6 +6493,51 @@ h1.greeting {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
+/* Reminders: literally same card as planPanel for consistent UI */
+.reminderPanel {
+  composes: cardSurface;
+  padding: clamp(18px, 2.4vw, 24px);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-height: 0;
+  width: 100%;
+  margin: 0;
+  height: 100%;
+  max-width: 576px;
+  background: rgba(6, 6, 6, 0.86);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 32px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.reminderPanelDock {
+  width: 100%;
+  margin-top: 32px;
+}
+
+.reminderPanelHeaderRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.reminderPanelHeaderRow h3 {
+  margin: 0;
+  font-size: 0.92rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.reminderHint {
+  margin: 4px 0 0;
+  font-size: 0.82rem;
+  color: rgba(210, 214, 226, 0.65);
+}
+
 .planPanelSlim {
   max-width: clamp(320px, 50vw, 420px);
   width: 100%;
@@ -5716,6 +6545,470 @@ h1.greeting {
   align-self: stretch;
   /* Ensure same vertical footprint as calendar when side-by-side */
   height: 100%;
+}
+
+.settingsCard {
+  background: rgba(6, 6, 6, 0.84);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 28px;
+  padding: clamp(18px, 2.4vw, 24px);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  width: 100%;
+  max-width: clamp(320px, 50vw, 420px);
+  align-self: stretch;
+  box-shadow: 0 20px 36px rgba(0, 0, 0, 0.55);
+}
+
+.settingsCardHeader h3 {
+  margin: 0;
+  font-size: 1rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.settingsCardHeader p {
+  margin: 4px 0 0;
+  font-size: 0.7rem;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: rgba(220, 220, 220, 0.7);
+}
+
+.settingsList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.settingsRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.settingsRow:first-child {
+  border-top: none;
+}
+
+.settingsRow > span {
+  font-size: 0.8rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(235, 235, 235, 0.82);
+}
+
+.settingsControl {
+  border: none;
+  background: rgba(255, 255, 255, 0.02);
+  color: rgba(235, 235, 235, 0.9);
+  font-size: 0.65rem;
+  padding: 10px 14px;
+  border-radius: 12px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.settingsControlMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-start;
+}
+
+.settingsControlHelper {
+  font-size: 0.62rem;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: rgba(235, 235, 235, 0.85);
+}
+
+.settingsControlOptions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.settingsControlOption {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  font-size: 0.55rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(235, 235, 235, 0.85);
+}
+
+.settingsControlDisabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.settingsControlDisabled svg {
+  opacity: 0.5;
+}
+
+.settingsControl svg {
+  opacity: 0.7;
+}
+
+.settingsDangerCard {
+  border: 1px solid rgba(255, 71, 87, 0.45);
+  background: rgba(71, 0, 7, 0.65);
+  padding: clamp(16px, 2.4vh, 24px);
+  margin-top: clamp(18px, 3vh, 32px);
+}
+
+.settingsDangerHelper {
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(255, 179, 179, 0.85);
+  margin: 6px 0 0;
+}
+
+.settingsDangerError {
+  font-size: 0.78rem;
+  margin: 6px 0 0;
+  color: #ff8a8a;
+}
+
+.settingsDangerButton {
+  margin-top: 16px;
+  border: none;
+  border-radius: 999px;
+  padding: 12px 20px;
+  font-size: 0.78rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  background: rgba(255, 71, 87, 0.2);
+  color: rgba(255, 221, 221, 0.95);
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.settingsDangerButton:hover:not(:disabled) {
+  background: rgba(255, 71, 87, 0.35);
+}
+
+.settingsDangerButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.settingsDangerButtonConfirm {
+  background: rgba(255, 71, 87, 0.55);
+  color: #fff;
+}
+
+/* (old reminderPanel block removed; definition now lives directly above) */
+
+.reminderPanelHeader {
+  /* Match list/empty-section headers (e.g. "HABITS") */
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.reminderSimpleTitle {
+  /* Match HABITS label styling */
+  font-size: 0.62rem;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: rgba(235, 235, 235, 0.45);
+}
+
+.reminderComposer {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  padding: 16px;
+  background: rgba(8, 8, 10, 0.85);
+}
+
+.reminderComposer label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.82rem;
+  color: rgba(245, 245, 245, 0.8);
+}
+
+.reminderComposer input,
+.reminderComposer textarea {
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.4);
+  color: #fff;
+  padding: 8px 10px;
+  font-size: 0.9rem;
+}
+
+.reminderComposerActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.reminderComposerActions button {
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  padding: 6px 16px;
+  background: rgba(35, 35, 35, 0.9);
+  color: #fff;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.reminderComposerActions button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.reminderCancelButton {
+  background: transparent;
+  color: rgba(235, 235, 235, 0.7);
+}
+
+.dashboardReminderDock {
+  /* Match spacing pattern of stacked cards without introducing extra weird gap */
+  margin-top: clamp(8px, 1.5vh, 16px);
+  width: 100%;
+}
+
+.dashboardReminderDock .reminderPanel {
+  /* Full-width card inside dock, using identical card styling as .planPanel */
+  width: 100%;
+  max-width: none;
+  height: auto;
+}
+
+.dashboardReminderDock .reminderListItem {
+  border-color: rgba(255, 255, 255, 0.06);
+  background: rgba(20, 20, 20, 0.86);
+  padding: 14px 16px;
+}
+
+.dashboardReminderDock .reminderActions button {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(10, 10, 10, 0.6);
+}
+
+.dashboardReminderDock .reminderComposer {
+  border-color: rgba(255, 255, 255, 0.06);
+  background: rgba(16, 16, 16, 0.9);
+}
+
+.dashboardReminderDock .reminderComposer input,
+.dashboardReminderDock .reminderComposer textarea {
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(6, 6, 6, 0.8);
+}
+
+.reminderFooter {
+  margin-top: 12px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.reminderAddButton {
+  min-width: 148px;
+}
+
+.reminderError {
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(255, 95, 95, 0.1);
+  border: 1px solid rgba(255, 95, 95, 0.4);
+  color: rgba(255, 190, 190, 0.9);
+  font-size: 0.82rem;
+}
+
+.reminderEmpty {
+  /* Use same empty-state styling as listEmptyMessage/cardEmptyMessage */
+  padding: 18px;
+  border-radius: 18px;
+  border: 1px dashed rgba(255, 255, 255, 0.1);
+  background: rgba(8, 8, 8, 0.6);
+  text-align: center;
+  color: rgba(235, 235, 235, 0.6);
+  font-size: 0.82rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.reminderList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.reminderListItem {
+  /* Match plan/habit list items geometry */
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 18px 20px 16px;
+  border-radius: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: radial-gradient(circle at top left, rgba(27, 27, 34, 0.95), rgba(8, 8, 10, 0.88));
+  box-shadow: 0 14px 32px rgba(3, 0, 17, 0.45);
+}
+
+.reminderChatRow {
+  display: flex;
+  gap: 16px;
+}
+
+.reminderAvatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(68, 121, 255, 0.4), rgba(156, 74, 255, 0.35));
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+
+.reminderChatBubble {
+  flex: 1;
+  border-radius: 22px;
+  padding: 16px 18px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(5, 5, 7, 0.78);
+  backdrop-filter: blur(12px);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.reminderChatIntro {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  font-size: 0.78rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(235, 235, 235, 0.65);
+}
+
+.reminderModeBadge {
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 0.65rem;
+  letter-spacing: 0.08em;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: rgba(235, 235, 235, 0.85);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.reminderChatText {
+  margin: 0;
+  font-size: 0.96rem;
+  color: rgba(245, 245, 245, 0.9);
+  line-height: 1.5;
+}
+
+.reminderTaskName {
+  font-weight: 700;
+  color: rgba(157, 189, 255, 0.95);
+}
+
+.reminderChatSummary {
+  margin: 0;
+  font-size: 0.82rem;
+  color: rgba(235, 235, 235, 0.72);
+  font-style: italic;
+}
+
+.reminderChatFollowUp {
+  margin: 0;
+  font-size: 0.8rem;
+  color: rgba(210, 210, 210, 0.78);
+}
+
+.reminderMetaRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.reminderTime {
+  font-size: 0.82rem;
+  color: rgba(181, 210, 255, 0.9);
+}
+
+.reminderStatusPill {
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: rgba(235, 235, 235, 0.8);
+}
+
+.reminderActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.reminderActions button {
+  flex: 1 0 120px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(20, 20, 24, 0.85);
+  color: rgba(235, 235, 235, 0.9);
+  font-size: 0.78rem;
+  padding: 7px 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease,
+    border-color 0.2s ease,
+    transform 0.18s ease;
+}
+
+.reminderActions button:hover {
+  border-color: rgba(255, 255, 255, 0.3);
+  color: #fff;
+  transform: translateY(-1px);
+}
+
+.reminderDangerButton {
+  border-color: rgba(255, 90, 90, 0.4);
+  color: rgba(255, 140, 140, 0.9);
+}
+
+.reminderDangerButton:hover {
+  border-color: rgba(255, 120, 120, 0.8);
+  color: #fff;
 }
 
 .tabBar {
@@ -5770,6 +7063,7 @@ h1.greeting {
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
   max-height: clamp(220px, 35vh, 320px);
+  width: 100%;
 }
 
 .planList::-webkit-scrollbar,
@@ -5793,6 +7087,7 @@ h1.greeting {
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(12, 12, 14, 0.82);
   transition: background 0.2s ease;
+  width: 100%;
 }
 
 .planItemButton {
@@ -5872,9 +7167,9 @@ h1.greeting {
 .listItemActionButton {
   border: none;
   background: transparent;
-  color: rgba(220, 220, 228, 0.72);
-  border-radius: 10px;
-  padding: 6px;
+  color: rgba(235, 235, 235, 0.9);
+  border-radius: 0;
+  padding: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -5885,8 +7180,7 @@ h1.greeting {
 }
 
 .listItemActionButton:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.92);
+  color: rgba(255, 255, 255, 1);
 }
 
 .listItemActionButton:disabled {
@@ -5925,10 +7219,10 @@ h1.greeting {
       --font-mono,
       "IBM Plex Mono",
       SFMono-Regular,
-      Consolas,
-      "Liberation Mono",
-      Menlo,
-      monospace
+    Consolas,
+    "Liberation Mono",
+    Menlo,
+    monospace
     );
   letter-spacing: 0.02em;
 }
@@ -5941,11 +7235,15 @@ h1.greeting {
   min-width: 0;
 }
 
-.planMeta {
+.planTime {
   font-size: 0.68rem;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: rgba(190, 190, 200, 0.66);
+  color: rgba(190, 190, 200, 0.52);
+}
+
+.planTime time {
+  color: inherit;
 }
 
 .habitContent {
@@ -6062,16 +7360,19 @@ h1.greeting {
 .secondaryAction {
   align-self: flex-end;
   margin-left: auto;
+  width: auto;
+  display: inline-flex;
+  justify-content: center;
   padding: 10px 20px;
   border-radius: 16px;
-  border: 1px solid rgba(118, 139, 255, 0.55);
-  background: rgba(8, 8, 8, 0.86);
-  color: rgba(214, 222, 255, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.92);
   font-size: 0.68rem;
   letter-spacing: 0.2em;
   text-transform: uppercase;
   cursor: pointer;
-  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.38);
+  box-shadow: none;
   transition:
     background 0.2s ease,
     color 0.2s ease,
@@ -6079,18 +7380,74 @@ h1.greeting {
     transform 0.2s ease;
 }
 
-.secondaryAction:hover {
-  transform: translateY(-1px);
-  background: rgba(12, 12, 12, 0.92);
-  border-color: rgba(148, 167, 255, 0.7);
-}
-
 .secondaryAction[disabled],
 .secondaryAction[data-disabled="true"] {
   cursor: not-allowed;
   opacity: 0.6;
   transform: none;
-  border-color: rgba(118, 139, 255, 0.25);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.planDetailOverlay {
+  position: fixed;
+  top: clamp(64px, 10vh, 110px);
+  right: clamp(16px, 4vw, 32px);
+  z-index: 60;
+}
+
+.planDetailCard {
+  padding: clamp(16px, 1.5vw, 22px);
+  border-radius: 24px;
+  background: rgba(12, 12, 12, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow:
+    0 24px 35px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.02);
+  width: min(320px, 100vw);
+}
+
+.planDetailHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 1rem;
+  letter-spacing: 0.04em;
+  text-transform: capitalize;
+  color: rgba(250, 250, 250, 0.92);
+  margin-bottom: 8px;
+}
+
+.planDetailClose {
+  border: none;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.9);
+  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.planDetailClose:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.planDetailTime {
+  font-size: 0.78rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(200, 200, 200, 0.82);
+  margin: 0 0 8px;
+}
+
+.planDetailDetails {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  color: rgba(230, 230, 230, 0.85);
 }
 
 .chatBar {
@@ -6101,21 +7458,23 @@ h1.greeting {
   margin: 0 auto;
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.16);
-  background: #050505;
+  background: #111111;
   padding: 6px 12px;
-  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.55);
   position: relative;
   z-index: 1;
-  transition:
-    border-color 0.18s ease,
-    background 0.18s ease,
-    box-shadow 0.18s ease;
 }
 
 .chatBar:focus-within {
-  border-color: rgba(255, 255, 255, 0.28);
-  background: #0d0d10;
-  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.65);
+  border-color: rgba(255, 255, 255, 0.16);
+  background: #111111;
+}
+
+.layout[data-view="general"] .chatBar {
+  background: #050505;
+}
+
+.layout[data-view="general"] .chatBar:focus-within {
+  background: #050505;
 }
 
 .chatBarRow {
@@ -6138,7 +7497,7 @@ h1.greeting {
   bottom: env(safe-area-inset-bottom, 0px);
   transform: translateX(-50%);
   width: min(
-    var(--chat-column-max-width, 920px),
+    var(--chat-column-max-width, 828px),
     calc(100vw - clamp(32px, 8vw, 120px))
   );
   display: flex;
@@ -6149,28 +7508,47 @@ h1.greeting {
   z-index: 80;
 }
 
+.chatThinkingIndicator {
+  position: relative;
+  align-self: center;
+  margin: clamp(12px, 2vh, 18px) auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.generalChatComposer[data-has-attachments="true"] {
+  gap: clamp(10px, 1.8vh, 22px);
+}
+
 .generalChatComposer > * {
   width: 100%;
 }
 
-.generalChatComposer .chatDisclaimer,
+ .generalChatComposer .chatDisclaimer,
 .generalChatComposer .generalChatBarRow {
   width: 100%;
-  max-width: 100%;
+  max-width: min(var(--chat-column-max-width, 828px), 100%);
   margin: 0 auto;
 }
 
 .generalChatBarRow,
 .dashboardChatBarRow {
   width: 100%;
-  max-width: min(var(--chat-column-max-width, 760px), 100%);
+  max-width: min(var(--chat-column-max-width, 828px), 100%);
 }
 
 .generalChatBarRow {
   width: 100%;
-  max-width: min(var(--chat-column-max-width, 760px), 100%);
+  max-width: min(var(--chat-column-max-width, 828px), 100%);
   padding-bottom: 18px;
   margin: 0 auto;
+}
+
+.generalChatComposer .generalChatBarRow {
+  padding-bottom: 0;
 }
 
 .generalChatBarRow::before {
@@ -6182,15 +7560,15 @@ h1.greeting {
   left: 0;
   right: 0;
   top: 0;
-  bottom: calc(-1 * clamp(40px, 6vh, 72px));
+  bottom: calc(-1 * clamp(26px, 4vh, 42px));
   margin: 0 auto;
   width: 100%;
   max-width: 100%;
   border-radius: 32px 32px 0 0;
-  background: linear-gradient(180deg, rgba(8, 8, 8, 0.96), rgba(3, 3, 3, 0.92));
+  background: linear-gradient(180deg, rgba(8, 8, 8, 0.7), rgba(3, 3, 3, 0.6));
   box-shadow:
-    0 34px 60px rgba(0, 0, 0, 0.78),
-    0 12px 24px rgba(0, 0, 0, 0.45);
+    0 34px 60px rgba(0, 0, 0, 0.52),
+    0 12px 24px rgba(0, 0, 0, 0.28);
   pointer-events: none;
   z-index: 0;
 }
@@ -6211,6 +7589,15 @@ h1.greeting {
     color 0.2s ease;
 }
 
+.chatIconButton {
+  background: none;
+  width: 32px;
+  height: 32px;
+  border: none;
+  padding: 0;
+  color: rgba(235, 235, 235, 0.7);
+}
+
 .chatIconButton[disabled],
 .chatActionButton[disabled] {
   cursor: not-allowed;
@@ -6223,7 +7610,10 @@ h1.greeting {
   color: rgba(235, 235, 235, 0.7);
 }
 
-.chatIconButton:hover,
+.chatIconButton:hover {
+  background: none;
+  color: rgba(235, 235, 235, 0.7);
+}
 .chatActionButton:hover {
   background: rgba(255, 255, 255, 0.08);
   color: rgba(255, 255, 255, 0.95);
@@ -6420,8 +7810,9 @@ h1.greeting {
   justify-content: space-between;
   padding: 12px 16px;
   border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(12, 12, 14, 0.78);
+  border: none;
+  background: rgba(10, 10, 14, 0.96);
+  box-shadow: none;
   color: rgba(235, 235, 240, 0.92);
   font-size: 0.8rem;
   letter-spacing: 0.06em;
@@ -6431,12 +7822,6 @@ h1.greeting {
     background 0.2s ease,
     border-color 0.2s ease,
     transform 0.2s ease;
-}
-
-.proactivityTimeListItem:hover,
-.proactivityTimeListItem:focus-visible {
-  border-color: rgba(255, 255, 255, 0.16);
-  background: rgba(18, 18, 20, 0.9);
 }
 
 .proactivityTimeListItem:focus-visible {
@@ -6455,26 +7840,10 @@ h1.greeting {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  opacity: 0.2;
-  transition: opacity 0.2s ease;
-}
-
-.proactivityTimeListItem:hover .proactivityTimeActions,
-.proactivityTimeListItem:focus-within .proactivityTimeActions {
-  opacity: 1;
-}
-
-.proactivityTimeListItem .proactivityTimeInput {
-  position: absolute;
-  inset: 0;
-  opacity: 0;
-  pointer-events: none;
-  width: 0;
-  height: 0;
-}
-
-.proactivityTimeListItem .proactivityTimeInput::-webkit-calendar-picker-indicator {
-  display: none;
+  opacity: 0.7;
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
 }
 
 .proactivityTimeListItem:disabled {
@@ -6848,4 +8217,12 @@ h1.greeting {
   height: 0 !important;
   min-width: 0 !important;
   min-height: 0 !important;
+}
+.planDerivedTag {
+  font-size: 0.62rem;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: rgba(195, 195, 205, 0.6);
+  margin-top: 6px;
+  display: block;
 }

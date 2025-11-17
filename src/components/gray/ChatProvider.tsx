@@ -13,6 +13,7 @@ import {
   type ReactNode,
   type SetStateAction,
 } from "react";
+import { usePathname } from "next/navigation";
 import { useUser } from "@/contexts/UserContext";
 import {
   apiService,
@@ -230,6 +231,7 @@ const FALLBACK_ASSISTANT_DELAY_MS = 150;
 const GENERAL_SESSION_ID = "general-session";
 export const GENERAL_CHAT_SESSION_ID = GENERAL_SESSION_ID;
 const GENERAL_SESSION_TITLE = "General Chat";
+export const SHARED_CHAT_PLACEHOLDER_TITLE = "Shared Chat";
 const GENERAL_CONVERSATION_PREFIX = "general:";
 export const buildGeneralConversationId = (userId?: number | null) => {
   if (typeof userId !== "number" || !Number.isFinite(userId)) {
@@ -320,6 +322,20 @@ export const buildPersonalizedSystemPrompt = (user?: User | null, basePrompt?: s
 export const buildAssistantReply = (prompt: string) => {
   void prompt;
   return "I'm here and ready—feel free to share more details or ask another question.";
+};
+
+const buildAssistantErrorReply = (cause: unknown) => {
+  const base = "I couldn't reach the Gray backend to finish that request.";
+  if (!cause) {
+    return `${base} Make sure the API service is running (try \`npm run backend\`) and then retry.`;
+  }
+  if (cause instanceof Error && cause.message.trim()) {
+    return `${base} Details: ${cause.message.trim()} — verify the service is up and try again.`;
+  }
+  if (typeof cause === "string" && cause.trim().length > 0) {
+    return `${base} Details: ${cause.trim()}.`;
+  }
+  return `${base} Check that the API is reachable and try again.`;
 };
 
 const normalizeReminderLabel = (label?: string | null) => {
@@ -1104,6 +1120,7 @@ const GENERIC_TITLE_TOKENS = new Set([
   "new thread",
   "new session",
   "conversation start",
+  SHARED_CHAT_PLACEHOLDER_TITLE.toLowerCase(),
 ]);
 
 export const isGenericTitle = (title: string | null | undefined): boolean => {
@@ -1357,6 +1374,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
   }, [generalConversationId]);
 
   const sessions = sessionsState;
+  const [remoteConversationsLoaded, setRemoteConversationsLoaded] = useState(false);
   const pendingTitleSyncRef = useRef<Map<string, string>>(new Map());
   const pendingThreadSeedsRef = useRef<Map<string, { sessionId: string; createdAt: number }>>(
     new Map()
@@ -2044,7 +2062,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
 
   const applyAutoTitle = useCallback(
     (sessionId: string, candidate?: string | null) => {
-      const session = sessions.find((entry) => entry.id === sessionId);
+      const session = sessionsRef.current.find((entry) => entry.id === sessionId);
       if (!session || session.scope === "general" || session.titleMode === "manual") {
         return;
       }
@@ -2063,7 +2081,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       updateSession(sessionId, { title: rawTitle, titleMode: "auto" });
       queueConversationTitleSync(sessionId, rawTitle);
     },
-    [queueConversationTitleSync, sessions, updateSession]
+    [queueConversationTitleSync, updateSession]
   );
 
   const updateMessage = useCallback(
@@ -2253,11 +2271,12 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       if (target?.scope === "general") {
         return;
       }
-      const normalized =
-        trimmed.length > 100
-          ? trimmed.slice(0, 100).trim()
-          : trimmed;
-      updateSession(sessionId, { title: normalized, titleMode: "manual" });
+      const normalized = trimmed.length > 100 ? trimmed.slice(0, 100).trim() : trimmed;
+      updateSession(sessionId, {
+        title: normalized,
+        titleMode: "manual",
+        updatedAt: Date.now(),
+      });
       queueConversationTitleSync(sessionId, normalized);
     },
     [queueConversationTitleSync, updateSession]
@@ -2391,11 +2410,29 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
     return created;
   }, [persistSessions]);
 
-  const mergeRemoteConversations = useCallback(
-    (conversations: ConversationSummary[]) => {
-      if (!Array.isArray(conversations) || conversations.length === 0) {
-        return;
+const mergeRemoteConversations = useCallback(
+  (conversations: ConversationSummary[]) => {
+    if (!Array.isArray(conversations) || conversations.length === 0) {
+      return;
+    }
+
+    const shouldAdoptRemoteTitle = (currentTitle: string | null | undefined, remoteTitle: string) => {
+      if (!remoteTitle || !remoteTitle.trim()) {
+        return false;
       }
+      const normalizedRemote = remoteTitle.trim();
+      const normalizedCurrent = (currentTitle ?? "").trim();
+      if (!normalizedCurrent) {
+        return true;
+      }
+      if (normalizedCurrent.toLowerCase() === normalizedRemote.toLowerCase()) {
+        return false;
+      }
+      if (normalizedCurrent.toLowerCase() === SHARED_CHAT_PLACEHOLDER_TITLE.toLowerCase()) {
+        return true;
+      }
+      return isGenericTitle(normalizedCurrent);
+    };
       setSessions((prev) => {
         let changed = false;
         const next = [...prev];
@@ -2453,12 +2490,18 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
 
           if (typeof existingIndex === "number") {
             const current = next[existingIndex];
+            const adoptRemoteTitle = shouldAdoptRemoteTitle(current.title, normalizedTitle);
             const merged: ChatSession = {
               ...current,
-              // Preserve the local title as source of truth; only sync timestamps and ids.
               createdAt: Math.min(current.createdAt, createdAt),
               updatedAt: Math.max(current.updatedAt, updatedAt),
               conversationId,
+              ...(adoptRemoteTitle
+                ? {
+                    title: normalizedTitle,
+                    titleMode: isGenericTitle(normalizedTitle) ? "auto" : "manual",
+                  }
+                : {}),
             };
             if (
               merged.title !== current.title ||
@@ -2475,13 +2518,19 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
           const pendingIndex = findPendingSessionMatch(createdAt);
           if (typeof pendingIndex === "number") {
             const pending = next[pendingIndex];
+            const adoptRemoteTitle = shouldAdoptRemoteTitle(pending.title, normalizedTitle);
             const merged: ChatSession = {
               ...pending,
-              // Keep the pending session's title; attach the server conversation id and timestamps.
               createdAt: Math.min(pending.createdAt, createdAt),
               updatedAt: Math.max(pending.updatedAt, updatedAt),
               conversationId,
               pendingAutoStream: false,
+              ...(adoptRemoteTitle
+                ? {
+                    title: normalizedTitle,
+                    titleMode: isGenericTitle(normalizedTitle) ? "auto" : "manual",
+                  }
+                : {}),
             };
             next[pendingIndex] = merged;
             indexByConversationId.set(conversationId, pendingIndex);
@@ -2547,6 +2596,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
   );
 
   useEffect(() => {
+    setRemoteConversationsLoaded(false);
     if (!user?.id) {
       return;
     }
@@ -2560,11 +2610,16 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
         mergeRemoteConversations(records);
       } catch (error) {
         console.error("Failed to load remote conversations:", error);
+      } finally {
+        if (!cancelled) {
+          setRemoteConversationsLoaded(true);
+        }
       }
     };
     void loadRemoteConversations();
     return () => {
       cancelled = true;
+      setRemoteConversationsLoaded(false);
     };
   }, [user?.id, mergeRemoteConversations]);
 
@@ -2877,6 +2932,9 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
 
       // 3) Wait for the authenticated user so the first streamed reply connects properly.
       const resolvedUser = await resolveChatUser();
+      if (resolvedUser && !requestConversationId) {
+        requestConversationId = buildGeneralConversationId(resolvedUser.id);
+      }
 
       if (!resolvedUser) {
         const fallback = buildAssistantReply(trimmed);
@@ -2989,7 +3047,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
             });
           } catch (error) {
             console.error("Failed to send general message:", error);
-            const fallback = buildAssistantReply(trimmed);
+            const fallback = buildAssistantErrorReply(error);
             if (assistantMessageId) {
               updateMessage(generalSession.id, assistantMessageId, { content: fallback });
             } else {
@@ -3098,25 +3156,82 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
   }, [sessions]);
 
   const generalGreetingRef = useRef(false);
+  const pathname = usePathname();
 
   useEffect(() => {
     const general = sessionsRef.current.find((session) => session.scope === "general");
-    const hasAnyMessages = sessionsRef.current.some((session) => session.messages.length > 0);
-    if (!general || hasAnyMessages || generalGreetingRef.current) {
+    const generalHasMessages = Boolean(general?.messages && general.messages.length > 0);
+    if (
+      !general ||
+      generalHasMessages ||
+      generalGreetingRef.current ||
+      !user?.id ||
+      pathname !== "/g" ||
+      !remoteConversationsLoaded
+    ) {
       return;
     }
     generalGreetingRef.current = true;
-    const preferredName =
-      user?.personalization_nickname?.trim() ||
-      user?.full_name?.split(" ")[0] ||
-      "there";
-    const greeting = [
-      `Hey ${preferredName}, I’m Gray.`,
-      "To get things rolling you can tell me what’s on deck today, ask for ideas, or just jot a reminder.",
-      "If nothing’s urgent, I can still help you plan the next move."
-    ].join(" ");
-    appendMessage(general.id, "assistant", greeting);
-  }, [appendMessage, sessions, user?.full_name, user?.personalization_nickname]);
+
+    let cancelled = false;
+    const fallbackGreeting = () => {
+      const preferredName =
+        user?.personalization_nickname?.trim() ||
+        user?.full_name?.split(" ")[0] ||
+        "there";
+      return [
+        `Hey ${preferredName}, I’m Gray.`,
+        "To get things rolling you can tell me what’s on deck today, ask for ideas, or just jot a reminder.",
+        "If nothing’s urgent, I can still help you plan the next move."
+      ].join(" ");
+    };
+
+    const deliverStarterMessage = async () => {
+      const fallback = fallbackGreeting();
+      try {
+        const timeContext = buildLocalTimeContext();
+        const response = await apiService.requestChatStarter({
+          user_id: user.id,
+          name: user.full_name,
+          nickname: user.personalization_nickname,
+          occupation: user.personalization_occupation,
+          about: user.personalization_about,
+          custom_instructions: user.personalization_custom_instructions,
+          workspace_context: workspaceContextValue ?? null,
+          system_prompt: personalizedSystemPrompt || null,
+          time_context: timeContext,
+        });
+        if (cancelled) {
+          return;
+        }
+        const starter = response?.message?.trim() || fallback;
+        appendMessage(general.id, "assistant", starter);
+      } catch (error) {
+        console.error("Failed to generate chat starter", error);
+        if (!cancelled) {
+          appendMessage(general.id, "assistant", fallback);
+        }
+      }
+    };
+
+    void deliverStarterMessage();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    appendMessage,
+    personalizedSystemPrompt,
+    pathname,
+    remoteConversationsLoaded,
+    sessions,
+    user?.full_name,
+    user?.id,
+    user?.personalization_about,
+    user?.personalization_custom_instructions,
+    user?.personalization_nickname,
+    user?.personalization_occupation,
+    workspaceContextValue,
+  ]);
 
   useEffect(() => {
     if (!user?.id || !generalSessionId) {

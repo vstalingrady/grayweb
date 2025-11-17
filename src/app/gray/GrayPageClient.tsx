@@ -44,6 +44,7 @@ import type { CalendarEvent, CalendarInfo } from "@/components/calendar/types";
 import {
   useChatStore,
   GENERAL_CHAT_SESSION_ID,
+  SHARED_CHAT_PLACEHOLDER_TITLE,
   deriveTitleFromMessage,
   normalizeConversationIdValue,
   type ChatSession,
@@ -1089,10 +1090,7 @@ function GrayPageClientInner({
     return activeNav === "history" && baseViewMode !== "chat" ? "history" : null;
   });
 
-  const effectiveManualViewMode =
-    activeNav === "general" || activeNav === "dashboard"
-      ? null
-      : manualViewMode;
+  const effectiveManualViewMode = activeNav === "dashboard" ? null : manualViewMode;
 
   const viewMode: ViewMode =
     baseViewMode === "chat"
@@ -1239,7 +1237,11 @@ function GrayPageClientInner({
     if (baseViewMode === "chat") {
       return;
     }
-    if (activeNav === "general" && manualViewMode !== null) {
+    if (activeNav === "dashboard" && manualViewMode !== null) {
+      setManualViewMode(null);
+      return;
+    }
+    if (activeNav === "general" && manualViewMode === "history") {
       setManualViewMode(null);
     }
   }, [activeNav, baseViewMode, manualViewMode]);
@@ -2488,7 +2490,7 @@ function GrayPageClientInner({
       const nowTs = Date.now();
       resolved = ensureSessionFn(activeChatId, () => ({
         id: activeChatId,
-        title: "Shared Chat",
+        title: SHARED_CHAT_PLACEHOLDER_TITLE,
         titleMode: "auto",
         createdAt: nowTs,
         updatedAt: nowTs,
@@ -3289,11 +3291,12 @@ function GrayPageClientInner({
   return (
     <>
       <div
-      className={styles.page}
-      data-dashboard-tab={dashboardTabAttr}
-      data-compact={isCompactLayout ? "true" : "false"}
-      data-general-attachments={generalAttachmentsActive ? "true" : "false"}
-    >
+        className={styles.page}
+        data-dashboard-tab={dashboardTabAttr}
+        data-compact={isCompactLayout ? "true" : "false"}
+        data-general-attachments={generalAttachmentsActive ? "true" : "false"}
+        data-workspace-background={shouldShowWorkspaceBackground ? "true" : "false"}
+      >
       {shouldShowWorkspaceBackground ? (
         <>
           <div
