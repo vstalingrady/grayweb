@@ -123,6 +123,7 @@ if __name__ == "__main__":
         sqlalchemy.Column("full_name", sqlalchemy.String),
         sqlalchemy.Column("profile_picture_url", sqlalchemy.String, nullable=True),
         sqlalchemy.Column("role", sqlalchemy.String, default="user"),
+        sqlalchemy.Column("plan_tier", sqlalchemy.String, nullable=True),
         sqlalchemy.Column("initials", sqlalchemy.String),
         sqlalchemy.Column("personalization_nickname", sqlalchemy.String, nullable=True),
         sqlalchemy.Column("personalization_occupation", sqlalchemy.String, nullable=True),
@@ -137,6 +138,7 @@ if __name__ == "__main__":
         sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True, index=True),
         sqlalchemy.Column("user_id", sqlalchemy.ForeignKey("users.id")),
         sqlalchemy.Column("title", sqlalchemy.String),
+        sqlalchemy.Column("scope", sqlalchemy.String, default="thread"),
         sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=sqlalchemy.func.now()),
         sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=sqlalchemy.func.now(), onupdate=sqlalchemy.func.now()),
     )
@@ -469,6 +471,7 @@ if __name__ == "__main__":
     ensure_column("plans", "schedule_slot", "VARCHAR")
     ensure_column("plans", "description", "VARCHAR")
     ensure_column("habits", "description", "VARCHAR")
+    ensure_column("chat_sessions", "scope", "VARCHAR DEFAULT 'thread'")
 
     migration_time = (time.time() - migration_start) * 1000
     LOG.info("Database migrations completed", extra={

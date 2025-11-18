@@ -309,6 +309,7 @@ users = sqlalchemy.Table(
     sqlalchemy.Column("profile_picture_url", sqlalchemy.String, nullable=True),
     sqlalchemy.Column("role", sqlalchemy.String, default="user"),
     sqlalchemy.Column("initials", sqlalchemy.String),
+    sqlalchemy.Column("workspace_background_id", sqlalchemy.String, nullable=True),
     sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
     sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
 )
@@ -319,6 +320,7 @@ chat_sessions = sqlalchemy.Table(
     sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True, index=True),
     sqlalchemy.Column("user_id", sqlalchemy.ForeignKey("users.id")),
     sqlalchemy.Column("title", sqlalchemy.String),
+    sqlalchemy.Column("scope", sqlalchemy.String, default="thread"),
     sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
     sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
 )
@@ -534,6 +536,8 @@ class UserBase(BaseModel):
     profile_picture_url: Optional[str] = None
     role: str = "user"
     plan_tier: Optional[str] = None
+    workspace_background_id: Optional[str] = None
+    maps_enabled: bool = False
 
 class UserCreate(UserBase):
     pass
@@ -543,6 +547,8 @@ class UserUpdate(BaseModel):
     profile_picture_url: Optional[str] = None
     role: Optional[str] = None
     plan_tier: Optional[str] = None
+    workspace_background_id: Optional[str] = None
+    maps_enabled: Optional[bool] = None
 
 class User(UserBase):
     id: int
@@ -2437,35 +2443,28 @@ async def get_or_create_user_streak(user_id: int, db: databases.Database) -> Use
     # Supabase-first streak lookup.
     if supabase:
         try:
-            result = (
-                supabase.table("user_streaks")
-                .select("*")
-                .eq("user_id", user_id)
-                .limit(1)
-                .execute()
-            )
-            rows = result.data or []
+            result = supabase.table("user_streaks").select("*").eq("user_id", user_id).limit(1).execute()
+            rows = getattr(result, "data", None) or []
             if rows:
                 return rows[0]
 
             now = datetime.utcnow().isoformat()
+            supabase.table("user_streaks").insert(
+                {
+                    "user_id": user_id,
+                    "current_streak": 0,
+                    "last_activity_date": None,
+                    "created_at": now,
+                    "updated_at": now,
+                }
+            ).execute()
+
             created = (
-                supabase.table("user_streaks")
-                .insert(
-                    {
-                        "user_id": user_id,
-                        "current_streak": 0,
-                        "last_activity_date": None,
-                        "created_at": now,
-                        "updated_at": now,
-                    }
-                )
-                .select("*")
-                .single()
-                .execute()
+                supabase.table("user_streaks").select("*").eq("user_id", user_id).limit(1).execute()
             )
-            if created.data:
-                return created.data
+            created_rows = getattr(created, "data", None) or []
+            if created_rows:
+                return created_rows[0]
         except Exception as error:
             _handle_supabase_table_error(
                 f"Warning: Failed to load or create user streak in Supabase for user {user_id}",
@@ -2518,22 +2517,18 @@ async def update_user_streak(user_id: int, db: databases.Database):
     if supabase:
         try:
             now = datetime.utcnow().isoformat()
-            updated = (
-                supabase.table("user_streaks")
-                .update(
-                    {
-                        "current_streak": new_streak,
-                        "last_activity_date": now,
-                        "updated_at": now,
-                    }
-                )
-                .eq("user_id", user_id)
-                .select("*")
-                .single()
-                .execute()
-            )
-            if updated.data:
-                return updated.data
+            supabase.table("user_streaks").update(
+                {
+                    "current_streak": new_streak,
+                    "last_activity_date": now,
+                    "updated_at": now,
+                }
+            ).eq("user_id", user_id).execute()
+
+            refreshed = supabase.table("user_streaks").select("*").eq("user_id", user_id).limit(1).execute()
+            refreshed_rows = getattr(refreshed, "data", None) or []
+            if refreshed_rows:
+                return refreshed_rows[0]
         except Exception as error:
             _handle_supabase_table_error(
                 f"Warning: Failed to update user streak in Supabase for user {user_id}",
@@ -4173,20 +4168,14 @@ async def create_plan(user_id: int, plan: PlanCreate, db: databases.Database = D
         "description": plan.description,
     }
     if supabase:
-        try:
-            timestamp = datetime.utcnow().isoformat()
-            payload = {**base_values, "created_at": timestamp, "updated_at": timestamp}
-            result = (
-                supabase.table("plans")
-                .insert(payload)
-                .select("*")
-                .single()
-                .execute()
-            )
-            if result.data:
-                return result.data
-        except Exception as error:
-            _handle_supabase_table_error("Warning: Failed to create plan", error)
+        timestamp = datetime.utcnow().isoformat()
+        payload = {**base_values, "created_at": timestamp, "updated_at": timestamp}
+        result = supabase.table("plans").insert(payload).execute()
+        rows = getattr(result, "data", None) or []
+        if isinstance(rows, list) and rows:
+            return rows[0]
+        if isinstance(rows, dict) and rows:
+            return rows
     now = datetime.utcnow()
     plan_id = await db.execute(
         plans.insert().values(
@@ -4202,46 +4191,47 @@ async def create_plan(user_id: int, plan: PlanCreate, db: databases.Database = D
 async def update_plan(user_id: int, plan_id: int, plan_update: PlanUpdate, db: databases.Database = Depends(get_database)):
     update_data = plan_update.dict(exclude_unset=True)
     if supabase:
-        try:
-            existing = (
+        existing = (
+            supabase.table("plans")
+            .select("id")
+            .eq("id", plan_id)
+            .eq("user_id", user_id)
+            .limit(1)
+            .execute()
+        )
+        if not existing.data:
+            raise HTTPException(status_code=404, detail="Plan not found")
+        if not update_data:
+            plan_record = (
                 supabase.table("plans")
-                .select("id")
-                .eq("id", plan_id)
-                .eq("user_id", user_id)
-                .limit(1)
-                .execute()
-            )
-            if not existing.data:
-                raise HTTPException(status_code=404, detail="Plan not found")
-            if not update_data:
-                plan_record = (
-                    supabase.table("plans")
-                    .select("*")
-                    .eq("id", plan_id)
-                    .eq("user_id", user_id)
-                    .single()
-                    .execute()
-                )
-                return plan_record.data
-            update_payload = {
-                **update_data,
-                "updated_at": datetime.utcnow().isoformat(),
-            }
-            result = (
-                supabase.table("plans")
-                .update(update_payload)
-                .eq("id", plan_id)
-                .eq("user_id", user_id)
                 .select("*")
+                .eq("id", plan_id)
+                .eq("user_id", user_id)
                 .single()
                 .execute()
             )
-            if result.data:
-                return result.data
-        except HTTPException:
-            raise
-        except Exception as error:
-            _handle_supabase_table_error("Warning: Failed to update plan", error)
+            record_rows = getattr(plan_record, "data", None) or []
+            if isinstance(record_rows, list) and record_rows:
+                return record_rows[0]
+            if isinstance(record_rows, dict) and record_rows:
+                return record_rows
+            raise HTTPException(status_code=404, detail="Plan not found")
+        update_payload = {
+            **update_data,
+            "updated_at": datetime.utcnow().isoformat(),
+        }
+        result = (
+            supabase.table("plans")
+            .update(update_payload)
+            .eq("id", plan_id)
+            .eq("user_id", user_id)
+            .execute()
+        )
+        rows = getattr(result, "data", None) or []
+        if isinstance(rows, list) and rows:
+            return rows[0]
+        if isinstance(rows, dict) and rows:
+            return rows
     existing = await db.fetch_one(
         plans.select().where(
             (plans.c.id == plan_id) & (plans.c.user_id == user_id)
@@ -4263,23 +4253,18 @@ async def update_plan(user_id: int, plan_id: int, plan_update: PlanUpdate, db: d
 @app.delete("/users/{user_id}/plans/{plan_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_plan(user_id: int, plan_id: int, db: databases.Database = Depends(get_database)):
     if supabase:
-        try:
-            existing = (
-                supabase.table("plans")
-                .select("id")
-                .eq("id", plan_id)
-                .eq("user_id", user_id)
-                .limit(1)
-                .execute()
-            )
-            if not existing.data:
-                raise HTTPException(status_code=404, detail="Plan not found")
-            supabase.table("plans").delete().eq("id", plan_id).eq("user_id", user_id).execute()
-            return None
-        except HTTPException:
-            raise
-        except Exception as error:
-            _handle_supabase_table_error("Warning: Failed to delete plan", error)
+        existing = (
+            supabase.table("plans")
+            .select("id")
+            .eq("id", plan_id)
+            .eq("user_id", user_id)
+            .limit(1)
+            .execute()
+        )
+        if not existing.data:
+            raise HTTPException(status_code=404, detail="Plan not found")
+        supabase.table("plans").delete().eq("id", plan_id).eq("user_id", user_id).execute()
+        return None
     query = plans.select().where(
         (plans.c.id == plan_id) & (plans.c.user_id == user_id)
     )
@@ -4320,20 +4305,14 @@ async def create_habit(user_id: int, habit: HabitCreate, db: databases.Database 
         "description": habit.description,
     }
     if supabase:
-        try:
-            timestamp = datetime.utcnow().isoformat()
-            payload = {**base_values, "created_at": timestamp, "updated_at": timestamp}
-            result = (
-                supabase.table("habits")
-                .insert(payload)
-                .select("*")
-                .single()
-                .execute()
-            )
-            if result.data:
-                return result.data
-        except Exception as error:
-            _handle_supabase_table_error("Warning: Failed to create habit", error)
+        timestamp = datetime.utcnow().isoformat()
+        payload = {**base_values, "created_at": timestamp, "updated_at": timestamp}
+        result = supabase.table("habits").insert(payload).execute()
+        rows = getattr(result, "data", None) or []
+        if isinstance(rows, list) and rows:
+            return rows[0]
+        if isinstance(rows, dict) and rows:
+            return rows
     now = datetime.utcnow()
     habit_id = await db.execute(
         habits.insert().values(
@@ -4349,46 +4328,47 @@ async def create_habit(user_id: int, habit: HabitCreate, db: databases.Database 
 async def update_habit(user_id: int, habit_id: int, habit_update: HabitUpdate, db: databases.Database = Depends(get_database)):
     update_data = habit_update.dict(exclude_unset=True)
     if supabase:
-        try:
-            existing = (
+        existing = (
+            supabase.table("habits")
+            .select("id")
+            .eq("id", habit_id)
+            .eq("user_id", user_id)
+            .limit(1)
+            .execute()
+        )
+        if not existing.data:
+            raise HTTPException(status_code=404, detail="Habit not found")
+        if not update_data:
+            habit_row = (
                 supabase.table("habits")
-                .select("id")
-                .eq("id", habit_id)
-                .eq("user_id", user_id)
-                .limit(1)
-                .execute()
-            )
-            if not existing.data:
-                raise HTTPException(status_code=404, detail="Habit not found")
-            if not update_data:
-                habit_row = (
-                    supabase.table("habits")
-                    .select("*")
-                    .eq("id", habit_id)
-                    .eq("user_id", user_id)
-                    .single()
-                    .execute()
-                )
-                return habit_row.data
-            update_payload = {
-                **update_data,
-                "updated_at": datetime.utcnow().isoformat(),
-            }
-            result = (
-                supabase.table("habits")
-                .update(update_payload)
-                .eq("id", habit_id)
-                .eq("user_id", user_id)
                 .select("*")
+                .eq("id", habit_id)
+                .eq("user_id", user_id)
                 .single()
                 .execute()
             )
-            if result.data:
-                return result.data
-        except HTTPException:
-            raise
-        except Exception as error:
-            _handle_supabase_table_error("Warning: Failed to update habit", error)
+            habit_rows = getattr(habit_row, "data", None) or []
+            if isinstance(habit_rows, list) and habit_rows:
+                return habit_rows[0]
+            if isinstance(habit_rows, dict) and habit_rows:
+                return habit_rows
+            raise HTTPException(status_code=404, detail="Habit not found")
+        update_payload = {
+            **update_data,
+            "updated_at": datetime.utcnow().isoformat(),
+        }
+        result = (
+            supabase.table("habits")
+            .update(update_payload)
+            .eq("id", habit_id)
+            .eq("user_id", user_id)
+            .execute()
+        )
+        rows = getattr(result, "data", None) or []
+        if isinstance(rows, list) and rows:
+            return rows[0]
+        if isinstance(rows, dict) and rows:
+            return rows
     existing = await db.fetch_one(
         habits.select().where(
             (habits.c.id == habit_id) & (habits.c.user_id == user_id)
@@ -4410,23 +4390,18 @@ async def update_habit(user_id: int, habit_id: int, habit_update: HabitUpdate, d
 @app.delete("/users/{user_id}/habits/{habit_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_habit(user_id: int, habit_id: int, db: databases.Database = Depends(get_database)):
     if supabase:
-        try:
-            existing = (
-                supabase.table("habits")
-                .select("id")
-                .eq("id", habit_id)
-                .eq("user_id", user_id)
-                .limit(1)
-                .execute()
-            )
-            if not existing.data:
-                raise HTTPException(status_code=404, detail="Habit not found")
-            supabase.table("habits").delete().eq("id", habit_id).eq("user_id", user_id).execute()
-            return None
-        except HTTPException:
-            raise
-        except Exception as error:
-            _handle_supabase_table_error("Warning: Failed to delete habit", error)
+        existing = (
+            supabase.table("habits")
+            .select("id")
+            .eq("id", habit_id)
+            .eq("user_id", user_id)
+            .limit(1)
+            .execute()
+        )
+        if not existing.data:
+            raise HTTPException(status_code=404, detail="Habit not found")
+        supabase.table("habits").delete().eq("id", habit_id).eq("user_id", user_id).execute()
+        return None
     query = habits.select().where(
         (habits.c.id == habit_id) & (habits.c.user_id == user_id)
     )
@@ -4580,15 +4555,12 @@ async def create_user_reminder(
     }
     if supabase:
         try:
-            result = (
-                supabase.table("reminders")
-                .insert(values)
-                .select("*")
-                .single()
-                .execute()
-            )
-            if result.data:
-                return _serialize_reminder_row(result.data)
+            result = supabase.table("reminders").insert(values).execute()
+            rows = getattr(result, "data", None) or []
+            if isinstance(rows, list) and rows:
+                return _serialize_reminder_row(rows[0])
+            if isinstance(rows, dict) and rows:
+                return _serialize_reminder_row(rows)
         except Exception as error:
             _handle_supabase_table_error("Warning: Failed to create reminder", error)
 
@@ -4651,12 +4623,13 @@ async def update_user_reminder(
                 .update(update_payload)
                 .eq("id", reminder_id)
                 .eq("user_id", user_id)
-                .select("*")
-                .single()
                 .execute()
             )
-            if result.data:
-                return _serialize_reminder_row(result.data)
+            rows = getattr(result, "data", None) or []
+            if isinstance(rows, list) and rows:
+                return _serialize_reminder_row(rows[0])
+            if isinstance(rows, dict) and rows:
+                return _serialize_reminder_row(rows)
         except HTTPException:
             raise
         except Exception as error:
@@ -4786,15 +4759,10 @@ async def create_calendar_event(user_id: int, event: CalendarEventCreate, db: da
                 "end_time": event.end_time.isoformat(),
                 "created_at": now.isoformat(),
             }
-            result = (
-                supabase.table("calendar_events")
-                .insert(payload)
-                .select("*")
-                .single()
-                .execute()
-            )
-            if result.data:
-                return result.data
+            result = supabase.table("calendar_events").insert(payload).execute()
+            data = result.data if isinstance(result.data, list) else [result.data]
+            if data:
+                return data[0]
         except Exception as error:
             _handle_supabase_table_error(
                 f"Warning: Failed to create calendar event in Supabase for user {user_id}",
