@@ -168,7 +168,7 @@ export function PersonalizationPanel({
     : `${formatNumber(contextTokensUsed)} tokens used while limit is unlimited`;
   const contextMeterDescription = hasContextUsage ? contextMeterValueText : "";
   const contextFooterDescription = hasContextUsage ? contextFooterLabel : "";
-  const contextMessagesLabel = hasContextUsage ? `${contextUsage.messageCount.toLocaleString()} messages` : "";
+  const contextMessagesLabel = hasContextUsage && contextUsage ? `${contextUsage.messageCount.toLocaleString()} messages` : "";
   const contextTokensLabel = contextUsage
     ? `${contextTokensUsed.toLocaleString()} tokens`
     : "0 tokens";
@@ -177,11 +177,7 @@ export function PersonalizationPanel({
   const interests = useMemo(() => ["Systems", "Wellness"], []);
   const traits = useMemo(() => TRAIT_PRESETS, []);
   const resolvedBackgroundOptions = useMemo(
-    () => [
-      SOLID_WHITE_BACKGROUND,
-      SOLID_BLACK_BACKGROUND,
-      ...backgroundOptions,
-    ],
+    () => backgroundOptions,
     [backgroundOptions]
   );
   const [nickname, setNickname] = useState(() => profileNickname ?? "");
