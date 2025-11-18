@@ -1513,7 +1513,7 @@
 
 .sidebarNavItem[data-nav="history"] {
   gap: 0;
-  --history-line-offset: 12px;
+  --history-line-offset: 9px;
   --history-line-color: rgba(255, 255, 255, 0.08);
 }
 
