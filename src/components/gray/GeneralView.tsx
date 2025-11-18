@@ -143,6 +143,72 @@ export function GrayGeneralView({
     await onRefreshData();
   };
 
+  const mergedEvents = useMemo(() => [...calendarEvents, ...planCalendarEvents], [calendarEvents, planCalendarEvents]);
+
+  const handleCalendarEventsChange = useCallback((nextEvents: CalendarEvent[]) => {
+    // 1. Separate real events from plan events
+    const nextCalendarEvents = nextEvents.filter((e) => !e.id.startsWith(PLAN_EVENT_ID_PREFIX));
+    const nextPlanEvents = nextEvents.filter((e) => e.id.startsWith(PLAN_EVENT_ID_PREFIX));
+
+    // 2. Propagate real events to parent
+    onCalendarEventsChange(nextCalendarEvents);
+
+    // 3. Detect and save changed plans
+    nextPlanEvents.forEach((event) => {
+      const planId = event.id.slice(PLAN_EVENT_ID_PREFIX.length);
+      const originalPlan = plans.find((p) => p.id === planId);
+      
+      // If we can't find the plan, or if we can't save, skip
+      if (!originalPlan || !onSavePlan) return;
+
+      // Check if time changed
+      // We need to compare against the *current* derived event for this plan
+      const originalEvent = planCalendarEvents.find((e) => e.id === event.id);
+      if (!originalEvent) return;
+
+      if (
+        originalEvent.start.getTime() === event.start.getTime() &&
+        originalEvent.end.getTime() === event.end.getTime()
+      ) {
+        return;
+      }
+
+      const formatTime = (value: Date) =>
+        `${String(value.getHours()).padStart(2, "0")}:${String(value.getMinutes()).padStart(2, "0")}`;
+
+      const scheduleSlot = `${formatTime(event.start)}-${formatTime(event.end)}`;
+
+      void onSavePlan(planId, {
+        label: originalPlan.label,
+        details: originalPlan.details ?? null,
+        deadline: originalPlan.deadline ?? null,
+        scheduleSlot,
+      });
+    });
+
+    // 4. Detect and save changed reminders
+    if (onReminderMove) {
+      nextCalendarEvents
+        .filter((e) => e.id.startsWith("reminder-"))
+        .forEach((event) => {
+          const originalEvent = calendarEvents.find((e) => e.id === event.id);
+          if (!originalEvent) return;
+
+          if (
+            originalEvent.start.getTime() === event.start.getTime() &&
+            originalEvent.end.getTime() === event.end.getTime()
+          ) {
+            return;
+          }
+
+          const reminderId = Number(event.id.replace("reminder-", ""));
+          if (!Number.isNaN(reminderId)) {
+            void onReminderMove(reminderId, { start: event.start, end: event.end });
+          }
+        });
+    }
+  }, [onCalendarEventsChange, onSavePlan, plans, planCalendarEvents, onReminderMove, calendarEvents]);
+
   return (
     <>
       {showGreeting ? (
@@ -168,12 +234,9 @@ export function GrayGeneralView({
               showHeaderControls={false}
               showHeaderDates={false}
               calendars={calendars}
-              events={calendarEvents}
-              supplementalEvents={planCalendarEvents}
+              events={mergedEvents}
               onCalendarsChange={onCalendarsChange}
-              onEventsChange={onCalendarEventsChange}
-              onEventMove={handleCalendarEventMove}
-              onTaskToggle={handleCalendarTaskToggle}
+              onEventsChange={handleCalendarEventsChange}
               selectedDate={calendarSelectedDate}
               onSelectedDateChange={onCalendarSelectedDateChange}
               maxHeight={PANEL_HEIGHT}

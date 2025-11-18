@@ -720,6 +720,7 @@ function GrayPageClientInner({
           userId={userId}
           reminderPlans={reminderPlans}
           proactivityDeliveryKeys={deliveredProactivityKeys}
+          onReminderMove={handleReminderMove}
         />
       );
     }
@@ -1483,11 +1484,7 @@ function GrayPageClientInner({
         return plan;
       });
       setReminderPlans(updated);
-      const reminderLabel = targetPlan.label || "Reminder plan";
-      void sendDashboardNotification(
-        "Plan updated",
-        `${reminderLabel} marked as ${nextCompleted ? "complete" : "active"} in today's pulse.`
-      );
+      
       apiService
         .updateReminder(user.id, reminderId, {
           status: nextCompleted ? "delivered" : "pending",
@@ -1516,10 +1513,6 @@ function GrayPageClientInner({
     );
 
     setPlans(updatedPlans);
-    void sendDashboardNotification(
-      "Plan updated",
-      `${targetPlan.label} marked as ${nextCompleted ? "complete" : "active"} in today's pulse.`
-    );
 
     apiService
       .updatePlan(user.id, planId, { completed: nextCompleted })
@@ -1621,10 +1614,6 @@ function GrayPageClientInner({
       const previousReminderPlans = reminderPlans;
       const updatedReminderPlans = previousReminderPlans.filter((plan) => plan.id !== planToDelete.id);
       setReminderPlans(updatedReminderPlans);
-      void sendDashboardNotification(
-        "Plan removed",
-        `${planToDelete.label || "Reminder plan"} removed from today's pulse.`
-      );
       apiService.deleteReminder(user.id, reminderId).catch((error) => {
         console.error("Failed to delete reminder:", error);
         setReminderPlans(previousReminderPlans);
@@ -1640,7 +1629,6 @@ function GrayPageClientInner({
     const previousPlans = plans;
     const updatedPlans = previousPlans.filter((plan) => plan.id !== planToDelete.id);
     setPlans(updatedPlans);
-    void sendDashboardNotification("Plan removed", `${planToDelete.label} removed from today's pulse.`);
 
     apiService
       .deletePlan(user.id, planId)
@@ -2168,7 +2156,7 @@ function GrayPageClientInner({
   );
   const dashboardTabAttr = isDashboardView ? dashboardTab : undefined;
 
-  const shouldShowWorkspaceBackground = true;
+  const shouldShowWorkspaceBackground = activeNav !== "general";
   const generalAttachmentsActive =
     viewMode === "general" && (attachments.length > 0 || isAttachmentUploading);
   const generalAttachmentTray = viewMode === "general"
