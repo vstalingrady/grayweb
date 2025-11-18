@@ -1484,7 +1484,7 @@ function GrayPageClientInner({
         return plan;
       });
       setReminderPlans(updated);
-      
+
       apiService
         .updateReminder(user.id, reminderId, {
           status: nextCompleted ? "delivered" : "pending",
@@ -1843,7 +1843,7 @@ function GrayPageClientInner({
       // But since we don't have the previous event object easily for plans (they are computed),
       // we can rely on re-constructing the scheduleSlot from the new event and comparing strings?
       // Or just save it. Optimistic update in `savePlan` handles de-duping/state update.
-      
+
       // Construct new schedule slot
       const formatTime = (value: Date) =>
         `${String(value.getHours()).padStart(2, "0")}:${String(value.getMinutes()).padStart(2, "0")}`;
@@ -1882,9 +1882,11 @@ function GrayPageClientInner({
       }
     });
 
-    // 4. Update Calendar State (Standard + Reminders)
-    // We exclude plans because they live in `plans` state, not `calendarEvents` state.
-    const nextStateEvents = [...standardEvents, ...reminderEvents];
+    // 4. Update Calendar State (Standard + Reminders + Plans)
+    // We need to preserve plan events in the calendar state to prevent them from disappearing
+    // when events are clicked or moved. Plan data lives in `plans` state, but the calendar
+    // events derived from plans need to remain in calendarEvents for rendering.
+    const nextStateEvents = [...standardEvents, ...reminderEvents, ...planEvents];
     const previousEvents = calendarEvents;
     setCalendarEvents(nextStateEvents);
 
