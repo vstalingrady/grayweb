@@ -4309,7 +4309,7 @@
   );
   max-width: 720px;
   margin-bottom: env(safe-area-inset-bottom, 0px);
-  padding: 0 clamp(10px, 2vw, 18px);
+  padding: 0 clamp(10px, 2vw, 18px) 12px;
 }
 
 @supports (-webkit-background-clip: text) or (background-clip: text) {

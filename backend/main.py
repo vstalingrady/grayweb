@@ -1,7 +1,7 @@
 import logging
 import socket
 import asyncio
-from fastapi import FastAPI, HTTPException, Depends, status, File, Form, Query, UploadFile, Response
+from fastapi import FastAPI, HTTPException, Depends, status, File, Form, Query, UploadFile, Response, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import StreamingResponse
@@ -103,6 +103,7 @@ def _int_env(var_name: str, default: int) -> int:
 
 
 AI_PROVIDER = (os.getenv("AI_PROVIDER") or "gemini").strip().lower()
+GUMROAD_WEBHOOK_SECRET = os.getenv("GUMROAD_WEBHOOK_SECRET") or None
 
 GEMINI_SERVICE = GeminiService()
 ANTHROPIC_SERVICE = AnthropicService()
@@ -532,6 +533,7 @@ class UserBase(BaseModel):
     full_name: str
     profile_picture_url: Optional[str] = None
     role: str = "user"
+    plan_tier: Optional[str] = None
 
 class UserCreate(UserBase):
     pass
@@ -540,6 +542,7 @@ class UserUpdate(BaseModel):
     full_name: Optional[str] = None
     profile_picture_url: Optional[str] = None
     role: Optional[str] = None
+    plan_tier: Optional[str] = None
 
 class User(UserBase):
     id: int
@@ -938,7 +941,7 @@ if SUPABASE_URL and SUPABASE_KEY and SUPABASE_URL != "your_supabase_url_here":
     if supabase is not None:
         source_label = SUPABASE_KEY_SOURCE or "SUPABASE_KEY"
         print(f"Supabase client initialized successfully (source: {source_label}).")
-        if SUPABASE_KEY_SOURCE == "SUPABASE_ANON_KEY":
+        if SUPABASE_KEY_SOURCE in {"SUPABASE_ANON_KEY", "NEXT_PUBLIC_SUPABASE_ANON_KEY"}:
             print("Warning: Using SUPABASE_ANON_KEY may limit write operations; configure a service-role key for full functionality.")
     else:
         print("Warning: Failed to initialize Supabase client via helper; conversation history disabled.")
@@ -1501,6 +1504,78 @@ def _datetime_to_ms(value: Optional[datetime]) -> int:
     return int(aware.timestamp() * 1000)
 
 
+@app.post("/api/payments/gumroad")
+async def gumroad_webhook(request: Request, db: databases.Database = Depends(get_database)):
+    """
+    Handle Gumroad webhook / ping events.
+
+    On a successful, non-refunded purchase we mark the associated user as a
+    premium ("Depth") member by setting `plan_tier = 'depth'` on the user row.
+    Gumroad is expected to send `custom_id` containing the local user id.
+    """
+    form = await request.form()
+
+    # Basic shared-secret validation; if no secret is configured locally,
+    # accept the ping but avoid mutating state.
+    configured_secret = GUMROAD_WEBHOOK_SECRET
+    incoming_secret = form.get("secret")
+    if configured_secret and incoming_secret != configured_secret:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid webhook signature")
+
+    custom_id = form.get("custom_id")
+    if not custom_id:
+        # Nothing to associate with a local user; acknowledge without changes.
+        return {"ok": True}
+
+    try:
+        user_id = int(str(custom_id).strip())
+    except (TypeError, ValueError):
+        return {"ok": True}
+
+    refunded_flag = str(form.get("refunded", "")).lower() == "true"
+    success_flag = str(form.get("success", "")).lower() in {"true", "1"}
+    sale_kind = (form.get("sale_kind") or form.get("resource_name") or "").lower()
+
+    is_charge_event = sale_kind in {"sale", "subscription_payment", "recurring_subscription_payment"} or not sale_kind
+    should_activate = success_flag and is_charge_event and not refunded_flag
+
+    if not should_activate:
+        # For now we ignore refunds / cancellations; downgrade logic can be
+        # added later once product behavior is finalized.
+        return {"ok": True}
+
+    try:
+        await db.execute(
+            users.update()
+            .where(users.c.id == user_id)
+            .values(
+                plan_tier="depth",
+                updated_at=datetime.utcnow(),
+            )
+        )
+    except Exception as error:
+        api_logger.error(
+            "Failed to update user plan from Gumroad webhook",
+            exc_info=True,
+            extra={
+                "event_type": "gumroad_webhook_error",
+                "user_id": user_id,
+                "error": str(error),
+            },
+        )
+        # Do not surface internal errors to Gumroad; just acknowledge receipt.
+        return {"ok": False}
+
+    api_logger.info(
+        "Upgraded user via Gumroad webhook",
+        extra={
+            "event_type": "gumroad_webhook_upgrade",
+            "user_id": user_id,
+        },
+    )
+    return {"ok": True}
+
+
 def _normalize_plan_items(raw: Any) -> List[Dict[str, Any]]:
     normalized: List[Dict[str, Any]] = []
     if not isinstance(raw, list):
@@ -1796,20 +1871,36 @@ def _merge_extra_contents(*lists: Optional[List[types.Content]]) -> Optional[Lis
 def _normalize_conversation_history(history: Optional[List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
   if not history:
     return []
+
   normalized: List[Dict[str, Any]] = []
+  last_role: Optional[str] = None
+  last_text: Optional[str] = None
+
   for entry in history:
     raw_role = entry.get("role")
     if not raw_role:
       continue
+
     role = "model" if raw_role == "assistant" else raw_role
     if role not in {"user", "model"}:
       continue
+
+    text = entry.get("text") or ""
+
+    # Deduplicate consecutive identical messages so that if the same user
+    # message is accidentally persisted twice, it only influences context once.
+    if last_role == role and last_text == text:
+      continue
+
     normalized.append(
       {
         "role": role,
-        "text": entry.get("text") or "",
+        "text": text,
       }
     )
+    last_role = role
+    last_text = text
+
   return normalized
 
 
@@ -2748,7 +2839,9 @@ async def stream_ai_response(
             if accumulated:
                 yield ("final", final_payload)
                 return
-            raise RuntimeError("AI response was empty")
+            # Fallback for empty response (e.g. safety blocks)
+            yield ("final", {"text": "I'm unable to generate a response for that request.", "grounding_metadata": grounding_metadata})
+            return
         except Exception as gemini_error:  # pragma: no cover - best effort logging
             print(f"[Gemini] Streaming failed: {gemini_error}")
             raise
@@ -3246,13 +3339,21 @@ async def chat_with_ai(request: ChatRequest, db: databases.Database = Depends(ge
         # Get conversation history for context
         conversation_history: List[Dict[str, Any]] = await _load_conversation_history(conversation_id)
 
-        # Save user message to local conversation store (after capturing prior history)
+        # Save user message to local conversation store (after capturing prior history),
+        # but avoid writing an identical message twice in a row (e.g., when a fallback
+        # request replays the same prompt after a streaming failure).
         user_message_payload: Dict[str, Any] = {
             "role": "user",
             "text": request.message
         }
-
-        await save_conversation_message(conversation_id, user_message_payload, user_id=request.user_id)
+        last_history_entry: Optional[Dict[str, Any]] = conversation_history[-1] if conversation_history else None
+        should_persist_user = not (
+            last_history_entry
+            and last_history_entry.get("role") in {"user", "assistant", "model"}
+            and (last_history_entry.get("text") or "") == request.message
+        )
+        if should_persist_user:
+            await save_conversation_message(conversation_id, user_message_payload, user_id=request.user_id)
 
         # Generate AI response
         ai_response, grounding_metadata = await generate_ai_response(
@@ -3387,7 +3488,14 @@ async def chat_with_ai_stream(request: ChatRequest, db: databases.Database = Dep
             "text": request.message,
         }
 
-        await save_conversation_message(conversation_id, user_message_payload, user_id=request.user_id)
+        last_history_entry: Optional[Dict[str, Any]] = conversation_history[-1] if conversation_history else None
+        should_persist_user = not (
+            last_history_entry
+            and last_history_entry.get("role") in {"user", "assistant", "model"}
+            and (last_history_entry.get("text") or "") == request.message
+        )
+        if should_persist_user:
+            await save_conversation_message(conversation_id, user_message_payload, user_id=request.user_id)
 
         async def event_stream() -> AsyncGenerator[str, None]:
             nonlocal session_title
@@ -3845,6 +3953,7 @@ async def create_user(user: UserCreate, db: databases.Database = Depends(get_dat
         full_name=user.full_name,
         profile_picture_url=user.profile_picture_url,
         role=user.role,
+        plan_tier=user.plan_tier,
         initials=initials,
         created_at=now,
         updated_at=now
@@ -4701,7 +4810,7 @@ async def create_calendar_event(user_id: int, event: CalendarEventCreate, db: da
         end_time=event.end_time
     )
     event_id = await db.execute(query)
-    return {**event.dict(), "id": event_id, "user_id": user_id}
+    return {**event.dict(), "id": event_id, "user_id": user_id, "created_at": now}
 
 
 # Dashboard API endpoints
