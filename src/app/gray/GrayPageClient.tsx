@@ -50,6 +50,8 @@ import {
   type WorkspaceBackgroundOption,
   type WorkspaceBackgroundDraft,
   GREAT_WAVE_BACKGROUND,
+  SOLID_WHITE_BACKGROUND,
+  SOLID_BLACK_BACKGROUND,
 } from "@/components/gray/PersonalizationPanel";
 import { useProactivityNotifications } from "@/components/gray/ProactivityNotificationProvider";
 import { GrayChatView } from "@/components/gray/ChatView";
@@ -487,6 +489,8 @@ function GrayPageClientInner({
   const [contextUsageSummary, setContextUsageSummary] = useState<ContextUsageSummary | null>(null);
   const [calendarSelectedDate, setCalendarSelectedDate] = useState<Date>(() => new Date(initialTimestamp));
   const [workspaceBackgrounds, setWorkspaceBackgrounds] = useState<WorkspaceBackgroundOption[]>([
+    SOLID_WHITE_BACKGROUND,
+    SOLID_BLACK_BACKGROUND,
     GREAT_WAVE_BACKGROUND,
   ]);
   const [workspaceBackgroundId, setWorkspaceBackgroundId] = useState<string>(() =>
@@ -583,11 +587,11 @@ function GrayPageClientInner({
           source: "database" as const,
         }))
         .filter((option) => option.id !== GREAT_WAVE_BACKGROUND.id);
-      setWorkspaceBackgrounds([GREAT_WAVE_BACKGROUND, ...dynamicOptions]);
+      setWorkspaceBackgrounds([SOLID_WHITE_BACKGROUND, SOLID_BLACK_BACKGROUND, GREAT_WAVE_BACKGROUND, ...dynamicOptions]);
     } catch (error) {
       console.error("Failed to load workspace backgrounds:", error);
       setWorkspaceBackgroundsError(error instanceof Error ? error.message : "Failed to load backgrounds");
-      setWorkspaceBackgrounds((current) => (current.length > 0 ? current : [GREAT_WAVE_BACKGROUND]));
+      setWorkspaceBackgrounds((current) => (current.length > 0 ? current : [SOLID_WHITE_BACKGROUND, SOLID_BLACK_BACKGROUND, GREAT_WAVE_BACKGROUND]));
     } finally {
       setWorkspaceBackgroundsLoading(false);
     }
