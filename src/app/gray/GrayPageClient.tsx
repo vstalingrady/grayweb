@@ -1821,9 +1821,72 @@ function GrayPageClientInner({
     }
   };
 
-  const handleEventsChange = async (nextEvents: CalendarEvent[]) => {
+  const handleEventsChange = async (allEvents: CalendarEvent[]) => {
+    // Define prefix locally to match planCalendarUtils
+    const PLAN_EVENT_ID_PREFIX = "plan-event-";
+
+    // 1. Separate events by type
+    const planEvents = allEvents.filter((e) => e.id.startsWith(PLAN_EVENT_ID_PREFIX));
+    const reminderEvents = allEvents.filter((e) => e.id.startsWith("reminder-"));
+    const standardEvents = allEvents.filter(
+      (e) => !e.id.startsWith(PLAN_EVENT_ID_PREFIX) && !e.id.startsWith("reminder-")
+    );
+
+    // 2. Handle Plans (Update schedule)
+    // We compare against current `plans` state to see if schedule changed
+    planEvents.forEach((event) => {
+      const planId = event.id.slice(PLAN_EVENT_ID_PREFIX.length);
+      const originalPlan = plans.find((p) => p.id === planId);
+      if (!originalPlan) return;
+
+      // We need to parse the existing scheduleSlot to compare times
+      // But since we don't have the previous event object easily for plans (they are computed),
+      // we can rely on re-constructing the scheduleSlot from the new event and comparing strings?
+      // Or just save it. Optimistic update in `savePlan` handles de-duping/state update.
+      
+      // Construct new schedule slot
+      const formatTime = (value: Date) =>
+        `${String(value.getHours()).padStart(2, "0")}:${String(value.getMinutes()).padStart(2, "0")}`;
+      const newScheduleSlot = `${formatTime(event.start)}-${formatTime(event.end)}`;
+
+      if (originalPlan.scheduleSlot === newScheduleSlot) {
+        return;
+      }
+
+      void savePlan(planId, {
+        label: originalPlan.label,
+        details: originalPlan.details ?? null,
+        deadline: originalPlan.deadline ?? null,
+        scheduleSlot: newScheduleSlot,
+      });
+    });
+
+    // 3. Handle Reminders (Update remind_at)
+    reminderEvents.forEach((event) => {
+      const originalEvent = calendarEvents.find((e) => e.id === event.id);
+      // If start/end didn't change, skip
+      if (
+        originalEvent &&
+        originalEvent.start.getTime() === event.start.getTime() &&
+        originalEvent.end.getTime() === event.end.getTime()
+      ) {
+        return;
+      }
+
+      const reminderId = Number(event.id.replace("reminder-", ""));
+      if (!Number.isNaN(reminderId) && user) {
+        // Update API
+        apiService.updateReminder(user.id, reminderId, {
+          remind_at: event.start.toISOString(),
+        }).catch(err => console.error("Failed to update reminder time", err));
+      }
+    });
+
+    // 4. Update Calendar State (Standard + Reminders)
+    // We exclude plans because they live in `plans` state, not `calendarEvents` state.
+    const nextStateEvents = [...standardEvents, ...reminderEvents];
     const previousEvents = calendarEvents;
-    setCalendarEvents(nextEvents);
+    setCalendarEvents(nextStateEvents);
 
     if (!user) {
       return;
@@ -1843,17 +1906,18 @@ function GrayPageClientInner({
     };
 
     // Find deleted events (in previous but not in next)
+    // Only consider standard/reminder events for deletion detection against previous state
     const deletedEventIds = previousEvents
-      .filter(prev => !nextEvents.find(next => next.id === prev.id))
+      .filter(prev => !nextStateEvents.find(next => next.id === prev.id))
       .map(event => event.id);
 
     // Find new events (in next but not in previous)
-    const newEvents = nextEvents.filter(
+    const newEvents = nextStateEvents.filter(
       next => !previousEvents.find(prev => prev.id === next.id)
     );
 
     // Find updated events (in both, but with different data)
-    const updatedEvents = nextEvents.filter(next => {
+    const updatedEvents = nextStateEvents.filter(next => {
       const prev = previousEvents.find(p => p.id === next.id);
       if (!prev) return false;
       return (
@@ -1879,13 +1943,15 @@ function GrayPageClientInner({
         }
       } else if (eventId.startsWith('evt-')) {
         // Temporary event - just remove from local state
-        // No need to call API
         console.log("Removing temporary event:", eventId);
       }
+      // Note: Reminders (NaN ID) are ignored here, which is correct as they shouldn't be deleted via this handler
     }
 
     // Create new events
     for (const event of newEvents) {
+      if (event.id.startsWith("reminder-")) continue; // Skip creating reminders as events
+
       const numericCalendarId = event.calendarId ? Number(event.calendarId) : null;
       if (!Number.isNaN(numericCalendarId) || event.calendarId === "default") {
         try {
@@ -1911,6 +1977,8 @@ function GrayPageClientInner({
 
     // Update existing events
     for (const event of updatedEvents) {
+      if (event.id.startsWith("reminder-")) continue; // handled in step 3
+
       const numericEventId = Number(event.id);
       const numericCalendarId = event.calendarId ? Number(event.calendarId) : null;
       if (!Number.isNaN(numericEventId) && (!Number.isNaN(numericCalendarId) || event.calendarId === "default")) {
