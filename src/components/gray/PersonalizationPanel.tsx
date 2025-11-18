@@ -9,6 +9,11 @@ import type { ContextUsageSummary } from "@/components/gray/types";
 import { useUser } from "@/contexts/UserContext";
 import { useChatStore } from "@/components/gray/ChatProvider";
 
+type ApiStatus = {
+  tone: "idle" | "loading" | "success" | "error";
+  message?: string;
+};
+
 type PersonalizationPanelProps = {
   onClose: () => void;
   viewerName: string;
@@ -75,6 +80,25 @@ export const GREAT_WAVE_BACKGROUND: WorkspaceBackgroundOption = {
     "url('https://upload.wikimedia.org/wikipedia/commons/a/a5/Tsunami_by_hokusai_19th_century.jpg') center / cover no-repeat",
   source: "builtin",
 };
+
+export const SOLID_WHITE_BACKGROUND: WorkspaceBackgroundOption = {
+  id: "solid-white",
+  label: "Clean White",
+  description: "Minimalist and bright.",
+  previewStyle: "#ffffff",
+  backdropStyle: "#ffffff",
+  source: "builtin",
+};
+
+export const SOLID_BLACK_BACKGROUND: WorkspaceBackgroundOption = {
+  id: "solid-black",
+  label: "Deep Black",
+  description: "Focus and contrast.",
+  previewStyle: "#000000",
+  backdropStyle: "#000000",
+  source: "builtin",
+};
+
 const MAX_CUSTOM_INSTRUCTION_FILE_BYTES = 512 * 1024;
 const CUSTOM_INSTRUCTION_FILE_ACCEPT =
   ".txt,.md,.json,text/plain,application/json";
@@ -114,6 +138,7 @@ export function PersonalizationPanel({
   // Derived context usage display metadata from backend payload only.
   const contextProviderLabel = formatContextLabel(contextUsage);
 
+  const hasContextUsage = Boolean(contextUsage);
   const contextLimit = typeof contextUsage?.limit === "number" ? contextUsage.limit : 0;
   const contextTokensUsed =
     typeof contextUsage?.conversationTokens === "number"
@@ -130,24 +155,20 @@ export function PersonalizationPanel({
       ? Math.max(0, Math.min(100, (contextTokensUsed / effectiveContextLimit) * 100))
       : 0;
   const contextPercentLabel = `${Math.round(contextPercent)}%`;
-  const contextLimitLabel = hasFiniteLimit
-    ? `${formatNumber(contextLimit)} total tokens`
-    : `Unlimited context (visualized against ${formatNumber(DEFAULT_CONTEXT_LIMIT)} tokens)`;
+  const contextLimitLabel = hasContextUsage
+    ? hasFiniteLimit
+      ? `${formatNumber(contextLimit)} total tokens`
+      : `Unlimited context (visualized against ${formatNumber(DEFAULT_CONTEXT_LIMIT)} tokens)`
+    : "";
   const contextFooterLabel = hasFiniteLimit
     ? `${formatNumber(contextTokensRemaining)} tokens left`
     : "No cap active";
   const contextMeterValueText = hasFiniteLimit
     ? `${formatNumber(contextTokensUsed)} of ${formatNumber(contextLimit)} tokens used`
     : `${formatNumber(contextTokensUsed)} tokens used while limit is unlimited`;
-  const contextMeterDescription = contextUsage
-    ? contextMeterValueText
-    : "No context captured yet";
-  const contextFooterDescription = contextUsage
-    ? contextFooterLabel
-    : "Start a conversation to build context.";
-  const contextMessagesLabel = contextUsage
-    ? `${contextUsage.messageCount.toLocaleString()} messages`
-    : "No messages yet";
+  const contextMeterDescription = hasContextUsage ? contextMeterValueText : "";
+  const contextFooterDescription = hasContextUsage ? contextFooterLabel : "";
+  const contextMessagesLabel = hasContextUsage ? `${contextUsage.messageCount.toLocaleString()} messages` : "";
   const contextTokensLabel = contextUsage
     ? `${contextTokensUsed.toLocaleString()} tokens`
     : "0 tokens";
@@ -155,7 +176,14 @@ export function PersonalizationPanel({
   const { updateUser: updateUserProfile } = useUser();
   const interests = useMemo(() => ["Systems", "Wellness"], []);
   const traits = useMemo(() => TRAIT_PRESETS, []);
-  const resolvedBackgroundOptions = backgroundOptions.length > 0 ? backgroundOptions : [GREAT_WAVE_BACKGROUND];
+  const resolvedBackgroundOptions = useMemo(
+    () => [
+      SOLID_WHITE_BACKGROUND,
+      SOLID_BLACK_BACKGROUND,
+      ...backgroundOptions,
+    ],
+    [backgroundOptions]
+  );
   const [nickname, setNickname] = useState(() => profileNickname ?? "");
   const [occupation, setOccupation] = useState(() => profileOccupation ?? "");
   const [moreAboutYou, setMoreAboutYou] = useState(() => profileAbout ?? "");
@@ -190,17 +218,17 @@ export function PersonalizationPanel({
     };
   }, [onClose]);
 
-    // Keep nickname in sync with the saved profile value only.
-    // Do NOT overwrite it with viewerName, otherwise it keeps snapping back.
+  // Keep nickname in sync with the saved profile value only.
+  // Do NOT overwrite it with viewerName, otherwise it keeps snapping back.
   useEffect(() => {
     if (typeof profileNickname === "string") {
       setNickname(profileNickname);
     } else {
-        // If there is no saved nickname yet, fall back to the current input value
-        // and do NOT auto-inject viewerName, so user edits are preserved.
-        setNickname((current) => (current === "" ? "" : current));
-      }
-    }, [profileNickname]);
+      // If there is no saved nickname yet, fall back to the current input value
+      // and do NOT auto-inject viewerName, so user edits are preserved.
+      setNickname((current) => (current === "" ? "" : current));
+    }
+  }, [profileNickname]);
 
   useEffect(() => {
     // Only use the saved profile occupation; do NOT auto-fill from role.
@@ -448,8 +476,8 @@ export function PersonalizationPanel({
       await onCreateBackground({
         assetFile: newBackgroundFile ?? undefined,
       });
-    setBackgroundSaveState({ tone: "success", message: "Background added" });
-    resetBackgroundFileState();
+      setBackgroundSaveState({ tone: "success", message: "Background added" });
+      resetBackgroundFileState();
     } catch (error) {
       setBackgroundSaveState({
         tone: "error",
@@ -567,7 +595,7 @@ export function PersonalizationPanel({
                   className={styles.personalizationToggle}
                   data-active={webSearchEnabled ? "true" : "false"}
                   aria-pressed={webSearchEnabled}
-                  onClick={() => setWebSearchEnabled((previous) => !previous)}
+                  onClick={() => setWebSearchEnabled(!webSearchEnabled)}
                 >
                   <span>
                     <span>Web search</span>
@@ -587,10 +615,12 @@ export function PersonalizationPanel({
                 </div>
                 <div className={styles.personalizationContextPercentRow}>
                   <span className={styles.personalizationContextPercent}>{contextPercentLabel}</span>
-                  <span className={styles.personalizationContextPercentHint}>{contextMeterDescription}</span>
+                  {contextMeterDescription ? (
+                    <span className={styles.personalizationContextPercentHint}>{contextMeterDescription}</span>
+                  ) : null}
                 </div>
                 <div className={styles.personalizationContextStats}>
-                  <span>{contextMessagesLabel}</span>
+                  {contextMessagesLabel ? <span>{contextMessagesLabel}</span> : null}
                   <span>{contextTokensLabel}</span>
                 </div>
                 <div
@@ -607,8 +637,8 @@ export function PersonalizationPanel({
                   />
                 </div>
                 <div className={styles.personalizationContextFooter}>
-                  <span>{contextLimitLabel}</span>
-                  <span>{contextFooterDescription}</span>
+                  {contextLimitLabel ? <span>{contextLimitLabel}</span> : null}
+                  {contextFooterDescription ? <span>{contextFooterDescription}</span> : null}
                 </div>
               </div>
             </section>

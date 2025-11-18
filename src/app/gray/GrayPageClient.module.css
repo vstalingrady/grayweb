@@ -412,13 +412,13 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
-  color: rgba(240, 240, 245, 0.92);
+  color: rgba(240, 240, 240, 0.92);
   font-size: 0.82rem;
   letter-spacing: 0.02em;
 }
 
 .profileMenuLabelGroup span:last-child {
-  color: rgba(220, 220, 230, 0.56);
+  color: rgba(220, 220, 220, 0.56);
   font-size: 0.68rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -428,7 +428,7 @@
   font-size: 0.82rem;
   letter-spacing: 0.06em;
   font-weight: 600;
-  color: rgba(246, 246, 250, 0.95);
+  color: rgba(246, 246, 246, 0.95);
   display: block;
   line-height: 1.1;
 }
@@ -497,7 +497,7 @@
   font-size: clamp(1.6rem, 4vw, 2.2rem);
   font-weight: 500;
   letter-spacing: 0.04em;
-  color: rgba(242, 242, 246, 0.96);
+  color: rgba(242, 242, 242, 0.96);
   margin: 0;
 }
 
@@ -505,7 +505,7 @@
   font-size: 0.68rem;
   letter-spacing: 0.32em;
   text-transform: uppercase;
-  color: rgba(220, 220, 230, 0.55);
+  color: rgba(220, 220, 220, 0.55);
   margin-bottom: 6px;
 }
 
@@ -514,7 +514,7 @@
   font-size: 0.78rem;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: rgba(214, 214, 226, 0.58);
+  color: rgba(214, 214, 214, 0.58);
   margin-top: 6px;
 }
 
@@ -527,14 +527,14 @@
   border-radius: 12px;
   border: none;
   background: rgba(255, 255, 255, 0.08);
-  color: rgba(250, 250, 252, 0.86);
+  color: rgba(250, 250, 250, 0.86);
   cursor: pointer;
 }
 
 .personalizationPanel button {
   background: rgba(255, 255, 255, 0.04);
   border-color: rgba(255, 255, 255, 0.25);
-  color: rgba(246, 246, 248, 0.92);
+  color: rgba(246, 246, 246, 0.92);
   box-shadow: none;
 }
 
@@ -578,28 +578,28 @@
   font-size: 1rem;
   font-weight: 500;
   letter-spacing: 0.04em;
-  color: rgba(242, 244, 248, 0.92);
+  color: rgba(242, 242, 242, 0.92);
 }
 
 .personalizationCardHeader p {
   margin: 6px 0 0;
   font-size: 0.78rem;
   letter-spacing: 0.04em;
-  color: rgba(214, 214, 226, 0.58);
+  color: rgba(214, 214, 214, 0.58);
 }
 
 .personalizationSectionLabel {
   text-transform: uppercase;
   font-size: 0.62rem;
   letter-spacing: 0.3em;
-  color: rgba(205, 208, 222, 0.6);
+  color: rgba(205, 205, 205, 0.6);
   margin: 0;
 }
 
 .personalizationHint {
   margin: 4px 0 0;
   font-size: 0.74rem;
-  color: rgba(188, 192, 208, 0.72);
+  color: rgba(188, 188, 188, 0.72);
 }
 
 .personalizationTraitHeader {
@@ -637,7 +637,7 @@
   font-size: 0.68rem;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: rgba(226, 226, 236, 0.75);
+  color: rgba(226, 226, 226, 0.75);
 }
 
 .personalizationTraitList {
@@ -658,7 +658,7 @@
   justify-content: space-between;
   font-size: 0.78rem;
   letter-spacing: 0.04em;
-  color: rgba(232, 232, 238, 0.78);
+  color: rgba(232, 232, 232, 0.78);
 }
 
 .personalizationTraitBar {
@@ -687,7 +687,7 @@
   font-size: 0.76rem;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: rgba(210, 210, 222, 0.6);
+  color: rgba(210, 210, 210, 0.6);
 }
 
 .personalizationField {
@@ -695,7 +695,7 @@
   border-radius: 14px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(18, 18, 22, 0.86);
-  color: rgba(234, 234, 242, 0.88);
+  color: rgba(234, 234, 234, 0.88);
   font-size: 0.85rem;
   line-height: 1.4;
 }
@@ -712,7 +712,7 @@
   font-size: 0.75rem;
   letter-spacing: 0.35em;
   text-transform: uppercase;
-  color: rgba(215, 215, 228, 0.78);
+  color: rgba(215, 215, 215, 0.78);
 }
 
 .reminderCheckboxInput {
@@ -780,7 +780,7 @@
   border-radius: 14px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(255, 255, 255, 0.03);
-  color: rgba(234, 234, 244, 0.88);
+  color: rgba(234, 234, 234, 0.88);
   font-size: 0.85rem;
   letter-spacing: 0.02em;
   cursor: pointer;
@@ -794,7 +794,7 @@
 .personalizationToggleHint {
   display: block;
   font-size: 0.72rem;
-  color: rgba(203, 206, 220, 0.62);
+  color: rgba(203, 203, 203, 0.62);
 }
 
 .personalizationSwitch {
@@ -887,7 +887,7 @@
   font-size: 0.68rem;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: rgba(205, 208, 222, 0.6);
+  color: rgba(205, 205, 205, 0.6);
 }
 
 .personalizationBackgroundControlRow {
@@ -925,7 +925,7 @@
 .personalizationBackgroundSub {
   margin: 0;
   font-size: 0.7rem;
-  color: rgba(205, 208, 222, 0.62);
+  color: rgba(205, 205, 205, 0.62);
   line-height: 1.5;
 }
 
@@ -959,7 +959,7 @@
 
 .personalizationBackgroundFileName {
   font-size: 0.78rem;
-  color: rgba(205, 208, 222, 0.7);
+  color: rgba(205, 205, 205, 0.7);
   max-width: 220px;
   word-break: break-word;
 }
@@ -1175,7 +1175,7 @@
 
 .personalizationFormStatus {
   font-size: 0.78rem;
-  color: rgba(203, 206, 220, 0.8);
+  color: rgba(203, 203, 203, 0.8);
 }
 
 .personalizationFormStatus[data-status="success"] {
@@ -7389,7 +7389,7 @@ h1.greeting {
   padding: 0;
   border: none;
   background: transparent;
-  color: rgba(232, 232, 238, 0.9);
+  color: rgba(232, 232, 232, 0.9);
   text-align: left;
   cursor: pointer;
   min-width: 0;
