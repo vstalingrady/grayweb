@@ -173,7 +173,18 @@ export function PersonalizationPanel({
     ? `${contextTokensUsed.toLocaleString()} tokens`
     : "0 tokens";
 
-  const { updateUser: updateUserProfile } = useUser();
+  const { user, updateUser: updateUserProfile } = useUser();
+  const mapsEnabled = user?.maps_enabled ?? false;
+
+  const handleMapsToggle = async () => {
+    if (!user?.id) return;
+    try {
+      await updateUserProfile({ maps_enabled: !mapsEnabled });
+    } catch (e) {
+      console.error("Failed to toggle maps", e);
+    }
+  };
+
   const interests = useMemo(() => ["Systems", "Wellness"], []);
   const traits = useMemo(() => TRAIT_PRESETS, []);
   const resolvedBackgroundOptions = useMemo(
@@ -598,6 +609,22 @@ export function PersonalizationPanel({
                     <span className={styles.personalizationToggleHint}>Let Gray search for answers automatically.</span>
                   </span>
                   <span className={styles.personalizationSwitch} data-active={webSearchEnabled ? "true" : "false"}>
+                    <span />
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  className={styles.personalizationToggle}
+                  data-active={mapsEnabled ? "true" : "false"}
+                  aria-pressed={mapsEnabled}
+                  onClick={handleMapsToggle}
+                >
+                  <span>
+                    <span>Maps</span>
+                    <span className={styles.personalizationToggleHint}>Enable location-based features.</span>
+                  </span>
+                  <span className={styles.personalizationSwitch} data-active={mapsEnabled ? "true" : "false"}>
                     <span />
                   </span>
                 </button>
