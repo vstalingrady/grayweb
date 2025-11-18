@@ -255,17 +255,23 @@ export function GrayDashboardCalendar({
   const weekLayouts = useMemo(() => {
     return weekDays.map((day) => {
       const dayEventsForWeek = visibleEvents.filter((event) => isSameDay(event.start, day));
-      const eventsWithPreview = draftPreview
+      const mappedEvents = draftPreview
         ? dayEventsForWeek.map((event) =>
           event.id === draftPreview.id
-            ? { ...event, start: ensureDateZone(draftPreview.start), end: ensureDateZone(draftPreview.end) }
+            ? {
+              ...event,
+              start: ensureDateZone(draftPreview.start),
+              end: ensureDateZone(draftPreview.end),
+            }
             : event
         )
         : dayEventsForWeek;
 
+      const eventsWithPreview = mappedEvents.filter((event) => isSameDay(event.start, day));
+
       // Also add the draft preview if it belongs to this day
-      if (draftPreview && !dayEventsForWeek.some(e => e.id === draftPreview.id)) {
-        const draftEvent = visibleEvents.find(e => e.id === draftPreview.id);
+      if (draftPreview && !dayEventsForWeek.some((e) => e.id === draftPreview.id)) {
+        const draftEvent = visibleEvents.find((e) => e.id === draftPreview.id);
         if (draftEvent && isSameDay(draftPreview.start, day)) {
           eventsWithPreview.push({
             ...draftEvent,
@@ -627,7 +633,9 @@ export function GrayDashboardCalendar({
                       </>
                     )}
                     {weekLayouts[columnIndex]?.map((event) => {
-                      const eventWithColumn = { ...event, column: columnIndex };
+                      // Derive column from the weekDays array to ensure it's always correct
+                      const eventDay = weekDays.findIndex(day => isSameDay(event.start, day));
+                      const eventWithColumn = { ...event, column: eventDay >= 0 ? eventDay : columnIndex };
                       return (
                         <EventCard
                           key={event.id}
