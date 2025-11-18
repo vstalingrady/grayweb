@@ -1935,6 +1935,11 @@ function GrayPageClientInner({
             end_time: event.end.toISOString(),
           });
         } catch (error) {
+          // If event doesn't exist in database (404), skip the API call and keep optimistic update
+          if (error instanceof Error && error.message.includes("Not Found")) {
+            console.log(`Event ${event.id} not found in database, keeping as client-side only`);
+            continue;
+          }
           logCalendarSyncError("update calendar event", error);
           revertCalendarState();
           return;
