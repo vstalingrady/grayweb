@@ -1,7 +1,9 @@
 "use client";
 
 import {
+  Children,
   FormEvent,
+  isValidElement,
   memo,
   useCallback,
   useEffect,
@@ -21,6 +23,7 @@ type CodeComponent = any;
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
+import remarkGrayLatex from "@/lib/remarkGrayLatex";
 import styles from "@/app/gray/GrayPageClient.module.css";
 import Image from "next/image";
 import { GrayChatComposer } from "./ChatComposer";
@@ -32,6 +35,7 @@ import {
   normalizeAssistantContent,
   deriveTitleFromMessage,
   normalizeConversationIdValue,
+  buildGeneralConversationId,
   extractGrayRemindersFromText,
   stripGrayTitleMarkers,
   type ChatMessage as ChatSessionMessage,
@@ -45,10 +49,11 @@ import AttachmentTray from "./AttachmentTray";
 const LEGACY_REMINDER_SNIPPET_REGEX = /```[a-z0-9_-]*[\s\S]*?(gray[\s\S]{0,120}?reminder)[\s\S]*?```/gi;
 
 const MARKDOWN_PLUGINS: any = [
-  // Rely on explicit math markers (`\(…\)`, `\[…\]`) and our own
-  // `$…$` pre-processing to avoid treating currency like `$20` as math.
+  // Rely on explicit math markers and convert them into KaTeX-friendly
+  // dollar fences so currency like `$20` stays untouched.
   [remarkMath, { singleDollarTextMath: false }],
   remarkGfm,
+  remarkGrayLatex,
 ];
 
 const INLINE_LATEX_REGEX = /\\\(([\s\S]+?)\\\)/g;
@@ -57,49 +62,53 @@ const INLINE_DOLLAR_LATEX_REGEX = /\$([^\n$]+?)\$/g;
 const DISPLAY_DOLLAR_LATEX_REGEX = /\$\$([\s\S]+?)\$\$/g;
 const MIN_TILDE_FENCE_LENGTH = 3;
 
+const wrapDisplayMathBlock = (content: string): string => {
+  const normalized = content.trim();
+  if (!normalized) {
+    return "";
+  }
+  return `\n\n$$\n${normalized}\n$$\n\n`;
+};
+
+const wrapInlineMath = (content: string): string => {
+  const normalized = content.trim();
+  if (!normalized) {
+    return "";
+  }
+  return `$$${normalized}$$`;
+};
+
 const normalizeLatexSegment = (segment: string): string => {
   if (!segment) {
     return segment;
   }
   let updated = segment;
 
-  // Normalize block math written as `$$ ... $$` into `\[ ... \]`
-  // so remark-math / rehype-katex can render it reliably.
+  // Normalize block math written as `$$ ... $$` into fenced blocks so
+  // remark-math / rehype-katex can render it reliably.
   updated = updated.replace(DISPLAY_DOLLAR_LATEX_REGEX, (_match, content: string) => {
-    const normalized = content.trim();
-    if (!normalized) {
-      return "";
-    }
-    return `\n\n\\[${normalized}\\]\n\n`;
+    const wrapped = wrapDisplayMathBlock(content);
+    return wrapped;
   });
 
-  // Normalize inline math written as `$ ... $` into `\( ... \)`.
-  // This only touches *paired* dollar markers, so bare currency
-  // amounts like `$20` remain untouched.
+  // Normalize inline math written as `$ ... $` into inline double-dollar
+  // fences to avoid confusing currency like `$20`.
   updated = updated.replace(INLINE_DOLLAR_LATEX_REGEX, (_match, content: string) => {
-    const normalized = content.trim();
-    if (!normalized) {
-      return "";
-    }
-    return `\\(${normalized}\\)`;
+    const inlineWrapped = wrapInlineMath(content);
+    return inlineWrapped;
   });
 
-  // Clean up any existing `\(...\)` / `\[...\]` markers by trimming
-  // inner whitespace and ensuring they are on their own lines when
-  // used as display math.
+  // Clean up any existing `\[...\]` markers by trimming inner whitespace
+  // and rewriting them as double-dollar display blocks.
   updated = updated.replace(DISPLAY_LATEX_REGEX, (_match, content: string) => {
-    const normalized = content.trim();
-    if (!normalized) {
-      return "";
-    }
-    return `\n\n\\[${normalized}\\]\n\n`;
+    const wrapped = wrapDisplayMathBlock(content);
+    return wrapped;
   });
+
+  // Normalize inline `\(...\)` markers into inline double-dollar fences.
   updated = updated.replace(INLINE_LATEX_REGEX, (_match, content: string) => {
-    const normalized = content.trim();
-    if (!normalized) {
-      return "";
-    }
-    return `\\(${normalized}\\)`;
+    const inlineWrapped = wrapInlineMath(content);
+    return inlineWrapped;
   });
   return updated;
 };
@@ -783,6 +792,7 @@ const tokenizeCode = (code: string, language: string): CodeLine[] => {
 };
 
 const SINGLE_TOKEN_CODE_PATTERN = /^[\w.$-]+$/;
+const LATEX_MATH_BLOCK_PATTERN = /^\s*(\$\$[\s\S]*\$\$|\\\[[\s\S]*\\\])\s*$/;
 
 const MarkdownCodeBlock: CodeComponent = ({ inline, className, children, ...props }: any) => {
   const isInline = Boolean(inline);
@@ -801,6 +811,21 @@ const MarkdownCodeBlock: CodeComponent = ({ inline, className, children, ...prop
 
   if (!isInline && !trimmedRaw) {
     return null;
+  }
+
+  const isLikelyLatexMathBlock = !isInline && LATEX_MATH_BLOCK_PATTERN.test(trimmedRaw);
+
+  if (isLikelyLatexMathBlock) {
+    const normalizedMath = normalizeAssistantMath(trimmedRaw) ?? trimmedRaw;
+    // Render LaTeX math blocks as regular markdown so remark-math / rehype-katex
+    // can display them instead of treating them as plain code.
+    return (
+      <div className={styles.chatMarkdown}>
+        <ReactMarkdown remarkPlugins={MARKDOWN_PLUGINS} rehypePlugins={[[rehypeKatex, { strict: false }]]}>
+          {normalizedMath}
+        </ReactMarkdown>
+      </div>
+    );
   }
 
   if (isInline) {
@@ -849,6 +874,7 @@ const MarkdownCodeBlock: CodeComponent = ({ inline, className, children, ...prop
 
   return (
     <div
+      data-code-block-root="true"
       className={`${styles.codeBlock} ${isCompactBlock ? styles.codeBlockCompact : ""}`}
       data-language={language}
     >
@@ -1696,7 +1722,9 @@ export function GrayChatView({
     attachmentInputRef.current?.click();
   }, []);
   const activeSessionId = session?.id ?? null;
-  const activeConversationId = session?.conversationId ?? null;
+  const activeConversationId =
+    session?.conversationId ??
+    (session?.scope === "general" ? buildGeneralConversationId(user?.id) ?? null : null);
   const buildAttachmentPayloads = useCallback(
     () => attachments.map((attachment) => ({ id: attachment.id })),
     [attachments]
@@ -1713,6 +1741,21 @@ export function GrayChatView({
   const sessionConversationId = session?.conversationId ?? null;
   const sessionPendingAutoStream = Boolean(session?.pendingAutoStream);
   const isResponding = Boolean(session?.isResponding);
+  const latestSearchSources = useMemo(() => {
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      const message = messages[index];
+      if (message.role !== "assistant") {
+        continue;
+      }
+      if (!message.groundingMetadata) {
+        return [];
+      }
+      const allSources = buildGroundingSourceCards(message.groundingMetadata);
+      const searchSources = allSources.filter((source) => Boolean(source.href));
+      return searchSources;
+    }
+    return [];
+  }, [messages]);
   const locationRequestSummary = pendingLocationRequestMessage
     ? pendingLocationRequestMessage.length > 120
       ? `${pendingLocationRequestMessage.slice(0, 120)}…`
@@ -1752,6 +1795,13 @@ export function GrayChatView({
   useEffect(() => {
     setHasHydrated(true);
   }, []);
+
+  useEffect(() => {
+    if (!hasHydrated || !session?.id || !scrollAnchorRef.current) {
+      return;
+    }
+    scrollAnchorRef.current.scrollIntoView({ behavior: "auto" });
+  }, [hasHydrated, session?.id]);
 
   const streamingContentSignature = useMemo(() => {
     if (!activeStreamingMessageId) {
@@ -1909,6 +1959,7 @@ export function GrayChatView({
 
         if (!Array.isArray(history) || history.length === 0) {
           updateSession(activeSessionId, {
+            conversationId: activeConversationId ?? undefined,
             messages: [],
             updatedAt: Date.now(),
             isResponding: false,
@@ -1916,7 +1967,17 @@ export function GrayChatView({
           return;
         }
 
-        const mappedHistory: ChatSessionMessage[] = history.map((message, index) => {
+        // Deduplicate consecutive identical backend messages so that if the same
+        // user entry is stored twice, it only renders once in the UI.
+        const dedupedHistory = history.filter((message, index, arr) => {
+          if (index === 0) {
+            return true;
+          }
+          const prev = arr[index - 1];
+          return !(prev.role === message.role && (prev.text ?? "") === (message.text ?? ""));
+        });
+
+        const mappedHistory: ChatSessionMessage[] = dedupedHistory.map((message, index) => {
           const role: ChatRole = message.role === "model" ? "assistant" : "user";
           const rawText = message.text ?? "";
           const normalizedText = role === "assistant" ? stripGrayTitleMarkers(rawText) : rawText;
@@ -1945,6 +2006,7 @@ export function GrayChatView({
         });
 
         updateSession(activeSessionId, {
+          conversationId: activeConversationId ?? undefined,
           messages: mappedHistory,
           updatedAt: Date.now(),
           isResponding: false,
@@ -1952,6 +2014,7 @@ export function GrayChatView({
       } catch (error) {
         console.error("Failed to load conversation history:", error);
         updateSession(activeSessionId, {
+          conversationId: activeConversationId ?? undefined,
           messages: session?.messages ?? [],
           updatedAt: Date.now(),
           isResponding: false,
@@ -1989,7 +2052,10 @@ export function GrayChatView({
       let assistantMessageId: string | null = existingAssistantId ?? null;
       let streamingMessageId: string | null = assistantMessageId ?? null;
       let accumulated = "";
-      let streamedConversationId: string | null = normalizeConversationIdValue(conversationId) ?? null;
+      const isGeneralSession = session?.scope === "general";
+      let streamedConversationId: string | null = isGeneralSession
+        ? null
+        : normalizeConversationIdValue(conversationId) ?? null;
       let didReceiveToken = false;
       const streamingUserId = resolvedUser.id;
       const requestTitleHint = shouldRequestAutoTitleForSession(session);
@@ -2005,7 +2071,9 @@ export function GrayChatView({
         const timeContext = buildLocalTimeContext();
         for await (const event of apiService.sendMessageStream({
           message: prompt,
-          conversation_id: streamedConversationId ?? undefined,
+          conversation_id: isGeneralSession
+            ? buildGeneralConversationId(streamingUserId)
+            : streamedConversationId ?? undefined,
           system_prompt: personalizedSystemPrompt,
           user_id: streamingUserId,
           context: contextPayload,
@@ -2034,8 +2102,13 @@ export function GrayChatView({
           }
 
           if (event.type === "end") {
-            streamedConversationId =
-              normalizeConversationIdValue(event.conversationId) ?? streamedConversationId;
+            // For general sessions we keep using the synthetic general conversation
+            // identifier instead of adopting any backend UUID so that /g remains
+            // a single stable thread.
+            if (!isGeneralSession) {
+              streamedConversationId =
+                normalizeConversationIdValue(event.conversationId) ?? streamedConversationId;
+            }
             const finalResponse = normalizeAssistantContent(event.response ?? accumulated, prompt);
             accumulated = finalResponse;
             if (event.title) {
@@ -2087,7 +2160,9 @@ export function GrayChatView({
         try {
           const fallbackResponse = await apiService.sendMessage({
             message: prompt,
-            conversation_id: streamedConversationId ?? undefined,
+            conversation_id: isGeneralSession
+              ? buildGeneralConversationId(streamingUserId)
+              : streamedConversationId ?? undefined,
             system_prompt: personalizedSystemPrompt,
             user_id: streamingUserId,
             context: contextPayload,
@@ -2587,6 +2662,18 @@ export function GrayChatView({
       // Render <pre> as a fragment so our custom code renderer controls layout.
       // Use full props to avoid narrowing issues with react-markdown's types.
       pre: (props: any) => <>{props.children}</>,
+      // Avoid invalid HTML like <p><div>…</div></p> when a code block
+      // appears where a paragraph would normally be rendered.
+      p: ({ children, ...rest }: any) => {
+        const hasBlockCodeChild = Children.toArray(children).some(
+          (child) =>
+            isValidElement(child) && child.props && child.props["data-code-block-root"]
+        );
+        if (hasBlockCodeChild) {
+          return <div {...rest}>{children}</div>;
+        }
+        return <p {...rest}>{children}</p>;
+      },
     }),
     []
   );
@@ -2709,6 +2796,37 @@ export function GrayChatView({
           />
         )}
       </div>
+      {latestSearchSources.length > 0 ? (
+        <div className={styles.chatSourcesFooter}>
+          <span className={styles.chatSourcesFooterLabel}>Sources</span>
+          <span className={styles.chatSourcesFooterBadge}>
+            <Globe size={12} />
+          </span>
+          <div className={styles.chatFooterSourcesList}>
+            {latestSearchSources.slice(0, 3).map((source) => {
+              const label = source.siteLabel || source.title || "Source";
+              if (source.href) {
+                return (
+                  <a
+                    key={source.id}
+                    href={source.href}
+                    target="_blank"
+                    rel="noreferrer"
+                    className={styles.chatFooterSourceLink}
+                  >
+                    {label}
+                  </a>
+                );
+              }
+              return (
+                <span key={source.id} className={styles.chatFooterSourceText}>
+                  {label}
+                </span>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
       <div className={styles.chatComposerDock} ref={composerDockRef}>
         <input
           ref={attachmentInputRef}
