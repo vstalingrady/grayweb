@@ -84,7 +84,7 @@ class AnthropicService:
     if workspace_context and workspace_context.strip():
       context_lines.append(workspace_context.strip())
     if time_context and time_context.strip():
-      context_lines.append(f"Local time context: {time_context.strip()}")
+      context_lines.append(time_context.strip())
     if context_lines:
       pieces.append("Workspace context:\n" + "\n".join(context_lines))
     return "\n\n".join(pieces) if pieces else None

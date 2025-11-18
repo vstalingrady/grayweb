@@ -24,10 +24,9 @@ export const buildLocalTimeContext = (referenceDate?: Date) => {
     timeZoneName: "short",
   });
   const labeledTime = formatter.format(now);
-  const isoTimestamp = now.toISOString();
   const utcOffset = formatUtcOffset(-now.getTimezoneOffset());
 
-  return `Current local time: ${labeledTime} (timezone: ${timeZone}, UTC${utcOffset}). ISO timestamp: ${isoTimestamp}`;
+  return `The user's local time is ${labeledTime}. Timezone: ${timeZone} (UTC${utcOffset}).`;
 };
 
 export default buildLocalTimeContext;

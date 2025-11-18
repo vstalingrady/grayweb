@@ -90,7 +90,7 @@ class GeminiService:
         if workspace_context:
             pieces.append(workspace_context.strip())
         if time_context:
-            pieces.append(f"Local time context: {time_context.strip()}")
+            pieces.append(time_context.strip())
         if not pieces:
             return None
         return "\n".join(pieces)
