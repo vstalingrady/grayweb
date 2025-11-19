@@ -221,9 +221,6 @@ export const EventCard = memo(function EventCard({
           {taskCompleted ? <Check size={12} /> : null}
         </button>
       ) : null}
-      {event.entryType === "reminder" && (
-        <div className={styles.reminderHandle} />
-      )}
     </div>
   );
 });
