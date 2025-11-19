@@ -70,7 +70,7 @@ const DEFAULT_STATE: ComposerState = {
   title: "New event",
   startTime: "09:00",
   endTime: "10:00",
-  color: "#5b8def",
+  color: "#6f8bff",
   entryType: "event",
   calendarId: "default",
   details: "",
@@ -338,9 +338,10 @@ export function EventComposer({
     }
   };
 
-  const isSyntheticEvent =
-    Boolean(activeEvent?.calendarId === "plan") ||
-    (typeof activeEvent?.id === "string" && activeEvent.id.startsWith("reminder-"));
+  const isPlanSyntheticEvent = Boolean(activeEvent?.calendarId === "plan");
+  const isReminderSyntheticEvent =
+    typeof activeEvent?.id === "string" && activeEvent.id.startsWith("reminder-");
+  const isSyntheticEvent = isPlanSyntheticEvent || isReminderSyntheticEvent;
 
   return (
     <div
@@ -357,18 +358,18 @@ export function EventComposer({
         style={
           anchoredPosition
             ? {
-                position: "fixed",
-                top: `${anchoredPosition.top}px`,
-                left: `${anchoredPosition.left}px`,
-              }
+              position: "fixed",
+              top: `${anchoredPosition.top}px`,
+              left: `${anchoredPosition.left}px`,
+            }
             : undefined
         }
       >
         <div className={styles.composerHeader}>
           <div>
-          <h2 className={styles.composerHeaderTitle}>
-            {activeEvent ? "Edit event" : "Create event"}
-          </h2>
+            <h2 className={styles.composerHeaderTitle}>
+              {activeEvent ? "Edit event" : "Create event"}
+            </h2>
           </div>
           <button
             type="button"
@@ -511,7 +512,7 @@ export function EventComposer({
 
 
           <footer className={styles.composerFooter}>
-            {activeEvent && !isSyntheticEvent ? (
+            {activeEvent && !isPlanSyntheticEvent ? (
               <button type="button" className={styles.composerDeleteButton} onClick={handleDelete}>
                 Delete
               </button>

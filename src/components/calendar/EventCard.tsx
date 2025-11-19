@@ -221,7 +221,7 @@ export const EventCard = memo(function EventCard({
           {taskCompleted ? <Check size={12} /> : null}
         </button>
       ) : null}
-      {event.entryType === "reminder" && (
+      {event.entryType === "reminder" && event.displayHint !== "line" && (
         <div className={styles.reminderHandle} />
       )}
     </div>
