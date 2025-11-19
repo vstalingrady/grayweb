@@ -156,6 +156,9 @@ export const useEventDrag = ({
         const target = pointerEvent.currentTarget;
         target.setPointerCapture(newDragState.pointerId);
 
+        const frameRef = { current: 0 }; // Local ref for RAF ID within the closure
+        const pendingStateRef = { current: null as DragState | null }; // Local ref for pending state
+
         const handleMove = (moveEvent: PointerEvent) => {
           if (moveEvent.pointerId !== newDragState.pointerId) {
             return;
@@ -229,7 +232,17 @@ export const useEventDrag = ({
           );
 
           latestDraftsRef.current = nextDrafts;
-          setDragState((prev) => prev ? { ...prev, activeDrafts: nextDrafts } : null);
+          
+          // Schedule state update
+          pendingStateRef.current = { ...newDragState, activeDrafts: nextDrafts };
+          if (!frameRef.current) {
+            frameRef.current = requestAnimationFrame(() => {
+              if (pendingStateRef.current) {
+                setDragState(pendingStateRef.current);
+              }
+              frameRef.current = 0;
+            });
+          }
         };
 
         const release = () => {
@@ -238,6 +251,10 @@ export const useEventDrag = ({
           target.removeEventListener("pointercancel", handleCancel);
           if (target.hasPointerCapture(newDragState.pointerId)) {
             target.releasePointerCapture(newDragState.pointerId);
+          }
+          if (frameRef.current) {
+            cancelAnimationFrame(frameRef.current);
+            frameRef.current = 0;
           }
         };
 
