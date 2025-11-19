@@ -1250,18 +1250,55 @@ const ChatMessagesList = memo(
                             <div className={styles.chatGroundingSourceCards}>
                               {sourceCards.map((source) => {
                                 const initials = buildGroundingSourceInitials(source.siteLabel ?? source.title);
+                                let faviconUrl: string | undefined;
+                                if (source.href) {
+                                  try {
+                                    const hostname = new URL(source.href).hostname;
+                                    faviconUrl = `https://www.google.com/s2/favicons?domain=${hostname}&sz=128`;
+                                  } catch {
+                                    // Ignore invalid URLs
+                                  }
+                                }
+
                                 const cardContent = (
                                   <>
-                                    <div className={styles.chatGroundingSourceCardAvatar}>{initials}</div>
+                                    <div className={styles.chatGroundingSourceCardAvatar}>
+                                      {faviconUrl ? (
+                                        <>
+                                          <img
+                                            src={faviconUrl}
+                                            alt=""
+                                            style={{
+                                              width: "100%",
+                                              height: "100%",
+                                              borderRadius: "50%",
+                                              objectFit: "cover",
+                                            }}
+                                            onError={(e) => {
+                                              e.currentTarget.style.display = "none";
+                                              // Show the sibling span (initials)
+                                              const next = e.currentTarget.nextElementSibling;
+                                              if (next) {
+                                                next.removeAttribute("style");
+                                              }
+                                            }}
+                                          />
+                                          <span style={{ display: "none" }}>{initials}</span>
+                                        </>
+                                      ) : (
+                                        initials
+                                      )}
+                                    </div>
                                     <div className={styles.chatGroundingSourceCardContent}>
-                                                                          <div className={styles.chatGroundingSourceCardTitle}>
-                                                                            {source.title ?? "Referenced source"}
-                                                                          </div>
-                                                                          {source.siteLabel ? (
-                                                                            <div className={styles.chatGroundingSourceCardSite}>
-                                                                              {source.siteLabel}
-                                                                            </div>
-                                                                          ) : null}                                    </div>
+                                      <div className={styles.chatGroundingSourceCardTitle}>
+                                        {source.title ?? "Referenced source"}
+                                      </div>
+                                      {source.siteLabel ? (
+                                        <div className={styles.chatGroundingSourceCardSite}>
+                                          {source.siteLabel}
+                                        </div>
+                                      ) : null}
+                                    </div>
                                   </>
                                 );
                                 if (source.href) {
