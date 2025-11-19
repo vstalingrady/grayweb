@@ -86,6 +86,7 @@ export function GrayEnhancedSidebar({
       },
     ];
   }, [historySections]);
+  const historyNavItem = useMemo(() => navItems.find((item) => item.id === "history"), [navItems]);
 
   useEffect(() => {
     if (!isProfileMenuOpen) {
@@ -235,7 +236,7 @@ export function GrayEnhancedSidebar({
                 className={styles.sidebarLogoImage}
               />
             </button>
-            <div className={styles.sidebarScroll}>
+            <div className={styles.sidebarAnchored}>
               <div className={styles.searchRow}>
                 <span className={styles.searchIcon}>
                   <SearchIcon size={16} />
@@ -243,188 +244,188 @@ export function GrayEnhancedSidebar({
                 <span className={styles.searchLabel}>Search</span>
                 <span className={styles.searchShortcut}>CTRL+K</span>
               </div>
-                  <nav aria-label="Primary">
-                    <ul className={styles.sidebarNav}>
-                      {navItems.map((item) => (
-                        <li key={item.id} className={styles.sidebarNavItem} data-nav={item.id}>
-                          <button
-                            type="button"
-                            data-active={item.id === activeNav ? "true" : "false"}
-                            aria-label={item.label}
-                            onClick={() => onNavigate(item.id)}
-                          >
-                            <span className={styles.navIcon}>
-                              <item.icon size={18} />
-                            </span>
-                            <span className={styles.navLabel}>{item.label}</span>
-                          </button>
-
-                          {item.id === "history" && isExpanded && (
-                            <>
-                              <span className={styles.sidebarHistoryConnector} aria-hidden="true" />
-                              <div className={styles.sidebarHistory}>
-                                {historyGroups.length > 0 ? (
-                                  historyGroups.map((group) => (
-                                    <div key={group.id} className={styles.sidebarHistoryGroup}>
-                                      <span className={styles.sidebarHistoryLabel}>{group.label}</span>
-                                      <ul className={styles.sidebarHistoryList}>
-                                        {group.items.map((entry) => {
-                                          const isActive = entry.id === activeChatId;
-                                          return (
-                                            <li key={entry.id}>
-                                              <Link
-                                                href={entry.href}
-                                                className={
-                                                  isActive
-                                                    ? `${styles.sidebarHistoryLink} ${styles.sidebarHistoryLinkActive}`
-                                                    : styles.sidebarHistoryLink
-                                                }
-                                              >
-                                                {entry.title}
-                                              </Link>
-                                            </li>
-                                          );
-                                        })}
-                                      </ul>
-                                    </div>
-                                  ))
-                                ) : (
-                                  <span className={styles.sidebarHistoryEmpty}>No conversations yet.</span>
-                                )}
-                              </div>
-                            </>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  </nav>
+              <nav aria-label="Primary">
+                <ul className={styles.sidebarNav}>
+                  {navItems.map((item) => (
+                    <li key={item.id} className={styles.sidebarNavItem} data-nav={item.id}>
+                      <button
+                        type="button"
+                        data-active={item.id === activeNav ? "true" : "false"}
+                        aria-label={item.label}
+                        onClick={() => onNavigate(item.id)}
+                      >
+                        <span className={styles.navIcon}>
+                          <item.icon size={18} />
+                        </span>
+                        <span className={styles.navLabel}>{item.label}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </nav>
+            </div>
+            {historyNavItem && isExpanded ? (
+              <div className={styles.sidebarScroll} aria-label="Recent conversations">
+                <div className={styles.sidebarHistorySection}>
+                  <div className={styles.sidebarHistory}>
+                    {historyGroups.length > 0 ? (
+                      historyGroups.map((group) => (
+                        <div key={group.id} className={styles.sidebarHistoryGroup}>
+                          <span className={styles.sidebarHistoryLabel}>{group.label}</span>
+                          <ul className={styles.sidebarHistoryList}>
+                            {group.items.map((entry) => {
+                              const isActive = entry.id === activeChatId;
+                              return (
+                                <li key={entry.id}>
+                                  <Link
+                                    href={entry.href}
+                                    className={
+                                      isActive
+                                        ? `${styles.sidebarHistoryLink} ${styles.sidebarHistoryLinkActive}`
+                                        : styles.sidebarHistoryLink
+                                    }
+                                  >
+                                    {entry.title}
+                                  </Link>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        </div>
+                      ))
+                    ) : (
+                      <span className={styles.sidebarHistoryEmpty}>No conversations yet.</span>
+                    )}
+                  </div>
                 </div>
               </div>
-              <div className={styles.sidebarBottom}>
-                <div className={styles.sidebarProfile}>
-                  <div
-                    className={styles.profileMenuWrapper}
-                    data-expanded={isProfileMenuOpen ? "true" : "false"}
-                    role="group"
-                    aria-label="Profile actions"
-                    ref={profileControlsRef}
-                  >
-                    <button
-                      type="button"
-                      className={styles.profileMenuButton}
-                      aria-label={isProfileMenuOpen ? "Collapse profile menu" : "Expand profile menu"}
-                      aria-haspopup="menu"
-                      aria-expanded={isProfileMenuOpen ? "true" : "false"}
-                      onClick={handleProfileClick}
+            ) : null}
+          </div>
+          <div className={styles.sidebarBottom}>
+            <div className={styles.sidebarProfile}>
+              <div
+                className={styles.profileMenuWrapper}
+                data-expanded={isProfileMenuOpen ? "true" : "false"}
+                role="group"
+                aria-label="Profile actions"
+                ref={profileControlsRef}
+              >
+                <button
+                  type="button"
+                  className={styles.profileMenuButton}
+                  aria-label={isProfileMenuOpen ? "Collapse profile menu" : "Expand profile menu"}
+                  aria-haspopup="menu"
+                  aria-expanded={isProfileMenuOpen ? "true" : "false"}
+                  onClick={handleProfileClick}
+                >
+                  <span className={styles.profileInfo}>
+                    <span
+                      className={styles.profileAvatar}
+                      aria-hidden="true"
+                      data-has-image={sidebarAvatarUrl ? "true" : "false"}
                     >
-                      <span className={styles.profileInfo}>
-                        <span
-                          className={styles.profileAvatar}
-                          aria-hidden="true"
-                          data-has-image={sidebarAvatarUrl ? "true" : "false"}
-                        >
-                          {sidebarAvatarUrl ? (
-                            <>
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img src={sidebarAvatarUrl} alt={viewerName} />
-                            </>
-                          ) : (
-                            <UserRound size={22} />
-                          )}
-                        </span>
-                        <span className={styles.profileDetails}>
-                          <span>{viewerName}</span>
-                          <span>{normalizedPlan}</span>
-                        </span>
-                      </span>
-                    </button>
-                    {isProfileMenuOpen && (
-                      <div className={styles.profileMenu} role="menu" ref={profileMenuRef}>
-                        {!isDepthMember ? (
-                          <>
-                            <button
-                              type="button"
-                              className={`${styles.profileMenuItem} ${styles.profileMenuUpgrade}`}
-                              onClick={handleUpgradePlan}
-                              role="menuitem"
-                            >
-                              <span className={styles.profileMenuItemContent}>
-                                <span className={styles.profileMenuIcon}>
-                                  <Star size={16} />
-                                </span>
-                                <span className={styles.profileMenuLabel}>Upgrade</span>
-                              </span>
-                            </button>
-                            <span className={styles.profileMenuDivider} aria-hidden="true" />
-                          </>
-                        ) : null}
+                      {sidebarAvatarUrl ? (
+                        <>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={sidebarAvatarUrl} alt={viewerName} />
+                        </>
+                      ) : (
+                        <UserRound size={22} />
+                      )}
+                    </span>
+                    <span className={styles.profileDetails}>
+                      <span>{viewerName}</span>
+                      <span>{normalizedPlan}</span>
+                    </span>
+                  </span>
+                </button>
+                {isProfileMenuOpen && (
+                  <div className={styles.profileMenu} role="menu" ref={profileMenuRef}>
+                    {!isDepthMember ? (
+                      <>
                         <button
                           type="button"
-                          className={styles.profileMenuItem}
-                          onClick={handleOpenPersonalization}
+                          className={`${styles.profileMenuItem} ${styles.profileMenuUpgrade}`}
+                          onClick={handleUpgradePlan}
                           role="menuitem"
                         >
                           <span className={styles.profileMenuItemContent}>
                             <span className={styles.profileMenuIcon}>
-                              <Sparkles size={16} />
+                              <Star size={16} />
                             </span>
-                            <span className={styles.profileMenuLabel}>Personalization</span>
-                          </span>
-                        </button>
-                        <button
-                          type="button"
-                          className={styles.profileMenuItem}
-                          onClick={handleOpenSettings}
-                          role="menuitem"
-                        >
-                          <span className={styles.profileMenuItemContent}>
-                            <span className={styles.profileMenuIcon}>
-                              <SettingsIcon size={16} />
-                            </span>
-                            <span className={styles.profileMenuLabel}>Settings</span>
-                          </span>
-                        </button>
-                        <button
-                          type="button"
-                          className={styles.profileMenuItem}
-                          onClick={handleOpenHelp}
-                          role="menuitem"
-                        >
-                          <span className={styles.profileMenuItemContent}>
-                            <span className={styles.profileMenuIcon}>
-                              <LifeBuoy size={16} />
-                            </span>
-                            <span className={styles.profileMenuLabel}>Help</span>
+                            <span className={styles.profileMenuLabel}>Upgrade</span>
                           </span>
                         </button>
                         <span className={styles.profileMenuDivider} aria-hidden="true" />
-                        <button
-                          type="button"
-                          className={`${styles.profileMenuItem} ${styles.profileMenuLogout}`}
-                          onClick={handleLogOut}
-                          role="menuitem"
-                        >
-                          <span className={styles.profileMenuItemContent}>
-                            <span className={styles.profileMenuIcon}>
-                              <LogOut size={16} />
-                            </span>
-                            <span className={styles.profileMenuLabel}>Log out</span>
-                          </span>
-                        </button>
-                      </div>
-                    )}
+                      </>
+                    ) : null}
+                    <button
+                      type="button"
+                      className={styles.profileMenuItem}
+                      onClick={handleOpenPersonalization}
+                      role="menuitem"
+                    >
+                      <span className={styles.profileMenuItemContent}>
+                        <span className={styles.profileMenuIcon}>
+                          <Sparkles size={16} />
+                        </span>
+                        <span className={styles.profileMenuLabel}>Personalization</span>
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.profileMenuItem}
+                      onClick={handleOpenSettings}
+                      role="menuitem"
+                    >
+                      <span className={styles.profileMenuItemContent}>
+                        <span className={styles.profileMenuIcon}>
+                          <SettingsIcon size={16} />
+                        </span>
+                        <span className={styles.profileMenuLabel}>Settings</span>
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.profileMenuItem}
+                      onClick={handleOpenHelp}
+                      role="menuitem"
+                    >
+                      <span className={styles.profileMenuItemContent}>
+                        <span className={styles.profileMenuIcon}>
+                          <LifeBuoy size={16} />
+                        </span>
+                        <span className={styles.profileMenuLabel}>Help</span>
+                      </span>
+                    </button>
+                    <span className={styles.profileMenuDivider} aria-hidden="true" />
+                    <button
+                      type="button"
+                      className={`${styles.profileMenuItem} ${styles.profileMenuLogout}`}
+                      onClick={handleLogOut}
+                      role="menuitem"
+                    >
+                      <span className={styles.profileMenuItemContent}>
+                        <span className={styles.profileMenuIcon}>
+                          <LogOut size={16} />
+                        </span>
+                        <span className={styles.profileMenuLabel}>Log out</span>
+                      </span>
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    className={styles.profileToggleButton}
-                    aria-label={isExpanded ? "Collapse sidebar" : "Expand sidebar"}
-                    data-expanded={isExpanded ? "true" : "false"}
-                    onClick={handleSidebarToggle}
-                  >
-                    {isExpanded ? <ChevronsRight size={18} /> : <ChevronsUp size={18} />}
-                  </button>
-                </div>
+                )}
               </div>
+              <button
+                type="button"
+                className={styles.profileToggleButton}
+                aria-label={isExpanded ? "Collapse sidebar" : "Expand sidebar"}
+                data-expanded={isExpanded ? "true" : "false"}
+                onClick={handleSidebarToggle}
+              >
+                {isExpanded ? <ChevronsRight size={18} /> : <ChevronsUp size={18} />}
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </aside>
