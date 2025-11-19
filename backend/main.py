@@ -310,6 +310,13 @@ users = sqlalchemy.Table(
     sqlalchemy.Column("role", sqlalchemy.String, default="user"),
     sqlalchemy.Column("initials", sqlalchemy.String),
     sqlalchemy.Column("workspace_background_id", sqlalchemy.String, nullable=True),
+    sqlalchemy.Column("maps_enabled", sqlalchemy.Boolean, default=False),
+    sqlalchemy.Column("personalization_nickname", sqlalchemy.String, nullable=True),
+    sqlalchemy.Column("personalization_occupation", sqlalchemy.String, nullable=True),
+    sqlalchemy.Column("personalization_about", sqlalchemy.String, nullable=True),
+    sqlalchemy.Column("personalization_custom_instructions", sqlalchemy.String, nullable=True),
+    sqlalchemy.Column("plan_tier", sqlalchemy.String, nullable=True),
+    sqlalchemy.Column("maps_enabled", sqlalchemy.Boolean, default=False),
     sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
     sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
 )
@@ -538,6 +545,10 @@ class UserBase(BaseModel):
     plan_tier: Optional[str] = None
     workspace_background_id: Optional[str] = None
     maps_enabled: bool = False
+    personalization_nickname: Optional[str] = None
+    personalization_occupation: Optional[str] = None
+    personalization_about: Optional[str] = None
+    personalization_custom_instructions: Optional[str] = None
 
 class UserCreate(UserBase):
     pass
@@ -549,6 +560,10 @@ class UserUpdate(BaseModel):
     plan_tier: Optional[str] = None
     workspace_background_id: Optional[str] = None
     maps_enabled: Optional[bool] = None
+    personalization_nickname: Optional[str] = None
+    personalization_occupation: Optional[str] = None
+    personalization_about: Optional[str] = None
+    personalization_custom_instructions: Optional[str] = None
 
 class User(UserBase):
     id: int
@@ -4170,12 +4185,18 @@ async def create_plan(user_id: int, plan: PlanCreate, db: databases.Database = D
     if supabase:
         timestamp = datetime.utcnow().isoformat()
         payload = {**base_values, "created_at": timestamp, "updated_at": timestamp}
-        result = supabase.table("plans").insert(payload).execute()
-        rows = getattr(result, "data", None) or []
-        if isinstance(rows, list) and rows:
-            return rows[0]
-        if isinstance(rows, dict) and rows:
-            return rows
+        try:
+            result = supabase.table("plans").insert(payload).execute()
+            rows = getattr(result, "data", None) or []
+            if isinstance(rows, list) and rows:
+                return rows[0]
+            if isinstance(rows, dict) and rows:
+                return rows
+            raise HTTPException(status_code=500, detail="Failed to create plan in Supabase: No data returned")
+        except Exception as e:
+            api_logger.error(f"Supabase plan creation failed: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail=f"Failed to create plan in Supabase: {str(e)}")
+
     now = datetime.utcnow()
     plan_id = await db.execute(
         plans.insert().values(
@@ -4307,12 +4328,18 @@ async def create_habit(user_id: int, habit: HabitCreate, db: databases.Database 
     if supabase:
         timestamp = datetime.utcnow().isoformat()
         payload = {**base_values, "created_at": timestamp, "updated_at": timestamp}
-        result = supabase.table("habits").insert(payload).execute()
-        rows = getattr(result, "data", None) or []
-        if isinstance(rows, list) and rows:
-            return rows[0]
-        if isinstance(rows, dict) and rows:
-            return rows
+        try:
+            result = supabase.table("habits").insert(payload).execute()
+            rows = getattr(result, "data", None) or []
+            if isinstance(rows, list) and rows:
+                return rows[0]
+            if isinstance(rows, dict) and rows:
+                return rows
+            raise HTTPException(status_code=500, detail="Failed to create habit in Supabase: No data returned")
+        except Exception as e:
+            api_logger.error(f"Supabase habit creation failed: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail=f"Failed to create habit in Supabase: {str(e)}")
+
     now = datetime.utcnow()
     habit_id = await db.execute(
         habits.insert().values(
@@ -4561,8 +4588,10 @@ async def create_user_reminder(
                 return _serialize_reminder_row(rows[0])
             if isinstance(rows, dict) and rows:
                 return _serialize_reminder_row(rows)
+            raise HTTPException(status_code=500, detail="Failed to create reminder in Supabase: No data returned")
         except Exception as error:
-            _handle_supabase_table_error("Warning: Failed to create reminder", error)
+            api_logger.error(f"Supabase reminder creation failed: {error}", exc_info=True)
+            raise HTTPException(status_code=500, detail=f"Failed to create reminder in Supabase: {str(error)}")
 
     sqlite_values = {
         **values,
