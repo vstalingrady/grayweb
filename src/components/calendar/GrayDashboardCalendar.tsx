@@ -610,10 +610,9 @@ export function GrayDashboardCalendar({
 
     const bounds = target.getBoundingClientRect();
     const offsetY = event.clientY - bounds.top;
-    const minutes = Math.max(0, Math.round((offsetY / hourHeight) * 60 / SNAP_MINUTES) * SNAP_MINUTES);
+    const minutes = Math.max(0, Math.min(24 * 60 - 1, Math.round((offsetY / hourHeight) * 60 / SNAP_MINUTES) * SNAP_MINUTES));
     const start = new Date(day);
-    start.setHours(0, 0, 0, 0);
-    start.setMinutes(minutes);
+    start.setHours(0, minutes, 0, 0);
     const anchorRect: ComposerAnchorRect = {
       left: bounds.right,
       width: 16,
