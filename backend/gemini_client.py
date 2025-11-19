@@ -52,8 +52,8 @@ class GeminiService:
         self._response_mime_type = os.getenv("GEMINI_RESPONSE_MIME_TYPE")
 
         self._api_key = self._first_valid_api_key()
-        self._default_model = os.getenv("GEMINI_DEFAULT_MODEL", "gemini-flash-lite-latest")
-        self._light_model = os.getenv("GEMINI_LIGHT_MODEL", "gemini-2.5-flash-lite")
+        self._default_model = os.getenv("GEMINI_DEFAULT_MODEL", "gemini-1.5-flash")
+        self._light_model = os.getenv("GEMINI_LIGHT_MODEL", "gemini-1.5-flash-8b")
 
         if self._api_key:
             self._client = genai.Client(api_key=self._api_key)
@@ -82,7 +82,8 @@ class GeminiService:
         return None
 
     def _choose_model(self, override: Optional[str]) -> str:
-        # Always use the correct Gemini model
+        if override:
+            return override
         return self._default_model
 
     def _build_context_block(self, workspace_context: Optional[str], time_context: Optional[str]) -> Optional[str]:
