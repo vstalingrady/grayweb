@@ -975,10 +975,8 @@
   color: rgba(247, 247, 247, 0.94);
   box-shadow: 0 22px 36px rgba(0, 0, 0, 0.45);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  background: linear-gradient(160deg,
-      rgba(255, 255, 255, 0.08),
-      rgba(255, 255, 255, 0.02));
-  backdrop-filter: blur(4px);
+  background-color: var(--event-card-color, rgba(255, 255, 255, 0.08));
+  backdrop-filter: none;
   overflow: hidden;
   cursor: pointer;
   transition:
@@ -1095,10 +1093,6 @@
 }
 
 
-.eventCard[data-display-hint="line"]:hover::after {
-  transform: translate(-50%, -50%) scale(1.1);
-}
-
 .eventCard[data-entry-type="reminder"] {
   padding: 0;
   background: transparent;
@@ -1147,10 +1141,6 @@
   box-shadow: none;
   pointer-events: none;
   transition: transform 0.1s ease;
-}
-
-.eventCard[data-entry-type="reminder"]:hover::after {
-  transform: translate(-50%, -50%) scale(1.1);
 }
 
 

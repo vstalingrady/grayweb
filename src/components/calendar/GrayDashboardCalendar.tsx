@@ -116,6 +116,7 @@ type GrayDashboardCalendarProps = {
   currentDate?: Date;
   selectedDate?: Date;
   onSelectedDateChange?: (date: Date) => void;
+  onEventDelete?: (event: CalendarEvent) => void;
 };
 
 export function GrayDashboardCalendar({
@@ -145,6 +146,7 @@ export function GrayDashboardCalendar({
   currentDate,
   selectedDate: controlledSelectedDate,
   onSelectedDateChange,
+  onEventDelete,
 }: GrayDashboardCalendarProps) {
   const hourHeight = hourHeightProp ?? DEFAULT_HOUR_HEIGHT;
   const [viewMode, setViewMode] = useState<CalendarViewMode>(viewModeLocked ?? "week");
@@ -585,6 +587,10 @@ export function GrayDashboardCalendar({
   };
 
   const handleComposerDelete = (eventId: string) => {
+    const eventToDelete = events.find((event) => event.id === eventId);
+    if (eventToDelete && onEventDelete) {
+      onEventDelete(eventToDelete);
+    }
     updateEvents((previous) => previous.filter((event) => event.id !== eventId));
     setComposerOpen(false);
     setEditingEvent(null);
@@ -643,6 +649,10 @@ export function GrayDashboardCalendar({
   };
 
   const handleDeleteEvent = (event: PositionedEvent) => {
+    const calendarEvent = events.find((e) => e.id === event.id);
+    if (calendarEvent && onEventDelete) {
+      onEventDelete(calendarEvent);
+    }
     updateEvents((previous) => previous.filter((e) => e.id !== event.id));
   };
 

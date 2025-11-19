@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import GrayPageClient from "@/app/gray/GrayPageClient";
 import { readServerSession } from "@/lib/auth/server";
 import { GENERAL_CHAT_SESSION_ID } from "@/components/gray/ChatProvider";
@@ -16,12 +16,14 @@ export const metadata: Metadata = {
 
 export default async function ChatPage({ params }: ChatPageProps) {
   const { chatId } = await params;
-  const session = await readServerSession();
 
+  // The General workspace lives at /g and should never be addressed as /c/general-session.
+  // If someone navigates there directly (or via an old link), return a 404.
   if (chatId === GENERAL_CHAT_SESSION_ID) {
-    redirect("/g");
+    notFound();
   }
 
+  const session = await readServerSession();
   if (!session) {
     const redirectTarget = encodeURIComponent(`/c/${chatId}`);
     redirect(`/login?redirect=${redirectTarget}`);

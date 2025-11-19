@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { ChangeEvent, FormEvent, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Gem, MessageSquarePlus, LayoutDashboard, History, Search } from "lucide-react";
@@ -427,7 +427,9 @@ function GrayPageClientInner({
 }: GrayPageClientProps) {
   const { user, loading } = useUser();
   const router = useRouter();
+  const pathname = usePathname();
   const [now, setNow] = useState(() => new Date(initialTimestamp));
+  const [isWorkspaceBackgroundAllowed, setIsWorkspaceBackgroundAllowed] = useState(false);
 
   // Derived state for hooks
   const userId = typeof user?.id === "number" ? user.id : null;
@@ -475,6 +477,16 @@ function GrayPageClientInner({
     setProactivity,
     persistProactivitySettings
   } = useProactivity(userId, resolvedTimezone);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const host = window.location.host.toLowerCase();
+    const isAllowedHost = host === "gray.localhost:3000";
+    const isRootPath = pathname === "/";
+    setIsWorkspaceBackgroundAllowed(isAllowedHost && isRootPath);
+  }, [pathname]);
 
   // Include reminderPlans in derivedPlans so they appear in the pulse
   const derivedPlans = user ? [...plans, ...reminderPlans] : [];
@@ -1266,9 +1278,22 @@ function GrayPageClientInner({
         "Schedule:",
         sortedEvents
           .map((e) => {
-            const startStr = e.start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            const endStr = e.end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            return `- [${startStr} - ${endStr}] ${e.title}${e.description ? ` (${e.description})` : ""}`;
+            const dateLabel = e.start.toLocaleDateString([], {
+              weekday: "short",
+              month: "short",
+              day: "numeric",
+            });
+            const startStr = e.start.toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            });
+            const endStr = e.end.toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            });
+            return `- ${dateLabel} [${startStr} - ${endStr}] ${e.title}${
+              e.description ? ` (${e.description})` : ""
+            }`;
           })
           .join("\n")
       );
@@ -2472,7 +2497,8 @@ function GrayPageClientInner({
   );
   const dashboardTabAttr = isDashboardView ? dashboardTab : undefined;
 
-  const shouldShowWorkspaceBackground = activeNav === "dashboard" || activeNav === "general" || activeNav === "threads";
+  const shouldShowWorkspaceBackground = isWorkspaceBackgroundAllowed && viewMode !== "chat";
+  const isFullPageChatLayout = variant === "chat" && activeNav === "general";
   const generalAttachmentsActive =
     viewMode === "general" && (attachments.length > 0 || isAttachmentUploading);
   const generalAttachmentTray = viewMode === "general"
@@ -2491,10 +2517,12 @@ function GrayPageClientInner({
     <>
       <div
         className={styles.page}
+        data-variant={variant}
         data-dashboard-tab={dashboardTabAttr}
         data-compact={isCompactLayout ? "true" : "false"}
         data-general-attachments={generalAttachmentsActive ? "true" : "false"}
         data-workspace-background={shouldShowWorkspaceBackground ? "true" : "false"}
+        data-chat-layout={isFullPageChatLayout ? "full" : "embedded"}
       >
         {shouldShowWorkspaceBackground ? (
           <>

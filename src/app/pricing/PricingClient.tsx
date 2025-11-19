@@ -172,23 +172,17 @@ interface PricingClientProps {
 export default function PricingClient({ storeId, voyagerVariantId, pioneerVariantId }: PricingClientProps) {
   const [billingCycle, setBillingCycle] = useState<"monthly" | "annual">("monthly");
   const router = useRouter();
-  useEffect(() => {
-    if (typeof window !== "undefined" && (window as any).createLemonSqueezy) {
-      (window as any).createLemonSqueezy();
-    }
-  }, []);
-
   const { price: voyagerPrice, cadence: voyagerCadence } = VOYAGER_PRICING[billingCycle];
   const { price: pioneerPrice, cadence: pioneerCadence } = PIONEER_PRICING[billingCycle];
   const voyagerSavingsLabel = billingCycle === "annual" ? "Save $7" : undefined;
   const pioneerSavingsLabel = billingCycle === "annual" ? "Save $27" : undefined;
   
   const voyagerCheckoutHref = (storeId && voyagerVariantId) 
-    ? `https://alignment.lemonsqueezy.com/buy/${voyagerVariantId}?embed=1&media=0&checkout[custom][billing_cycle]=${billingCycle}`
+    ? `https://${storeId}/buy/${voyagerVariantId}?embed=1&media=0&checkout[custom][billing_cycle]=${billingCycle}`
     : undefined;
 
   const pioneerCheckoutHref = (storeId && pioneerVariantId)
-    ? `https://alignment.lemonsqueezy.com/buy/${pioneerVariantId}?embed=1&media=0&checkout[custom][billing_cycle]=${billingCycle}`
+    ? `https://${storeId}/buy/${pioneerVariantId}?embed=1&media=0&checkout[custom][billing_cycle]=${billingCycle}`
     : undefined;
 
   const handleDismiss = useCallback(() => {
@@ -201,7 +195,15 @@ export default function PricingClient({ storeId, voyagerVariantId, pioneerVarian
 
   return (
     <main className={styles.page}>
-      <Script src="https://assets.lemonsqueezy.com/lemon.js" strategy="lazyOnload" />
+      <Script 
+        src="https://assets.lemonsqueezy.com/lemon.js" 
+        strategy="afterInteractive"
+        onLoad={() => {
+          if (typeof window !== "undefined" && (window as any).createLemonSqueezy) {
+            (window as any).createLemonSqueezy();
+          }
+        }}
+      />
       <div className={styles.particleBackground} aria-hidden="true">
         <DepthParticleCanvas />
       </div>

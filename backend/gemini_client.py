@@ -243,16 +243,6 @@ class GeminiService:
         if not self.available or not self._client:
             raise RuntimeError("Gemini client is not configured")
 
-        contents = self._build_contents(conversation_history, message, attachments, extra_contents)
-        config = self._build_config(
-            system_prompt,
-            workspace_context,
-            time_context,
-            response_schema=response_schema,
-            response_mime_type=response_mime_type,
-            tools=tools,
-            tool_config=tool_config,
-        )
         selected_model = self._choose_model(model)
 
         # Hotfix: The current flash-lite-latest endpoint reports "Tool use with function calling is unsupported"
@@ -272,6 +262,17 @@ class GeminiService:
             tools = filtered_tools if filtered_tools else None
             if not tools:
                 tool_config = None
+
+        contents = self._build_contents(conversation_history, message, attachments, extra_contents)
+        config = self._build_config(
+            system_prompt,
+            workspace_context,
+            time_context,
+            response_schema=response_schema,
+            response_mime_type=response_mime_type,
+            tools=tools,
+            tool_config=tool_config,
+        )
 
         response = await self._client.aio.models.generate_content(
             model=selected_model,
@@ -298,16 +299,6 @@ class GeminiService:
         if not self.available or not self._client:
             raise RuntimeError("Gemini client is not configured")
 
-        contents = self._build_contents(conversation_history, message, attachments, extra_contents)
-        config = self._build_config(
-            system_prompt,
-            workspace_context,
-            time_context,
-            response_schema=response_schema,
-            response_mime_type=response_mime_type,
-            tools=tools,
-            tool_config=tool_config,
-        )
         selected_model = self._choose_model(model)
 
         # Hotfix: The current flash-lite-latest endpoint reports "Tool use with function calling is unsupported"
@@ -327,6 +318,17 @@ class GeminiService:
             tools = filtered_tools if filtered_tools else None
             if not tools:
                 tool_config = None
+
+        contents = self._build_contents(conversation_history, message, attachments, extra_contents)
+        config = self._build_config(
+            system_prompt,
+            workspace_context,
+            time_context,
+            response_schema=response_schema,
+            response_mime_type=response_mime_type,
+            tools=tools,
+            tool_config=tool_config,
+        )
 
         stream_iter = await self._client.aio.models.generate_content_stream(
             model=selected_model,

@@ -8,6 +8,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone as dt_timezone
 from typing import Any, Dict, List, Optional, Sequence, Tuple
@@ -176,34 +177,60 @@ class ProactivityEngine:
             return None
 
         timezone = payload.get("timezone") or "UTC"
-        recently_sent = await self._recently_sent(user_id)
-        if recently_sent:
-            logger.debug("Skipping duplicate proactivity send", extra={
-                "event_type": "proactivity_send_skipped",
-                "user_id": user_id,
-                "source": source,
-            })
-            if not force:
-                return None
+        last_sent_at = await self._last_notification_timestamp(user_id)
+        if last_sent_at:
+            last_sent_utc = (
+                last_sent_at if last_sent_at.tzinfo else last_sent_at.replace(tzinfo=dt_timezone.utc)
+            ).astimezone(dt_timezone.utc)
+            if datetime.now(dt_timezone.utc) - last_sent_utc < timedelta(seconds=MIN_SEND_INTERVAL_SECONDS):
+                logger.debug("Skipping duplicate proactivity send", extra={
+                    "event_type": "proactivity_send_skipped",
+                    "user_id": user_id,
+                    "source": source,
+                })
+                if not force:
+                    return None
 
-        should_send = force
-        if not should_send:
-            should_send = await self._should_send_message(payload, timezone)
+        current_window = self._current_window_bounds(payload, timezone)
+        should_send = force or current_window is not None
 
         if not should_send:
             return None
 
+        if not force and last_sent_at and current_window:
+            if self._already_sent_in_window(last_sent_at, current_window):
+                logger.debug("Skipping proactivity send because window already satisfied", extra={
+                    "event_type": "proactivity_window_satisfied",
+                    "user_id": user_id,
+                    "source": source,
+                })
+                return None
+
         return await self._send_proactivity_message(user_id, payload, timezone, source=source)
 
-    async def _should_send_message(self, settings: Dict[str, Any], timezone: str) -> bool:
+    def _current_window_bounds(
+        self,
+        settings: Dict[str, Any],
+        timezone: str,
+    ) -> Optional[Tuple[datetime, datetime]]:
         local_tz = self._resolve_timezone(timezone)
         local_now = datetime.now(local_tz)
-        times = self._extract_times(settings)
-
-        for time_str in times:
-            if self._is_within_window(local_now, time_str):
-                return True
-        return False
+        tolerance = timedelta(seconds=300)
+        for time_str in self._extract_times(settings):
+            parts = time_str.split(":")
+            if len(parts) < 2:
+                continue
+            try:
+                target_hour = int(parts[0])
+                target_minute = int(parts[1])
+            except (TypeError, ValueError):
+                continue
+            target_time = local_now.replace(hour=target_hour, minute=target_minute, second=0, microsecond=0)
+            window_start = target_time - tolerance
+            window_end = target_time + tolerance
+            if window_start <= local_now <= window_end:
+                return window_start, window_end
+        return None
 
     @staticmethod
     def _resolve_timezone(value: str) -> ZoneInfo:
@@ -221,21 +248,8 @@ class ProactivityEngine:
                 times = [fallback]
         return times or ["09:00"]
 
-    @staticmethod
-    def _is_within_window(local_now: datetime, time_str: str) -> bool:
-        parts = time_str.split(":")
-        if len(parts) < 2:
-            return False
-        try:
-            target_hour = int(parts[0])
-            target_minute = int(parts[1])
-        except (TypeError, ValueError):
-            return False
-
-        target_time = local_now.replace(hour=target_hour, minute=target_minute, second=0, microsecond=0)
-        return abs((local_now - target_time).total_seconds()) <= 300
-
-    async def _recently_sent(self, user_id: int) -> bool:
+    async def _last_notification_timestamp(self, user_id: int) -> Optional[datetime]:
+        """Return the timestamp of the most recent proactive notification."""
         # Prefer Supabase for duplicate detection when available.
         if self.supabase is not None:
             try:
@@ -250,15 +264,8 @@ class ProactivityEngine:
                 )
                 rows = getattr(result, "data", None) or []
                 if not rows:
-                    return False
-                last_sent_raw = rows[0].get("sent_at")
-                if not last_sent_raw:
-                    return False
-                try:
-                    last_sent = datetime.fromisoformat(last_sent_raw)
-                except Exception:
-                    return False
-                return datetime.now(dt_timezone.utc) - last_sent.replace(tzinfo=dt_timezone.utc) < timedelta(seconds=MIN_SEND_INTERVAL_SECONDS)
+                    return None
+                return self._normalize_timestamp(rows[0].get("sent_at"))
             except Exception as exc:
                 logger.error(
                     f"Failed to check recent proactive notification in Supabase: {exc}",
@@ -278,19 +285,44 @@ class ProactivityEngine:
             LIMIT 1
         """
         record = await self.db.fetch_one(query, values={"user_id": user_id, "type": "check_in"})
-        if not record or not record[0]:
-            return False
+        if not record:
+            return None
+        value = None
+        if isinstance(record, dict):
+            value = record.get("sent_at")
+        elif hasattr(record, "sent_at"):
+            value = record.sent_at
+        elif len(record) > 0:
+            value = record[0]
+        return self._normalize_timestamp(value)
 
-        try:
-            last_sent = record[0]
-            if isinstance(last_sent, str):
-                last_sent = datetime.fromisoformat(last_sent)  # pragma: no cover - SQLite string fallback
-        except Exception:
-            return False
+    @staticmethod
+    def _normalize_timestamp(value: Any) -> Optional[datetime]:
+        if isinstance(value, datetime):
+            return value
+        if isinstance(value, str):
+            try:
+                return datetime.fromisoformat(value)
+            except Exception:
+                return None
+        return None
 
-        if not isinstance(last_sent, datetime):
+    def _already_sent_in_window(
+        self,
+        last_sent_at: datetime,
+        window_bounds: Tuple[datetime, datetime],
+    ) -> bool:
+        if not window_bounds:
             return False
-        return datetime.now(dt_timezone.utc) - last_sent.replace(tzinfo=dt_timezone.utc) < timedelta(seconds=MIN_SEND_INTERVAL_SECONDS)
+        start_local, end_local = window_bounds
+        start_utc = start_local.astimezone(dt_timezone.utc)
+        end_utc = end_local.astimezone(dt_timezone.utc)
+        last = last_sent_at
+        if last.tzinfo is None:
+            last = last.replace(tzinfo=dt_timezone.utc)
+        else:
+            last = last.astimezone(dt_timezone.utc)
+        return start_utc <= last <= end_utc
 
     async def _send_proactivity_message(
         self,
@@ -481,6 +513,9 @@ class ProactivityEngine:
                 "habits": record["habits"] or [],
             }
 
+        profile_summary, custom_instructions = await self._load_user_profile_context(user_id)
+        chat_context = await self._load_recent_chat_context(user_id)
+
         try:
             cadence = (settings.get("cadence") or "").strip().lower()
             reason: Optional[str] = None
@@ -497,11 +532,114 @@ class ProactivityEngine:
                 settings or {},
                 timezone,
                 reason=reason,
+                profile_context=profile_summary,
+                custom_instructions=custom_instructions,
+                chat_context=chat_context,
             )
             return message.strip() if message else None
         except Exception as exc:
             logger.error(f"AI generator failed for user {user_id}: {exc}", exc_info=True)
             return None
+
+    async def _load_user_profile_context(self, user_id: int) -> Tuple[Optional[str], Optional[str]]:
+        """Pull saved personalization fields so proactive nudges can reference them."""
+        try:
+            record = await self.db.fetch_one(
+                """
+                SELECT
+                  personalization_nickname,
+                  personalization_occupation,
+                  personalization_about,
+                  personalization_custom_instructions
+                FROM users
+                WHERE id = :user_id
+                """,
+                {"user_id": user_id},
+            )
+        except Exception as exc:
+            logger.error(f"Failed loading personalization for user {user_id}: {exc}", exc_info=True)
+            return None, None
+
+        if not record:
+            return None, None
+
+        row = dict(record)
+        summary_parts: List[str] = []
+        nickname = self._format_snippet(row.get("personalization_nickname"), limit=80)
+        occupation = self._format_snippet(row.get("personalization_occupation"), limit=120)
+        about = self._format_snippet(row.get("personalization_about"), limit=200)
+
+        if nickname:
+            summary_parts.append(f"Preferred name: {nickname}")
+        if occupation:
+            summary_parts.append(f"Occupation: {occupation}")
+        if about:
+            summary_parts.append(f"About: {about}")
+
+        profile_summary = ". ".join(summary_parts) if summary_parts else None
+        custom_instructions = self._truncate_block(row.get("personalization_custom_instructions"), limit=2000)
+        return profile_summary, custom_instructions
+
+    async def _load_recent_chat_context(self, user_id: int, *, limit: int = 6) -> Optional[str]:
+        """Summarize the latest general chat turns for the AI prompt."""
+        if self.supabase is None:
+            return None
+        try:
+            result = (
+                self.supabase.table("general_chat_messages")
+                .select("role, content, created_at")
+                .eq("user_id", user_id)
+                .order("created_at", desc=True)
+                .limit(limit)
+                .execute()
+            )
+        except Exception as exc:
+            logger.debug(
+                "Failed to load chat history for proactivity",
+                extra={
+                    "event_type": "proactivity_history_load_failure",
+                    "user_id": user_id,
+                    "error": str(exc),
+                },
+            )
+            return None
+
+        rows = getattr(result, "data", None) or []
+        if not rows:
+            return None
+
+        lines: List[str] = []
+        for row in reversed(rows):
+            snippet = self._format_snippet(row.get("content"), limit=220)
+            if not snippet:
+                continue
+            role = str(row.get("role") or "").lower()
+            speaker = "User" if role == "user" else "Gray"
+            lines.append(f"- {speaker}: {snippet}")
+
+        return "\n".join(lines) if lines else None
+
+    @staticmethod
+    def _format_snippet(value: Optional[Any], *, limit: int) -> Optional[str]:
+        if value is None:
+            return None
+        text = re.sub(r"\s+", " ", str(value)).strip()
+        if not text:
+            return None
+        if limit > 0 and len(text) > limit:
+            text = text[: limit - 3].rstrip() + "..."
+        return text
+
+    @staticmethod
+    def _truncate_block(value: Optional[Any], *, limit: int = 2000) -> Optional[str]:
+        if value is None:
+            return None
+        text = str(value).strip()
+        if not text:
+            return None
+        if limit > 0 and len(text) > limit:
+            text = text[: limit - 3].rstrip() + "..."
+        return text
 
     async def _get_user_recent_activity(self, user_id: int) -> Optional[Dict[str, Any]]:
         # Prefer Supabase when available.

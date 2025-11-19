@@ -39,6 +39,14 @@ export const isGrayWorkspaceHost = (host?: string | null): boolean => {
   return normalized.startsWith("gray.") || normalized === "gray";
 };
 
+export const isPayHost = (host?: string | null): boolean => {
+  const normalized = normalizeHostname(host);
+  if (!normalized) {
+    return false;
+  }
+  return normalized.startsWith("pay.") || normalized === "pay";
+};
+
 export const resolveDefaultWorkspacePath = (
   host?: string | null
 ): string => {

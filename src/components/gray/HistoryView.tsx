@@ -87,16 +87,9 @@ export function GrayHistoryView({
               const hasLink = Boolean(entry.href && entry.href !== "#");
               const isActive = entry.id === activeEntryId;
 
-              const isGenericTitle =
-                entry.title.trim().toLowerCase() === "new chat" ||
-                entry.title.trim().toLowerCase() === "new conversation";
-
               const content = (
                 <div className={styles.historyRowTitle}>
                   <span>{entry.title}</span>
-                  {isGenericTitle && (
-                    <span className={styles.historyRowBadge}>Untitled</span>
-                  )}
                   {entry.sectionLabel ? (
                     <span className={styles.historyRowSection}>{entry.sectionLabel}</span>
                   ) : null}

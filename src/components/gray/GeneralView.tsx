@@ -94,6 +94,16 @@ export function GrayGeneralView({
     [onTogglePlan]
   );
 
+  const handleCalendarEventDelete = useCallback(
+    (event: CalendarEvent) => {
+      const plan = resolvePlanFromEvent(event.id);
+      if (plan) {
+        onDeletePlan(plan);
+      }
+    },
+    [onDeletePlan, resolvePlanFromEvent]
+  );
+
   const handleCalendarEventMove = useCallback(
     (event: CalendarEvent, range: { start: Date; end: Date }) => {
       if (event.entryType === "reminder" && onReminderMove) {
@@ -175,6 +185,7 @@ export function GrayGeneralView({
               onEventsChange={onCalendarEventsChange}
               selectedDate={calendarSelectedDate}
               onSelectedDateChange={onCalendarSelectedDateChange}
+              onEventDelete={handleCalendarEventDelete}
               maxHeight={PANEL_HEIGHT}
               hourHeight={COMPACT_CALENDAR_HOUR_HEIGHT}
             />

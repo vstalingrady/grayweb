@@ -208,60 +208,6 @@ function buildGrayReminderPayload(created: any, userId: number) {
   };
 }
 
-const ReminderIdSchema = z
-  .number()
-  .int()
-  .positive()
-  .describe("Numeric reminder id from the backend.");
-
-const ReminderIsoSchema = z
-  .string()
-  .min(1)
-  .describe("Reminder time as an ISO 8601 datetime string in the user's local timezone.");
-
-function buildGrayReminderPayload(created: any, userId: number) {
-  const id = typeof created?.id === "number" ? created.id : Number.parseInt(String(created?.id ?? 0), 10) || Date.now();
-  const remindAt = typeof created?.remind_at === "string" ? created.remind_at : created?.remindAt ?? created?.time_iso ?? null;
-  const label = (created?.label ?? created?.summary ?? created?.description ?? "Reminder").toString();
-  const status = (created?.status ?? "pending").toString();
-  const deliveryMode = (created?.delivery_mode ?? "reminder").toString();
-
-  const summary =
-    typeof created?.summary === "string"
-      ? created.summary
-      : typeof created?.description === "string"
-        ? created.description
-        : null;
-
-  const reminderRecord: Record<string, unknown> = {
-    id,
-    remind_at: remindAt,
-    status,
-    description: created?.description ?? null,
-    summary,
-  };
-
-  return {
-    type: "gray.reminder",
-    source: "mcp/plans-habits-server",
-    status: "created",
-    entity: "plan",
-    delivery_mode: deliveryMode,
-    data: {
-      id,
-      user_id: typeof created?.user_id === "number" ? created.user_id : userId,
-      label,
-      time_iso: remindAt,
-      raw: created ?? {},
-      delivery_mode: deliveryMode,
-      summary,
-      reminder_id: id,
-      reminder_status: status,
-      reminder: reminderRecord,
-    },
-  };
-}
-
 /**
  * Tools: Plans
  */

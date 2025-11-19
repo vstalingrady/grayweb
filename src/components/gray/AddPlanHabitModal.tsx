@@ -128,7 +128,12 @@ export function AddPlanHabitModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!inputValue.trim() || !user) {
+    if (!user) {
+      setError("You must be signed in to perform this action.");
+      return;
+    }
+
+    if (!inputValue.trim()) {
       return;
     }
 

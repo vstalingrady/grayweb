@@ -170,8 +170,8 @@ export function PersonalizationPanel({
   const contextFooterDescription = hasContextUsage ? contextFooterLabel : "";
   const contextMessagesLabel = hasContextUsage && contextUsage ? `${contextUsage.messageCount.toLocaleString()} messages` : "";
   const contextTokensLabel = contextUsage
-    ? `${contextTokensUsed.toLocaleString()} tokens`
-    : "0 tokens";
+    ? `${contextTokensUsed.toLocaleString()}`
+    : "0";
 
   const { user, updateUser: updateUserProfile } = useUser();
   const mapsEnabled = user?.maps_enabled ?? false;
@@ -609,7 +609,7 @@ export function PersonalizationPanel({
                     <span className={styles.personalizationToggleHint}>Let Gray search for answers automatically.</span>
                   </span>
                   <span className={styles.personalizationSwitch} data-active={webSearchEnabled ? "true" : "false"}>
-                    <span />
+                    <span className={styles.personalizationSlider} />
                   </span>
                 </button>
 
@@ -625,7 +625,7 @@ export function PersonalizationPanel({
                     <span className={styles.personalizationToggleHint}>Enable location-based features.</span>
                   </span>
                   <span className={styles.personalizationSwitch} data-active={mapsEnabled ? "true" : "false"}>
-                    <span />
+                    <span className={styles.personalizationSlider} />
                   </span>
                 </button>
               </div>

@@ -5,13 +5,14 @@ import { useRouter } from "next/navigation";
 import { ChevronDown, X } from "lucide-react";
 import styles from "@/app/gray/GrayPageClient.module.css";
 import { useUser } from "@/contexts/UserContext";
+import { apiService } from "@/lib/api";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { clearSupabaseAuthStorage } from "@/lib/supabaseStorage";
 
 type GeneralSetting = {
   label: string;
   helper: string;
-  options: string[];
+  options?: string[];
   disabled?: boolean;
 };
 
@@ -40,6 +41,13 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [mapsEnabled, setMapsEnabled] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      // setMapsEnabled(Boolean(user.maps_enabled));
+    }
+  }, [user]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -141,9 +149,8 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
               <span>{label}</span>
               <button
                 type="button"
-                className={`${styles.settingsControl} ${
-                  disabled ? styles.settingsControlDisabled : ""
-                }`}
+                className={`${styles.settingsControl} ${disabled ? styles.settingsControlDisabled : ""
+                  }`}
                 aria-disabled={disabled ? "true" : "false"}
                 disabled={disabled}
               >
@@ -163,25 +170,21 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
               </button>
             </div>
           ))}
+
         </div>
 
-        <section className={`${styles.settingsCard} ${styles.settingsDangerCard}`}>
-          {deleteError ? (
-            <p className={styles.settingsDangerError}>{deleteError}</p>
-          ) : confirmDelete ? (
-            <p className={styles.settingsDangerHelper}>Select confirm again to permanently delete your account.</p>
-          ) : null}
-          <button
-            type="button"
-            className={`${styles.settingsDangerButton} ${
-              confirmDelete ? styles.settingsDangerButtonConfirm : ""
-            }`}
-            onClick={handleDeleteAccount}
-            disabled={!user || isDeleting}
-          >
-            {isDeleting ? "Deleting..." : confirmDelete ? "Confirm delete" : "Delete account"}
-          </button>
-        </section>
+        {deleteError ? (
+          <p className={styles.settingsDangerError}>{deleteError}</p>
+        ) : null}
+
+        <button
+          type="button"
+          className={styles.settingsDeleteLink}
+          onClick={handleDeleteAccount}
+          disabled={!user || isDeleting}
+        >
+          {isDeleting ? "Deleting..." : confirmDelete ? "Click again to confirm delete" : "Delete Account"}
+        </button>
       </div>
     </div>
   );

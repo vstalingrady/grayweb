@@ -60,8 +60,8 @@ export default async function RootLayout({
       }
 
       var fallbackVersion = "19.2.0";
-      var ensureMetadata = function(rendererInterface) {
-        if (!rendererInterface || typeof rendererInterface !== "object") {
+      var ensureMetadata = function(target) {
+        if (!target || typeof target !== "object") {
           return;
         }
 
@@ -69,15 +69,13 @@ export default async function RootLayout({
           return typeof value === "string" ? value.trim() : "";
         };
 
-        if (!normalize(rendererInterface.version)) {
-          rendererInterface.version = fallbackVersion;
+        if (!normalize(target.version)) {
+          target.version = fallbackVersion;
         }
 
-        if (!normalize(rendererInterface.rendererPackageVersion)) {
-          rendererInterface.rendererPackageVersion =
-            rendererInterface.version && rendererInterface.version.trim()
-              ? rendererInterface.version
-              : fallbackVersion;
+        if (!normalize(target.rendererPackageVersion)) {
+          target.rendererPackageVersion =
+            target.version && target.version.trim() ? target.version : fallbackVersion;
         }
       };
 
@@ -87,6 +85,20 @@ export default async function RootLayout({
           return !!hook && hook.__versionPatched;
         }
         hook.__versionPatched = true;
+
+        if (hook.renderers && typeof hook.renderers.forEach === "function") {
+          hook.renderers.forEach(function(renderer) {
+            ensureMetadata(renderer);
+          });
+        }
+
+        if (typeof hook.inject === "function") {
+          var originalInject = hook.inject;
+          hook.inject = function(renderer) {
+            ensureMetadata(renderer);
+            return originalInject.apply(this, arguments);
+          };
+        }
 
         if (hook.rendererInterfaces && typeof hook.rendererInterfaces.forEach === "function") {
           hook.rendererInterfaces.forEach(ensureMetadata);

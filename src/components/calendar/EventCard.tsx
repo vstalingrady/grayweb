@@ -158,7 +158,9 @@ export const EventCard = memo(function EventCard({
 
   cardStyle["--event-card-color"] = backgroundColor;
   cardStyle["--event-line-color"] = backgroundColor;
-  cardStyle.backgroundColor = backgroundColor;
+  if (event.entryType !== "reminder" && event.displayHint !== "line") {
+    cardStyle.backgroundColor = backgroundColor;
+  }
   cardStyle["--event-card-text-color"] = textColor;
   cardStyle["--event-card-time-color"] = timeColor;
   cardStyle["--event-card-detail-color"] = detailColor;

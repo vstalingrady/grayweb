@@ -8,20 +8,47 @@ def resolve_supabase_credentials() -> Tuple[Optional[str], Optional[str], Option
     """
     Resolve Supabase URL and key from environment variables with sensible fallbacks.
 
-    Order for URL:
+    URL resolution order:
     - SUPABASE_URL
+    - NEXT_PUBLIC_SUPABASE_URL (so backend automatically reuses frontend config)
+    - SUPABASE_PROJECT_URL / SUPABASE_HOST (with https:// prefix)
     - Derive from Postgres host (e.g., <ref>.supabase.co) if present
 
-    Order for KEY:
+    Key resolution order:
     - SUPABASE_KEY
     - SUPABASE_SERVICE_ROLE_KEY
     - SUPABASE_SERVICE_KEY
     - SUPABASE_SECRET_KEY
     - SUPABASE_ANON_KEY
+    - NEXT_PUBLIC_SUPABASE_ANON_KEY (read-only fallback)
 
     Returns: (url, key, key_source_env_name)
     """
-    url = (os.getenv("SUPABASE_URL") or "").strip() or None
+
+    def _normalize_url(value: str) -> str:
+        trimmed = value.strip()
+        if not trimmed:
+            return ""
+        if trimmed.startswith("http://") or trimmed.startswith("https://"):
+            return trimmed.rstrip("/")
+        return f"https://{trimmed.lstrip('/').rstrip('/')}"
+
+    url_candidates = [
+        "SUPABASE_URL",
+        "NEXT_PUBLIC_SUPABASE_URL",
+        "SUPABASE_PROJECT_URL",
+        "SUPABASE_HOST",
+    ]
+
+    url: Optional[str] = None
+    for env_name in url_candidates:
+        candidate = os.getenv(env_name, "").strip()
+        if candidate and "your_supabase_url" not in candidate.lower():
+            url = _normalize_url(candidate)
+            if env_name != "SUPABASE_URL":
+                os.environ["SUPABASE_URL"] = url
+            break
+
     if not url:
         # Attempt to infer from pooled Postgres host: aws-1-<region>.pooler.supabase.com
         host = os.getenv("host") or os.getenv("PGHOST") or ""
@@ -30,6 +57,7 @@ def resolve_supabase_credentials() -> Tuple[Optional[str], Optional[str], Option
             if parts:
                 project_ref = parts[0]
                 url = f"https://{project_ref}.supabase.co"
+                os.environ["SUPABASE_URL"] = url
 
     candidate_keys = [
         "SUPABASE_KEY",
@@ -37,6 +65,7 @@ def resolve_supabase_credentials() -> Tuple[Optional[str], Optional[str], Option
         "SUPABASE_SERVICE_KEY",
         "SUPABASE_SECRET_KEY",
         "SUPABASE_ANON_KEY",
+        "NEXT_PUBLIC_SUPABASE_ANON_KEY",
     ]
     key: Optional[str] = None
     key_source: Optional[str] = None
@@ -62,4 +91,3 @@ def create_supabase_client() -> Optional[Client]:
         return create_client(url, key)
     except Exception:
         return None
-

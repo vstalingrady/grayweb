@@ -168,6 +168,7 @@ export function GraySidebar({
                   </div>
                 ))}
               </div>
+              <div className={styles.sidebarScrollFade} aria-hidden="true" />
             </div>
           </div>
           <div className={styles.sidebarBottom}>

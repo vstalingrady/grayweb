@@ -348,11 +348,6 @@ export function EventComposer({
     }
   };
 
-  const isPlanSyntheticEvent = Boolean(activeEvent?.calendarId === "plan");
-  const isReminderSyntheticEvent =
-    typeof activeEvent?.id === "string" && activeEvent.id.startsWith("reminder-");
-  const isSyntheticEvent = isPlanSyntheticEvent || isReminderSyntheticEvent;
-
   return (
     <div
       className={overlayClassName}
@@ -524,7 +519,7 @@ export function EventComposer({
 
 
           <footer className={styles.composerFooter}>
-            {activeEvent && !isPlanSyntheticEvent ? (
+            {activeEvent && onDelete ? (
               <button type="button" className={styles.composerDeleteButton} onClick={handleDelete}>
                 Delete
               </button>

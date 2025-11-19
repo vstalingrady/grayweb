@@ -431,6 +431,24 @@ export function GrayDashboardView({
     },
     [onTogglePlan]
   );
+
+  const handleCalendarEventDelete = useCallback(
+    (event: CalendarEvent) => {
+      if (!onDeletePlan) {
+        return;
+      }
+      if (!event.id.startsWith(PLAN_EVENT_ID_PREFIX)) {
+        return;
+      }
+      const planId = event.id.slice(PLAN_EVENT_ID_PREFIX.length);
+      const targetPlan = displayPlans.find((plan) => plan.id === planId);
+      if (!targetPlan) {
+        return;
+      }
+      onDeletePlan(targetPlan);
+    },
+    [displayPlans, onDeletePlan]
+  );
   const displayProactivity =
     hasPulseData && isCurrentPulseEditable
       ? currentPulse?.proactivity ?? proactivityFallback
@@ -1593,6 +1611,7 @@ export function GrayDashboardView({
       events={mergedEvents}
       onCalendarsChange={onCalendarsChange}
       onEventsChange={onCalendarEventsChange}
+       onEventDelete={handleCalendarEventDelete}
       selectedDate={calendarSelectedDate}
       onSelectedDateChange={onCalendarSelectedDateChange}
       hourHeight={CALENDAR_PANEL_HOUR_HEIGHT}
