@@ -281,24 +281,25 @@ const buildGroundingSourceCards = (metadata: GroundingMetadata | undefined | nul
     if (chunk.web) {
       const derivedHost = deriveGroundingSourceHost(undefined, chunk.web.uri);
       const rawSite = chunk.web.site ?? chunk.web.domain;
-      let siteLabel = rawSite ?? derivedHost ?? "Web source";
+      let siteLabel: string | undefined = rawSite ?? derivedHost;
 
       // Filter out internal Google/Vertex domains if they leak into the label
       if (
+        !siteLabel ||
         siteLabel.toLowerCase().includes("vertexaisearch") ||
         siteLabel.toLowerCase() === "google search"
       ) {
-        siteLabel = derivedHost ?? "Web source";
+        siteLabel = derivedHost;
       }
-      // Final safety check
-      if (siteLabel.toLowerCase().includes("vertexaisearch")) {
-        siteLabel = "Source";
+      // Final safety check: if still internal or empty, make it undefined to hide
+      if (!siteLabel || siteLabel.toLowerCase().includes("vertexaisearch")) {
+        siteLabel = undefined;
       }
 
       sources.push({
         id: `${id}-web`,
-        siteLabel,
-        title: chunk.web.title ?? siteLabel,
+        siteLabel: siteLabel,
+        title: chunk.web.title ?? siteLabel ?? "Referenced web content",
         href: chunk.web.uri ?? undefined,
         isReferenced,
       });
@@ -308,22 +309,23 @@ const buildGroundingSourceCards = (metadata: GroundingMetadata | undefined | nul
       const retrieved = chunk.retrieved_context;
       const derivedHost = deriveGroundingSourceHost(undefined, retrieved.uri);
       const host = retrieved.document_name ?? derivedHost;
-      let siteLabel = host ?? "Referenced context";
+      let siteLabel: string | undefined = host;
 
       if (
+        !siteLabel ||
         siteLabel.toLowerCase().includes("vertexaisearch") ||
         siteLabel.toLowerCase() === "google search"
       ) {
-        siteLabel = derivedHost ?? "Referenced context";
+        siteLabel = derivedHost;
       }
-       if (siteLabel.toLowerCase().includes("vertexaisearch")) {
-        siteLabel = "Context";
+       if (!siteLabel || siteLabel.toLowerCase().includes("vertexaisearch")) {
+        siteLabel = undefined;
       }
 
       sources.push({
         id: `${id}-retrieved`,
-        siteLabel,
-        title: retrieved.title || retrieved.text?.slice(0, 80) || siteLabel,
+        siteLabel: siteLabel,
+        title: retrieved.title || retrieved.text?.slice(0, 80) || siteLabel ?? "Referenced context",
         href: retrieved.uri ?? undefined,
         excerpt: retrieved.text,
         isReferenced,
@@ -1252,13 +1254,14 @@ const ChatMessagesList = memo(
                                   <>
                                     <div className={styles.chatGroundingSourceCardAvatar}>{initials}</div>
                                     <div className={styles.chatGroundingSourceCardContent}>
-                                      <div className={styles.chatGroundingSourceCardTitle}>
-                                        {source.title ?? "Referenced source"}
-                                      </div>
-                                      <div className={styles.chatGroundingSourceCardSite}>
-                                        {source.siteLabel ?? "Referer"}
-                                      </div>
-                                    </div>
+                                                                          <div className={styles.chatGroundingSourceCardTitle}>
+                                                                            {source.title ?? "Referenced source"}
+                                                                          </div>
+                                                                          {source.siteLabel ? (
+                                                                            <div className={styles.chatGroundingSourceCardSite}>
+                                                                              {source.siteLabel}
+                                                                            </div>
+                                                                          ) : null}                                    </div>
                                   </>
                                 );
                                 if (source.href) {
