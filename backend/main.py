@@ -4803,8 +4803,37 @@ async def list_user_reminders(
             if limit is not None:
                 builder = builder.limit(limit)
             result = builder.execute()
-            if result.data is not None:
-                return [_serialize_reminder_row(row) for row in result.data]
+            
+            rows = result.data if result.data is not None else []
+
+            # Self-healing: Auto-mark stale pending reminders as delivered to prevent loop
+            if status_filter == "pending" and rows:
+                now = datetime.utcnow()
+                stale_threshold = now - timedelta(minutes=15)
+                stale_ids = []
+                for row in rows:
+                    try:
+                        remind_at_str = row.get("remind_at")
+                        if remind_at_str:
+                            remind_at = datetime.fromisoformat(remind_at_str.replace("Z", "+00:00")).replace(tzinfo=None)
+                            if remind_at < stale_threshold:
+                                stale_ids.append(row["id"])
+                    except (ValueError, TypeError):
+                        continue
+                
+                if stale_ids:
+                    # Launch background update to mark these as delivered
+                    try:
+                        api_logger.info(f"Auto-marking {len(stale_ids)} stale reminders as delivered", extra={"user_id": user_id, "reminder_ids": stale_ids})
+                        supabase.table("reminders").update({
+                            "status": "delivered",
+                            "updated_at": now.isoformat(),
+                            "delivered_at": now.isoformat()
+                        }).in_("id", stale_ids).execute()
+                    except Exception as e:
+                        api_logger.error(f"Failed to auto-mark stale reminders: {e}")
+
+            return [_serialize_reminder_row(row) for row in rows]
         except Exception as error:
             _handle_supabase_table_error("Warning: Reminders table not found or inaccessible", error)
 
@@ -4934,10 +4963,15 @@ async def update_user_reminder(
                 return _serialize_reminder_row(rows[0])
             if isinstance(rows, dict) and rows:
                 return _serialize_reminder_row(rows)
+            
+            # If Supabase returns no data, it implies failure to update (likely permission or not found)
+            api_logger.error(f"Supabase update returned no data for reminder {reminder_id}", extra={"user_id": user_id})
+            raise HTTPException(status_code=500, detail="Failed to update reminder in Supabase (no data returned)")
         except HTTPException:
             raise
         except Exception as error:
-            _handle_supabase_table_error("Warning: Failed to update reminder", error)
+            api_logger.error(f"Supabase update failed: {error}", exc_info=True)
+            raise HTTPException(status_code=500, detail=f"Supabase update failed: {str(error)}")
 
     existing = await db.fetch_one(
         reminders.select().where(
