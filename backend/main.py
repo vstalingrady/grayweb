@@ -2535,18 +2535,22 @@ async def update_user_streak(user_id: int, db: databases.Database):
 
     # Check if last activity was yesterday
     if streak['last_activity_date']:
-        last_activity = streak['last_activity_date'].date()
-        yesterday = date.fromordinal(today.toordinal() - 1)
-
-        if last_activity == yesterday:
-            # Continue streak
-            new_streak = streak['current_streak'] + 1
-        elif last_activity < yesterday:
-            # Streak broken, start new one
+        last_activity = _coerce_activity_day(streak['last_activity_date'])
+        if last_activity is None:
+            # If we can't parse the date, treat as first activity
             new_streak = 1
         else:
-            # Already updated today
-            return streak
+            yesterday = date.fromordinal(today.toordinal() - 1)
+
+            if last_activity == yesterday:
+                # Continue streak
+                new_streak = streak['current_streak'] + 1
+            elif last_activity < yesterday:
+                # Streak broken, start new one
+                new_streak = 1
+            else:
+                # Already updated today
+                return streak
     else:
         # First activity ever
         new_streak = 1
