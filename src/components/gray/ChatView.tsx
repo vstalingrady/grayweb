@@ -325,7 +325,7 @@ const buildGroundingSourceCards = (metadata: GroundingMetadata | undefined | nul
       sources.push({
         id: `${id}-retrieved`,
         siteLabel: siteLabel,
-        title: retrieved.title || retrieved.text?.slice(0, 80) || siteLabel ?? "Referenced context",
+        title: retrieved.title || retrieved.text?.slice(0, 80) || (siteLabel ?? "Referenced context"),
         href: retrieved.uri ?? undefined,
         excerpt: retrieved.text,
         isReferenced,
