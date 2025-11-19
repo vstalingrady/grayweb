@@ -6,16 +6,14 @@
   flex: 1 1 auto;
   background: var(--background, #050505);
   color: var(--foreground, #f5f5f5);
-  font-family: var(
-      --font-sans,
+  font-family: var(--font-sans,
       "Plus Jakarta Sans",
       "Plus Jakarta Sans",
       system-ui,
       -apple-system,
       BlinkMacSystemFont,
       "Segoe UI",
-      sans-serif
-    );
+      sans-serif);
   display: flex;
   justify-content: flex-start;
   padding: 0;
@@ -51,8 +49,7 @@
 .backdrop {
   position: fixed;
   inset: 0;
-  background: url("https://upload.wikimedia.org/wikipedia/commons/a/a5/Tsunami_by_hokusai_19th_century.jpg")
-    center / cover no-repeat;
+  background: url("https://upload.wikimedia.org/wikipedia/commons/a/a5/Tsunami_by_hokusai_19th_century.jpg") center / cover no-repeat;
   transform: scale(1.05);
   filter: saturate(0.85) brightness(0.65);
   pointer-events: none;
@@ -217,8 +214,7 @@
     transform 0.2s ease;
 }
 
-.sidebarRailAvatar:hover {
-}
+.sidebarRailAvatar:hover {}
 
 .sidebarRailAvatar[data-expanded="true"] {
   padding-right: 0;
@@ -228,11 +224,9 @@
   width: 44px;
   height: 44px;
   border-radius: 999px;
-  background: linear-gradient(
-    135deg,
-    rgba(96, 96, 102, 0.85),
-    rgba(32, 32, 36, 0.9)
-  );
+  background: linear-gradient(135deg,
+      rgba(96, 96, 102, 0.85),
+      rgba(32, 32, 36, 0.9));
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -404,7 +398,7 @@
   flex-shrink: 0;
 }
 
-.profileMenuIcon > svg {
+.profileMenuIcon>svg {
   display: block;
 }
 
@@ -462,7 +456,7 @@
   position: fixed;
   inset: 0;
   z-index: 60;
-  background: transparent;
+  background: rgba(0, 0, 0, 0.8);
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -475,7 +469,7 @@
   overflow: auto;
   border-radius: clamp(16px, 2.5vw, 24px);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(10, 10, 14, 0.98);
+  background: rgba(10, 10, 10, 0.98);
   box-shadow:
     0 40px 80px rgba(0, 0, 0, 0.6),
     inset 0 0 0 1px rgba(255, 255, 255, 0.03);
@@ -557,7 +551,7 @@
 }
 
 .personalizationCard {
-  background: rgba(8, 8, 10, 0.92);
+  background: rgba(8, 8, 8, 0.92);
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: clamp(18px, 3vw, 24px);
   padding: clamp(18px, 3vw, 28px);
@@ -798,31 +792,132 @@
 }
 
 .personalizationSwitch {
-  width: 44px;
-  height: 26px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.12);
-  border: 1px solid rgba(255, 255, 255, 0.26);
-  display: inline-flex;
-  align-items: center;
-  padding: 3px;
-}
-
-.personalizationSwitch span {
-  width: 20px;
+  position: relative;
+  display: inline-block;
+  width: 36px;
   height: 20px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.8);
-  transform: translateX(0);
+}
+.personalizationSlider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(255, 255, 255, 0.1);
+  transition: 0.4s;
+  border-radius: 34px;
 }
 
-.personalizationSwitch[data-active="true"] {
-  background: rgba(255, 255, 255, 0.32);
-  border-color: rgba(255, 255, 255, 0.4);
+.personalizationSlider:before {
+  position: absolute;
+  content: "";
+  height: 14px;
+  width: 14px;
+  left: 3px;
+  bottom: 3px;
+  background-color: rgba(255, 255, 255, 0.6);
+  transition: 0.4s;
+  border-radius: 50%;
+}
+.personalizationSwitch[data-active="true"] .personalizationSlider {
+  background-color: rgba(255, 255, 255, 0.25);
 }
 
-.personalizationSwitch[data-active="true"] span {
+.personalizationSwitch[data-active="true"] .personalizationSlider:before {
   transform: translateX(16px);
+  background-color: #fff;
+}
+
+.mobileHeader {
+  display: none;
+}
+
+.mobileSidebarOverlay {
+  display: none;
+}
+
+/* Mobile Responsive Styles */
+@media (max-width: 768px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: 50;
+    width: 0;
+    transition: width 0.3s ease;
+  }
+
+  .sidebar[data-expanded="true"] {
+    width: 100%;
+    /* Full width on very small screens, or maybe just 80% */
+    max-width: 320px;
+  }
+
+  .sidebarRail {
+    /* Hide the rail on mobile when collapsed, show when expanded? 
+       Actually, we probably want a hamburger menu in the main content to open the sidebar.
+       The sidebar itself will contain the rail content or be the full drawer.
+    */
+    display: none;
+  }
+
+  .sidebar[data-expanded="true"] .sidebarRail {
+    display: none;
+  }
+
+  .sidebarPanel {
+    /* On mobile, the panel takes up the full drawer width */
+    width: 100%;
+  }
+
+  /* Overlay when sidebar is open */
+  .mobileSidebarOverlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 40;
+    backdrop-filter: blur(4px);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+  }
+
+  .mobileSidebarOverlay[data-visible="true"] {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  /* Mobile Header */
+  .mobileHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    background: rgba(7, 7, 7, 0.96);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    position: sticky;
+    top: 0;
+    z-index: 30;
+  }
+
+  .mobileMenuButton {
+    background: transparent;
+    border: none;
+    color: var(--foreground);
+    padding: 8px;
+    margin-left: -8px;
+  }
+
+  .main {
+    /* Adjust main content to account for mobile header if needed, 
+         but flex/grid should handle it if we structure it right. */
+  }
 }
 
 .personalizationPersonaGrid {
@@ -1355,20 +1450,16 @@
   -ms-overflow-style: none;
   scrollbar-width: none;
   position: relative;
-  mask-image: linear-gradient(
-    180deg,
-    transparent 0%,
-    rgba(0, 0, 0, 1) 32px,
-    rgba(0, 0, 0, 1) calc(100% - 48px),
-    transparent 100%
-  );
-  -webkit-mask-image: linear-gradient(
-    180deg,
-    transparent 0%,
-    rgba(0, 0, 0, 1) 32px,
-    rgba(0, 0, 0, 1) calc(100% - 48px),
-    transparent 100%
-  );
+  mask-image: linear-gradient(180deg,
+      transparent 0%,
+      rgba(0, 0, 0, 1) 32px,
+      rgba(0, 0, 0, 1) calc(100% - 48px),
+      transparent 100%);
+  -webkit-mask-image: linear-gradient(180deg,
+      transparent 0%,
+      rgba(0, 0, 0, 1) 32px,
+      rgba(0, 0, 0, 1) calc(100% - 48px),
+      transparent 100%);
 }
 
 .sidebarScroll::-webkit-scrollbar {
@@ -1383,12 +1474,10 @@
   right: 0;
   height: 48px;
   pointer-events: none;
-  background: linear-gradient(
-    180deg,
-    rgba(7, 7, 7, 0) 0%,
-    rgba(7, 7, 7, 0.35) 40%,
-    rgba(7, 7, 7, 0.96) 100%
-  );
+  background: linear-gradient(180deg,
+      rgba(7, 7, 7, 0) 0%,
+      rgba(7, 7, 7, 0.35) 40%,
+      rgba(7, 7, 7, 0.96) 100%);
   z-index: 1;
   margin-top: auto;
 }
@@ -1401,12 +1490,10 @@
   right: 0;
   height: 36px;
   pointer-events: none;
-  background: linear-gradient(
-    180deg,
-    rgba(7, 7, 7, 0.96) 0%,
-    rgba(7, 7, 7, 0.65) 60%,
-    rgba(7, 7, 7, 0) 100%
-  );
+  background: linear-gradient(180deg,
+      rgba(7, 7, 7, 0.96) 0%,
+      rgba(7, 7, 7, 0.65) 60%,
+      rgba(7, 7, 7, 0) 100%);
   z-index: 1;
 }
 
@@ -1437,16 +1524,14 @@
   border-radius: 16px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(32, 32, 32, 0.72);
-  font-family: var(
-      --font-mono,
+  font-family: var(--font-mono,
       "IBM Plex Mono",
       "IBM Plex Mono",
       SFMono-Regular,
       Consolas,
       "Liberation Mono",
       Menlo,
-      monospace
-    );
+      monospace);
   font-size: 0.7rem;
   letter-spacing: 0.16em;
   text-transform: uppercase;
@@ -1517,7 +1602,7 @@
   --history-line-color: rgba(255, 255, 255, 0.08);
 }
 
-.sidebarNavItem[data-nav="history"] > .sidebarHistory {
+.sidebarNavItem[data-nav="history"]>.sidebarHistory {
   margin-top: 0;
   padding-top: 0;
   border-top: none;
@@ -1976,11 +2061,9 @@
   height: 44px;
   border-radius: 999px;
   overflow: hidden;
-  background: linear-gradient(
-    145deg,
-    rgba(52, 52, 56, 0.82),
-    rgba(24, 24, 28, 0.92)
-  );
+  background: linear-gradient(145deg,
+      rgba(52, 52, 56, 0.82),
+      rgba(24, 24, 28, 0.92));
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2103,14 +2186,12 @@
   overflow-y: auto;
   overflow-x: hidden;
   scrollbar-gutter: stable both-edges;
-  scroll-padding-bottom: calc(
-    var(--chat-composer-overlap, clamp(10px, 2vh, 18px)) + clamp(12px, 2vh, 20px)
-  );
+  scroll-padding-bottom: calc(var(--chat-composer-overlap, clamp(10px, 2vh, 18px)) + clamp(12px, 2vh, 20px));
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
 }
 
-.sidebar[data-expanded="true"] ~ .main {
+.sidebar[data-expanded="true"]~.main {
   --gray-sidebar-width: 320px;
   --chat-bar-horizontal-shift: calc(var(--gray-sidebar-width) / 2);
 }
@@ -2196,7 +2277,23 @@
 }
 
 .page[data-compact="true"] .main[data-view="general"] {
-  padding-top: clamp(22px, 6vh, 38px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding-top: 0;
+  padding-bottom: clamp(20px, 5vh, 40px);
+  grid-template-rows: none;
+  gap: clamp(24px, 4vh, 48px);
+}
+
+.page[data-compact="true"] .mainContent[data-view="general"] {
+  height: auto;
+  min-height: 0;
+  flex: 0 1 auto;
+  justify-content: center;
+  padding-top: 0;
+  margin-bottom: clamp(20px, 4vh, 32px);
 }
 
 .main[data-view="chat"] {
@@ -2229,11 +2326,11 @@
   padding-bottom: 0;
 }
 
-.mainContent > * {
+.mainContent>* {
   width: min(1180px, 100%);
 }
 
-.mainContent[data-view="dashboard"] > * {
+.mainContent[data-view="dashboard"]>* {
   width: 100%;
   max-width: none;
   flex: 1 1 auto;
@@ -2252,7 +2349,7 @@
   align-self: stretch;
 }
 
-.mainContent[data-view="chat"] > * {
+.mainContent[data-view="chat"]>* {
   width: 100%;
   max-width: none;
 }
@@ -2296,7 +2393,7 @@
   gap: clamp(16px, 4vh, 24px);
 }
 
-.mainContent[data-view="general"] > * {
+.mainContent[data-view="general"]>* {
   width: min(var(--gray-general-max-width), 100%);
   margin-left: auto;
   margin-right: auto;
@@ -2324,13 +2421,17 @@
   margin-right: auto;
 }
 
-.mainContent > .chatView,
-.mainContent > .chatViewEmpty {
+.page[data-compact="true"] .secondaryColumn {
+  display: none;
+}
+
+.mainContent>.chatView,
+.mainContent>.chatViewEmpty {
   width: min(960px, 100%);
 }
 
-.mainContent[data-view="chat"] > .chatView,
-.mainContent[data-view="chat"] > .chatViewEmpty {
+.mainContent[data-view="chat"]>.chatView,
+.mainContent[data-view="chat"]>.chatViewEmpty {
   width: 100%;
   max-width: none;
   margin-left: 0;
@@ -2409,13 +2510,7 @@
   gap: clamp(18px, 3.5vh, 28px);
   min-height: 100%;
   padding:
-    clamp(8px, 2vh, 18px)
-    0
-    calc(
-      env(safe-area-inset-bottom, 0px)
-        + clamp(96px, 10vh, 140px)
-    )
-    0;
+    clamp(8px, 2vh, 18px) 0 calc(env(safe-area-inset-bottom, 0px) + clamp(96px, 10vh, 140px)) 0;
 
   overflow: auto;
   scroll-behavior: smooth;
@@ -2934,7 +3029,7 @@
   justify-content: center;
 }
 
-.chatMetadataControl > button {
+.chatMetadataControl>button {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2947,9 +3042,9 @@
   transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
 }
 
-.chatMetadataControl > button:hover,
-.chatMetadataControl > button:focus-visible,
-.chatMetadataControl > button[data-active="true"] {
+.chatMetadataControl>button:hover,
+.chatMetadataControl>button:focus-visible,
+.chatMetadataControl>button[data-active="true"] {
   color: #fff;
   border-color: rgba(255, 255, 255, 0.18);
   background: rgba(255, 255, 255, 0.05);
@@ -3163,15 +3258,13 @@
   box-shadow: 0 14px 32px rgba(0, 0, 0, 0.38);
   margin: clamp(8px, 1.6vh, 14px) 0;
   overflow: hidden;
-  font-family: var(
-      --font-mono,
+  font-family: var(--font-mono,
       "IBM Plex Mono",
       SFMono-Regular,
       Consolas,
       "Liberation Mono",
       Menlo,
-      monospace
-    );
+      monospace);
 }
 
 .codeHeader {
@@ -3267,15 +3360,13 @@
   border-radius: 6px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(255, 255, 255, 0.06);
-  font-family: var(
-      --font-mono,
+  font-family: var(--font-mono,
       "IBM Plex Mono",
       SFMono-Regular,
       Consolas,
       "Liberation Mono",
       Menlo,
-      monospace
-    );
+      monospace);
   font-size: 0.92em;
   line-height: 1.35;
   white-space: nowrap;
@@ -3674,7 +3765,7 @@
   font-weight: 600;
 }
 
-.chatGroundingSourceDeckHeader > span:first-child {
+.chatGroundingSourceDeckHeader>span:first-child {
   color: rgba(255, 255, 255, 0.92);
 }
 
@@ -3785,14 +3876,14 @@
   margin-bottom: 0.5rem;
 }
 
-.chatGroundingQueries > span {
+.chatGroundingQueries>span {
   font-size: 0.72rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: rgba(255, 255, 255, 0.65);
 }
 
-.chatGroundingQueries > div {
+.chatGroundingQueries>div {
   display: flex;
   flex-wrap: wrap;
   gap: 0.35rem;
@@ -3843,10 +3934,8 @@
 }
 
 .chatAttachmentTray {
-  width: min(
-    var(--chat-column-max-width, 828px),
-    calc(100vw - clamp(32px, 8vw, 120px))
-  );
+  width: min(var(--chat-column-max-width, 828px),
+      calc(100vw - clamp(32px, 8vw, 120px)));
   margin: 0 auto;
   display: flex;
   flex-direction: column;
@@ -3873,10 +3962,8 @@
 }
 
 .chatAttachmentList {
-  width: min(
-    var(--chat-column-max-width, 828px),
-    calc(100vw - clamp(32px, 8vw, 120px))
-  );
+  width: min(var(--chat-column-max-width, 828px),
+      calc(100vw - clamp(32px, 8vw, 120px)));
   margin: 0 auto;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -4278,10 +4365,8 @@
 }
 
 .chatDisclaimer {
-  width: min(
-    var(--chat-column-max-width, 828px),
-    calc(100vw - clamp(32px, 8vw, 120px))
-  );
+  width: min(var(--chat-column-max-width, 828px),
+      calc(100vw - clamp(32px, 8vw, 120px)));
   text-align: center;
   font-size: 0.7rem;
   font-weight: 500;
@@ -4303,10 +4388,8 @@
 }
 
 .chatComposerDock .chatDisclaimer {
-  width: min(
-    var(--chat-column-max-width, 828px),
-    calc(100vw - clamp(32px, 8vw, 120px))
-  );
+  width: min(var(--chat-column-max-width, 828px),
+      calc(100vw - clamp(32px, 8vw, 120px)));
   max-width: 720px;
   margin-bottom: env(safe-area-inset-bottom, 0px);
   padding: 0 clamp(10px, 2vw, 18px) 12px;
@@ -4314,14 +4397,12 @@
 
 @supports (-webkit-background-clip: text) or (background-clip: text) {
   .chatDisclaimer {
-    background: linear-gradient(
-      90deg,
-      rgba(255, 255, 255, 0) 0%,
-      rgba(255, 255, 255, 0.65) 22%,
-      rgba(255, 255, 255, 0.85) 50%,
-      rgba(255, 255, 255, 0.65) 78%,
-      rgba(255, 255, 255, 0) 100%
-    );
+    background: linear-gradient(90deg,
+        rgba(255, 255, 255, 0) 0%,
+        rgba(255, 255, 255, 0.65) 22%,
+        rgba(255, 255, 255, 0.85) 50%,
+        rgba(255, 255, 255, 0.65) 78%,
+        rgba(255, 255, 255, 0) 100%);
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
@@ -4337,6 +4418,7 @@
   from {
     transform: rotate(0deg);
   }
+
   to {
     transform: rotate(360deg);
   }
@@ -4359,7 +4441,7 @@
   gap: 8px;
 }
 
-.headerLeft > * {
+.headerLeft>* {
   width: 100%;
 }
 
@@ -4536,7 +4618,7 @@ h1.greeting {
   width: 100%;
 }
 
-.dashboardSectionCard > * {
+.dashboardSectionCard>* {
   width: 100%;
 }
 
@@ -4556,7 +4638,7 @@ h1.greeting {
   grid-template-columns: 1fr;
 }
 
-.pulseGridStacked > * {
+.pulseGridStacked>* {
   width: 100%;
 }
 
@@ -4580,7 +4662,7 @@ h1.greeting {
   box-sizing: border-box;
 }
 
-.dashboardPulseContainer > * {
+.dashboardPulseContainer>* {
   flex: 1;
   min-width: 0;
 }
@@ -4623,7 +4705,7 @@ h1.greeting {
   min-width: 0;
 }
 
-.pulseSidebarColumn > * {
+.pulseSidebarColumn>* {
   flex: none;
   width: 100%;
 }
@@ -4672,7 +4754,7 @@ h1.greeting {
   width: 100%;
 }
 
-.calendarSidebarColumn > * {
+.calendarSidebarColumn>* {
   width: 100%;
 }
 
@@ -4722,12 +4804,9 @@ h1.greeting {
   padding: clamp(18px, 2.6vw, 28px);
   border-radius: 28px;
   border: 1px solid rgba(255, 255, 255, 0.05);
-  background: radial-gradient(
-      circle at top left,
+  background: radial-gradient(circle at top left,
       rgba(20, 20, 20, 0.92),
-      rgba(8, 8, 8, 0.92)
-    )
-    no-repeat;
+      rgba(8, 8, 8, 0.92)) no-repeat;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.025),
     0 26px 46px rgba(0, 0, 0, 0.48);
@@ -4828,12 +4907,9 @@ h1.greeting {
   padding: clamp(18px, 2.6vw, 26px) clamp(22px, 3.4vw, 32px);
   border-radius: 32px;
   border: 1px solid rgba(255, 255, 255, 0.05);
-  background: radial-gradient(
-      circle at top left,
+  background: radial-gradient(circle at top left,
       rgba(22, 22, 22, 0.95),
-      rgba(8, 8, 8, 0.94)
-    )
-    no-repeat;
+      rgba(8, 8, 8, 0.94)) no-repeat;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.03),
     0 26px 46px rgba(0, 0, 0, 0.45);
@@ -4850,7 +4926,7 @@ h1.greeting {
   pointer-events: none;
 }
 
-.pulseWeekPanel > * {
+.pulseWeekPanel>* {
   position: relative;
   z-index: 1;
   min-width: 0;
@@ -5073,7 +5149,7 @@ h1.greeting {
   min-width: 0;
 }
 
-.dashboardSidebarColumn > * {
+.dashboardSidebarColumn>* {
   width: 100%;
   max-width: none;
 }
@@ -5753,7 +5829,7 @@ h1.greeting {
   margin: 0 auto;
 }
 
-.mainGrid[data-compact="true"] > * {
+.mainGrid[data-compact="true"]>* {
   max-width: 100%;
 }
 
@@ -5775,8 +5851,8 @@ h1.greeting {
   grid-area: secondary;
 }
 
-.primaryColumn > *,
-.secondaryColumn > * {
+.primaryColumn>*,
+.secondaryColumn>* {
   flex: 1;
 }
 
@@ -5864,7 +5940,7 @@ h1.greeting {
   overflow: visible;
 }
 
-.dashboardCalendarContainer > * {
+.dashboardCalendarContainer>* {
   width: 100%;
   min-width: 0;
 }
@@ -5891,7 +5967,7 @@ h1.greeting {
   content: none;
 }
 
-.dashboardCalendarShell > * {
+.dashboardCalendarShell>* {
   flex: 1 1 auto;
   min-height: 0;
 }
@@ -6019,7 +6095,7 @@ h1.greeting {
   gap: clamp(12px, 4vh, 20px);
 }
 
-.dashboardCompactGrid > * {
+.dashboardCompactGrid>* {
   width: 100%;
 }
 
@@ -6080,16 +6156,14 @@ h1.greeting {
   font-size: 0.68rem;
   letter-spacing: 0.2em;
   color: rgba(235, 235, 235, 0.4);
-  font-family: var(
-      --font-mono,
+  font-family: var(--font-mono,
       "IBM Plex Mono",
       "IBM Plex Mono",
       SFMono-Regular,
       Consolas,
       "Liberation Mono",
       Menlo,
-      monospace
-    );
+      monospace);
   gap: 0;
 }
 
@@ -6122,11 +6196,9 @@ h1.greeting {
 }
 
 .calendarViewport::-webkit-scrollbar-thumb {
-  background: linear-gradient(
-    180deg,
-    rgba(182, 186, 198, 0.7),
-    rgba(122, 126, 136, 0.48)
-  );
+  background: linear-gradient(180deg,
+      rgba(182, 186, 198, 0.7),
+      rgba(122, 126, 136, 0.48));
   border-radius: 999px;
   border: 1px solid rgba(14, 14, 16, 0.45);
 }
@@ -6140,13 +6212,11 @@ h1.greeting {
   position: relative;
   width: 100%;
   min-height: calc(var(--calendar-hour-height) * 24);
-  background-image: linear-gradient(
-    to bottom,
-    rgba(255, 255, 255, 0.03),
-    rgba(255, 255, 255, 0.03) 1px,
-    rgba(0, 0, 0, 0) 1px,
-    rgba(0, 0, 0, 0) var(--calendar-hour-height)
-  );
+  background-image: linear-gradient(to bottom,
+      rgba(255, 255, 255, 0.03),
+      rgba(255, 255, 255, 0.03) 1px,
+      rgba(0, 0, 0, 0) 1px,
+      rgba(0, 0, 0, 0) var(--calendar-hour-height));
   background-size: 100% var(--calendar-hour-height);
   background-repeat: repeat-y;
 }
@@ -6404,15 +6474,12 @@ h1.greeting {
     border-color 0.2s ease;
 }
 
-.calendarSidebarSectionList label input:checked + .calendarSidebarCheckbox {
+.calendarSidebarSectionList label input:checked+.calendarSidebarCheckbox {
   background: rgba(245, 245, 245, 0.95);
   border-color: rgba(245, 245, 245, 0.95);
 }
 
-.calendarSidebarSectionList
-  label
-  input:checked
-  + .calendarSidebarCheckbox::after {
+.calendarSidebarSectionList label input:checked+.calendarSidebarCheckbox::after {
   content: "";
   position: absolute;
   inset: 3px;
@@ -6577,16 +6644,14 @@ h1.greeting {
   display: grid;
   grid-template-rows: repeat(24, var(--calendar-hour-height, 72px));
   gap: 0;
-  font-family: var(
-      --font-mono,
+  font-family: var(--font-mono,
       "IBM Plex Mono",
       "IBM Plex Mono",
       SFMono-Regular,
       Consolas,
       "Liberation Mono",
       Menlo,
-      monospace
-    );
+      monospace);
   font-size: 0.62rem;
   letter-spacing: 0.18em;
   color: rgba(225, 225, 225, 0.38);
@@ -6754,7 +6819,7 @@ h1.greeting {
   border-top: none;
 }
 
-.settingsRow > span {
+.settingsRow>span {
   font-size: 0.8rem;
   letter-spacing: 0.18em;
   text-transform: uppercase;
@@ -6864,6 +6929,30 @@ h1.greeting {
 .settingsDangerButtonConfirm {
   background: rgba(255, 71, 87, 0.55);
   color: #fff;
+}
+
+.settingsDeleteLink {
+  margin-top: 24px;
+  border: none;
+  background: transparent;
+  padding: 0;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  color: rgba(255, 71, 87, 0.65);
+  cursor: pointer;
+  align-self: center;
+  transition: color 0.2s ease;
+}
+
+.settingsDeleteLink:hover:not(:disabled) {
+  color: rgba(255, 71, 87, 0.95);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.settingsDeleteLink:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* (old reminderPanel block removed; definition now lives directly above) */
@@ -7051,8 +7140,7 @@ h1.greeting {
   border-radius: 22px;
   padding: 16px 18px 14px;
   border: 1px solid rgba(255, 255, 255, 0.07);
-  background: rgba(5, 5, 7, 0.78);
-  backdrop-filter: blur(12px);
+  background: #18181b;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -7288,7 +7376,7 @@ h1.greeting {
   width: 100%;
 }
 
-.proactivityCard .planListItem + .planListItem {
+.proactivityCard .planListItem+.planListItem {
   margin-top: 0;
 }
 
@@ -7379,6 +7467,17 @@ h1.greeting {
 .proactivitySetupButton:disabled {
   border-color: rgba(255, 255, 255, 0.15);
   opacity: 0.6;
+}
+
+.planItemButton[data-completed="true"] .planLabel,
+.planItemButton[data-completed="true"] .planDetails {
+  text-decoration: line-through;
+  opacity: 0.5;
+  color: rgba(236, 236, 236, 0.5);
+}
+
+.planItemButton[data-completed="true"] .planDetails {
+  color: rgba(188, 188, 188, 0.4);
 }
 
 .planItemButton {
@@ -7506,16 +7605,28 @@ h1.greeting {
 }
 
 .planLabel {
-  font-family: var(
-      --font-mono,
-      "IBM Plex Mono",
-      SFMono-Regular,
-    Consolas,
-    "Liberation Mono",
-    Menlo,
-    monospace
-    );
-  letter-spacing: 0.02em;
+  font-family: "Plus Jakarta Sans", var(--font-sans), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 0.9rem;
+  font-weight: 400;
+  line-height: 1.4;
+  color: rgba(236, 236, 236, 0.95);
+}
+
+.planDetails {
+  display: block;
+  font-family: "IBM Plex Mono", var(--font-mono), monospace;
+  font-size: 0.7rem;
+  line-height: 1.5;
+  color: rgba(188, 188, 188, 0.72);
+  margin-top: 2px;
+}
+
+.planDerivedTag {
+  display: none;
+}
+
+.planDerivedTag {
+  display: none;
 }
 
 .planLabelGroup {
@@ -7636,15 +7747,13 @@ h1.greeting {
 }
 
 .habitLabel {
-  font-family: var(
-      --font-mono,
+  font-family: var(--font-mono,
       "IBM Plex Mono",
       SFMono-Regular,
       Consolas,
       "Liberation Mono",
       Menlo,
-      monospace
-    );
+      monospace);
   letter-spacing: 0.02em;
 }
 
@@ -7801,6 +7910,19 @@ h1.greeting {
   z-index: 80;
 }
 
+.page[data-compact="true"] .generalChatComposer {
+  position: relative;
+  bottom: auto;
+  left: auto;
+  right: auto;
+  padding-left: 0;
+  padding-right: 0;
+  width: min(var(--gray-general-max-width, 1220px), 100%);
+  max-width: min(640px, 100%);
+  margin-top: 0;
+  pointer-events: auto;
+}
+
 .chatThinkingIndicator {
   position: relative;
   align-self: center;
@@ -7816,14 +7938,14 @@ h1.greeting {
   gap: clamp(10px, 1.8vh, 22px);
 }
 
-.generalChatComposer > * {
+.generalChatComposer>* {
   width: 100%;
   max-width: min(var(--chat-column-max-width, 828px), 100%);
   margin: 0 auto;
   pointer-events: auto;
 }
 
- .generalChatComposer .chatDisclaimer,
+.generalChatComposer .chatDisclaimer,
 .generalChatComposer .generalChatBarRow {
   width: 100%;
   max-width: min(var(--chat-column-max-width, 828px), 100%);
@@ -7910,6 +8032,7 @@ h1.greeting {
   background: none;
   color: rgba(235, 235, 235, 0.7);
 }
+
 .chatActionButton:hover {
   background: rgba(255, 255, 255, 0.08);
   color: rgba(255, 255, 255, 0.95);
@@ -7920,15 +8043,13 @@ h1.greeting {
   border: none;
   background: transparent;
   color: rgba(245, 245, 245, 0.92);
-  font-family: var(
-      --font-sans,
+  font-family: var(--font-sans,
       "Plus Jakarta Sans",
       "Inter",
       -apple-system,
       BlinkMacSystemFont,
       "Segoe UI",
-      sans-serif
-    );
+      sans-serif);
   font-size: 0.95rem;
   padding: 12px 0;
   outline: none;
@@ -7941,6 +8062,7 @@ h1.greeting {
 }
 
 @media (max-width: 1080px) {
+
   .calendarCard,
   .planPanel {
     max-width: none;
@@ -7958,7 +8080,7 @@ h1.greeting {
     justify-content: stretch;
   }
 
-  .dashboardSidebarColumn > * {
+  .dashboardSidebarColumn>* {
     max-width: none;
   }
 
@@ -8090,9 +8212,11 @@ h1.greeting {
     margin: 0;
   }
 }
+
 .pulseSurfaceHeader {
   padding-bottom: clamp(12px, 2vw, 20px);
 }
+
 .proactivityTimeList {
   display: flex;
   flex-direction: column;
@@ -8146,6 +8270,7 @@ h1.greeting {
   cursor: not-allowed;
   opacity: 0.6;
 }
+
 .proactivityTimeListButton {
   flex: 1;
   display: flex;
@@ -8496,6 +8621,7 @@ h1.greeting {
   color: rgba(255, 255, 255, 0.74);
   line-height: 1.4;
 }
+
 :global(html)::-webkit-scrollbar-button:single-button,
 :global(body)::-webkit-scrollbar-button:single-button {
   display: none !important;
@@ -8504,6 +8630,7 @@ h1.greeting {
   min-width: 0 !important;
   min-height: 0 !important;
 }
+
 :global(html)::-webkit-scrollbar-button:vertical:increment,
 :global(html)::-webkit-scrollbar-button:vertical:decrement,
 :global(body)::-webkit-scrollbar-button:vertical:increment,
@@ -8514,11 +8641,7 @@ h1.greeting {
   min-width: 0 !important;
   min-height: 0 !important;
 }
+
 .planDerivedTag {
-  font-size: 0.62rem;
-  letter-spacing: 0.3em;
-  text-transform: uppercase;
-  color: rgba(195, 195, 205, 0.6);
-  margin-top: 6px;
-  display: block;
+  display: none;
 }
