@@ -1435,7 +1435,7 @@
 .sidebarTop {
   display: flex;
   flex-direction: column;
-  gap: clamp(8px, 2vh, 14px);
+  gap: clamp(4px, 1.2vh, 10px);
   flex: 1;
   min-height: 0;
   overflow: hidden;
@@ -1577,6 +1577,8 @@
 }
 
 .sidebarHistorySection {
+  --history-line-offset: 8px;
+  --history-line-color: rgba(255, 255, 255, 0.08);
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -1585,9 +1587,21 @@
 .sidebarHistory {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
   margin-top: 0;
-  padding-left: 12px;
+  padding-left: 16px;
+  position: relative;
+}
+
+.sidebarHistory::before {
+  content: "";
+  position: absolute;
+  left: var(--history-line-offset);
+  top: 6px;
+  bottom: 6px;
+  width: 2px;
+  background: var(--history-line-color);
+  pointer-events: none;
 }
 
 .sidebarHistoryGroup {
@@ -1608,7 +1622,7 @@
 .sidebarHistoryList {
   list-style: none;
   margin: 0;
-  padding: 0 0 0 4px;
+  padding: 0 0 0 8px;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -2442,10 +2456,10 @@
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
-  gap: clamp(12px, 2vh, 20px);
+  gap: clamp(8px, 1.5vh, 14px);
   min-height: 100%;
   padding:
-    clamp(8px, 2vh, 18px) 0 16px 0;
+    clamp(8px, 2vh, 18px) 0 clamp(200px, 25vh, 280px) 0;
 
   overflow: auto;
   scroll-behavior: smooth;
