@@ -1958,8 +1958,22 @@ function GrayPageClientInner({
       return;
     }
 
-    const revertCalendarState = () => {
-      setCalendarEvents(previousEvents);
+    const revertUpdate = (failedId: string) => {
+      const original = previousEvents.find((e) => e.id === failedId);
+      if (original) {
+        setCalendarEvents((current) => current.map((e) => (e.id === failedId ? original : e)));
+      }
+    };
+
+    const revertDelete = (failedId: string) => {
+      const original = previousEvents.find((e) => e.id === failedId);
+      if (original) {
+        setCalendarEvents((current) => [...current, original]);
+      }
+    };
+
+    const revertCreate = (tempId: string) => {
+      setCalendarEvents((current) => current.filter((e) => e.id !== tempId));
     };
 
     const logCalendarSyncError = (action: string, error: unknown) => {
@@ -2004,7 +2018,7 @@ function GrayPageClientInner({
             await apiService.deleteReminder(user.id, reminderId);
           } catch (error) {
             logCalendarSyncError("delete reminder", error);
-            revertCalendarState();
+            revertDelete(eventId);
             return;
           }
         }
@@ -2018,7 +2032,7 @@ function GrayPageClientInner({
           await apiService.deleteCalendarEvent(user.id, numericId);
         } catch (error) {
           logCalendarSyncError("delete calendar event", error);
-          revertCalendarState();
+          revertDelete(eventId);
           return;
         }
       } else if (eventId.startsWith('evt-')) {
@@ -2066,7 +2080,7 @@ function GrayPageClientInner({
           ]);
         } catch (error) {
           logCalendarSyncError("create reminder", error);
-          revertCalendarState();
+          revertCreate(event.id);
           return;
         }
         continue;
@@ -2091,7 +2105,7 @@ function GrayPageClientInner({
           } : e));
         } catch (error) {
           logCalendarSyncError("create calendar event", error);
-          revertCalendarState();
+          revertCreate(event.id);
           return;
         }
       }
@@ -2123,7 +2137,7 @@ function GrayPageClientInner({
             );
           } catch (error) {
             logCalendarSyncError("update reminder", error);
-            revertCalendarState();
+            revertUpdate(event.id);
             return;
           }
         }
@@ -2148,7 +2162,7 @@ function GrayPageClientInner({
             continue;
           }
           logCalendarSyncError("update calendar event", error);
-          revertCalendarState();
+          revertUpdate(event.id);
           return;
         }
       }
