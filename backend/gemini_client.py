@@ -52,8 +52,8 @@ class GeminiService:
         self._response_mime_type = os.getenv("GEMINI_RESPONSE_MIME_TYPE")
 
         self._api_key = self._first_valid_api_key()
-        self._default_model = os.getenv("GEMINI_DEFAULT_MODEL", "gemini-1.5-flash")
-        self._light_model = os.getenv("GEMINI_LIGHT_MODEL", "gemini-1.5-flash-8b")
+        self._default_model = os.getenv("GEMINI_DEFAULT_MODEL", "models/gemini-flash-lite-latest")
+        self._light_model = os.getenv("GEMINI_LIGHT_MODEL", "models/gemini-flash-lite-latest")
 
         if self._api_key:
             self._client = genai.Client(api_key=self._api_key)
