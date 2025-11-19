@@ -152,7 +152,7 @@ const buildCalendarEventFromReminder = (
   const end = new Date(start.getTime() + 60_000);
   const reminderRecord = (reminder.data.reminder as Record<string, unknown> | null | undefined) ?? null;
   const rawRecord = (reminder.data.raw as Record<string, unknown> | null | undefined) ?? null;
-  
+
   // Check for color in metadata
   let effectiveColor = color;
   if (reminderRecord && typeof reminderRecord["metadata"] === "object" && reminderRecord["metadata"]) {
@@ -1375,7 +1375,7 @@ function GrayPageClientInner({
   }, [setWorkspaceContext, workspaceContextSummary]);
 
   useEffect(() => {
-    if (!userId) {
+    if (!sessions.length) {
       reminderEventKeysRef.current.clear();
       return;
     }
@@ -1436,7 +1436,7 @@ function GrayPageClientInner({
       }
       return [...filtered, ...toAppend];
     });
-  }, [sessions, calendarCalendars, setCalendarEvents, userId]);
+  }, [sessions, calendarCalendars, setCalendarEvents]);
 
   useEffect(() => {
     if (activeNav === "threads") {
@@ -2472,7 +2472,7 @@ function GrayPageClientInner({
   );
   const dashboardTabAttr = isDashboardView ? dashboardTab : undefined;
 
-  const shouldShowWorkspaceBackground = activeNav !== "general";
+  const shouldShowWorkspaceBackground = activeNav === "dashboard";
   const generalAttachmentsActive =
     viewMode === "general" && (attachments.length > 0 || isAttachmentUploading);
   const generalAttachmentTray = viewMode === "general"
