@@ -1925,9 +1925,12 @@ function GrayPageClientInner({
       });
     });
 
-    // 3. Handle Reminders (Update remind_at)
+    // 3. Capture previousEvents BEFORE any state changes for accurate comparison
+    const previousEvents = calendarEvents;
+
+    // 4. Handle Reminders (Update remind_at)
     reminderEvents.forEach((event) => {
-      const originalEvent = calendarEvents.find((e) => e.id === event.id);
+      const originalEvent = previousEvents.find((e) => e.id === event.id);
       // If start/end didn't change, skip
       if (
         originalEvent &&
@@ -1940,18 +1943,32 @@ function GrayPageClientInner({
       const reminderId = extractReminderId(event.id);
       if (reminderId !== null && user) {
         // Update API
+        const previousReminderPlans = reminderPlans;
+        const previousCalendarEvents = previousEvents;
+
+        // Optimistically update local state
+        const updatedReminderPlans = previousReminderPlans.map((plan) =>
+          plan.reminderId === reminderId
+            ? { ...plan, deadline: event.start.toISOString() }
+            : plan
+        );
+        setReminderPlans(updatedReminderPlans);
+
         apiService.updateReminder(user.id, reminderId, {
           remind_at: event.start.toISOString(),
-        }).catch(err => console.error("Failed to update reminder time", err));
+        }).catch(err => {
+          console.error("Failed to update reminder time", err);
+          // Revert on error
+          setReminderPlans(previousReminderPlans);
+        });
       }
     });
 
-    // 4. Update Calendar State (Standard + Reminders + Plans)
+    // 5. Update Calendar State (Standard + Reminders + Plans)
     // We need to preserve plan events in the calendar state to prevent them from disappearing
     // when events are clicked or moved. Plan data lives in `plans` state, but the calendar
     // events derived from plans need to remain in calendarEvents for rendering.
     const nextStateEvents = [...standardEvents, ...reminderEvents, ...planEvents];
-    const previousEvents = calendarEvents;
     setCalendarEvents(nextStateEvents);
 
     if (!user) {
