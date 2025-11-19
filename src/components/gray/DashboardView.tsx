@@ -368,7 +368,13 @@ export function GrayDashboardView({
     if (hasPulseData) {
       return fallbackPlans;
     }
-    return livePlans ?? [];
+    const rawPlans = livePlans ?? [];
+    const seen = new Set<string>();
+    return rawPlans.filter((plan) => {
+      if (seen.has(plan.id)) return false;
+      seen.add(plan.id);
+      return true;
+    });
   }, [currentPulse, hasPulseData, isCurrentPulseEditable, livePlans]);
   const [pulseSelectedDate, setPulseSelectedDate] = useState<Date>(() => new Date(currentDate));
   const [pulseMonthDate, setPulseMonthDate] = useState<Date>(() => new Date(currentDate));

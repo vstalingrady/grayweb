@@ -60,7 +60,12 @@ export const mapPlansToCalendarEvents = (plans: PlanItem[]): CalendarEvent[] => 
   if (!plans || plans.length === 0) {
     return [];
   }
-  return plans
+  
+  // Deduplicate plans by ID
+  const uniquePlans = new Map<string, PlanItem>();
+  plans.forEach(plan => uniquePlans.set(plan.id, plan));
+  
+  const mapped = Array.from(uniquePlans.values())
     .filter((plan) => plan.deadline && !plan.completed)
     .map((plan) => {
       const deadline = plan.deadline ? new Date(plan.deadline) : null;
@@ -86,10 +91,11 @@ export const mapPlansToCalendarEvents = (plans: PlanItem[]): CalendarEvent[] => 
         start: effectiveStart,
         end: effectiveEnd,
         color: PLAN_EVENT_COLOR,
-        entryType: "task",
+        entryType: "task" as const,
         description: plan.details ?? plan.scheduleSlot ?? undefined,
-        displayHint: shouldDisplayAsLine ? "line" : undefined,
+        displayHint: shouldDisplayAsLine ? ("line" as const) : undefined,
       };
-    })
-    .filter((event): event is CalendarEvent => !!event);
+    });
+
+  return mapped.filter((event) => event !== null) as CalendarEvent[];
 };
