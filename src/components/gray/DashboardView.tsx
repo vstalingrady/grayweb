@@ -395,10 +395,17 @@ export function GrayDashboardView({
 
   const displayHabits = hasPulseData ? currentPulse?.habits ?? [] : [];
   const derivedReminderPlans = reminderPlans ?? [];
-  const visiblePlans = useMemo(
-    () => [...displayPlans, ...derivedTaskPlans, ...derivedReminderPlans],
-    [displayPlans, derivedTaskPlans, derivedReminderPlans]
-  );
+  const visiblePlans = useMemo(() => {
+    const all = [...displayPlans, ...derivedTaskPlans, ...derivedReminderPlans];
+    const seen = new Set<string>();
+    return all.filter((item) => {
+      if (seen.has(item.id)) {
+        return false;
+      }
+      seen.add(item.id);
+      return true;
+    });
+  }, [displayPlans, derivedTaskPlans, derivedReminderPlans]);
   const visibleHabits = useMemo(() => [...displayHabits], [displayHabits]);
   const derivedReminderIds = useMemo(
     () => new Set(derivedReminderPlans.map((plan) => plan.id)),
