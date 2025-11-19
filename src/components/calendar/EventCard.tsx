@@ -222,22 +222,7 @@ export const EventCard = memo(function EventCard({
         </button>
       ) : null}
       {event.entryType === "reminder" && (
-        <>
-          <div className={styles.reminderHandle} />
-          {onDelete && isSelected && (
-            <button
-              type="button"
-              className={styles.eventCardDelete}
-              onClick={(e) => {
-                e.stopPropagation();
-                onDelete(event);
-              }}
-              aria-label="Delete reminder"
-            >
-              <Trash2 size={12} />
-            </button>
-          )}
-        </>
+        <div className={styles.reminderHandle} />
       )}
     </div>
   );
