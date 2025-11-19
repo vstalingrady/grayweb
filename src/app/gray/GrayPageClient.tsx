@@ -152,6 +152,16 @@ const buildCalendarEventFromReminder = (
   const end = new Date(start.getTime() + 60_000);
   const reminderRecord = (reminder.data.reminder as Record<string, unknown> | null | undefined) ?? null;
   const rawRecord = (reminder.data.raw as Record<string, unknown> | null | undefined) ?? null;
+  
+  // Check for color in metadata
+  let effectiveColor = color;
+  if (reminderRecord && typeof reminderRecord["metadata"] === "object" && reminderRecord["metadata"]) {
+    const metadata = reminderRecord["metadata"] as Record<string, unknown>;
+    if (typeof metadata["color"] === "string" && metadata["color"]) {
+      effectiveColor = metadata["color"];
+    }
+  }
+
   const summaryCandidate =
     reminder.data.summary ??
     (reminderRecord && typeof reminderRecord["description"] === "string"
@@ -168,7 +178,7 @@ const buildCalendarEventFromReminder = (
     title,
     start,
     end,
-    color,
+    color: effectiveColor,
     entryType: "reminder",
     description,
     displayHint: "line",
@@ -1848,6 +1858,46 @@ function GrayPageClientInner({
     void persistProactivitySettings(null);
   };
 
+  // Calendar-driven plan updates should always sync to the backend,
+  // even when historical pulse snapshots are view-only.
+  const persistPlanFromCalendarMove = async (planId: string, updates: PlanUpdates) => {
+    if (!user) {
+      return;
+    }
+
+    const numericPlanId = Number(planId);
+    if (Number.isNaN(numericPlanId)) {
+      return;
+    }
+
+    const previousPlans = plans;
+    const updatedPlans = previousPlans.map((plan) =>
+      plan.id === planId
+        ? {
+          ...plan,
+          label: updates.label,
+          deadline: updates.deadline ?? null,
+          scheduleSlot: updates.scheduleSlot ?? null,
+          details: updates.details ?? null,
+        }
+        : plan
+    );
+
+    setPlans(updatedPlans);
+
+    try {
+      await apiService.updatePlan(user.id, numericPlanId, {
+        label: updates.label,
+        description: updates.details ?? null,
+        deadline: updates.deadline ?? null,
+        scheduleSlot: updates.scheduleSlot ?? null,
+      });
+    } catch (error) {
+      console.error("Failed to update plan from calendar move:", error);
+      setPlans(previousPlans);
+    }
+  };
+
   const handleCalendarsChange = (nextCalendars: CalendarInfo[]) => {
     const previousCalendars = new Map(calendarCalendars.map((calendar) => [calendar.id, calendar]));
     setCalendarCalendars(nextCalendars);
@@ -1896,31 +1946,55 @@ function GrayPageClientInner({
       (e) => !e.id.startsWith(PLAN_EVENT_ID_PREFIX) && !e.id.startsWith("reminder-")
     );
 
-    // 2. Handle Plans (Update schedule)
-    // We compare against current `plans` state to see if schedule changed
+    // 2. Handle Plans (Update schedule + deadline day when moved between days)
+    // We compare against current `plans` state to see if schedule or day changed.
     planEvents.forEach((event) => {
       const planId = event.id.slice(PLAN_EVENT_ID_PREFIX.length);
       const originalPlan = plans.find((p) => p.id === planId);
       if (!originalPlan) return;
-
-      // We need to parse the existing scheduleSlot to compare times
-      // But since we don't have the previous event object easily for plans (they are computed),
-      // we can rely on re-constructing the scheduleSlot from the new event and comparing strings?
-      // Or just save it. Optimistic update in `savePlan` handles de-duping/state update.
 
       // Construct new schedule slot
       const formatTime = (value: Date) =>
         `${String(value.getHours()).padStart(2, "0")}:${String(value.getMinutes()).padStart(2, "0")}`;
       const newScheduleSlot = `${formatTime(event.start)}-${formatTime(event.end)}`;
 
-      if (originalPlan.scheduleSlot === newScheduleSlot) {
+      const existingDeadlineIso = originalPlan.deadline ?? null;
+      let nextDeadlineIso = existingDeadlineIso;
+
+      if (existingDeadlineIso) {
+        const existingDeadline = new Date(existingDeadlineIso);
+        if (!Number.isNaN(existingDeadline.getTime())) {
+          const sameDateKey = (value: Date) =>
+            `${value.getFullYear()}-${value.getMonth()}-${value.getDate()}`;
+          const originalDateKey = sameDateKey(existingDeadline);
+          const nextDateKey = sameDateKey(event.start);
+
+          // If the event was moved to a different day (horizontal drag),
+          // update the plan's deadline to match the new day while preserving
+          // the original deadline's time-of-day.
+          if (originalDateKey !== nextDateKey) {
+            const updatedDeadline = new Date(existingDeadline);
+            updatedDeadline.setFullYear(
+              event.start.getFullYear(),
+              event.start.getMonth(),
+              event.start.getDate()
+            );
+            nextDeadlineIso = updatedDeadline.toISOString();
+          }
+        }
+      }
+
+      const scheduleChanged = originalPlan.scheduleSlot !== newScheduleSlot;
+      const deadlineChanged = nextDeadlineIso !== existingDeadlineIso;
+
+      if (!scheduleChanged && !deadlineChanged) {
         return;
       }
 
-      void savePlan(planId, {
+      void persistPlanFromCalendarMove(planId, {
         label: originalPlan.label,
         details: originalPlan.details ?? null,
-        deadline: originalPlan.deadline ?? null,
+        deadline: nextDeadlineIso,
         scheduleSlot: newScheduleSlot,
       });
     });
@@ -2022,7 +2096,8 @@ function GrayPageClientInner({
         prev.start.getTime() !== next.start.getTime() ||
         prev.end.getTime() !== next.end.getTime() ||
         prev.description !== next.description ||
-        prev.calendarId !== next.calendarId
+        prev.calendarId !== next.calendarId ||
+        prev.color !== next.color
       );
     });
 
@@ -2138,6 +2213,7 @@ function GrayPageClientInner({
               label: event.title,
               description: event.description,
               remind_at: event.start.toISOString(),
+              metadata: { color: event.color },
             });
             // Update reminderPlans as well
             setReminderPlans((prev) =>
@@ -2171,6 +2247,7 @@ function GrayPageClientInner({
             description: event.description,
             start_time: event.start.toISOString(),
             end_time: event.end.toISOString(),
+            color: event.color,
           });
         } catch (error) {
           // If event doesn't exist in database (404), skip the API call and keep optimistic update
@@ -2213,6 +2290,7 @@ function GrayPageClientInner({
       try {
         await apiService.updateReminder(user.id, reminderId, {
           remind_at: isoTime,
+          metadata: { color: updatedCalendarEvents.find(e => e.reminderId === reminderId)?.color },
         });
       } catch (error) {
         console.error("Failed to move reminder:", error);
