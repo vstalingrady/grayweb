@@ -1236,15 +1236,6 @@ const ChatMessagesList = memo(
                     }
                     return (
                       <div className={styles.chatGroundingPanel}>
-                        {filteredQueries.length > 0 ? (
-                          <div className={styles.chatGroundingQueries}>
-                            {filteredQueries.map((query) => (
-                              <span key={query} className={styles.chatGroundingQueryChip}>
-                                {query}
-                              </span>
-                            ))}
-                          </div>
-                        ) : null}
                         {sourceCards.length > 0 ? (
                           <div className={styles.chatGroundingSourceDeck}>
                             <div className={styles.chatGroundingSourceCards}>
