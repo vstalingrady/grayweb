@@ -1253,8 +1253,8 @@ const ChatMessagesList = memo(
                                 let faviconUrl: string | undefined;
                                 if (source.href) {
                                   try {
-                                    const hostname = new URL(source.href).hostname;
-                                    faviconUrl = `https://www.google.com/s2/favicons?domain=${hostname}&sz=64`;
+                                    const encodedUrl = encodeURIComponent(source.href);
+                                    faviconUrl = `https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=${encodedUrl}&size=32`;
                                   } catch {
                                     // Ignore invalid URLs
                                   }
@@ -1268,6 +1268,7 @@ const ChatMessagesList = memo(
                                           <img
                                             src={faviconUrl}
                                             alt=""
+                                            referrerPolicy="no-referrer"
                                             style={{
                                               width: "16px",
                                               height: "16px",
