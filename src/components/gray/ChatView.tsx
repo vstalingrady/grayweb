@@ -217,7 +217,7 @@ type GrayChatViewProps = {
 
 const deriveGroundingSourceHost = (site?: string | null, uri?: string | null) => {
   const normalizedSite = site?.trim();
-  if (normalizedSite) {
+  if (normalizedSite && !normalizedSite.toLowerCase().includes("vertexalsearch")) {
     return normalizedSite;
   }
   if (!uri) {
@@ -1208,32 +1208,31 @@ const ChatMessagesList = memo(
                     }
                     return (
                       <div className={styles.chatGroundingPanel}>
+                        {filteredQueries.length > 0 ? (
+                          <div className={styles.chatGroundingQueries}>
+                            {filteredQueries.map((query) => (
+                              <span key={query} className={styles.chatGroundingQueryChip}>
+                                {query}
+                              </span>
+                            ))}
+                          </div>
+                        ) : null}
                         {sourceCards.length > 0 ? (
                           <div className={styles.chatGroundingSourceDeck}>
-                            <div className={styles.chatGroundingSourceDeckHeader}>
-                              <span>More on this</span>
-                              <span className={styles.chatGroundingSourceDeckBadge}>
-                                <Globe size={14} />
-                                Sources
-                              </span>
-                            </div>
                             <div className={styles.chatGroundingSourceCards}>
                               {sourceCards.map((source) => {
                                 const initials = buildGroundingSourceInitials(source.siteLabel ?? source.title);
                                 const cardContent = (
                                   <>
-                                    <div className={styles.chatGroundingSourceCardMeta}>
-                                      <div className={styles.chatGroundingSourceCardAvatar}>{initials}</div>
+                                    <div className={styles.chatGroundingSourceCardAvatar}>{initials}</div>
+                                    <div className={styles.chatGroundingSourceCardContent}>
+                                      <div className={styles.chatGroundingSourceCardTitle}>
+                                        {source.title ?? "Referenced source"}
+                                      </div>
                                       <div className={styles.chatGroundingSourceCardSite}>
                                         {source.siteLabel ?? "Referer"}
                                       </div>
                                     </div>
-                                    <div className={styles.chatGroundingSourceCardTitle}>
-                                      {source.title ?? "Referenced source"}
-                                    </div>
-                                    {source.excerpt ? (
-                                      <div className={styles.chatGroundingSourceCardExcerpt}>{source.excerpt}</div>
-                                    ) : null}
                                   </>
                                 );
                                 if (source.href) {
@@ -1264,29 +1263,10 @@ const ChatMessagesList = memo(
                         ) : null}
                         {renderedSearchEntry ? (
                           <div className={styles.chatGroundingSearchEntryDeck}>
-                            <div className={styles.chatGroundingSourceDeckHeader}>
-                              <span>{sourceCards.length > 0 ? "Search results" : "Sources"}</span>
-                              <span className={styles.chatGroundingSourceDeckBadge}>
-                                <Globe size={14} />
-                                Sources
-                              </span>
-                            </div>
                             <div
                               className={styles.chatGroundingSearchEntry}
                               dangerouslySetInnerHTML={{ __html: renderedSearchEntry }}
                             />
-                          </div>
-                        ) : null}
-                        {filteredQueries.length > 0 ? (
-                          <div className={styles.chatGroundingQueries}>
-                            <span>Search queries:</span>
-                            <div>
-                              {filteredQueries.map((query) => (
-                                <span key={query} className={styles.chatGroundingQueryChip}>
-                                  {query}
-                                </span>
-                              ))}
-                            </div>
                           </div>
                         ) : null}
                         {mapSources.length > 0 ? (
@@ -1332,34 +1312,6 @@ const ChatMessagesList = memo(
                     {timestampLabel}
                   </time>
                   <div className={styles.chatMessageFooterRight}>
-                    {isAssistant && sourceCards.length > 0 ? (
-                      <div className={styles.chatFooterSources}>
-                        <span className={styles.chatFooterSourcesLabel}>Sources</span>
-                        <div className={styles.chatFooterSourcesList}>
-                          {sourceCards.slice(0, 2).map((source) => {
-                            const label = source.siteLabel || source.title || "Source";
-                            if (source.href) {
-                              return (
-                                <a
-                                  key={source.id}
-                                  href={source.href}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className={styles.chatFooterSourceLink}
-                                >
-                                  {label}
-                                </a>
-                              );
-                            }
-                            return (
-                              <span key={source.id} className={styles.chatFooterSourceText}>
-                                {label}
-                              </span>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    ) : null}
                     <div className={styles.chatActionIconRow}>
                       {isMetadataAvailable ? (
                         <div className={styles.chatMetadataControl}>
@@ -2808,37 +2760,6 @@ export function GrayChatView({
           />
         )}
       </div>
-      {latestSearchSources.length > 0 ? (
-        <div className={styles.chatSourcesFooter}>
-          <span className={styles.chatSourcesFooterLabel}>Sources</span>
-          <span className={styles.chatSourcesFooterBadge}>
-            <Globe size={12} />
-          </span>
-          <div className={styles.chatFooterSourcesList}>
-            {latestSearchSources.slice(0, 3).map((source) => {
-              const label = source.siteLabel || source.title || "Source";
-              if (source.href) {
-                return (
-                  <a
-                    key={source.id}
-                    href={source.href}
-                    target="_blank"
-                    rel="noreferrer"
-                    className={styles.chatFooterSourceLink}
-                  >
-                    {label}
-                  </a>
-                );
-              }
-              return (
-                <span key={source.id} className={styles.chatFooterSourceText}>
-                  {label}
-                </span>
-              );
-            })}
-          </div>
-        </div>
-      ) : null}
       <div className={styles.chatComposerDock} ref={composerDockRef}>
         <input
           ref={attachmentInputRef}
