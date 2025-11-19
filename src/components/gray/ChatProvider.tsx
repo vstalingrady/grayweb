@@ -24,6 +24,7 @@ import {
   type GroundingMetadata,
   type MediaUpload,
   type Reminder,
+  type ReminderCreatePayload,
   type User,
 } from "@/lib/api";
 import { buildLocalTimeContext } from "@/lib/timeContext";
@@ -108,7 +109,8 @@ type ChatContextValue = {
     sessionId: string,
     role: ChatRole,
     content: string,
-    tempId?: string
+    tempId?: string,
+    metadata?: GroundingMetadata
   ) => ChatMessage | null;
   updateMessage: (
     sessionId: string,

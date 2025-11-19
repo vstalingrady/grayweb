@@ -245,7 +245,7 @@ const buildGroundingSourceInitials = (text?: string | null) => {
 
 type DerivedGroundingSource = {
   id: string;
-  siteLabel: string;
+  siteLabel?: string;
   title: string;
   href?: string;
   excerpt?: string;
@@ -328,7 +328,7 @@ const buildGroundingSourceCards = (metadata: GroundingMetadata | undefined | nul
     if (chunk.web) {
       const derivedHost = deriveGroundingSourceHost(undefined, chunk.web.uri);
       const rawSite = chunk.web.site ?? chunk.web.domain;
-      let siteLabel: string | undefined = rawSite ?? derivedHost;
+      let siteLabel: string | undefined = (rawSite ?? derivedHost) ?? undefined;
 
       // Filter out internal Google/Vertex domains if they leak into the label
       if (
@@ -336,7 +336,7 @@ const buildGroundingSourceCards = (metadata: GroundingMetadata | undefined | nul
         siteLabel.toLowerCase().includes("vertexaisearch") ||
         siteLabel.toLowerCase() === "google search"
       ) {
-        siteLabel = derivedHost;
+        siteLabel = derivedHost ?? undefined;
       }
       // Final safety check: if still internal or empty, make it undefined to hide
       if (!siteLabel || siteLabel.toLowerCase().includes("vertexaisearch")) {
@@ -357,14 +357,14 @@ const buildGroundingSourceCards = (metadata: GroundingMetadata | undefined | nul
       const retrieved = chunk.retrieved_context;
       const derivedHost = deriveGroundingSourceHost(undefined, retrieved.uri);
       const host = retrieved.document_name ?? derivedHost;
-      let siteLabel: string | undefined = host;
+      let siteLabel: string | undefined = host ?? undefined;
 
       if (
         !siteLabel ||
         siteLabel.toLowerCase().includes("vertexaisearch") ||
         siteLabel.toLowerCase() === "google search"
       ) {
-        siteLabel = derivedHost;
+        siteLabel = derivedHost ?? undefined;
       }
       if (!siteLabel || siteLabel.toLowerCase().includes("vertexaisearch")) {
         siteLabel = undefined;
