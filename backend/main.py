@@ -48,8 +48,12 @@ from google_calendar import (
 from google.genai import types
 from gemini_client import GeminiAttachment, GeminiService
 from anthropic_client import AnthropicService
-from backend.calendar_tools import CALENDAR_TOOLS
-from backend.file_search import FileSearchService
+try:
+    from backend.calendar_tools import CALENDAR_TOOLS
+    from backend.file_search import FileSearchService
+except ImportError:
+    from calendar_tools import CALENDAR_TOOLS
+    from file_search import FileSearchService
 from ai_message_generator import AIMessageGenerator
 from proactivity_engine import (
     ProactivityEngine,
@@ -1137,7 +1141,35 @@ def _delete_general_conversation_history(user_id: int) -> None:
 
 def _delete_supabase_user_records(user_id: int) -> None:
     if not supabase:
+        api_logger.info("Supabase not configured, skipping remote deletion", extra={"user_id": user_id})
         return
+
+    api_logger.info(f"Starting Supabase data deletion for user {user_id}", extra={"user_id": user_id})
+
+    # Special handling for user_chat_messages which doesn't have a direct user_id column
+    # but is linked via thread_id to user_chat_threads
+    try:
+        # 1. Fetch all thread IDs belonging to the user
+        threads_result = (
+            supabase.table("user_chat_threads")
+            .select("id")
+            .eq("user_identifier", user_id)
+            .execute()
+        )
+        thread_rows = threads_result.data or []
+        thread_ids = [row["id"] for row in thread_rows]
+
+        # 2. Delete messages for these threads
+        if thread_ids:
+            api_logger.info(f"Deleting chat messages for {len(thread_ids)} threads", extra={"user_id": user_id, "thread_count": len(thread_ids)})
+            # Delete in batches if necessary, but for now assuming reasonable size
+            supabase.table("user_chat_messages").delete().in_("thread_id", thread_ids).execute()
+            
+    except Exception as error:
+        _handle_supabase_table_error(
+            f"Warning: Failed to delete user_chat_messages for user {user_id}",
+            error,
+        )
 
     delete_targets: List[Tuple[str, str]] = [
         ("general_chat_messages", "user_id"),
@@ -1157,6 +1189,7 @@ def _delete_supabase_user_records(user_id: int) -> None:
         ("proactivity_settings", "user_id"),
         ("proactive_notifications", "user_id"),
         ("google_calendar_credentials", "user_id"),
+        ("proactivity_push_subscriptions", "user_id"),
     ]
 
     for table_name, column in delete_targets:
@@ -1167,6 +1200,8 @@ def _delete_supabase_user_records(user_id: int) -> None:
                 f"Warning: Failed to delete Supabase data for user {user_id} in {table_name}",
                 error,
             )
+    
+    api_logger.info(f"Completed Supabase data deletion for user {user_id}", extra={"user_id": user_id})
 
 
 def _ensure_user_data_record(user_identifier: int) -> Optional[int]:
@@ -4239,7 +4274,34 @@ async def delete_user_account(user_id: int, db: databases.Database = Depends(get
     if not existing:
         raise HTTPException(status_code=404, detail="User not found")
 
+    user_email = existing["email"]
+    api_logger.info(f"Processing account deletion for user {user_id} ({user_email})", extra={"user_id": user_id, "email": user_email, "event_type": "account_deletion_start"})
+
     _delete_supabase_user_records(user_id)
+
+    # Attempt to delete from Supabase Auth if we have the service key
+    if supabase and SUPABASE_KEY_SOURCE in {"SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_SERVICE_KEY", "SUPABASE_SECRET_KEY"}:
+        try:
+            # Find auth user UUID by email (requires admin privileges)
+            # We try to list users to find the match. This might be slow with many users.
+            # A better approach would be to store the auth_id in our local users table.
+            auth_users_response = supabase.auth.admin.list_users()
+            auth_users = getattr(auth_users_response, "users", []) or []
+            
+            auth_user_id = None
+            for auth_user in auth_users:
+                 if hasattr(auth_user, "email") and auth_user.email == user_email:
+                     auth_user_id = auth_user.id
+                     break
+            
+            if auth_user_id:
+                supabase.auth.admin.delete_user(auth_user_id)
+                api_logger.info(f"Deleted Supabase Auth user {auth_user_id}", extra={"user_id": user_id, "auth_user_id": auth_user_id})
+            else:
+                api_logger.warning(f"Could not find Supabase Auth user for email {user_email}", extra={"user_id": user_id})
+                
+        except Exception as e:
+            api_logger.error(f"Failed to delete Supabase Auth user: {e}", extra={"user_id": user_id, "error": str(e)})
 
     deletion_tables = [
         chat_sessions,
@@ -4257,12 +4319,15 @@ async def delete_user_account(user_id: int, db: databases.Database = Depends(get
         proactivity_settings,
         proactive_notifications,
         google_calendar_credentials,
+        proactivity_push_subscriptions,
     ]
 
     for table in deletion_tables:
         await db.execute(table.delete().where(table.c.user_id == user_id))
 
     await db.execute(users.delete().where(users.c.id == user_id))
+    
+    api_logger.info(f"User account {user_id} deleted successfully", extra={"user_id": user_id, "event_type": "account_deletion_complete"})
 
 @app.get("/users/{user_id}/chat-sessions", response_model=List[ChatSession])
 async def get_user_chat_sessions(user_id: int, db: databases.Database = Depends(get_database)):
@@ -5079,6 +5144,12 @@ async def update_calendar_event(
                 error,
             )
 
+    # Filter out fields that don't exist on the local SQLite table (for example, "color").
+    allowed_sqlite_keys = set(calendar_events.c.keys())
+    sqlite_update_data = {
+        key: value for key, value in update_data.items() if key in allowed_sqlite_keys
+    }
+
     existing = await db.fetch_one(
         calendar_events.select().where(
             (calendar_events.c.id == event_id) & (calendar_events.c.user_id == user_id)
@@ -5087,13 +5158,13 @@ async def update_calendar_event(
     if not existing:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
 
-    if not update_data:
+    if not sqlite_update_data:
         return existing
 
     await db.execute(
         calendar_events.update()
         .where((calendar_events.c.id == event_id) & (calendar_events.c.user_id == user_id))
-        .values(**update_data)
+        .values(**sqlite_update_data)
     )
     query = calendar_events.select().where(calendar_events.c.id == event_id)
     updated = await db.fetch_one(query)
