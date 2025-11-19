@@ -113,6 +113,21 @@ const normalizeLatexSegment = (segment: string): string => {
   return updated;
 };
 
+const hasCodeBlockDescendant = (node: ReactNode): boolean => {
+  if (!isValidElement(node)) {
+    return false;
+  }
+  const props: any = node.props ?? {};
+  if (props["data-code-block-root"]) {
+    return true;
+  }
+  const children = props.children;
+  if (!children) {
+    return false;
+  }
+  return Children.toArray(children).some((child) => hasCodeBlockDescendant(child as ReactNode));
+};
+
 const normalizeLatexForDisplay = (value: string): string => {
   if (
     !value ||
@@ -1092,6 +1107,7 @@ type ChatMessagesListProps = {
   handleRetryUserMessage: (messageId: string) => void;
   handleDeleteMessage: (messageId: string) => void;
   shouldShowPendingStreamIndicator: boolean;
+  showFirstMessageSpinner: boolean;
   scrollAnchorRef: RefObject<HTMLDivElement | null>;
 };
 
@@ -1109,6 +1125,7 @@ const ChatMessagesList = memo(
     handleRetryUserMessage,
     handleDeleteMessage,
     shouldShowPendingStreamIndicator,
+    showFirstMessageSpinner,
     scrollAnchorRef,
   }: ChatMessagesListProps) => {
     return (
@@ -1489,6 +1506,14 @@ const ChatMessagesList = memo(
             </div>
           );
         })}
+
+        {showFirstMessageSpinner && (
+          <div className={styles.chatMessage} data-role="assistant">
+            <div className={styles.chatAssistantBlock}>
+              <GrayStreamingSpinner />
+            </div>
+          </div>
+        )}
         <div ref={scrollAnchorRef} />
       </div>
     );
@@ -1769,6 +1794,7 @@ export function GrayChatView({
   const [activeStreamingMessageId, setActiveStreamingMessageId] = useState<string | null>(null);
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [conversationUsage, setConversationUsage] = useState<ConversationUsage | null>(null);
+  const isSubmittingRef = useRef(false);
 
   const composerDockRef = useRef<HTMLDivElement | null>(null);
   const [composerHeight, setComposerHeight] = useState(0);
@@ -2407,6 +2433,11 @@ export function GrayChatView({
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (isSubmittingRef.current) {
+      return;
+    }
+    isSubmittingRef.current = true;
+
     let targetSession = session;
     if (!targetSession && sessionId) {
       const nowTs = Date.now();
@@ -2424,10 +2455,12 @@ export function GrayChatView({
       }));
     }
     if (!targetSession) {
+      isSubmittingRef.current = false;
       return;
     }
     const content = draft.trim();
     if (!content) {
+      isSubmittingRef.current = false;
       return;
     }
 
@@ -2449,12 +2482,15 @@ export function GrayChatView({
         targetSession.id,
         content,
         targetSession.conversationId ?? null
-      );
+      ).finally(() => {
+        isSubmittingRef.current = false;
+      });
       return;
     }
 
     appendMessage(targetSession.id, "assistant", buildAssistantReply(content));
     replyTimeout.current = null;
+    isSubmittingRef.current = false;
   };
 
   const latestAssistantMessageId = useMemo(() => {
@@ -2746,9 +2782,8 @@ export function GrayChatView({
       // Avoid invalid HTML like <p><div>…</div></p> when a code block
       // appears where a paragraph would normally be rendered.
       p: ({ children, ...rest }: any) => {
-        const hasBlockCodeChild = Children.toArray(children).some(
-          (child) =>
-            isValidElement(child) && child.props && (child.props as any)["data-code-block-root"]
+        const hasBlockCodeChild = Children.toArray(children).some((child) =>
+          hasCodeBlockDescendant(child as ReactNode)
         );
         if (hasBlockCodeChild) {
           return <div {...rest}>{children}</div>;
@@ -2831,16 +2866,21 @@ export function GrayChatView({
     );
   }
 
+
   const trimmedDraft = draft.trim();
   const composerHasContent = Boolean(trimmedDraft);
   const isSendDisabled = isResponding || !composerHasContent;
   const shouldShowPendingStreamIndicator =
     !hideThinkingIndicator && (isResponding || sessionPendingAutoStream);
 
+  const showFirstMessageSpinner =
+    (isResponding || sessionPendingAutoStream) &&
+    !messages.some((m) => m.role === "assistant");
+
   return (
     <div className={styles.chatView} aria-live="polite" style={chatViewStyle}>
       <div className={styles.chatViewport}>
-        {shouldShowPendingStreamIndicator && (
+        {shouldShowPendingStreamIndicator && !showFirstMessageSpinner && (
           <div className={styles.chatThinkingIndicator}>
             <div className={styles.chatStreamingStatus} role="status" aria-live="polite">
               <GrayStreamingSpinner />
@@ -2873,6 +2913,7 @@ export function GrayChatView({
             handleRetryUserMessage={handleRetryUserMessage}
             handleDeleteMessage={handleDeleteMessage}
             shouldShowPendingStreamIndicator={shouldShowPendingStreamIndicator}
+            showFirstMessageSpinner={showFirstMessageSpinner}
             scrollAnchorRef={scrollAnchorRef}
           />
         )}

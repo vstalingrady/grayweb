@@ -217,7 +217,7 @@ export function GrayEnhancedSidebar({
 
       <div className={styles.sidebarPanel} data-expanded={isExpanded ? "true" : "false"}>
         <div className={styles.sidebarPanelContent}>
-          <div className={styles.sidebarTop}>
+          <div className={styles.sidebarTop} data-layout="anchored">
             <button
               type="button"
               className={styles.sidebarLogo}
@@ -264,43 +264,44 @@ export function GrayEnhancedSidebar({
                 </ul>
               </nav>
             </div>
-            {historyNavItem && isExpanded ? (
-              <div className={styles.sidebarScroll} aria-label="Recent conversations">
-                <div className={styles.sidebarHistorySection}>
-                  <div className={styles.sidebarHistory}>
-                    {historyGroups.length > 0 ? (
-                      historyGroups.map((group) => (
-                        <div key={group.id} className={styles.sidebarHistoryGroup}>
-                          <span className={styles.sidebarHistoryLabel}>{group.label}</span>
-                          <ul className={styles.sidebarHistoryList}>
-                            {group.items.map((entry) => {
-                              const isActive = entry.id === activeChatId;
-                              return (
-                                <li key={entry.id}>
-                                  <Link
-                                    href={entry.href}
-                                    className={
-                                      isActive
-                                        ? `${styles.sidebarHistoryLink} ${styles.sidebarHistoryLinkActive}`
-                                        : styles.sidebarHistoryLink
-                                    }
-                                  >
-                                    {entry.title}
-                                  </Link>
-                                </li>
-                              );
-                            })}
-                          </ul>
-                        </div>
-                      ))
-                    ) : (
-                      <span className={styles.sidebarHistoryEmpty}>No conversations yet.</span>
-                    )}
-                  </div>
+          </div>
+          {historyNavItem && isExpanded ? (
+            <div className={styles.sidebarScroll} aria-label="Recent conversations">
+              <div className={styles.sidebarHistorySection}>
+                <div className={styles.sidebarHistory}>
+                  {historyGroups.length > 0 ? (
+                    historyGroups.map((group) => (
+                      <div key={group.id} className={styles.sidebarHistoryGroup}>
+                        <span className={styles.sidebarHistoryLabel}>{group.label}</span>
+                        <ul className={styles.sidebarHistoryList}>
+                          {group.items.map((entry) => {
+                            const isActive = entry.id === activeChatId;
+                            return (
+                              <li key={entry.id}>
+                                <Link
+                                  href={entry.href}
+                                  className={
+                                    isActive
+                                      ? `${styles.sidebarHistoryLink} ${styles.sidebarHistoryLinkActive}`
+                                      : styles.sidebarHistoryLink
+                                  }
+                                >
+                                  {entry.title}
+                                </Link>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </div>
+                    ))
+                  ) : (
+                    <span className={styles.sidebarHistoryEmpty}>No conversations yet.</span>
+                  )}
                 </div>
               </div>
-            ) : null}
-          </div>
+              <div className={styles.sidebarScrollFade} aria-hidden="true" />
+            </div>
+          ) : null}
           <div className={styles.sidebarBottom}>
             <div className={styles.sidebarProfile}>
               <div
@@ -426,6 +427,7 @@ export function GrayEnhancedSidebar({
               </button>
             </div>
           </div>
+
         </div>
       </div>
     </aside>
