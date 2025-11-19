@@ -158,7 +158,11 @@ export function GrayDashboardCalendar({
   const [eventsState, setEventsState] = useState<CalendarEvent[]>(createSeedEvents);
   const [composerOpen, setComposerOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
-  const [draftPreview, setDraftPreview] = useState<EventDraft | null>(null);
+
+  // Multi-select state
+  const [selectedEventIds, setSelectedEventIds] = useState<Set<string>>(new Set());
+  const [activeDrafts, setActiveDrafts] = useState<Record<string, EventDraft> | null>(null);
+
   const [nowReference, setNowReference] = useState<Date | null>(() => currentDate ?? null);
   const [composerRange, setComposerRange] = useState<{ start: Date; end: Date } | null>(null);
   const [composerAnchorRect, setComposerAnchorRect] = useState<ComposerAnchorRect | null>(null);
@@ -232,15 +236,21 @@ export function GrayDashboardCalendar({
 
   const dayEvents = useMemo(() => {
     const filtered = visibleEvents.filter((event) => isSameDay(event.start, selectedDate));
-    if (draftPreview) {
-      return filtered.map((event) =>
-        event.id === draftPreview.id
-          ? { ...event, start: ensureDateZone(draftPreview.start), end: ensureDateZone(draftPreview.end) }
-          : event
-      );
+    if (activeDrafts) {
+      return filtered.map((event) => {
+        const draft = activeDrafts[event.id];
+        if (draft) {
+          return {
+            ...event,
+            start: ensureDateZone(draft.start),
+            end: ensureDateZone(draft.end),
+          };
+        }
+        return event;
+      });
     }
     return filtered;
-  }, [draftPreview, selectedDate, visibleEvents]);
+  }, [activeDrafts, selectedDate, visibleEvents]);
 
   const dayLayouts = useMemo<PositionedEvent[]>(
     () =>
@@ -255,30 +265,36 @@ export function GrayDashboardCalendar({
   const weekLayouts = useMemo(() => {
     return weekDays.map((day) => {
       const dayEventsForWeek = visibleEvents.filter((event) => isSameDay(event.start, day));
-      const mappedEvents = draftPreview
-        ? dayEventsForWeek.map((event) =>
-          event.id === draftPreview.id
-            ? {
+      const mappedEvents = activeDrafts
+        ? dayEventsForWeek.map((event) => {
+          const draft = activeDrafts[event.id];
+          if (draft) {
+            return {
               ...event,
-              start: ensureDateZone(draftPreview.start),
-              end: ensureDateZone(draftPreview.end),
-            }
-            : event
-        )
+              start: ensureDateZone(draft.start),
+              end: ensureDateZone(draft.end),
+            };
+          }
+          return event;
+        })
         : dayEventsForWeek;
 
       const eventsWithPreview = mappedEvents.filter((event) => isSameDay(event.start, day));
 
-      // Also add the draft preview if it belongs to this day
-      if (draftPreview && !dayEventsForWeek.some((e) => e.id === draftPreview.id)) {
-        const draftEvent = visibleEvents.find((e) => e.id === draftPreview.id);
-        if (draftEvent && isSameDay(draftPreview.start, day)) {
-          eventsWithPreview.push({
-            ...draftEvent,
-            start: ensureDateZone(draftPreview.start),
-            end: ensureDateZone(draftPreview.end),
-          });
-        }
+      // Also add any active drafts if they belong to this day but weren't originally
+      if (activeDrafts) {
+        Object.values(activeDrafts).forEach((draft) => {
+          if (isSameDay(draft.start, day) && !dayEventsForWeek.some((e) => e.id === draft.id)) {
+            const originalEvent = visibleEvents.find((e) => e.id === draft.id);
+            if (originalEvent) {
+              eventsWithPreview.push({
+                ...originalEvent,
+                start: ensureDateZone(draft.start),
+                end: ensureDateZone(draft.end),
+              });
+            }
+          }
+        });
       }
 
       return layoutDayEvents(eventsWithPreview, {
@@ -287,7 +303,7 @@ export function GrayDashboardCalendar({
         dayStart: startOfDay(day),
       });
     });
-  }, [hourHeight, shortEventMinimumHeight, visibleEvents, weekDays, draftPreview]);
+  }, [hourHeight, shortEventMinimumHeight, visibleEvents, weekDays, activeDrafts]);
 
   const updateViewMode = useCallback(
     (nextMode: CalendarViewMode) => {
@@ -405,21 +421,31 @@ export function GrayDashboardCalendar({
     hasInitialWeekScrollRef.current = true;
   }, [hourHeight, viewMode, weekNowIndicator]);
 
+  const handleCommitDrag = (drafts: Record<string, EventDraft>) => {
+    updateEvents((previous) =>
+      previous.map((event) => {
+        const draft = drafts[event.id];
+        if (draft) {
+          return {
+            ...event,
+            start: ensureDateZone(draft.start),
+            end: ensureDateZone(draft.end),
+          };
+        }
+        return event;
+      })
+    );
+    setActiveDrafts(null);
+  };
+
   const dragControls = useEventDrag({
     containerRef: dayColumnRef,
     hourHeight,
     snapMinutes: SNAP_MINUTES,
-    onPreview: setDraftPreview,
-    onCommit: (draft) => {
-      updateEvents((previous) =>
-        previous.map((event) =>
-          event.id === draft.id
-            ? { ...event, start: ensureDateZone(draft.start), end: ensureDateZone(draft.end) }
-            : event
-        )
-      );
-      setDraftPreview(null);
-    },
+    selectedEventIds,
+    allEvents: events,
+    onPreview: setActiveDrafts,
+    onCommit: handleCommitDrag,
   });
   const { getDraggableProps, suppressClickRef } = dragControls;
 
@@ -428,17 +454,10 @@ export function GrayDashboardCalendar({
     containerRef: weekScrollRef,
     hourHeight,
     snapMinutes: SNAP_MINUTES,
-    onPreview: setDraftPreview,
-    onCommit: (draft) => {
-      updateEvents((previous) =>
-        previous.map((event) =>
-          event.id === draft.id
-            ? { ...event, start: ensureDateZone(draft.start), end: ensureDateZone(draft.end) }
-            : event
-        )
-      );
-      setDraftPreview(null);
-    },
+    selectedEventIds,
+    allEvents: events,
+    onPreview: setActiveDrafts,
+    onCommit: handleCommitDrag,
     horizontal: {
       columnCount: 7,
       getColumnIndex: (pointerEvent: PointerEvent) => {
@@ -476,9 +495,36 @@ export function GrayDashboardCalendar({
       setEditingEvent(null);
       setComposerAnchorRect(anchorRect ?? null);
       setComposerOpen(true);
+      // Clear selection when opening composer
+      setSelectedEventIds(new Set());
     },
     []
   );
+
+  const handleEventClick = (
+    event: CalendarEvent,
+    anchorRect?: DOMRect | DOMRectReadOnly | null,
+    mouseEvent?: MouseEvent
+  ) => {
+    if (suppressClickRef.current) return;
+
+    if (mouseEvent?.ctrlKey || mouseEvent?.metaKey) {
+      // Toggle selection
+      setSelectedEventIds((prev) => {
+        const next = new Set(prev);
+        if (next.has(event.id)) {
+          next.delete(event.id);
+        } else {
+          next.add(event.id);
+        }
+        return next;
+      });
+    } else {
+      // Single select and edit
+      setSelectedEventIds(new Set([event.id]));
+      handleEditEvent(event, anchorRect);
+    }
+  };
 
   const handleEditEvent = (event: CalendarEvent, anchorRect?: DOMRect | DOMRectReadOnly | null) => {
     setEditingEvent(event);
@@ -541,6 +587,10 @@ export function GrayDashboardCalendar({
         return;
       }
     }
+
+    // Clear selection on background click
+    setSelectedEventIds(new Set());
+
     const bounds = target.getBoundingClientRect();
     const offsetY = event.clientY - bounds.top;
     const minutes = Math.max(0, Math.min(24 * 60, Math.round((offsetY / hourHeight) * 60 / SNAP_MINUTES) * SNAP_MINUTES));
@@ -553,6 +603,26 @@ export function GrayDashboardCalendar({
       height: 24,
     };
     openComposerAt(start, anchorRect);
+  };
+
+  // Helper to override event position if dragged
+  const getEventOverride = (event: PositionedEvent, dayStart: Date) => {
+    const draft = activeDrafts?.[event.id];
+    if (!draft) return event;
+
+    const startMinutes = (draft.start.getTime() - dayStart.getTime()) / 60000;
+    const endMinutes = (draft.end.getTime() - dayStart.getTime()) / 60000;
+    const durationMinutes = Math.max(endMinutes - startMinutes, 5);
+
+    const minuteHeight = hourHeight / 60;
+    const top = Math.max(startMinutes * minuteHeight, 0);
+    const height = Math.max(durationMinutes * minuteHeight, shortEventMinimumHeight);
+
+    return {
+      ...event,
+      top,
+      height,
+    };
   };
 
   const renderWeekView = () => (
@@ -607,6 +677,40 @@ export function GrayDashboardCalendar({
               const isToday = nowReference ? isSameDay(day, nowReference) : false;
               const columnNowIndicatorOffset =
                 weekNowIndicator?.dayIndex === columnIndex ? weekNowIndicator.offset : null;
+
+              // 1. Get static events for this column, EXCLUDING ones that are being dragged
+              const staticEvents = weekLayouts[columnIndex]?.filter(
+                (event) => !activeDrafts?.[event.id]
+              ) || [];
+
+              // 2. Get dragged events that belong to this column (based on draft start time)
+              const draggedEvents = activeDrafts
+                ? Object.values(activeDrafts)
+                  .filter((draft) => isSameDay(draft.start, day))
+                  .map((draft) => {
+                    const original = events.find((e) => e.id === draft.id);
+                    if (!original) return null;
+
+                    // Calculate position based on draft
+                    const startMinutes = (draft.start.getTime() - startOfDay(day).getTime()) / 60000;
+                    const endMinutes = (draft.end.getTime() - startOfDay(day).getTime()) / 60000;
+                    const durationMinutes = Math.max(endMinutes - startMinutes, 5);
+                    const minuteHeight = hourHeight / 60;
+
+                    return {
+                      ...original,
+                      top: Math.max(startMinutes * minuteHeight, 0),
+                      height: Math.max(durationMinutes * minuteHeight, shortEventMinimumHeight),
+                      column: 0,
+                      columnSpan: 1,
+                      columnCount: 1,
+                      width: 1,
+                      zIndex: 10, // Bring to front
+                    } as PositionedEvent;
+                  })
+                  .filter((e): e is PositionedEvent => e !== null)
+                : [];
+
               return (
                 <div
                   key={day.toISOString()}
@@ -632,24 +736,30 @@ export function GrayDashboardCalendar({
                         />
                       </>
                     )}
-                    {weekLayouts[columnIndex]?.map((event) => {
-                      // Derive column from the weekDays array to ensure it's always correct
-                      const eventDay = weekDays.findIndex(day => isSameDay(event.start, day));
-                      const eventWithColumn = { ...event, column: eventDay >= 0 ? eventDay : columnIndex };
-                      return (
-                        <EventCard
-                          key={event.id}
-                          event={event}
-                          onClick={(_, anchorRect) => {
-                            if (!suppressClickRef.current) {
-                              handleEditEvent(event, anchorRect);
-                            }
-                          }}
-                          draggableProps={viewMode === "week" ? getWeekDraggableProps(eventWithColumn) : undefined}
-                          isDragging={draftPreview?.id === event.id}
-                        />
-                      );
-                    })}
+
+                    {/* Render Static Events */}
+                    {staticEvents.map((event) => (
+                      <EventCard
+                        key={event.id}
+                        event={event}
+                        onClick={(_e, anchorRect, mouseEvent) => handleEventClick(event, anchorRect, mouseEvent)}
+                        draggableProps={viewMode === "week" ? getWeekDraggableProps(event) : undefined}
+                        isDragging={false}
+                        isSelected={selectedEventIds.has(event.id)}
+                      />
+                    ))}
+
+                    {/* Render Dragged Events */}
+                    {draggedEvents.map((event) => (
+                      <EventCard
+                        key={event.id}
+                        event={event}
+                        onClick={(_e, anchorRect, mouseEvent) => handleEventClick(event, anchorRect, mouseEvent)}
+                        draggableProps={viewMode === "week" ? getWeekDraggableProps(event) : undefined}
+                        isDragging={true}
+                        isSelected={selectedEventIds.has(event.id)}
+                      />
+                    ))}
                   </div>
                 </div>
               );
@@ -722,19 +832,55 @@ export function GrayDashboardCalendar({
                   />
                 </>
               )}
-              {dayLayouts.map((event) => (
-                <EventCard
-                  key={event.id}
-                  event={event}
-                  onClick={(_, anchorRect) => {
-                    if (!suppressClickRef.current) {
-                      handleEditEvent(event, anchorRect);
-                    }
-                  }}
-                  draggableProps={viewMode === "day" ? getDraggableProps(event) : undefined}
-                  isDragging={draftPreview?.id === event.id}
-                />
-              ))}
+
+              {/* Static Events */}
+              {dayLayouts
+                .filter((event) => !activeDrafts?.[event.id])
+                .map((event) => (
+                  <EventCard
+                    key={event.id}
+                    event={event}
+                    onClick={(_e, anchorRect, mouseEvent) => handleEventClick(event, anchorRect, mouseEvent)}
+                    draggableProps={viewMode === "day" ? getDraggableProps(event) : undefined}
+                    isDragging={false}
+                    isSelected={selectedEventIds.has(event.id)}
+                  />
+                ))}
+
+              {/* Dragged Events */}
+              {activeDrafts && Object.values(activeDrafts)
+                .filter((draft) => isSameDay(draft.start, selectedDate))
+                .map((draft) => {
+                  const original = events.find((e) => e.id === draft.id);
+                  if (!original) return null;
+
+                  const startMinutes = (draft.start.getTime() - dayAnchor.getTime()) / 60000;
+                  const endMinutes = (draft.end.getTime() - dayAnchor.getTime()) / 60000;
+                  const durationMinutes = Math.max(endMinutes - startMinutes, 5);
+                  const minuteHeight = hourHeight / 60;
+
+                  const event: PositionedEvent = {
+                    ...original,
+                    top: Math.max(startMinutes * minuteHeight, 0),
+                    height: Math.max(durationMinutes * minuteHeight, shortEventMinimumHeight),
+                    column: 0,
+                    columnSpan: 1,
+                    columnCount: 1,
+                    width: 1,
+                    zIndex: 10,
+                  };
+
+                  return (
+                    <EventCard
+                      key={event.id}
+                      event={event}
+                      onClick={(_e, anchorRect, mouseEvent) => handleEventClick(event, anchorRect, mouseEvent)}
+                      draggableProps={viewMode === "day" ? getDraggableProps(event) : undefined}
+                      isDragging={true}
+                      isSelected={selectedEventIds.has(event.id)}
+                    />
+                  );
+                })}
             </div>
           </div>
         </div>
