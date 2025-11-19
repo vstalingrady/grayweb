@@ -4322,21 +4322,29 @@ async def update_calendar(user_id: int, calendar_id: int, calendar_update: Calen
     return await db.fetch_one(query)
 
 @app.get("/users/{user_id}/plans", response_model=List[Plan])
-async def get_user_plans(user_id: int, db: databases.Database = Depends(get_database)):
+async def get_user_plans(
+    user_id: int,
+    limit: Optional[int] = Query(None, gt=0),
+    db: databases.Database = Depends(get_database)
+):
     if supabase:
         try:
-            result = (
+            query = (
                 supabase.table("plans")
                 .select("*")
                 .eq("user_id", user_id)
                 .order("created_at", desc=False)
-                .execute()
             )
+            if limit:
+                query = query.limit(limit)
+            result = query.execute()
             if result.data is not None:
                 return result.data
         except Exception as error:
             _handle_supabase_table_error("Warning: Plans table not found or inaccessible", error)
     query = plans.select().where(plans.c.user_id == user_id).order_by(plans.c.created_at)
+    if limit:
+        query = query.limit(limit)
     return await db.fetch_all(query)
 
 @app.post("/users/{user_id}/plans", response_model=Plan, status_code=status.HTTP_201_CREATED)
@@ -4466,21 +4474,29 @@ async def delete_plan(user_id: int, plan_id: int, db: databases.Database = Depen
     return None
 
 @app.get("/users/{user_id}/habits", response_model=List[Habit])
-async def get_user_habits(user_id: int, db: databases.Database = Depends(get_database)):
+async def get_user_habits(
+    user_id: int,
+    limit: Optional[int] = Query(None, gt=0),
+    db: databases.Database = Depends(get_database)
+):
     if supabase:
         try:
-            result = (
+            query = (
                 supabase.table("habits")
                 .select("*")
                 .eq("user_id", user_id)
                 .order("created_at", desc=False)
-                .execute()
             )
+            if limit:
+                query = query.limit(limit)
+            result = query.execute()
             if result.data is not None:
                 return result.data
         except Exception as error:
             _handle_supabase_table_error("Warning: Habits table not found or inaccessible", error)
     query = habits.select().where(habits.c.user_id == user_id).order_by(habits.c.created_at)
+    if limit:
+        query = query.limit(limit)
     return await db.fetch_all(query)
 
 @app.post("/users/{user_id}/habits", response_model=Habit, status_code=status.HTTP_201_CREATED)
@@ -4621,17 +4637,23 @@ async def touch_user_streak(user_id: int, db: databases.Database = Depends(get_d
     return await update_user_streak(user_id, db)
 
 @app.get("/users/{user_id}/calendar-events", response_model=List[CalendarEvent])
-async def get_user_calendar_events(user_id: int, db: databases.Database = Depends(get_database)):
+async def get_user_calendar_events(
+    user_id: int,
+    start_date: Optional[str] = Query(None),
+    end_date: Optional[str] = Query(None),
+    db: databases.Database = Depends(get_database)
+):
     # Supabase-first for calendar events.
     if supabase:
         try:
-            result = (
-                supabase.table("calendar_events")
-                .select("*")
-                .eq("user_id", user_id)
-                .order("start_time", desc=False)
-                .execute()
-            )
+            query = supabase.table("calendar_events").select("*").eq("user_id", user_id)
+            
+            if start_date:
+                query = query.gte("start_time", start_date)
+            if end_date:
+                query = query.lte("end_time", end_date)
+                
+            result = query.order("start_time", desc=False).execute()
             rows = result.data or []
             now = datetime.utcnow().isoformat()
             normalized = []
@@ -4648,7 +4670,23 @@ async def get_user_calendar_events(user_id: int, db: databases.Database = Depend
             )
 
     # Fallback to local SQLite.
-    query = calendar_events.select().where(calendar_events.c.user_id == user_id).order_by(calendar_events.c.start_time)
+    query = calendar_events.select().where(calendar_events.c.user_id == user_id)
+    
+    if start_date:
+        try:
+            start_dt = datetime.fromisoformat(start_date.replace("Z", "+00:00"))
+            query = query.where(calendar_events.c.start_time >= start_dt)
+        except ValueError:
+            pass
+            
+    if end_date:
+        try:
+            end_dt = datetime.fromisoformat(end_date.replace("Z", "+00:00"))
+            query = query.where(calendar_events.c.end_time <= end_dt)
+        except ValueError:
+            pass
+
+    query = query.order_by(calendar_events.c.start_time)
     rows = await db.fetch_all(query)
     now = datetime.utcnow()
     normalized = []

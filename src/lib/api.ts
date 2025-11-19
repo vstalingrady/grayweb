@@ -915,8 +915,17 @@ class ApiService {
   }
 
   // Calendar events
-  async getUserCalendarEvents(userId: number): Promise<CalendarEvent[]> {
-    return this.fetch<CalendarEvent[]>(`/users/${userId}/calendar-events`);
+  async getUserCalendarEvents(userId: number, options?: { startDate?: string; endDate?: string }): Promise<CalendarEvent[]> {
+    const params = new URLSearchParams();
+    if (options?.startDate) {
+      params.set("start_date", options.startDate);
+    }
+    if (options?.endDate) {
+      params.set("end_date", options.endDate);
+    }
+    const suffix = params.toString();
+    const endpoint = suffix ? `/users/${userId}/calendar-events?${suffix}` : `/users/${userId}/calendar-events`;
+    return this.fetch<CalendarEvent[]>(endpoint);
   }
 
   async createCalendarEvent(userId: number, eventData: {
@@ -965,8 +974,9 @@ class ApiService {
   }
 
   // Plans
-  async getUserPlans(userId: number): Promise<Plan[]> {
-    return this.fetch<Plan[]>(`/users/${userId}/plans`);
+  async getUserPlans(userId: number, limit?: number): Promise<Plan[]> {
+    const endpoint = limit ? `/users/${userId}/plans?limit=${limit}` : `/users/${userId}/plans`;
+    return this.fetch<Plan[]>(endpoint);
   }
 
   async updatePlan(
