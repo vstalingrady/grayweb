@@ -1435,7 +1435,7 @@
 .sidebarTop {
   display: flex;
   flex-direction: column;
-  gap: clamp(20px, 4vh, 28px);
+  gap: clamp(8px, 2vh, 14px);
   flex: 1;
   min-height: 0;
   overflow: hidden;
@@ -1444,59 +1444,18 @@
 .sidebarScroll {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 0;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding-right: 4px;
+  padding-right: 0;
   -ms-overflow-style: none;
   scrollbar-width: none;
   position: relative;
-  mask-image: linear-gradient(180deg,
-      transparent 0%,
-      rgba(0, 0, 0, 1) 32px,
-      rgba(0, 0, 0, 1) calc(100% - 48px),
-      transparent 100%);
-  -webkit-mask-image: linear-gradient(180deg,
-      transparent 0%,
-      rgba(0, 0, 0, 1) 32px,
-      rgba(0, 0, 0, 1) calc(100% - 48px),
-      transparent 100%);
 }
 
 .sidebarScroll::-webkit-scrollbar {
   display: none;
-}
-
-.sidebarScroll::after {
-  content: "";
-  position: sticky;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 48px;
-  pointer-events: none;
-  background: linear-gradient(180deg,
-      rgba(7, 7, 7, 0) 0%,
-      rgba(7, 7, 7, 0.35) 40%,
-      rgba(7, 7, 7, 0.96) 100%);
-  z-index: 1;
-  margin-top: auto;
-}
-
-.sidebarScroll::before {
-  content: "";
-  position: sticky;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 36px;
-  pointer-events: none;
-  background: linear-gradient(180deg,
-      rgba(7, 7, 7, 0.96) 0%,
-      rgba(7, 7, 7, 0.65) 60%,
-      rgba(7, 7, 7, 0) 100%);
-  z-index: 1;
 }
 
 .sidebarLogo {
@@ -1598,18 +1557,6 @@
   gap: 10px;
 }
 
-.sidebarNavItem[data-nav="history"] {
-  gap: 0;
-  --history-line-offset: 9px;
-  --history-line-color: rgba(255, 255, 255, 0.08);
-}
-
-.sidebarNavItem[data-nav="history"]>.sidebarHistory {
-  margin-top: 0;
-  padding-top: 0;
-  border-top: none;
-}
-
 .navIcon {
   display: inline-flex;
   align-items: center;
@@ -1623,30 +1570,26 @@
   text-align: left;
 }
 
-.sidebarHistoryConnector {
-  display: block;
-  position: relative;
-  height: 14px;
-  margin: 0;
+.sidebarAnchored {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
-.sidebarHistoryConnector::before {
-  content: "";
-  position: absolute;
-  left: var(--history-line-offset);
-  top: 0;
-  bottom: 0;
-  width: 2px;
-  background: var(--history-line-color);
-  pointer-events: none;
+.sidebarHistorySection {
+  --history-line-offset: 6px;
+  --history-line-color: rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 0;
 }
 
 .sidebarHistory {
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  margin-top: 6px;
-  padding-left: 24px;
+  gap: 14px;
+  margin-top: 0;
+  padding-left: 18px;
   position: relative;
 }
 
@@ -1679,7 +1622,7 @@
 .sidebarHistoryList {
   list-style: none;
   margin: 0;
-  padding: 0 0 0 8px;
+  padding: 0 0 0 6px;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -2303,6 +2246,10 @@
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
+.page[data-variant="chat"] .main[data-view="chat"] {
+  --gray-chat-bar-clearance: clamp(24px, 5vh, 80px);
+}
+
 .main[data-view="chat"] .chatView {
   gap: 0;
 }
@@ -2443,7 +2390,7 @@
 .chatView {
   display: flex;
   flex-direction: column;
-  gap: clamp(4px, 1.2vh, 12px);
+  gap: 0;
   width: 100%;
   min-height: clamp(520px, 70vh, 900px);
   flex: 1 1 auto;
@@ -2508,22 +2455,22 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  justify-content: flex-end;
-  gap: clamp(18px, 3.5vh, 28px);
+  justify-content: flex-start;
+  gap: clamp(12px, 2vh, 20px);
   min-height: 100%;
   padding:
-    clamp(8px, 2vh, 18px) 0 calc(env(safe-area-inset-bottom, 0px) + clamp(96px, 10vh, 140px)) 0;
+    clamp(8px, 2vh, 18px) 0 calc(env(safe-area-inset-bottom, 0px) + clamp(40px, 8vh, 80px)) 0;
 
   overflow: auto;
   scroll-behavior: smooth;
   width: 100%;
   max-width: 100%;
   margin: 0;
+  align-items: stretch;
 }
 
 .chatMessages::before {
-  content: "";
-  flex: 1 0 auto;
+  content: none;
 }
 
 .chatMessages::-webkit-scrollbar {
@@ -2590,7 +2537,7 @@
 .chatMessage {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 6px;
   width: 100%;
   max-width: var(--chat-column-max-width);
   margin: 0 auto;
@@ -3874,20 +3821,21 @@
 
 .chatGroundingQueries {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
+  flex-direction: column;
+  gap: 0.25rem;
   margin-bottom: 0.6rem;
   padding-bottom: 0.6rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .chatGroundingQueryChip {
-  border-radius: 999px;
-  padding: 0.15rem 0.6rem;
-  font-size: 0.7rem;
-  background: rgba(255, 255, 255, 0.04);
-  color: rgba(255, 255, 255, 0.65);
+  padding: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
   border: none;
+  background: transparent;
+  border-radius: 0;
 }
 
 .chatGroundingSources {
