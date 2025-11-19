@@ -256,6 +256,27 @@ const parseReminderPlanId = (planId: string): number | null => {
   return Number.isNaN(parsed) ? null : parsed;
 };
 
+const extractReminderId = (eventId: string): number | null => {
+  if (!eventId.startsWith("reminder-")) return null;
+  const parts = eventId.split("-");
+  // Expected: reminder-{source}-{id}-{iso}
+  // We assume source doesn't contain hyphens usually, but if it does, we might be in trouble.
+  // However, based on buildReminderEventKey, source is usually 'assistant'.
+  // Let's try to parse the 3rd part (index 2).
+  if (parts.length >= 3) {
+    const candidate = Number(parts[2]);
+    if (!Number.isNaN(candidate)) {
+      return candidate;
+    }
+  }
+  // Fallback: try regex
+  const match = eventId.match(/^reminder-[^-]+-(\d+)-/);
+  if (match) {
+    return Number(match[1]);
+  }
+  return null;
+};
+
 const SIDEBAR_ITEMS: SidebarNavItem[] = [
   { id: "general", label: "General", icon: Gem },
   { id: "threads", label: "Threads", icon: MessageSquarePlus },
@@ -1226,6 +1247,23 @@ function GrayPageClientInner({
       );
     }
 
+    if (derivedEvents.length > 0) {
+      if (sections.length > 0) {
+        sections.push("");
+      }
+      const sortedEvents = [...derivedEvents].sort((a, b) => a.start.getTime() - b.start.getTime());
+      sections.push(
+        "Schedule:",
+        sortedEvents
+          .map((e) => {
+            const startStr = e.start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            const endStr = e.end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            return `- [${startStr} - ${endStr}] ${e.title}${e.description ? ` (${e.description})` : ""}`;
+          })
+          .join("\n")
+      );
+    }
+
     if (currentHabits.length > 0) {
       if (sections.length > 0) {
         sections.push("");
@@ -1899,8 +1937,8 @@ function GrayPageClientInner({
         return;
       }
 
-      const reminderId = Number(event.id.replace("reminder-", ""));
-      if (!Number.isNaN(reminderId) && user) {
+      const reminderId = extractReminderId(event.id);
+      if (reminderId !== null && user) {
         // Update API
         apiService.updateReminder(user.id, reminderId, {
           remind_at: event.start.toISOString(),
@@ -1960,8 +1998,8 @@ function GrayPageClientInner({
     // Delete removed events
     for (const eventId of deletedEventIds) {
       if (eventId.startsWith("reminder-")) {
-        const reminderId = Number(eventId.replace("reminder-", ""));
-        if (!Number.isNaN(reminderId)) {
+        const reminderId = extractReminderId(eventId);
+        if (reminderId !== null) {
           try {
             await apiService.deleteReminder(user.id, reminderId);
           } catch (error) {
