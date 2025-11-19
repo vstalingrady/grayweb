@@ -1158,11 +1158,25 @@ export const isGenericTitle = (title: string | null | undefined): boolean => {
   return isLowInformationTitle(trimmed);
 };
 
+const isTitleDerivedFromMessage = (title: string, messages: ChatMessage[]): boolean => {
+  if (!title) return false;
+  const firstUserMsg = messages.find((m) => m.role === "user");
+  if (!firstUserMsg || !firstUserMsg.content) return false;
+
+  const cleanTitle = title.trim().toLowerCase().replace(/\u2026$/, ""); // Remove ellipsis
+  const cleanMsg = firstUserMsg.content.trim().toLowerCase();
+
+  if (!cleanMsg) return false;
+
+  // Check if message starts with title (handling truncation)
+  return cleanMsg.startsWith(cleanTitle);
+};
+
 export const shouldRequestAutoTitleForSession = (session?: ChatSession | null): boolean => {
   if (!session) return true; // Generate title for new sessions
   // Generate title if session has auto mode and a generic/placeholder title
   if (session.titleMode === "auto") {
-    return isGenericTitle(session.title);
+    return isGenericTitle(session.title) || isTitleDerivedFromMessage(session.title, session.messages);
   }
   return false;
 };
@@ -2099,7 +2113,9 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       }
       // Only replace placeholder / generic titles so we don't fight manual titles
       // or backend-generated titles that are already set.
-      if (!isGenericSessionTitle(session.title)) {
+      // Use isGenericTitle (same check as shouldRequestAutoTitleForSession) to allow
+      // replacing fallback titles derived from user messages.
+      if (!isGenericTitle(session.title) && !isTitleDerivedFromMessage(session.title, session.messages)) {
         return;
       }
       if (session.title?.trim() === rawTitle) {
