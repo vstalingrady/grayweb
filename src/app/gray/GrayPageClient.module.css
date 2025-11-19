@@ -2459,7 +2459,7 @@
   gap: clamp(8px, 1.5vh, 14px);
   min-height: 100%;
   padding:
-    clamp(8px, 2vh, 18px) 0 clamp(200px, 25vh, 280px) 0;
+    clamp(8px, 2vh, 18px) 0 clamp(120px, 15vh, 160px) 0;
 
   overflow: auto;
   scroll-behavior: smooth;
