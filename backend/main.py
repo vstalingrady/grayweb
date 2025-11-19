@@ -613,9 +613,17 @@ class CalendarEventBase(BaseModel):
     description: Optional[str] = None
     start_time: datetime
     end_time: datetime
+    calendar_id: Optional[int] = None
 
 class CalendarEventCreate(CalendarEventBase):
     pass
+
+class CalendarEventUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    start_time: Optional[datetime] = None
+    end_time: Optional[datetime] = None
+    calendar_id: Optional[int] = None
 
 class CalendarEvent(CalendarEventBase):
     id: int
@@ -4800,7 +4808,7 @@ async def create_calendar_event(user_id: int, event: CalendarEventCreate, db: da
         try:
             payload = {
                 "user_id": user_id,
-                "calendar_id": None,
+                "calendar_id": event.calendar_id,
                 "title": event.title,
                 "description": event.description,
                 "start_time": event.start_time.isoformat(),
@@ -4818,15 +4826,140 @@ async def create_calendar_event(user_id: int, event: CalendarEventCreate, db: da
             )
 
     # Fallback to local SQLite.
-    query = calendar_events.insert().values(
-        user_id=user_id,
-        title=event.title,
-        description=event.description,
-        start_time=event.start_time,
-        end_time=event.end_time
+    event_id = await db.execute(
+        calendar_events.insert().values(
+            user_id=user_id,
+            calendar_id=event.calendar_id,
+            title=event.title,
+            description=event.description,
+            start_time=event.start_time,
+            end_time=event.end_time,
+            created_at=now,
+        )
     )
-    event_id = await db.execute(query)
-    return {**event.dict(), "id": event_id, "user_id": user_id, "created_at": now}
+    query = calendar_events.select().where(calendar_events.c.id == event_id)
+    return await db.fetch_one(query)
+
+
+@app.patch("/users/{user_id}/calendar-events/{event_id}", response_model=CalendarEvent)
+async def update_calendar_event(
+    user_id: int,
+    event_id: int,
+    event_update: CalendarEventUpdate,
+    db: databases.Database = Depends(get_database),
+):
+    update_data = event_update.dict(exclude_unset=True)
+
+    if supabase:
+        try:
+            existing = (
+                supabase.table("calendar_events")
+                .select("*")
+                .eq("id", event_id)
+                .eq("user_id", user_id)
+                .single()
+                .execute()
+            )
+            # If Supabase has no record, fall back to SQLite without raising; the event
+            # may be stored only in the local DB.
+            if not existing.data:
+                existing = None  # type: ignore[assignment]
+            elif not update_data:
+                return existing.data
+
+            if update_data:
+                # Work on a copy so the SQLite fallback still receives datetime objects.
+                supabase_update: Dict[str, Any] = dict(update_data)
+                if "start_time" in supabase_update and isinstance(supabase_update["start_time"], datetime):
+                    supabase_update["start_time"] = supabase_update["start_time"].isoformat()
+                if "end_time" in supabase_update and isinstance(supabase_update["end_time"], datetime):
+                    supabase_update["end_time"] = supabase_update["end_time"].isoformat()
+
+                update_payload = {
+                    **supabase_update,
+                }
+                result = (
+                    supabase.table("calendar_events")
+                    .update(update_payload)
+                    .eq("id", event_id)
+                    .eq("user_id", user_id)
+                    .execute()
+                )
+                rows = getattr(result, "data", None) or []
+                if isinstance(rows, list) and rows:
+                    return rows[0]
+                if isinstance(rows, dict) and rows:
+                    return rows
+        except Exception as error:
+            _handle_supabase_table_error(
+                f"Warning: Failed to update calendar event {event_id} for user {user_id}",
+                error,
+            )
+
+    existing = await db.fetch_one(
+        calendar_events.select().where(
+            (calendar_events.c.id == event_id) & (calendar_events.c.user_id == user_id)
+        )
+    )
+    if not existing:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
+
+    if not update_data:
+        return existing
+
+    await db.execute(
+        calendar_events.update()
+        .where((calendar_events.c.id == event_id) & (calendar_events.c.user_id == user_id))
+        .values(**update_data)
+    )
+    query = calendar_events.select().where(calendar_events.c.id == event_id)
+    updated = await db.fetch_one(query)
+    if not updated:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
+    return updated
+
+
+@app.delete("/users/{user_id}/calendar-events/{event_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_calendar_event(
+    user_id: int,
+    event_id: int,
+    db: databases.Database = Depends(get_database),
+):
+    if supabase:
+        try:
+            existing = (
+                supabase.table("calendar_events")
+                .select("id")
+                .eq("id", event_id)
+                .eq("user_id", user_id)
+                .limit(1)
+                .execute()
+            )
+            # If Supabase has no record, fall back to SQLite without raising; the event
+            # may be stored only in the local DB.
+            if existing.data:
+                supabase.table("calendar_events").delete().eq("id", event_id).eq("user_id", user_id).execute()
+                return None
+        except Exception as error:
+            _handle_supabase_table_error(
+                f"Warning: Failed to delete calendar event {event_id} for user {user_id}",
+                error,
+            )
+
+    existing = await db.fetch_one(
+        calendar_events.select().where(
+            (calendar_events.c.id == event_id) & (calendar_events.c.user_id == user_id)
+        )
+    )
+    if not existing:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
+
+    await db.execute(
+        calendar_events.delete().where(
+            (calendar_events.c.id == event_id) & (calendar_events.c.user_id == user_id)
+        )
+    )
+    return None
 
 
 # Dashboard API endpoints
