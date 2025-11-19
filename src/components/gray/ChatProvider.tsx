@@ -2864,10 +2864,12 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
                 if (event.title) {
                   applyAutoTitle(sessionId, event.title);
                 }
+                const metadata = event.groundingMetadata ?? undefined;
                 const timingUpdate = event.timing ? { backendTimings: event.timing } : undefined;
                 if (assistantMessageId) {
                   updateMessage(sessionId, assistantMessageId, {
                     content,
+                    groundingMetadata: metadata,
                     ...(timingUpdate ?? {}),
                   });
                 }

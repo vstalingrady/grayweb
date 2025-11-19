@@ -2111,15 +2111,25 @@ export function GrayChatView({
             if (event.title) {
               applyAutoTitle(targetSessionId, event.title);
             }
+            const metadata = event.groundingMetadata ?? undefined;
             if (!assistantMessageId) {
-              const assistantMessage = appendMessage(targetSessionId, "assistant", finalResponse);
+              const assistantMessage = appendMessage(
+                targetSessionId,
+                "assistant",
+                finalResponse,
+                undefined,
+                metadata
+              );
               assistantMessageId = (assistantMessage as { id: string } | null)?.id ?? null;
               streamingMessageId = assistantMessageId;
               if (streamingMessageId) {
                 setActiveStreamingMessageId(streamingMessageId);
               }
             } else if (assistantMessageId) {
-              updateMessage(targetSessionId, assistantMessageId, { content: finalResponse });
+              updateMessage(targetSessionId, assistantMessageId, {
+                content: finalResponse,
+                groundingMetadata: metadata,
+              });
             }
             updateSession(targetSessionId, {
               conversationId: streamedConversationId ?? undefined,
