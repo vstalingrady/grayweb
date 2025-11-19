@@ -1,4 +1,4 @@
-import { CSSProperties, HTMLAttributes, MouseEvent, useMemo } from "react";
+import { CSSProperties, HTMLAttributes, MouseEvent, memo, useMemo } from "react";
 import { Check } from "lucide-react";
 
 import styles from "./GrayDashboardCalendar.module.css";
@@ -96,8 +96,9 @@ type EventCardProps = {
   event: PositionedEvent;
   isPreview?: boolean;
   isDragging?: boolean;
+  isSelected?: boolean;
   draggableProps?: Pick<HTMLAttributes<HTMLElement>, "onPointerDown">;
-  onClick?: (event: PositionedEvent, anchor: DOMRect) => void;
+  onClick?: (event: PositionedEvent, anchor: DOMRect, mouseEvent: MouseEvent) => void;
   taskAction?: TaskToggleAction;
 };
 
@@ -109,10 +110,11 @@ type EventCardStyle = CSSProperties & {
   "--event-card-detail-color"?: string;
 };
 
-export function EventCard({
+export const EventCard = memo(function EventCard({
   event,
   isPreview = false,
   isDragging = false,
+  isSelected = false,
   draggableProps,
   onClick,
   taskAction,
@@ -177,6 +179,7 @@ export function EventCard({
       data-stacked={isStacked ? "true" : undefined}
       data-preview={isPreview ? "true" : "false"}
       data-dragging={isDragging ? "true" : "false"}
+      data-selected={isSelected ? "true" : "false"}
       data-task-completed={taskCompleted ? "true" : undefined}
       data-task-disabled={taskAction?.disabled ? "true" : undefined}
       style={cardStyle}
@@ -184,7 +187,7 @@ export function EventCard({
       tabIndex={0}
       onClick={(domEvent) => {
         const anchorRect = domEvent.currentTarget.getBoundingClientRect();
-        onClick?.(event, anchorRect);
+        onClick?.(event, anchorRect, domEvent);
       }}
       title={tooltipLabel}
       {...draggableProps}
@@ -218,4 +221,4 @@ export function EventCard({
       ) : null}
     </div>
   );
-}
+});
