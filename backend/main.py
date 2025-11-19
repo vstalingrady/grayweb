@@ -2392,19 +2392,33 @@ def _coerce_activity_day(value: Any) -> Optional[date]:
 
 
 async def _compute_proactivity_streak(db: databases.Database, user_id: int) -> Dict[str, int]:
-    rows = await db.fetch_all(
-        proactivity_logs.select()
-        .where(proactivity_logs.c.user_id == user_id)
-        .order_by(proactivity_logs.c.activity_date.desc())
-    )
+    rows = []
+    if supabase:
+        try:
+            result = supabase.table("proactivity_logs").select("*").eq("user_id", user_id).order("activity_date", desc=True).execute()
+            rows = getattr(result, "data", None) or []
+        except Exception as error:
+            logger.error(f"Failed to fetch proactivity logs from Supabase for user {user_id}: {error}")
+            # If Supabase is configured but fails, we return 0 streak rather than potentially stale SQLite data
+            return {"current_streak": 0, "best_streak": 0}
+    else:
+        rows = await db.fetch_all(
+            proactivity_logs.select()
+            .where(proactivity_logs.c.user_id == user_id)
+            .order_by(proactivity_logs.c.activity_date.desc())
+        )
 
     qualifying_days: List[date] = []
     seen: set[date] = set()
 
     for row in rows:
-        if row["score"] is not None and row["score"] < 70:
+        # Handle both dict (Supabase) and Record (SQLite) access
+        score = row.get("score") if isinstance(row, dict) else row["score"]
+        activity_date_val = row.get("activity_date") if isinstance(row, dict) else row["activity_date"]
+
+        if score is not None and score < 70:
             continue
-        day = _coerce_activity_day(row["activity_date"])
+        day = _coerce_activity_day(activity_date_val)
         if day is None or day in seen:
             continue
         seen.add(day)
@@ -2480,11 +2494,12 @@ async def get_or_create_user_streak(user_id: int, db: databases.Database) -> Use
             created_rows = getattr(created, "data", None) or []
             if created_rows:
                 return created_rows[0]
+            
+            raise HTTPException(status_code=500, detail="Failed to retrieve created user streak from Supabase")
+
         except Exception as error:
-            _handle_supabase_table_error(
-                f"Warning: Failed to load or create user streak in Supabase for user {user_id}",
-                error,
-            )
+            logger.error(f"Critical: Failed to load or create user streak in Supabase for user {user_id}: {error}")
+            raise HTTPException(status_code=500, detail="Database write failed for user streak")
 
     # Fallback to local SQLite.
     query = user_streaks.select().where(user_streaks.c.user_id == user_id)
@@ -2544,11 +2559,12 @@ async def update_user_streak(user_id: int, db: databases.Database):
             refreshed_rows = getattr(refreshed, "data", None) or []
             if refreshed_rows:
                 return refreshed_rows[0]
+                
+            raise HTTPException(status_code=500, detail="Failed to retrieve updated user streak from Supabase")
+
         except Exception as error:
-            _handle_supabase_table_error(
-                f"Warning: Failed to update user streak in Supabase for user {user_id}",
-                error,
-            )
+            logger.error(f"Critical: Failed to update user streak in Supabase for user {user_id}: {error}")
+            raise HTTPException(status_code=500, detail="Database update failed for user streak")
 
     # Fallback to local SQLite.
     update_query = user_streaks.update().where(
@@ -4396,6 +4412,9 @@ async def update_habit(user_id: int, habit_id: int, habit_update: HabitUpdate, d
             return rows[0]
         if isinstance(rows, dict) and rows:
             return rows
+            
+        raise HTTPException(status_code=500, detail="Failed to update habit in Supabase")
+
     existing = await db.fetch_one(
         habits.select().where(
             (habits.c.id == habit_id) & (habits.c.user_id == user_id)
@@ -5433,12 +5452,70 @@ async def daily_proactivity_checkin(
     db: databases.Database = Depends(get_database)
 ):
     """Daily proactivity check-in - creates or updates today's proactivity log"""
-    from datetime import datetime
-    from sqlalchemy import func
+    from datetime import datetime, time
 
     today = datetime.utcnow().date()
+    
+    if supabase:
+        try:
+            # Define "today" range for Supabase timestamp comparison
+            start_of_day = datetime.combine(today, time.min).isoformat()
+            end_of_day = datetime.combine(today, time.max).isoformat()
 
-    # Check if there's already a log for today
+            # Check for existing log in Supabase
+            result = (
+                supabase.table("proactivity_logs")
+                .select("*")
+                .eq("user_id", user_id)
+                .gte("activity_date", start_of_day)
+                .lte("activity_date", end_of_day)
+                .limit(1)
+                .execute()
+            )
+            rows = getattr(result, "data", None) or []
+            
+            score = min(100, (checkin.tasks_completed / max(checkin.total_tasks, 1)) * 100) if checkin.total_tasks > 0 else 0
+            now = datetime.utcnow().isoformat()
+
+            if rows:
+                existing_id = rows[0]['id']
+                # Update existing
+                update_resp = supabase.table("proactivity_logs").update({
+                    "tasks_completed": checkin.tasks_completed,
+                    "total_tasks": checkin.total_tasks,
+                    "score": score,
+                    "notes": checkin.notes,
+                    "updated_at": now
+                }).eq("id", existing_id).select().execute()
+                
+                updated_rows = getattr(update_resp, "data", None) or []
+                if updated_rows:
+                    return updated_rows[0]
+                raise HTTPException(status_code=500, detail="Failed to retrieve updated proactivity log from Supabase")
+            else:
+                # Create new
+                insert_resp = supabase.table("proactivity_logs").insert({
+                    "user_id": user_id,
+                    "activity_date": now,
+                    "tasks_completed": checkin.tasks_completed,
+                    "total_tasks": checkin.total_tasks,
+                    "score": score,
+                    "notes": checkin.notes,
+                    "created_at": now,
+                    "updated_at": now
+                }).select().execute()
+                
+                new_rows = getattr(insert_resp, "data", None) or []
+                if new_rows:
+                    return new_rows[0]
+                raise HTTPException(status_code=500, detail="Failed to retrieve created proactivity log from Supabase")
+
+        except Exception as error:
+            logger.error(f"Critical: Failed to write proactivity log to Supabase for user {user_id}: {error}")
+            raise HTTPException(status_code=500, detail="Database write failed for proactivity log")
+
+    # Fallback to local SQLite (only if Supabase is not configured)
+    from sqlalchemy import func
     existing_log_query = proactivity_logs.select().where(
         (proactivity_logs.c.user_id == user_id) &
         (func.date(proactivity_logs.c.activity_date) == today)
