@@ -33,6 +33,9 @@ class AIMessageGenerator:
         reason: Optional[str] = None,
         tone: Optional[str] = None,
         decision_context: Optional[Dict[str, Any]] = None,
+        profile_context: Optional[str] = None,
+        custom_instructions: Optional[str] = None,
+        chat_context: Optional[str] = None,
     ) -> tuple[str, str]:
         """
         Generate a personalized daily check-in message
@@ -73,17 +76,30 @@ class AIMessageGenerator:
         context_summary = ", ".join(context_summary_parts)
 
         meta_line = f"Cadence: {cadence or 'unspecified'}. Label: {label}. Date key: {date_key or 'today'}."
-        user_context = f"User context: {context_summary}. {meta_line}"
+        context_chunks: List[str] = [f"User context: {context_summary}. {meta_line}"]
+        if reason:
+            context_chunks.append(f"Trigger reason: {reason}")
+        if tone:
+            context_chunks.append(f"Requested tone: {tone}")
+        if decision_context:
+            context_chunks.append(f"Decision context: {decision_context}")
+        if profile_context:
+            context_chunks.append(f"Profile summary: {profile_context.strip()}")
+        if custom_instructions:
+            context_chunks.append(f"Custom instructions from the user:\n{custom_instructions.strip()}")
+        if chat_context:
+            context_chunks.append(f"Recent chat snippets:\n{chat_context.strip()}")
+
+        user_context = "\n\n".join(part for part in context_chunks if part.strip())
 
         system_prompt = (
             "You are Gray, a proactive AI mentor and accountability partner.\n"
-            "Write a medium-length proactive check-in message for the user in first person as Gray.\n"
+            "Write a concise proactive check-in message for the user in first person as Gray.\n"
             "- Tone: warm, honest, encouraging; a mix of friend and coach.\n"
-            "- Length: 3–6 short paragraphs. You may include a short bullet list with 2–4 concrete example next steps.\n"
+            "- Length: Keep it short and punchy (2-3 sentences or 1-2 short paragraphs).\n"
             "- Use the context string the user sends as background only; do NOT invent specific project names or fake details.\n"
-            "- Help them notice how they're doing, reflect on what matters most right now, and choose one meaningful next step.\n"
-            "- End by inviting them to reply with what they want to focus on next or where they feel stuck.\n"
-            "- Avoid emojis.\n"
+            "- Help them notice how they're doing and choose one meaningful next step.\n"
+            "- Avoid emojis and avoid lists unless absolutely necessary for clarity.\n"
         )
 
         if not self.gemini or not self.gemini.available:
