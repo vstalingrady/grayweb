@@ -88,10 +88,13 @@ export const useEventDrag = ({
         const target = pointerEvent.currentTarget;
         const containerRect = containerRef.current.getBoundingClientRect();
         const scrollTop = containerRef.current.scrollTop;
-        const minuteHeight = hourHeight / 60;
+        const minuteHeight = (hourHeight / 60) || 1;
         const pointerOffsetY = pointerEvent.clientY - containerRect.top + scrollTop;
 
+        // Calculate where the event starts in minutes from day start
         const eventStartMinutes = minutesBetween(eventAnchor, primaryEvent.start);
+
+        // Store the offset: how many minutes into the event was the pointer when we clicked
         const dragOffsetMinutes = eventStartMinutes - pointerOffsetY / minuteHeight;
 
         // Identify all events to drag
@@ -199,7 +202,7 @@ export const useEventDrag = ({
             isDraggingRef.current = true;
           }
 
-          const minuteHeightLocal = hourHeight / 60;
+          const minuteHeightLocal = (hourHeight / 60) || 1;
 
           // Where the primary event would be based on pointer
           const rawStartMinutes = pointerY / minuteHeightLocal + dragState.offsetMinutes;
