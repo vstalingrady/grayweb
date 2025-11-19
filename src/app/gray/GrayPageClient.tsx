@@ -825,8 +825,8 @@ function GrayPageClientInner({
               tokensRemaining: usage.limit > 0 ? Math.max(0, usage.limit - usage.conversationTokens) : 0,
               limit: usage.limit,
               provider: usage.provider,
-              modelName: usage.modelName,
-              modelLabel: usage.modelLabel,
+              modelName: usage.modelName ?? null,
+              modelLabel: usage.modelLabel ?? null,
             });
           }
         })

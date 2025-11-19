@@ -29,6 +29,7 @@ interface UserContextType {
     personalization_occupation?: string | null;
     personalization_about?: string | null;
     personalization_custom_instructions?: string | null;
+    maps_enabled?: boolean;
   }) => Promise<void>;
   refreshUser: () => Promise<void>;
   waitForUser: () => Promise<User | null>;
@@ -115,6 +116,11 @@ const sanitizeCachedUser = (value: unknown): { user: User; timestamp: number } |
         : undefined,
     role: typeof raw.role === 'string' && raw.role.trim().length > 0 ? raw.role : 'user',
     initials: typeof raw.initials === 'string' && raw.initials.trim().length > 0 ? raw.initials : 'OP',
+    workspace_background_id:
+      typeof raw.workspace_background_id === 'string' && raw.workspace_background_id.length > 0
+        ? raw.workspace_background_id
+        : null,
+    maps_enabled: typeof raw.maps_enabled === 'boolean' ? raw.maps_enabled : false,
     personalization_nickname:
       typeof raw.personalization_nickname === 'string' && raw.personalization_nickname.length > 0
         ? raw.personalization_nickname
@@ -129,7 +135,7 @@ const sanitizeCachedUser = (value: unknown): { user: User; timestamp: number } |
         : null,
     personalization_custom_instructions:
       typeof raw.personalization_custom_instructions === 'string' &&
-      raw.personalization_custom_instructions.length > 0
+        raw.personalization_custom_instructions.length > 0
         ? raw.personalization_custom_instructions
         : null,
     created_at:
@@ -334,6 +340,7 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
     personalization_occupation?: string | null;
     personalization_about?: string | null;
     personalization_custom_instructions?: string | null;
+    maps_enabled?: boolean;
   }) => {
     if (!user) throw new Error('No user logged in');
 
@@ -346,6 +353,7 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
       personalization_occupation?: string | null;
       personalization_about?: string | null;
       personalization_custom_instructions?: string | null;
+      maps_enabled?: boolean;
     } = {};
 
     if (typeof userData.full_name === 'string') {
@@ -369,6 +377,9 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
     if (Object.prototype.hasOwnProperty.call(userData, 'personalization_custom_instructions')) {
       payload.personalization_custom_instructions =
         userData.personalization_custom_instructions ?? null;
+    }
+    if (typeof userData.maps_enabled === 'boolean') {
+      payload.maps_enabled = userData.maps_enabled;
     }
 
     if (Object.keys(payload).length === 0) {
