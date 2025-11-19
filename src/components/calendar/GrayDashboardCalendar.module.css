@@ -1043,29 +1043,16 @@
 }
 
 .eventCard[data-display-hint="line"]::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 20px;
-  height: 20px;
-  border-radius: 999px;
-  border: 2px solid var(--event-line-color, rgba(255, 255, 255, 0.9));
-  background:
-    radial-gradient(circle at center, var(--event-line-color, rgba(255, 255, 255, 0.9)) 50%, rgba(8, 8, 10, 0.85) 52%);
-  transform: translate(-50%, -50%);
-  pointer-events: none;
-  transition: transform 0.2s ease;
+  content: none;
 }
 
 .eventCard[data-display-hint="line"]:hover::after,
 .eventCard[data-display-hint="line"]:focus-visible::after {
-  transform: translate(-50%, -50%) scale(1.1);
+  transform: none;
 }
 
 .eventCard[data-display-hint="line"]:focus-visible {
-  outline: 2px solid rgba(255, 255, 255, 0.85);
-  outline-offset: 2px;
+  outline: none;
 }
 
 .eventCard[data-entry-type="task"] {
@@ -1495,7 +1482,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  opacity: 0;
+  opacity: 1;
   transition: opacity 0.15s ease;
 }
 

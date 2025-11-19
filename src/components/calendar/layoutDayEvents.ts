@@ -156,8 +156,8 @@ export const layoutDayEvents = (
     const durationMinutes = Math.max(endMinutes - startMinutes, 5);
     const isLineEvent = event.displayHint === "line";
     const baseHeight = Math.max(durationMinutes * minuteHeight, minimumHeight);
-    const height = isLineEvent ? 2 : baseHeight;
-    const top = isLineEvent ? Math.max(startMinutes * minuteHeight - 1, 0) : startMinutes * minuteHeight;
+    const height = isLineEvent ? 28 : baseHeight;
+    const top = isLineEvent ? Math.max(startMinutes * minuteHeight - 14, 0) : startMinutes * minuteHeight;
 
     if (!meta) {
       return {
