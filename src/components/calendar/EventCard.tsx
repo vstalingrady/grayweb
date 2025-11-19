@@ -224,7 +224,7 @@ export const EventCard = memo(function EventCard({
       {event.entryType === "reminder" && (
         <>
           <div className={styles.reminderHandle} />
-          {onDelete && (
+          {onDelete && isSelected && (
             <button
               type="button"
               className={styles.eventCardDelete}

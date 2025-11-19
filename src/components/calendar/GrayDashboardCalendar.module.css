@@ -1496,7 +1496,7 @@
   align-items: center;
   justify-content: center;
   opacity: 0;
-  transition: opacity 0.2s ease, background 0.2s ease;
+  transition: opacity 0.15s ease;
 }
 
 .eventCard:hover .reminderHandle {
@@ -1504,7 +1504,7 @@
 }
 
 .reminderHandle:hover {
-  background: rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.3);
 }
 
 .reminderHandle::after {
@@ -1529,14 +1529,10 @@
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.2s ease, background 0.2s ease;
+  opacity: 1;
+  transition: background 0.15s ease;
   z-index: 11;
   padding: 0;
-}
-
-.eventCard:hover .eventCardDelete {
-  opacity: 1;
 }
 
 .eventCardDelete:hover {
