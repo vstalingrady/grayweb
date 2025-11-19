@@ -34,11 +34,9 @@ type UseEventDragParams = {
 
 type DragState = {
   pointerId: number;
-  // The initial offset of the pointer relative to the start of the PRIMARY event
-  offsetMinutes: number;
-  // The original start time of the PRIMARY event
-  anchor: Date;
-  // Map of all events being dragged: ID -> { originalStart, duration, column }
+  initialClientY: number;
+  initialClientX: number;
+  anchor: Date; // Day start (00:00)
   draggingEvents: Record<
     string,
     { originalStart: Date; durationMinutes: number; column: number }
@@ -79,23 +77,12 @@ export const useEventDrag = ({
           return;
         }
 
-        const eventAnchor = new Date(primaryEvent.start);
-        eventAnchor.setHours(0, 0, 0, 0);
-
+        // Prevent default to stop text selection, etc.
         pointerEvent.preventDefault();
         pointerEvent.stopPropagation();
 
-        const target = pointerEvent.currentTarget;
-        const containerRect = containerRef.current.getBoundingClientRect();
-        const scrollTop = containerRef.current.scrollTop;
-        const minuteHeight = (hourHeight / 60) || 1;
-        const pointerOffsetY = pointerEvent.clientY - containerRect.top + scrollTop;
-
-        // Calculate where the event starts in minutes from day start
-        const eventStartMinutes = minutesBetween(eventAnchor, primaryEvent.start);
-
-        // Store the offset: how many minutes into the event was the pointer when we clicked
-        const dragOffsetMinutes = eventStartMinutes - pointerOffsetY / minuteHeight;
+        const eventAnchor = new Date(primaryEvent.start);
+        eventAnchor.setHours(0, 0, 0, 0);
 
         // Identify all events to drag
         const eventsToDrag = new Map<string, CalendarEvent>();
@@ -127,7 +114,8 @@ export const useEventDrag = ({
 
         const dragState: DragState = {
           pointerId: pointerEvent.pointerId,
-          offsetMinutes: dragOffsetMinutes,
+          initialClientY: pointerEvent.clientY,
+          initialClientX: pointerEvent.clientX,
           anchor: eventAnchor,
           draggingEvents,
         };
@@ -135,34 +123,30 @@ export const useEventDrag = ({
         suppressClickRef.current = false;
         isDraggingRef.current = false;
 
-        const dispatchPreview = (primaryStartMinutes: number, targetColumn?: number) => {
-          // Calculate the delta for the primary event
-          const primaryOriginalStartMinutes = minutesBetween(
-            dragState.anchor,
-            dragState.draggingEvents[primaryEvent.id].originalStart
-          );
+        const target = pointerEvent.currentTarget;
+        target.setPointerCapture(dragState.pointerId);
 
-          // Snap the primary event's new start time
-          const snappedPrimaryStart = snapToInterval(primaryStartMinutes, snapMinutes);
-
-          // Calculate how much we moved from the original start
-          const deltaMinutes = snappedPrimaryStart - primaryOriginalStartMinutes;
+        const dispatchPreview = (deltaMinutes: number, targetColumn?: number) => {
+          const drafts: Record<string, EventDraft> = {};
 
           // Calculate column delta if applicable
           const primaryOriginalColumn = draggingEvents[primaryEvent.id].column;
           const columnDelta = typeof targetColumn === "number" ? targetColumn - primaryOriginalColumn : 0;
 
-          const drafts: Record<string, EventDraft> = {};
-
           Object.entries(dragState.draggingEvents).forEach(
-            ([id, { originalStart, durationMinutes, column }]) => {
-              // Apply the same delta to all events
+            ([id, { originalStart, durationMinutes }]) => {
+              // 1. Calculate original start in minutes from anchor
               const originalStartMinutes = minutesBetween(dragState.anchor, originalStart);
+
+              // 2. Apply delta
               const newStartMinutes = originalStartMinutes + deltaMinutes;
 
-              // Clamp to day bounds
+              // 3. Snap the RESULTING time, not the delta
+              const snappedStartMinutes = snapToInterval(newStartMinutes, snapMinutes);
+
+              // 4. Clamp to day bounds
               const clampedStart = clamp(
-                newStartMinutes,
+                snappedStartMinutes,
                 0,
                 MINUTES_IN_DAY - durationMinutes
               );
@@ -184,17 +168,14 @@ export const useEventDrag = ({
         };
 
         const handleMove = (moveEvent: PointerEvent) => {
-          if (moveEvent.pointerId !== dragState.pointerId || !containerRef.current) {
+          if (moveEvent.pointerId !== dragState.pointerId) {
             return;
           }
-          const containerBounds = containerRef.current.getBoundingClientRect();
-          const pointerY =
-            moveEvent.clientY - containerBounds.top + containerRef.current.scrollTop;
 
           // Check for drag threshold
           if (!isDraggingRef.current) {
-            const dx = moveEvent.clientX - pointerEvent.clientX;
-            const dy = moveEvent.clientY - pointerEvent.clientY;
+            const dx = moveEvent.clientX - dragState.initialClientX;
+            const dy = moveEvent.clientY - dragState.initialClientY;
             const distance = Math.sqrt(dx * dx + dy * dy);
             if (distance < 5) {
               return;
@@ -202,10 +183,13 @@ export const useEventDrag = ({
             isDraggingRef.current = true;
           }
 
-          const minuteHeightLocal = (hourHeight / 60) || 1;
+          const minuteHeight = (hourHeight / 60) || 1; // Safeguard against 0 division
 
-          // Where the primary event would be based on pointer
-          const rawStartMinutes = pointerY / minuteHeightLocal + dragState.offsetMinutes;
+          // Calculate delta in pixels
+          const deltaY = moveEvent.clientY - dragState.initialClientY;
+
+          // Convert to minutes
+          const rawDeltaMinutes = deltaY / minuteHeight;
 
           const primaryColumn = draggingEvents[primaryEvent.id].column;
 
@@ -220,7 +204,7 @@ export const useEventDrag = ({
               )
               : primaryColumn;
 
-          dispatchPreview(rawStartMinutes, targetColumn);
+          dispatchPreview(rawDeltaMinutes, targetColumn);
         };
 
         const release = () => {
@@ -242,12 +226,16 @@ export const useEventDrag = ({
           if (isDraggingRef.current && activeDraftsRef.current) {
             onCommit?.(activeDraftsRef.current);
           }
+
+          // If we dragged, suppress the click that follows
           if (isDraggingRef.current) {
             suppressClickRef.current = true;
+            // Reset suppression after a tick to allow future clicks
             window.setTimeout(() => {
               suppressClickRef.current = false;
             }, 0);
           }
+
           isDraggingRef.current = false;
           release();
           finalize();
@@ -265,7 +253,6 @@ export const useEventDrag = ({
           finalize();
         };
 
-        target.setPointerCapture(dragState.pointerId);
         target.addEventListener("pointermove", handleMove);
         target.addEventListener("pointerup", handleUp);
         target.addEventListener("pointercancel", handleCancel);
