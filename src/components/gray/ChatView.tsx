@@ -279,8 +279,22 @@ const buildGroundingSourceCards = (metadata: GroundingMetadata | undefined | nul
     const id = `chunk-${index}`;
     const isReferenced = referenced.has(index);
     if (chunk.web) {
-      const host = chunk.web.site ?? chunk.web.domain ?? deriveGroundingSourceHost(undefined, chunk.web.uri);
-      const siteLabel = host ?? "Web source";
+      const derivedHost = deriveGroundingSourceHost(undefined, chunk.web.uri);
+      const rawSite = chunk.web.site ?? chunk.web.domain;
+      let siteLabel = rawSite ?? derivedHost ?? "Web source";
+
+      // Filter out internal Google/Vertex domains if they leak into the label
+      if (
+        siteLabel.toLowerCase().includes("vertexaisearch") ||
+        siteLabel.toLowerCase() === "google search"
+      ) {
+        siteLabel = derivedHost ?? "Web source";
+      }
+      // Final safety check
+      if (siteLabel.toLowerCase().includes("vertexaisearch")) {
+        siteLabel = "Source";
+      }
+
       sources.push({
         id: `${id}-web`,
         siteLabel,
@@ -292,8 +306,20 @@ const buildGroundingSourceCards = (metadata: GroundingMetadata | undefined | nul
     }
     if (chunk.retrieved_context) {
       const retrieved = chunk.retrieved_context;
-      const host = retrieved.document_name ?? deriveGroundingSourceHost(undefined, retrieved.uri);
-      const siteLabel = host ?? "Referenced context";
+      const derivedHost = deriveGroundingSourceHost(undefined, retrieved.uri);
+      const host = retrieved.document_name ?? derivedHost;
+      let siteLabel = host ?? "Referenced context";
+
+      if (
+        siteLabel.toLowerCase().includes("vertexaisearch") ||
+        siteLabel.toLowerCase() === "google search"
+      ) {
+        siteLabel = derivedHost ?? "Referenced context";
+      }
+       if (siteLabel.toLowerCase().includes("vertexaisearch")) {
+        siteLabel = "Context";
+      }
+
       sources.push({
         id: `${id}-retrieved`,
         siteLabel,
