@@ -1236,6 +1236,15 @@ const ChatMessagesList = memo(
                     }
                     return (
                       <div className={styles.chatGroundingPanel}>
+                        {filteredQueries.length > 0 ? (
+                          <div className={styles.chatGroundingQueries}>
+                            {filteredQueries.map((query) => (
+                              <span key={query} className={styles.chatGroundingQueryChip}>
+                                {query}
+                              </span>
+                            ))}
+                          </div>
+                        ) : null}
                         {sourceCards.length > 0 ? (
                           <div className={styles.chatGroundingSourceDeck}>
                             <div className={styles.chatGroundingSourceCards}>
@@ -1279,14 +1288,6 @@ const ChatMessagesList = memo(
                                 );
                               })}
                             </div>
-                          </div>
-                        ) : null}
-                        {renderedSearchEntry ? (
-                          <div className={styles.chatGroundingSearchEntryDeck}>
-                            <div
-                              className={styles.chatGroundingSearchEntry}
-                              dangerouslySetInnerHTML={{ __html: renderedSearchEntry }}
-                            />
                           </div>
                         ) : null}
                         {mapSources.length > 0 ? (
