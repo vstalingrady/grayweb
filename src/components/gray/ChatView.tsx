@@ -891,22 +891,19 @@ const MarkdownCodeBlock: CodeComponent = ({ inline, className, children, ...prop
         </button>
       </div>
       <div
-        className={`${styles.codeSurface} ${
-          isMiniBlock ? styles.codeSurfaceMini : isCompactBlock ? styles.codeSurfaceCompact : ""
-        }`}
+        className={`${styles.codeSurface} ${isMiniBlock ? styles.codeSurfaceMini : isCompactBlock ? styles.codeSurfaceCompact : ""
+          }`}
       >
         {codeLines.map((line, lineIndex) => (
           <div
-            className={`${styles.codeLine} ${
-              isMiniBlock ? styles.codeLineMini : isCompactBlock ? styles.codeLineCompact : ""
-            }`}
+            className={`${styles.codeLine} ${isMiniBlock ? styles.codeLineMini : isCompactBlock ? styles.codeLineCompact : ""
+              }`}
             key={`code-line-${lineIndex}`}
           >
             {!isCompactBlock && <span className={styles.codeLineNumber}>{lineIndex + 1}</span>}
             <span
-              className={`${styles.codeLineContent} ${
-                isMiniBlock ? styles.codeLineContentMini : ""
-              }`}
+              className={`${styles.codeLineContent} ${isMiniBlock ? styles.codeLineContentMini : ""
+                }`}
             >
               {line.map((token, tokenIndex) => {
                 const classKey = `codeToken${token.type}` as keyof typeof styles;
@@ -982,7 +979,7 @@ const ReminderCard = ({ reminder }: { reminder: GrayReminderCreatedPayload }) =>
   const displayLabel = scheduleLabel ?? "Flexible timing";
 
   return (
-      <article className={styles.reminderCard} data-mode={mode}>
+    <article className={styles.reminderCard} data-mode={mode}>
       <header className={styles.reminderCardHeader}>
         <div>
           <h4>{data.label || "Untitled reminder"}</h4>
@@ -1038,10 +1035,10 @@ const ChatMessagesList = memo(
     scrollAnchorRef,
   }: ChatMessagesListProps) => {
     return (
-    <div
-      className={styles.chatMessages}
-      data-streaming={shouldShowPendingStreamIndicator ? "true" : undefined}
-    >
+      <div
+        className={styles.chatMessages}
+        data-streaming={shouldShowPendingStreamIndicator ? "true" : undefined}
+      >
         {messages.map((message, messageIndex) => {
           const isUser = message.role === "user";
           const isAssistant = !isUser;
@@ -1151,34 +1148,34 @@ const ChatMessagesList = memo(
                     </ReactMarkdown>
                   </div>
                 )}
-                {false && isAssistant && message.groundingMetadata ? (
+                {isAssistant && message.groundingMetadata ? (
                   (() => {
                     const metadata = message.groundingMetadata;
                     const searchQueries =
-                      metadata.web_search_queries ??
+                      metadata?.web_search_queries ??
                       (metadata as { webSearchQueries?: string[] })?.webSearchQueries ??
                       [];
                     const searchEntryPoint =
-                      metadata.search_entry_point ??
+                      metadata?.search_entry_point ??
                       (metadata as { searchEntryPoint?: { rendered_content?: string; renderedContent?: string } })
                         ?.searchEntryPoint ??
                       null;
                     const renderedSearchEntry =
                       typeof searchEntryPoint?.rendered_content === "string"
-                        ? searchEntryPoint.rendered_content
+                        ? searchEntryPoint?.rendered_content
                         : typeof (searchEntryPoint as any)?.renderedContent === "string"
-                        ? (searchEntryPoint as any).renderedContent
-                        : null;
+                          ? (searchEntryPoint as any).renderedContent
+                          : null;
                     const chunks =
-                      metadata.grounding_chunks ??
+                      metadata?.grounding_chunks ??
                       (metadata as { groundingChunks?: GroundingMetadata["grounding_chunks"] })?.groundingChunks ??
                       [];
                     const mapSources = chunks
                       .map((chunk) => chunk?.maps)
                       .filter((maps): maps is NonNullable<(typeof chunks)[number]["maps"]> => Boolean(maps));
                     const hasWidget = Boolean(
-                      metadata.google_maps_widget_context_token ??
-                        (metadata as { googleMapsWidgetContextToken?: string })?.googleMapsWidgetContextToken
+                      metadata?.google_maps_widget_context_token ??
+                      (metadata as { googleMapsWidgetContextToken?: string })?.googleMapsWidgetContextToken
                     );
                     const previousUserMessage = (() => {
                       for (let index = messageIndex - 1; index >= 0; index -= 1) {
@@ -1318,10 +1315,10 @@ const ChatMessagesList = memo(
                             })}
                           </div>
                         ) : null}
-                        {metadata.google_maps_widget_context_token ? (
+                        {metadata?.google_maps_widget_context_token ? (
                           <div className={styles.chatGroundingWidget}>
                             <span>Widget token:</span>
-                            <code>{metadata.google_maps_widget_context_token}</code>
+                            <code>{metadata?.google_maps_widget_context_token}</code>
                           </div>
                         ) : null}
                       </div>
@@ -1331,39 +1328,39 @@ const ChatMessagesList = memo(
               </div>
               {!showStreamingIndicator && (
                 <div className={styles.chatMessageFooter}>
-              <time className={styles.chatMessageTimestamp} dateTime={messageTimestampIso}>
-                {timestampLabel}
-              </time>
-              <div className={styles.chatMessageFooterRight}>
-                {isAssistant && sourceCards.length > 0 ? (
-                  <div className={styles.chatFooterSources}>
-                    <span className={styles.chatFooterSourcesLabel}>Sources</span>
-                    <div className={styles.chatFooterSourcesList}>
-                      {sourceCards.slice(0, 2).map((source) => {
-                        const label = source.siteLabel || source.title || "Source";
-                        if (source.href) {
-                          return (
-                            <a
-                              key={source.id}
-                              href={source.href}
-                              target="_blank"
-                              rel="noreferrer"
-                              className={styles.chatFooterSourceLink}
-                            >
-                              {label}
-                            </a>
-                          );
-                        }
-                        return (
-                          <span key={source.id} className={styles.chatFooterSourceText}>
-                            {label}
-                          </span>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ) : null}
-                <div className={styles.chatActionIconRow}>
+                  <time className={styles.chatMessageTimestamp} dateTime={messageTimestampIso}>
+                    {timestampLabel}
+                  </time>
+                  <div className={styles.chatMessageFooterRight}>
+                    {isAssistant && sourceCards.length > 0 ? (
+                      <div className={styles.chatFooterSources}>
+                        <span className={styles.chatFooterSourcesLabel}>Sources</span>
+                        <div className={styles.chatFooterSourcesList}>
+                          {sourceCards.slice(0, 2).map((source) => {
+                            const label = source.siteLabel || source.title || "Source";
+                            if (source.href) {
+                              return (
+                                <a
+                                  key={source.id}
+                                  href={source.href}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className={styles.chatFooterSourceLink}
+                                >
+                                  {label}
+                                </a>
+                              );
+                            }
+                            return (
+                              <span key={source.id} className={styles.chatFooterSourceText}>
+                                {label}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ) : null}
+                    <div className={styles.chatActionIconRow}>
                       {isMetadataAvailable ? (
                         <div className={styles.chatMetadataControl}>
                           <button type="button" aria-label="Response details" tabIndex={0}>
@@ -2637,7 +2634,12 @@ export function GrayChatView({
     // Workspace context: include the FULL workspace summary so the user sees its impact.
     const workspaceTokens = estimateTokenCount(workspaceContext);
 
-    const totalTokens = conversationTokens + workspaceTokens;
+    // If we have authoritative backend usage, use that as the total (it likely includes system prompt + context).
+    // Otherwise, sum our estimates.
+    const totalTokens =
+      typeof conversationUsage?.conversationTokens === "number" && conversationUsage.conversationTokens >= 0
+        ? conversationUsage.conversationTokens
+        : conversationTokens + workspaceTokens;
     const percentUsed =
       limit > 0 ? Math.max(0, Math.min(100, (totalTokens / limit) * 100)) : 0;
     const tokensRemaining = limit > 0 ? Math.max(0, limit - totalTokens) : 0;
@@ -2667,7 +2669,7 @@ export function GrayChatView({
       p: ({ children, ...rest }: any) => {
         const hasBlockCodeChild = Children.toArray(children).some(
           (child) =>
-            isValidElement(child) && child.props && child.props["data-code-block-root"]
+            isValidElement(child) && child.props && (child.props as any)["data-code-block-root"]
         );
         if (hasBlockCodeChild) {
           return <div {...rest}>{children}</div>;
