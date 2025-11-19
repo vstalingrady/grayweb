@@ -1554,7 +1554,7 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 6px;
 }
 
 .navIcon {
@@ -1573,12 +1573,10 @@
 .sidebarAnchored {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 
 .sidebarHistorySection {
-  --history-line-offset: 6px;
-  --history-line-color: rgba(255, 255, 255, 0.08);
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -1587,21 +1585,9 @@
 .sidebarHistory {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 10px;
   margin-top: 0;
-  padding-left: 18px;
-  position: relative;
-}
-
-.sidebarHistory::before {
-  content: "";
-  position: absolute;
-  left: var(--history-line-offset);
-  top: 0;
-  bottom: 0;
-  width: 2px;
-  background: var(--history-line-color);
-  pointer-events: none;
+  padding-left: 12px;
 }
 
 .sidebarHistoryGroup {
@@ -1622,7 +1608,7 @@
 .sidebarHistoryList {
   list-style: none;
   margin: 0;
-  padding: 0 0 0 6px;
+  padding: 0 0 0 4px;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -2459,7 +2445,7 @@
   gap: clamp(12px, 2vh, 20px);
   min-height: 100%;
   padding:
-    clamp(8px, 2vh, 18px) 0 calc(env(safe-area-inset-bottom, 0px) + clamp(40px, 8vh, 80px)) 0;
+    clamp(8px, 2vh, 18px) 0 16px 0;
 
   overflow: auto;
   scroll-behavior: smooth;
