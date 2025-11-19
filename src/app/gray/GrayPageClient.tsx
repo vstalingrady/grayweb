@@ -445,7 +445,8 @@ function GrayPageClientInner({
     persistProactivitySettings
   } = useProactivity(userId, resolvedTimezone);
 
-  const derivedPlans = user ? plans : [];
+  // Include reminderPlans in derivedPlans so they appear in the pulse
+  const derivedPlans = user ? [...plans, ...reminderPlans] : [];
   const derivedHabits = user ? habits : [];
 
   const sendDashboardNotification = useCallback(async (title: string, body: string) => {
@@ -799,6 +800,40 @@ function GrayPageClientInner({
       </div>
     );
   };
+
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+
+  // Close mobile sidebar on navigation
+  const handleMobileNavigate = (nav: SidebarNavKey) => {
+    handleNavigate(nav);
+    setIsMobileSidebarOpen(false);
+  };
+
+
+  // Fetch context usage for general session if in dashboard view and personalization is open
+  useEffect(() => {
+    if (isPersonalizationOpen && viewMode === "general" && generalSessionId && !contextUsageSummary) {
+      apiService.getConversationUsage(generalSessionId)
+        .then((usage) => {
+          if (usage) {
+            setContextUsageSummary({
+              conversationId: usage.conversationId,
+              messageCount: usage.messageCount,
+              conversationTokens: usage.conversationTokens,
+              workspaceTokens: 0, // Can't easily estimate without full context, but conversation is main part
+              totalTokens: usage.conversationTokens,
+              tokensRemaining: usage.limit > 0 ? Math.max(0, usage.limit - usage.conversationTokens) : 0,
+              limit: usage.limit,
+              provider: usage.provider,
+              modelName: usage.modelName,
+              modelLabel: usage.modelLabel,
+            });
+          }
+        })
+        .catch((err) => console.error("Failed to fetch general session usage", err));
+    }
+  }, [isPersonalizationOpen, viewMode, generalSessionId, contextUsageSummary]);
+
   const renderMainSurface = () => {
     if (viewMode === "general") {
       return (
@@ -1809,16 +1844,7 @@ function GrayPageClientInner({
         changedCalendars.push(calendar.label);
       }
     });
-    if (changedCalendars.length > 0) {
-      const labelSummary =
-        changedCalendars.length <= 3
-          ? changedCalendars.join(", ")
-          : `${changedCalendars.slice(0, 3).join(", ")} +${changedCalendars.length - 3} more`;
-      void sendDashboardNotification(
-        "Calendar updated",
-        `Updated ${changedCalendars.length === 1 ? "calendar" : "calendars"}: ${labelSummary}.`
-      );
-    }
+    // Intentionally suppress desktop notifications for calendar visibility/label tweaks.
   };
 
   const handleEventsChange = async (allEvents: CalendarEvent[]) => {
@@ -2005,19 +2031,7 @@ function GrayPageClientInner({
       }
     }
 
-    const summaryParts: string[] = [];
-    if (newEvents.length > 0) {
-      summaryParts.push(`${newEvents.length} new`);
-    }
-    if (updatedEvents.length > 0) {
-      summaryParts.push(`${updatedEvents.length} updated`);
-    }
-    if (deletedEventIds.length > 0) {
-      summaryParts.push(`${deletedEventIds.length} removed`);
-    }
-    if (summaryParts.length > 0) {
-      void sendDashboardNotification("Calendar updated", summaryParts.join(", "));
-    }
+    // Suppress desktop notifications for routine calendar event edits/moves.
   };
 
   const handleReminderMove = useCallback(
@@ -2262,8 +2276,14 @@ function GrayPageClientInner({
         ) : null}
         <div className={styles.shell}>
           <div className={styles.layout} data-view={viewMode}>
+            {/* Mobile Overlay */}
+            <div
+              className={styles.mobileSidebarOverlay}
+              data-visible={isMobileSidebarOpen ? "true" : "false"}
+              onClick={() => setIsMobileSidebarOpen(false)}
+            />
             <GrayEnhancedSidebar
-              isExpanded={isSidebarExpanded}
+              isExpanded={isSidebarExpanded || isMobileSidebarOpen}
               viewerName={viewerName}
               viewerInitials={viewerInitials}
               viewerAvatarUrl={viewerAvatarUrl}
@@ -2273,9 +2293,12 @@ function GrayPageClientInner({
               navItems={SIDEBAR_ITEMS}
               historySections={historySections}
               onExpand={() => setIsSidebarExpanded(true)}
-              onCollapse={() => setIsSidebarExpanded(false)}
+              onCollapse={() => {
+                setIsSidebarExpanded(false);
+                setIsMobileSidebarOpen(false);
+              }}
               onToggle={() => setIsSidebarExpanded((previous) => !previous)}
-              onNavigate={handleNavigate}
+              onNavigate={handleMobileNavigate}
               activeChatId={currentChatId}
               onOpenPersonalization={handleOpenPersonalization}
               onOpenSettings={handleOpenSettings}
@@ -2293,6 +2316,17 @@ function GrayPageClientInner({
               data-general-attachments={generalAttachmentsActive ? "true" : "false"}
               data-dashboard-free="true"
             >
+              {/* Mobile Header */}
+              <div className={styles.mobileHeader}>
+                <button
+                  className={styles.mobileMenuButton}
+                  onClick={() => setIsMobileSidebarOpen(true)}
+                >
+                  <LayoutDashboard size={24} />
+                </button>
+                <span style={{ fontWeight: 600 }}>Gray</span>
+                <div style={{ width: 24 }} /> {/* Spacer */}
+              </div>
               {isDashboardView ? renderPrimaryView() : renderMainSurface()}
               {viewMode === "general" ? (
                 <>
