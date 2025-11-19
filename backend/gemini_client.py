@@ -255,6 +255,23 @@ class GeminiService:
         )
         selected_model = self._choose_model(model)
 
+        # Hotfix: The current flash-lite-latest endpoint reports "Tool use with function calling is unsupported"
+        # We explicitly disable function calling tools for this model but keep Google Search.
+        if "flash-lite" in selected_model and tools:
+            filtered_tools = []
+            for tool in tools:
+                # Keep Google Search tools
+                if getattr(tool, "google_search", None):
+                    filtered_tools.append(tool)
+                # Skip tools with function declarations
+                elif getattr(tool, "function_declarations", None):
+                    print(f"[Gemini] Warning: Dropping function calling tool for {selected_model}")
+                    continue
+                else:
+                    filtered_tools.append(tool)
+            tools = filtered_tools if filtered_tools else None
+            if not tools:
+                tool_config = None
 
         response = await self._client.aio.models.generate_content(
             model=selected_model,
@@ -293,7 +310,23 @@ class GeminiService:
         )
         selected_model = self._choose_model(model)
 
-
+        # Hotfix: The current flash-lite-latest endpoint reports "Tool use with function calling is unsupported"
+        # We explicitly disable function calling tools for this model but keep Google Search.
+        if "flash-lite" in selected_model and tools:
+            filtered_tools = []
+            for tool in tools:
+                # Keep Google Search tools
+                if getattr(tool, "google_search", None):
+                    filtered_tools.append(tool)
+                # Skip tools with function declarations
+                elif getattr(tool, "function_declarations", None):
+                    print(f"[Gemini] Warning: Dropping function calling tool for {selected_model}")
+                    continue
+                else:
+                    filtered_tools.append(tool)
+            tools = filtered_tools if filtered_tools else None
+            if not tools:
+                tool_config = None
 
         stream_iter = await self._client.aio.models.generate_content_stream(
             model=selected_model,
