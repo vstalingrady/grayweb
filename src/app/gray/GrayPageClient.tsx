@@ -1959,6 +1959,20 @@ function GrayPageClientInner({
 
     // Delete removed events
     for (const eventId of deletedEventIds) {
+      if (eventId.startsWith("reminder-")) {
+        const reminderId = Number(eventId.replace("reminder-", ""));
+        if (!Number.isNaN(reminderId)) {
+          try {
+            await apiService.deleteReminder(user.id, reminderId);
+          } catch (error) {
+            logCalendarSyncError("delete reminder", error);
+            revertCalendarState();
+            return;
+          }
+        }
+        continue;
+      }
+
       const numericId = Number(eventId);
       if (!Number.isNaN(numericId)) {
         // Real event - delete from backend
@@ -1973,12 +1987,54 @@ function GrayPageClientInner({
         // Temporary event - just remove from local state
         console.log("Removing temporary event:", eventId);
       }
-      // Note: Reminders (NaN ID) are ignored here, which is correct as they shouldn't be deleted via this handler
     }
 
     // Create new events
     for (const event of newEvents) {
-      if (event.id.startsWith("reminder-")) continue; // Skip creating reminders as events
+      if (event.entryType === "reminder") {
+        try {
+          const createdReminder = await apiService.createReminder(user.id, {
+            label: event.title,
+            remind_at: event.start.toISOString(),
+            description: event.description,
+            summary: event.description,
+          });
+          const newId = `reminder-${createdReminder.id}`;
+          setCalendarEvents((prev) =>
+            prev.map((e) =>
+              e.id === event.id
+                ? {
+                  ...e,
+                  id: newId,
+                  reminderId: createdReminder.id,
+                  reminderStatus: createdReminder.status,
+                }
+                : e
+            )
+          );
+          // Also update reminderPlans to reflect the new reminder immediately
+          setReminderPlans((prev) => [
+            ...prev,
+            {
+              id: newId,
+              label: createdReminder.label,
+              completed: createdReminder.status === "completed",
+              deadline: createdReminder.remind_at,
+              scheduleSlot: null,
+              details: createdReminder.description ?? createdReminder.summary ?? null,
+              reminderId: createdReminder.id,
+              reminderStatus: createdReminder.status,
+            },
+          ]);
+        } catch (error) {
+          logCalendarSyncError("create reminder", error);
+          revertCalendarState();
+          return;
+        }
+        continue;
+      }
+
+      if (event.id.startsWith("reminder-")) continue; // Should not happen for new events, but safety check
 
       const numericCalendarId = event.calendarId ? Number(event.calendarId) : null;
       if (!Number.isNaN(numericCalendarId) || event.calendarId === "default") {
@@ -2005,7 +2061,36 @@ function GrayPageClientInner({
 
     // Update existing events
     for (const event of updatedEvents) {
-      if (event.id.startsWith("reminder-")) continue; // handled in step 3
+      if (event.entryType === "reminder" || event.id.startsWith("reminder-")) {
+        const reminderId = event.reminderId ?? Number(event.id.replace("reminder-", ""));
+        if (!Number.isNaN(reminderId)) {
+          try {
+            await apiService.updateReminder(user.id, reminderId, {
+              label: event.title,
+              description: event.description,
+              remind_at: event.start.toISOString(),
+            });
+            // Update reminderPlans as well
+            setReminderPlans((prev) =>
+              prev.map((plan) =>
+                plan.reminderId === reminderId
+                  ? {
+                    ...plan,
+                    label: event.title,
+                    details: event.description ?? null,
+                    deadline: event.start.toISOString(),
+                  }
+                  : plan
+              )
+            );
+          } catch (error) {
+            logCalendarSyncError("update reminder", error);
+            revertCalendarState();
+            return;
+          }
+        }
+        continue;
+      }
 
       const numericEventId = Number(event.id);
       const numericCalendarId = event.calendarId ? Number(event.calendarId) : null;
