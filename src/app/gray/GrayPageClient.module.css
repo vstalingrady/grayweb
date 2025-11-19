@@ -2583,7 +2583,7 @@
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 8px;
   padding: 0;
   background: transparent;
   color: rgba(244, 244, 244, 0.96);
@@ -2627,9 +2627,9 @@
 .reminderCardList {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 8px;
   width: 100%;
-  margin: 6px 0 -8px;
+  margin: 0;
 }
 
 .reminderCard {
