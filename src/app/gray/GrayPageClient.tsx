@@ -2018,7 +2018,6 @@ function GrayPageClientInner({
       if (reminderId !== null && user) {
         // Update API
         const previousReminderPlans = reminderPlans;
-        const previousCalendarEvents = previousEvents;
 
         // Optimistically update local state
         const updatedReminderPlans = previousReminderPlans.map((plan) =>
@@ -2030,6 +2029,7 @@ function GrayPageClientInner({
 
         apiService.updateReminder(user.id, reminderId, {
           remind_at: event.start.toISOString(),
+          metadata: { color: event.color },
         }).catch(err => {
           console.error("Failed to update reminder time", err);
           // Revert on error
