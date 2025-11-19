@@ -417,7 +417,10 @@ export function GrayDashboardView({
     () => new Set(derivedReminderPlans.map((plan) => plan.id)),
     [derivedReminderPlans]
   );
-  const planCalendarEvents = useMemo(() => mapPlansToCalendarEvents(displayPlans), [displayPlans]);
+  const planCalendarEvents = useMemo(() => {
+    const plansExcludingReminders = displayPlans.filter((plan) => !plan.id.startsWith("reminder-"));
+    return mapPlansToCalendarEvents(plansExcludingReminders);
+  }, [displayPlans]);
 
   const handleCalendarTaskToggle = useCallback(
     (event: CalendarEvent) => {
@@ -633,7 +636,7 @@ export function GrayDashboardView({
     );
     setPulseMonthDate((previous) =>
       previous.getFullYear() === previousCurrentDay.getFullYear() &&
-      previous.getMonth() === previousCurrentDay.getMonth()
+        previous.getMonth() === previousCurrentDay.getMonth()
         ? new Date(currentDate)
         : previous
     );
@@ -1023,144 +1026,144 @@ export function GrayDashboardView({
       >
         <div className={styles.proactivityModal}>
           <header className={styles.proactivityModalHeader}>
-          <div className={styles.proactivityModalHeading}>
-            <span className={styles.proactivityModalEyebrow} id="proactivityModalHeading">
-              Proactivity
-            </span>
-          </div>
-          <button
-            type="button"
-            className={styles.proactivityModalClose}
-            onClick={handleCloseProactivityModal}
-            aria-label="Close proactivity options"
-          >
-            <X size={16} />
-          </button>
-        </header>
-        <label
-          id="proactivityPresetLabel"
-          htmlFor="proactivityPresetSelect"
-          className={styles.proactivityPresetLabel}
-        >
-          Preset cadence
-        </label>
-        <div className={styles.proactivityPresetSelectWrapper}>
-          <select
-            id="proactivityPresetSelect"
-            className={styles.proactivityPresetSelect}
-            value={selectedPresetId}
-            onChange={handlePresetSelectChange}
-          >
-            <option value="">Select a preset</option>
-            {PROACTIVITY_PRESETS.map((preset) => (
-              <option key={preset.id} value={preset.id}>
-                {preset.title}
-              </option>
-            ))}
-            <option value={CUSTOM_PROACTIVITY_ID}>Custom</option>
-          </select>
-          <ChevronDown size={14} className={styles.proactivityPresetSelectIcon} aria-hidden="true" />
-        </div>
-        {isCustomPresetSelected ? (
-          <section className={styles.proactivityCustomSection}>
-            <header className={styles.proactivityCustomHeader}>
-              <div>
-                <span className={styles.proactivityCustomEyebrow}>Custom setup</span>
-              </div>
-              <button
-                type="button"
-                className={styles.proactivityCustomReset}
-                onClick={handleCustomReset}
-              >
-                Reset
-              </button>
-            </header>
-            <div className={styles.proactivityCustomControls}>
-              <div className={styles.proactivityCustomField}>
-                <div className={styles.proactivityTimes}>
-                  {customTimes.map((time, index) => (
-                    <div key={`${time}-${index}`} className={styles.proactivityTimeListItem}>
-                      {editingCustomTimeIndex === index ? (
-                        <input
-                          type="time"
-                          value={editingCustomTimeDraft}
-                          onChange={(event) => handleCustomTimeChange(event.target.value)}
-                          className={styles.proactivityTimeInput}
-                          autoFocus
-                          step={300}
-                          onBlur={() => commitCustomTimeEdit(index, editingCustomTimeDraft)}
-                          onKeyDown={(event) => {
-                            if (event.key === "Enter" || event.key === "Escape") {
-                              event.preventDefault();
-                              commitCustomTimeEdit(index, editingCustomTimeDraft);
-                            }
-                          }}
-                          aria-label={`Edit custom start time ${time}`}
-                        />
-                      ) : (
-                        <button
-                          type="button"
-                          className={styles.proactivityTimeListButton}
-                          onClick={() => handleCustomTimeEdit(index)}
-                        >
-                          <span className={styles.proactivityTimeLabel}>{formatCustomTimeLabel(time)}</span>
-                        </button>
-                      )}
-                      <div className={styles.proactivityTimeActions}>
-                        <button
-                          type="button"
-                          className={styles.listItemActionButton}
-                          onClick={() => handleCustomTimeEdit(index)}
-                          aria-label={`Edit custom start time ${time}`}
-                        >
-                          <Pencil size={12} />
-                        </button>
-                        <button
-                          type="button"
-                          className={styles.listItemActionButton}
-                          onClick={() => handleCustomTimeRemove(index)}
-                          aria-label={`Remove custom start time ${time}`}
-                          disabled={customTimes.length <= 1}
-                        >
-                          <X size={12} />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                  <button
-                    type="button"
-                    className={styles.proactivityTimeAdd}
-                    onClick={handleCustomTimeAdd}
-                  >
-                    <Plus size={14} />
-                    <span>Add time</span>
-                  </button>
-                </div>
-              </div>
+            <div className={styles.proactivityModalHeading}>
+              <span className={styles.proactivityModalEyebrow} id="proactivityModalHeading">
+                Proactivity
+              </span>
             </div>
-          </section>
-        ) : null}
-        <footer className={styles.proactivityModalFooter}>
-          {showModalRemoveButton ? (
             <button
               type="button"
-              className={styles.proactivityModalSecondary}
-              onClick={handleModalProactivityRemove}
+              className={styles.proactivityModalClose}
+              onClick={handleCloseProactivityModal}
+              aria-label="Close proactivity options"
             >
-              {modalRemoveLabel}
+              <X size={16} />
             </button>
-          ) : null}
-          <button
-            type="button"
-            className={styles.proactivityModalDismiss}
-            onClick={handleCloseProactivityModal}
+          </header>
+          <label
+            id="proactivityPresetLabel"
+            htmlFor="proactivityPresetSelect"
+            className={styles.proactivityPresetLabel}
           >
-            Done
-          </button>
-        </footer>
+            Preset cadence
+          </label>
+          <div className={styles.proactivityPresetSelectWrapper}>
+            <select
+              id="proactivityPresetSelect"
+              className={styles.proactivityPresetSelect}
+              value={selectedPresetId}
+              onChange={handlePresetSelectChange}
+            >
+              <option value="">Select a preset</option>
+              {PROACTIVITY_PRESETS.map((preset) => (
+                <option key={preset.id} value={preset.id}>
+                  {preset.title}
+                </option>
+              ))}
+              <option value={CUSTOM_PROACTIVITY_ID}>Custom</option>
+            </select>
+            <ChevronDown size={14} className={styles.proactivityPresetSelectIcon} aria-hidden="true" />
+          </div>
+          {isCustomPresetSelected ? (
+            <section className={styles.proactivityCustomSection}>
+              <header className={styles.proactivityCustomHeader}>
+                <div>
+                  <span className={styles.proactivityCustomEyebrow}>Custom setup</span>
+                </div>
+                <button
+                  type="button"
+                  className={styles.proactivityCustomReset}
+                  onClick={handleCustomReset}
+                >
+                  Reset
+                </button>
+              </header>
+              <div className={styles.proactivityCustomControls}>
+                <div className={styles.proactivityCustomField}>
+                  <div className={styles.proactivityTimes}>
+                    {customTimes.map((time, index) => (
+                      <div key={`${time}-${index}`} className={styles.proactivityTimeListItem}>
+                        {editingCustomTimeIndex === index ? (
+                          <input
+                            type="time"
+                            value={editingCustomTimeDraft}
+                            onChange={(event) => handleCustomTimeChange(event.target.value)}
+                            className={styles.proactivityTimeInput}
+                            autoFocus
+                            step={300}
+                            onBlur={() => commitCustomTimeEdit(index, editingCustomTimeDraft)}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter" || event.key === "Escape") {
+                                event.preventDefault();
+                                commitCustomTimeEdit(index, editingCustomTimeDraft);
+                              }
+                            }}
+                            aria-label={`Edit custom start time ${time}`}
+                          />
+                        ) : (
+                          <button
+                            type="button"
+                            className={styles.proactivityTimeListButton}
+                            onClick={() => handleCustomTimeEdit(index)}
+                          >
+                            <span className={styles.proactivityTimeLabel}>{formatCustomTimeLabel(time)}</span>
+                          </button>
+                        )}
+                        <div className={styles.proactivityTimeActions}>
+                          <button
+                            type="button"
+                            className={styles.listItemActionButton}
+                            onClick={() => handleCustomTimeEdit(index)}
+                            aria-label={`Edit custom start time ${time}`}
+                          >
+                            <Pencil size={12} />
+                          </button>
+                          <button
+                            type="button"
+                            className={styles.listItemActionButton}
+                            onClick={() => handleCustomTimeRemove(index)}
+                            aria-label={`Remove custom start time ${time}`}
+                            disabled={customTimes.length <= 1}
+                          >
+                            <X size={12} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      className={styles.proactivityTimeAdd}
+                      onClick={handleCustomTimeAdd}
+                    >
+                      <Plus size={14} />
+                      <span>Add time</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </section>
+          ) : null}
+          <footer className={styles.proactivityModalFooter}>
+            {showModalRemoveButton ? (
+              <button
+                type="button"
+                className={styles.proactivityModalSecondary}
+                onClick={handleModalProactivityRemove}
+              >
+                {modalRemoveLabel}
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className={styles.proactivityModalDismiss}
+              onClick={handleCloseProactivityModal}
+            >
+              Done
+            </button>
+          </footer>
+        </div>
       </div>
-    </div>
-  );
+    );
 
   const proactivityModal =
     isMounted && isProactivityModalOpen && typeof document !== "undefined"
@@ -1256,20 +1259,20 @@ export function GrayDashboardView({
 
   const proactivityCard = renderProactivityCard();
 
-const plansCard = (
+  const plansCard = (
     <article className={styles.dashboardCard}>
       <header className={styles.dashboardCardHeader}>
         <span>Plans</span>
       </header>
       <div className={styles.dashboardCardBody}>
         <ul className={styles.planList}>
-                {showPlansList
+          {showPlansList
             ? visiblePlans.map((plan) => {
-                const isDerivedReminder = derivedReminderIds.has(plan.id);
-                const timeLabel = formatPlanTimeLabel(plan);
-                const tagLabel = isDerivedReminder ? "Reminder" : "Plan";
-                return (
-                  <li key={plan.id} className={styles.planListItem}>
+              const isDerivedReminder = derivedReminderIds.has(plan.id);
+              const timeLabel = formatPlanTimeLabel(plan);
+              const tagLabel = isDerivedReminder ? "Reminder" : "Plan";
+              return (
+                <li key={plan.id} className={styles.planListItem}>
                   <button
                     type="button"
                     className={styles.planItemButton}
@@ -1277,10 +1280,10 @@ const plansCard = (
                     onClick={() => handlePlanToggle(plan.id)}
                     disabled={!isCurrentPulseEditable}
                   >
-                      <span className={styles.planCheckbox} aria-hidden="true">
-                        {plan.completed ? <Check size={14} /> : <Square size={14} />}
-                      </span>
-                      <span className={styles.planLabelGroup}>
+                    <span className={styles.planCheckbox} aria-hidden="true">
+                      {plan.completed ? <Check size={14} /> : <Square size={14} />}
+                    </span>
+                    <span className={styles.planLabelGroup}>
                       <span className={styles.planLabel}>{plan.label}</span>
                       {!isDerivedReminder && plan.details ? (
                         <span className={styles.planDetails}>{plan.details}</span>
@@ -1292,44 +1295,44 @@ const plansCard = (
                       ) : null}
                       <span className={styles.planDerivedTag}>{tagLabel}</span>
                     </span>
-                    </button>
-                    {canManagePlans ? (
-                      <span className={styles.listItemActions}>
-                        {onSavePlan ? (
-                          <button
-                            type="button"
-                            className={styles.listItemActionButton}
-                            onClick={(event) => {
-                              event.preventDefault();
-                              event.stopPropagation();
-                              setPlanEditorTarget(plan);
-                            }}
-                            aria-label={`Edit plan ${plan.label}`}
-                            disabled={!isCurrentPulseEditable}
-                          >
-                            <Pencil size={14} />
-                          </button>
-                        ) : null}
-                        {onDeletePlan ? (
-                          <button
-                            type="button"
-                            className={styles.listItemActionButton}
-                            onClick={(event) => {
-                              event.preventDefault();
-                              event.stopPropagation();
-                              handlePlanDelete(plan);
-                            }}
-                            aria-label={`Delete plan ${plan.label}`}
-                            disabled={!isCurrentPulseEditable}
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        ) : null}
-                      </span>
-                    ) : null}
-                  </li>
-                );
-              })
+                  </button>
+                  {canManagePlans ? (
+                    <span className={styles.listItemActions}>
+                      {onSavePlan ? (
+                        <button
+                          type="button"
+                          className={styles.listItemActionButton}
+                          onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            setPlanEditorTarget(plan);
+                          }}
+                          aria-label={`Edit plan ${plan.label}`}
+                          disabled={!isCurrentPulseEditable}
+                        >
+                          <Pencil size={14} />
+                        </button>
+                      ) : null}
+                      {onDeletePlan ? (
+                        <button
+                          type="button"
+                          className={styles.listItemActionButton}
+                          onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            handlePlanDelete(plan);
+                          }}
+                          aria-label={`Delete plan ${plan.label}`}
+                          disabled={!isCurrentPulseEditable}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      ) : null}
+                    </span>
+                  ) : null}
+                </li>
+              );
+            })
             : (
               <li className={styles.listEmptyMessage}>
                 <span>No plans captured yet.</span>
@@ -1358,66 +1361,66 @@ const plansCard = (
         <ul className={`${styles.habitList} ${styles.dashboardHabitList}`}>
           {showHabitsList
             ? visibleHabits.map((habit) => (
-                <li key={habit.id} className={styles.habitListItem}>
-                  <button
-                    type="button"
-                    className={styles.planItemButton}
-                    data-completed={habit.completed ? "true" : "false"}
-                    onClick={() => handleHabitToggle(habit.id)}
-                    disabled={!isCurrentPulseEditable || !onToggleHabit}
-                  >
-                    <span className={styles.planCheckbox} aria-hidden="true">
-                      {habit.completed ? <Check size={14} /> : <Square size={14} />}
-                    </span>
-                    <span className={styles.habitContent}>
-                      <span className={styles.habitLabel}>{habit.label}</span>
-                      {habit.details ? (
-                        <span className={styles.habitDetails}>{habit.details}</span>
+              <li key={habit.id} className={styles.habitListItem}>
+                <button
+                  type="button"
+                  className={styles.planItemButton}
+                  data-completed={habit.completed ? "true" : "false"}
+                  onClick={() => handleHabitToggle(habit.id)}
+                  disabled={!isCurrentPulseEditable || !onToggleHabit}
+                >
+                  <span className={styles.planCheckbox} aria-hidden="true">
+                    {habit.completed ? <Check size={14} /> : <Square size={14} />}
+                  </span>
+                  <span className={styles.habitContent}>
+                    <span className={styles.habitLabel}>{habit.label}</span>
+                    {habit.details ? (
+                      <span className={styles.habitDetails}>{habit.details}</span>
+                    ) : null}
+                  </span>
+                </button>
+                <span className={styles.habitRightSection}>
+                  {canManageHabits ? (
+                    <span className={styles.listItemActions}>
+                      {onEditHabit ? (
+                        <button
+                          type="button"
+                          className={styles.listItemActionButton}
+                          onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            handleHabitEdit(habit);
+                          }}
+                          aria-label={`Edit habit ${habit.label}`}
+                          disabled={!isCurrentPulseEditable}
+                        >
+                          <Pencil size={14} />
+                        </button>
+                      ) : null}
+                      {onDeleteHabit ? (
+                        <button
+                          type="button"
+                          className={styles.listItemActionButton}
+                          onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            handleHabitDelete(habit);
+                          }}
+                          aria-label={`Delete habit ${habit.label}`}
+                          disabled={!isCurrentPulseEditable}
+                        >
+                          <Trash2 size={14} />
+                        </button>
                       ) : null}
                     </span>
-                  </button>
-                  <span className={styles.habitRightSection}>
-                    {canManageHabits ? (
-                      <span className={styles.listItemActions}>
-                        {onEditHabit ? (
-                          <button
-                            type="button"
-                            className={styles.listItemActionButton}
-                            onClick={(event) => {
-                              event.preventDefault();
-                              event.stopPropagation();
-                              handleHabitEdit(habit);
-                            }}
-                            aria-label={`Edit habit ${habit.label}`}
-                            disabled={!isCurrentPulseEditable}
-                          >
-                            <Pencil size={14} />
-                          </button>
-                        ) : null}
-                        {onDeleteHabit ? (
-                          <button
-                            type="button"
-                            className={styles.listItemActionButton}
-                            onClick={(event) => {
-                              event.preventDefault();
-                              event.stopPropagation();
-                              handleHabitDelete(habit);
-                            }}
-                            aria-label={`Delete habit ${habit.label}`}
-                            disabled={!isCurrentPulseEditable}
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        ) : null}
-                      </span>
-                    ) : null}
-                    <span className={styles.habitStreak}>
-                      <Flame size={12} aria-hidden="true" />
-                      <span>{habit.streakLabel}</span>
-                    </span>
+                  ) : null}
+                  <span className={styles.habitStreak}>
+                    <Flame size={12} aria-hidden="true" />
+                    <span>{habit.streakLabel}</span>
                   </span>
-                </li>
-              ))
+                </span>
+              </li>
+            ))
             : (
               <li className={styles.listEmptyMessage}>
                 <span>No habits tracked yet.</span>
@@ -1456,14 +1459,14 @@ const plansCard = (
       const sections =
         variant === "compact"
           ? [
-              ...dashboardSections,
-              {
-                id: "compact-automation",
-                title: "Signals & Automation",
-                subtitle: "Reminders, notifications, and proactive nudges",
-                cards: [{ id: "proactivity", element: proactivityCard }],
-              },
-            ]
+            ...dashboardSections,
+            {
+              id: "compact-automation",
+              title: "Signals & Automation",
+              subtitle: "Reminders, notifications, and proactive nudges",
+              cards: [{ id: "proactivity", element: proactivityCard }],
+            },
+          ]
           : dashboardSections;
       return sections.map((section) => {
         const gridClass =
@@ -1580,12 +1583,12 @@ const plansCard = (
   }, [calendarEvents, planCalendarEvents]);
 
   const calendarContent = (
-      <GrayDashboardCalendar
-        initialDate={currentDate}
-        currentDate={currentDate}
-        showSidebar={true}
-        showHeaderDates={true}
-        showSelectedDateLabel={false}
+    <GrayDashboardCalendar
+      initialDate={currentDate}
+      currentDate={currentDate}
+      showSidebar={true}
+      showHeaderDates={true}
+      showSelectedDateLabel={false}
       calendars={calendars}
       events={mergedEvents}
       onCalendarsChange={onCalendarsChange}
