@@ -250,6 +250,53 @@ type DerivedGroundingSource = {
   href?: string;
   excerpt?: string;
   isReferenced: boolean;
+  faviconHost?: string | null;
+};
+
+const normalizeFaviconCandidate = (value?: string | null): string | null => {
+  if (!value) {
+    return null;
+  }
+  let trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+  if (/^[a-z]+:\/\//i.test(trimmed)) {
+    try {
+      const parsed = new URL(trimmed);
+      return parsed.origin;
+    } catch {
+      return null;
+    }
+  }
+  trimmed = trimmed.replace(/^[^a-z0-9]+/i, "");
+  if (!trimmed) {
+    return null;
+  }
+  trimmed = trimmed.split(/[/?#\s]/)[0];
+  if (!trimmed) {
+    return null;
+  }
+  if (!/^[a-z0-9.-]+$/i.test(trimmed)) {
+    return null;
+  }
+  return `https://${trimmed.toLowerCase()}`;
+};
+
+const buildGroundingSourceFaviconUrl = (source: DerivedGroundingSource): string | undefined => {
+  const candidates = [source.href, source.faviconHost, source.siteLabel];
+  for (const candidate of candidates) {
+    const normalized = normalizeFaviconCandidate(candidate);
+    if (normalized) {
+      try {
+        const encoded = encodeURIComponent(normalized);
+        return `https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=${encoded}&size=32`;
+      } catch {
+        continue;
+      }
+    }
+  }
+  return undefined;
 };
 
 const buildGroundingSourceCards = (metadata: GroundingMetadata | undefined | null): DerivedGroundingSource[] => {
@@ -302,6 +349,7 @@ const buildGroundingSourceCards = (metadata: GroundingMetadata | undefined | nul
         title: chunk.web.title ?? siteLabel ?? "Referenced web content",
         href: chunk.web.uri ?? undefined,
         isReferenced,
+        faviconHost: derivedHost,
       });
       return;
     }
@@ -318,7 +366,7 @@ const buildGroundingSourceCards = (metadata: GroundingMetadata | undefined | nul
       ) {
         siteLabel = derivedHost;
       }
-       if (!siteLabel || siteLabel.toLowerCase().includes("vertexaisearch")) {
+      if (!siteLabel || siteLabel.toLowerCase().includes("vertexaisearch")) {
         siteLabel = undefined;
       }
 
@@ -329,6 +377,7 @@ const buildGroundingSourceCards = (metadata: GroundingMetadata | undefined | nul
         href: retrieved.uri ?? undefined,
         excerpt: retrieved.text,
         isReferenced,
+        faviconHost: derivedHost,
       });
     }
   });
@@ -1250,41 +1299,51 @@ const ChatMessagesList = memo(
                             <div className={styles.chatGroundingSourceCards}>
                               {sourceCards.map((source) => {
                                 const initials = buildGroundingSourceInitials(source.siteLabel ?? source.title);
-                                let faviconUrl: string | undefined;
-                                if (source.href) {
-                                  try {
-                                    const encodedUrl = encodeURIComponent(source.href);
-                                    faviconUrl = `https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=${encodedUrl}&size=32`;
-                                  } catch {
-                                    // Ignore invalid URLs
-                                  }
-                                }
+                                const faviconUrl = buildGroundingSourceFaviconUrl(source);
 
                                 const cardContent = (
                                   <>
                                     <div className={styles.chatGroundingSourceCardAvatar}>
                                       {faviconUrl ? (
-                                        <>
+                                        <div style={{ position: "relative", width: "16px", height: "16px" }}>
+                                          {/* Show initials by default as fallback */}
+                                          <span
+                                            style={{
+                                              position: "absolute",
+                                              top: 0,
+                                              left: 0,
+                                              width: "16px",
+                                              height: "16px",
+                                              display: "flex",
+                                              alignItems: "center",
+                                              justifyContent: "center",
+                                              fontSize: "10px",
+                                            }}
+                                          >
+                                            {initials}
+                                          </span>
+                                          {/* Favicon overlays on top when it loads */}
                                           <img
                                             src={faviconUrl}
                                             alt=""
                                             referrerPolicy="no-referrer"
                                             style={{
+                                              position: "absolute",
+                                              top: 0,
+                                              left: 0,
                                               width: "16px",
                                               height: "16px",
                                               objectFit: "contain",
+                                              backgroundColor: "white",
+                                              borderRadius: "2px",
                                             }}
                                             onError={(e) => {
+                                              // Hide the image if it fails to load,
+                                              // letting the initials show through
                                               e.currentTarget.style.display = "none";
-                                              // Show the sibling span (initials)
-                                              const next = e.currentTarget.nextElementSibling;
-                                              if (next) {
-                                                next.removeAttribute("style");
-                                              }
                                             }}
                                           />
-                                          <span style={{ display: "none" }}>{initials}</span>
-                                        </>
+                                        </div>
                                       ) : (
                                         initials
                                       )}
