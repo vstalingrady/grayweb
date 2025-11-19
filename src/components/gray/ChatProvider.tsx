@@ -418,6 +418,18 @@ const sendReminderNotification = (reminder: Reminder) => {
 const GREETING_PATTERN =
   /^(?:hi|hey|hello|hiya|yo|sup|what'?s up|howdy|good (?:morning|afternoon|evening)|hola|h[ae]y there|hi there|hey there|gm|gn|good night)\b[^\w]*$/i;
 
+// Short "what do you know about me" style questions should still
+// receive full workspace context so the model can surface calendars,
+// events, plans, and habits even if the message is brief.
+const SELF_CONTEXT_PATTERNS: RegExp[] = [
+  /\bwhat do you know about me\b/i,
+  /\bwhat do you remember about me\b/i,
+  /\bwhat do you know about my day\b/i,
+  /\bwhat do you know about today\b/i,
+  /\bwhat do you know about my schedule\b/i,
+  /\bwhat do you know about my calendar\b/i,
+];
+
 const LOW_SIGNAL_TITLE_WORDS = new Set<string>([
   "hi",
   "hi there",
@@ -533,6 +545,11 @@ export const shouldIncludeWorkspaceContext = (message: string, context: string |
   const punctuationTrimmed = normalized.replace(/[.!?]+$/g, "").trim();
   if (GREETING_PATTERN.test(punctuationTrimmed)) {
     return false;
+  }
+
+  // Explicit self-context and "what do you know" prompts
+  if (SELF_CONTEXT_PATTERNS.some((pattern) => pattern.test(punctuationTrimmed))) {
+    return true;
   }
 
   if (punctuationTrimmed.length >= MIN_CONTEXT_MESSAGE_LENGTH) {
@@ -1405,6 +1422,13 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
   const [isAttachmentUploading, setIsAttachmentUploading] = useState(false);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [mapsEnabled, setMapsEnabled] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      setMapsEnabled(Boolean(user.maps_enabled));
+    }
+  }, [user]);
+
   const [mapsWidgetEnabled, setMapsWidgetEnabled] = useState(false);
   const [mapsLatitude, setMapsLatitude] = useState("");
   const [mapsLongitude, setMapsLongitude] = useState("");
@@ -1517,10 +1541,10 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       }
       return shouldAutoEnableMapsForMessage(trimmedMessage)
         ? {
-            ...mapPayload,
-            maps_enabled: true,
-            maps_widget: mapPayload.maps_widget || true,
-          }
+          ...mapPayload,
+          maps_enabled: true,
+          maps_widget: mapPayload.maps_widget || true,
+        }
         : mapPayload;
     },
     [mapPayload]
@@ -2048,7 +2072,10 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
           }
           const normalizedPartial: Partial<ChatSession> = { ...partial };
           if ("conversationId" in partial) {
-            normalizedPartial.conversationId = normalizeConversationIdValue(partial.conversationId);
+            // Preserve special General conversation identifiers (`general:{userId}`)
+            // while still normalizing regular thread UUIDs.
+            normalizedPartial.conversationId =
+              coerceConversationIdForRequest(partial.conversationId) ?? undefined;
           }
           return { ...session, ...normalizedPartial };
         });
@@ -2330,24 +2357,24 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
         const fallbackSession: ChatSession =
           fallbackScope === "general"
             ? {
-                ...createEmptyGeneralSession(createdMessage.createdAt, generalConversationIdRef.current),
-                messages: [createdMessage],
-                updatedAt: createdMessage.createdAt,
-                isResponding: role === "user",
-                pendingAutoStream: false,
-              }
+              ...createEmptyGeneralSession(createdMessage.createdAt, generalConversationIdRef.current),
+              messages: [createdMessage],
+              updatedAt: createdMessage.createdAt,
+              isResponding: role === "user",
+              pendingAutoStream: false,
+            }
             : {
-                id: sessionId,
-                title: "New Chat",
-                titleMode: "auto",
-                createdAt: createdMessage.createdAt,
-                updatedAt: createdMessage.createdAt,
-                messages: [createdMessage],
-                isResponding: role === "user",
-                scope: "thread",
-                conversationId: undefined,
-                pendingAutoStream: false,
-              };
+              id: sessionId,
+              title: "New Chat",
+              titleMode: "auto",
+              createdAt: createdMessage.createdAt,
+              updatedAt: createdMessage.createdAt,
+              messages: [createdMessage],
+              isResponding: role === "user",
+              scope: "thread",
+              conversationId: undefined,
+              pendingAutoStream: false,
+            };
 
         const ordered = normalizeSessionsList([fallbackSession, ...prev]);
         persistSessions(ordered);
@@ -2410,29 +2437,29 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
     return created;
   }, [persistSessions]);
 
-const mergeRemoteConversations = useCallback(
-  (conversations: ConversationSummary[]) => {
-    if (!Array.isArray(conversations) || conversations.length === 0) {
-      return;
-    }
+  const mergeRemoteConversations = useCallback(
+    (conversations: ConversationSummary[]) => {
+      if (!Array.isArray(conversations) || conversations.length === 0) {
+        return;
+      }
 
-    const shouldAdoptRemoteTitle = (currentTitle: string | null | undefined, remoteTitle: string) => {
-      if (!remoteTitle || !remoteTitle.trim()) {
-        return false;
-      }
-      const normalizedRemote = remoteTitle.trim();
-      const normalizedCurrent = (currentTitle ?? "").trim();
-      if (!normalizedCurrent) {
-        return true;
-      }
-      if (normalizedCurrent.toLowerCase() === normalizedRemote.toLowerCase()) {
-        return false;
-      }
-      if (normalizedCurrent.toLowerCase() === SHARED_CHAT_PLACEHOLDER_TITLE.toLowerCase()) {
-        return true;
-      }
-      return isGenericTitle(normalizedCurrent);
-    };
+      const shouldAdoptRemoteTitle = (currentTitle: string | null | undefined, remoteTitle: string) => {
+        if (!remoteTitle || !remoteTitle.trim()) {
+          return false;
+        }
+        const normalizedRemote = remoteTitle.trim();
+        const normalizedCurrent = (currentTitle ?? "").trim();
+        if (!normalizedCurrent) {
+          return true;
+        }
+        if (normalizedCurrent.toLowerCase() === normalizedRemote.toLowerCase()) {
+          return false;
+        }
+        if (normalizedCurrent.toLowerCase() === SHARED_CHAT_PLACEHOLDER_TITLE.toLowerCase()) {
+          return true;
+        }
+        return isGenericTitle(normalizedCurrent);
+      };
       setSessions((prev) => {
         let changed = false;
         const next = [...prev];
@@ -2498,9 +2525,9 @@ const mergeRemoteConversations = useCallback(
               conversationId,
               ...(adoptRemoteTitle
                 ? {
-                    title: normalizedTitle,
-                    titleMode: isGenericTitle(normalizedTitle) ? "auto" : "manual",
-                  }
+                  title: normalizedTitle,
+                  titleMode: isGenericTitle(normalizedTitle) ? "auto" : "manual",
+                }
                 : {}),
             };
             if (
@@ -2527,9 +2554,9 @@ const mergeRemoteConversations = useCallback(
               pendingAutoStream: false,
               ...(adoptRemoteTitle
                 ? {
-                    title: normalizedTitle,
-                    titleMode: isGenericTitle(normalizedTitle) ? "auto" : "manual",
-                  }
+                  title: normalizedTitle,
+                  titleMode: isGenericTitle(normalizedTitle) ? "auto" : "manual",
+                }
                 : {}),
             };
             next[pendingIndex] = merged;
@@ -2698,6 +2725,7 @@ const mergeRemoteConversations = useCallback(
           ? crypto.randomUUID()
           : Math.random().toString(36).slice(2);
       const fallbackTitle = "New Chat";
+      const willAutoStream = shouldAutoStream && trimmedInitial.length > 0;
 
       const baseSession: ChatSession = {
         id: sessionId,
@@ -2706,10 +2734,10 @@ const mergeRemoteConversations = useCallback(
         createdAt: now,
         updatedAt: now,
         messages: [],
-        isResponding: false,
+        isResponding: willAutoStream,
         scope: "thread",
         conversationId: sessionId,
-        pendingAutoStream: false,
+        pendingAutoStream: willAutoStream,
       };
 
       if (normalizedInitial) {
@@ -2775,9 +2803,9 @@ const mergeRemoteConversations = useCallback(
             }
             const streamingUserId = resolvedUser.id;
 
-      let accumulated = "";
-      let streamedConversationId: string | null =
-        normalizeConversationIdValue(baseSession.conversationId) ?? sessionId;
+            let accumulated = "";
+            let streamedConversationId: string | null =
+              normalizeConversationIdValue(baseSession.conversationId) ?? sessionId;
 
             const timeContext = buildLocalTimeContext();
             const attachmentPayloads = attachmentsRef.current.map((attachment) => ({
@@ -3123,8 +3151,8 @@ const mergeRemoteConversations = useCallback(
         updatedAt: typeof raw.updatedAt === "number" ? raw.updatedAt : now,
         messages: Array.isArray(raw.messages)
           ? raw.messages.map((message) => ({
-              ...message,
-            }))
+            ...message,
+          }))
           : [],
         isResponding: Boolean(raw.isResponding),
         scope: normalizedScope,
@@ -3156,7 +3184,107 @@ const mergeRemoteConversations = useCallback(
   }, [sessions]);
 
   const generalGreetingRef = useRef(false);
+  const generalHistoryHydratedRef = useRef(false);
   const pathname = usePathname();
+
+  // Hydrate the General workspace (`/g`) from Supabase-backed history so that
+  // existing `general_chat_messages` rows render as the canonical General chat.
+  useEffect(() => {
+    const general = sessionsRef.current.find((session) => session.scope === "general");
+    if (!general || !user?.id || pathname !== "/g" || generalHistoryHydratedRef.current) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const hydrateGeneralHistory = async () => {
+      const generalConversationId = buildGeneralConversationId(user.id);
+      if (!generalConversationId) {
+        return;
+      }
+      try {
+        const history = await apiService.getConversation(generalConversationId);
+        if (cancelled || !Array.isArray(history) || history.length === 0) {
+          return;
+        }
+
+        // Deduplicate consecutive identical backend messages to keep the
+        // rendered history tidy.
+        const dedupedHistory = history.filter((message, index, arr) => {
+          if (index === 0) {
+            return true;
+          }
+          const prev = arr[index - 1];
+          return !(prev.role === message.role && (prev.text ?? "") === (message.text ?? ""));
+        });
+
+        const now = Date.now();
+        const mapped: ChatMessage[] = dedupedHistory.map((message, index) => {
+          const role: ChatRole = message.role === "model" ? "assistant" : "user";
+          const rawText = message.text ?? "";
+          const normalizedText = role === "assistant" ? stripGrayTitleMarkers(rawText) : rawText;
+          const reminderExtraction =
+            role === "assistant"
+              ? extractGrayRemindersFromText(normalizedText)
+              : { cleanText: normalizedText, reminders: [] };
+          const normalizedMetadata =
+            (message as { grounding_metadata?: GroundingMetadata | null }).grounding_metadata ??
+            (message as { groundingMetadata?: GroundingMetadata | null }).groundingMetadata ??
+            null;
+
+          return {
+            id:
+              typeof crypto !== "undefined" && "randomUUID" in crypto
+                ? crypto.randomUUID()
+                : `${generalConversationId}-${index}-${now}`,
+            role,
+            content: reminderExtraction.cleanText,
+            createdAt: now,
+            reminders:
+              role === "assistant" && reminderExtraction.reminders.length
+                ? reminderExtraction.reminders
+                : undefined,
+            groundingMetadata: normalizedMetadata ?? undefined,
+          };
+        });
+
+        if (!mapped.length) {
+          return;
+        }
+
+        setSessions((prev) => {
+          const index = prev.findIndex((session) => session.scope === "general");
+          if (index === -1) {
+            return prev;
+          }
+          const current = prev[index];
+          if (current.messages && current.messages.length > 0) {
+            return prev;
+          }
+          const updated: ChatSession = {
+            ...current,
+            conversationId: generalConversationId,
+            messages: mapped,
+            updatedAt: now,
+            isResponding: false,
+          };
+          const next = [...prev];
+          next[index] = updated;
+          const ordered = normalizeSessionsList(next);
+          persistSessions(ordered);
+          return ordered;
+        });
+        generalHistoryHydratedRef.current = true;
+      } catch (error) {
+        console.error("Failed to load general conversation history:", error);
+      }
+    };
+
+    void hydrateGeneralHistory();
+    return () => {
+      cancelled = true;
+    };
+  }, [pathname, persistSessions, setSessions, user?.id]);
 
   useEffect(() => {
     const general = sessionsRef.current.find((session) => session.scope === "general");
@@ -3477,6 +3605,77 @@ const mergeRemoteConversations = useCallback(
     }
     persistSessions(sessions);
   }, [persistSessions, sessions]);
+
+  // Persist AI-created reminders to Supabase
+  const persistedReminderKeysRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!user?.id) {
+      return;
+    }
+
+    const allMessages = sessions.flatMap((session) => session.messages);
+    const messagesWithReminders = allMessages.filter(
+      (message) => message.role === "assistant" && message.reminders && message.reminders.length > 0
+    );
+
+    for (const message of messagesWithReminders) {
+      if (!message.reminders) continue;
+
+      for (const reminder of message.reminders) {
+        const reminderKey = buildReminderKey(reminder);
+
+        // Skip if already persisted
+        if (persistedReminderKeysRef.current.has(reminderKey)) {
+          continue;
+        }
+
+        // Extract reminder data
+        const data = reminder.data;
+        const reminderRecord = (data.reminder as Record<string, unknown> | null) ?? null;
+        const remindAtIso =
+          (reminderRecord && typeof reminderRecord.remind_at === "string" && reminderRecord.remind_at) ||
+          (typeof data.time_iso === "string" ? data.time_iso : null);
+
+        if (!remindAtIso) {
+          console.warn("Skipping reminder without valid remind_at time:", reminder);
+          continue;
+        }
+
+        // Check for color in metadata
+        let color: string | undefined = undefined;
+        if (reminderRecord && typeof reminderRecord["metadata"] === "object" && reminderRecord["metadata"]) {
+          const metadata = reminderRecord["metadata"] as Record<string, unknown>;
+          if (typeof metadata["color"] === "string" && metadata["color"]) {
+            color = metadata["color"];
+          }
+        }
+
+        const payload: ReminderCreatePayload = {
+          label: data.label || "Reminder",
+          remind_at: remindAtIso,
+          description: data.summary ?? reminder.data.raw?.description as string | undefined ?? null,
+          entity_type: reminder.entity,
+          delivery_mode: reminder.delivery_mode ?? reminder.entity,
+          summary: data.summary ?? null,
+          metadata: reminderRecord?.metadata as Record<string, unknown> | undefined ?? null,
+          color,
+        };
+
+        // Persist to Supabase
+        persistedReminderKeysRef.current.add(reminderKey);
+        apiService
+          .createReminder(user.id, payload)
+          .then((created) => {
+            console.log("Successfully persisted AI-created reminder:", created);
+          })
+          .catch((error) => {
+            console.error("Failed to persist AI-created reminder:", error);
+            // Remove from persisted set so it can be retried
+            persistedReminderKeysRef.current.delete(reminderKey);
+          });
+      }
+    }
+  }, [sessions, user?.id]);
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;
 }
