@@ -152,13 +152,22 @@ class ApiNetworkError extends Error {
 export const isApiNetworkError = (value: unknown): value is ApiNetworkError =>
   value instanceof ApiNetworkError;
 
+export interface FileSearchUploadResponse {
+  name: string;
+  display_name?: string;
+  uri?: string;
+}
+
 export interface User {
   id: number;
   email: string;
   full_name: string;
   profile_picture_url?: string;
   role: string;
+  plan_tier?: string | null;
   initials: string;
+  workspace_background_id?: string | null;
+  maps_enabled: boolean;
   personalization_nickname?: string | null;
   personalization_occupation?: string | null;
   personalization_about?: string | null;
@@ -183,6 +192,7 @@ export interface CalendarEvent {
   description?: string;
   start_time: string;
   end_time: string;
+  color?: string;
   created_at: string;
 }
 
@@ -204,6 +214,7 @@ export interface Plan {
   deadline?: string | null;
   schedule_slot?: string | null;
   description?: string | null;
+  color?: string;
   created_at: string;
   updated_at: string;
 }
@@ -272,6 +283,7 @@ export interface Reminder {
   summary?: string | null;
   metadata?: Record<string, unknown> | null;
   status: ReminderStatus;
+  color?: string;
   created_at: string;
   updated_at: string;
   delivered_at?: string | null;
@@ -286,6 +298,7 @@ export interface ReminderCreatePayload {
   delivery_mode?: string | null;
   summary?: string | null;
   metadata?: Record<string, unknown> | null;
+  color?: string;
 }
 
 export interface ReminderUpdatePayload {
@@ -296,6 +309,7 @@ export interface ReminderUpdatePayload {
   delivery_mode?: string | null;
   summary?: string | null;
   metadata?: Record<string, unknown> | null;
+  color?: string;
 }
 
 export interface ProactivitySettings {
@@ -586,6 +600,9 @@ export interface UserUpdate {
   full_name?: string;
   profile_picture_url?: string;
   role?: string;
+  plan_tier?: string | null;
+  workspace_background_id?: string | null;
+  maps_enabled?: boolean;
   personalization_nickname?: string | null;
   personalization_occupation?: string | null;
   personalization_about?: string | null;
@@ -753,7 +770,8 @@ class ApiService {
           const friendlyMessage = `Unable to reach the API at ${baseUrl}. Verify that the backend service is running and accessible.`;
 
           if (shouldLogErrors) {
-            console.error(`[ERROR][ApiService.fetch:network-error]`, {
+            const logMethod = isDevEnv() ? console.warn : console.error;
+            logMethod(`[WARN][ApiService.fetch:network-error]`, {
               requestId,
               endpoint,
               url,
@@ -773,7 +791,8 @@ class ApiService {
 
       if (error instanceof ApiNetworkError) {
         if (shouldLogErrors) {
-          console.error(`[ERROR][ApiService.fetch:network-error-rethrow]`, {
+          const logMethod = isDevEnv() ? console.warn : console.error;
+          logMethod(`[WARN][ApiService.fetch:network-error-rethrow]`, {
             requestId,
             endpoint,
             url,
@@ -906,6 +925,7 @@ class ApiService {
     description?: string;
     start_time: string;
     end_time: string;
+    color?: string;
   }): Promise<CalendarEvent> {
     return this.fetch<CalendarEvent>(`/users/${userId}/calendar-events`, {
       method: 'POST',
@@ -919,6 +939,7 @@ class ApiService {
     description?: string;
     start_time?: string;
     end_time?: string;
+    color?: string;
   }): Promise<CalendarEvent> {
     return this.fetch<CalendarEvent>(`/users/${userId}/calendar-events/${eventId}`, {
       method: 'PATCH',
@@ -1422,8 +1443,8 @@ class ApiService {
               typeof rawTiming.total_ms === 'number'
                 ? rawTiming.total_ms
                 : typeof rawTiming.totalMs === 'number'
-                ? rawTiming.totalMs
-                : undefined;
+                  ? rawTiming.totalMs
+                  : undefined;
             if (typeof totalMs !== 'number' || !Number.isFinite(totalMs)) {
               return undefined;
             }
@@ -1431,8 +1452,8 @@ class ApiService {
               typeof rawTiming.first_token_ms === 'number'
                 ? rawTiming.first_token_ms
                 : typeof rawTiming.firstTokenMs === 'number'
-                ? rawTiming.firstTokenMs
-                : undefined;
+                  ? rawTiming.firstTokenMs
+                  : undefined;
             const timing: ChatStreamTiming = { totalMs };
             if (typeof firstTokenMs === 'number' && Number.isFinite(firstTokenMs)) {
               timing.firstTokenMs = firstTokenMs;

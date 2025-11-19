@@ -66,11 +66,18 @@ type ComposerAction =
 
 const COLOR_SWATCHES = ["#4C6FFF", "#0AD5B0", "#F6A623", "#D075FF", "#E36D7D", "#CDD1D5"] as const;
 
+// Default colors  by entry type
+const DEFAULT_COLORS: Record<CalendarEntryType, string> = {
+  event: "#6f8bff",      // Blue for general events
+  task: "#F6A623",       // Orange for tasks
+  reminder: "#0AD5B0",   // Teal for reminders
+};
+
 const DEFAULT_STATE: ComposerState = {
   title: "New event",
   startTime: "09:00",
   endTime: "10:00",
-  color: "#6f8bff",
+  color: DEFAULT_COLORS.event,
   entryType: "event",
   calendarId: "default",
   details: "",
@@ -240,7 +247,10 @@ export function EventComposer({
     if (state.entryType === nextType) {
       return;
     }
-    const payload: Partial<ComposerState> = { entryType: nextType };
+    const payload: Partial<ComposerState> = {
+      entryType: nextType,
+      color: DEFAULT_COLORS[nextType], // Apply default color for the new type
+    };
     if (nextType === "reminder") {
       payload.endTime = state.startTime;
     }
@@ -368,7 +378,9 @@ export function EventComposer({
         <div className={styles.composerHeader}>
           <div>
             <h2 className={styles.composerHeaderTitle}>
-              {activeEvent ? "Edit event" : "Create event"}
+              {activeEvent
+                ? `Edit ${ENTRY_TYPE_LABELS[state.entryType].toLowerCase()}`
+                : `Create ${ENTRY_TYPE_LABELS[state.entryType].toLowerCase()}`}
             </h2>
           </div>
           <button

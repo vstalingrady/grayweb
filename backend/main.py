@@ -615,6 +615,7 @@ class CalendarEventBase(BaseModel):
     start_time: datetime
     end_time: datetime
     calendar_id: Optional[int] = None
+    color: Optional[str] = None
 
 class CalendarEventCreate(CalendarEventBase):
     pass
@@ -625,6 +626,7 @@ class CalendarEventUpdate(BaseModel):
     start_time: Optional[datetime] = None
     end_time: Optional[datetime] = None
     calendar_id: Optional[int] = None
+    color: Optional[str] = None
 
 class CalendarEvent(CalendarEventBase):
     id: int
@@ -662,6 +664,7 @@ class PlanBase(BaseModel):
     deadline: Optional[str] = None
     schedule_slot: Optional[str] = None
     description: Optional[str] = None
+    color: Optional[str] = None
 
 class PlanCreate(PlanBase):
     pass
@@ -774,6 +777,7 @@ class ReminderBase(BaseModel):
     delivery_mode: Optional[str] = None
     summary: Optional[str] = None
     metadata: Optional[Dict[str, Any]] = None
+    color: Optional[str] = None
 
 
 class ReminderCreate(ReminderBase):
@@ -788,6 +792,7 @@ class ReminderUpdate(BaseModel):
     delivery_mode: Optional[str] = None
     summary: Optional[str] = None
     metadata: Optional[Dict[str, Any]] = None
+    color: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -797,6 +802,7 @@ class PlanUpdate(BaseModel):
     deadline: Optional[str] = None
     schedule_slot: Optional[str] = None
     description: Optional[str] = None
+    color: Optional[str] = None
 
 class HabitBase(BaseModel):
     label: str
