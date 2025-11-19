@@ -1254,7 +1254,7 @@ const ChatMessagesList = memo(
                                 if (source.href) {
                                   try {
                                     const hostname = new URL(source.href).hostname;
-                                    faviconUrl = `https://www.google.com/s2/favicons?domain=${hostname}&sz=128`;
+                                    faviconUrl = `https://icons.duckduckgo.com/ip3/${hostname}.ico`;
                                   } catch {
                                     // Ignore invalid URLs
                                   }
@@ -1269,10 +1269,10 @@ const ChatMessagesList = memo(
                                             src={faviconUrl}
                                             alt=""
                                             style={{
-                                              width: "100%",
-                                              height: "100%",
-                                              borderRadius: "50%",
-                                              objectFit: "cover",
+                                              width: "60%",
+                                              height: "60%",
+                                              objectFit: "contain",
+                                              borderRadius: "2px",
                                             }}
                                             onError={(e) => {
                                               e.currentTarget.style.display = "none";
