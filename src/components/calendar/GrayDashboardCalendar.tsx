@@ -642,6 +642,10 @@ export function GrayDashboardCalendar({
     };
   };
 
+  const handleDeleteEvent = (event: PositionedEvent) => {
+    updateEvents((previous) => previous.filter((e) => e.id !== event.id));
+  };
+
   const renderWeekView = () => (
     <div className={styles.calendarGrid}>
       <div className={styles.calendarBody}>
@@ -731,6 +735,7 @@ export function GrayDashboardCalendar({
                         draggableProps={viewMode === "week" ? getWeekDraggableProps(event) : undefined}
                         isDragging={!!activeDrafts?.[event.id]}
                         isSelected={selectedEventIds.has(event.id)}
+                        onDelete={handleDeleteEvent}
                       />
                     ))}
                   </div>
@@ -815,6 +820,7 @@ export function GrayDashboardCalendar({
                   draggableProps={viewMode === "day" ? getDraggableProps(event) : undefined}
                   isDragging={!!activeDrafts?.[event.id]}
                   isSelected={selectedEventIds.has(event.id)}
+                  onDelete={handleDeleteEvent}
                 />
               ))}
             </div>

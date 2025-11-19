@@ -1,5 +1,5 @@
 import { CSSProperties, HTMLAttributes, MouseEvent, memo, useMemo } from "react";
-import { Check } from "lucide-react";
+import { Check, Trash2 } from "lucide-react";
 
 import styles from "./GrayDashboardCalendar.module.css";
 import { PositionedEvent } from "./types";
@@ -99,6 +99,7 @@ type EventCardProps = {
   isSelected?: boolean;
   draggableProps?: Pick<HTMLAttributes<HTMLElement>, "onPointerDown">;
   onClick?: (event: PositionedEvent, anchor: DOMRect, mouseEvent: MouseEvent) => void;
+  onDelete?: (event: PositionedEvent) => void;
   taskAction?: TaskToggleAction;
 };
 
@@ -117,6 +118,7 @@ export const EventCard = memo(function EventCard({
   isSelected = false,
   draggableProps,
   onClick,
+  onDelete,
   taskAction,
 }: EventCardProps) {
   const timeLabel = useMemo(() => {
@@ -219,6 +221,24 @@ export const EventCard = memo(function EventCard({
           {taskCompleted ? <Check size={12} /> : null}
         </button>
       ) : null}
+      {event.entryType === "reminder" && (
+        <>
+          <div className={styles.reminderHandle} />
+          {onDelete && (
+            <button
+              type="button"
+              className={styles.eventCardDelete}
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete(event);
+              }}
+              aria-label="Delete reminder"
+            >
+              <Trash2 size={12} />
+            </button>
+          )}
+        </>
+      )}
     </div>
   );
 });

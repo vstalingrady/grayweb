@@ -1479,3 +1479,71 @@
   grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
   column-gap: clamp(14px, 1.6vw, 24px);
 }
+
+.reminderHandle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  cursor: grab;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s ease, background 0.2s ease;
+}
+
+.eventCard:hover .reminderHandle {
+  opacity: 1;
+}
+
+.reminderHandle:hover {
+  background: rgba(255, 255, 255, 0.4);
+}
+
+.reminderHandle::after {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.eventCardDelete {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.4);
+  border: none;
+  color: rgba(255, 255, 255, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s ease, background 0.2s ease;
+  z-index: 11;
+  padding: 0;
+}
+
+.eventCard:hover .eventCardDelete {
+  opacity: 1;
+}
+
+.eventCardDelete:hover {
+  background: rgba(200, 50, 50, 0.9);
+  color: white;
+}
+
+.eventCard[data-entry-type="reminder"] {
+  overflow: visible;
+}
