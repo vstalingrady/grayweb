@@ -1561,7 +1561,17 @@ const plansCard = (
     </>
   );
 
-  const mergedEvents = useMemo(() => [...calendarEvents, ...planCalendarEvents], [calendarEvents, planCalendarEvents]);
+  const mergedEvents = useMemo(() => {
+    const allEvents = [...calendarEvents, ...planCalendarEvents];
+    const seen = new Set<string>();
+    return allEvents.filter((event) => {
+      if (seen.has(event.id)) {
+        return false;
+      }
+      seen.add(event.id);
+      return true;
+    });
+  }, [calendarEvents, planCalendarEvents]);
 
   const calendarContent = (
       <GrayDashboardCalendar
