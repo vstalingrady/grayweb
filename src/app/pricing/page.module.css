@@ -374,10 +374,16 @@
 }
 
 .disclaimer {
-  margin: 1.5rem auto 2rem;
+  margin: 0 auto;
   text-align: center;
   color: rgba(246, 247, 251, 0.55);
   font-size: 0.85rem;
+}
+
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .disclaimer {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
 }
 
 @media (max-width: 900px) {

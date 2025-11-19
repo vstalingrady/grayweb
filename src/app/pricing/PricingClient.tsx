@@ -78,8 +78,8 @@ const VOYAGER_PRICING = {
 } as const;
 
 const PIONEER_PRICING = {
-  monthly: { price: "$27", cadence: "month" },
-  annual: { price: "$277", cadence: "year" },
+  monthly: { price: "$37", cadence: "month" },
+  annual: { price: "$377", cadence: "year" },
 } as const;
 
 const PARTICLE_COUNT = 1300;
@@ -175,7 +175,7 @@ export default function PricingClient({ storeId, voyagerVariantId, pioneerVarian
   const { price: voyagerPrice, cadence: voyagerCadence } = VOYAGER_PRICING[billingCycle];
   const { price: pioneerPrice, cadence: pioneerCadence } = PIONEER_PRICING[billingCycle];
   const voyagerSavingsLabel = billingCycle === "annual" ? "Save $7" : undefined;
-  const pioneerSavingsLabel = billingCycle === "annual" ? "Save $27" : undefined;
+  const pioneerSavingsLabel = billingCycle === "annual" ? "Save $67" : undefined;
   
   const voyagerCheckoutHref = (storeId && voyagerVariantId) 
     ? `https://${storeId}/buy/${voyagerVariantId}?embed=1&media=0&checkout[custom][billing_cycle]=${billingCycle}`
