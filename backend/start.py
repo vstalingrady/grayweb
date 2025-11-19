@@ -519,6 +519,7 @@ if __name__ == "__main__":
         host=server_start_info["host"],
         port=server_start_info["port"],
         reload=server_start_info["reload"],
+        reload_excludes=["*.db", "*.sqlite", "*.sqlite3", "*.log"],
         log_level=server_start_info["log_level"],
         access_log=server_start_info["access_log"]
     )
