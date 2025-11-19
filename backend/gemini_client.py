@@ -255,22 +255,6 @@ class GeminiService:
         )
         selected_model = self._choose_model(model)
 
-        # Hotfix: The current flash-lite-latest endpoint reports "Tool use with function calling is unsupported"
-        # We explicitly disable tools for this model to ensure basic chat functionality works.
-        if "flash-lite" in selected_model and tools:
-            print(f"[Gemini] Warning: Disabling tools for {selected_model} as they are currently unsupported.")
-            tools = None
-            tool_config = None
-            # Re-build config without tools
-            config = self._build_config(
-                system_prompt,
-                workspace_context,
-                time_context,
-                response_schema=response_schema,
-                response_mime_type=response_mime_type,
-                tools=None,
-                tool_config=None,
-            )
 
         response = await self._client.aio.models.generate_content(
             model=selected_model,
@@ -309,22 +293,7 @@ class GeminiService:
         )
         selected_model = self._choose_model(model)
 
-        # Hotfix: The current flash-lite-latest endpoint reports "Tool use with function calling is unsupported"
-        # We explicitly disable tools for this model to ensure basic chat functionality works.
-        if "flash-lite" in selected_model and tools:
-            print(f"[Gemini] Warning: Disabling tools for {selected_model} as they are currently unsupported.")
-            tools = None
-            tool_config = None
-            # Re-build config without tools
-            config = self._build_config(
-                system_prompt,
-                workspace_context,
-                time_context,
-                response_schema=response_schema,
-                response_mime_type=response_mime_type,
-                tools=None,
-                tool_config=None,
-            )
+
 
         stream_iter = await self._client.aio.models.generate_content_stream(
             model=selected_model,
