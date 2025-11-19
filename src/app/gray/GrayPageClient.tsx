@@ -2472,7 +2472,7 @@ function GrayPageClientInner({
   );
   const dashboardTabAttr = isDashboardView ? dashboardTab : undefined;
 
-  const shouldShowWorkspaceBackground = activeNav === "dashboard";
+  const shouldShowWorkspaceBackground = activeNav === "dashboard" || activeNav === "general" || activeNav === "threads";
   const generalAttachmentsActive =
     viewMode === "general" && (attachments.length > 0 || isAttachmentUploading);
   const generalAttachmentTray = viewMode === "general"
