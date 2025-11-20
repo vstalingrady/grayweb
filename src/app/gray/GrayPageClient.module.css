@@ -2156,6 +2156,13 @@
   justify-items: stretch;
 }
 
+.main[data-view="history"] {
+  grid-template-rows: 1fr;
+  justify-items: stretch;
+  padding: 0;
+  overflow: hidden;
+}
+
 .main[data-view="chat"] {
   grid-template-rows: 1fr;
   justify-items: stretch;
@@ -2335,6 +2342,11 @@
 }
 
 .mainContent[data-view="chat"]>* {
+  width: 100%;
+  max-width: none;
+}
+
+.mainContent[data-view="history"]>* {
   width: 100%;
   max-width: none;
 }
