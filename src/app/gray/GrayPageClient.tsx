@@ -299,7 +299,7 @@ const SIDEBAR_ITEMS: SidebarNavItem[] = [
   { id: "general", label: "General", icon: Gem },
   { id: "threads", label: "Threads", icon: MessageSquarePlus },
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { id: "reference", label: "Reference Library", icon: FileText },
+  { id: "reference", label: "Reference", icon: FileText },
   { id: "history", label: "History", icon: History },
 ];
 

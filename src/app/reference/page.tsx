@@ -6,7 +6,7 @@ import { readServerSession } from "@/lib/auth/server";
 const DEFAULT_REDIRECT = "/login?redirect=/reference";
 
 export const metadata: Metadata = {
-  title: "Reference Library",
+  title: "Reference",
 };
 
 export default async function ReferencePage() {
