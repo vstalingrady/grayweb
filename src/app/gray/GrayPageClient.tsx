@@ -217,18 +217,21 @@ type PlanCarrierUser = User & { plan_tier?: string | null };
 
 const derivePlanTierLabel = (candidate?: PlanCarrierUser | null): string => {
   if (!candidate) {
-    return "Free";
+    return "Scout";
   }
   const rawTier = (candidate.plan_tier ?? candidate.role ?? "").trim();
   if (!rawTier) {
-    return "Free";
+    return "Scout";
   }
   const normalized = rawTier.toLowerCase();
+  if (normalized === "voyager") {
+    return "Voyager";
+  }
   const premiumTokens = new Set(["depth", "pro", "premium", "operator", "admin"]);
   if (premiumTokens.has(normalized)) {
     return "Depth";
   }
-  return "Free";
+  return "Scout";
 };
 
 const getSessionSeedFingerprint = (session: ChatSession): string | null => {
@@ -856,27 +859,47 @@ function GrayPageClientInner({
 
   // Fetch context usage for general session when personalization is open
   useEffect(() => {
-    if (isPersonalizationOpen && generalSessionId) {
-      apiService.getConversationUsage(generalSessionId)
-        .then((usage) => {
-          if (usage) {
-            setContextUsageSummary({
-              conversationId: usage.conversationId,
-              messageCount: usage.messageCount,
-              conversationTokens: usage.conversationTokens,
-              workspaceTokens: 0,
-              totalTokens: usage.conversationTokens,
-              tokensRemaining: usage.limit > 0 ? Math.max(0, usage.limit - usage.conversationTokens) : 0,
-              limit: usage.limit,
-              provider: usage.provider,
-              modelName: usage.modelName ?? null,
-              modelLabel: usage.modelLabel ?? null,
-            });
-          }
-        })
-        .catch((err) => console.error("Failed to fetch general session usage", err));
+    if (!isPersonalizationOpen || !generalSessionId) {
+      return;
     }
-  }, [isPersonalizationOpen, generalSessionId]);
+
+    // Avoid refetching if we already have usage for this conversation
+    if (contextUsageSummary?.conversationId === generalSessionId) {
+      return;
+    }
+
+    let cancelled = false;
+
+    apiService
+      .getConversationUsage(generalSessionId)
+      .then((usage) => {
+        if (!usage || cancelled) {
+          return;
+        }
+        setContextUsageSummary({
+          conversationId: usage.conversationId,
+          messageCount: usage.messageCount,
+          conversationTokens: usage.conversationTokens,
+          workspaceTokens: 0,
+          totalTokens: usage.conversationTokens,
+          tokensRemaining:
+            usage.limit > 0
+              ? Math.max(0, usage.limit - usage.conversationTokens)
+              : 0,
+          limit: usage.limit,
+          provider: usage.provider,
+          modelName: usage.modelName ?? null,
+          modelLabel: usage.modelLabel ?? null,
+        });
+      })
+      .catch((err) => {
+        console.error("Failed to fetch general session usage", err);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isPersonalizationOpen, generalSessionId, contextUsageSummary?.conversationId]);
 
   const renderMainSurface = () => {
     if (viewMode === "general") {
@@ -1600,6 +1623,7 @@ function GrayPageClientInner({
     const reminderId = parseReminderPlanId(id);
     if (reminderId !== null) {
       const previousReminderPlans = reminderPlans;
+      const previousCalendarEvents = calendarEvents;
       const targetPlan = reminderPlanMap.get(id);
       if (!targetPlan) {
         return;
@@ -1616,7 +1640,20 @@ function GrayPageClientInner({
         }
         return plan;
       });
+
+      // Also update the corresponding calendar event
+      const updatedCalendarEvents = previousCalendarEvents.map((event) => {
+        if (event.id === id) {
+          return {
+            ...event,
+            reminderStatus: newStatus,
+          };
+        }
+        return event;
+      });
+
       setReminderPlans(updated);
+      setCalendarEvents(updatedCalendarEvents);
 
       apiService
         .updateReminder(user.id, reminderId, {
@@ -1625,6 +1662,7 @@ function GrayPageClientInner({
         .catch((error) => {
           console.error("Failed to update reminder:", error);
           setReminderPlans(previousReminderPlans);
+          setCalendarEvents(previousCalendarEvents);
         });
       return;
     }
@@ -1745,11 +1783,21 @@ function GrayPageClientInner({
     const reminderId = parseReminderPlanId(planToDelete.id);
     if (reminderId !== null) {
       const previousReminderPlans = reminderPlans;
+      const previousCalendarEvents = calendarEvents;
       const updatedReminderPlans = previousReminderPlans.filter((plan) => plan.id !== planToDelete.id);
+
+      // Also remove the corresponding calendar event
+      const updatedCalendarEvents = previousCalendarEvents.filter(
+        (event) => event.id !== planToDelete.id
+      );
+
       setReminderPlans(updatedReminderPlans);
+      setCalendarEvents(updatedCalendarEvents);
+
       apiService.deleteReminder(user.id, reminderId).catch((error) => {
         console.error("Failed to delete reminder:", error);
         setReminderPlans(previousReminderPlans);
+        setCalendarEvents(previousCalendarEvents);
       });
       return;
     }
