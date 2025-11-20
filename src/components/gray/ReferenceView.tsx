@@ -7,7 +7,7 @@ export function ReferenceView() {
   const [searchQuery, setSearchQuery] = useState("");
 
   return (
-    <div className="flex flex-col h-full p-8 max-w-6xl mx-auto w-full">
+    <div className="flex flex-col h-full w-full">
       <header className="mb-10">
         <h1 className="text-3xl font-medium tracking-tight text-white mb-2">Reference</h1>
         <p className="text-zinc-400">

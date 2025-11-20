@@ -1700,7 +1700,7 @@
   display: flex;
   flex-direction: column;
   gap: clamp(20px, 4vw, 32px);
-  padding: clamp(24px, 4vw, 36px) clamp(12px, 2vw, 20px) 0;
+  padding: clamp(24px, 4vw, 36px) 0 0;
   height: 100%;
   overflow: hidden;
 }
@@ -2156,11 +2156,18 @@
   justify-items: stretch;
 }
 
-.main[data-view="history"] {
+.main[data-view="history"],
+.main[data-view="reference"] {
   grid-template-rows: 1fr;
-  justify-items: stretch;
-  padding: 0;
+  justify-items: center;
+  padding: clamp(16px, 2vh, 24px) clamp(16px, 2vw, 32px);
   overflow: hidden;
+}
+
+.main[data-view="history"]>*,
+.main[data-view="reference"]>* {
+  width: 100%;
+  max-width: min(1600px, 100%);
 }
 
 .main[data-view="chat"] {
