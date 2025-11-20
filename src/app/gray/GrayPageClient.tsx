@@ -133,6 +133,12 @@ const buildReminderEventKey = (reminder: GrayReminderCreatedPayload): string => 
           : typeof reminderRecord?.["id"] === "string"
             ? reminderRecord["id"]
             : undefined;
+
+  const numericId = Number(legacyId);
+  if (!Number.isNaN(numericId) && numericId > 0) {
+    return `${numericId}`;
+  }
+
   const primaryId = reminder.data.id ?? legacyId ?? reminder.data.label ?? "reminder";
   const scheduleIso = deriveReminderScheduleIso(reminder) ?? "unscheduled";
   const source = reminder.source ?? "assistant";
