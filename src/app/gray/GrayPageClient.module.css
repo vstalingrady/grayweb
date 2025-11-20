@@ -1440,6 +1440,7 @@
   display: flex;
   flex-direction: column;
   gap: 0;
+  margin-top: 24px;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
@@ -1462,12 +1463,10 @@
   margin-top: auto;
   flex-shrink: 0;
   pointer-events: none;
-  background: linear-gradient(
-    to bottom,
-    rgba(7, 7, 7, 0) 0%,
-    rgba(7, 7, 7, 0.24) 40%,
-    rgba(7, 7, 7, 0.96) 100%
-  );
+  background: linear-gradient(to bottom,
+      rgba(7, 7, 7, 0) 0%,
+      rgba(7, 7, 7, 0.24) 40%,
+      rgba(7, 7, 7, 0.96) 100%);
   z-index: 1;
 }
 
@@ -1593,7 +1592,7 @@
 }
 
 .sidebarHistorySection {
-  --history-line-offset: 8px;
+  --history-line-offset: 9px;
   --history-line-color: rgba(255, 255, 255, 0.08);
   display: flex;
   flex-direction: column;
@@ -1603,7 +1602,8 @@
 .sidebarHistory {
   display: flex;
   flex-direction: column;
-  gap: 0; /* Changed from 10px, spacing now controlled by group margin and link padding */
+  gap: 0;
+  /* Changed from 10px, spacing now controlled by group margin and link padding */
   padding-left: 8px;
   position: relative;
 }
@@ -1612,8 +1612,10 @@
   content: "";
   position: absolute;
   left: var(--history-line-offset);
-  top: 0; /* Changed from 14px */
-  bottom: 0; /* Changed from 6px */
+  top: 0;
+  /* Changed from 14px */
+  bottom: 0;
+  /* Changed from 6px */
   width: 2px;
   background: var(--history-line-color);
   pointer-events: none;
@@ -1622,7 +1624,7 @@
 .sidebarHistoryGroup {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 2px;
   margin-top: 10px;
 }
 
@@ -1631,22 +1633,26 @@
 }
 
 .sidebarHistoryLabel {
-  font-size: 0.62rem;
+  font-size: 0.68rem;
   letter-spacing: 0.26em;
   text-transform: uppercase;
   font-weight: 500;
   color: rgba(235, 235, 235, 0.7);
-  padding-left: 12px; /* Reduced */
-  padding-bottom: 4px; /* Reduced */
+  padding-left: 12px;
+  /* Reduced */
+  padding-bottom: 0;
+  /* Reduced */
 }
 
 .sidebarHistoryList {
   list-style: none;
   margin: 0;
-  padding: 0 0 0 4px; /* Adjusted padding-left */
+  padding: 0 0 0 16px;
+  /* Adjusted padding-left */
   display: flex;
   flex-direction: column;
-  gap: 4px; /* Reduced gap */
+  gap: 2px;
+  /* Reduced gap */
 }
 
 .sidebarHistoryList li {
@@ -1655,11 +1661,12 @@
 
 .sidebarHistoryLink {
   display: block;
-  padding: 4px 6px; /* Reduced vertical padding */
+  padding: 2px 6px;
+  /* Reduced vertical padding */
   border-radius: 8px;
   align-items: center;
   gap: 8px;
-  font-size: 0.84rem;
+  font-size: 0.9rem;
   font-family: "Plus Jakarta Sans", var(--font-sans), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
     sans-serif;
   font-weight: 500;
