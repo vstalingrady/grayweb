@@ -29,7 +29,8 @@ except ImportError:  # graceful fallback if pywebpush isn't available
 logger = logging.getLogger(__name__)
 
 # Avoid duplicate sends if a user gets evaluated twice in a short window.
-MIN_SEND_INTERVAL_SECONDS = 300
+# Set to 3 hours to prevent duplicate messages within the same time window
+MIN_SEND_INTERVAL_SECONDS = 10800  # 3 hours
 
 PROACTIVITY_PUSH_TABLE = "proactivity_push_subscriptions"
 
@@ -228,7 +229,7 @@ class ProactivityEngine:
     ) -> Optional[Tuple[datetime, datetime]]:
         local_tz = self._resolve_timezone(timezone)
         local_now = datetime.now(local_tz)
-        tolerance = timedelta(seconds=300)
+        tolerance = timedelta(minutes=30)  # 30-minute window around scheduled time
         for time_str in self._extract_times(settings):
             parts = time_str.split(":")
             if len(parts) < 2:
