@@ -2443,6 +2443,15 @@
   overflow: visible;
 }
 
+.chatHeaderControls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 0 4px;
+  flex-shrink: 0;
+  z-index: 2;
+}
+
 .chatViewEmpty {
   display: flex;
   align-items: center;

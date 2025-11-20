@@ -1722,6 +1722,8 @@ const estimateTokenCount = (content: string | null | undefined): number => {
   return Math.max(lengthBased, wordBased);
 };
 
+import { ModelSelector } from "./ModelSelector";
+
 export function GrayChatView({
   sessionId,
   introContent,
@@ -2901,6 +2903,9 @@ export function GrayChatView({
 
   return (
     <div className={styles.chatView} aria-live="polite" style={chatViewStyle}>
+      <div className={styles.chatHeaderControls}>
+        <ModelSelector />
+      </div>
       <div className={styles.chatViewport}>
         {shouldShowPendingStreamIndicator && !showFirstMessageSpinner && (
           <div className={styles.chatThinkingIndicator}>
