@@ -5,6 +5,7 @@ import { GrayChatBar, type GrayChatBarProps } from "./ChatBar";
 import styles from "@/app/gray/GrayPageClient.module.css";
 import { useUser } from "@/contexts/UserContext";
 import { useChatStore } from "./ChatProvider";
+import { ModelSelector } from "./ModelSelector";
 
 type GrayChatComposerProps = GrayChatBarProps & {
   showUnderline?: boolean;
@@ -40,6 +41,9 @@ const GrayChatComposerBase = ({
         {showUnderline ? <div className={styles.chatBarUnderline} aria-hidden="true" /> : null}
       </div>
       {attachmentTray}
+      <div className={styles.modelSelectorContainer}>
+        <ModelSelector />
+      </div>
       <p className={styles.chatDisclaimer}>Gray can make mistakes. Check important info.</p>
     </div>
   );
