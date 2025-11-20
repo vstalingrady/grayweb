@@ -22,14 +22,20 @@ import { motion } from "framer-motion";
 import Navigation from "@/app/components/Navigation";
 import FooterBackground from "@/app/components/FooterBackground";
 import PerformanceChart from "./components/PerformanceChart";
-import MockChatInterface from "@/app/components/MockChatInterface";
+import { PricingPlansSection } from "@/app/pricing/PricingPlansSection";
 
 type GrayMarketingClientProps = {
   tryGrayUrl: string;
+  storeId?: string;
+  voyagerVariantId?: string;
+  pioneerVariantId?: string;
 };
 
 export default function GrayMarketingClient({
   tryGrayUrl,
+  storeId,
+  voyagerVariantId,
+  pioneerVariantId,
 }: GrayMarketingClientProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
@@ -107,7 +113,7 @@ export default function GrayMarketingClient({
                 <X className="w-5 h-5 text-red-500" />
                 The Problem
               </h3>
-              <ul className="space-y-4 text-zinc-400 text-sm">
+              <ul className="space-y-4 text-zinc-400">
                 <li className="flex items-start gap-3">
                   <span className="w-1.5 h-1.5 rounded-full bg-zinc-700 mt-2.5" />
                   No external accountability
@@ -126,17 +132,15 @@ export default function GrayMarketingClient({
                 </li>
               </ul>
             </div>
-            <div className="p-0 bg-zinc-900 rounded-3xl border border-zinc-800 text-white relative overflow-hidden flex flex-col min-h-[300px]">
-              <div className="absolute top-0 right-0 p-32 bg-gradient-to-br from-blue-500/10 to-purple-500/10 blur-3xl -z-10" />
-              <div className="p-8 pb-0">
-                <h3 className="text-xl font-semibold mb-2 flex items-center gap-2">
-                  <Check className="w-5 h-5 text-green-500" />
-                  The Solution
-                </h3>
-              </div>
-              <div className="flex-1 relative">
-                <MockChatInterface />
-              </div>
+            <div className="p-8 bg-zinc-100 rounded-3xl border border-white/10 text-black relative overflow-hidden">
+              <div className="absolute top-0 right-0 p-32 bg-gradient-to-br from-blue-500/20 to-purple-500/20 blur-3xl -z-10" />
+              <h3 className="text-xl font-semibold mb-6 flex items-center gap-2">
+                <Check className="w-5 h-5 text-green-600" />
+                The Solution
+              </h3>
+              <p className="text-lg font-medium leading-relaxed">
+                Gray gives you that system. An always-on mentor that notices when you slip, helps you get back on track, and pushes you to be your best self.
+              </p>
             </div>
           </div>
         </div>
@@ -203,6 +207,102 @@ export default function GrayMarketingClient({
                 )}
               </div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Comparison Section */}
+      <section className="py-24 bg-zinc-950 border-y border-zinc-900">
+        <div className="container mx-auto px-4 md:px-6">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl md:text-4xl font-bold mb-4">Not another productivity app.</h2>
+            <p className="text-zinc-400">Gray is a coach, not a tool. It helps you BECOME better, not just DO more.</p>
+          </div>
+
+          <div className="overflow-x-auto max-w-5xl mx-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-zinc-800">
+                  <th className="py-4 px-6 text-zinc-500 font-medium">Feature</th>
+                  <th className="py-4 px-6 text-white font-bold text-lg bg-zinc-900/50 rounded-t-xl">Gray</th>
+                  <th className="py-4 px-6 text-zinc-500 font-medium">ChatGPT</th>
+                  <th className="py-4 px-6 text-zinc-500 font-medium">Notion/Todoist</th>
+                  <th className="py-4 px-6 text-zinc-500 font-medium">Therapy</th>
+                </tr>
+              </thead>
+              <tbody className="text-sm">
+                {[
+                  ["Reaches out first", "✓", "✗", "✗", "Only weekly"],
+                  ["Remembers your life", "Deep memory", "Basic", "Your responsibility", "Takes notes"],
+                  ["Challenges you", "Yes", "Only if you ask", "Never", "Sometimes"],
+                  ["Always available", "24/7", "24/7", "24/7", "1hr/week"],
+                  ["Integrates with life", "Calendar, Gmail, Notion", "Limited", "Separate tools", "Separate"],
+                  ["Price", "$17/mo", "$20/mo", "$8-15/mo", "$200+/session"]
+                ].map(([feature, gray, gpt, tools, therapy], i) => (
+                  <tr key={i} className="border-b border-zinc-800/50 hover:bg-zinc-900/20 transition-colors">
+                    <td className="py-4 px-6 text-zinc-300 font-medium">{feature}</td>
+                    <td className="py-4 px-6 text-white font-semibold bg-zinc-900/30">{gray}</td>
+                    <td className="py-4 px-6 text-zinc-500">{gpt}</td>
+                    <td className="py-4 px-6 text-zinc-500">{tools}</td>
+                    <td className="py-4 px-6 text-zinc-500">{therapy}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      {/* Pricing Section (shared with /pricing) */}
+      <section id="pricing" className="py-24 bg-zinc-950 border-t border-zinc-900">
+        <div className="container mx-auto px-4 md:px-6">
+          <PricingPlansSection
+            storeId={storeId}
+            voyagerVariantId={voyagerVariantId}
+            pioneerVariantId={pioneerVariantId}
+          />
+        </div>
+      </section>
+
+      {/* FAQ Section */}
+      <section id="faq" className="py-24 px-4 md:px-6">
+        <div className="container mx-auto max-w-3xl">
+          <h2 className="text-3xl font-bold mb-12 text-center">Frequently Asked Questions</h2>
+
+          <div className="space-y-6">
+            {[
+              { q: "Is this therapy?", a: "No. Gray is a mentor/coach, not a therapist. If you need therapy, get therapy. Gray is for breaking paralysis and building momentum." },
+              { q: "How is this different from ChatGPT?", a: "ChatGPT waits for you. Gray reaches out. ChatGPT has basic memory. Gray remembers everything. ChatGPT is a tool. Gray is a coach." },
+              { q: "Will this work for ADHD/gifted burnout?", a: "Gray is built FOR the \"gifted and burnt out.\" It understands paralysis, pattern interrupts, and the emotional side of getting unstuck. Many users with ADHD find it helpful, but it's not a replacement for treatment." },
+              { q: "What if I can't afford $17/month?", a: "The free tier (10 check-ins/day) is genuinely useful. If you're a student or facing financial hardship, email us for sliding scale pricing." },
+              { q: "Do you sell my data?", a: "Never. Your conversations are private. We don't train models on your data. We don't sell to advertisers. Your potential is not a product." },
+              { q: "Can I cancel anytime?", a: "Yes. No tricks, no dark patterns. Cancel in one click." }
+            ].map((faq, i) => (
+              <FAQItem key={i} question={faq.q} answer={faq.a} />
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Final CTA */}
+      <section className="py-32 px-4 md:px-6 text-center relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent to-zinc-900/50 pointer-events-none" />
+        <div className="container mx-auto relative z-10">
+          <h2 className="text-4xl md:text-5xl font-bold mb-6 tracking-tight">Stop planning. Start building.</h2>
+          <p className="text-xl text-zinc-400 mb-10 max-w-2xl mx-auto">
+            The best time to start was 2 years ago. The second best time is today.
+          </p>
+          <Link
+            href={tryGrayUrl}
+            className="inline-flex items-center justify-center px-10 py-5 bg-white text-black text-lg font-bold rounded-full hover:bg-zinc-200 transition-colors"
+          >
+            Start Free—No Credit Card Required
+          </Link>
+
+          <div className="mt-12 flex flex-wrap justify-center gap-8 text-sm text-zinc-500">
+            <span className="flex items-center gap-2"><Check className="w-4 h-4" /> Free tier forever</span>
+            <span className="flex items-center gap-2"><Check className="w-4 h-4" /> Cancel anytime</span>
+            <span className="flex items-center gap-2"><Check className="w-4 h-4" /> Your data stays private</span>
           </div>
         </div>
       </section>
@@ -298,4 +398,23 @@ export default function GrayMarketingClient({
   );
 }
 
+function FAQItem({ question, answer }: { question: string, answer: string }) {
+  const [isOpen, setIsOpen] = useState(false);
 
+  return (
+    <div className="border border-zinc-800 rounded-xl bg-zinc-900/30 overflow-hidden">
+      <button
+        className="w-full flex items-center justify-between p-6 text-left hover:bg-zinc-900/50 transition-colors"
+        onClick={() => setIsOpen(!isOpen)}
+      >
+        <span className="font-medium pr-4">{question}</span>
+        {isOpen ? <ChevronUp className="w-5 h-5 text-zinc-400" /> : <ChevronDown className="w-5 h-5 text-zinc-400" />}
+      </button>
+      {isOpen && (
+        <div className="px-6 pb-6 text-zinc-400 leading-relaxed">
+          {answer}
+        </div>
+      )}
+    </div>
+  );
+}
