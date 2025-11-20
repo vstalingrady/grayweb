@@ -7,11 +7,13 @@ import {
     CalendarClock,
     Clock,
     Database,
+    FlaskConical,
     Headphones,
     Infinity as InfinityIcon,
     MessageSquare,
     Pin,
     Plus,
+    Shuffle,
     Users,
     Zap,
 } from "lucide-react";
@@ -26,40 +28,50 @@ type FeatureItem = {
 };
 
 const FREE_FEATURES: FeatureItem[] = [
-    { label: "Gray Lite only", icon: Zap },
+    {
+        label: "Gray Lite only",
+        icon: Zap,
+        subtext: "Gemini 2.5 Flash Lite"
+    },
     { label: "Limited daily messages", icon: MessageSquare },
-    { label: "Short context memory per thread", icon: Pin },
+    { label: "14-day chat memory", icon: Pin },
     { label: "Premade proactivity routines only", icon: Clock },
     { label: "Community support forum", icon: Users },
 ];
 
 const VOYAGER_FEATURES: FeatureItem[] = [
     {
-        label: "Gray Base + model switcher",
+        label: "Gray Base + limited Gray Pro",
         icon: Zap,
-        subtext: "Gemini 3, Claude 4.5, Grok 4.1, GPT 5.1, DeepSeek V3.2, Kimi K2",
+        subtext: "Gemini 2.5 Flash + Gemini 3 Pro",
     },
     { label: "Expanded message limit (unlimited Gray Lite)", icon: MessageSquare },
     {
-        label: "5× context memory per thread",
+        label: "4x permanent context memory",
         icon: Pin,
-        subtext: "Roughly five times Scout's recall window",
     },
-    { label: "Thinking mode toggle for longer reasoning", icon: Brain },
+    { label: "Reasoning mode toggle", icon: Brain },
     { label: "Calendar, Gmail, Notion integrations", icon: CalendarClock },
-    { label: "Discord ticket support + early feature flights", icon: Headphones },
     { label: "Everything in Scout", icon: Plus, variant: "inherit" },
 ];
 
 const PIONEER_FEATURES: FeatureItem[] = [
-    { label: "Gray Pro + expanded model catalog", icon: Zap },
+    {
+        label: "Expanded Gray Pro",
+        icon: Zap,
+    },
+    {
+        label: "Model switcher",
+        icon: Shuffle,
+        subtext: "Claude 4.5, Grok 4.1, GPT 5.1, DeepSeek V3.2, Kimi K2",
+    },
     { label: "Expanded reasoning budget", icon: InfinityIcon },
     {
-        label: "5× Voyager context + long-term pinning",
+        label: "4x Voyager context",
         icon: Pin,
-        subtext: "Effectively uncapped context memory for daily reliance",
     },
-    { label: "Calendar, Gmail, Notion integrations", icon: CalendarClock },
+    { label: "Priority response time (during high load)", icon: Headphones },
+    { label: "Early access to experimental features", icon: FlaskConical },
     { label: "Reference library (docs/files RAG)", icon: Database },
     { label: "Everything in Voyager", icon: Plus, variant: "inherit" },
 ];
@@ -70,8 +82,8 @@ const BILLING_CYCLES = [
 ];
 
 const VOYAGER_PRICING = {
-    monthly: { price: "$7", cadence: "month" },
-    annual: { price: "$77", cadence: "year" },
+    monthly: { price: "$17", cadence: "month" },
+    annual: { price: "$177", cadence: "year" },
 } as const;
 
 const PIONEER_PRICING = {
@@ -89,7 +101,7 @@ export function PricingPlansSection({ storeId, voyagerVariantId, pioneerVariantI
     const [billingCycle, setBillingCycle] = useState<"monthly" | "annual">("monthly");
     const { price: voyagerPrice, cadence: voyagerCadence } = VOYAGER_PRICING[billingCycle];
     const { price: pioneerPrice, cadence: pioneerCadence } = PIONEER_PRICING[billingCycle];
-    const voyagerSavingsLabel = billingCycle === "annual" ? "Save $7" : undefined;
+    const voyagerSavingsLabel = billingCycle === "annual" ? "Save $27" : undefined;
     const pioneerSavingsLabel = billingCycle === "annual" ? "Save $67" : undefined;
 
     const voyagerCheckoutHref = (storeId && voyagerVariantId)
@@ -112,7 +124,7 @@ export function PricingPlansSection({ storeId, voyagerVariantId, pioneerVariantI
                 }}
             />
             <header className={styles.hero}>
-                <h1 className={styles.heroTitle}>Plans built for longer, deeper reasoning</h1>
+                <h1 className={styles.heroTitle}>Maximize your potential</h1>
                 <p className={styles.heroSubhead}>
                     Choose the plan that matches how often you rely on Gray. Pay monthly or save when you
                     commit annually.
@@ -166,7 +178,7 @@ export function PricingPlansSection({ storeId, voyagerVariantId, pioneerVariantI
                     </div>
                 </article>
 
-                <article className={styles.planCard} data-variant="highlighted">
+                <article className={styles.planCard}>
                     <div className={styles.cardBody}>
                         <div className={styles.cardIntro}>
                             <header className={styles.cardHeader}>
