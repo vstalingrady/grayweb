@@ -5353,8 +5353,8 @@ async def list_user_reminders(
             
             rows = result.data if result.data is not None else []
 
-            # Self-healing: Auto-mark stale pending reminders as delivered to prevent loop
-            # Only mark reminders that haven't been delivered yet (delivered_at is None)
+            # Self-healing: Auto-DELETE stale pending reminders to prevent loop
+            # Only delete reminders that haven't been delivered yet (delivered_at is None)
             if status_filter == "pending" and rows:
                 now = datetime.utcnow()
                 stale_threshold = now - timedelta(minutes=15)
@@ -5363,7 +5363,7 @@ async def list_user_reminders(
                     try:
                         remind_at_str = row.get("remind_at")
                         delivered_at = row.get("delivered_at")
-                        # Only mark as delivered if it hasn't been delivered before
+                        # Only delete if it hasn't been delivered before
                         if remind_at_str and not delivered_at:
                             remind_at = datetime.fromisoformat(remind_at_str.replace("Z", "+00:00")).replace(tzinfo=None)
                             if remind_at < stale_threshold:
@@ -5372,16 +5372,14 @@ async def list_user_reminders(
                         continue
                 
                 if stale_ids:
-                    # Launch background update to mark these as delivered
+                    # Delete stale reminders completely instead of marking as delivered
                     try:
-                        api_logger.info(f"Auto-marking {len(stale_ids)} stale reminders as delivered", extra={"user_id": user_id, "reminder_ids": stale_ids})
-                        supabase.table("reminders").update({
-                            "status": "delivered",
-                            "updated_at": now.isoformat(),
-                            "delivered_at": now.isoformat()
-                        }).in_("id", stale_ids).execute()
+                        api_logger.info(f"Auto-deleting {len(stale_ids)} stale reminders", extra={"user_id": user_id, "reminder_ids": stale_ids})
+                        supabase.table("reminders").delete().in_("id", stale_ids).execute()
+                        # Filter out the deleted reminders from the response
+                        rows = [row for row in rows if row["id"] not in stale_ids]
                     except Exception as e:
-                        api_logger.error(f"Failed to auto-mark stale reminders: {e}")
+                        api_logger.error(f"Failed to auto-delete stale reminders: {e}")
 
             return [_serialize_reminder_row(row) for row in rows]
         except Exception as error:
