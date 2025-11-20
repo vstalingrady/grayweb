@@ -229,13 +229,43 @@ export default function GrayMarketingClient({
       <footer id="contact" className="site-footer">
         <FooterBackground />
         <div className="site-footer__overlay">
-          <div className="site-footer__social-row">
+          <div className="site-footer__grid">
+            <div className="site-footer__column">
+              <p className="site-footer__column-title">Products</p>
+              <a href={tryGrayUrl} className="site-footer__column-link" target="_blank" rel="noreferrer">
+                Gray
+              </a>
+            </div>
+            <div className="site-footer__column">
+              <p className="site-footer__column-title">Research</p>
+              <span className="site-footer__column-note">Coming soon</span>
+            </div>
             <div className="site-footer__column">
               <p className="site-footer__column-title">Contact</p>
               <a href="mailto:hi@alignment.id" className="site-footer__column-link">
                 hi@alignment.id
               </a>
             </div>
+          </div>
+          <div className="site-footer__grid site-footer__grid--secondary">
+            <div className="site-footer__column site-footer__column-stack">
+              <p className="site-footer__column-title">Policies</p>
+              <a href="/policies/tos" className="site-footer__column-link">
+                Terms of Service
+              </a>
+              <a href="/policies/privacy" className="site-footer__column-link">
+                Privacy Policy
+              </a>
+              <a href="/policies/refund" className="site-footer__column-link">
+                Refund Policy
+              </a>
+            </div>
+            <div className="site-footer__column">
+              <p className="site-footer__column-title">Blog</p>
+              <span className="site-footer__column-note">Coming soon</span>
+            </div>
+          </div>
+          <div className="site-footer__social-row">
             <div className="site-footer__social-links">
               <a
                 href="https://x.com/alignmentlab"
@@ -275,6 +305,10 @@ export default function GrayMarketingClient({
               </a>
             </div>
             <p className="site-footer__meta">© {new Date().getFullYear()} Alignment. All rights reserved.</p>
+            <button type="button" className="site-footer__language">
+              <span>English</span>
+              <span className="site-footer__language-region">United States</span>
+            </button>
           </div>
         </div>
       </footer>
