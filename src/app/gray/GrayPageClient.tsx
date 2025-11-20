@@ -237,6 +237,9 @@ const derivePlanTierLabel = (candidate?: PlanCarrierUser | null): string => {
   if (normalized === "voyager") {
     return "Voyager";
   }
+  if (normalized === "pioneer") {
+    return "Pioneer";
+  }
   const premiumTokens = new Set(["depth", "pro", "premium", "operator", "admin"]);
   if (premiumTokens.has(normalized)) {
     return "Depth";
@@ -1026,6 +1029,22 @@ function GrayPageClientInner({
     }
     return deriveInitials(user?.full_name ?? viewerName) || "OP";
   }, [user, loading, viewerName]);
+
+  const filteredSidebarItems = useMemo(() => {
+    const isPioneerOrHigher = ["Pioneer", "Depth"].includes(viewerPlanLabel);
+    if (isPioneerOrHigher) {
+      return SIDEBAR_ITEMS;
+    }
+    return SIDEBAR_ITEMS.filter((item) => item.id !== "reference");
+  }, [viewerPlanLabel]);
+
+  const filteredRailItems = useMemo(() => {
+    const isPioneerOrHigher = ["Pioneer", "Depth"].includes(viewerPlanLabel);
+    if (isPioneerOrHigher) {
+      return SIDEBAR_RAIL_ITEMS;
+    }
+    return SIDEBAR_RAIL_ITEMS.filter((item) => item.id !== "reference");
+  }, [viewerPlanLabel]);
   const historySections = useMemo<SidebarHistorySection[]>(() => {
     // Only show conversations that are bound to a *normalized*
     // conversationId so we don't duplicate entries with both
@@ -2685,8 +2704,8 @@ function GrayPageClientInner({
               viewerAvatarUrl={viewerAvatarUrl}
               viewerPlanLabel={viewerPlanLabel}
               activeNav={sidebarActiveNav}
-              railItems={SIDEBAR_RAIL_ITEMS}
-              navItems={SIDEBAR_ITEMS}
+              railItems={filteredRailItems}
+              navItems={filteredSidebarItems}
               historySections={historySections}
               onExpand={() => setIsSidebarExpanded(true)}
               onCollapse={() => {
