@@ -111,6 +111,9 @@ def _int_env(var_name: str, default: int) -> int:
 
 AI_PROVIDER = (os.getenv("AI_PROVIDER") or "gemini").strip().lower()
 GUMROAD_WEBHOOK_SECRET = os.getenv("GUMROAD_WEBHOOK_SECRET") or None
+LEMONSQUEEZY_WEBHOOK_SECRET = os.getenv("LEMONSQUEEZY_WEBHOOK_SECRET") or None
+LEMONSQUEEZY_VOYAGER_VARIANT_ID = os.getenv("LEMONSQUEEZY_VOYAGER") or None
+LEMONSQUEEZY_PIONEER_VARIANT_ID = os.getenv("LEMONSQUEEZY_PIONEER") or None
 
 GEMINI_SERVICE = GeminiService()
 ANTHROPIC_SERVICE = AnthropicService()
@@ -1735,6 +1738,145 @@ async def gumroad_webhook(request: Request, db: databases.Database = Depends(get
             "user_id": user_id,
         },
     )
+    return {"ok": True}
+
+
+@app.post("/lemonsqueezy-webhook")
+async def lemonsqueezy_webhook(request: Request, db: databases.Database = Depends(get_database)):
+    """
+    Handle LemonSqueezy webhook events for subscription purchases.
+    
+    Updates user plan_tier based on variant_id from subscription events.
+    Expects user_id to be passed in meta.custom_data during checkout.
+    """
+    import hmac
+    import hashlib
+    
+    # Verify webhook signature
+    body_bytes = await request.body()
+    if LEMONSQUEEZY_WEBHOOK_SECRET:
+        signature = request.headers.get("X-Signature")
+        if not signature:
+            api_logger.warning(
+                "LemonSqueezy webhook received without signature",
+                extra={"event_type": "lemonsqueezy_webhook_no_signature"},
+            )
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No signature")
+        
+        expected_signature = hmac.new(
+            LEMONSQUEEZY_WEBHOOK_SECRET.encode(),
+            body_bytes,
+            hashlib.sha256
+        ).hexdigest()
+        
+        if not hmac.compare_digest(signature, expected_signature):
+            api_logger.warning(
+                "LemonSqueezy webhook signature mismatch",
+                extra={"event_type": "lemonsqueezy_webhook_invalid_signature"},
+            )
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid signature")
+    
+    try:
+        payload = json.loads(body_bytes.decode())
+    except (json.JSONDecodeError, UnicodeDecodeError) as error:
+        api_logger.error(
+            "Failed to parse LemonSqueezy webhook payload",
+            exc_info=True,
+            extra={"event_type": "lemonsqueezy_webhook_parse_error", "error": str(error)},
+        )
+        return {"ok": False, "error": "Invalid JSON"}
+    
+    event_name = payload.get("meta", {}).get("event_name")
+    custom_data = payload.get("meta", {}).get("custom_data", {})
+    attributes = payload.get("data", {}).get("attributes", {})
+    
+    # Only process subscription events
+    if event_name not in ["subscription_created", "subscription_updated"]:
+        return {"ok": True}
+    
+    # Extract user_id from custom data
+    user_id = custom_data.get("user_id")
+    if not user_id:
+        api_logger.warning(
+            "LemonSqueezy webhook missing user_id",
+            extra={"event_type": "lemonsqueezy_webhook_no_user_id", "event_name": event_name},
+        )
+        return {"ok": True}
+    
+    try:
+        user_id = int(user_id)
+    except (TypeError, ValueError):
+        api_logger.warning(
+            "LemonSqueezy webhook invalid user_id format",
+            extra={"event_type": "lemonsqueezy_webhook_invalid_user_id", "user_id": user_id},
+        )
+        return {"ok": True}
+    
+    # Determine tier from variant_id
+    variant_id = str(attributes.get("variant_id", ""))
+    plan_tier = None
+    
+    if variant_id == LEMONSQUEEZY_VOYAGER_VARIANT_ID:
+        plan_tier = "voyager"
+    elif variant_id == LEMONSQUEEZY_PIONEER_VARIANT_ID:
+        plan_tier = "pioneer"
+    
+    if not plan_tier:
+        api_logger.warning(
+            "LemonSqueezy webhook unknown variant_id",
+            extra={
+                "event_type": "lemonsqueezy_webhook_unknown_variant",
+                "variant_id": variant_id,
+                "user_id": user_id,
+            },
+        )
+        return {"ok": True}
+    
+    # Check subscription status
+    subscription_status = attributes.get("status", "")
+    if subscription_status not in ["active", "on_trial"]:
+        # Don't upgrade if subscription is not active
+        api_logger.info(
+            "LemonSqueezy webhook skipping inactive subscription",
+            extra={
+                "event_type": "lemonsqueezy_webhook_inactive_subscription",
+                "user_id": user_id,
+                "status": subscription_status,
+            },
+        )
+        return {"ok": True}
+    
+    # Update user tier
+    try:
+        await db.execute(
+            users.update()
+            .where(users.c.id == user_id)
+            .values(
+                plan_tier=plan_tier,
+                updated_at=datetime.utcnow(),
+            )
+        )
+        api_logger.info(
+            "Updated user tier from LemonSqueezy webhook",
+            extra={
+                "event_type": "lemonsqueezy_webhook_tier_update",
+                "user_id": user_id,
+                "plan_tier": plan_tier,
+                "variant_id": variant_id,
+            },
+        )
+    except Exception as error:
+        api_logger.error(
+            "Failed to update user plan from LemonSqueezy webhook",
+            exc_info=True,
+            extra={
+                "event_type": "lemonsqueezy_webhook_error",
+                "user_id": user_id,
+                "error": str(error),
+            },
+        )
+        return {"ok": False}
+    
     return {"ok": True}
 
 

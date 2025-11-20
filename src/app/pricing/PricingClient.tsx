@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { X } from "lucide-react";
 import styles from "./page.module.css";
 import { PricingPlansSection } from "./PricingPlansSection";
+import { useUser } from "@/contexts/UserContext";
 
 const PARTICLE_COUNT = 1300;
 const SPHERE_RADIUS = 14.5;
@@ -96,37 +97,33 @@ interface PricingClientProps {
 
 export default function PricingClient({ storeId, voyagerVariantId, pioneerVariantId }: PricingClientProps) {
   const router = useRouter();
+  const { user } = useUser();
 
   const handleDismiss = useCallback(() => {
-    if (typeof window !== "undefined" && window.history.length > 1) {
-      router.back();
-      return;
-    }
-    router.push("/#pricing");
+    router.push("/gray");
   }, [router]);
 
   return (
-    <main className={styles.page}>
-      <div className={styles.particleBackground} aria-hidden="true">
-        <DepthParticleCanvas />
-      </div>
-      <div className={styles.starField} aria-hidden="true">
-        <div className={styles.starLayer} />
-        <div className={styles.starLayer} data-variant="dense" />
-      </div>
-      <button type="button" className={styles.dismiss} onClick={handleDismiss}>
-        <X size={18} aria-hidden="true" />
-        <span className="sr-only">Close Gray plans</span>
-      </button>
-      <div className={styles.shell}>
-        <div className={styles.inner}>
+    <div className={styles.pricingPage}>
+      <DepthParticleCanvas />
+      <div className={styles.pricingPageContent}>
+        <div className={styles.pricingContentInner}>
+          <button
+            type="button"
+            className={styles.dismissButton}
+            onClick={handleDismiss}
+            aria-label="Close pricing page"
+          >
+            <X size={20} />
+          </button>
           <PricingPlansSection
             storeId={storeId}
             voyagerVariantId={voyagerVariantId}
             pioneerVariantId={pioneerVariantId}
+            userId={user?.id}
           />
         </div>
       </div>
-    </main>
+    </div>
   );
 }

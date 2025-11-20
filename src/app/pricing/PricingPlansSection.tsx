@@ -95,9 +95,10 @@ interface PricingPlansSectionProps {
     storeId?: string;
     voyagerVariantId?: string;
     pioneerVariantId?: string;
+    userId?: number;
 }
 
-export function PricingPlansSection({ storeId, voyagerVariantId, pioneerVariantId }: PricingPlansSectionProps) {
+export function PricingPlansSection({ storeId, voyagerVariantId, pioneerVariantId, userId }: PricingPlansSectionProps) {
     const [billingCycle, setBillingCycle] = useState<"monthly" | "annual">("monthly");
     const { price: voyagerPrice, cadence: voyagerCadence } = VOYAGER_PRICING[billingCycle];
     const { price: pioneerPrice, cadence: pioneerCadence } = PIONEER_PRICING[billingCycle];
@@ -105,11 +106,11 @@ export function PricingPlansSection({ storeId, voyagerVariantId, pioneerVariantI
     const pioneerSavingsLabel = billingCycle === "annual" ? "Save $67" : undefined;
 
     const voyagerCheckoutHref = (storeId && voyagerVariantId)
-        ? `https://${storeId}/buy/${voyagerVariantId}?embed=1&media=0&checkout[custom][billing_cycle]=${billingCycle}`
+        ? `https://${storeId}/buy/${voyagerVariantId}?embed=1&media=0&checkout[custom][billing_cycle]=${billingCycle}${userId ? `&checkout[custom][user_id]=${userId}` : ''}`
         : undefined;
 
     const pioneerCheckoutHref = (storeId && pioneerVariantId)
-        ? `https://${storeId}/buy/${pioneerVariantId}?embed=1&media=0&checkout[custom][billing_cycle]=${billingCycle}`
+        ? `https://${storeId}/buy/${pioneerVariantId}?embed=1&media=0&checkout[custom][billing_cycle]=${billingCycle}${userId ? `&checkout[custom][user_id]=${userId}` : ''}`
         : undefined;
 
     return (
@@ -152,7 +153,7 @@ export function PricingPlansSection({ storeId, voyagerVariantId, pioneerVariantI
                         <div className={styles.cardIntro}>
                             <header className={styles.cardHeader}>
                                 <h2>Scout</h2>
-                                <p>Test Gray Pulse Lite with a constrained reasoning budget, context, and preset automations.</p>
+                                <p>Try Gray Pulse Lite with limited context and preset routines.</p>
                             </header>
                             <div className={styles.priceBlock}>
                                 <span className={styles.priceValue}>$0</span>
