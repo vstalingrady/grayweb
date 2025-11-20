@@ -1,19 +1,13 @@
-import { redirect } from "next/navigation";
-import GrayPageClient from "@/app/gray/GrayPageClient";
-import { readServerSession } from "@/lib/auth/server";
+import { headers } from "next/headers";
+import { hostFromHeaders, isGrayWorkspaceHost } from "@/lib/grayRouting";
+import GrayMarketingEntry from "./MarketingEntry";
+import GrayWorkspaceEntry from "./WorkspaceEntry";
 
-export default async function GrayPage() {
-  const session = await readServerSession();
-  if (!session) {
-    redirect(`/login?redirect=${encodeURIComponent("/gray")}`);
+export default async function GrayLandingPage() {
+  const requestHeaders = await headers();
+  const host = hostFromHeaders(requestHeaders);
+  if (isGrayWorkspaceHost(host)) {
+    return <GrayWorkspaceEntry />;
   }
-
-  const initialTimestamp = Date.now();
-  return (
-    <GrayPageClient
-      initialTimestamp={initialTimestamp}
-      activeNav="threads"
-      variant="general"
-    />
-  );
+  return <GrayMarketingEntry />;
 }

@@ -181,6 +181,7 @@ type ChatContextValue = {
   fileSearchImportStatus: string | null;
   handleFileSearchImport: () => Promise<void>;
   fileSearchUploadInputRef: RefObject<HTMLInputElement | null>;
+  loadConversationMessages: (sessionId: string) => Promise<void>;
 };
 
 type SaveContextCacheOptions = {
@@ -431,6 +432,18 @@ const SELF_CONTEXT_PATTERNS: RegExp[] = [
   /\bwhat do you know about my schedule\b/i,
   /\bwhat do you know about my calendar\b/i,
 ];
+
+const resolveClientTimezone = (): string => {
+  if (typeof Intl === "undefined") {
+    return "UTC";
+  }
+  try {
+    const resolved = Intl.DateTimeFormat().resolvedOptions();
+    return resolved.timeZone || "UTC";
+  } catch {
+    return "UTC";
+  }
+};
 
 const LOW_SIGNAL_TITLE_WORDS = new Set<string>([
   "hi",
@@ -1337,6 +1350,51 @@ const loadStoredSessions = (
   // All chat session state is now ephemeral in memory and backed by the
   // database. We no longer hydrate from browser storage.
   return { key: null, sessions: defaultSessions() };
+};
+
+const mapApiMessagesToChatMessages = (
+  history: { role: string; text: string; grounding_metadata?: GroundingMetadata | null; groundingMetadata?: GroundingMetadata | null }[],
+  conversationId: string,
+  timestamp: number = Date.now()
+): ChatMessage[] => {
+  // Deduplicate consecutive identical backend messages to keep the
+  // rendered history tidy.
+  const dedupedHistory = history.filter((message, index, arr) => {
+    if (index === 0) {
+      return true;
+    }
+    const prev = arr[index - 1];
+    return !(prev.role === message.role && (prev.text ?? "") === (message.text ?? ""));
+  });
+
+  return dedupedHistory.map((message, index) => {
+    const role: ChatRole = message.role === "model" ? "assistant" : "user";
+    const rawText = message.text ?? "";
+    const normalizedText = role === "assistant" ? stripGrayTitleMarkers(rawText) : rawText;
+    const reminderExtraction =
+      role === "assistant"
+        ? extractGrayRemindersFromText(normalizedText)
+        : { cleanText: normalizedText, reminders: [] };
+    const normalizedMetadata =
+      message.grounding_metadata ??
+      message.groundingMetadata ??
+      null;
+
+    return {
+      id:
+        typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : `${conversationId}-${index}-${timestamp}`,
+      role,
+      content: reminderExtraction.cleanText,
+      createdAt: timestamp,
+      reminders:
+        role === "assistant" && reminderExtraction.reminders.length
+          ? reminderExtraction.reminders
+          : undefined,
+      groundingMetadata: normalizedMetadata ?? undefined,
+    };
+  });
 };
 
 type ChatProviderProps = {
@@ -2837,6 +2895,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
               context: contextPayload,
               conversation_id: streamedConversationId ?? sessionId,
               time_context: timeContext,
+              timezone: resolveClientTimezone(),
               attachments: attachmentPayloads,
               context_cache_id: selectedContextCacheId ?? undefined,
               should_generate_title: shouldRequestAutoTitleForSession(baseSession),
@@ -3017,6 +3076,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
               context: contextPayload,
               conversation_id: requestConversationId ?? undefined,
               time_context: timeContext,
+              timezone: resolveClientTimezone(),
               attachments: attachmentPayloads,
               context_cache_id: selectedContextCacheId ?? undefined,
               should_generate_title: shouldRequestAutoTitleForSession(generalSession),
@@ -3207,6 +3267,58 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
   const generalHistoryHydratedRef = useRef(false);
   const pathname = usePathname();
 
+  const loadConversationMessages = useCallback(
+    async (sessionId: string) => {
+      const session = sessionsRef.current.find((s) => s.id === sessionId);
+      if (!session || !session.conversationId) {
+        return;
+      }
+      if (session.messages.length > 0) {
+        return;
+      }
+
+      try {
+        const history = await apiService.getConversation(session.conversationId);
+        if (!Array.isArray(history) || history.length === 0) {
+          return;
+        }
+
+        const now = Date.now();
+        const mapped = mapApiMessagesToChatMessages(history, session.conversationId, now);
+
+        if (!mapped.length) {
+          return;
+        }
+
+        setSessions((prev) => {
+          const index = prev.findIndex((s) => s.id === sessionId);
+          if (index === -1) {
+            return prev;
+          }
+          const current = prev[index];
+          // Double check to avoid race conditions
+          if (current.messages && current.messages.length > 0) {
+            return prev;
+          }
+          const updated: ChatSession = {
+            ...current,
+            messages: mapped,
+            // We don't update updatedAt here to avoid jumping it to the top of the list
+            isResponding: false,
+          };
+          const next = [...prev];
+          next[index] = updated;
+          const ordered = normalizeSessionsList(next);
+          persistSessions(ordered);
+          return ordered;
+        });
+      } catch (error) {
+        console.error("Failed to load conversation messages:", error);
+      }
+    },
+    [persistSessions, setSessions]
+  );
+
   // Hydrate the General workspace (`/g`) from Supabase-backed history so that
   // existing `general_chat_messages` rows render as the canonical General chat.
   useEffect(() => {
@@ -3228,45 +3340,8 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
           return;
         }
 
-        // Deduplicate consecutive identical backend messages to keep the
-        // rendered history tidy.
-        const dedupedHistory = history.filter((message, index, arr) => {
-          if (index === 0) {
-            return true;
-          }
-          const prev = arr[index - 1];
-          return !(prev.role === message.role && (prev.text ?? "") === (message.text ?? ""));
-        });
-
         const now = Date.now();
-        const mapped: ChatMessage[] = dedupedHistory.map((message, index) => {
-          const role: ChatRole = message.role === "model" ? "assistant" : "user";
-          const rawText = message.text ?? "";
-          const normalizedText = role === "assistant" ? stripGrayTitleMarkers(rawText) : rawText;
-          const reminderExtraction =
-            role === "assistant"
-              ? extractGrayRemindersFromText(normalizedText)
-              : { cleanText: normalizedText, reminders: [] };
-          const normalizedMetadata =
-            (message as { grounding_metadata?: GroundingMetadata | null }).grounding_metadata ??
-            (message as { groundingMetadata?: GroundingMetadata | null }).groundingMetadata ??
-            null;
-
-          return {
-            id:
-              typeof crypto !== "undefined" && "randomUUID" in crypto
-                ? crypto.randomUUID()
-                : `${generalConversationId}-${index}-${now}`,
-            role,
-            content: reminderExtraction.cleanText,
-            createdAt: now,
-            reminders:
-              role === "assistant" && reminderExtraction.reminders.length
-                ? reminderExtraction.reminders
-                : undefined,
-            groundingMetadata: normalizedMetadata ?? undefined,
-          };
-        });
+        const mapped = mapApiMessagesToChatMessages(history, generalConversationId, now);
 
         if (!mapped.length) {
           return;
@@ -3546,6 +3621,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       fileSearchImportStatus,
       handleFileSearchImport,
       fileSearchUploadInputRef,
+      loadConversationMessages,
     }),
     [
       appendMessage,
@@ -3616,6 +3692,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       fileSearchImportStatus,
       handleFileSearchImport,
       fileSearchUploadInputRef,
+      loadConversationMessages,
     ]
   );
 

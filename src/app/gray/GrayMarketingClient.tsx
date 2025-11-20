@@ -20,9 +20,23 @@ import {
 } from "lucide-react";
 import { motion } from "framer-motion";
 import Navigation from "@/app/components/Navigation";
+import FooterBackground from "@/app/components/FooterBackground";
 import PerformanceChart from "./components/PerformanceChart";
+import { PricingPlansSection } from "@/app/pricing/PricingClient";
 
-export default function GrayMarketingClient({ tryGrayUrl }: { tryGrayUrl: string }) {
+type GrayMarketingClientProps = {
+  tryGrayUrl: string;
+  storeId?: string;
+  voyagerVariantId?: string;
+  pioneerVariantId?: string;
+};
+
+export default function GrayMarketingClient({
+  tryGrayUrl,
+  storeId,
+  voyagerVariantId,
+  pioneerVariantId,
+}: GrayMarketingClientProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   return (
@@ -239,137 +253,14 @@ export default function GrayMarketingClient({ tryGrayUrl }: { tryGrayUrl: string
         </div>
       </section>
 
-      {/* Features Section */}
-      <section className="py-24 px-4 md:px-6">
-        <div className="container mx-auto max-w-6xl">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold mb-6">Built for the way you actually work.</h2>
-          </div>
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[
-              { title: "Proactive Check-Ins", desc: "Gray doesn't wait for you. It reaches out at the right moments throughout your day.", icon: <Clock className="w-5 h-5" /> },
-              { title: "Deep Memory System", desc: "Gray remembers your goals, struggles, patterns, and history. Every conversation builds on the last.", icon: <Brain className="w-5 h-5" /> },
-              { title: "Life Integrations", desc: "Connects to your Calendar, Gmail, and Notion. Gray knows what you're actually doing.", icon: <Layout className="w-5 h-5" /> },
-              { title: "Reasoning Mode", desc: "Toggle deep thinking for complex problems. Gray can spend 30+ seconds reasoning through strategic questions.", icon: <Zap className="w-5 h-5" /> },
-              { title: "Pattern Interrupts", desc: "Gray notices when you're spiraling and intervenes. \"You're spiraling and intervenes. \"You've been researching instead of coding. Why?\"", icon: <Shield className="w-5 h-5" /> },
-              { title: "Model Switching", desc: "Choose your AI: Claude for depth, GPT for creativity, DeepSeek for speed. You're in control.", icon: <ArrowRight className="w-5 h-5" /> },
-            ].map((item, i) => (
-              <div key={i} className="p-6 rounded-2xl bg-zinc-900 border border-zinc-800">
-                <div className="flex items-center gap-3 mb-3 text-white">
-                  <div className="p-2 bg-zinc-800 rounded-lg">{item.icon}</div>
-                  <h3 className="font-semibold">{item.title}</h3>
-                </div>
-                <p className="text-zinc-400 text-sm leading-relaxed">{item.desc}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Pricing Section */}
+      {/* Pricing Section (shared with /pricing) */}
       <section id="pricing" className="py-24 bg-zinc-950 border-t border-zinc-900">
         <div className="container mx-auto px-4 md:px-6">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">Choose your commitment level.</h2>
-            <p className="text-zinc-400">Invest in your potential for less than the cost of a lunch.</p>
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
-            {/* Scout */}
-            <div className="p-8 rounded-3xl border border-zinc-800 bg-black flex flex-col">
-              <div className="mb-6">
-                <h3 className="text-xl font-bold mb-2">Scout</h3>
-                <p className="text-zinc-400 text-sm">Try proactive mentorship</p>
-              </div>
-              <div className="mb-8">
-                <span className="text-4xl font-bold">Free</span>
-              </div>
-              <ul className="space-y-4 mb-8 flex-1">
-                <li className="flex items-center gap-3 text-sm text-zinc-300">
-                  <Check className="w-4 h-4 text-zinc-500" /> 10 check-ins/day
-                </li>
-                <li className="flex items-center gap-3 text-sm text-zinc-300">
-                  <Check className="w-4 h-4 text-zinc-500" /> 30-day memory
-                </li>
-                <li className="flex items-center gap-3 text-sm text-zinc-300">
-                  <Check className="w-4 h-4 text-zinc-500" /> Gemini Flash Lite
-                </li>
-                <li className="flex items-center gap-3 text-sm text-zinc-300">
-                  <Check className="w-4 h-4 text-zinc-500" /> Community support
-                </li>
-              </ul>
-              <Link href={tryGrayUrl} className="w-full py-3 rounded-xl border border-zinc-800 text-center text-sm font-medium hover:bg-zinc-900 transition-colors">
-                Start Free
-              </Link>
-            </div>
-
-            {/* Voyager */}
-            <div className="p-8 rounded-3xl border border-white/20 bg-zinc-900 relative flex flex-col">
-              <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-white text-black px-3 py-1 rounded-full text-xs font-bold tracking-wide">
-                MOST POPULAR
-              </div>
-              <div className="mb-6">
-                <h3 className="text-xl font-bold mb-2">Voyager</h3>
-                <p className="text-zinc-400 text-sm">Full daily support</p>
-              </div>
-              <div className="mb-8">
-                <span className="text-4xl font-bold">$17</span>
-                <span className="text-zinc-500">/month</span>
-              </div>
-              <ul className="space-y-4 mb-8 flex-1">
-                <li className="flex items-center gap-3 text-sm text-white">
-                  <Check className="w-4 h-4 text-green-500" /> Unlimited check-ins
-                </li>
-                <li className="flex items-center gap-3 text-sm text-white">
-                  <Check className="w-4 h-4 text-green-500" /> Unlimited memory
-                </li>
-                <li className="flex items-center gap-3 text-sm text-white">
-                  <Check className="w-4 h-4 text-green-500" /> Gemini Flash + Pro
-                </li>
-                <li className="flex items-center gap-3 text-sm text-white">
-                  <Check className="w-4 h-4 text-green-500" /> Calendar, Gmail, Notion
-                </li>
-                <li className="flex items-center gap-3 text-sm text-white">
-                  <Check className="w-4 h-4 text-green-500" /> Custom automations
-                </li>
-              </ul>
-              <Link href={tryGrayUrl} className="w-full py-3 rounded-xl bg-white text-black text-center text-sm font-bold hover:bg-zinc-200 transition-colors">
-                Get Started
-              </Link>
-            </div>
-
-            {/* Pioneer */}
-            <div className="p-8 rounded-3xl border border-zinc-800 bg-black flex flex-col">
-              <div className="mb-6">
-                <h3 className="text-xl font-bold mb-2">Pioneer</h3>
-                <p className="text-zinc-400 text-sm">Maximum power</p>
-              </div>
-              <div className="mb-8">
-                <span className="text-4xl font-bold">$37</span>
-                <span className="text-zinc-500">/month</span>
-              </div>
-              <ul className="space-y-4 mb-8 flex-1">
-                <li className="flex items-center gap-3 text-sm text-zinc-300">
-                  <Check className="w-4 h-4 text-purple-500" /> Everything in Voyager
-                </li>
-                <li className="flex items-center gap-3 text-sm text-zinc-300">
-                  <Check className="w-4 h-4 text-purple-500" /> Model switcher (Claude, GPT, etc)
-                </li>
-                <li className="flex items-center gap-3 text-sm text-zinc-300">
-                  <Check className="w-4 h-4 text-purple-500" /> 4x context window
-                </li>
-                <li className="flex items-center gap-3 text-sm text-zinc-300">
-                  <Check className="w-4 h-4 text-purple-500" /> Expanded reasoning budget
-                </li>
-                <li className="flex items-center gap-3 text-sm text-zinc-300">
-                  <Check className="w-4 h-4 text-purple-500" /> Reference library (RAG)
-                </li>
-              </ul>
-              <Link href={tryGrayUrl} className="w-full py-3 rounded-xl border border-zinc-800 text-center text-sm font-medium hover:bg-zinc-900 transition-colors">
-                Upgrade
-              </Link>
-            </div>
-          </div>
+          <PricingPlansSection
+            storeId={storeId}
+            voyagerVariantId={voyagerVariantId}
+            pioneerVariantId={pioneerVariantId}
+          />
         </div>
       </section>
 
@@ -417,9 +308,90 @@ export default function GrayMarketingClient({ tryGrayUrl }: { tryGrayUrl: string
       </section>
 
       {/* Footer */}
-      <footer className="py-12 border-t border-zinc-900 text-center text-zinc-600 text-sm">
-        <div className="container mx-auto">
-          <p>&copy; {new Date().getFullYear()} Gray. All rights reserved.</p>
+      <footer id="contact" className="site-footer">
+        <FooterBackground />
+        <div className="site-footer__overlay">
+          <div className="site-footer__grid">
+            <div className="site-footer__column">
+              <p className="site-footer__column-title">Products</p>
+              <a href={tryGrayUrl} className="site-footer__column-link" target="_blank" rel="noreferrer">
+                Gray
+              </a>
+            </div>
+            <div className="site-footer__column">
+              <p className="site-footer__column-title">Research</p>
+              <span className="site-footer__column-note">Coming soon</span>
+            </div>
+            <div className="site-footer__column">
+              <p className="site-footer__column-title">Contact</p>
+              <a href="mailto:hi@alignment.id" className="site-footer__column-link">
+                hi@alignment.id
+              </a>
+            </div>
+          </div>
+          <div className="site-footer__grid site-footer__grid--secondary">
+            <div className="site-footer__column site-footer__column-stack">
+              <p className="site-footer__column-title">Policies</p>
+              <a href="/policies/tos" className="site-footer__column-link">
+                Terms of Service
+              </a>
+              <a href="/policies/privacy" className="site-footer__column-link">
+                Privacy Policy
+              </a>
+              <a href="/policies/refund" className="site-footer__column-link">
+                Refund Policy
+              </a>
+            </div>
+            <div className="site-footer__column">
+              <p className="site-footer__column-title">Blog</p>
+              <span className="site-footer__column-note">Coming soon</span>
+            </div>
+          </div>
+          <div className="site-footer__social-row">
+            <div className="site-footer__social-links">
+              <a
+                href="https://x.com/alignmentlab"
+                target="_blank"
+                rel="noreferrer"
+                className="site-footer__social-link"
+              >
+                <img src="/logos/xwhite.svg" alt="" className="site-footer__social-icon" />
+                <span className="sr-only">X</span>
+              </a>
+              <a
+                href="https://youtube.com/@alignmentlab"
+                target="_blank"
+                rel="noreferrer"
+                className="site-footer__social-link"
+              >
+                <img src="/logos/youtubewhite.svg" alt="" className="site-footer__social-icon" />
+                <span className="sr-only">YouTube</span>
+              </a>
+              <a
+                href="https://instagram.com/alignmentlab"
+                target="_blank"
+                rel="noreferrer"
+                className="site-footer__social-link"
+              >
+                <img src="/logos/instagramwhite.svg" alt="" className="site-footer__social-icon" />
+                <span className="sr-only">Instagram</span>
+              </a>
+              <a
+                href="https://discord.gg/alignment"
+                target="_blank"
+                rel="noreferrer"
+                className="site-footer__social-link"
+              >
+                <img src="/logos/discordwhite.svg" alt="" className="site-footer__social-icon" />
+                <span className="sr-only">Discord</span>
+              </a>
+            </div>
+            <p className="site-footer__meta">© {new Date().getFullYear()} Alignment. All rights reserved.</p>
+            <button type="button" className="site-footer__language">
+              <span>English</span>
+              <span className="site-footer__language-region">United States</span>
+            </button>
+          </div>
         </div>
       </footer>
     </div>

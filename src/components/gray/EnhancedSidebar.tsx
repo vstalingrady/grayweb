@@ -5,7 +5,6 @@ import {
   ChevronsRight,
   ChevronsUp,
   ChevronsDown,
-  Search as SearchIcon,
   UserRound,
   Sparkles,
   Settings as SettingsIcon,
@@ -65,27 +64,9 @@ export function GrayEnhancedSidebar({
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const profileControlsRef = useRef<HTMLDivElement | null>(null);
   const profileMenuRef = useRef<HTMLDivElement | null>(null);
-  const normalizedPlan = viewerPlanLabel?.trim().length ? viewerPlanLabel : "Free";
+  const normalizedPlan = viewerPlanLabel?.trim().length ? viewerPlanLabel : "Scout";
   const isDepthMember = normalizedPlan.trim().toLowerCase() === "depth";
 
-  const historyGroups = useMemo(() => {
-    const allEntries = historySections
-      .flatMap((section) => section.entries)
-      .filter((entry) => entry.href && entry.href !== "#");
-
-    if (!allEntries.length) {
-      return [];
-    }
-
-    const sortedEntries = [...allEntries].sort((a, b) => b.createdAt - a.createdAt);
-    return [
-      {
-        id: "recent",
-        label: "Recent",
-        items: sortedEntries,
-      },
-    ];
-  }, [historySections]);
   const historyNavItem = useMemo(() => navItems.find((item) => item.id === "history"), [navItems]);
 
   useEffect(() => {
@@ -237,13 +218,6 @@ export function GrayEnhancedSidebar({
               />
             </button>
             <div className={styles.sidebarAnchored}>
-              <div className={styles.searchRow}>
-                <span className={styles.searchIcon}>
-                  <SearchIcon size={16} />
-                </span>
-                <span className={styles.searchLabel}>Search</span>
-                <span className={styles.searchShortcut}>CTRL+K</span>
-              </div>
               <nav aria-label="Primary">
                 <ul className={styles.sidebarNav}>
                   {navItems.map((item) => (
@@ -269,12 +243,12 @@ export function GrayEnhancedSidebar({
             <div className={styles.sidebarScroll} aria-label="Recent conversations">
               <div className={styles.sidebarHistorySection}>
                 <div className={styles.sidebarHistory}>
-                  {historyGroups.length > 0 ? (
-                    historyGroups.map((group) => (
+                  {historySections.length > 0 ? (
+                    historySections.map((group) => (
                       <div key={group.id} className={styles.sidebarHistoryGroup}>
                         <span className={styles.sidebarHistoryLabel}>{group.label}</span>
                         <ul className={styles.sidebarHistoryList}>
-                          {group.items.map((entry) => {
+                          {group.entries.map((entry) => {
                             const isActive = entry.id === activeChatId;
                             return (
                               <li key={entry.id}>

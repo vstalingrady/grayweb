@@ -62,6 +62,18 @@ const INLINE_DOLLAR_LATEX_REGEX = /\$([^\n$]+?)\$/g;
 const DISPLAY_DOLLAR_LATEX_REGEX = /\$\$([\s\S]+?)\$\$/g;
 const MIN_TILDE_FENCE_LENGTH = 3;
 
+const resolveClientTimezone = (): string => {
+  if (typeof Intl === "undefined") {
+    return "UTC";
+  }
+  try {
+    const resolved = Intl.DateTimeFormat().resolvedOptions();
+    return resolved.timeZone || "UTC";
+  } catch {
+    return "UTC";
+  }
+};
+
 const wrapDisplayMathBlock = (content: string): string => {
   const normalized = content.trim();
   if (!normalized) {
@@ -1778,9 +1790,18 @@ export function GrayChatView({
     handleFileSearchImport,
     fileSearchUploadInputRef,
     webSearchEnabled,
+    loadConversationMessages,
   } = useChatStore();
   const session = sessionId ? getSession(sessionId) : undefined;
   const sessionExists = Boolean(session);
+
+  // Load messages if they are missing (e.g. for historical threads)
+  useEffect(() => {
+    if (sessionId && session?.conversationId && session.messages.length === 0) {
+      void loadConversationMessages(sessionId);
+    }
+  }, [sessionId, session?.conversationId, session?.messages.length, loadConversationMessages]);
+
   const { user, waitForUser } = useUser();
   const [draft, setDraft] = useState("");
   const [hasHydrated, setHasHydrated] = useState(false);
@@ -2269,6 +2290,7 @@ export function GrayChatView({
             user_id: streamingUserId,
             context: contextPayload,
             time_context: buildLocalTimeContext(),
+            timezone: resolveClientTimezone(),
             attachments: buildAttachmentPayloads(),
             context_cache_id: selectedContextCacheId ?? undefined,
             web_search_enabled: webSearchEnabled,

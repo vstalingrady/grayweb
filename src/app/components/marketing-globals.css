@@ -90,12 +90,19 @@ a:hover {
 
 .section-shell {
   margin-inline: auto;
-  max-width: 1120px;
-  padding-inline: 1.5rem;
+  max-width: 1280px;
+  padding-inline: clamp(1.25rem, 4vw, 2.5rem);
 }
 
 .section-padding {
   padding-block: 5rem;
+}
+
+.hero-full {
+  min-height: 100svh;
+  display: flex;
+  align-items: center;
+  width: 100%;
 }
 
 .section-intro {
@@ -324,9 +331,9 @@ a:hover {
   position: relative;
   display: grid;
   gap: clamp(1.5rem, 4.5vw, 2.8rem);
-  padding: clamp(1.6rem, 5vw, 2.6rem);
-  margin-inline: clamp(1.1rem, 5vw, 2.6rem);
-  border-radius: 32px;
+  padding: clamp(2.2rem, 6vw, 3.2rem);
+  margin-inline: 0;
+  border-radius: 40px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: radial-gradient(140% 140% at 16% -10%, rgba(255, 214, 165, 0.12), rgba(4, 7, 12, 0.9)),
     linear-gradient(150deg, rgba(5, 6, 12, 0.92), rgba(8, 4, 2, 0.78));
@@ -407,6 +414,7 @@ a:hover {
 
 .grove-alignment--compact {
   padding: clamp(1.4rem, 4.5vw, 2.2rem);
+  margin-inline: clamp(1.1rem, 5vw, 2.6rem);
 }
 
 .grove-alignment__body--two-col {
@@ -951,6 +959,16 @@ a:hover {
   background: rgba(30, 8, 0, 0.92);
   box-shadow: 0 0 0 1px rgba(255, 131, 0, 0.48), 0 12px 30px rgba(255, 101, 0, 0.24), 0 0 20px rgba(50, 16, 0, 0.2);
   transform: translateY(-1px);
+}
+
+.hero-cta-link,
+.hero-cta-link:hover {
+  padding: 0;
+  border: none;
+  background: none;
+  box-shadow: none;
+  border-radius: 0;
+  transform: none;
 }
 
 .code-block {
@@ -2471,7 +2489,7 @@ a:hover {
   align-items: center;
   justify-content: center;
   margin-left: 0;
-  padding: 0.55rem 1.1rem;
+  padding: 0.55rem;
   border-radius: 9999px;
   border: 1px solid rgba(255, 255, 255, 0.04);
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0));
@@ -2483,7 +2501,7 @@ a:hover {
   font-weight: 600;
   text-decoration: none;
   transition: transform 0.24s ease, box-shadow 0.24s ease, color 0.24s ease;
-  gap: 0.65rem;
+  gap: 0;
   font-family: var(--font-mono), "IBM Plex Mono", "SFMono-Regular", Menlo, Monaco, Consolas,
     "Liberation Mono", "Courier New", monospace;
 }

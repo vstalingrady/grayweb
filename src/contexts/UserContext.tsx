@@ -304,7 +304,6 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
         }
       }
     } catch (err) {
-      console.error('loadUser: General error:', err);
       setError(err instanceof Error ? err.message : 'Failed to load user');
       const shouldSkipLog = isApiNetworkError(err);
       if (!shouldSkipLog) {
@@ -483,10 +482,14 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
     if (userEmail) {
       console.log('UserContext: Loading user with email:', userEmail);
       loadUser(userEmail, { silent: Boolean(user) }).catch((err) => {
-        console.error('Failed to load user profile:', err);
-        if (!isApiNetworkError(err)) {
-          console.error('User load error details:', err);
+        if (isApiNetworkError(err)) {
+          if (process.env.NODE_ENV !== 'production') {
+            console.debug('User profile API unreachable while bootstrapping:', err);
+          }
+          return;
         }
+        console.error('Failed to load user profile:', err);
+        console.error('User load error details:', err);
       });
     } else {
       console.log('UserContext: No userEmail provided');

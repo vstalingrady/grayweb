@@ -138,18 +138,25 @@ class ProactivityEngine:
         users = await self.list_active_user_settings()
         results["users_evaluated"] = len(users)
 
-        for user in users:
-            try:
-                sent = await self.dispatch_user_if_due(
-                    user.user_id,
-                    source=source,
-                )
-                if sent:
+        # Process users in batches to avoid overwhelming the DB/API but still get concurrency
+        batch_size = 20
+        for i in range(0, len(users), batch_size):
+            batch = users[i : i + batch_size]
+            tasks = [
+                self.dispatch_user_if_due(user.user_id, source=source, user_settings=user)
+                for user in batch
+            ]
+            
+            # Run the batch concurrently
+            batch_results = await asyncio.gather(*tasks, return_exceptions=True)
+
+            for user, result in zip(batch, batch_results):
+                if isinstance(result, Exception):
+                    logger.error(f"Error evaluating user {user.user_id} proactivity: {result}", exc_info=True)
+                    results["errors"] += 1
+                elif result:
                     results["messages_sent"] += 1
                     results["details"].append({"user_id": user.user_id, "source": source, "status": "sent"})
-            except Exception as exc:
-                logger.error(f"Error evaluating user {user.user_id} proactivity: {exc}", exc_info=True)
-                results["errors"] += 1
 
         return results
 
@@ -159,24 +166,30 @@ class ProactivityEngine:
         *,
         source: str,
         force: bool = False,
+        user_settings: Optional[ProactivityUserSettings] = None,
     ) -> Optional[Dict[str, Any]]:
         await self._ensure_connection()
-        settings_record = await self.db.fetch_one(
-            "SELECT payload FROM proactivity_settings WHERE user_id = :user_id",
-            {"user_id": user_id},
-        )
-        if not settings_record:
-            return None
+        
+        if user_settings:
+            payload = user_settings.payload
+            timezone = user_settings.timezone
+        else:
+            settings_record = await self.db.fetch_one(
+                "SELECT payload FROM proactivity_settings WHERE user_id = :user_id",
+                {"user_id": user_id},
+            )
+            if not settings_record:
+                return None
 
-        payload = self._deserialize_payload(settings_record[0])
-        if not payload:
-            return None
+            payload = self._deserialize_payload(settings_record[0])
+            if not payload:
+                return None
+
+            timezone = payload.get("timezone") or "UTC"
 
         cadence = (payload.get("cadence") or "").strip().lower()
         if cadence in {"manual", "paused"} and not force:
             return None
-
-        timezone = payload.get("timezone") or "UTC"
         last_sent_at = await self._last_notification_timestamp(user_id)
         if last_sent_at:
             last_sent_utc = (
@@ -432,6 +445,24 @@ class ProactivityEngine:
         if webpush is None:
             # Optional dependency; if it's not installed, skip silently.
             return
+
+        # Only attempt web push in production by default, or when explicitly enabled.
+        enable_flag = os.getenv("ENABLE_WEB_PUSH")
+        if enable_flag is not None:
+            normalized = enable_flag.strip().lower()
+            web_push_enabled = normalized in ("1", "true", "yes", "on")
+        else:
+            node_env = os.getenv("NODE_ENV", "").strip().lower()
+            environment = os.getenv("ENVIRONMENT", "").strip().lower()
+            web_push_enabled = node_env == "production" or environment == "production"
+
+        if not web_push_enabled:
+            logger.debug(
+                "Skipping web push delivery because it is disabled in this environment",
+                extra={"event_type": "proactivity_web_push_skipped", "user_id": user_id},
+            )
+            return
+
         vapid_public = os.getenv("VAPID_PUBLIC_KEY")
         vapid_private = os.getenv("VAPID_PRIVATE_KEY")
         if not vapid_public or not vapid_private:

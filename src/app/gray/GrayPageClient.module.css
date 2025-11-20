@@ -1665,8 +1665,7 @@
 
 .sidebarHistoryLink {
   display: block;
-  padding: 2px 6px;
-  /* Reduced vertical padding */
+  padding: 4px 8px;
   border-radius: 8px;
   align-items: center;
   gap: 8px;
@@ -1953,7 +1952,7 @@
   padding: 2px 0 2px 10px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
 }
 
 .historySection li {

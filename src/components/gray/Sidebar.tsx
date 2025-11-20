@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { ChevronsRight, ChevronsUp, Search as SearchIcon, UserRound } from "lucide-react";
+import { ChevronsRight, ChevronsUp, UserRound } from "lucide-react";
 import { useUser } from "@/contexts/UserContext";
 import styles from "@/app/gray/GrayPageClient.module.css";
 import {
@@ -122,13 +122,6 @@ export function GraySidebar({
               />
             </button>
             <div className={styles.sidebarScroll}>
-              <div className={styles.searchRow}>
-                <span className={styles.searchIcon}>
-                  <SearchIcon size={16} />
-                </span>
-                <span className={styles.searchLabel}>Search</span>
-                <span className={styles.searchShortcut}>CTRL+K</span>
-              </div>
               <nav aria-label="Primary">
                 <ul className={styles.sidebarNav}>
                   {navItems.map((item) => (

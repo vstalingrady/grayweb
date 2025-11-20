@@ -184,7 +184,12 @@ export function ProactivityNotificationProvider({ children }: ProactivityNotific
     if (!userId) {
       return;
     }
-    if (typeof window === "undefined" || !("serviceWorker" in navigator) || !("PushManager" in window)) {
+    if (
+      typeof window === "undefined" ||
+      !("serviceWorker" in navigator) ||
+      !("PushManager" in window) ||
+      typeof Notification === "undefined"
+    ) {
       return;
     }
 
@@ -200,6 +205,26 @@ export function ProactivityNotificationProvider({ children }: ProactivityNotific
 
     const subscribe = async () => {
       try {
+        if (!window.isSecureContext) {
+          if (process.env.NODE_ENV !== "production") {
+            console.warn("[Proactivity] Push subscription requires a secure context (HTTPS or localhost)");
+          }
+          return;
+        }
+
+        let permission: NotificationPermission | null = Notification.permission;
+
+        if (permission === "default") {
+          permission = await requestNotificationPermission();
+        }
+
+        if (permission !== "granted") {
+          if (process.env.NODE_ENV !== "production") {
+            console.warn("[Proactivity] Push subscription skipped because notification permission is not granted");
+          }
+          return;
+        }
+
         const registration = await navigator.serviceWorker.register("/sw-proactivity.js");
         let subscription = await registration.pushManager.getSubscription();
         if (!subscription) {

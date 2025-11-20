@@ -688,7 +688,14 @@ export default async function GroveApplication() {
             target="_blank"
             rel="noreferrer"
           >
-            <span className="nav-cta__label">Try Gray</span>
+            <Image
+              src="/grayaiwhitenotspinning.svg"
+              alt=""
+              width={20}
+              height={20}
+              className="nav-cta__icon"
+              aria-hidden
+            />
             <span className="sr-only">Open Gray workspace</span>
           </a>
           <p className="site-footer__meta">© {new Date().getFullYear()} Alignment. All rights reserved.</p>

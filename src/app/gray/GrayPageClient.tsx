@@ -636,8 +636,15 @@ function GrayPageClientInner({
         .filter((option) => option.id !== GREAT_WAVE_BACKGROUND.id);
       setWorkspaceBackgrounds([SOLID_WHITE_BACKGROUND, SOLID_BLACK_BACKGROUND, GREAT_WAVE_BACKGROUND, ...dynamicOptions]);
     } catch (error) {
-      console.error("Failed to load workspace backgrounds:", error);
-      setWorkspaceBackgroundsError(error instanceof Error ? error.message : "Failed to load backgrounds");
+      if (isApiNetworkError(error)) {
+        if (process.env.NODE_ENV !== "production") {
+          console.debug("Workspace backgrounds API unreachable; using built-in backgrounds only.", error);
+        }
+        setWorkspaceBackgroundsError(error instanceof Error ? error.message : "Workspace backgrounds API unreachable");
+      } else {
+        console.error("Failed to load workspace backgrounds:", error);
+        setWorkspaceBackgroundsError(error instanceof Error ? error.message : "Failed to load backgrounds");
+      }
       setWorkspaceBackgrounds((current) => (current.length > 0 ? current : [SOLID_WHITE_BACKGROUND, SOLID_BLACK_BACKGROUND, GREAT_WAVE_BACKGROUND]));
     } finally {
       setWorkspaceBackgroundsLoading(false);

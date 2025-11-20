@@ -112,7 +112,6 @@ const Navigation = () => {
               aria-hidden
               priority
             />
-            <span className="nav-cta__label">Try Gray</span>
             <span className="sr-only">Open Gray workspace</span>
           </Link>
         </div>
@@ -173,7 +172,6 @@ const Navigation = () => {
               aria-hidden
               priority
             />
-            <span className="nav-cta__label">Try Gray</span>
             <span className="sr-only">Open Gray workspace</span>
           </Link>
         </div>
