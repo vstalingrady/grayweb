@@ -5,8 +5,8 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Gemini 1.5 Flash Pricing (approximate)
-PRICE_INPUT_PER_MILLION = 0.075
-PRICE_OUTPUT_PER_MILLION = 0.30
+PRICE_INPUT_PER_MILLION = 0.10
+PRICE_OUTPUT_PER_MILLION = 0.40
 
 LIMITS = {
     "scout": {
