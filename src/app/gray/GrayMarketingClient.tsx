@@ -140,12 +140,18 @@ export default function GrayMarketingClient({
       {/* Solution Section */}
       <section id="how-it-works" className="py-24 px-4 md:px-6">
         <div className="container mx-auto">
-          <div className="text-center max-w-3xl mx-auto mb-20">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+            className="text-center max-w-3xl mx-auto mb-20"
+          >
             <h2 className="text-3xl md:text-4xl font-bold mb-6">Gray doesn't wait for you to ask for help.</h2>
             <p className="text-lg text-zinc-400">
               A fundamentally different approach to productivity. Proactive, context-aware, and relentless.
             </p>
-          </div>
+          </motion.div>
 
           <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
             {[
@@ -153,50 +159,66 @@ export default function GrayMarketingClient({
                 icon: <MessageSquare className="w-6 h-6 text-blue-400" />,
                 title: "Proactive Check-Ins",
                 description: "Gray reaches out throughout your day—not to nag, but to connect.",
-                examples: [
-                  "Morning: \"What's the one thing that would make today a win?\"",
-                  "Midday: \"You've been on YouTube for 45m. What are you avoiding?\"",
-                  "Evening: \"Did you do what you said you would? Let's plan tomorrow.\""
+                features: [
+                  "Morning intention setting",
+                  "Midday accountability nudges",
+                  "Evening reflection & planning"
                 ]
               },
               {
                 icon: <Brain className="w-6 h-6 text-purple-400" />,
                 title: "Deep Memory",
                 description: "Gray remembers everything. Your goals, your patterns, your excuses.",
-                quote: "Remember last Tuesday when you thought you couldn't finish the assignment, but you did it in an hour? This is just like that."
+                features: [
+                  "Tracks your progress over time",
+                  "Recalls past wins & struggles",
+                  "Connects dots you might miss"
+                ]
               },
               {
                 icon: <Zap className="w-6 h-6 text-yellow-400" />,
                 title: "Strategic Guidance",
                 description: "Gray doesn't just listen—it challenges you to think bigger.",
-                examples: [
-                  "\"You've been 'planning' for 3 weeks. What can you ship today?\"",
-                  "\"What would you do if you couldn't fail?\"",
-                  "\"How does scrolling Twitter serve your priority of Family?\""
+                features: [
+                  "Calls out avoidance patterns",
+                  "Pushes you past comfort zones",
+                  "Aligns actions with priorities"
                 ]
               }
             ].map((feature, i) => (
-              <div key={i} className="p-8 rounded-3xl bg-zinc-900/30 border border-zinc-800 hover:border-zinc-700 transition-colors">
-                <div className="w-12 h-12 bg-zinc-900 rounded-2xl flex items-center justify-center mb-6 border border-zinc-800">
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.5, delay: i * 0.15 }}
+                whileHover={{ y: -8, transition: { duration: 0.2 } }}
+                className="p-8 rounded-3xl bg-zinc-900/30 border border-zinc-800 hover:border-zinc-700 hover:bg-zinc-900/50 transition-all cursor-pointer group"
+              >
+                <motion.div
+                  className="w-12 h-12 bg-zinc-900 rounded-2xl flex items-center justify-center mb-6 border border-zinc-800 group-hover:border-zinc-700 group-hover:scale-110 transition-all"
+                  whileHover={{ rotate: 5 }}
+                >
                   {feature.icon}
-                </div>
-                <h3 className="text-xl font-bold mb-4">{feature.title}</h3>
-                <p className="text-zinc-400 mb-6 leading-relaxed">{feature.description}</p>
-                {feature.examples && (
-                  <ul className="space-y-3">
-                    {feature.examples.map((ex, j) => (
-                      <li key={j} className="text-sm text-zinc-500 pl-3 border-l-2 border-zinc-800 italic">
-                        {ex}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                {feature.quote && (
-                  <blockquote className="text-sm text-zinc-500 pl-3 border-l-2 border-zinc-800 italic">
-                    "{feature.quote}"
-                  </blockquote>
-                )}
-              </div>
+                </motion.div>
+                <h3 className="text-xl font-bold mb-3">{feature.title}</h3>
+                <p className="text-zinc-400 mb-6 leading-relaxed text-sm">{feature.description}</p>
+                <ul className="space-y-3">
+                  {feature.features.map((item, j) => (
+                    <motion.li
+                      key={j}
+                      initial={{ opacity: 0, x: -10 }}
+                      whileInView={{ opacity: 1, x: 0 }}
+                      viewport={{ once: true }}
+                      transition={{ duration: 0.3, delay: i * 0.15 + j * 0.1 }}
+                      className="flex items-start gap-3 text-sm text-zinc-300"
+                    >
+                      <Check className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
+                      <span>{item}</span>
+                    </motion.li>
+                  ))}
+                </ul>
+              </motion.div>
             ))}
           </div>
         </div>
