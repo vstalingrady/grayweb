@@ -1700,18 +1700,13 @@
   display: flex;
   flex-direction: column;
   gap: 24px;
-  padding: 32px;
-  height: auto;
-  max-height: 85vh;
+  padding: 0;
+  height: 100%;
+  max-height: 100%;
   overflow: hidden;
   width: 100%;
-  max-width: 800px;
+  max-width: 520px;
   margin: 0 auto;
-  background: rgba(12, 12, 12, 0.95);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 24px;
-  box-shadow: 0 32px 64px rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(12px);
 }
 
 .historyViewHeader {
@@ -1723,8 +1718,8 @@
 }
 
 .historyViewHeader h1 {
-  font-size: clamp(1.8rem, 3vw, 2.2rem);
-  letter-spacing: 0.06em;
+  font-size: 1.875rem;
+  letter-spacing: -0.03em;
   text-transform: none;
   font-weight: 600;
 }
@@ -1735,7 +1730,7 @@
   align-items: center;
   gap: 12px;
   width: 100%;
-  max-width: 600px;
+  max-width: 520px;
   padding: 0 18px;
   border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -1771,11 +1766,11 @@
   position: relative;
   flex: 1;
   overflow: hidden;
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.04);
-  background: rgba(0, 0, 0, 0.2);
-  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
-  margin-bottom: 0;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(10, 10, 10, 0.6);
+  box-shadow: none;
+  margin-bottom: 24px;
 }
 
 .historyListShell ul {
@@ -2269,7 +2264,8 @@
   grid-template-rows: minmax(0, 1fr) auto;
   row-gap: 0;
   --chat-column-max-width: min(828px, 100%);
-  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + clamp(64px, 10vh, 120px));
+  /* Minimal bottom padding - chat composer is now positioned at the bottom */
+  padding-bottom: 0;
   overflow: hidden;
 }
 
@@ -4394,7 +4390,7 @@
   line-height: 1.4;
   letter-spacing: 0.08em;
   color: rgba(235, 235, 235, 0.72);
-  margin: clamp(8px, 1.4vh, 16px) auto 0;
+  margin: clamp(8px, 1.4vh, 12px) auto 0;
   padding: 0 clamp(6px, 1vw, 12px);
   pointer-events: none;
   text-shadow: 0 10px 24px rgba(0, 0, 0, 0.65);
@@ -7913,13 +7909,14 @@ h1.greeting {
 }
 
 .generalChatComposer {
-  position: relative;
+  position: sticky;
+  bottom: 0;
   /* Added for absolute positioning of children like ModelSelector */
   display: flex;
   flex-direction: column;
   align-items: stretch;
   gap: 12px;
-  padding: 10px 14px 18px;
+  padding: 10px 14px calc(env(safe-area-inset-bottom, 0px) + 12px);
   border-top-left-radius: 20px;
   border-top-right-radius: 20px;
   background: var(--color-background-elevated);
