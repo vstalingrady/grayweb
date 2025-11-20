@@ -1703,6 +1703,9 @@
   padding: clamp(24px, 4vw, 36px) 0 0;
   height: 100%;
   overflow: hidden;
+  width: 100%;
+  max-width: 800px;
+  margin: 0 auto;
 }
 
 .historyViewHeader {
@@ -1725,12 +1728,19 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  width: min(560px, 100%);
+  width: 100%;
+  max-width: 600px;
   padding: 0 18px;
-  border-radius: 999px;
+  border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(18, 18, 18, 0.82);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  background: rgba(18, 18, 18, 0.6);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.historyViewSearch:focus-within {
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(18, 18, 18, 0.85);
 }
 
 .historyViewSearch svg {
@@ -1755,25 +1765,26 @@
   position: relative;
   flex: 1;
   overflow: hidden;
-  border-radius: clamp(18px, 3vw, 22px);
+  border-radius: 24px;
   border: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(10, 10, 10, 0.78);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  background: rgba(10, 10, 10, 0.4);
+  box-shadow: none;
+  margin-bottom: 24px;
 }
 
 .historyListShell ul {
   list-style: none;
   margin: 0;
-  padding: clamp(12px, 2vw, 18px);
+  padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
   max-height: 100%;
   overflow-y: auto;
 }
 
 .historyListShell li {
-  border-radius: 14px;
+  border-radius: 12px;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -1785,12 +1796,11 @@
 
 .historyListShell li:hover,
 .historyListShell li:focus-within {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .historyListShell li[data-active="true"] {
-  background: rgba(255, 255, 255, 0.12);
-  box-shadow: 0 18px 30px rgba(0, 0, 0, 0.35);
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .historyListButton {
@@ -1800,12 +1810,12 @@
   align-items: center;
   justify-content: space-between;
   gap: 18px;
-  padding: 16px 20px;
-  border-radius: 14px;
+  padding: 14px 18px;
+  border-radius: 12px;
   border: none;
   background: transparent;
-  color: rgba(230, 230, 236, 0.88);
-  font-size: 0.98rem;
+  color: rgba(230, 230, 236, 0.75);
+  font-size: 0.94rem;
   line-height: 1.4;
   cursor: pointer;
   transition: color 0.2s ease;
@@ -7896,7 +7906,8 @@ h1.greeting {
 }
 
 .generalChatComposer {
-  position: relative; /* Added for absolute positioning of children like ModelSelector */
+  position: relative;
+  /* Added for absolute positioning of children like ModelSelector */
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -7910,7 +7921,8 @@ h1.greeting {
   width: 100%;
   max-width: var(--page-content-max-width);
   margin: 0 auto;
-  z-index: 100; /* Ensure composer is above other page elements */
+  z-index: 100;
+  /* Ensure composer is above other page elements */
 }
 
 .modelSelectorContainer {
@@ -8055,6 +8067,21 @@ h1.greeting {
   color: rgba(255, 255, 255, 0.95);
 }
 
+.chatBar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.chatInputWrapper {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  background: transparent;
+  min-width: 0;
+}
+
 .chatInput {
   flex: 1;
   border: none;
@@ -8070,6 +8097,7 @@ h1.greeting {
   font-size: 0.95rem;
   padding: 12px 0;
   outline: none;
+  min-width: 0;
 }
 
 .chatInput::placeholder {
