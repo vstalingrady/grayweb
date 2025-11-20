@@ -1705,7 +1705,7 @@
   max-height: 100%;
   overflow: hidden;
   width: 100%;
-  max-width: 420px;
+  max-width: 360px;
   margin: 0 auto;
 }
 
@@ -1733,9 +1733,9 @@
   align-items: center;
   gap: 12px;
   width: 100%;
-  max-width: 420px;
+  max-width: 360px;
   padding: 0 16px;
-  margin: 0 32px 32px 32px;
+  margin: 0 0 32px 0;
   border-radius: 9999px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   background: rgba(10, 10, 10, 1);
@@ -8022,8 +8022,8 @@ h1.greeting {
   justify-content: center;
   border: none;
   background: transparent;
-  border-radius: 999px;
-  padding: 8px;
+  border-radius: 0;
+  padding: 0;
   color: rgba(235, 235, 235, 0.7);
   cursor: pointer;
   transition:
@@ -8058,8 +8058,8 @@ h1.greeting {
 }
 
 .chatActionButton:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.95);
+  background: none;
+  color: rgba(255, 255, 255, 0.9);
 }
 
 .chatBar {
