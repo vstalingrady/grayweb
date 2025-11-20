@@ -22,6 +22,7 @@ import { motion } from "framer-motion";
 import Navigation from "@/app/components/Navigation";
 import FooterBackground from "@/app/components/FooterBackground";
 import PerformanceChart from "./components/PerformanceChart";
+import MockChatInterface from "@/app/components/MockChatInterface";
 
 type GrayMarketingClientProps = {
   tryGrayUrl: string;
@@ -106,7 +107,7 @@ export default function GrayMarketingClient({
                 <X className="w-5 h-5 text-red-500" />
                 The Problem
               </h3>
-              <ul className="space-y-4 text-zinc-400">
+              <ul className="space-y-4 text-zinc-400 text-sm">
                 <li className="flex items-start gap-3">
                   <span className="w-1.5 h-1.5 rounded-full bg-zinc-700 mt-2.5" />
                   No external accountability
@@ -125,15 +126,17 @@ export default function GrayMarketingClient({
                 </li>
               </ul>
             </div>
-            <div className="p-8 bg-zinc-100 rounded-3xl border border-white/10 text-black relative overflow-hidden">
-              <div className="absolute top-0 right-0 p-32 bg-gradient-to-br from-blue-500/20 to-purple-500/20 blur-3xl -z-10" />
-              <h3 className="text-xl font-semibold mb-6 flex items-center gap-2">
-                <Check className="w-5 h-5 text-green-600" />
-                The Solution
-              </h3>
-              <p className="text-lg font-medium leading-relaxed">
-                Gray gives you that system. An always-on mentor that notices when you slip, helps you get back on track, and pushes you to be your best self.
-              </p>
+            <div className="p-0 bg-zinc-900 rounded-3xl border border-zinc-800 text-white relative overflow-hidden flex flex-col min-h-[300px]">
+              <div className="absolute top-0 right-0 p-32 bg-gradient-to-br from-blue-500/10 to-purple-500/10 blur-3xl -z-10" />
+              <div className="p-8 pb-0">
+                <h3 className="text-xl font-semibold mb-2 flex items-center gap-2">
+                  <Check className="w-5 h-5 text-green-500" />
+                  The Solution
+                </h3>
+              </div>
+              <div className="flex-1 relative">
+                <MockChatInterface />
+              </div>
             </div>
           </div>
         </div>
