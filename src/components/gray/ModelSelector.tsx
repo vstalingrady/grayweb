@@ -89,8 +89,8 @@ export const ModelSelector = memo(() => {
         aria-label="Select model"
         type="button"
       >
-        <span className={styles.triggerLabel}>{activeOption.label}</span>
         <ChevronUp className={styles.chevron} size={16} />
+        <span className={styles.triggerLabel}>{activeOption.label}</span>
       </button>
 
       {/* Dropup Menu */}
