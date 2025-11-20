@@ -35,7 +35,8 @@ const FREE_FEATURES: FeatureItem[] = [
     },
     { label: "Limited daily messages", icon: MessageSquare },
     { label: "14-day chat memory", icon: Pin },
-    { label: "Premade proactivity routines only", icon: Clock },
+    { label: "Premade proactivity routines", icon: Clock },
+    { label: "Pulse only", icon: CalendarClock },
     { label: "Community support forum", icon: Users },
 ];
 
@@ -54,8 +55,12 @@ const VOYAGER_FEATURES: FeatureItem[] = [
         label: "Full context memory",
         icon: Pin,
     },
+    {
+        label: "Calendar-powered focus routines",
+        icon: Clock,
+    },
     { label: "Reasoning mode toggle", icon: Brain },
-    { label: "Calendar, Gmail, Notion integrations", icon: CalendarClock },
+    { label: "Google Calendar, Gmail, Notion integrations", icon: CalendarClock },
     { label: "Everything in Scout", icon: Plus, variant: "inherit" },
 ];
 
@@ -152,7 +157,7 @@ export function PricingPlansSection({ storeId, voyagerVariantId, pioneerVariantI
             </div>
 
             <section className={styles.planGrid}>
-                <article className={styles.planCard}>
+                <article className={styles.planCard} data-variant="muted">
                     <div className={styles.cardBody}>
                         <div className={styles.cardIntro}>
                             <header className={styles.cardHeader}>
@@ -160,8 +165,8 @@ export function PricingPlansSection({ storeId, voyagerVariantId, pioneerVariantI
                                 <p>Try Gray Pulse Lite with limited context and preset routines.</p>
                             </header>
                             <div className={styles.priceBlock}>
-                                <span className={styles.priceValue}>$0</span>
-                                <span className={styles.priceMeta}>/ forever</span>
+                                <span className={styles.priceValue}>$0.003125</span>
+                                <span className={styles.priceMeta}>/ 6 hours</span>
                             </div>
                         </div>
                         <ul className={styles.featureList}>
@@ -183,7 +188,7 @@ export function PricingPlansSection({ storeId, voyagerVariantId, pioneerVariantI
                     </div>
                 </article>
 
-                <article className={styles.planCard}>
+                <article className={styles.planCard} data-variant="highlighted">
                     <div className={styles.cardBody}>
                         <div className={styles.cardIntro}>
                             <header className={styles.cardHeader}>
