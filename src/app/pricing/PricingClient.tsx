@@ -104,13 +104,13 @@ export default function PricingClient({ storeId, voyagerVariantId, pioneerVarian
   }, [router]);
 
   return (
-    <div className={styles.pricingPage}>
+    <div className={styles.page}>
       <DepthParticleCanvas />
-      <div className={styles.pricingPageContent}>
-        <div className={styles.pricingContentInner}>
+      <div className={styles.shell}>
+        <div className={styles.inner}>
           <button
             type="button"
-            className={styles.dismissButton}
+            className={styles.dismiss}
             onClick={handleDismiss}
             aria-label="Close pricing page"
           >

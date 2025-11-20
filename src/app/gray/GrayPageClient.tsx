@@ -919,7 +919,7 @@ function GrayPageClientInner({
   }, [isPersonalizationOpen, generalSessionId, contextUsageSummary?.conversationId]);
 
   const renderMainSurface = () => {
-    if (viewMode === "general") {
+    if (viewMode === "general" && activeNav !== "reference") {
       return (
         <div
           className={styles.mainContent}
@@ -2695,7 +2695,7 @@ function GrayPageClientInner({
                 <div style={{ width: 24 }} /> {/* Spacer */}
               </div>
               {isDashboardView ? renderPrimaryView() : renderMainSurface()}
-              {viewMode === "general" ? (
+              {viewMode === "general" && activeNav !== "reference" ? (
                 <>
                   <ChatDraftInput
                     variant="composer"
