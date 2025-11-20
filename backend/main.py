@@ -4565,22 +4565,58 @@ async def get_conversation_usage(conversation_id: str):
         # Count messages
         message_count = len(history)
         
-        # Estimate token count (rough approximation: ~4 characters per token)
-        total_chars = sum(len(msg.get("text", "")) for msg in history)
-        estimated_tokens = total_chars // 4
+        # Better token estimation: use tiktoken if available, otherwise rough estimate
+        try:
+            import tiktoken
+            encoding = tiktoken.get_encoding("cl100k_base")  # GPT-4/Gemini-compatible
+            total_tokens = sum(
+                len(encoding.encode(msg.get("text", "")))
+                for msg in history
+            )
+        except (ImportError, Exception):
+            # Fallback: improved estimation (more accurate than chars/4)
+            # Average English word ~= 1.3 tokens, average word ~= 5 chars
+            total_chars = sum(len(msg.get("text", "")) for msg in history)
+            total_tokens = int(total_chars / 3.8)  # More accurate than /4
+        
+        # Determine context limit based on user tier
+        # Extract user_id from conversation to lookup tier
+        user_tier = "scout"  # Default
+        try:
+            # Get user_id from the conversation metadata in Supabase
+            if supabase:
+                conv_result = supabase.table("user_chat_threads").select("user_id").eq("id", conversation_id).single().execute()
+                if conv_result and conv_result.data:
+                    user_id = conv_result.data.get("user_id")
+                    if user_id:
+                        user_result = supabase.table("users").select("plan_tier").eq("id", user_id).single().execute()
+                        if user_result and user_result.data:
+                            user_tier = (user_result.data.get("plan_tier") or "scout").lower()
+        except Exception as tier_error:
+            app_logger.warning(f"Could not determine user tier for conversation {conversation_id}: {tier_error}")
+        
+        # Set context limits by tier
+        TIER_CONTEXT_LIMITS = {
+            "scout": 65_536,      # 64k tokens
+            "voyager": 262_144,   # 256k tokens  
+            "pioneer": 1_048_576, # 1M tokens (full context)
+        }
+        
+        context_limit = TIER_CONTEXT_LIMITS.get(user_tier, TIER_CONTEXT_LIMITS["scout"])
         
         # Get provider info from environment
-        provider = os.getenv("AI_PROVIDER", "local")
+        provider = os.getenv("AI_PROVIDER", "gemini")
         model_name = os.getenv("AI_MODEL_NAME", None)
         
         return {
             "conversation_id": conversation_id,
             "message_count": message_count,
-            "conversation_tokens": estimated_tokens,
-            "limit": 0,  # 0 means unlimited
+            "conversation_tokens": total_tokens,
+            "limit": context_limit,
             "provider": provider,
             "model_name": model_name,
-            "model_label": model_name
+            "model_label": model_name,
+            "user_tier": user_tier,
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching conversation usage: {str(e)}")
