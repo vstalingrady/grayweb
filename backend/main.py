@@ -1113,13 +1113,24 @@ def _load_general_conversation_history(user_id: int) -> List[Dict[str, Any]]:
     if not supabase:
         return []
     try:
-        result = (
-            supabase.table("general_chat_messages")
-            .select("role, content, grounding_metadata")
-            .eq("user_id", user_id)
-            .order("created_at", desc=False)
-            .execute()
-        )
+        # Check plan tier for retention policy (Scout = 14 days)
+        is_restricted = True
+        try:
+            user_res = supabase.table("users").select("plan_tier").eq("id", user_id).single().execute()
+            if user_res.data:
+                tier = (user_res.data.get("plan_tier") or "").lower()
+                if tier in ("voyager", "pioneer", "depth"):
+                    is_restricted = False
+        except Exception:
+            pass
+
+        query = supabase.table("general_chat_messages").select("role, content, grounding_metadata").eq("user_id", user_id)
+
+        if is_restricted:
+            cutoff = datetime.utcnow() - timedelta(days=14)
+            query = query.gte("created_at", cutoff.isoformat())
+
+        result = query.order("created_at", desc=False).execute()
     except Exception as error:
         _handle_conversation_store_error("Warning: General chat history unavailable", error)
         return []
@@ -3960,9 +3971,6 @@ async def chat_with_ai(request: ChatRequest, db: databases.Database = Depends(ge
                 await _update_conversation_title(conversation_id, extracted_title)
                 session_title = extracted_title
 
-        # Update user streak for daily activity, respecting user timezone when provided
-        await update_user_streak(request.user_id, db, user_timezone=request.timezone)
-
         return ChatResponse(
             response=ai_response,
             conversation_id=conversation_id,
@@ -4181,8 +4189,6 @@ async def chat_with_ai_stream(request: ChatRequest, db: databases.Database = Dep
                         # Update the title in the database with the AI-generated one
                         await _update_conversation_title(conversation_id, extracted_title)
                         session_title = extracted_title
-
-                await update_user_streak(request.user_id, db, user_timezone=request.timezone)
 
                 end_payload: Dict[str, Any] = {
                     "conversation_id": conversation_id,
