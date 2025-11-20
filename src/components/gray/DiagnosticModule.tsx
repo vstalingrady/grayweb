@@ -1,3 +1,5 @@
+"use client";
+
 import React from 'react';
 import styles from './DiagnosticModule.module.css';
 import { X, Check } from 'lucide-react';

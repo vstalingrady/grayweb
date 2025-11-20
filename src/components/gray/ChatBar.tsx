@@ -1,7 +1,7 @@
 "use client";
 
 import styles from "@/app/gray/GrayPageClient.module.css";
-import { Loader2, Paperclip, Lightbulb, Send, Search } from "lucide-react";
+import { Loader2, Paperclip, Lightbulb, Search, ArrowUpRight } from "lucide-react";
 import { type FormEvent } from "react";
 
 export type GrayChatBarProps = {
@@ -67,7 +67,11 @@ export function GrayChatBar({
         className={styles.chatActionButton}
         disabled={computedDisabled}
       >
-        {isSubmitting ? <Loader2 size={18} className={styles.chatSpinner} /> : <Send size={18} />}
+        {isSubmitting ? (
+          <Loader2 size={18} className={styles.chatSpinner} />
+        ) : (
+          <ArrowUpRight size={18} />
+        )}
       </button>
     </form>
   );

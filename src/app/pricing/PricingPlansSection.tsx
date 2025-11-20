@@ -47,7 +47,7 @@ const VOYAGER_FEATURES: FeatureItem[] = [
         subtext: "Gemini 2.5 Flash + Gemini 3 Pro",
     },
     {
-        label: "16x more message credits",
+        label: "32x more message credits",
         icon: MessageSquare,
         subtext: "Plus unlimited Gray Lite",
     },
@@ -60,7 +60,11 @@ const VOYAGER_FEATURES: FeatureItem[] = [
         icon: Clock,
     },
     { label: "Reasoning mode toggle", icon: Brain },
-    { label: "Google Calendar, Gmail, Notion integrations", icon: CalendarClock },
+    {
+        label: "Google Calendar, Gmail, Notion integrations",
+        icon: CalendarClock,
+        subtext: "(coming soon)",
+    },
     { label: "Everything in Scout", icon: Plus, variant: "inherit" },
 ];
 
@@ -72,14 +76,15 @@ const PIONEER_FEATURES: FeatureItem[] = [
     {
         label: "Model switcher",
         icon: Shuffle,
-        subtext: "Claude 4.5, Grok 4.1, GPT 5.1, DeepSeek V3.2, Kimi K2 Thinking",
+        subtext: "Claude 4.5, Grok 4.1, GPT 5.1, DeepSeek V3.2, Kimi K2 Thinking (coming soon)",
     },
     { label: "Expanded reasoning budget", icon: InfinityIcon },
     {
-        label: "64x more message credits",
+        label: "128x more message credits",
         icon: Pin,
+        subtext: "Plus unlimited Gray Base",
     },
-    { label: "Priority response time (during high load)", icon: Headphones },
+    { label: "Priority response during peaks", icon: Headphones },
     { label: "Early access to experimental features", icon: FlaskConical },
     { label: "Reference library (docs/files RAG)", icon: Database },
     { label: "Everything in Voyager", icon: Plus, variant: "inherit" },
@@ -165,8 +170,8 @@ export function PricingPlansSection({ storeId, voyagerVariantId, pioneerVariantI
                                 <p>Try Gray Pulse Lite with limited context and preset routines.</p>
                             </header>
                             <div className={styles.priceBlock}>
-                                <span className={styles.priceValue}>$0.009375</span>
-                                <span className={styles.priceMeta}>/ 6 hours</span>
+                                <span className={styles.priceValue}>Free</span>
+                                <span className={styles.priceMeta}>/ forever</span>
                             </div>
                         </div>
                         <ul className={styles.featureList}>

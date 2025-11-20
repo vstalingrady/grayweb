@@ -182,6 +182,10 @@ type ChatContextValue = {
   handleFileSearchImport: () => Promise<void>;
   fileSearchUploadInputRef: RefObject<HTMLInputElement | null>;
   loadConversationMessages: (sessionId: string) => Promise<void>;
+  reasoningMode: boolean;
+  setReasoningMode: (value: boolean) => void;
+  modelTier: "lite" | "base" | "pro";
+  setModelTier: (value: "lite" | "base" | "pro") => void;
 };
 
 type SaveContextCacheOptions = {
@@ -1643,7 +1647,9 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
   });
   const [fileSearchImportName, setFileSearchImportName] = useState("");
   const [fileSearchImportStatus, setFileSearchImportStatus] = useState<string | null>(null);
-  const fileSearchUploadInputRef = useRef<HTMLInputElement | null>(null);
+  const [fileSearchUploadInputRef] = useState<RefObject<HTMLInputElement | null>>({ current: null });
+  const [reasoningMode, setReasoningMode] = useState(false);
+  const [modelTier, setModelTier] = useState<"lite" | "base" | "pro">("lite");
   const lastAutoCachedWorkspaceRef = useRef<string | null>(null);
   const autoCacheInFlightRef = useRef(false);
 
@@ -2332,7 +2338,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
           }
           didUpdate = true;
 
-          const normalizedConversationId = normalizeConversationIdValue(session.conversationId);
+          const normalizedConversationId = coerceConversationIdForRequest(session.conversationId);
           const payload = buildConversationHistoryPayload(filtered);
 
           if (normalizedConversationId) {
@@ -2901,6 +2907,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
               should_generate_title: shouldRequestAutoTitleForSession(baseSession),
               ...autoMapPayload,
               web_search_enabled: webSearchEnabled,
+              model: modelTier,
             })) {
               if (event.type === "token") {
                 const delta = event.delta;
@@ -3007,7 +3014,8 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
         coerceConversationIdForRequest(generalConversationIdRef.current);
       let requestConversationId = resolvedGeneralConversationId;
 
-      if (!trimmed) {
+      // Allow empty message only if it's the start of a session (e.g. onboarding trigger)
+      if (!trimmed && generalSession.messages.length > 0) {
         return generalSession.id;
       }
 
@@ -3082,6 +3090,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
               should_generate_title: shouldRequestAutoTitleForSession(generalSession),
               ...autoMapPayload,
               web_search_enabled: webSearchEnabled,
+              model: modelTier,
             })) {
               if (event.type === "token") {
                 const delta = event.delta;
@@ -3622,6 +3631,10 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       handleFileSearchImport,
       fileSearchUploadInputRef,
       loadConversationMessages,
+      reasoningMode,
+      setReasoningMode,
+      modelTier,
+      setModelTier,
     }),
     [
       appendMessage,
@@ -3692,7 +3705,12 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       fileSearchImportStatus,
       handleFileSearchImport,
       fileSearchUploadInputRef,
+      fileSearchUploadInputRef,
       loadConversationMessages,
+      reasoningMode,
+      setReasoningMode,
+      modelTier,
+      setModelTier,
     ]
   );
 

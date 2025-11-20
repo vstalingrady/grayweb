@@ -22,6 +22,7 @@ import { AddPlanHabitModal } from "./AddPlanHabitModal";
 import { mapPlansToCalendarEvents, PLAN_EVENT_ID_PREFIX } from "./planCalendarUtils";
 import { formatPlanTimeLabel } from "./planUtils";
 import { requestNotificationPermission } from "@/lib/notificationUtils";
+import { useUser } from "@/contexts/UserContext";
 
 const isSameDay = (a: Date, b: Date) =>
   a.getFullYear() === b.getFullYear() &&
@@ -530,6 +531,10 @@ export function GrayDashboardView({
     }
     return style;
   }, [isChatBarVisible, panelMaxHeightPx]);
+
+  const { user } = useUser();
+  const planTier = (user?.plan_tier || "scout").toLowerCase();
+  const isScout = planTier === "scout";
 
   useLayoutEffect(() => {
     if (typeof window === "undefined") {
@@ -1654,6 +1659,7 @@ export function GrayDashboardView({
       showSidebar={true}
       showHeaderDates={true}
       showSelectedDateLabel={false}
+      showCalendarList={!isScout}
       calendars={calendars}
       events={mergedEvents}
       onCalendarsChange={onCalendarsChange}

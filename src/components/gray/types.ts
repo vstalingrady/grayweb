@@ -5,6 +5,7 @@ export type SidebarNavKey =
   | "general"
   | "threads"
   | "dashboard"
+  | "reference"
   | "history"
   | "search";
 

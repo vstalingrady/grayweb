@@ -1,40 +1,67 @@
-:root {
-    --bg: #050505;
-    --surface: #0F0F0F;
-    --surface-highlight: #141414;
-    --surface-border: #222;
-    --text-main: #EEEEEE;
-    --text-muted: #666666;
-    --text-dim: #444444;
-    --accent-white: #FFFFFF;
-    --signal-red: #FF3333;
-    --signal-green: #00FF94;
-    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-    --font-mono: 'JetBrains Mono', 'SF Mono', monospace;
+.mono {
+  font-family: inherit;
+  font-size: 0.68rem;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: rgba(196, 196, 196, 0.72);
 }
 
-.mono { font-family: var(--font-mono); letter-spacing: -0.5px; }
-
 .featuresSection {
-    padding: 6rem 0;
+  padding: 4rem 0 5rem;
+  background: radial-gradient(circle at top, rgba(255, 255, 255, 0.04), transparent 55%);
+  text-align: center;
 }
 
 .featuresGrid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-    gap: 1px;
-    background: var(--surface-border);
-    border: 1px solid var(--surface-border);
-    margin-bottom: 6rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1px;
+  max-width: 1120px;
+  margin: 0 auto 4rem;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.06), rgba(20, 20, 20, 0.4));
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  overflow: hidden;
 }
 
 .featureCard {
-    background: var(--bg);
-    padding: 2.5rem;
-    transition: background 0.3s;
+  background: radial-gradient(circle at top left, rgba(255, 255, 255, 0.04), transparent 60%),
+    rgba(8, 8, 8, 0.96);
+  padding: 2.25rem 2.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  transition:
+    background 0.3s ease,
+    transform 0.24s ease,
+    box-shadow 0.24s ease;
 }
-.featureCard:hover { background: var(--surface); }
 
-.featureIcon { font-size: 1.5rem; margin-bottom: 1.5rem; display: block; color: var(--text-main); }
-.featureTitle { font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--text-main); }
-.featureDesc { font-size: 0.9rem; color: var(--text-muted); line-height: 1.6; }
+.featureCard:hover {
+  background: radial-gradient(circle at top left, rgba(255, 255, 255, 0.08), transparent 60%),
+    rgba(12, 12, 12, 0.98);
+  transform: translateY(-1px);
+  box-shadow: 0 22px 40px rgba(0, 0, 0, 0.7);
+}
+
+.featureIcon {
+  font-size: 1.4rem;
+  margin-bottom: 1.6rem;
+  display: block;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.featureTitle {
+  font-size: 0.92rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.86);
+}
+
+.featureDesc {
+  font-size: 0.86rem;
+  color: rgba(210, 210, 210, 0.76);
+  line-height: 1.7;
+  max-width: 32rem;
+}

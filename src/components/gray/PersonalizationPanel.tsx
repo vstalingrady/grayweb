@@ -547,29 +547,14 @@ export function PersonalizationPanel({
             <p className={styles.personalizationEyebrow}>Personalization</p>
             <h2 id="personalization-title">{viewerName}</h2>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-            <button
-              type="button"
-              className={styles.personalizationFormButton}
-              onClick={handleCompressConversation}
-              disabled={compressState === "loading" || !contextUsage?.conversationId}
-              style={{
-                padding: "6px 16px",
-                fontSize: "0.7rem",
-                minWidth: "auto"
-              }}
-            >
-              {compressState === "loading" ? "..." : compressState === "success" ? "Done" : "Compress"}
-            </button>
-            <button
-              type="button"
-              className={styles.personalizationClose}
-              onClick={onClose}
-              aria-label="Close personalization"
-            >
-              <X size={18} />
-            </button>
-          </div>
+          <button
+            type="button"
+            className={styles.personalizationClose}
+            onClick={onClose}
+            aria-label="Close personalization"
+          >
+            <X size={18} />
+          </button>
         </header>
 
         <div className={styles.personalizationGrid}>
@@ -871,6 +856,14 @@ export function PersonalizationPanel({
                   <h3>Context usage</h3>
                   <p>Track how much of your conversation context you&apos;ve used.</p>
                 </div>
+                <button
+                  type="button"
+                  className={styles.personalizationLink}
+                  onClick={handleCompressConversation}
+                  disabled={compressState === "loading" || !contextUsage?.conversationId}
+                >
+                  {compressState === "loading" ? "Compressing…" : compressState === "success" ? "Done" : "Compress"}
+                </button>
               </div>
               <div className={styles.personalizationContextUsage}>
                 <div className={styles.personalizationContextPercentRow}>

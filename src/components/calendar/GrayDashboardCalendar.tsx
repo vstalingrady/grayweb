@@ -103,6 +103,7 @@ type GrayDashboardCalendarProps = {
   showSurfaceLabel?: boolean;
   showSurfaceHeading?: boolean;
   showHeaderControls?: boolean;
+  showCalendarList?: boolean;
   showHeaderDates?: boolean;
   compactSurface?: boolean;
   className?: string;
@@ -133,6 +134,7 @@ export function GrayDashboardCalendar({
   showSurfaceLabel = true,
   showSurfaceHeading = true,
   showHeaderControls = true,
+  showCalendarList = true,
   showHeaderDates = true,
   compactSurface = false,
   className,
@@ -1109,6 +1111,7 @@ export function GrayDashboardCalendar({
             showSelectedDateLabel={showSelectedDateLabel}
             className={styles.calendarSidebarIntegrated}
             showMonthNavigation
+            showCalendarList={showCalendarList}
             onIntegrationAction={onIntegrationAction}
           />
         </div>

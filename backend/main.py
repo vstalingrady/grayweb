@@ -194,6 +194,9 @@ def _ensure_sqlite_has_seen_chat_column():
             if "has_seen_general_chat" not in columns:
                 conn.execute("ALTER TABLE users ADD COLUMN has_seen_general_chat BOOLEAN DEFAULT 0")
                 conn.commit()
+            # Backfill nulls to the default so Pydantic validation doesn't see None
+            conn.execute("UPDATE users SET has_seen_general_chat = 0 WHERE has_seen_general_chat IS NULL")
+            conn.commit()
         finally:
             conn.close()
     except sqlite3.Error as exc:
@@ -203,11 +206,118 @@ def _ensure_sqlite_has_seen_chat_column():
         )
 
 
+def _ensure_sqlite_maps_enabled_column():
+    if not DATABASE_URL.startswith("sqlite"):
+        return
+    db_path = DATABASE_URL.replace("sqlite:///", "", 1)
+    if not db_path:
+        return
+    try:
+        conn = sqlite3.connect(db_path)
+        try:
+            cursor = conn.execute("PRAGMA table_info(users)")
+            columns = {row[1] for row in cursor.fetchall()}
+            if "maps_enabled" not in columns:
+                conn.execute("ALTER TABLE users ADD COLUMN maps_enabled BOOLEAN DEFAULT 0")
+                conn.commit()
+            # Backfill nulls to the default so Pydantic validation doesn't see None
+            conn.execute("UPDATE users SET maps_enabled = 0 WHERE maps_enabled IS NULL")
+            conn.commit()
+        finally:
+            conn.close()
+    except sqlite3.Error as exc:
+        app_logger.error(
+            "Failed to ensure maps_enabled column on sqlite users table",
+            extra={"event_type": "sqlite_migration_error", "error": str(exc)},
+        )
+
+
+def _ensure_sqlite_usage_columns():
+    if not DATABASE_URL.startswith("sqlite"):
+        return
+    db_path = DATABASE_URL.replace("sqlite:///", "", 1)
+    if not db_path:
+        return
+    try:
+        conn = sqlite3.connect(db_path)
+        try:
+            cursor = conn.execute("PRAGMA table_info(users)")
+            columns = {row[1] for row in cursor.fetchall()}
+
+            missing_alters = []
+            if "daily_token_usage" not in columns:
+                missing_alters.append("ALTER TABLE users ADD COLUMN daily_token_usage INTEGER DEFAULT 0")
+            if "monthly_cost_usage" not in columns:
+                missing_alters.append("ALTER TABLE users ADD COLUMN monthly_cost_usage REAL DEFAULT 0")
+            if "weekly_cost_usage" not in columns:
+                missing_alters.append("ALTER TABLE users ADD COLUMN weekly_cost_usage REAL DEFAULT 0")
+            if "six_hour_cost_usage" not in columns:
+                missing_alters.append("ALTER TABLE users ADD COLUMN six_hour_cost_usage REAL DEFAULT 0")
+            if "last_daily_reset" not in columns:
+                missing_alters.append("ALTER TABLE users ADD COLUMN last_daily_reset TEXT")
+            if "last_monthly_reset" not in columns:
+                missing_alters.append("ALTER TABLE users ADD COLUMN last_monthly_reset TEXT")
+            if "last_weekly_reset" not in columns:
+                missing_alters.append("ALTER TABLE users ADD COLUMN last_weekly_reset TEXT")
+            if "last_six_hour_reset" not in columns:
+                missing_alters.append("ALTER TABLE users ADD COLUMN last_six_hour_reset TEXT")
+
+            for statement in missing_alters:
+                conn.execute(statement)
+            if missing_alters:
+                conn.commit()
+
+            # Backfill nulls for counters to zero to avoid None in logic
+            conn.execute(
+                """
+                UPDATE users
+                SET daily_token_usage = COALESCE(daily_token_usage, 0),
+                    monthly_cost_usage = COALESCE(monthly_cost_usage, 0),
+                    weekly_cost_usage = COALESCE(weekly_cost_usage, 0),
+                    six_hour_cost_usage = COALESCE(six_hour_cost_usage, 0)
+                """
+            )
+            conn.commit()
+        finally:
+            conn.close()
+    except sqlite3.Error as exc:
+        app_logger.error(
+            "Failed to ensure usage columns on sqlite users table",
+            extra={"event_type": "sqlite_migration_error", "error": str(exc)},
+        )
+
+
+def _ensure_sqlite_workspace_background_column():
+    if not DATABASE_URL.startswith("sqlite"):
+        return
+    db_path = DATABASE_URL.replace("sqlite:///", "", 1)
+    if not db_path:
+        return
+    try:
+        conn = sqlite3.connect(db_path)
+        try:
+            cursor = conn.execute("PRAGMA table_info(users)")
+            columns = {row[1] for row in cursor.fetchall()}
+            if "workspace_background_id" not in columns:
+                conn.execute("ALTER TABLE users ADD COLUMN workspace_background_id TEXT")
+                conn.commit()
+        finally:
+            conn.close()
+    except sqlite3.Error as exc:
+        app_logger.error(
+            "Failed to ensure workspace_background_id column on sqlite users table",
+            extra={"event_type": "sqlite_migration_error", "error": str(exc)},
+        )
+
+
 # Database configuration
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./test.db")
 
 _ensure_sqlite_users_auth_column()
 _ensure_sqlite_has_seen_chat_column()
+_ensure_sqlite_maps_enabled_column()
+_ensure_sqlite_usage_columns()
+_ensure_sqlite_workspace_background_column()
 
 database = databases.Database(DATABASE_URL)
 metadata = sqlalchemy.MetaData()
@@ -382,6 +492,14 @@ users = sqlalchemy.Table(
     sqlalchemy.Column("plan_tier", sqlalchemy.String, nullable=True),
     sqlalchemy.Column("maps_enabled", sqlalchemy.Boolean, default=False),
     sqlalchemy.Column("has_seen_general_chat", sqlalchemy.Boolean, default=False),
+    sqlalchemy.Column("daily_token_usage", sqlalchemy.Integer, default=0),
+    sqlalchemy.Column("monthly_cost_usage", sqlalchemy.Float, default=0.0),
+    sqlalchemy.Column("weekly_cost_usage", sqlalchemy.Float, default=0.0),
+    sqlalchemy.Column("six_hour_cost_usage", sqlalchemy.Float, default=0.0),
+    sqlalchemy.Column("last_daily_reset", sqlalchemy.String, nullable=True),
+    sqlalchemy.Column("last_monthly_reset", sqlalchemy.String, nullable=True),
+    sqlalchemy.Column("last_weekly_reset", sqlalchemy.String, nullable=True),
+    sqlalchemy.Column("last_six_hour_reset", sqlalchemy.String, nullable=True),
     sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
     sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
 )
@@ -4580,6 +4698,23 @@ async def get_conversation_usage(conversation_id: str):
             total_tokens = int(total_chars / 3.8)  # More accurate than /4
         
         # Determine context limit based on user tier
+        # Extract user_id from conversation to lookup tier
+        # Handle generic session ID gracefully
+        if conversation_id == "general-session":
+            # We can't determine the user from this ID alone, so we return default/empty usage
+            # or we could try to get it from the request if we had auth context.
+            # For now, return safe defaults.
+            return {
+                "conversation_id": conversation_id,
+                "message_count": 0,
+                "conversation_tokens": 0,
+                "limit": 65_536, # Scout limit
+                "provider": os.getenv("AI_PROVIDER", "gemini"),
+                "model_name": os.getenv("AI_MODEL_NAME", None),
+                "model_label": os.getenv("AI_MODEL_NAME", None),
+                "user_tier": "scout",
+            }
+
         # Extract user_id from conversation to lookup tier
         user_tier = "scout"  # Default
         try:

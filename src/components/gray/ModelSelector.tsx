@@ -15,9 +15,9 @@ type ModelOption = {
 };
 
 const OPTIONS: ModelOption[] = [
-  { id: "lite", label: "Lite", description: "Quick responses", icon: Zap, tierRequired: "scout" },
-  { id: "base", label: "Base", description: "Balanced intelligence", icon: Box, tierRequired: "voyager" },
-  { id: "pro", label: "Pro", description: "Complex tasks", icon: Sparkles, tierRequired: "voyager" },
+  { id: "lite", label: "Gray Lite", description: "Quick responses", icon: Zap, tierRequired: "scout" },
+  { id: "base", label: "Gray Base", description: "Balanced intelligence", icon: Box, tierRequired: "voyager" },
+  { id: "pro", label: "Gray Pro", description: "Complex tasks", icon: Sparkles, tierRequired: "voyager" },
 ];
 
 const TIER_LEVELS: Record<string, number> = {
@@ -89,8 +89,11 @@ export const ModelSelector = memo(() => {
         aria-label="Select model"
         type="button"
       >
-        <ChevronUp className={styles.chevron} size={16} />
         <span className={styles.triggerLabel}>{activeOption.label}</span>
+        <ChevronUp
+          className={`${styles.chevron} ${isOpen ? styles.chevronOpen : ""}`}
+          size={18}
+        />
       </button>
 
       {/* Dropup Menu */}
@@ -136,11 +139,10 @@ export const ModelSelector = memo(() => {
           {nextTier && (
             <div className={styles.upgradeSection}>
               <div className={styles.upgradeContent}>
-                <div className={styles.upgradeIconWrapper}>
+              <div className={styles.upgradeIconWrapper}>
                   <Rocket size={18} />
                 </div>
                 <div className={styles.upgradeInfo}>
-                  <div className={styles.upgradeLabel}>Upgrade</div>
                   <div className={styles.upgradeDescription}>Unlock more capabilities</div>
                 </div>
                 <a href="/pricing" className={styles.upgradeButton}>Upgrade</a>

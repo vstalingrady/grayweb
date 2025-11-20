@@ -25,6 +25,7 @@ interface UserContextType {
     full_name?: string;
     profile_picture_url?: string;
     role?: string;
+    plan_tier?: string | null;
     personalization_nickname?: string | null;
     personalization_occupation?: string | null;
     personalization_about?: string | null;
@@ -163,6 +164,24 @@ const removeCachedUser = (_email?: string | null) => {
   // No-op: user cache is not stored in browser storage anymore.
 };
 
+const touchDailyStreakOnce = (userId: number) => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+  try {
+    const todayKey = new Date().toISOString().slice(0, 10);
+    const storageKey = `gray-streak-last-touch:${userId}`;
+    const last = window.localStorage.getItem(storageKey);
+    if (last === todayKey) {
+      return;
+    }
+    window.localStorage.setItem(storageKey, todayKey);
+    void apiService.touchUserStreak(userId).catch(() => undefined);
+  } catch {
+    // If localStorage or the API fails, silently skip; streaks are non-critical.
+  }
+};
+
 export function UserProvider({ children, userEmail }: UserProviderProps) {
   const cachedUser = useMemo(() => readCachedUser(userEmail ?? null)?.user ?? null, [userEmail]);
   const [user, setUser] = useState<User | null>(null);
@@ -172,7 +191,7 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
 
   const deriveNameFromEmail = (email: string) => humanizeIdentifier(email) ?? 'Operator';
 
-  const fetchSupabaseProfile = async (): Promise<{ fullName: string | null; avatarUrl: string | null } | null> => {
+  const fetchSupabaseProfile = async (): Promise<{ fullName: string | null; avatarUrl: string | null; planTier: string | null } | null> => {
     try {
       const supabase = getSupabaseClient();
       if (!supabase) {
@@ -226,9 +245,16 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
         metadata.image,
       ].find((value) => typeof value === 'string' && value.trim().length > 0) as string | undefined;
 
+      const planTierRaw = (metadata.plan_tier ?? metadata.planTier) as unknown;
+      const planTier =
+        typeof planTierRaw === 'string' && planTierRaw.trim().length > 0
+          ? planTierRaw.trim().toLowerCase()
+          : null;
+
       return {
         fullName: fullName ?? null,
         avatarUrl: avatarUrlCandidate ?? null,
+        planTier,
       };
     } catch (supabaseError) {
       // Avoid crashing the UI when Supabase is not configured.
@@ -252,6 +278,7 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
       const supabaseProfile = await fetchSupabaseProfile();
       const preferredName = supabaseProfile?.fullName ?? deriveNameFromEmail(email);
       const preferredAvatar = supabaseProfile?.avatarUrl ?? undefined;
+      const preferredPlanTier = supabaseProfile?.planTier ?? null;
 
       console.log('loadUser: Preferred name:', preferredName, 'Avatar:', preferredAvatar);
 
@@ -260,12 +287,15 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
         const userData = await apiService.getUserByEmail(email);
         console.log('loadUser: User data retrieved:', userData);
 
-        const updates: { full_name?: string; profile_picture_url?: string } = {};
+        const updates: { full_name?: string; profile_picture_url?: string; plan_tier?: string | null } = {};
         if (preferredName && preferredName !== userData.full_name) {
           updates.full_name = preferredName;
         }
         if (preferredAvatar && preferredAvatar !== userData.profile_picture_url) {
           updates.profile_picture_url = preferredAvatar;
+        }
+        if (preferredPlanTier && preferredPlanTier !== (userData.plan_tier ?? null)) {
+          updates.plan_tier = preferredPlanTier;
         }
 
         if (Object.keys(updates).length > 0) {
@@ -274,14 +304,17 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
             const updatedUser = await apiService.updateUser(userData.id, updates);
             setUser(updatedUser);
             persistCachedUser(updatedUser.email, updatedUser);
+            touchDailyStreakOnce(updatedUser.id);
           } catch (updateError) {
             console.error('Error updating user profile:', updateError);
             setUser(userData);
             persistCachedUser(userData.email, userData);
+            touchDailyStreakOnce(userData.id);
           }
         } else {
           setUser(userData);
           persistCachedUser(userData.email, userData);
+          touchDailyStreakOnce(userData.id);
         }
       } catch (userError) {
         console.log('loadUser: Error getting user, checking if user not found...');
@@ -293,11 +326,13 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
             full_name: preferredName,
             profile_picture_url: preferredAvatar,
             role: 'user',
+            plan_tier: preferredPlanTier,
           };
           const newUser = await apiService.createUser(defaultUserData);
           console.log('loadUser: New user created:', newUser);
           setUser(newUser);
           persistCachedUser(newUser.email, newUser);
+          touchDailyStreakOnce(newUser.id);
         } else {
           console.error('loadUser: Unexpected error getting user:', userError);
           throw userError;
@@ -335,6 +370,7 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
     full_name?: string;
     profile_picture_url?: string;
     role?: string;
+    plan_tier?: string | null;
     personalization_nickname?: string | null;
     personalization_occupation?: string | null;
     personalization_about?: string | null;
@@ -348,6 +384,7 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
       full_name?: string;
       profile_picture_url?: string;
       role?: string;
+      plan_tier?: string | null;
       personalization_nickname?: string | null;
       personalization_occupation?: string | null;
       personalization_about?: string | null;
@@ -363,6 +400,9 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
     }
     if (typeof userData.role === 'string') {
       payload.role = userData.role;
+    }
+    if (Object.prototype.hasOwnProperty.call(userData, 'plan_tier')) {
+      payload.plan_tier = userData.plan_tier ?? null;
     }
     if (Object.prototype.hasOwnProperty.call(userData, 'personalization_nickname')) {
       payload.personalization_nickname = userData.personalization_nickname ?? null;

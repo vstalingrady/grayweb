@@ -6,6 +6,9 @@
     width: 100%;
     max-width: 1200px;
     margin: 0 auto;
+    opacity: 0;
+    transform: translateY(20px);
+    animation: fadeInUp 0.8s ease-out 0.2s forwards;
 }
 
 .introText {
@@ -39,8 +42,8 @@
 }
 
 .panel {
-    background: rgba(18, 18, 18, 0.6);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(8, 8, 8, 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.06);
     border-radius: 24px;
     padding: 0;
     overflow: hidden;
@@ -49,24 +52,14 @@
     transition: transform 0.3s ease, border-color 0.3s ease;
 }
 
-.panel:hover {
-    border-color: rgba(255, 255, 255, 0.15);
-    transform: translateY(-2px);
-}
-
 .solutionPanel {
-    background: rgba(255, 255, 255, 0.95);
-    color: #000;
-    border: none;
-}
-
-.solutionPanel .panelContent {
-    color: #333;
+    background: rgba(12, 12, 12, 0.98);
+    color: #f3f3f3;
 }
 
 .visBox {
     height: 180px;
-    background: #080808;
+    background: #050505;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     position: relative;
     display: flex;
@@ -75,20 +68,8 @@
     overflow: hidden;
 }
 
-.solutionPanel .visBox {
-    background: #f0f0f0;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
-}
-
 .visLabel {
-    position: absolute;
-    bottom: 12px;
-    right: 16px;
-    font-family: var(--font-mono);
-    font-size: 0.65rem;
-    letter-spacing: 0.1em;
-    color: #444;
-    text-transform: uppercase;
+    display: none;
 }
 
 .panelContent {
@@ -105,8 +86,10 @@
     margin-bottom: 1.5rem;
 }
 
-.iconRed { color: #FF3333; }
-.iconGreen { color: #00C853; }
+.iconRed,
+.iconGreen {
+    color: rgba(235, 235, 235, 0.9);
+}
 
 .problemList {
     list-style: none;
@@ -121,7 +104,7 @@
     display: flex;
     align-items: flex-start;
     gap: 12px;
-    color: #888;
+    color: rgba(180, 180, 180, 0.9);
     font-size: 0.95rem;
     line-height: 1.5;
 }
@@ -130,7 +113,7 @@
     width: 6px;
     height: 6px;
     border-radius: 50%;
-    background: #333;
+    background: #3a3a3a;
     margin-top: 8px;
     flex-shrink: 0;
 }
@@ -138,7 +121,7 @@
 .solutionText {
     font-size: 1.1rem;
     line-height: 1.6;
-    color: #333;
+    color: rgba(230, 230, 230, 0.92);
     font-weight: 500;
 }
 
@@ -149,7 +132,7 @@
     position: relative;
     width: 100px;
     height: 100px;
-    border: 1px dashed #333;
+    border: 1px dashed #343434;
     border-radius: 50%;
     animation: pulseContainer 4s infinite ease-in-out;
 }
@@ -158,9 +141,9 @@
     position: absolute;
     width: 6px;
     height: 6px;
-    background: #FF3333;
+    background: #a3a3a3;
     border-radius: 50%;
-    box-shadow: 0 0 8px rgba(255, 51, 51, 0.6);
+    box-shadow: 0 0 8px rgba(0, 0, 0, 0.55);
     top: 50%;
     left: 50%;
 }
@@ -209,7 +192,7 @@
 
 .streamLine {
     height: 4px;
-    background: linear-gradient(90deg, rgba(0, 255, 148, 0) 0%, #00FF94 50%, rgba(0, 255, 148, 0) 100%);
+    background: linear-gradient(90deg, rgba(255, 255, 255, 0) 0%, rgba(210, 210, 210, 0.9) 50%, rgba(255, 255, 255, 0) 100%);
     border-radius: 4px;
     opacity: 0;
     transform-origin: left;
@@ -223,6 +206,17 @@
     0% { transform: translateX(-50px) scaleX(0); opacity: 0; }
     30% { opacity: 1; }
     100% { transform: translateX(50px) scaleX(1); opacity: 0; }
+}
+
+@keyframes fadeInUp {
+    0% {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 @media (max-width: 768px) {

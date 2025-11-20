@@ -42,6 +42,7 @@ import {
   type ChatRole,
   type GrayReminderCreatedPayload,
   type GrayReminderEntityType,
+  GENERAL_CHAT_SESSION_ID,
 } from "./ChatProvider";
 import { formatReminderDisplayLabels } from "./reminderTimeUtils";
 import AttachmentTray from "./AttachmentTray";
@@ -1793,6 +1794,7 @@ export function GrayChatView({
     fileSearchUploadInputRef,
     webSearchEnabled,
     loadConversationMessages,
+    sendGeneralMessage,
   } = useChatStore();
   const session = sessionId ? getSession(sessionId) : undefined;
   const sessionExists = Boolean(session);
@@ -1838,8 +1840,11 @@ export function GrayChatView({
   }, []);
   const activeSessionId = session?.id ?? null;
   const activeConversationId =
-    session?.conversationId ??
-    (session?.scope === "general" ? buildGeneralConversationId(user?.id) ?? null : null);
+    session?.conversationId && session.conversationId !== GENERAL_CHAT_SESSION_ID
+      ? session.conversationId
+      : session?.scope === "general"
+        ? buildGeneralConversationId(user?.id) ?? null
+        : null;
   const buildAttachmentPayloads = useCallback(
     () => attachments.map((attachment) => ({ id: attachment.id })),
     [attachments]
@@ -2502,13 +2507,19 @@ export function GrayChatView({
     }
 
     if (userMessage) {
-      void streamAssistantReply(
-        targetSession.id,
-        content,
-        targetSession.conversationId ?? null
-      ).finally(() => {
-        isSubmittingRef.current = false;
-      });
+      if (targetSession.scope === "general") {
+        void sendGeneralMessage(content).finally(() => {
+          isSubmittingRef.current = false;
+        });
+      } else {
+        void streamAssistantReply(
+          targetSession.id,
+          content,
+          targetSession.conversationId ?? null
+        ).finally(() => {
+          isSubmittingRef.current = false;
+        });
+      }
       return;
     }
 

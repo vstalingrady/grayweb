@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import {
   ArrowRight,
   Brain,
@@ -19,18 +20,31 @@ import { motion } from "framer-motion";
 import Navigation from "@/app/components/Navigation";
 import FooterBackground from "@/app/components/FooterBackground";
 import PerformanceChart from "./components/PerformanceChart";
+import { DiagnosticModule } from "@/components/gray/DiagnosticModule";
 
-import { DiagnosticModule } from '@/components/gray/DiagnosticModule';
-import { FeaturesGrid } from '@/components/gray/FeaturesGrid';
+const FeaturesGrid = dynamic(
+  () => import("@/components/gray/FeaturesGrid").then((mod) => mod.FeaturesGrid),
+  { ssr: false }
+);
 
 type GrayMarketingClientProps = {
   tryGrayUrl: string;
+  storeId?: string;
+  voyagerVariantId?: string;
+  pioneerVariantId?: string;
 };
 
 export default function GrayMarketingClient({
   tryGrayUrl,
 }: GrayMarketingClientProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [showFinalCta, setShowFinalCta] = useState(false);
+
+  useEffect(() => {
+    // Defer the final CTA so the hero is the first thing rendered on mount.
+    const timer = setTimeout(() => setShowFinalCta(true), 50);
+    return () => clearTimeout(timer);
+  }, []);
 
   return (
     <div className="fixed inset-0 overflow-y-auto bg-black text-white selection:bg-zinc-800 selection:text-zinc-200 font-sans">
@@ -92,26 +106,28 @@ export default function GrayMarketingClient({
       <DiagnosticModule />
 
       {/* Final CTA */}
-      <section className="py-32 px-4 md:px-6 text-center relative overflow-hidden bg-black">
-        <div className="container mx-auto relative z-10">
-          <h2 className="text-4xl md:text-5xl font-bold mb-6 tracking-tight">Stop planning. Start building.</h2>
-          <p className="text-xl text-zinc-400 mb-10 max-w-2xl mx-auto">
-            The best time to start was 2 years ago. The second best time is today.
-          </p>
-          <Link
-            href={tryGrayUrl}
-            className="inline-flex items-center justify-center px-10 py-5 bg-white text-black text-lg font-bold rounded-full hover:bg-zinc-200 transition-colors"
-          >
-            Start Free—No Credit Card Required
-          </Link>
+      {showFinalCta && (
+        <section className="py-32 px-4 md:px-6 text-center relative overflow-hidden bg-black">
+          <div className="container mx-auto relative z-10">
+            <h2 className="text-4xl md:text-5xl font-bold mb-6 tracking-tight">Stop planning. Start building.</h2>
+            <p className="text-xl text-zinc-400 mb-10 max-w-2xl mx-auto">
+              The best time to start was 2 years ago. The second best time is today.
+            </p>
+            <Link
+              href={tryGrayUrl}
+              className="inline-flex items-center justify-center px-10 py-5 bg-white text-black text-lg font-bold rounded-full hover:bg-zinc-200 transition-colors"
+            >
+              Start Free—No Credit Card Required
+            </Link>
 
-          <div className="mt-12 flex flex-wrap justify-center gap-8 text-sm text-zinc-500">
-            <span className="flex items-center gap-2"><Check className="w-4 h-4" /> Free tier forever</span>
-            <span className="flex items-center gap-2"><Check className="w-4 h-4" /> Cancel anytime</span>
-            <span className="flex items-center gap-2"><Check className="w-4 h-4" /> Your data stays private</span>
+            <div className="mt-12 flex flex-wrap justify-center gap-8 text-sm text-zinc-500">
+              <span className="flex items-center gap-2"><Check className="w-4 h-4" /> Free tier forever</span>
+              <span className="flex items-center gap-2"><Check className="w-4 h-4" /> Cancel anytime</span>
+              <span className="flex items-center gap-2"><Check className="w-4 h-4" /> Your data stays private</span>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* Footer */}
       <footer id="contact" className="site-footer">

@@ -15,10 +15,11 @@ function GrayWorkspaceHeader({
   onUpgradeClick,
   children,
 }: GrayWorkspaceHeaderProps) {
+  const normalizedPlanLabel = planLabel.trim().length ? planLabel.trim() : "Scout";
   const normalizedStreak = Number.isFinite(streakCount)
     ? Math.max(0, Math.trunc(streakCount))
     : 0;
-  const isDepthMember = planLabel.trim().toLowerCase() === "depth";
+  const isDepthMember = normalizedPlanLabel.toLowerCase() === "depth";
 
   const handlePlanBadgeClick = () => {
     if (isDepthMember) {
@@ -34,13 +35,11 @@ function GrayWorkspaceHeader({
           type="button"
           className={styles.planBadge}
           data-state={isDepthMember ? "active" : "cta"}
-          aria-label={isDepthMember ? `${planLabel} plan` : "Upgrade to Depth"}
+          aria-label={isDepthMember ? `${normalizedPlanLabel} plan` : "Upgrade"}
           aria-disabled={isDepthMember ? "true" : "false"}
           onClick={handlePlanBadgeClick}
         >
-          <span className={styles.planBadgeLabel}>
-            {isDepthMember ? planLabel : "Upgrade"}
-          </span>
+          <span className={styles.planBadgeLabel}>Upgrade</span>
         </button>
         {normalizedStreak > 0 ? (
           <div className={styles.streakBadge} aria-label={`${normalizedStreak} day streak`}>

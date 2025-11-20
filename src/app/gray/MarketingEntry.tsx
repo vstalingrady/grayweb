@@ -8,11 +8,17 @@ export default async function GrayMarketingEntry() {
   const requestHeaders = await headers();
   const host = hostFromHeaders(requestHeaders);
   const tryGrayUrl = resolveTryGrayUrl(host);
+  const storeId = process.env.LEMONSQUEEZY_STORE_ID;
+  const voyagerVariantId = process.env.LEMONSQUEEZY_VOYAGER;
+  const pioneerVariantId = process.env.LEMONSQUEEZY_PIONEER;
   return (
     <>
       <MarketingStyles />
       <GrayMarketingClient
         tryGrayUrl={tryGrayUrl}
+        storeId={storeId}
+        voyagerVariantId={voyagerVariantId}
+        pioneerVariantId={pioneerVariantId}
       />
     </>
   );

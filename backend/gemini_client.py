@@ -52,8 +52,11 @@ class GeminiService:
         self._response_mime_type = os.getenv("GEMINI_RESPONSE_MIME_TYPE")
 
         self._api_key = self._first_valid_api_key()
+        # Default to Gemini Flash Lite for hackathon setup; can be overridden via env.
         self._default_model = os.getenv("GEMINI_DEFAULT_MODEL", "models/gemini-flash-lite-latest")
         self._light_model = os.getenv("GEMINI_LIGHT_MODEL", "models/gemini-flash-lite-latest")
+        # Optional dedicated model for \"pro\" tier; falls back to default if unset.
+        self._pro_model = os.getenv("GEMINI_PRO_MODEL", self._default_model)
 
         if self._api_key:
             self._client = genai.Client(api_key=self._api_key)
@@ -82,8 +85,32 @@ class GeminiService:
         return None
 
     def _choose_model(self, override: Optional[str]) -> str:
+        """
+        Resolve the concrete Gemini model to use.
+
+        The frontend currently passes tier labels like \"lite\", \"base\", or \"pro\"
+        instead of full model IDs. To keep that simple on the client, we translate
+        those tier labels here into concrete model names.
+
+        Per request:
+          - Gray Base  -> models/gemini-flash-latest
+          - Gray Pro   -> models/gemini-3-pro-preview
+          - Gray Lite  -> current light model (env or default)
+        """
         if override:
+            tier = override.strip().lower()
+            if tier in {"lite", "gray-lite"}:
+                # Keep Lite mapped to the configured light model.
+                return self._light_model
+            if tier in {"base", "gray-base"}:
+                # Hard-coded mapping for Gray Base.
+                return "models/gemini-flash-latest"
+            if tier in {"pro", "gray-pro"}:
+                # Hard-coded mapping for Gray Pro.
+                return "models/gemini-3-pro-preview"
+            # If the override already looks like a full model ID, use it verbatim.
             return override
+        # Default when no override is provided: use the configured default.
         return self._default_model
 
     def _build_context_block(self, workspace_context: Optional[str], time_context: Optional[str]) -> Optional[str]:
