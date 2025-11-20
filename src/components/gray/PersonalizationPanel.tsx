@@ -632,15 +632,9 @@ export function PersonalizationPanel({
               <div className={styles.personalizationContextUsage}>
                 <div className={styles.personalizationContextUsageHeader}>
                   <p className={styles.personalizationSectionLabel}>Context usage</p>
-                  {contextProviderLabel ? (
-                    <span className={styles.personalizationHint}>Model: {contextProviderLabel}</span>
-                  ) : null}
                 </div>
                 <div className={styles.personalizationContextPercentRow}>
                   <span className={styles.personalizationContextPercent}>{contextPercentLabel}</span>
-                  {contextMeterDescription ? (
-                    <span className={styles.personalizationContextPercentHint}>{contextMeterDescription}</span>
-                  ) : null}
                 </div>
                 <div className={styles.personalizationContextStats}>
                   {contextMessagesLabel ? <span>{contextMessagesLabel}</span> : null}
@@ -659,10 +653,7 @@ export function PersonalizationPanel({
                     style={{ width: `${contextPercent}%` }}
                   />
                 </div>
-                <div className={styles.personalizationContextFooter}>
-                  {contextLimitLabel ? <span>{contextLimitLabel}</span> : null}
-                  {contextFooterDescription ? <span>{contextFooterDescription}</span> : null}
-                </div>
+
               </div>
             </section>
             <section className={styles.personalizationCard}>
