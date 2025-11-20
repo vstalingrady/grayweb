@@ -22,7 +22,6 @@ import PerformanceChart from "./components/PerformanceChart";
 
 import { DiagnosticModule } from '@/components/gray/DiagnosticModule';
 import { FeaturesGrid } from '@/components/gray/FeaturesGrid';
-import { PricingSection } from '@/components/gray/PricingSection';
 
 type GrayMarketingClientProps = {
   tryGrayUrl: string;
@@ -91,11 +90,9 @@ export default function GrayMarketingClient({
       </section>
 
       <DiagnosticModule />
-      <FeaturesGrid />
-      <PricingSection />
 
       {/* Final CTA */}
-      <section className="py-32 px-4 md:px-6 text-center relative overflow-hidden bg-gradient-to-b from-zinc-900 to-black">
+      <section className="py-32 px-4 md:px-6 text-center relative overflow-hidden bg-black">
         <div className="container mx-auto relative z-10">
           <h2 className="text-4xl md:text-5xl font-bold mb-6 tracking-tight">Stop planning. Start building.</h2>
           <p className="text-xl text-zinc-400 mb-10 max-w-2xl mx-auto">
@@ -206,4 +203,3 @@ export default function GrayMarketingClient({
     </div>
   );
 }
-
