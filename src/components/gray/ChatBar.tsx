@@ -17,6 +17,7 @@ export type GrayChatBarProps = {
   isReasoningLocked?: boolean;
   isSearchEnabled?: boolean;
   onToggleSearch?: () => void;
+  modelSelector?: React.ReactNode;
 };
 
 export function GrayChatBar({
@@ -32,6 +33,7 @@ export function GrayChatBar({
   isReasoningLocked = false,
   isSearchEnabled = false,
   onToggleSearch,
+  modelSelector,
 }: GrayChatBarProps) {
   const computedDisabled =
     typeof isSubmitDisabled === "boolean" ? isSubmitDisabled : value.trim().length === 0;
@@ -48,35 +50,16 @@ export function GrayChatBar({
           <Paperclip size={18} />
         </button>
       ) : null}
-      <input
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        placeholder={placeholder}
-        className={styles.chatInput}
-        aria-label={placeholder}
-      />
-      {onToggleSearch ? (
-        <button
-          type="button"
-          className={`${styles.chatIconButton} ${isSearchEnabled ? styles.chatIconButtonActive : ""}`}
-          aria-label="Toggle web search"
-          onClick={onToggleSearch}
-          title="Toggle web search"
-        >
-          <Search size={18} />
-        </button>
-      ) : null}
-      {onToggleReasoning && !isReasoningLocked ? (
-        <button
-          type="button"
-          className={`${styles.chatIconButton} ${isReasoningEnabled ? styles.chatIconButtonActive : ""}`}
-          aria-label="Toggle reasoning mode"
-          onClick={onToggleReasoning}
-          title="Toggle reasoning mode"
-        >
-          <Lightbulb size={18} />
-        </button>
-      ) : null}
+      <div className={styles.chatInputWrapper}>
+        <input
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder={placeholder}
+          className={styles.chatInput}
+          aria-label={placeholder}
+        />
+        {modelSelector}
+      </div>
       <button
         type="submit"
         aria-label="Send message"

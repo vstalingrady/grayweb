@@ -37,13 +37,11 @@ const GrayChatComposerBase = ({
           isReasoningLocked={isReasoningLocked}
           isSearchEnabled={searchEnabled}
           onToggleSearch={() => setSearchEnabled(!searchEnabled)}
+          modelSelector={<ModelSelector />}
         />
         {showUnderline ? <div className={styles.chatBarUnderline} aria-hidden="true" /> : null}
       </div>
       {attachmentTray}
-      <div className={styles.modelSelectorContainer}>
-        <ModelSelector />
-      </div>
       <p className={styles.chatDisclaimer}>Gray can make mistakes. Check important info.</p>
     </div>
   );
