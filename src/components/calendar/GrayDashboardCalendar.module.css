@@ -758,12 +758,12 @@
 }
 
 .calendarHeaderCell strong {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 32px;
   height: 32px;
-  line-height: 32px;
-  text-align: center;
-  vertical-align: middle;
+  line-height: 1;
   padding: 0;
   border-radius: 999px;
   border: 1px solid transparent;
@@ -1035,9 +1035,11 @@
   background: var(--event-line-color, rgba(255, 255, 255, 0.9));
   transform: translate(-50%, -50%);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-  pointer-events: auto; /* Changed from none to auto to ensure it captures drags */
+  pointer-events: auto;
+  /* Changed from none to auto to ensure it captures drags */
   transition: transform 0.1s ease;
-  z-index: 2; /* Ensure dot is above the line */
+  z-index: 2;
+  /* Ensure dot is above the line */
 }
 
 /* Add a larger invisible hit target around the dot */
@@ -1047,7 +1049,8 @@
   left: 0;
   right: 0;
   top: 50%;
-  height: 12px; /* Invisible vertical hit area spanning the width */
+  height: 12px;
+  /* Invisible vertical hit area spanning the width */
   margin-top: -6px;
   background: transparent;
   pointer-events: auto;
@@ -1069,7 +1072,8 @@
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 16px; /* Slightly larger hit target */
+  width: 16px;
+  /* Slightly larger hit target */
   height: 16px;
   border-radius: 50%;
   background: var(--event-line-color, rgba(255, 255, 255, 0.9));
@@ -1090,7 +1094,8 @@
   background: var(--event-line-color, rgba(255, 255, 255, 0.9));
   border-radius: 999px;
   opacity: 0.8;
-  pointer-events: none; /* Line remains non-clickable */
+  pointer-events: none;
+  /* Line remains non-clickable */
 }
 
 
