@@ -853,9 +853,9 @@ function GrayPageClientInner({
   };
 
 
-  // Fetch context usage for general session if in dashboard view and personalization is open
+  // Fetch context usage for general session when personalization is open
   useEffect(() => {
-    if (isPersonalizationOpen && viewMode === "general" && generalSessionId && !contextUsageSummary) {
+    if (isPersonalizationOpen && generalSessionId && !contextUsageSummary) {
       apiService.getConversationUsage(generalSessionId)
         .then((usage) => {
           if (usage) {
@@ -863,7 +863,7 @@ function GrayPageClientInner({
               conversationId: usage.conversationId,
               messageCount: usage.messageCount,
               conversationTokens: usage.conversationTokens,
-              workspaceTokens: 0, // Can't easily estimate without full context, but conversation is main part
+              workspaceTokens: 0,
               totalTokens: usage.conversationTokens,
               tokensRemaining: usage.limit > 0 ? Math.max(0, usage.limit - usage.conversationTokens) : 0,
               limit: usage.limit,
@@ -875,7 +875,7 @@ function GrayPageClientInner({
         })
         .catch((err) => console.error("Failed to fetch general session usage", err));
     }
-  }, [isPersonalizationOpen, viewMode, generalSessionId, contextUsageSummary]);
+  }, [isPersonalizationOpen, generalSessionId, contextUsageSummary]);
 
   const renderMainSurface = () => {
     if (viewMode === "general") {
@@ -1028,12 +1028,37 @@ function GrayPageClientInner({
 
     dedupedThreadSessions.forEach((session) => {
       const date = new Date(session.updatedAt);
-      const groupId = `${date.getFullYear()}-${date.getMonth()}`;
-      const label =
-        date.getFullYear() === currentYear
-          ? date.toLocaleDateString([], { month: "long" })
-          : date.toLocaleDateString([], { month: "long", year: "numeric" });
-      const sortKey = new Date(date.getFullYear(), date.getMonth(), 1).getTime();
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const oneWeekAgo = new Date(today);
+      oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+
+      let groupId: string;
+      let label: string;
+      let sortKey: number;
+
+      if (date >= today) {
+        groupId = "recent";
+        label = "Recent";
+        sortKey = Number.MAX_SAFE_INTEGER;
+      } else if (date >= yesterday) {
+        groupId = "yesterday";
+        label = "Yesterday";
+        sortKey = Number.MAX_SAFE_INTEGER - 1;
+      } else if (date >= oneWeekAgo) {
+        groupId = "this-week";
+        label = "This Week";
+        sortKey = Number.MAX_SAFE_INTEGER - 2;
+      } else {
+        groupId = `${date.getFullYear()}-${date.getMonth()}`;
+        label =
+          date.getFullYear() === currentYear
+            ? date.toLocaleDateString([], { month: "long" })
+            : date.toLocaleDateString([], { month: "long", year: "numeric" });
+        sortKey = new Date(date.getFullYear(), date.getMonth(), 1).getTime();
+      }
 
       const href =
         session.scope === "general" || session.id === GENERAL_CHAT_SESSION_ID
@@ -1291,9 +1316,8 @@ function GrayPageClientInner({
               hour: "2-digit",
               minute: "2-digit",
             });
-            return `- ${dateLabel} [${startStr} - ${endStr}] ${e.title}${
-              e.description ? ` (${e.description})` : ""
-            }`;
+            return `- ${dateLabel} [${startStr} - ${endStr}] ${e.title}${e.description ? ` (${e.description})` : ""
+              }`;
           })
           .join("\n")
       );

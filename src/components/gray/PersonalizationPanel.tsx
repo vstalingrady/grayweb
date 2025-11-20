@@ -8,6 +8,7 @@ import styles from "@/app/gray/GrayPageClient.module.css";
 import type { ContextUsageSummary } from "@/components/gray/types";
 import { useUser } from "@/contexts/UserContext";
 import { useChatStore } from "@/components/gray/ChatProvider";
+import { apiService } from "@/lib/api";
 
 type ApiStatus = {
   tone: "idle" | "loading" | "success" | "error";
@@ -211,6 +212,8 @@ export function PersonalizationPanel({
   const [newBackgroundFileName, setNewBackgroundFileName] = useState<string | null>(null);
   const [newBackgroundFileError, setNewBackgroundFileError] = useState<string | null>(null);
   const [backgroundSaveState, setBackgroundSaveState] = useState<ApiStatus>({ tone: "idle" });
+  const [compressState, setCompressState] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [compressMessage, setCompressMessage] = useState<string | null>(null);
   const showAlignmentProfile = false; // Temporarily hide alignment profile card until updated.
 
   useEffect(() => {
@@ -493,6 +496,33 @@ export function PersonalizationPanel({
     }
   };
 
+  const handleCompressConversation = async () => {
+    const conversationId = contextUsage?.conversationId;
+    if (!conversationId) {
+      setCompressState("error");
+      setCompressMessage("No active conversation to compress");
+      return;
+    }
+
+    setCompressState("loading");
+    setCompressMessage("Compressing...");
+
+    try {
+      const result = await apiService.compressConversation(conversationId);
+      setCompressState("success");
+      setCompressMessage(result.message || "Conversation compressed successfully");
+
+      // Auto-clear success message after 3 seconds
+      setTimeout(() => {
+        setCompressState("idle");
+        setCompressMessage(null);
+      }, 3000);
+    } catch (error) {
+      setCompressState("error");
+      setCompressMessage(error instanceof Error ? error.message : "Failed to compress conversation");
+    }
+  };
+
   const handleOverlayClick = (event: MouseEvent<HTMLDivElement>) => {
     if (event.target === event.currentTarget) {
       onClose();
@@ -652,6 +682,26 @@ export function PersonalizationPanel({
                     className={styles.personalizationContextMeterFill}
                     style={{ width: `${contextPercent}%` }}
                   />
+                </div>
+                <div style={{ marginTop: "12px", display: "flex", flexDirection: "column", gap: "8px" }}>
+                  <button
+                    type="button"
+                    className={styles.personalizationFormButton}
+                    onClick={handleCompressConversation}
+                    disabled={compressState === "loading" || !contextUsage?.conversationId}
+                    style={{ width: "100%" }}
+                  >
+                    {compressState === "loading" ? "Compressing..." : "Compress Chat"}
+                  </button>
+                  {compressMessage ? (
+                    <span
+                      className={styles.personalizationFormStatus}
+                      data-status={compressState}
+                      style={{ textAlign: "center" }}
+                    >
+                      {compressMessage}
+                    </span>
+                  ) : null}
                 </div>
 
               </div>

@@ -444,6 +444,7 @@ export interface ChatRequest {
   system_prompt?: string;
   context?: string;
   time_context?: string;
+  timezone?: string;
   model?: string;
   attachments?: ChatAttachmentRequest[];
   responseJsonSchema?: Record<string, unknown>;
@@ -1614,6 +1615,12 @@ class ApiService {
       }
       throw error;
     }
+  }
+
+  async compressConversation(conversationId: string): Promise<{ success: boolean; message: string }> {
+    return this.fetch<{ success: boolean; message: string }>(`/api/conversation/${encodeURIComponent(conversationId)}/compress`, {
+      method: 'POST',
+    });
   }
 
   async createConversation(title: string, userId: number): Promise<{ id: string; title: string; history: ChatMessage[] }> {
