@@ -6,11 +6,10 @@
 .trigger {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
+  gap: 8px;
+  padding: 0;
+  background: transparent;
+  border: none;
   color: rgba(255, 255, 255, 0.9);
   font-size: 0.85rem;
   font-weight: 500;
@@ -18,9 +17,8 @@
   transition: all 0.2s ease;
 }
 
-.trigger:hover, .trigger[aria-expanded="true"] {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.2);
+.trigger:hover {
+  color: rgba(255, 255, 255, 1);
 }
 
 .triggerIcon {
@@ -32,16 +30,18 @@
 }
 
 .chevron {
-  opacity: 0.5;
+  opacity: 0.7;
 }
 
 .menu {
   position: absolute;
   bottom: calc(100% + 8px);
-  right: 0; /* Align to right edge of trigger */
+  right: 0;
+  /* Align to right edge of trigger */
   left: auto;
   width: 280px;
-  background: #1a1a1a; /* Fallback */
+  background: #1a1a1a;
+  /* Fallback */
   background: var(--color-background-elevated, #1a1a1a);
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 16px;

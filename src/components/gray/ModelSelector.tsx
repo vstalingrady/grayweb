@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useCallback, useMemo, useState, useRef, useEffect } from "react";
-import { Zap, Box, Sparkles, Lock, ChevronUp, Rocket } from "lucide-react";
+import { Zap, Box, Sparkles, Lock, ChevronUp, Rocket, Grid } from "lucide-react";
 import { useChatStore } from "@/components/gray/ChatProvider";
 import { useUser } from "@/contexts/UserContext";
 import styles from "./ModelSelector.module.css";
@@ -16,7 +16,7 @@ type ModelOption = {
 
 const OPTIONS: ModelOption[] = [
   { id: "lite", label: "Lite", description: "Quick responses", icon: Zap, tierRequired: "scout" },
-  { id: "base", label: "Base", description: "Balanced intelligence", icon: Box, tierRequired: "scout" },
+  { id: "base", label: "Base", description: "Balanced intelligence", icon: Box, tierRequired: "voyager" },
   { id: "pro", label: "Pro", description: "Complex tasks", icon: Sparkles, tierRequired: "voyager" },
 ];
 
@@ -89,6 +89,7 @@ export const ModelSelector = memo(() => {
         aria-label="Select model"
         type="button"
       >
+        <span className={styles.triggerLabel}>{activeOption.label}</span>
         <ChevronUp className={styles.chevron} size={16} />
       </button>
 
@@ -121,6 +122,15 @@ export const ModelSelector = memo(() => {
               </button>
             );
           })}
+
+          <div className={styles.divider} />
+
+          {/* All Models - Locked */}
+          <button className={styles.actionItem} type="button" disabled>
+            <Grid size={16} />
+            <span>All Models</span>
+            <Lock size={14} className={styles.actionLock} />
+          </button>
 
           {/* Upgrade Section */}
           {nextTier && (
