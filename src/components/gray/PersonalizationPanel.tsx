@@ -547,14 +547,29 @@ export function PersonalizationPanel({
             <p className={styles.personalizationEyebrow}>Personalization</p>
             <h2 id="personalization-title">{viewerName}</h2>
           </div>
-          <button
-            type="button"
-            className={styles.personalizationClose}
-            onClick={onClose}
-            aria-label="Close personalization"
-          >
-            <X size={18} />
-          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <button
+              type="button"
+              className={styles.personalizationFormButton}
+              onClick={handleCompressConversation}
+              disabled={compressState === "loading" || !contextUsage?.conversationId}
+              style={{
+                padding: "6px 16px",
+                fontSize: "0.7rem",
+                minWidth: "auto"
+              }}
+            >
+              {compressState === "loading" ? "..." : compressState === "success" ? "Done" : "Compress"}
+            </button>
+            <button
+              type="button"
+              className={styles.personalizationClose}
+              onClick={onClose}
+              aria-label="Close personalization"
+            >
+              <X size={18} />
+            </button>
+          </div>
         </header>
 
         <div className={styles.personalizationGrid}>
@@ -658,52 +673,6 @@ export function PersonalizationPanel({
                     <span className={styles.personalizationSlider} />
                   </span>
                 </button>
-              </div>
-              <div className={styles.personalizationContextUsage}>
-                <div className={styles.personalizationContextUsageHeader}>
-                  <p className={styles.personalizationSectionLabel}>Context usage</p>
-                </div>
-                <div className={styles.personalizationContextPercentRow}>
-                  <span className={styles.personalizationContextPercent}>{contextPercentLabel}</span>
-                </div>
-                <div className={styles.personalizationContextStats}>
-                  {contextMessagesLabel ? <span>{contextMessagesLabel}</span> : null}
-                  <span>{contextTokensLabel}</span>
-                </div>
-                <div
-                  className={styles.personalizationContextMeter}
-                  role="meter"
-                  aria-valuemin={0}
-                  aria-valuemax={effectiveContextLimit}
-                  aria-valuenow={Math.min(contextTokensUsed, effectiveContextLimit)}
-                  aria-valuetext={contextMeterValueText}
-                >
-                  <div
-                    className={styles.personalizationContextMeterFill}
-                    style={{ width: `${contextPercent}%` }}
-                  />
-                </div>
-                <div style={{ marginTop: "12px", display: "flex", flexDirection: "column", gap: "8px" }}>
-                  <button
-                    type="button"
-                    className={styles.personalizationFormButton}
-                    onClick={handleCompressConversation}
-                    disabled={compressState === "loading" || !contextUsage?.conversationId}
-                    style={{ width: "100%" }}
-                  >
-                    {compressState === "loading" ? "Compressing..." : "Compress Chat"}
-                  </button>
-                  {compressMessage ? (
-                    <span
-                      className={styles.personalizationFormStatus}
-                      data-status={compressState}
-                      style={{ textAlign: "center" }}
-                    >
-                      {compressMessage}
-                    </span>
-                  ) : null}
-                </div>
-
               </div>
             </section>
             <section className={styles.personalizationCard}>
@@ -894,6 +863,48 @@ export function PersonalizationPanel({
                   </button>
                 </div>
               </form>
+            </section>
+
+            <section className={styles.personalizationCard}>
+              <div className={styles.personalizationCardHeader}>
+                <div>
+                  <h3>Context usage</h3>
+                  <p>Track how much of your conversation context you&apos;ve used.</p>
+                </div>
+              </div>
+              <div className={styles.personalizationContextUsage}>
+                <div className={styles.personalizationContextPercentRow}>
+                  <span className={styles.personalizationContextPercent}>{contextPercentLabel}</span>
+                </div>
+                <div className={styles.personalizationContextStats}>
+                  {contextMessagesLabel ? <span>{contextMessagesLabel}</span> : null}
+                  <span>{contextTokensLabel}</span>
+                </div>
+                <div
+                  className={styles.personalizationContextMeter}
+                  role="meter"
+                  aria-valuemin={0}
+                  aria-valuemax={effectiveContextLimit}
+                  aria-valuenow={Math.min(contextTokensUsed, effectiveContextLimit)}
+                  aria-valuetext={contextMeterValueText}
+                >
+                  <div
+                    className={styles.personalizationContextMeterFill}
+                    style={{ width: `${contextPercent}%` }}
+                  />
+                </div>
+                <div style={{ marginTop: "12px", display: "flex", flexDirection: "column", gap: "8px" }}>
+                  {compressMessage ? (
+                    <span
+                      className={styles.personalizationFormStatus}
+                      data-status={compressState}
+                      style={{ textAlign: "center" }}
+                    >
+                      {compressMessage}
+                    </span>
+                  ) : null}
+                </div>
+              </div>
             </section>
 
             {/* Memory card temporarily disabled per request */}

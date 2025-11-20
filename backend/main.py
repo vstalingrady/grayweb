@@ -4598,7 +4598,7 @@ async def get_conversation_usage(conversation_id: str):
         # Set context limits by tier
         TIER_CONTEXT_LIMITS = {
             "scout": 65_536,      # 64k tokens
-            "voyager": 262_144,   # 256k tokens  
+            "voyager": 1_048_576, # 1M tokens (full context)
             "pioneer": 1_048_576, # 1M tokens (full context)
         }
         
