@@ -447,7 +447,7 @@ export function GrayDashboardView({
           return;
         }
 
-        // Fallback: Try to match complex chat-session reminder IDs (reminder-assistant-{id}-{iso})
+        // Fallback 1: Try to match complex chat-session reminder IDs (reminder-assistant-{id}-{iso})
         // to the normalized plan ID (reminder-{id}).
         const complexMatch = event.id.match(/^reminder-[^-]+-(\d+)-/);
         if (complexMatch) {
@@ -460,6 +460,20 @@ export function GrayDashboardView({
             return;
           }
         }
+
+        // Fallback 2: If still not found (e.g. stale displayPlans but valid chat event), 
+        // construct a synthetic plan to trigger deletion by ID.
+        console.log(`[CALENDAR] Deleting reminder event via synthetic fallback: ${event.id}`);
+        const syntheticPlan: PlanItem = {
+          id: event.id,
+          label: event.title,
+          completed: false,
+          deadline: null,
+          scheduleSlot: null,
+          details: null,
+        };
+        onDeletePlan(syntheticPlan);
+        return;
       }
 
       // Handle plan events (e.g., "plan-event-123")
