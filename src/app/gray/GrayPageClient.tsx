@@ -3,7 +3,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { ChangeEvent, FormEvent, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Gem, MessageSquarePlus, LayoutDashboard, History, Search } from "lucide-react";
+import { Gem, MessageSquarePlus, LayoutDashboard, History, Search, FileText } from "lucide-react";
 import { GrayEnhancedSidebar } from "@/components/gray/EnhancedSidebar";
 import { AddPlanHabitModal } from "@/components/gray/AddPlanHabitModal";
 import { GrayChatBar, type GrayChatBarProps } from "@/components/gray/ChatBar";
@@ -75,6 +75,11 @@ const GrayGeneralView = dynamic(
 
 const GrayHistoryView = dynamic(
   () => import("@/components/gray/HistoryView").then((mod) => mod.GrayHistoryView),
+  { loading: () => null }
+);
+
+const GrayReferenceView = dynamic(
+  () => import("@/components/gray/ReferenceView").then((mod) => mod.ReferenceView),
   { loading: () => null }
 );
 
@@ -294,6 +299,7 @@ const SIDEBAR_ITEMS: SidebarNavItem[] = [
   { id: "general", label: "General", icon: Gem },
   { id: "threads", label: "Threads", icon: MessageSquarePlus },
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { id: "reference", label: "Reference Library", icon: FileText },
   { id: "history", label: "History", icon: History },
 ];
 
@@ -306,6 +312,7 @@ const NAVIGATION_ROUTES: Partial<Record<SidebarNavKey, string>> = {
   general: "/g",
   threads: "/",
   dashboard: "/dashboard",
+  reference: "/reference",
   history: "/history",
 };
 
@@ -737,6 +744,9 @@ function GrayPageClientInner({
       ? "chat"
       : effectiveManualViewMode ?? (activeNav === "history" ? "history" : baseViewMode);
   const renderPrimaryView = () => {
+    if (activeNav === "reference") {
+      return <GrayReferenceView />;
+    }
     if (isDashboardView) {
       return (
         <GrayDashboardView
@@ -1167,6 +1177,15 @@ function GrayPageClientInner({
     }
 
     if (navId === "dashboard") {
+      setManualViewMode(null);
+      const target = NAVIGATION_ROUTES[navId];
+      if (target) {
+        router.push(target);
+      }
+      return;
+    }
+
+    if (navId === "reference") {
       setManualViewMode(null);
       const target = NAVIGATION_ROUTES[navId];
       if (target) {
