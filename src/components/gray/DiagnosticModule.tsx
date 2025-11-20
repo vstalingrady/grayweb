@@ -1,53 +1,81 @@
 import React from 'react';
 import styles from './DiagnosticModule.module.css';
+import { X, Check } from 'lucide-react';
 
 export const DiagnosticModule = () => {
     return (
         <section className={styles.moduleWrapper}>
+            <div className={styles.introText}>
+                <h2>You're stuck between knowing and doing.</h2>
+                <p>
+                    You know what you should do. You just can't seem to do it. 
+                    Most people fail not because they're lazy, but because they lack the support system that makes success inevitable.
+                </p>
+            </div>
+
             <div className={styles.moduleContainer}>
                 
-                {/* LEFT PANEL: THE PROBLEM (CAGE) */}
-                <div className={styles.panel}>
-                    <div className={styles.panelHeader}>
-                        <span className={styles.mono}>State: Trapped Potential</span>
-                        <span className={styles.mono} style={{ color: 'var(--signal-red)' }}>LOCKED</span>
-                    </div>
-                    
+                {/* LEFT PANEL: THE PROBLEM */}
+                <div className={`${styles.panel} ${styles.problemPanel}`}>
                     <div className={styles.visBox}>
-                        <div className={styles.cage}>
-                            <div className={styles.cageBars}></div>
-                            <div className={styles.trappedDot}></div>
+                        <div className={styles.chaosContainer}>
+                            <div className={styles.particle}></div>
+                            <div className={styles.particle}></div>
+                            <div className={styles.particle}></div>
+                            <div className={styles.particle}></div>
+                            <div className={styles.particle}></div>
+                            <div className={styles.particle}></div>
                         </div>
+                        <div className={styles.visLabel}>ENTROPY</div>
                     </div>
 
-                    <h3 className={styles.mono} style={{ fontSize: '1.1rem', marginBottom: '1rem' }}>The "Gifted" Trap</h3>
-                    <p className={styles.dim} style={{ fontSize: '0.9rem', lineHeight: '1.6' }}>
-                        You bounce around inside your own head. Intense energy, zero velocity. 
-                        You procrastinate because the cage of "perfection" feels safer than the risk of failure.
-                    </p>
+                    <div className={styles.panelContent}>
+                        <h3 className={styles.panelTitle}>
+                            <X className={styles.iconRed} size={20} />
+                            The Problem
+                        </h3>
+                        <ul className={styles.problemList}>
+                            <li>
+                                <span className={styles.bullet}></span>
+                                No external accountability
+                            </li>
+                            <li>
+                                <span className={styles.bullet}></span>
+                                No one to call out your patterns
+                            </li>
+                            <li>
+                                <span className={styles.bullet}></span>
+                                No structure to keep you on track
+                            </li>
+                            <li>
+                                <span className={styles.bullet}></span>
+                                No mentor who deeply understands your context
+                            </li>
+                        </ul>
+                    </div>
                 </div>
 
-                {/* RIGHT PANEL: THE SOLUTION (BREAKOUT) */}
-                <div className={styles.panel}>
-                    <div className={styles.panelHeader}>
-                        <span className={styles.mono}>State: Gray Protocol</span>
-                        <span className={styles.mono} style={{ color: 'var(--signal-green)' }}>UNBOUND</span>
-                    </div>
-
-                    <div className={styles.visBox}>
-                        <div className={`${styles.cage} ${styles.broken}`}>
-                            <div className={styles.cageBars}></div>
-                            <div className={styles.escapeLine}>
-                                <div className={styles.escapeHead}></div>
-                            </div>
+                {/* RIGHT PANEL: THE SOLUTION */}
+                <div className={`${styles.panel} ${styles.solutionPanel}`}>
+                     <div className={styles.visBox}>
+                        <div className={styles.flowContainer}>
+                            <div className={styles.streamLine}></div>
+                            <div className={styles.streamLine}></div>
+                            <div className={styles.streamLine}></div>
                         </div>
+                        <div className={styles.visLabel} style={{ color: '#00FF94' }}>FLOW</div>
                     </div>
 
-                    <h3 className={styles.mono} style={{ fontSize: '1.1rem', marginBottom: '1rem' }}>Breaking Out</h3>
-                    <p className={styles.dim} style={{ fontSize: '0.9rem', lineHeight: '1.6' }}>
-                        Gray breaks the loop. It finds the single smallest opening—one actionable step—and 
-                        launches you through it. Momentum replaces paralysis.
-                    </p>
+                    <div className={styles.panelContent}>
+                        <h3 className={styles.panelTitle}>
+                            <Check className={styles.iconGreen} size={20} />
+                            The Solution
+                        </h3>
+                        <p className={styles.solutionText}>
+                            Gray gives you that system. An always-on mentor that notices when you slip, 
+                            helps you get back on track, and pushes you to be your best self.
+                        </p>
+                    </div>
                 </div>
 
             </div>
