@@ -1,111 +1,125 @@
 "use client";
 
-import { Calendar, Download } from 'lucide-react'
-import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from "recharts"
+import { useEffect, useRef, useState, useMemo } from "react";
 
-const data = [
-  { date: "Jan 1", price: 355 }, { date: "Jan 8", price: 358 }, { date: "Jan 15", price: 345 },
-  { date: "Jan 22", price: 365 }, { date: "Jan 29", price: 355 }, { date: "Feb 5", price: 360 },
-  { date: "Feb 12", price: 345 }, { date: "Feb 19", price: 348 }, { date: "Feb 26", price: 320 },
-  { date: "Mar 5", price: 285 }, { date: "Mar 12", price: 305 }, { date: "Mar 19", price: 325 },
-  { date: "Mar 26", price: 328 }, { date: "Apr 2", price: 318 }, { date: "Apr 9", price: 325 },
-  { date: "Apr 16", price: 315 }, { date: "Apr 23", price: 320 }, { date: "Apr 30", price: 345 },
-  { date: "May 7", price: 335 }, { date: "May 14", price: 330 }, { date: "May 21", price: 320 },
-  { date: "May 28", price: 300 }, { date: "Jun 4", price: 315 }, { date: "Jun 11", price: 310 },
-  { date: "Jun 18", price: 318 }, { date: "Jun 25", price: 312 }, { date: "Jul 2", price: 325 },
-  { date: "Jul 9", price: 330 }, { date: "Jul 16", price: 332 }, { date: "Jul 23", price: 305 },
-  { date: "Jul 30", price: 325 }, { date: "Aug 6", price: 315 }, { date: "Aug 13", price: 305 },
-  { date: "Aug 20", price: 312 }, { date: "Aug 27", price: 335 }, { date: "Sep 3", price: 340 },
-  { date: "Sep 10", price: 338 }, { date: "Sep 17", price: 330 }, { date: "Sep 24", price: 335 },
-  { date: "Oct 1", price: 320 }, { date: "Oct 8", price: 340 }, { date: "Oct 15", price: 350 },
-  { date: "Oct 22", price: 345 }, { date: "Oct 29", price: 330 }, { date: "Nov 5", price: 335 },
-  { date: "Nov 12", price: 348 }, { date: "Nov 19", price: 348 }, { date: "Nov 26", price: 380 },
-  { date: "Dec 3", price: 410 }, { date: "Dec 10", price: 420 }, { date: "Dec 17", price: 428 },
-  { date: "Dec 24", price: 415 }, { date: "Dec 31", price: 425 }, { date: "Jan 7", price: 445 },
-  { date: "Jan 14", price: 420 }, { date: "Jan 21", price: 435 }, { date: "Jan 28", price: 450 },
-  { date: "Feb 4", price: 430 }, { date: "Feb 11", price: 455 }, { date: "Feb 18", price: 435 },
-  { date: "Feb 25", price: 440 }, { date: "Mar 4", price: 430 }, { date: "Mar 11", price: 410 },
-  { date: "Mar 18", price: 425 }, { date: "Mar 25", price: 435 }, { date: "Apr 1", price: 428 },
-  { date: "Apr 8", price: 440 }, { date: "Apr 15", price: 450 }, { date: "Apr 22", price: 430 },
-  { date: "Apr 29", price: 460 }, { date: "May 6", price: 460 }, { date: "May 13", price: 440 },
-  { date: "May 20", price: 465 }, { date: "May 27", price: 450 }, { date: "Jun 3", price: 460 },
-  { date: "Jun 10", price: 435 }, { date: "Jun 17", price: 445 }, { date: "Jun 24", price: 430 },
-  { date: "Jul 1", price: 400 }, { date: "Jul 8", price: 405 }, { date: "Jul 15", price: 400 }
-]
+// Number of data points to show on screen
+const POINTS_COUNT = 150;
 
 export default function PerformanceChart() {
-  return (
-    <div className="flex flex-col gap-6 p-6 bg-[#0D0D0D] rounded-2xl">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 md:gap-2 lg:gap-4 flex-wrap">
-        <div className="flex items-center gap-3">
-          <h2 className="text-xl font-medium text-white">Proactivity Score</h2>
-          <div className="flex items-center gap-2 px-3 py-1 bg-[#1A1A1A] rounded-full border border-[#333]">
-            <div className="w-4 h-4 rounded-full bg-green-600 flex items-center justify-center">
-              <span className="text-[10px] font-bold text-white">↑</span>
-            </div>
-            <span className="text-sm font-medium text-white">+12%</span>
-          </div>
-        </div>
-        
-        <div className="flex items-center gap-4 md:gap-2 lg:gap-4">
-          <div className="flex items-center bg-[#1A1A1A] rounded-lg p-1">
-            {['1D', '1W', '1M', '3M', '1Y'].map((period) => (
-              <button
-                key={period}
-                className={`px-3 md:px-2 lg:px-3 py-1 text-sm md:text-xs lg:text-sm rounded-md transition-colors ${
-                  period === '3M' 
-                    ? 'bg-[#2A2A2A] text-white shadow-sm' 
-                    : 'text-gray-400 hover:text-white'
-                }`}
-              >
-                {period}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
+  const [data, setData] = useState<number[]>([]);
+  const requestRef = useRef<number | null>(null);
 
-      <div className="h-[300px] w-full">
-        <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={data}>
-            <defs>
-              <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#fff" stopOpacity={0.3}/>
-                <stop offset="95%" stopColor="#fff" stopOpacity={0}/>
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="#1F1F1F" vertical={false} />
-            
-            {/* No XAxis */}
-            {/* No YAxis */}
-            <Tooltip 
-              content={({ active, payload }) => {
-                if (active && payload && payload.length) {
-                  return (
-                    <div className="bg-[#1A1A1A] border border-[#333] p-2 rounded-lg shadow-xl">
-                      <p className="text-white font-medium">
-                        {payload[0].value?.toFixed(0)} <span className="text-gray-400 text-sm ml-2">{payload[0].payload.date}</span>
-                      </p>
-                    </div>
-                  )
-                }
-                return null
-              }}
-            />
-            
-            <Area 
-              type="monotone" 
-              dataKey="price" 
-              stroke="#fff" 
-              strokeWidth={2} 
-              fillOpacity={1} 
-              fill="url(#colorPrice)"
-              isAnimationActive={true}
-              animationDuration={3000}
-            />
-          </AreaChart>
-        </ResponsiveContainer>
+  // Initialize data with smoother growth
+  useEffect(() => {
+    const initialData = [];
+    let value = 100;
+    for (let i = 0; i < POINTS_COUNT; i++) {
+      // Much smaller variation for stable initial chart
+      value += Math.random() * 0.5 - 0.2;
+      initialData.push(value);
+    }
+    setData(initialData);
+  }, []);
+
+  const updateData = () => {
+    setData((prevData) => {
+      if (prevData.length === 0) return prevData;
+
+      const lastValue = prevData[prevData.length - 1];
+      // Slower, smoother growth:
+      // Reduced range: -0.3 to +0.3
+      // Net positive trend: ~+0.15 per frame (slower)
+      // Adding smoothing to reduce jaggedness
+      const rawChange = Math.random() * 0.6 - 0.3;
+
+      // Apply exponential moving average for smoothing
+      const smoothingFactor = 0.3;
+      const previousChange = prevData.length > 1 ? prevData[prevData.length - 1] - prevData[prevData.length - 2] : 0;
+      const smoothedChange = smoothingFactor * rawChange + (1 - smoothingFactor) * previousChange;
+
+      const newValue = lastValue + smoothedChange;
+
+      const newData = [...prevData.slice(1), newValue];
+      return newData;
+    });
+
+    requestRef.current = requestAnimationFrame(updateData);
+  };
+
+  useEffect(() => {
+    requestRef.current = requestAnimationFrame(updateData);
+    return () => {
+      if (requestRef.current) cancelAnimationFrame(requestRef.current);
+    };
+  }, []);
+
+  // Calculate path and viewbox
+  const { pathD, fillD } = useMemo(() => {
+    if (data.length === 0) return { pathD: "", fillD: "" };
+
+    const currentMin = Math.min(...data);
+    const currentMax = Math.max(...data);
+
+    const padding = (currentMax - currentMin) * 0.15;
+    const yMin = currentMin - padding;
+    const yMax = currentMax + padding;
+    const yRange = yMax - yMin || 1;
+
+    const points = data.map((val, i) => {
+      const x = (i / (POINTS_COUNT - 1)) * 100;
+      const normalizedY = (val - yMin) / yRange;
+      const y = 100 - (normalizedY * 100);
+      return `${x.toFixed(2)},${y.toFixed(2)}`;
+    });
+
+    const linePath = `M ${points.join(" L ")}`;
+    const areaPath = `${linePath} L 100,200 L 0,200 Z`;
+
+    return { pathD: linePath, fillD: areaPath };
+  }, [data]);
+
+  if (data.length === 0) {
+    return (
+      <div className="bg-black/30 rounded-[28px] border border-white/5 shadow-[0_25px_80px_rgba(0,0,0,0.65)] backdrop-blur p-6 h-[320px] w-full pointer-events-none" />
+    );
+  }
+
+  return (
+    <div className="bg-black/30 rounded-[28px] border border-white/5 shadow-[0_25px_80px_rgba(0,0,0,0.65)] backdrop-blur p-6 h-[320px] w-full pointer-events-none flex items-center justify-center overflow-hidden relative">
+      <div className="absolute inset-0 w-full h-full">
+        <svg
+          viewBox="0 0 100 100"
+          preserveAspectRatio="none"
+          className="w-full h-full"
+          style={{ overflow: 'visible' }}
+        >
+          <defs>
+            <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="white" stopOpacity="0.15" />
+              <stop offset="100%" stopColor="white" stopOpacity="0" />
+            </linearGradient>
+          </defs>
+
+          {/* Area Fill */}
+          <path
+            d={fillD}
+            fill="url(#chartGradient)"
+            vectorEffect="non-scaling-stroke"
+          />
+
+          {/* Stroke Line */}
+          <path
+            d={pathD}
+            fill="none"
+            stroke="white"
+            strokeWidth="1.5"
+            strokeLinejoin="round"
+            strokeLinecap="round"
+            vectorEffect="non-scaling-stroke"
+            className="drop-shadow-[0_0_8px_rgba(255,255,255,0.4)]"
+          />
+        </svg>
       </div>
     </div>
-  )
+  );
 }
