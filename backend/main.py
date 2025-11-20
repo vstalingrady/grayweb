@@ -4980,6 +4980,7 @@ async def list_user_reminders(
             rows = result.data if result.data is not None else []
 
             # Self-healing: Auto-mark stale pending reminders as delivered to prevent loop
+            # Only mark reminders that haven't been delivered yet (delivered_at is None)
             if status_filter == "pending" and rows:
                 now = datetime.utcnow()
                 stale_threshold = now - timedelta(minutes=15)
@@ -4987,7 +4988,9 @@ async def list_user_reminders(
                 for row in rows:
                     try:
                         remind_at_str = row.get("remind_at")
-                        if remind_at_str:
+                        delivered_at = row.get("delivered_at")
+                        # Only mark as delivered if it hasn't been delivered before
+                        if remind_at_str and not delivered_at:
                             remind_at = datetime.fromisoformat(remind_at_str.replace("Z", "+00:00")).replace(tzinfo=None)
                             if remind_at < stale_threshold:
                                 stale_ids.append(row["id"])

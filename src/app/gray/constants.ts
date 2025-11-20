@@ -1,5 +1,6 @@
 export const DEFAULT_EVENT_COLOR = "#4f63ff";
-export const REMINDER_RETENTION_WINDOW_MS = 24 * 60 * 60 * 1000;
+// Keep delivered reminders visible for 7 days (168 hours)
+export const REMINDER_RETENTION_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
 export const sanitizeEventColor = (value?: string | null): string => {
   if (!value) {
