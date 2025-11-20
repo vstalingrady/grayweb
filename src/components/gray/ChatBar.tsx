@@ -1,7 +1,7 @@
 "use client";
 
 import styles from "@/app/gray/GrayPageClient.module.css";
-import { ArrowUpRight, Loader2, Paperclip } from "lucide-react";
+import { Loader2, Paperclip, Lightbulb, Send, Search } from "lucide-react";
 import { type FormEvent } from "react";
 
 export type GrayChatBarProps = {
@@ -12,6 +12,11 @@ export type GrayChatBarProps = {
   isSubmitDisabled?: boolean;
   isSubmitting?: boolean;
   onAddAttachment?: () => void;
+  isReasoningEnabled?: boolean;
+  onToggleReasoning?: () => void;
+  isReasoningLocked?: boolean;
+  isSearchEnabled?: boolean;
+  onToggleSearch?: () => void;
 };
 
 export function GrayChatBar({
@@ -22,6 +27,11 @@ export function GrayChatBar({
   isSubmitDisabled,
   isSubmitting = false,
   onAddAttachment,
+  isReasoningEnabled = false,
+  onToggleReasoning,
+  isReasoningLocked = false,
+  isSearchEnabled = false,
+  onToggleSearch,
 }: GrayChatBarProps) {
   const computedDisabled =
     typeof isSubmitDisabled === "boolean" ? isSubmitDisabled : value.trim().length === 0;
@@ -45,6 +55,28 @@ export function GrayChatBar({
         className={styles.chatInput}
         aria-label={placeholder}
       />
+      {onToggleSearch ? (
+        <button
+          type="button"
+          className={`${styles.chatIconButton} ${isSearchEnabled ? styles.chatIconButtonActive : ""}`}
+          aria-label="Toggle web search"
+          onClick={onToggleSearch}
+          title="Toggle web search"
+        >
+          <Search size={18} />
+        </button>
+      ) : null}
+      {onToggleReasoning && !isReasoningLocked ? (
+        <button
+          type="button"
+          className={`${styles.chatIconButton} ${isReasoningEnabled ? styles.chatIconButtonActive : ""}`}
+          aria-label="Toggle reasoning mode"
+          onClick={onToggleReasoning}
+          title="Toggle reasoning mode"
+        >
+          <Lightbulb size={18} />
+        </button>
+      ) : null}
       <button
         type="submit"
         aria-label="Send message"
@@ -52,7 +84,7 @@ export function GrayChatBar({
         className={styles.chatActionButton}
         disabled={computedDisabled}
       >
-        {isSubmitting ? <Loader2 size={18} className={styles.chatSpinner} /> : <ArrowUpRight size={18} />}
+        {isSubmitting ? <Loader2 size={18} className={styles.chatSpinner} /> : <Send size={18} />}
       </button>
     </form>
   );
