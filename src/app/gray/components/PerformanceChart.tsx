@@ -9,6 +9,7 @@ export default function PerformanceChart() {
   const [data, setData] = useState<number[]>([]);
   const requestRef = useRef<number | null>(null);
   const frameRef = useRef(0);
+  const [isSheared, setIsSheared] = useState(false);
 
   // Refs for "Trend" system - keeps the graph moving in one direction for longer
   const targetVelocityRef = useRef(0.1);
@@ -87,6 +88,14 @@ export default function PerformanceChart() {
     };
   }, []);
 
+  // Trigger shear animation after mount
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsSheared(true);
+    }, 600); // Delay to let fade-in complete first
+    return () => clearTimeout(timer);
+  }, []);
+
   // Calculate smooth path (Cubic Bezier)
   const { pathD, fillD } = useMemo(() => {
     if (data.length === 0) return { pathD: "", fillD: "" };
@@ -148,7 +157,7 @@ export default function PerformanceChart() {
     <div
       className="bg-black/30 rounded-[28px] border border-white/40 backdrop-blur p-6 h-[320px] w-full pointer-events-none flex items-center justify-center overflow-hidden relative transition-all duration-700 ease-out"
       style={{
-        transform: "perspective(1000px) rotateY(-12deg) rotateX(6deg) skewY(1deg)",
+        transform: isSheared ? "perspective(1000px) rotateY(-12deg) rotateX(6deg) skewY(1deg)" : "none",
         // INTENSE neon glow: bright white border with aggressive multi-layer glow
         boxShadow: "25px 35px 60px -15px rgba(0,0,0,0.7), inset 0 0 0 1px rgba(255,255,255,0.3), 0 0 4px rgba(255,255,255,0.6), 0 0 15px rgba(255,255,255,0.4), 0 0 35px rgba(255,255,255,0.3), 0 0 60px rgba(255,255,255,0.15)"
       }}
