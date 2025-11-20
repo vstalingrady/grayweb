@@ -1,8 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { FileText, Upload } from "lucide-react";
-import { GrayChatBar } from "@/components/gray/ChatBar";
+import { Search, Upload } from "lucide-react";
 
 export function ReferenceView() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -16,47 +15,25 @@ export function ReferenceView() {
         </p>
       </header>
 
-      <div className="mb-10 max-w-2xl">
-        <GrayChatBar
-          value={searchQuery}
-          onChange={setSearchQuery}
-          onSubmit={(e) => {
-            e.preventDefault();
-            console.log("Searching for:", searchQuery);
-          }}
-          placeholder="Search your knowledge base..."
-        />
-      </div>
+      <div className="flex flex-col items-center justify-center flex-1 min-h-[400px]">
+        <div className="flex items-center gap-4 w-full max-w-2xl">
+          <div className="flex-1 flex items-center gap-3 px-4 py-3 rounded-full bg-[#0A0A0A] border border-white/10 focus-within:border-white/20 transition-colors">
+            <Search size={18} className="text-zinc-500" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search your knowledge base..."
+              className="flex-1 bg-transparent border-none outline-none text-zinc-200 placeholder:text-zinc-600 text-sm"
+            />
+          </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-        <div className="p-6 rounded-3xl bg-[#0A0A0A] border border-white/5 flex flex-col items-center justify-center text-center gap-4 min-h-[200px] cursor-pointer hover:bg-[#111] hover:border-white/10 transition-all duration-200 group">
-          <div className="w-12 h-12 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-400 group-hover:scale-110 transition-transform duration-200">
+          <button
+            className="w-12 h-12 rounded-full bg-[#0A0A0A] border border-white/10 flex items-center justify-center text-zinc-400 hover:text-zinc-200 hover:border-white/20 hover:bg-white/5 transition-all"
+            title="Upload Files"
+          >
             <Upload size={20} />
-          </div>
-          <div>
-            <h3 className="font-medium text-zinc-100 text-lg">Upload Files</h3>
-            <p className="text-sm text-zinc-500 mt-1">
-              PDF, TXT, MD supported
-            </p>
-          </div>
-        </div>
-
-        <div className="p-6 rounded-3xl bg-[#0A0A0A] border border-white/5 flex flex-col items-center justify-center text-center gap-4 min-h-[200px] group">
-          <div className="w-12 h-12 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-400">
-            <FileText size={20} />
-          </div>
-          <div>
-            <h3 className="font-medium text-zinc-100 text-lg">0 Documents</h3>
-            <p className="text-sm text-zinc-500 mt-1">
-              No files indexed yet
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <div className="flex-1 rounded-3xl bg-[#0A0A0A] border border-white/5 p-6">
-        <div className="flex items-center justify-center h-full text-zinc-600 text-sm">
-          Select an action above to get started
+          </button>
         </div>
       </div>
     </div>
