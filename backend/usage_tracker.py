@@ -13,10 +13,10 @@ LIMITS = {
         "daily_tokens": 32000,
     },
     "voyager": {
-        "monthly_cost": 15.00,
+        "monthly_cost": 10.00,
     },
     "pioneer": {
-        "monthly_cost": 30.00,
+        "monthly_cost": 25.00,
     }
 }
 
