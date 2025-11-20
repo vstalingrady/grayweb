@@ -66,17 +66,16 @@ export function GrayHistoryView({
 
   return (
     <section className={styles.historyView} aria-label="Conversation history">
-      <header className="mb-6 px-4">
-        <h1 className="text-2xl font-medium tracking-tight text-white mb-4">History</h1>
-        <div className="flex items-center gap-3 px-4 py-3 rounded-full bg-[#0A0A0A] border border-white/10 focus-within:border-white/20 transition-colors">
-          <Search size={18} className="text-zinc-500" aria-hidden="true" />
+      <header className={styles.historyViewHeader}>
+        <h1>History</h1>
+        <div className={styles.historyViewSearch}>
+          <Search size={18} aria-hidden="true" />
           <input
             type="search"
             placeholder="Search your history..."
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             aria-label="Search history"
-            className="flex-1 bg-transparent border-none outline-none text-zinc-200 placeholder:text-zinc-600 text-sm"
           />
         </div>
       </header>
