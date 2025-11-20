@@ -180,10 +180,34 @@ def _ensure_sqlite_users_auth_column():
         )
 
 
+def _ensure_sqlite_has_seen_chat_column():
+    if not DATABASE_URL.startswith("sqlite"):
+        return
+    db_path = DATABASE_URL.replace("sqlite:///", "", 1)
+    if not db_path:
+        return
+    try:
+        conn = sqlite3.connect(db_path)
+        try:
+            cursor = conn.execute("PRAGMA table_info(users)")
+            columns = {row[1] for row in cursor.fetchall()}
+            if "has_seen_general_chat" not in columns:
+                conn.execute("ALTER TABLE users ADD COLUMN has_seen_general_chat BOOLEAN DEFAULT 0")
+                conn.commit()
+        finally:
+            conn.close()
+    except sqlite3.Error as exc:
+        app_logger.error(
+            "Failed to ensure has_seen_general_chat column on sqlite users table",
+            extra={"event_type": "sqlite_migration_error", "error": str(exc)},
+        )
+
+
 # Database configuration
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./test.db")
 
 _ensure_sqlite_users_auth_column()
+_ensure_sqlite_has_seen_chat_column()
 
 database = databases.Database(DATABASE_URL)
 metadata = sqlalchemy.MetaData()
@@ -357,6 +381,7 @@ users = sqlalchemy.Table(
     sqlalchemy.Column("personalization_custom_instructions", sqlalchemy.String, nullable=True),
     sqlalchemy.Column("plan_tier", sqlalchemy.String, nullable=True),
     sqlalchemy.Column("maps_enabled", sqlalchemy.Boolean, default=False),
+    sqlalchemy.Column("has_seen_general_chat", sqlalchemy.Boolean, default=False),
     sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
     sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
 )
@@ -585,6 +610,7 @@ class UserBase(BaseModel):
     plan_tier: Optional[str] = None
     workspace_background_id: Optional[str] = None
     maps_enabled: bool = False
+    has_seen_general_chat: bool = False
     personalization_nickname: Optional[str] = None
     personalization_occupation: Optional[str] = None
     personalization_about: Optional[str] = None
@@ -601,6 +627,7 @@ class UserUpdate(BaseModel):
     plan_tier: Optional[str] = None
     workspace_background_id: Optional[str] = None
     maps_enabled: Optional[bool] = None
+    has_seen_general_chat: Optional[bool] = None
     personalization_nickname: Optional[str] = None
     personalization_occupation: Optional[str] = None
     personalization_about: Optional[str] = None
@@ -610,7 +637,7 @@ class User(UserBase):
     id: int
     initials: str
     created_at: datetime
-    updated_at: datetime
+    updated_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -624,7 +651,7 @@ class ChatSession(ChatSessionBase):
     id: int
     user_id: int
     created_at: datetime
-    updated_at: datetime
+    updated_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -645,7 +672,7 @@ class Calendar(CalendarBase):
     id: int
     user_id: int
     created_at: datetime
-    updated_at: datetime
+    updated_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -713,7 +740,7 @@ class Plan(PlanBase):
     id: int
     user_id: int
     created_at: datetime
-    updated_at: datetime
+    updated_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -757,7 +784,7 @@ class ProactivityLog(ProactivityLogBase):
     score: int
     notes: Optional[str] = None
     created_at: datetime
-    updated_at: datetime
+    updated_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -857,7 +884,7 @@ class Habit(HabitBase):
     id: int
     user_id: int
     created_at: datetime
-    updated_at: datetime
+    updated_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -3935,6 +3962,29 @@ async def chat_with_ai(request: ChatRequest, db: databases.Database = Depends(ge
         raise HTTPException(status_code=500, detail=f"Chat error: {str(e)}")
 
 
+ONBOARDING_SYSTEM_PROMPT = """
+You are Gray, a smart financial command center and productivity partner.
+You are currently onboarding a new user. Your goal is to get to know them better to personalize their experience.
+Do not give them a to-do list yet.
+Ask them the following questions, one by one, in a conversational manner. Wait for their answer before asking the next one.
+1. What should I call you?
+2. Where are you based?
+3. What are you focused on this season? (Themes, pursuits, or arenas you want front and center)
+4. List 1-3 outcomes you want Gray to keep you accountable to. (Make them tangible)
+5. What recent wins or forward momentum are you proud of?
+6. Where does momentum slip, or what friction should I watch for?
+7. How should I support you week to week? (Rhythm, channel, check-ins)
+
+After you have gathered all this information, summarize it back to them and welcome them to Gray.
+Keep your tone:
+- Raw and honest
+- Quick and clever humor
+- Talk like a member of Gen Z
+- Forward-thinking
+- Empathetic but holding them accountable
+"""
+
+
 @app.post("/api/chat/stream")
 async def chat_with_ai_stream(request: ChatRequest, db: databases.Database = Depends(get_database)):
     """Stream an AI response token-by-token using Server-Sent Events."""
@@ -3954,11 +4004,32 @@ async def chat_with_ai_stream(request: ChatRequest, db: databases.Database = Dep
     })
 
     try:
+        # Fetch user record for logic
+        user_record = await db.fetch_one(users.select().where(users.c.id == request.user_id))
+        
+        # Handle Onboarding Logic
+        effective_message = request.message
+        effective_system_prompt = request.system_prompt
+
+        if user_record and not user_record["has_seen_general_chat"]:
+            # If this is the very first interaction (triggered by frontend with empty message usually)
+            if not effective_message or not effective_message.strip():
+                effective_message = "Hi Gray, I'm new here. Let's get started."
+                effective_system_prompt = ONBOARDING_SYSTEM_PROMPT
+                
+                # Mark as seen so next time it's normal chat
+                await db.execute(
+                    users.update()
+                    .where(users.c.id == request.user_id)
+                    .values(has_seen_general_chat=True)
+                )
+                api_logger.info(f"User {request.user_id} started onboarding flow")
+
         # Generate a title for the chat session (only if requested)
         session_title = None
         if request.should_generate_title:
             try:
-                title_request = ChatTitleRequest(message=request.message)
+                title_request = ChatTitleRequest(message=effective_message)
                 # Add timeout to prevent title generation from blocking the stream
                 title_response = await wait_for(
                     create_chat_title(title_request),
@@ -3971,7 +4042,7 @@ async def chat_with_ai_stream(request: ChatRequest, db: databases.Database = Dep
                     "user_id": request.user_id,
                     "correlation_id": correlation_id
                 })
-                session_title = _fallback_title_from_message(request.message)
+                session_title = _fallback_title_from_message(effective_message)
             except Exception as title_error:
                 api_logger.warning(f"Title generation failed: {title_error}", extra={
                     "event_type": "title_generation_error",
@@ -3979,10 +4050,10 @@ async def chat_with_ai_stream(request: ChatRequest, db: databases.Database = Dep
                     "error": str(title_error),
                     "correlation_id": correlation_id
                 })
-                session_title = _fallback_title_from_message(request.message)
+                session_title = _fallback_title_from_message(effective_message)
 
         if not session_title:
-            session_title = _fallback_title_from_message(request.message)
+            session_title = _fallback_title_from_message(effective_message)
 
         # Create chat session
         now = datetime.utcnow()
@@ -4011,20 +4082,20 @@ async def chat_with_ai_stream(request: ChatRequest, db: databases.Database = Dep
 
         user_message_payload: Dict[str, Any] = {
             "role": "user",
-            "text": request.message,
+            "text": effective_message,
         }
 
         last_history_entry: Optional[Dict[str, Any]] = conversation_history[-1] if conversation_history else None
         should_persist_user = not (
             last_history_entry
             and last_history_entry.get("role") in {"user", "assistant", "model"}
-            and (last_history_entry.get("text") or "") == request.message
+            and (last_history_entry.get("text") or "") == effective_message
         )
         if should_persist_user:
             await save_conversation_message(conversation_id, user_message_payload, user_id=request.user_id)
 
         # Enforce tier restrictions for streaming
-        user_record = await db.fetch_one(users.select().where(users.c.id == request.user_id))
+        # user_record was already fetched above
         plan_tier = user_record["plan_tier"] if user_record else None
         normalized_tier = (plan_tier or "scout").lower()
         
@@ -4042,10 +4113,10 @@ async def chat_with_ai_stream(request: ChatRequest, db: databases.Database = Dep
                 final_response: Optional[str] = None
                 grounding_metadata_payload: Optional[Dict[str, Any]] = None
                 async for kind, payload in stream_ai_response(
-                    request.message,
+                    effective_message,
                     conversation_history,
                     request.context,
-                    request.system_prompt,
+                    effective_system_prompt,
                     user_id=request.user_id,
                     db=db,
                     time_context=request.time_context,
@@ -4945,7 +5016,29 @@ async def delete_plan(user_id: int, plan_id: int, db: databases.Database = Depen
         )
         if not existing.data:
             raise HTTPException(status_code=404, detail="Plan not found")
+        
+        # Delete from plans table
         supabase.table("plans").delete().eq("id", plan_id).eq("user_id", user_id).execute()
+        
+        # Attempt to sync with dashboard_pulses (remove from today's pulse if present)
+        try:
+            today_key = datetime.utcnow().strftime("%Y-%m-%d")
+            pulse_res = supabase.table("dashboard_pulses").select("*").eq("user_id", user_id).eq("date_key", today_key).execute()
+            if pulse_res.data:
+                pulse = pulse_res.data[0]
+                current_plans = pulse.get("plans", []) or []
+                # Filter out the deleted plan. Handle string/int mismatch.
+                new_plans = [p for p in current_plans if str(p.get("id")) != str(plan_id)]
+                
+                if len(new_plans) != len(current_plans):
+                    supabase.table("dashboard_pulses").update({
+                        "plans": new_plans, 
+                        "updated_at": datetime.utcnow().isoformat()
+                    }).eq("id", pulse["id"]).execute()
+                    api_logger.info(f"Synced plan deletion to dashboard_pulse for user {user_id}")
+        except Exception as e:
+            api_logger.warning(f"Failed to sync plan deletion to dashboard_pulses: {e}")
+            
         return None
     query = plans.select().where(
         (plans.c.id == plan_id) & (plans.c.user_id == user_id)
@@ -5099,7 +5192,29 @@ async def delete_habit(user_id: int, habit_id: int, db: databases.Database = Dep
         )
         if not existing.data:
             raise HTTPException(status_code=404, detail="Habit not found")
+        
+        # Delete from habits table
         supabase.table("habits").delete().eq("id", habit_id).eq("user_id", user_id).execute()
+        
+        # Attempt to sync with dashboard_pulses (remove from today's pulse if present)
+        try:
+            today_key = datetime.utcnow().strftime("%Y-%m-%d")
+            pulse_res = supabase.table("dashboard_pulses").select("*").eq("user_id", user_id).eq("date_key", today_key).execute()
+            if pulse_res.data:
+                pulse = pulse_res.data[0]
+                current_habits = pulse.get("habits", []) or []
+                # Filter out the deleted habit.
+                new_habits = [h for h in current_habits if str(h.get("id")) != str(habit_id)]
+                
+                if len(new_habits) != len(current_habits):
+                    supabase.table("dashboard_pulses").update({
+                        "habits": new_habits, 
+                        "updated_at": datetime.utcnow().isoformat()
+                    }).eq("id", pulse["id"]).execute()
+                    api_logger.info(f"Synced habit deletion to dashboard_pulse for user {user_id}")
+        except Exception as e:
+            api_logger.warning(f"Failed to sync habit deletion to dashboard_pulses: {e}")
+            
         return None
     query = habits.select().where(
         (habits.c.id == habit_id) & (habits.c.user_id == user_id)
@@ -5448,9 +5563,17 @@ async def delete_user_reminder(
             if not existing.data:
                 api_logger.warning(f"Reminder {reminder_id} not found for user {user_id}")
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reminder not found")
+            
             api_logger.info(f"Deleting reminder {reminder_id} from Supabase")
             result = supabase.table("reminders").delete().eq("id", reminder_id).eq("user_id", user_id).execute()
             api_logger.info(f"Successfully deleted reminder {reminder_id}, result: {result.data}")
+            
+            # Verify deletion
+            check = supabase.table("reminders").select("id").eq("id", reminder_id).execute()
+            if check.data:
+                api_logger.error(f"Reminder {reminder_id} still exists after deletion attempt!")
+                raise HTTPException(status_code=500, detail="Failed to delete reminder (persistence error)")
+                
             return
         except HTTPException:
             raise
