@@ -1782,6 +1782,7 @@ function GrayPageClientInner({
 
     const reminderId = parseReminderPlanId(planToDelete.id);
     if (reminderId !== null) {
+      console.log(`[DELETE] Attempting to delete reminder ${reminderId} (plan ID: ${planToDelete.id})`);
       const previousReminderPlans = reminderPlans;
       const previousCalendarEvents = calendarEvents;
       const updatedReminderPlans = previousReminderPlans.filter((plan) => plan.id !== planToDelete.id);
@@ -1794,11 +1795,15 @@ function GrayPageClientInner({
       setReminderPlans(updatedReminderPlans);
       setCalendarEvents(updatedCalendarEvents);
 
-      apiService.deleteReminder(user.id, reminderId).catch((error) => {
-        console.error("Failed to delete reminder:", error);
-        setReminderPlans(previousReminderPlans);
-        setCalendarEvents(previousCalendarEvents);
-      });
+      apiService.deleteReminder(user.id, reminderId)
+        .then(() => {
+          console.log(`[DELETE] Successfully deleted reminder ${reminderId}`);
+        })
+        .catch((error) => {
+          console.error(`[DELETE] Failed to delete reminder ${reminderId}:`, error);
+          setReminderPlans(previousReminderPlans);
+          setCalendarEvents(previousCalendarEvents);
+        });
       return;
     }
 
@@ -2204,9 +2209,12 @@ function GrayPageClientInner({
       if (eventId.startsWith("reminder-")) {
         const reminderId = extractReminderId(eventId);
         if (reminderId !== null) {
+          console.log(`[CALENDAR DELETE] Attempting to delete reminder ${reminderId} from calendar`);
           try {
             await apiService.deleteReminder(user.id, reminderId);
+            console.log(`[CALENDAR DELETE] Successfully deleted reminder ${reminderId}`);
           } catch (error) {
+            console.error(`[CALENDAR DELETE] Failed to delete reminder ${reminderId}:`, error);
             logCalendarSyncError("delete reminder", error);
             revertDelete(eventId);
             return;

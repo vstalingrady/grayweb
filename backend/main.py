@@ -5188,6 +5188,7 @@ async def delete_user_reminder(
     reminder_id: int,
     db: databases.Database = Depends(get_database),
 ):
+    api_logger.info(f"DELETE reminder request: user_id={user_id}, reminder_id={reminder_id}")
     if supabase:
         try:
             existing = (
@@ -5199,12 +5200,16 @@ async def delete_user_reminder(
                 .execute()
             )
             if not existing.data:
+                api_logger.warning(f"Reminder {reminder_id} not found for user {user_id}")
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reminder not found")
-            supabase.table("reminders").delete().eq("id", reminder_id).eq("user_id", user_id).execute()
+            api_logger.info(f"Deleting reminder {reminder_id} from Supabase")
+            result = supabase.table("reminders").delete().eq("id", reminder_id).eq("user_id", user_id).execute()
+            api_logger.info(f"Successfully deleted reminder {reminder_id}, result: {result.data}")
             return
         except HTTPException:
             raise
         except Exception as error:
+            api_logger.error(f"Failed to delete reminder {reminder_id}: {error}", exc_info=True)
             _handle_supabase_table_error("Warning: Failed to delete reminder", error)
 
     existing = await db.fetch_one(
