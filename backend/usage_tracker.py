@@ -26,13 +26,11 @@ def get_limits_for_tier(tier: str):
     monthly = base.get("monthly_cost", 1.50)
     
     # Default policies:
-    # Weekly = Monthly / 4 (Standard calendar breakdown)
-    # 6-Hour = Weekly / 10 (Allows burst usage, but prevents draining the whole week in one sitting. 
-    #                       There are 28 6-hour blocks in a week, so 1/10 is ~3x the average steady-state rate)
+    # 6-Hour = Monthly / 120 (30 days × 4 six-hour blocks per day)
+    # This gives each 6-hour window an equal portion of the monthly budget
     return {
         "monthly_cost": monthly,
-        "weekly_cost": monthly / 4.0,
-        "six_hour_cost": (monthly / 4.0) / 10.0
+        "six_hour_cost": monthly / 120.0
     }
 
 class UsageLimitExceeded(Exception):
@@ -49,7 +47,7 @@ class UsageTracker:
     async def _get_user_usage(self, user_id: int):
         query = """
             SELECT plan_tier, daily_token_usage, monthly_cost_usage, last_daily_reset, last_monthly_reset,
-                   weekly_cost_usage, last_weekly_reset, six_hour_cost_usage, last_six_hour_reset
+                   six_hour_cost_usage, last_six_hour_reset
             FROM users WHERE id = :id
         """
         return await self.db.fetch_one(query=query, values={"id": user_id})
@@ -75,26 +73,7 @@ class UsageTracker:
             updates["monthly_cost_usage"] = 0.0
             updates["last_monthly_reset"] = today_str
 
-        # 3. Weekly Reset
-        last_weekly = usage_data["last_weekly_reset"]
-        current_week_number = now.isocalendar()[1]
-        
-        should_reset_weekly = False
-        if not last_weekly:
-            should_reset_weekly = True
-        else:
-            try:
-                last_weekly_date = datetime.datetime.strptime(last_weekly, "%Y-%m-%d")
-                if last_weekly_date.isocalendar()[1] != current_week_number or last_weekly_date.year != now.year:
-                    should_reset_weekly = True
-            except ValueError:
-                should_reset_weekly = True
-
-        if should_reset_weekly:
-            updates["weekly_cost_usage"] = 0.0
-            updates["last_weekly_reset"] = today_str
-
-        # 4. 6-Hour Reset
+        # 3. 6-Hour Reset
         last_six_hour = usage_data["last_six_hour_reset"]
         current_block_index = now.hour // 6
         current_block_id = f"{today_str}-{current_block_index}"
@@ -142,16 +121,6 @@ class UsageTracker:
                 next_reset = datetime.datetime(now.year, now.month + 1, 1, tzinfo=datetime.timezone.utc)
             raise UsageLimitExceeded(f"Monthly limit reached.", tier, next_reset)
 
-        # Check Weekly
-        current_weekly = usage_data["weekly_cost_usage"] or 0.0
-        if current_weekly >= limits["weekly_cost"]:
-            # Reset is next Monday at 00:00 UTC
-            days_ahead = 7 - now.weekday()
-            if days_ahead == 0:
-                days_ahead = 7
-            next_reset = (now + datetime.timedelta(days=days_ahead)).replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=datetime.timezone.utc)
-            raise UsageLimitExceeded(f"Weekly limit reached.", tier, next_reset)
-
         # Check 6-Hour
         current_six_hour = usage_data["six_hour_cost_usage"] or 0.0
         if current_six_hour >= limits["six_hour_cost"]:
@@ -176,7 +145,6 @@ class UsageTracker:
             UPDATE users 
             SET daily_token_usage = COALESCE(daily_token_usage, 0) + :tokens,
                 monthly_cost_usage = COALESCE(monthly_cost_usage, 0) + :cost,
-                weekly_cost_usage = COALESCE(weekly_cost_usage, 0) + :cost,
                 six_hour_cost_usage = COALESCE(six_hour_cost_usage, 0) + :cost
             WHERE id = :id
         """
