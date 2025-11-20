@@ -5,9 +5,9 @@ import { useRouter } from "next/navigation";
 import { ChevronDown, X } from "lucide-react";
 import styles from "@/app/gray/GrayPageClient.module.css";
 import { useUser } from "@/contexts/UserContext";
-import { apiService } from "@/lib/api";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { clearSupabaseAuthStorage } from "@/lib/supabaseStorage";
+import { clearAuthCookies } from "@/lib/auth/cookies";
 
 type GeneralSetting = {
   label: string;
@@ -89,9 +89,10 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     try {
       const supabase = getSupabaseClient();
       if (supabase) {
-        await supabase.auth.signOut({ scope: "local" });
+        await supabase.auth.signOut({ scope: "global" });
       }
       clearSupabaseAuthStorage();
+      clearAuthCookies();
       const redirect = encodeURIComponent("/delete-account");
       window.location.href = `/login?redirect=${redirect}`;
     } catch (error) {

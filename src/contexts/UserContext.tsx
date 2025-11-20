@@ -15,6 +15,7 @@ import { apiService, User, isApiNetworkError } from '@/lib/api';
 import { humanizeIdentifier } from '@/lib/names';
 import { getSupabaseClient } from '@/lib/supabaseClient';
 import { clearSupabaseAuthStorage } from '@/lib/supabaseStorage';
+import { clearAuthCookies } from '@/lib/auth/cookies';
 
 interface UserContextType {
   user: User | null;
@@ -461,11 +462,12 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
       const supabaseClient = getSupabaseClient();
       if (supabaseClient) {
         try {
-          await supabaseClient.auth.signOut({ scope: 'local' });
+          await supabaseClient.auth.signOut({ scope: 'global' });
         } catch (supabaseError) {
           console.warn('Failed to sign out after account deletion:', supabaseError);
         }
       }
+      clearAuthCookies();
       clearSupabaseAuthStorage();
       removeCachedUser(user.email);
       setUser(null);
