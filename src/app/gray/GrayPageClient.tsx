@@ -822,6 +822,7 @@ function GrayPageClientInner({
           proactivityDeliveryKeys={deliveredProactivityKeys}
           onReminderMove={handleReminderMove}
           streakCount={streakCount}
+          hideCalendar={isScout}
         />
       );
     }
@@ -831,21 +832,7 @@ function GrayPageClientInner({
           sessionId={currentChatId ?? null}
           onContextUsageChange={setContextUsageSummary}
           hideThinkingIndicator={hideChatThinkingIndicator}
-          introContent={
-            activeNav !== "threads" &&
-              (supportsInlineChat || activeNav === "general") &&
-              currentChatId &&
-              generalSessionId &&
-              currentChatId === generalSessionId ? (
-              <GrayWorkspaceHeader
-                streakCount={streakCount}
-                planLabel={viewerPlanLabel}
-                onUpgradeClick={handleUpgradePlan}
-              >
-                {renderWorkspaceGreeting()}
-              </GrayWorkspaceHeader>
-            ) : null
-          }
+          introContent={null}
         />
       );
     }
@@ -1021,6 +1008,14 @@ function GrayPageClientInner({
     const planCarrier = (user ?? null) as PlanCarrierUser | null;
     return derivePlanTierLabel(planCarrier);
   }, [user]);
+
+  const isScout = viewerPlanLabel === "Scout";
+
+  useEffect(() => {
+    if (isScout && dashboardTab === "calendar") {
+      setDashboardTab("pulse");
+    }
+  }, [isScout, dashboardTab]);
 
   const viewerInitials = useMemo(() => {
     if (loading) {

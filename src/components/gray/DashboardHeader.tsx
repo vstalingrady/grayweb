@@ -21,6 +21,7 @@ export type DashboardHeaderProps = {
   className?: string;
   todayButtonLabel?: string;
   streakCount?: number;
+  hideCalendar?: boolean;
 };
 
 const DEFAULT_VIEW_OPTIONS: Array<{ value: "week" | "day"; label: string }> = [
@@ -46,6 +47,7 @@ export function DashboardHeader({
   className,
   todayButtonLabel = "Today",
   streakCount = 0,
+  hideCalendar = false,
 }: DashboardHeaderProps) {
   const headerClassName = [
     calendarStyles.calendarSurfaceHeader,
@@ -81,24 +83,28 @@ export function DashboardHeader({
       <div className={calendarStyles.calendarSurfaceHeaderLeft}>
         <div className={calendarStyles.calendarSurfaceHeadingGroup}>
           <div className={calendarStyles.calendarSurfaceTabs}>
-            <button
-              type="button"
-              className={calendarStyles.calendarSurfaceTab}
-              data-active={activeTab === "pulse"}
-              aria-pressed={activeTab === "pulse"}
-              onClick={() => onSelectTab("pulse")}
-            >
-              Pulse
-            </button>
-            <button
-              type="button"
-              className={calendarStyles.calendarSurfaceTab}
-              data-active={activeTab === "calendar"}
-              aria-pressed={activeTab === "calendar"}
-              onClick={() => onSelectTab("calendar")}
-            >
-              Calendar
-            </button>
+            {!hideCalendar && (
+              <>
+                <button
+                  type="button"
+                  className={calendarStyles.calendarSurfaceTab}
+                  data-active={activeTab === "pulse"}
+                  aria-pressed={activeTab === "pulse"}
+                  onClick={() => onSelectTab("pulse")}
+                >
+                  Pulse
+                </button>
+                <button
+                  type="button"
+                  className={calendarStyles.calendarSurfaceTab}
+                  data-active={activeTab === "calendar"}
+                  aria-pressed={activeTab === "calendar"}
+                  onClick={() => onSelectTab("calendar")}
+                >
+                  Calendar
+                </button>
+              </>
+            )}
           </div>
         </div>
         {(label || title || rangeLabel) && (

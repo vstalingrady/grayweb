@@ -325,6 +325,7 @@ type GrayDashboardViewProps = {
   proactivityDeliveryKeys?: ReadonlySet<string>;
   onReminderMove?: (reminderId: number, range: { start: Date; end: Date }) => Promise<void> | void;
   streakCount?: number;
+  hideCalendar?: boolean;
 };
 
 export function GrayDashboardView({
@@ -360,6 +361,7 @@ export function GrayDashboardView({
   proactivityDeliveryKeys,
   onReminderMove,
   streakCount = 0,
+  hideCalendar = false,
 }: GrayDashboardViewProps) {
   const hasPulseData = Boolean(currentPulse && pulseEntries.length > 0);
   const displayPlans = useMemo(() => {
@@ -1581,6 +1583,7 @@ export function GrayDashboardView({
         activeTab={activeTab}
         onSelectTab={onSelectTab}
         className={headerClassName}
+        hideCalendar={hideCalendar}
       />
       <div
         className={calendarStyles.calendarSurfaceBody}
