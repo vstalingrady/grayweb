@@ -1,4 +1,5 @@
 import Image from "next/image";
+import MockChatInterface from "./MockChatInterface";
 
 const UserIcon = ({ className = "" }: { className?: string }) => (
   <svg
@@ -100,13 +101,13 @@ const ComparisonDiagram = () => (
             <div className="contrast-visual__placeholder" aria-hidden />
           </div>
 
-          <ul className="contrast-list">
+          <ul className="contrast-list text-[0.9rem] opacity-90">
             {wrapperPainPoints.map((point) => (
               <li key={point}>{point}</li>
             ))}
           </ul>
 
-          <footer className="contrast-footer">Feels like a prettier terminal—still your job to remember everything.</footer>
+          <footer className="contrast-footer text-xs opacity-70">Feels like a prettier terminal—still your job to remember everything.</footer>
         </article>
 
         <article className="contrast-card contrast-card--gray">
@@ -134,9 +135,8 @@ const ComparisonDiagram = () => (
             </div>
           </div>
 
-          <div className="contrast-visual contrast-visual--gray">
-            <div className="contrast-visual__halo" aria-hidden />
-            <div className="contrast-visual__core" aria-hidden />
+          <div className="contrast-visual contrast-visual--gray p-0 overflow-hidden relative">
+            <MockChatInterface />
           </div>
 
           <ul className="contrast-list contrast-list--bright">

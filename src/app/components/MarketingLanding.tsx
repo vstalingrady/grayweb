@@ -2,6 +2,7 @@ import React from "react";
 import Image from "next/image";
 import Navigation from "./Navigation";
 import HeroSection from "./HeroSection";
+import ComparisonDiagram from "./ComparisonDiagram";
 import FooterBackground from "./FooterBackground";
 import MarketingStyles from "./MarketingStyles";
 
@@ -23,6 +24,7 @@ export default function MarketingLanding({ tryGrayUrl }: MarketingLandingProps) 
             <div className="page-root">
                 <Navigation />
                 <HeroSection />
+                <ComparisonDiagram />
                 <footer id="contact" className="site-footer">
                     <FooterBackground />
                     <div className="site-footer__overlay">
