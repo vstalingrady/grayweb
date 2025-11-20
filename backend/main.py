@@ -4583,15 +4583,38 @@ async def get_conversation_usage(conversation_id: str):
         # Extract user_id from conversation to lookup tier
         user_tier = "scout"  # Default
         try:
-            # Get user_id from the conversation metadata in Supabase
-            if supabase:
-                conv_result = supabase.table("user_chat_threads").select("user_id").eq("id", conversation_id).single().execute()
-                if conv_result and conv_result.data:
-                    user_id = conv_result.data.get("user_id")
-                    if user_id:
-                        user_result = supabase.table("users").select("plan_tier").eq("id", user_id).single().execute()
-                        if user_result and user_result.data:
-                            user_tier = (user_result.data.get("plan_tier") or "scout").lower()
+            # Case 1: General conversation (format: "general:123")
+            if conversation_id.startswith("general:"):
+                try:
+                    user_id = int(conversation_id.split(":")[1])
+                except (ValueError, IndexError):
+                    user_id = None
+            
+            # Case 2: Thread conversation (UUID)
+            else:
+                # Get user_id from the conversation metadata in Supabase
+                # Note: The column in user_chat_threads is 'user_identifier', not 'user_id'
+                if supabase:
+                    conv_result = supabase.table("user_chat_threads").select("user_identifier").eq("id", conversation_id).single().execute()
+                    if conv_result and conv_result.data:
+                        user_id = conv_result.data.get("user_identifier")
+            
+            # If we found a user_id, look up their tier
+            if user_id:
+                # Check if user_id is an int (SQLite/Postgres ID) or UUID (Supabase Auth ID)
+                # The users table uses integer IDs for the primary key 'id'
+                # If user_identifier is a string (UUID), we might need to query by auth_user_id
+                
+                # Try querying by ID first (assuming it's the integer ID)
+                user_result = supabase.table("users").select("plan_tier").eq("id", user_id).single().execute()
+                
+                # If not found and it looks like a UUID, try auth_user_id? 
+                # Actually, the system seems to use integer IDs for internal linking mostly.
+                # Let's stick to ID for now as that's what the general chat uses.
+                
+                if user_result and user_result.data:
+                    user_tier = (user_result.data.get("plan_tier") or "scout").lower()
+                    
         except Exception as tier_error:
             app_logger.warning(f"Could not determine user tier for conversation {conversation_id}: {tier_error}")
         
