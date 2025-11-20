@@ -10,7 +10,7 @@ PRICE_OUTPUT_PER_MILLION = 0.30
 
 LIMITS = {
     "scout": {
-        "daily_tokens": 32000,
+        "monthly_cost": 1.00,
     },
     "voyager": {
         "monthly_cost": 10.00,
