@@ -13,9 +13,17 @@ export default function PerformanceChart() {
   useEffect(() => {
     const initialData = [];
     let value = 100;
+    let velocity = 0.1; // Start with positive momentum
+
     for (let i = 0; i < POINTS_COUNT; i++) {
-      // Much smaller variation for stable initial chart
-      value += Math.random() * 0.5 - 0.2;
+      // Target velocity: mostly positive, slight variation
+      // Center around +0.1, range [-0.05, +0.25]
+      const targetVelocity = 0.1 + (Math.random() * 0.3 - 0.15);
+
+      // High inertia (0.9) for very smooth curves
+      velocity = velocity * 0.9 + targetVelocity * 0.1;
+
+      value += velocity;
       initialData.push(value);
     }
     setData(initialData);
@@ -26,18 +34,20 @@ export default function PerformanceChart() {
       if (prevData.length === 0) return prevData;
 
       const lastValue = prevData[prevData.length - 1];
-      // Slower, smoother growth:
-      // Reduced range: -0.3 to +0.3
-      // Net positive trend: ~+0.15 per frame (slower)
-      // Adding smoothing to reduce jaggedness
-      const rawChange = Math.random() * 0.6 - 0.3;
+      const secondLastValue = prevData.length > 1 ? prevData[prevData.length - 2] : lastValue - 0.1;
 
-      // Apply exponential moving average for smoothing
-      const smoothingFactor = 0.3;
-      const previousChange = prevData.length > 1 ? prevData[prevData.length - 1] - prevData[prevData.length - 2] : 0;
-      const smoothedChange = smoothingFactor * rawChange + (1 - smoothingFactor) * previousChange;
+      // Calculate current velocity
+      let currentVelocity = lastValue - secondLastValue;
 
-      const newValue = lastValue + smoothedChange;
+      // Target velocity: mostly positive to ensure "stable growth"
+      // Same parameters as initialization to match style
+      const targetVelocity = 0.1 + (Math.random() * 0.3 - 0.15);
+
+      // Apply inertia to velocity
+      // This is the key to "less jagged" - changes in direction happen slowly
+      const newVelocity = currentVelocity * 0.9 + targetVelocity * 0.1;
+
+      const newValue = lastValue + newVelocity;
 
       const newData = [...prevData.slice(1), newValue];
       return newData;
