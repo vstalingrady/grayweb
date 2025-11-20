@@ -65,14 +65,17 @@ const showBrowserNotification = (
   }
   const body = parts.join("\n") || "You have a reminder waiting. Just say the word.";
   try {
-    // eslint-disable-next-line no-new
-    new Notification(title, {
+    const browserNotification = new Notification(title, {
       body,
       icon: PROACTIVITY_NOTIFICATION_ICON,
       badge: PROACTIVITY_NOTIFICATION_ICON,
       tag: `gray-reminder-${notification.id}`,
       requireInteraction: true,
     });
+    browserNotification.onclick = () => {
+      window.focus();
+      browserNotification.close();
+    };
   } catch (error) {
     console.error("Failed to show reminder browser notification:", error);
   }

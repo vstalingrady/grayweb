@@ -539,7 +539,11 @@ function GrayPageClientInner({
       return;
     }
     try {
-      new Notification(title, { body });
+      const notification = new Notification(title, { body });
+      notification.onclick = () => {
+        window.focus();
+        notification.close();
+      };
     } catch (error) {
       if (process.env.NODE_ENV !== "production") {
         console.warn("Failed to dispatch dashboard notification", error);
