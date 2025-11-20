@@ -102,11 +102,10 @@ export function useWorkspaceData(userId: number | null, variant: "general" | "da
             includeArchived: true,
           }),
           apiService
-            .touchUserStreak(userId)
+            .getUserStreak(userId)
             .catch((error) => {
-              console.error("Failed to update user streak:", error);
-              // Fallback to getting the current streak if update fails
-              return apiService.getUserStreak(userId).catch(() => null);
+              console.error("Failed to fetch user streak:", error);
+              return null;
             }),
         ]);
 
