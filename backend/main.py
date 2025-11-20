@@ -3208,9 +3208,13 @@ async def stream_ai_response(
         try:
             await tracker.check_limits(user_id)
         except UsageLimitExceeded as e:
+            reset_msg = ""
+            if e.next_reset_time:
+                reset_msg = f"\n\nLimit resets at {e.next_reset_time.strftime('%Y-%m-%d %H:%M')} UTC."
+
             limit_msg = (
                 f"**Usage Limit Reached**\n\n"
-                f"I've hit the usage cap for your **{e.tier.capitalize()}** plan ({e.message}).\n\n"
+                f"I've hit the usage cap for your **{e.tier.capitalize()}** plan ({e.message}).{reset_msg}\n\n"
                 f"To keep chatting without interruption, consider upgrading to a higher tier, or wait for the limit to reset."
             )
             # Yield the message as a delta so it appears, then finish.
@@ -3344,9 +3348,13 @@ async def generate_ai_response(
         try:
             await tracker.check_limits(user_id)
         except UsageLimitExceeded as e:
+            reset_msg = ""
+            if e.next_reset_time:
+                reset_msg = f"\n\nLimit resets at {e.next_reset_time.strftime('%Y-%m-%d %H:%M')} UTC."
+            
             limit_msg = (
                 f"**Usage Limit Reached**\n\n"
-                f"I've hit the usage cap for your **{e.tier.capitalize()}** plan ({e.message}).\n\n"
+                f"I've hit the usage cap for your **{e.tier.capitalize()}** plan ({e.message}).{reset_msg}\n\n"
                 f"To keep chatting without interruption, consider upgrading to a higher tier, or wait for the limit to reset."
             )
             return limit_msg, None

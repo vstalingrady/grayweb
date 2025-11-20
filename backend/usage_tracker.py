@@ -36,9 +36,10 @@ def get_limits_for_tier(tier: str):
     }
 
 class UsageLimitExceeded(Exception):
-    def __init__(self, message: str, tier: str):
+    def __init__(self, message: str, tier: str, next_reset_time: Optional[datetime.datetime] = None):
         self.message = message
         self.tier = tier
+        self.next_reset_time = next_reset_time
         super().__init__(message)
 
 class UsageTracker:
@@ -75,9 +76,6 @@ class UsageTracker:
             updates["last_monthly_reset"] = today_str
 
         # 3. Weekly Reset
-        # We check if the ISO calendar week has changed or if it's been > 7 days.
-        # Simplest approach: Store the date of last reset. If (now - last_reset).days >= 7, reset.
-        # Or align with Monday. Let's align with Monday for consistency.
         last_weekly = usage_data["last_weekly_reset"]
         current_week_number = now.isocalendar()[1]
         
@@ -87,7 +85,6 @@ class UsageTracker:
         else:
             try:
                 last_weekly_date = datetime.datetime.strptime(last_weekly, "%Y-%m-%d")
-                # If week number changed or year changed
                 if last_weekly_date.isocalendar()[1] != current_week_number or last_weekly_date.year != now.year:
                     should_reset_weekly = True
             except ValueError:
@@ -98,22 +95,14 @@ class UsageTracker:
             updates["last_weekly_reset"] = today_str
 
         # 4. 6-Hour Reset
-        # We group time into 4 blocks: 00-06, 06-12, 12-18, 18-24.
-        # We check if the current block is different from the last stored block.
-        # We store the full timestamp ISO string to compare.
-        last_six_hour = usage_data["last_six_hour_reset"] # ISO string
-        
+        last_six_hour = usage_data["last_six_hour_reset"]
         current_block_index = now.hour // 6
-        current_block_id = f"{today_str}-{current_block_index}" # e.g. 2023-10-27-1 (06:00-12:00)
+        current_block_id = f"{today_str}-{current_block_index}"
         
         should_reset_six_hour = False
         if not last_six_hour:
             should_reset_six_hour = True
         else:
-            # We simply store the block ID in the column for simplicity? 
-            # The column is TEXT. Let's assume it stores the block ID we just invented.
-            # Or if it stores a date, we parse it. 
-            # Let's stick to storing the Block ID string to avoid parsing ambiguity.
             if last_six_hour != current_block_id:
                 should_reset_six_hour = True
         
@@ -142,21 +131,37 @@ class UsageTracker:
         
         tier = (usage_data["plan_tier"] or "scout").lower()
         limits = get_limits_for_tier(tier)
+        now = datetime.datetime.utcnow()
         
         # Check Monthly
         current_monthly = usage_data["monthly_cost_usage"] or 0.0
         if current_monthly >= limits["monthly_cost"]:
-            raise UsageLimitExceeded(f"Monthly cost limit of ${limits['monthly_cost']:.2f} reached.", tier)
+            if now.month == 12:
+                next_reset = datetime.datetime(now.year + 1, 1, 1)
+            else:
+                next_reset = datetime.datetime(now.year, now.month + 1, 1)
+            raise UsageLimitExceeded(f"Monthly cost limit of ${limits['monthly_cost']:.2f} reached.", tier, next_reset)
 
         # Check Weekly
         current_weekly = usage_data["weekly_cost_usage"] or 0.0
         if current_weekly >= limits["weekly_cost"]:
-             raise UsageLimitExceeded(f"Weekly cost limit of ${limits['weekly_cost']:.2f} reached.", tier)
+            # Reset is next Monday
+            days_ahead = 7 - now.weekday()
+            if days_ahead == 0:
+                days_ahead = 7
+            next_reset = (now + datetime.timedelta(days=days_ahead)).replace(hour=0, minute=0, second=0, microsecond=0)
+            raise UsageLimitExceeded(f"Weekly cost limit of ${limits['weekly_cost']:.2f} reached.", tier, next_reset)
 
         # Check 6-Hour
         current_six_hour = usage_data["six_hour_cost_usage"] or 0.0
         if current_six_hour >= limits["six_hour_cost"]:
-             raise UsageLimitExceeded(f"6-hour burst limit of ${limits['six_hour_cost']:.2f} reached.", tier)
+            current_block = now.hour // 6
+            next_block_hour = (current_block + 1) * 6
+            if next_block_hour >= 24:
+                 next_reset = (now + datetime.timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+            else:
+                 next_reset = now.replace(hour=next_block_hour, minute=0, second=0, microsecond=0)
+            raise UsageLimitExceeded(f"6-hour burst limit of ${limits['six_hour_cost']:.2f} reached.", tier, next_reset)
 
     async def track_usage(self, user_id: int, input_tokens: int, output_tokens: int):
         cost = (input_tokens * PRICE_INPUT_PER_MILLION / 1_000_000) + \
