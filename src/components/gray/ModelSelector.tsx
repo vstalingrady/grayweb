@@ -140,8 +140,8 @@ export const ModelSelector = memo(() => {
                   <Rocket size={18} />
                 </div>
                 <div className={styles.upgradeInfo}>
-                  <div className={styles.upgradeLabel}>SuperGray</div>
-                  <div className={styles.upgradeDescription}>Unlock {nextTierLabel} capabilities</div>
+                  <div className={styles.upgradeLabel}>Upgrade</div>
+                  <div className={styles.upgradeDescription}>Unlock more capabilities</div>
                 </div>
                 <a href="/pricing" className={styles.upgradeButton}>Upgrade</a>
               </div>
