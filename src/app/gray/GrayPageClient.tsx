@@ -1836,9 +1836,18 @@ function GrayPageClientInner({
       const updatedReminderPlans = previousReminderPlans.filter((plan) => plan.id !== planToDelete.id);
 
       // Also remove the corresponding calendar event
-      const updatedCalendarEvents = previousCalendarEvents.filter(
-        (event) => event.id !== planToDelete.id
-      );
+      // We must handle both simple IDs (reminder-{id}) and complex IDs (reminder-{source}-{id}-{iso})
+      const updatedCalendarEvents = previousCalendarEvents.filter((event) => {
+        if (event.id === planToDelete.id) {
+          return false;
+        }
+        // Check for complex ID match
+        const match = event.id.match(/^reminder-[^-]+-(\d+)-/);
+        if (match && Number(match[1]) === reminderId) {
+          return false;
+        }
+        return true;
+      });
 
       setReminderPlans(updatedReminderPlans);
       setCalendarEvents(updatedCalendarEvents);

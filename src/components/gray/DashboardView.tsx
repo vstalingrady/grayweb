@@ -446,6 +446,20 @@ export function GrayDashboardView({
           onDeletePlan(targetPlan);
           return;
         }
+
+        // Fallback: Try to match complex chat-session reminder IDs (reminder-assistant-{id}-{iso})
+        // to the normalized plan ID (reminder-{id}).
+        const complexMatch = event.id.match(/^reminder-[^-]+-(\d+)-/);
+        if (complexMatch) {
+          const numericId = complexMatch[1];
+          const simpleId = `reminder-${numericId}`;
+          const fallbackPlan = displayPlans.find((plan) => plan.id === simpleId);
+          if (fallbackPlan) {
+            console.log(`[CALENDAR] Deleting reminder event via fallback: ${event.id} -> ${simpleId}`);
+            onDeletePlan(fallbackPlan);
+            return;
+          }
+        }
       }
 
       // Handle plan events (e.g., "plan-event-123")
