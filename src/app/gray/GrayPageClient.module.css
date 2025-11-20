@@ -1571,6 +1571,10 @@
   gap: 4px;
 }
 
+.sidebarNavItem[data-nav="history"] button {
+  padding-bottom: 0;
+}
+
 .navIcon {
   display: inline-flex;
   align-items: center;
