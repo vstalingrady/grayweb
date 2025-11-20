@@ -8,7 +8,6 @@ import { GrayEnhancedSidebar } from "@/components/gray/EnhancedSidebar";
 import { AddPlanHabitModal } from "@/components/gray/AddPlanHabitModal";
 import { GrayChatBar, type GrayChatBarProps } from "@/components/gray/ChatBar";
 import { GrayChatComposer } from "@/components/gray/ChatComposer";
-import { FirstChatOnboarding, type FirstChatOnboardingResult } from "@/components/gray/FirstChatOnboarding";
 import AttachmentTray from "@/components/gray/AttachmentTray";
 import { useUser } from "@/contexts/UserContext";
 import {
@@ -499,6 +498,32 @@ function GrayPageClientInner({
   }, [pathname]);
 
   // Include reminderPlans in derivedPlans so they appear in the pulse
+  const {
+    sessions,
+    renameSession,
+    deleteSession,
+    setWorkspaceContext,
+    sendGeneralMessage,
+    createThreadSession,
+    generalSessionId,
+    updateSession,
+    getSession,
+    ensureSession,
+    appendMessage,
+    uploadAttachments,
+    attachments,
+    isAttachmentUploading,
+    attachmentError,
+    removeAttachment,
+  } = useChatStore();
+  const reminderEventKeysRef = useRef<Set<string>>(new Set());
+  const supportsInlineChat = variant !== "chat";
+  const shouldShowDashboardChatBar = variant !== "dashboard";
+  const [currentChatId, setCurrentChatId] = useState<string | null>(() => activeChatId ?? null);
+  const [isCompactLayout, setIsCompactLayout] = useState(false);
+  const ensureSessionRef = useRef(ensureSession);
+  const { deliveredKeys: deliveredProactivityKeys } = useProactivityNotifications();
+
   const derivedPlans = user ? [...plans, ...reminderPlans] : [];
   const derivedHabits = user ? habits : [];
 
@@ -535,6 +560,32 @@ function GrayPageClientInner({
   const [planTab, setPlanTab] = useState<"plans" | "habits">("plans");
   const chatSubmitInFlightRef = useRef(false);
   const [hasSeenGeneralChat, setHasSeenGeneralChat] = useState(false);
+
+  useEffect(() => {
+    if (user?.has_seen_general_chat) {
+      setHasSeenGeneralChat(true);
+    }
+  }, [user?.has_seen_general_chat]);
+
+  useEffect(() => {
+    if (!user || loading) return;
+    // If we are in a view that shows the general chat
+    if (activeNav !== "threads" && (supportsInlineChat || activeNav === "general")) {
+      // And the user hasn't seen it yet
+      if (!user.has_seen_general_chat && !hasSeenGeneralChat && generalSessionId) {
+        const session = getSession(generalSessionId);
+        // Only trigger if the session is empty (new)
+        if (session && session.messages.length === 0 && !session.isResponding) {
+          console.log("[GrayPageClient] Triggering onboarding flow...");
+          // Send empty message to trigger backend onboarding logic
+          sendGeneralMessage("");
+          // Optimistically mark as seen to prevent double-trigger
+          setHasSeenGeneralChat(true);
+        }
+      }
+    }
+  }, [user, loading, activeNav, supportsInlineChat, hasSeenGeneralChat, generalSessionId, getSession, sendGeneralMessage]);
+
   const [isSidebarExpanded, setIsSidebarExpanded] = useState<boolean>(true);
   const [hasLoadedSidebarPref, setHasLoadedSidebarPref] = useState(false);
   const [dashboardTab, setDashboardTab] = useState<"pulse" | "calendar">("pulse");
@@ -559,31 +610,6 @@ function GrayPageClientInner({
 
   const [workspaceBackgroundsLoading, setWorkspaceBackgroundsLoading] = useState(false);
   const [workspaceBackgroundsError, setWorkspaceBackgroundsError] = useState<string | null>(null);
-  const {
-    sessions,
-    renameSession,
-    deleteSession,
-    setWorkspaceContext,
-    sendGeneralMessage,
-    createThreadSession,
-    generalSessionId,
-    updateSession,
-    getSession,
-    ensureSession,
-    appendMessage,
-    uploadAttachments,
-    attachments,
-    isAttachmentUploading,
-    attachmentError,
-    removeAttachment,
-  } = useChatStore();
-  const reminderEventKeysRef = useRef<Set<string>>(new Set());
-  const supportsInlineChat = variant !== "chat";
-  const shouldShowDashboardChatBar = variant !== "dashboard";
-  const [currentChatId, setCurrentChatId] = useState<string | null>(() => activeChatId ?? null);
-  const [isCompactLayout, setIsCompactLayout] = useState(false);
-  const ensureSessionRef = useRef(ensureSession);
-  const { deliveredKeys: deliveredProactivityKeys } = useProactivityNotifications();
 
   const activeWorkspaceBackground = useMemo(() => {
     const list = workspaceBackgrounds.length > 0 ? workspaceBackgrounds : [GREAT_WAVE_BACKGROUND];
@@ -796,25 +822,17 @@ function GrayPageClientInner({
           hideThinkingIndicator={hideChatThinkingIndicator}
           introContent={
             activeNav !== "threads" &&
-              (supportsInlineChat || activeNav === "general") &&
-              !hasSeenGeneralChat &&
-              currentChatId &&
-              generalSessionId &&
-              currentChatId === generalSessionId ? (
-              <div className={styles.introStack}>
-                <GrayWorkspaceHeader
-                  streakCount={streakCount}
-                  planLabel={viewerPlanLabel}
-                  onUpgradeClick={handleUpgradePlan}
-                >
-                  {renderWorkspaceGreeting()}
-                </GrayWorkspaceHeader>
-                <FirstChatOnboarding
-                  viewerName={viewerName}
-                  onComplete={handleFirstChatOnboardingDone}
-                  onSkip={handleFirstChatOnboardingDone}
-                />
-              </div>
+            (supportsInlineChat || activeNav === "general") &&
+            currentChatId &&
+            generalSessionId &&
+            currentChatId === generalSessionId ? (
+              <GrayWorkspaceHeader
+                streakCount={streakCount}
+                planLabel={viewerPlanLabel}
+                onUpgradeClick={handleUpgradePlan}
+              >
+                {renderWorkspaceGreeting()}
+              </GrayWorkspaceHeader>
             ) : null
           }
         />
@@ -2526,12 +2544,8 @@ function GrayPageClientInner({
     }
   };
 
-  const handleFirstChatOnboardingDone = useCallback(
-    (_result?: FirstChatOnboardingResult) => {
-      setHasSeenGeneralChat(true);
-    },
-    [setHasSeenGeneralChat]
-  );
+
+
 
   useEffect(() => {
     if (!supportsInlineChat || typeof window === "undefined") {
