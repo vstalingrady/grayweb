@@ -490,7 +490,6 @@ users = sqlalchemy.Table(
     sqlalchemy.Column("personalization_about", sqlalchemy.String, nullable=True),
     sqlalchemy.Column("personalization_custom_instructions", sqlalchemy.String, nullable=True),
     sqlalchemy.Column("plan_tier", sqlalchemy.String, nullable=True),
-    sqlalchemy.Column("maps_enabled", sqlalchemy.Boolean, default=False),
     sqlalchemy.Column("has_seen_general_chat", sqlalchemy.Boolean, default=False),
     sqlalchemy.Column("daily_token_usage", sqlalchemy.Integer, default=0),
     sqlalchemy.Column("monthly_cost_usage", sqlalchemy.Float, default=0.0),

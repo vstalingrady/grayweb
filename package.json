@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "backend": "DATABASE_URL=\"sqlite:///./users.db\" cd backend && python3 start.py",
+    "backend": "DATABASE_URL=\"sqlite:///./users.db\" cd backend && ../.venv/bin/python3 start.py",
     "mcp:build": "cd plans-habits-server && npm run build",
     "mcp:plans-habits-server": "node plans-habits-server/dist/index.js",
     "backend:with-mcp": "concurrently \"npm run backend\" \"npm run mcp:plans-habits-server\"",
