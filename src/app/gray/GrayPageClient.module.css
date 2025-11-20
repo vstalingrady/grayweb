@@ -1478,7 +1478,7 @@
   background: transparent;
   display: inline-flex;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: center;
   padding: 0;
   cursor: pointer;
   margin-bottom: 12px;
@@ -2101,7 +2101,6 @@
 .profileDetails span:last-child {
   font-size: 0.68rem;
   letter-spacing: 0.18em;
-  text-transform: uppercase;
   color: rgba(210, 214, 220, 0.64);
 }
 
@@ -2541,7 +2540,7 @@
   gap: clamp(8px, 1.5vh, 14px);
   min-height: 100%;
   padding:
-    clamp(8px, 2vh, 18px) 0 clamp(36px, 6vh, 60px) 0;
+    clamp(8px, 2vh, 18px) 0 0 0;
 
   overflow: auto;
   scroll-behavior: smooth;
@@ -4490,7 +4489,6 @@
   color: rgba(248, 248, 248, 0.92);
   letter-spacing: 0.28em;
   font-size: 0.6rem;
-  text-transform: uppercase;
   cursor: pointer;
 }
 
@@ -8012,8 +8010,21 @@ h1.greeting {
 }
 
 .chatBarUnderline {
-  /* Hidden to prevent gradient artifact when chat composer is sticky */
-  display: none;
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: calc(-1 * clamp(26px, 4vh, 42px));
+  margin: 0 auto;
+  width: 100%;
+  max-width: 100%;
+  border-radius: 32px 32px 0 0;
+  background: linear-gradient(180deg, rgba(8, 8, 8, 0.7), rgba(3, 3, 3, 0.6));
+  box-shadow:
+    0 34px 60px rgba(0, 0, 0, 0.52),
+    0 12px 24px rgba(0, 0, 0, 0.28);
+  pointer-events: none;
+  z-index: 0;
 }
 
 .chatIconButton,
@@ -8041,6 +8052,19 @@ h1.greeting {
   color: rgba(235, 235, 235, 0.7);
 }
 
+.chatActionButton {
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  background: #f5f5f5;
+  color: #050505;
+  line-height: 0;
+}
+
+.chatActionButton svg {
+  display: block;
+}
+
 .chatIconButton[disabled],
 .chatActionButton[disabled] {
   cursor: not-allowed;
@@ -8049,7 +8073,6 @@ h1.greeting {
 
 .chatIconButton[disabled]:hover,
 .chatActionButton[disabled]:hover {
-  background: transparent;
   color: rgba(235, 235, 235, 0.7);
 }
 
@@ -8059,8 +8082,8 @@ h1.greeting {
 }
 
 .chatActionButton:hover {
-  background: none;
-  color: rgba(255, 255, 255, 0.9);
+  background: #ffffff;
+  color: #050505;
 }
 
 .chatBar {
