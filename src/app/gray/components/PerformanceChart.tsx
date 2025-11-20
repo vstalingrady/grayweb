@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useMemo } from "react";
 
 // Number of data points to show on screen
-const POINTS_COUNT = 150;
+const POINTS_COUNT = 80;
 
 export default function PerformanceChart() {
   const [data, setData] = useState<number[]>([]);
@@ -13,15 +13,15 @@ export default function PerformanceChart() {
   useEffect(() => {
     const initialData = [];
     let value = 100;
-    let velocity = 0.1; // Start with positive momentum
+    let velocity = 0.1;
 
     for (let i = 0; i < POINTS_COUNT; i++) {
-      // Target velocity: mostly positive, slight variation
-      // Center around +0.1, range [-0.05, +0.25]
-      const targetVelocity = 0.1 + (Math.random() * 0.3 - 0.15);
+      // Target velocity: mostly positive, but with much more variation now
+      // Center around +0.1, range [-0.4, +0.6]
+      const targetVelocity = 0.1 + (Math.random() * 1.0 - 0.5);
 
-      // High inertia (0.9) for very smooth curves
-      velocity = velocity * 0.9 + targetVelocity * 0.1;
+      // Lower inertia (0.7) allows for more "wiggle" and distinct curves
+      velocity = velocity * 0.7 + targetVelocity * 0.3;
 
       value += velocity;
       initialData.push(value);
@@ -39,13 +39,11 @@ export default function PerformanceChart() {
       // Calculate current velocity
       let currentVelocity = lastValue - secondLastValue;
 
-      // Target velocity: mostly positive to ensure "stable growth"
-      // Same parameters as initialization to match style
-      const targetVelocity = 0.1 + (Math.random() * 0.3 - 0.15);
+      // Target velocity: mostly positive, wider range for "different" points
+      const targetVelocity = 0.1 + (Math.random() * 1.0 - 0.5);
 
-      // Apply inertia to velocity
-      // This is the key to "less jagged" - changes in direction happen slowly
-      const newVelocity = currentVelocity * 0.9 + targetVelocity * 0.1;
+      // Apply inertia
+      const newVelocity = currentVelocity * 0.7 + targetVelocity * 0.3;
 
       const newValue = lastValue + newVelocity;
 
