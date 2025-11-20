@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useCallback, useMemo, useState, useRef, useEffect } from "react";
-import { Zap, Box, Sparkles, Brain, Lock, ChevronUp, SlidersHorizontal, Grid, Rocket } from "lucide-react";
+import { Zap, Box, Sparkles, Lock, ChevronUp, Rocket } from "lucide-react";
 import { useChatStore } from "@/components/gray/ChatProvider";
 import { useUser } from "@/contexts/UserContext";
 import styles from "./ModelSelector.module.css";
@@ -18,7 +18,6 @@ const OPTIONS: ModelOption[] = [
   { id: "lite", label: "Lite", description: "Quick responses", icon: Zap, tierRequired: "scout" },
   { id: "base", label: "Base", description: "Balanced intelligence", icon: Box, tierRequired: "scout" },
   { id: "pro", label: "Pro", description: "Complex tasks", icon: Sparkles, tierRequired: "voyager" },
-  { id: "reasoning", label: "Deep", description: "Thinks hard", icon: Brain, tierRequired: "pioneer" },
 ];
 
 const TIER_LEVELS: Record<string, number> = {
@@ -28,7 +27,7 @@ const TIER_LEVELS: Record<string, number> = {
 };
 
 export const ModelSelector = memo(() => {
-  const { modelTier, setModelTier, reasoningMode, setReasoningMode } = useChatStore();
+  const { modelTier, setModelTier } = useChatStore();
   const { user } = useUser();
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -37,33 +36,27 @@ export const ModelSelector = memo(() => {
   const currentLevel = TIER_LEVELS[currentTier] ?? 0;
 
   const activeOption = useMemo(() => {
-    if (reasoningMode) return OPTIONS[3];
     if (modelTier === "pro") return OPTIONS[2];
     if (modelTier === "base") return OPTIONS[1];
     return OPTIONS[0];
-  }, [modelTier, reasoningMode]);
+  }, [modelTier]);
 
   const handleSelect = useCallback(
     (index: number) => {
       const option = OPTIONS[index];
       const requiredLevel = TIER_LEVELS[option.tierRequired];
-      
+
       if (currentLevel < requiredLevel) {
         return;
       }
 
-      if (index === 3) {
-        setModelTier("pro");
-        setReasoningMode(true);
-      } else {
-        setReasoningMode(false);
-        if (index === 2) setModelTier("pro");
-        else if (index === 1) setModelTier("base");
-        else setModelTier("lite");
-      }
+      if (index === 2) setModelTier("pro");
+      else if (index === 1) setModelTier("base");
+      else setModelTier("lite");
+
       setIsOpen(false);
     },
-    [currentLevel, setModelTier, setReasoningMode]
+    [currentLevel, setModelTier]
   );
 
   // Click outside to close
@@ -88,16 +81,15 @@ export const ModelSelector = memo(() => {
   return (
     <div className={styles.container} ref={containerRef}>
       {/* Trigger Button */}
-      <button 
-        className={styles.trigger} 
+      <button
+        className={styles.trigger}
         onClick={() => setIsOpen(!isOpen)}
         aria-expanded={isOpen}
         aria-haspopup="menu"
+        aria-label="Select model"
         type="button"
       >
-        <activeOption.icon className={styles.triggerIcon} size={16} />
-        <span className={styles.triggerLabel}>{activeOption.label}</span>
-        <ChevronUp className={styles.chevron} size={14} />
+        <ChevronUp className={styles.chevron} size={16} />
       </button>
 
       {/* Dropup Menu */}
@@ -122,7 +114,6 @@ export const ModelSelector = memo(() => {
                 <div className={styles.itemInfo}>
                   <div className={styles.itemLabel}>
                     {option.label}
-                    {option.id === "reasoning" && <span className={styles.betaTag}>Beta</span>}
                   </div>
                   <div className={styles.itemDescription}>{option.description}</div>
                 </div>
@@ -147,20 +138,7 @@ export const ModelSelector = memo(() => {
             </div>
           )}
 
-          <div className={styles.divider} />
 
-          {/* Extra Actions */}
-          <button className={styles.actionItem} type="button" disabled>
-            <SlidersHorizontal size={16} />
-            <span>Custom Instructions</span>
-            <span className={styles.actionBadge}>Customize</span>
-          </button>
-          
-          <button className={styles.actionItem} type="button" disabled>
-            <Grid size={16} />
-            <span>All Models</span>
-            <Lock size={14} className={styles.actionLock} />
-          </button>
         </div>
       </div>
     </div>
