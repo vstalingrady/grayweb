@@ -1001,6 +1001,7 @@ class ChatRequest(BaseModel):
     maps_longitude: Optional[float] = None
     maps_widget: bool = False
     web_search_enabled: bool = True
+    file_search_enabled: bool = False
     should_generate_title: bool = False
     reasoning_mode: bool = False
     timezone: Optional[str] = None
@@ -3225,6 +3226,7 @@ async def stream_ai_response(
     maps_longitude: Optional[float] = None,
     maps_widget: bool = False,
     search_enabled: bool = True,
+    file_search_enabled: bool = False,
     should_generate_title: bool = False,
     reasoning_mode: bool = False,
 ) -> AsyncGenerator[Tuple[str, Any], None]:
@@ -3291,8 +3293,12 @@ async def stream_ai_response(
         maps_longitude,
         maps_widget,
     )
+    file_search_tools = []
+    if file_search_enabled:
+         file_search_tools = await _build_file_search_tools(db, user_id)
+
     base_tools: List[types.Tool] = DEFAULT_CHAT_TOOLS if search_enabled else []
-    tool_list = [*base_tools, *maps_tools]
+    tool_list = [*base_tools, *maps_tools, *file_search_tools]
     grounding_metadata: Optional[Dict[str, Any]] = None
     if GEMINI_SERVICE.available:
         try:
@@ -3365,6 +3371,7 @@ async def generate_ai_response(
     maps_longitude: Optional[float] = None,
     maps_widget: bool = False,
     search_enabled: bool = True,
+    file_search_enabled: bool = False,
     should_generate_title: bool = False,
     reasoning_mode: bool = False,
 ) -> Tuple[str, Optional[Dict[str, Any]]]:
@@ -3434,8 +3441,12 @@ async def generate_ai_response(
         maps_longitude,
         maps_widget,
     )
+    file_search_tools = []
+    if file_search_enabled:
+         file_search_tools = await _build_file_search_tools(db, user_id)
+
     base_tools: List[types.Tool] = DEFAULT_CHAT_TOOLS if search_enabled else []
-    tool_list = [*base_tools, *maps_tools]
+    tool_list = [*base_tools, *maps_tools, *file_search_tools]
     grounding_metadata: Optional[Dict[str, Any]] = None
     if GEMINI_SERVICE.available:
         try:
@@ -3926,6 +3937,7 @@ async def chat_with_ai(request: ChatRequest, db: databases.Database = Depends(ge
             maps_longitude=request.maps_longitude,
             maps_widget=request.maps_widget,
             search_enabled=request.web_search_enabled,
+            file_search_enabled=request.file_search_enabled,
             should_generate_title=request.should_generate_title,
             reasoning_mode=effective_reasoning_mode,
         )
@@ -4128,6 +4140,7 @@ async def chat_with_ai_stream(request: ChatRequest, db: databases.Database = Dep
                     maps_longitude=request.maps_longitude,
                     maps_widget=request.maps_widget,
                     search_enabled=request.web_search_enabled,
+                    file_search_enabled=request.file_search_enabled,
                     should_generate_title=request.should_generate_title,
                     reasoning_mode=effective_reasoning_mode,
                 ):

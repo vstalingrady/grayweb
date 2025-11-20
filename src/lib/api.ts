@@ -168,6 +168,7 @@ export interface User {
   initials: string;
   workspace_background_id?: string | null;
   maps_enabled: boolean;
+  has_seen_general_chat?: boolean;
   personalization_nickname?: string | null;
   personalization_occupation?: string | null;
   personalization_about?: string | null;
@@ -455,7 +456,9 @@ export interface ChatRequest {
   maps_longitude?: number;
   maps_widget?: boolean;
   web_search_enabled?: boolean;
+  file_search_enabled?: boolean;
   should_generate_title?: boolean;
+  reasoning_mode?: boolean;
 }
 
 export interface ChatResponse {
@@ -604,6 +607,7 @@ export interface UserUpdate {
   plan_tier?: string | null;
   workspace_background_id?: string | null;
   maps_enabled?: boolean;
+  has_seen_general_chat?: boolean;
   personalization_nickname?: string | null;
   personalization_occupation?: string | null;
   personalization_about?: string | null;
