@@ -49,6 +49,7 @@ from google_calendar import (
 from google.genai import types
 from gemini_client import GeminiAttachment, GeminiService
 from anthropic_client import AnthropicService
+from usage_tracker import UsageTracker, UsageLimitExceeded
 try:
     from backend.calendar_tools import CALENDAR_TOOLS
     from backend.file_search import FileSearchService
@@ -971,6 +972,7 @@ class ChatRequest(BaseModel):
     maps_widget: bool = False
     web_search_enabled: bool = True
     should_generate_title: bool = False
+    reasoning_mode: bool = False
     timezone: Optional[str] = None
 
 class ChatResponse(BaseModel):
@@ -3055,8 +3057,25 @@ async def stream_ai_response(
     maps_widget: bool = False,
     search_enabled: bool = True,
     should_generate_title: bool = False,
+    reasoning_mode: bool = False,
 ) -> AsyncGenerator[Tuple[str, Any], None]:
     """Yield token chunks using the configured AI provider."""
+    # Check usage limits
+    if user_id is not None and db is not None:
+        tracker = UsageTracker(db)
+        try:
+            await tracker.check_limits(user_id)
+        except UsageLimitExceeded as e:
+            # For streaming, we yield an error event or raise.
+            # Raising HTTP exception might be handled by the caller, 
+            # but this is a generator.
+            # Best to raise, assuming caller handles it or the stream breaks.
+            # However, since this is an AsyncGenerator, raising here before yield works.
+            raise HTTPException(
+                status_code=402, 
+                detail=f"Usage limit exceeded for {e.tier.capitalize()} plan: {e.message}"
+            )
+
     provider = AI_PROVIDER or "gemini"
     conversation_history = _normalize_conversation_history(conversation_history)
     cached_contents = None
@@ -3105,6 +3124,7 @@ async def stream_ai_response(
     if GEMINI_SERVICE.available:
         try:
             accumulated = ""
+            final_usage = None
             async for chunk in GEMINI_SERVICE.stream(
                 message,
                 conversation_history,
@@ -3116,7 +3136,11 @@ async def stream_ai_response(
                 extra_contents=_merge_extra_contents(title_instruction_contents, cached_contents),
                 tools=tool_list,
                 tool_config=maps_tool_config,
+                reasoning_mode=reasoning_mode,
             ):
+                if chunk.usage_metadata:
+                    final_usage = chunk.usage_metadata
+
                 text_fragment = chunk.text or ""
                 if chunk.candidates:
                     candidate = chunk.candidates[0]
@@ -3126,6 +3150,15 @@ async def stream_ai_response(
                 accumulated += text_fragment
                 if text_fragment:
                     yield ("delta", text_fragment)
+            
+            if final_usage and user_id is not None and db is not None:
+                tracker = UsageTracker(db)
+                await tracker.track_usage(
+                    user_id,
+                    final_usage.prompt_token_count or 0,
+                    final_usage.candidates_token_count or 0
+                )
+
             final_payload = {"text": accumulated, "grounding_metadata": grounding_metadata}
             if accumulated:
                 yield ("final", final_payload)
@@ -3160,8 +3193,21 @@ async def generate_ai_response(
     maps_widget: bool = False,
     search_enabled: bool = True,
     should_generate_title: bool = False,
+    reasoning_mode: bool = False,
 ) -> Tuple[str, Optional[Dict[str, Any]]]:
     """Generate a structured response using the configured AI provider."""
+    # Check usage limits if user context is available
+    if user_id is not None and db is not None:
+        tracker = UsageTracker(db)
+        try:
+            await tracker.check_limits(user_id)
+        except UsageLimitExceeded as e:
+            # If we are in a chat request, we want to inform the user
+            raise HTTPException(
+                status_code=402, # Payment Required
+                detail=f"Usage limit exceeded for {e.tier.capitalize()} plan: {e.message}"
+            )
+
     conversation_history = _normalize_conversation_history(conversation_history)
     provider = AI_PROVIDER or "gemini"
 
@@ -3228,7 +3274,18 @@ async def generate_ai_response(
                 response_mime_type=response_mime_type,
                 tools=tool_list,
                 tool_config=maps_tool_config,
+                reasoning_mode=reasoning_mode,
             )
+
+            # Track usage
+            if user_id is not None and db is not None and response.usage_metadata:
+                tracker = UsageTracker(db)
+                await tracker.track_usage(
+                    user_id,
+                    response.usage_metadata.prompt_token_count or 0,
+                    response.usage_metadata.candidates_token_count or 0
+                )
+
             if response.candidates:
                 candidate = response.candidates[0]
                 if candidate.grounding_metadata:
@@ -3263,7 +3320,18 @@ async def generate_ai_response(
                     response_mime_type=response_mime_type,
                     tools=tool_list,
                     tool_config=maps_tool_config,
+                    reasoning_mode=reasoning_mode,
                 )
+                
+                # Track usage for follow-up generation
+                if user_id is not None and db is not None and response.usage_metadata:
+                    tracker = UsageTracker(db)
+                    await tracker.track_usage(
+                        user_id,
+                        response.usage_metadata.prompt_token_count or 0,
+                        response.usage_metadata.candidates_token_count or 0
+                    )
+
                 if response.candidates:
                     candidate = response.candidates[0]
                     payload = _candidate_grounding_payload(candidate)
@@ -3646,6 +3714,21 @@ async def chat_with_ai(request: ChatRequest, db: databases.Database = Depends(ge
         if should_persist_user:
             await save_conversation_message(conversation_id, user_message_payload, user_id=request.user_id)
 
+        # Enforce tier restrictions
+        # Only Voyager and Pioneer users can use reasoning mode.
+        # If the user is on the 'scout' plan (or no plan), force reasoning_mode to False.
+        user_record = await db.fetch_one(users.select().where(users.c.id == request.user_id))
+        plan_tier = user_record["plan_tier"] if user_record else None
+        
+        # Normalize tier to lowercase for comparison
+        normalized_tier = (plan_tier or "scout").lower()
+        
+        # If user requested reasoning but is not eligible, disable it silently (or we could raise 403)
+        effective_reasoning_mode = request.reasoning_mode
+        if effective_reasoning_mode and normalized_tier not in ("voyager", "pioneer"):
+            api_logger.info(f"Disabling reasoning mode for user {request.user_id} (tier: {normalized_tier})")
+            effective_reasoning_mode = False
+
         # Generate AI response
         ai_response, grounding_metadata = await generate_ai_response(
             request.message,
@@ -3666,6 +3749,7 @@ async def chat_with_ai(request: ChatRequest, db: databases.Database = Depends(ge
             maps_widget=request.maps_widget,
             search_enabled=request.web_search_enabled,
             should_generate_title=request.should_generate_title,
+            reasoning_mode=effective_reasoning_mode,
         )
 
         # Save AI response (including grounding metadata for downstream UI)
@@ -3788,6 +3872,16 @@ async def chat_with_ai_stream(request: ChatRequest, db: databases.Database = Dep
         if should_persist_user:
             await save_conversation_message(conversation_id, user_message_payload, user_id=request.user_id)
 
+        # Enforce tier restrictions for streaming
+        user_record = await db.fetch_one(users.select().where(users.c.id == request.user_id))
+        plan_tier = user_record["plan_tier"] if user_record else None
+        normalized_tier = (plan_tier or "scout").lower()
+        
+        effective_reasoning_mode = request.reasoning_mode
+        if effective_reasoning_mode and normalized_tier not in ("voyager", "pioneer"):
+            api_logger.info(f"Disabling reasoning mode for user {request.user_id} (tier: {normalized_tier})")
+            effective_reasoning_mode = False
+
         async def event_stream() -> AsyncGenerator[str, None]:
             nonlocal session_title
             start_time = time.perf_counter()
@@ -3813,6 +3907,7 @@ async def chat_with_ai_stream(request: ChatRequest, db: databases.Database = Dep
                     maps_widget=request.maps_widget,
                     search_enabled=request.web_search_enabled,
                     should_generate_title=request.should_generate_title,
+                    reasoning_mode=effective_reasoning_mode,
                 ):
                     if kind == "delta":
                         if not payload:
@@ -4256,10 +4351,10 @@ async def compress_conversation(conversation_id: str):
         # Load the current conversation history
         history = await _load_conversation_history(conversation_id)
         
-        if len(history) < 10:
+        if len(history) < 2:
             return {
                 "success": False,
-                "message": "Conversation too short to compress (need at least 10 messages)"
+                "message": "Conversation too short to compress (need at least 2 messages)"
             }
         
         # Calculate original token count

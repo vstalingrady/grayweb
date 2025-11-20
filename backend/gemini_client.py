@@ -119,6 +119,7 @@ class GeminiService:
         response_mime_type: Optional[str] = None,
         tools: Optional[List[types.Tool]] = None,
         tool_config: Optional[types.ToolConfig] = None,
+        reasoning_mode: bool = False,
     ) -> Optional[types.GenerateContentConfig]:
         config_kwargs: Dict[str, Any] = {}
 
@@ -126,8 +127,17 @@ class GeminiService:
         if system_instruction:
             config_kwargs["system_instruction"] = system_instruction
 
-        if self._thinking_budget is not None:
-            config_kwargs["thinking_config"] = types.ThinkingConfig(thinking_budget=self._thinking_budget)
+        if reasoning_mode:
+            # Use environment budget if set, otherwise default to 2048 for reasoning mode
+            budget = self._thinking_budget if self._thinking_budget is not None else 2048
+            config_kwargs["thinking_config"] = types.ThinkingConfig(thinking_budget=budget)
+        elif self._thinking_budget is not None:
+            # Fallback: if env var is explicitly set, use it even if reasoning_mode is False (legacy behavior)
+            # Or we can decide that reasoning_mode is the ONLY way to enable it.
+            # For now, let's stick to the plan: reasoning_mode enables it.
+            # But if the user has set a global budget in env, maybe they want it always on?
+            # Let's respect the explicit flag primarily.
+            pass
 
         if self._temperature is not None:
             config_kwargs["temperature"] = self._temperature
@@ -239,6 +249,7 @@ class GeminiService:
         response_mime_type: Optional[str] = None,
         tools: Optional[List[types.Tool]] = None,
         tool_config: Optional[types.ToolConfig] = None,
+        reasoning_mode: bool = False,
     ) -> types.GenerateContentResponse:
         if not self.available or not self._client:
             raise RuntimeError("Gemini client is not configured")
@@ -272,6 +283,7 @@ class GeminiService:
             response_mime_type=response_mime_type,
             tools=tools,
             tool_config=tool_config,
+            reasoning_mode=reasoning_mode,
         )
 
         response = await self._client.aio.models.generate_content(
@@ -295,6 +307,7 @@ class GeminiService:
         response_mime_type: Optional[str] = None,
         tools: Optional[List[types.Tool]] = None,
         tool_config: Optional[types.ToolConfig] = None,
+        reasoning_mode: bool = False,
         ) -> AsyncIterator[types.GenerateContentResponse]:
         if not self.available or not self._client:
             raise RuntimeError("Gemini client is not configured")
@@ -328,6 +341,7 @@ class GeminiService:
             response_mime_type=response_mime_type,
             tools=tools,
             tool_config=tool_config,
+            reasoning_mode=reasoning_mode,
         )
 
         stream_iter = await self._client.aio.models.generate_content_stream(

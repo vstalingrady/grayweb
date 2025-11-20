@@ -10,8 +10,10 @@ import os
 import re
 from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Optional, Any
+import databases
 
 from gemini_client import GeminiService
+from usage_tracker import UsageTracker, UsageLimitExceeded
 
 
 class AIMessageGenerator:
@@ -36,6 +38,7 @@ class AIMessageGenerator:
         profile_context: Optional[str] = None,
         custom_instructions: Optional[str] = None,
         chat_context: Optional[str] = None,
+        db: Optional[databases.Database] = None,
     ) -> tuple[str, str]:
         """
         Generate a personalized daily check-in message
@@ -105,6 +108,14 @@ class AIMessageGenerator:
         if not self.gemini or not self.gemini.available:
             raise RuntimeError("Gemini client is not configured for proactive messaging")
 
+        if db:
+            tracker = UsageTracker(db)
+            try:
+                await tracker.check_limits(user_id)
+            except UsageLimitExceeded as e:
+                print(f"[AIMessageGenerator] Usage limit exceeded for user {user_id}: {e}")
+                raise RuntimeError(f"Usage limit exceeded: {e}")
+
         try:
             response = await self.gemini.generate(
                 user_context,
@@ -114,6 +125,15 @@ class AIMessageGenerator:
                 time_context=None,
                 model=None,
             )
+            
+            if db and response.usage_metadata:
+                tracker = UsageTracker(db)
+                await tracker.track_usage(
+                    user_id,
+                    response.usage_metadata.prompt_token_count or 0,
+                    response.usage_metadata.candidates_token_count or 0
+                )
+
         except Exception as error:
             # Let the caller see that generation failed instead of silently templating.
             raise RuntimeError(f"Gemini proactive message generation failed: {error}") from error

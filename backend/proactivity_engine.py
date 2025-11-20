@@ -566,6 +566,7 @@ class ProactivityEngine:
                 profile_context=profile_summary,
                 custom_instructions=custom_instructions,
                 chat_context=chat_context,
+                db=self.db,
             )
             return message.strip() if message else None
         except Exception as exc:
