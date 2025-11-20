@@ -7915,24 +7915,14 @@ h1.greeting {
 
 .modelSelectorContainer {
   position: absolute;
-  bottom: calc(100% + 10px); /* Position above the chat bar, with some spacing */
+  bottom: calc(100% + 12px);
   left: 50%;
   transform: translateX(-50%);
   z-index: 10;
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
-  transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s ease;
+  pointer-events: auto;
 }
 
-/* Adjust the .generalChatComposer to control ModelSelector visibility */
-.generalChatComposer:hover .modelSelectorContainer,
-.generalChatComposer:focus-within .modelSelectorContainer {
-  opacity: 1;
-  visibility: visible;
-  pointer-events: auto;
-  transform: translateX(-50%) translateY(0); /* No translateY needed if already positioned by bottom */
-}
+/* Removed the hover/focus-within opacity rules since the component handles the menu state */
 
 /* The existing .generalChatComposer styles will be merged with this, so I will ensure proper ordering if needed. */
 /* The previous replace already handled .generalChatComposer, so I am replacing the entire block again with the new styles. */

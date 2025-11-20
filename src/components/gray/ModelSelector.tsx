@@ -1,7 +1,7 @@
 "use client";
 
-import { memo, useCallback, useMemo } from "react";
-import { Zap, Box, Sparkles, Brain, Lock } from "lucide-react";
+import { memo, useCallback, useMemo, useState, useRef, useEffect } from "react";
+import { Zap, Box, Sparkles, Brain, Lock, ChevronUp, SlidersHorizontal, Grid, Rocket } from "lucide-react";
 import { useChatStore } from "@/components/gray/ChatProvider";
 import { useUser } from "@/contexts/UserContext";
 import styles from "./ModelSelector.module.css";
@@ -9,15 +9,16 @@ import styles from "./ModelSelector.module.css";
 type ModelOption = {
   id: string;
   label: string;
+  description: string;
   icon: React.ElementType;
   tierRequired: "scout" | "voyager" | "pioneer";
 };
 
 const OPTIONS: ModelOption[] = [
-  { id: "lite", label: "Lite", icon: Zap, tierRequired: "scout" },
-  { id: "base", label: "Base", icon: Box, tierRequired: "scout" },
-  { id: "pro", label: "Pro", icon: Sparkles, tierRequired: "voyager" },
-  { id: "reasoning", label: "Deep", icon: Brain, tierRequired: "pioneer" },
+  { id: "lite", label: "Lite", description: "Quick responses", icon: Zap, tierRequired: "scout" },
+  { id: "base", label: "Base", description: "Balanced intelligence", icon: Box, tierRequired: "scout" },
+  { id: "pro", label: "Pro", description: "Complex tasks", icon: Sparkles, tierRequired: "voyager" },
+  { id: "reasoning", label: "Deep", description: "Thinks hard", icon: Brain, tierRequired: "pioneer" },
 ];
 
 const TIER_LEVELS: Record<string, number> = {
@@ -29,15 +30,17 @@ const TIER_LEVELS: Record<string, number> = {
 export const ModelSelector = memo(() => {
   const { modelTier, setModelTier, reasoningMode, setReasoningMode } = useChatStore();
   const { user } = useUser();
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const currentTier = (user?.plan_tier || "scout").toLowerCase();
   const currentLevel = TIER_LEVELS[currentTier] ?? 0;
 
-  const activeIndex = useMemo(() => {
-    if (reasoningMode) return 3;
-    if (modelTier === "pro") return 2;
-    if (modelTier === "base") return 1;
-    return 0;
+  const activeOption = useMemo(() => {
+    if (reasoningMode) return OPTIONS[3];
+    if (modelTier === "pro") return OPTIONS[2];
+    if (modelTier === "base") return OPTIONS[1];
+    return OPTIONS[0];
   }, [modelTier, reasoningMode]);
 
   const handleSelect = useCallback(
@@ -46,7 +49,6 @@ export const ModelSelector = memo(() => {
       const requiredLevel = TIER_LEVELS[option.tierRequired];
       
       if (currentLevel < requiredLevel) {
-        // Optionally trigger upsell modal here
         return;
       }
 
@@ -59,39 +61,107 @@ export const ModelSelector = memo(() => {
         else if (index === 1) setModelTier("base");
         else setModelTier("lite");
       }
+      setIsOpen(false);
     },
     [currentLevel, setModelTier, setReasoningMode]
   );
 
-  return (
-    <div className={styles.container}>
-      <div 
-        className={styles.track} 
-        style={{ "--option-count": OPTIONS.length } as React.CSSProperties}
-        data-active-index={activeIndex}
-      >
-        <div className={styles.indicator} />
-        {OPTIONS.map((option, index) => {
-          const requiredLevel = TIER_LEVELS[option.tierRequired];
-          const isLocked = currentLevel < requiredLevel;
-          const Icon = isLocked ? Lock : option.icon;
-          const isActive = activeIndex === index;
+  // Click outside to close
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
 
-          return (
-            <button
-              key={option.id}
-              className={styles.option}
-              onClick={() => handleSelect(index)}
-              disabled={isLocked}
-              data-active={isActive ? "true" : undefined}
-              aria-label={`Select ${option.label} model`}
-              title={isLocked ? `${option.label} (Requires ${option.tierRequired})` : option.label}
-            >
-              <Icon className={styles.icon} />
-              <span className={styles.label}>{option.label}</span>
-            </button>
-          );
-        })}
+    if (isOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isOpen]);
+
+  const nextTier = currentLevel === 0 ? "voyager" : currentLevel === 1 ? "pioneer" : null;
+  const nextTierLabel = nextTier ? nextTier.charAt(0).toUpperCase() + nextTier.slice(1) : "";
+
+  return (
+    <div className={styles.container} ref={containerRef}>
+      {/* Trigger Button */}
+      <button 
+        className={styles.trigger} 
+        onClick={() => setIsOpen(!isOpen)}
+        aria-expanded={isOpen}
+        aria-haspopup="menu"
+        type="button"
+      >
+        <activeOption.icon className={styles.triggerIcon} size={16} />
+        <span className={styles.triggerLabel}>{activeOption.label}</span>
+        <ChevronUp className={styles.chevron} size={14} />
+      </button>
+
+      {/* Dropup Menu */}
+      <div className={`${styles.menu} ${isOpen ? styles.menuOpen : ""}`}>
+        <div className={styles.menuContent}>
+          {OPTIONS.map((option, index) => {
+            const requiredLevel = TIER_LEVELS[option.tierRequired];
+            const isLocked = currentLevel < requiredLevel;
+            const isActive = activeOption.id === option.id;
+            const Icon = option.icon;
+
+            return (
+              <button
+                key={option.id}
+                className={`${styles.menuItem} ${isActive ? styles.menuItemActive : ""} ${isLocked ? styles.menuItemLocked : ""}`}
+                onClick={() => handleSelect(index)}
+                disabled={isLocked}
+              >
+                <div className={styles.itemIconWrapper}>
+                  {isLocked ? <Lock size={16} /> : <Icon size={18} />}
+                </div>
+                <div className={styles.itemInfo}>
+                  <div className={styles.itemLabel}>
+                    {option.label}
+                    {option.id === "reasoning" && <span className={styles.betaTag}>Beta</span>}
+                  </div>
+                  <div className={styles.itemDescription}>{option.description}</div>
+                </div>
+                {isActive && <div className={styles.activeIndicator} />}
+              </button>
+            );
+          })}
+
+          {/* Upgrade Section */}
+          {nextTier && (
+            <div className={styles.upgradeSection}>
+              <div className={styles.upgradeContent}>
+                <div className={styles.upgradeIconWrapper}>
+                  <Rocket size={18} />
+                </div>
+                <div className={styles.upgradeInfo}>
+                  <div className={styles.upgradeLabel}>SuperGray</div>
+                  <div className={styles.upgradeDescription}>Unlock {nextTierLabel} capabilities</div>
+                </div>
+                <a href="/pricing" className={styles.upgradeButton}>Upgrade</a>
+              </div>
+            </div>
+          )}
+
+          <div className={styles.divider} />
+
+          {/* Extra Actions */}
+          <button className={styles.actionItem} type="button" disabled>
+            <SlidersHorizontal size={16} />
+            <span>Custom Instructions</span>
+            <span className={styles.actionBadge}>Customize</span>
+          </button>
+          
+          <button className={styles.actionItem} type="button" disabled>
+            <Grid size={16} />
+            <span>All Models</span>
+            <Lock size={14} className={styles.actionLock} />
+          </button>
+        </div>
       </div>
     </div>
   );
