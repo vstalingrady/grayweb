@@ -3208,15 +3208,15 @@ async def stream_ai_response(
         try:
             await tracker.check_limits(user_id)
         except UsageLimitExceeded as e:
-            # For streaming, we yield an error event or raise.
-            # Raising HTTP exception might be handled by the caller, 
-            # but this is a generator.
-            # Best to raise, assuming caller handles it or the stream breaks.
-            # However, since this is an AsyncGenerator, raising here before yield works.
-            raise HTTPException(
-                status_code=402, 
-                detail=f"Usage limit exceeded for {e.tier.capitalize()} plan: {e.message}"
+            limit_msg = (
+                f"**Usage Limit Reached**\n\n"
+                f"I've hit the usage cap for your **{e.tier.capitalize()}** plan ({e.message}).\n\n"
+                f"To keep chatting without interruption, consider upgrading to a higher tier, or wait for the limit to reset."
             )
+            # Yield the message as a delta so it appears, then finish.
+            yield ("delta", limit_msg)
+            yield ("final", {"text": limit_msg, "grounding_metadata": None})
+            return
 
     provider = AI_PROVIDER or "gemini"
     conversation_history = _normalize_conversation_history(conversation_history)
@@ -3344,11 +3344,12 @@ async def generate_ai_response(
         try:
             await tracker.check_limits(user_id)
         except UsageLimitExceeded as e:
-            # If we are in a chat request, we want to inform the user
-            raise HTTPException(
-                status_code=402, # Payment Required
-                detail=f"Usage limit exceeded for {e.tier.capitalize()} plan: {e.message}"
+            limit_msg = (
+                f"**Usage Limit Reached**\n\n"
+                f"I've hit the usage cap for your **{e.tier.capitalize()}** plan ({e.message}).\n\n"
+                f"To keep chatting without interruption, consider upgrading to a higher tier, or wait for the limit to reset."
             )
+            return limit_msg, None
 
     conversation_history = _normalize_conversation_history(conversation_history)
     provider = AI_PROVIDER or "gemini"
