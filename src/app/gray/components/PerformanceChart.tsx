@@ -149,7 +149,8 @@ export default function PerformanceChart() {
       className="bg-black/30 rounded-[28px] border border-white/5 backdrop-blur p-6 h-[320px] w-full pointer-events-none flex items-center justify-center overflow-hidden relative transition-all duration-700 ease-out"
       style={{
         transform: "perspective(1000px) rotateY(-12deg) rotateX(6deg) skewY(1deg)",
-        boxShadow: "25px 35px 60px -15px rgba(0,0,0,0.7), inset 0 0 0 1px rgba(255,255,255,0.1)"
+        // Added outer glow (0 0 20px...) and wider ambient glow (0 0 40px...)
+        boxShadow: "25px 35px 60px -15px rgba(0,0,0,0.7), inset 0 0 0 1px rgba(255,255,255,0.1), 0 0 20px rgba(255,255,255,0.1), 0 0 40px rgba(255,255,255,0.05)"
       }}
     >
       <div className="absolute inset-0 w-full h-full bg-gradient-to-br from-white/5 to-transparent opacity-50" />
