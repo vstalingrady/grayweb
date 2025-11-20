@@ -37,7 +37,7 @@ const FREE_FEATURES: FeatureItem[] = [
     { label: "14-day chat memory", icon: Pin },
     { label: "Premade proactivity routines", icon: Clock },
     { label: "Pulse only", icon: CalendarClock },
-    { label: "Community support forum", icon: Users },
+    { label: "Discord community support", icon: Users },
 ];
 
 const VOYAGER_FEATURES: FeatureItem[] = [
@@ -165,7 +165,7 @@ export function PricingPlansSection({ storeId, voyagerVariantId, pioneerVariantI
                                 <p>Try Gray Pulse Lite with limited context and preset routines.</p>
                             </header>
                             <div className={styles.priceBlock}>
-                                <span className={styles.priceValue}>$0.003125</span>
+                                <span className={styles.priceValue}>$0.009375</span>
                                 <span className={styles.priceMeta}>/ 6 hours</span>
                             </div>
                         </div>
