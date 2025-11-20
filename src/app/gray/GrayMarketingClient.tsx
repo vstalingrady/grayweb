@@ -159,31 +159,19 @@ export default function GrayMarketingClient({
                 icon: <MessageSquare className="w-6 h-6 text-blue-400" />,
                 title: "Proactive Check-Ins",
                 description: "Gray reaches out throughout your day—not to nag, but to connect.",
-                features: [
-                  "Morning intention setting",
-                  "Midday accountability nudges",
-                  "Evening reflection & planning"
-                ]
+                mockup: "/mockups/proactive_checkin.png"
               },
               {
                 icon: <Brain className="w-6 h-6 text-purple-400" />,
                 title: "Deep Memory",
                 description: "Gray remembers everything. Your goals, your patterns, your excuses.",
-                features: [
-                  "Tracks your progress over time",
-                  "Recalls past wins & struggles",
-                  "Connects dots you might miss"
-                ]
+                mockup: "/mockups/deep_memory.png"
               },
               {
                 icon: <Zap className="w-6 h-6 text-yellow-400" />,
                 title: "Strategic Guidance",
                 description: "Gray doesn't just listen—it challenges you to think bigger.",
-                features: [
-                  "Calls out avoidance patterns",
-                  "Pushes you past comfort zones",
-                  "Aligns actions with priorities"
-                ]
+                mockup: "/mockups/strategic_guidance.png"
               }
             ].map((feature, i) => (
               <motion.div
@@ -203,21 +191,21 @@ export default function GrayMarketingClient({
                 </motion.div>
                 <h3 className="text-xl font-bold mb-3">{feature.title}</h3>
                 <p className="text-zinc-400 mb-6 leading-relaxed text-sm">{feature.description}</p>
-                <ul className="space-y-3">
-                  {feature.features.map((item, j) => (
-                    <motion.li
-                      key={j}
-                      initial={{ opacity: 0, x: -10 }}
-                      whileInView={{ opacity: 1, x: 0 }}
-                      viewport={{ once: true }}
-                      transition={{ duration: 0.3, delay: i * 0.15 + j * 0.1 }}
-                      className="flex items-start gap-3 text-sm text-zinc-300"
-                    >
-                      <Check className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
-                      <span>{item}</span>
-                    </motion.li>
-                  ))}
-                </ul>
+
+                {/* Visual Mockup */}
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  whileInView={{ opacity: 1, scale: 1 }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 0.4, delay: i * 0.15 + 0.2 }}
+                  className="rounded-2xl overflow-hidden border border-zinc-800/50 bg-black/20"
+                >
+                  <img
+                    src={feature.mockup}
+                    alt={feature.title}
+                    className="w-full h-auto"
+                  />
+                </motion.div>
               </motion.div>
             ))}
           </div>
