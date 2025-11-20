@@ -8007,21 +8007,8 @@ h1.greeting {
 }
 
 .chatBarUnderline {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 0;
-  bottom: calc(-1 * clamp(26px, 4vh, 42px));
-  margin: 0 auto;
-  width: 100%;
-  max-width: 100%;
-  border-radius: 32px 32px 0 0;
-  background: linear-gradient(180deg, rgba(8, 8, 8, 0.7), rgba(3, 3, 3, 0.6));
-  box-shadow:
-    0 34px 60px rgba(0, 0, 0, 0.52),
-    0 12px 24px rgba(0, 0, 0, 0.28);
-  pointer-events: none;
-  z-index: 0;
+  /* Hidden to prevent gradient artifact when chat composer is sticky */
+  display: none;
 }
 
 .chatIconButton,
