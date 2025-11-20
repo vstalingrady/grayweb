@@ -1,0 +1,45 @@
+:root {
+    --bg: #050505;
+    --surface: #0F0F0F;
+    --surface-highlight: #141414;
+    --surface-border: #222;
+    --text-main: #EEEEEE;
+    --text-muted: #666666;
+    --text-dim: #444444;
+    --accent-white: #FFFFFF;
+    --signal-red: #FF3333;
+    --signal-green: #00FF94;
+    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-mono: 'JetBrains Mono', 'SF Mono', monospace;
+}
+
+.mono { font-family: var(--font-mono); letter-spacing: -0.5px; }
+.dim { color: var(--text-muted); }
+
+.hero {
+    padding: 6rem 0 4rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+
+.hero h1 {
+    font-size: clamp(2.5rem, 5vw, 4rem);
+    font-weight: 500;
+    letter-spacing: -0.03em;
+    line-height: 1.1;
+    margin-bottom: 1.5rem;
+    background: linear-gradient(180deg, #fff, #888);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    max-width: 900px;
+}
+
+.subtitle {
+    font-size: 1.1rem;
+    color: var(--text-muted);
+    max-width: 600px;
+    margin: 0 auto 3rem;
+    line-height: 1.6;
+}

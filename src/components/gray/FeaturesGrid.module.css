@@ -1,0 +1,40 @@
+:root {
+    --bg: #050505;
+    --surface: #0F0F0F;
+    --surface-highlight: #141414;
+    --surface-border: #222;
+    --text-main: #EEEEEE;
+    --text-muted: #666666;
+    --text-dim: #444444;
+    --accent-white: #FFFFFF;
+    --signal-red: #FF3333;
+    --signal-green: #00FF94;
+    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-mono: 'JetBrains Mono', 'SF Mono', monospace;
+}
+
+.mono { font-family: var(--font-mono); letter-spacing: -0.5px; }
+
+.featuresSection {
+    padding: 6rem 0;
+}
+
+.featuresGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1px;
+    background: var(--surface-border);
+    border: 1px solid var(--surface-border);
+    margin-bottom: 6rem;
+}
+
+.featureCard {
+    background: var(--bg);
+    padding: 2.5rem;
+    transition: background 0.3s;
+}
+.featureCard:hover { background: var(--surface); }
+
+.featureIcon { font-size: 1.5rem; margin-bottom: 1.5rem; display: block; color: var(--text-main); }
+.featureTitle { font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--text-main); }
+.featureDesc { font-size: 0.9rem; color: var(--text-muted); line-height: 1.6; }

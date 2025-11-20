@@ -1,0 +1,128 @@
+:root {
+    --bg: #050505;
+    --surface: #0F0F0F;
+    --surface-highlight: #141414;
+    --surface-border: #222;
+    --text-main: #EEEEEE;
+    --text-muted: #666666;
+    --text-dim: #444444;
+    --accent-white: #FFFFFF;
+    --signal-red: #FF3333;
+    --signal-green: #00FF94;
+    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-mono: 'JetBrains Mono', 'SF Mono', monospace;
+}
+
+.mono { font-family: var(--font-mono); letter-spacing: -0.5px; }
+.dim { color: var(--text-muted); }
+
+.moduleWrapper {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 6rem;
+    width: 100%;
+    max-width: 1200px; /* Assuming container max-width */
+    margin-left: auto;
+    margin-right: auto;
+    padding: 0 2rem; /* Assuming container padding */
+}
+
+.moduleContainer {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    width: 100%;
+    max-width: 1000px;
+    border: 1px solid var(--surface-border);
+    background: var(--surface);
+}
+
+.panel {
+    padding: 2.5rem;
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--surface-border);
+}
+.panel:last-child { border-right: none; }
+
+.panelHeader { display: flex; justify-content: space-between; margin-bottom: 1.5rem; font-size: 0.7rem; text-transform: uppercase; }
+
+/* Visualizer Shared */
+.visBox {
+    height: 160px;
+    background: #000;
+    border: 1px solid var(--surface-border);
+    margin-bottom: 2rem;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* --- CAGE ANIMATION --- */
+.cage {
+    width: 80px; height: 80px;
+    border: 1px solid #444;
+    position: relative;
+    box-shadow: inset 0 0 20px rgba(0,0,0,0.8);
+}
+
+.cageBars {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    background: repeating-linear-gradient(90deg, transparent 0, transparent 19px, #333 20px);
+}
+
+.trappedDot {
+    width: 6px; height: 6px; background: var(--signal-red);
+    box-shadow: 0 0 10px var(--signal-red);
+    border-radius: 50%;
+    position: absolute;
+    top: 50%; left: 50%;
+    animation: panic 2s infinite ease-in-out;
+}
+
+@keyframes panic {
+    0% { transform: translate(-30px, -20px); }
+    20% { transform: translate(20px, 30px); }
+    40% { transform: translate(-10px, -30px); }
+    60% { transform: translate(30px, 10px); }
+    80% { transform: translate(-20px, 20px); }
+    100% { transform: translate(-30px, -20px); }
+}
+
+/* --- BREAKOUT ANIMATION --- */
+.cage.broken {
+    border-color: #222;
+    border-right: none; /* The way out */
+}
+.cage.broken .cageBars { opacity: 0.2; }
+
+.escapeLine {
+    position: absolute;
+    top: 50%; left: 50%;
+    width: 0; height: 2px;
+    background: var(--signal-green);
+    box-shadow: 0 0 15px var(--signal-green);
+    transform-origin: left center;
+    animation: breakout 2.5s infinite cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.escapeHead {
+    width: 10px; height: 10px; border-right: 2px solid var(--signal-green); border-top: 2px solid var(--signal-green);
+    transform: rotate(45deg);
+    position: absolute; right: -5px; top: -4px;
+}
+
+@keyframes breakout {
+    0% { width: 0; opacity: 0; transform: rotate(-15deg) scaleX(0); }
+    20% { opacity: 1; }
+    80% { opacity: 1; }
+    100% { width: 200px; opacity: 0; transform: rotate(-15deg) scaleX(1); }
+}
+
+/* --- RESPONSIVE --- */
+@media (max-width: 768px) {
+    .moduleContainer { grid-template-columns: 1fr; }
+    .panel { border-right: none; border-bottom: 1px solid var(--surface-border); }
+    .panel:last-child { border-bottom: none; }
+}

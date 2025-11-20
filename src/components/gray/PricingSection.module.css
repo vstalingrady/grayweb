@@ -1,0 +1,67 @@
+:root {
+    --bg: #050505;
+    --surface: #0F0F0F;
+    --surface-highlight: #141414;
+    --surface-border: #222;
+    --text-main: #EEEEEE;
+    --text-muted: #666666;
+    --text-dim: #444444;
+    --accent-white: #FFFFFF;
+    --signal-red: #FF3333;
+    --signal-green: #00FF94;
+    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-mono: 'JetBrains Mono', 'SF Mono', monospace;
+}
+
+.mono { font-family: var(--font-mono); letter-spacing: -0.5px; }
+.dim { color: var(--text-muted); }
+
+.pricingSection {
+    padding: 6rem 0;
+}
+
+.pricing {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    max-width: 900px;
+    margin: 0 auto 6rem;
+    border: 1px solid var(--surface-border);
+}
+
+.priceCard {
+    padding: 3rem;
+    background: var(--surface);
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+}
+.priceCard:first-child { border-right: 1px solid var(--surface-border); background: var(--bg); }
+
+.priceHeader { font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1rem; text-transform: uppercase; }
+.priceAmount { font-size: 2.5rem; font-weight: 500; margin-bottom: 2rem; color: var(--text-main); }
+.priceAmount span { font-size: 1rem; color: var(--text-muted); }
+
+.featureList { list-style: none; margin-bottom: 2rem; width: 100%; }
+.featureList li { margin-bottom: 0.8rem; color: var(--text-muted); font-size: 0.9rem; display: flex; align-items: center; }
+.featureList li::before { content: "→"; color: var(--text-dim); margin-right: 10px; }
+.featureList li.active::before { color: var(--signal-green); }
+.featureList li.active { color: var(--text-main); }
+
+.ctaBtn {
+    background: var(--text-main);
+    color: var(--bg);
+    padding: 1rem 2.5rem;
+    font-family: var(--font-mono);
+    font-weight: 600;
+    text-decoration: none;
+    display: inline-block;
+    margin-bottom: 2rem;
+    transition: transform 0.2s;
+}
+.ctaBtn:hover { transform: scale(1.02); }
+
+/* --- RESPONSIVE --- */
+@media (max-width: 768px) {
+    .pricing { grid-template-columns: 1fr; }
+    .priceCard:first-child { border-right: none; border-bottom: 1px solid var(--surface-border); }
+}
