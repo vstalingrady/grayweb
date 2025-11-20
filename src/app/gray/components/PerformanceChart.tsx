@@ -146,11 +146,11 @@ export default function PerformanceChart() {
 
   return (
     <div
-      className="bg-black/30 rounded-[28px] border border-white/10 backdrop-blur p-6 h-[320px] w-full pointer-events-none flex items-center justify-center overflow-hidden relative transition-all duration-700 ease-out"
+      className="bg-black/30 rounded-[28px] border border-white/40 backdrop-blur p-6 h-[320px] w-full pointer-events-none flex items-center justify-center overflow-hidden relative transition-all duration-700 ease-out"
       style={{
         transform: "perspective(1000px) rotateY(-12deg) rotateX(6deg) skewY(1deg)",
-        // Neon-style glow: tight inner glow, medium halo, wide ambient spread
-        boxShadow: "25px 35px 60px -15px rgba(0,0,0,0.7), inset 0 0 0 1px rgba(255,255,255,0.15), 0 0 8px rgba(255,255,255,0.3), 0 0 25px rgba(255,255,255,0.2), 0 0 50px rgba(255,255,255,0.1)"
+        // INTENSE neon glow: bright white border with aggressive multi-layer glow
+        boxShadow: "25px 35px 60px -15px rgba(0,0,0,0.7), inset 0 0 0 1px rgba(255,255,255,0.3), 0 0 4px rgba(255,255,255,0.6), 0 0 15px rgba(255,255,255,0.4), 0 0 35px rgba(255,255,255,0.3), 0 0 60px rgba(255,255,255,0.15)"
       }}
     >
       <div className="absolute inset-0 w-full h-full bg-gradient-to-br from-white/5 to-transparent opacity-50" />
