@@ -437,15 +437,29 @@ export function GrayDashboardView({
       if (!onDeletePlan) {
         return;
       }
-      if (!event.id.startsWith(PLAN_EVENT_ID_PREFIX)) {
-        return;
+
+      // Handle reminder events (e.g., "reminder-31")
+      if (event.id.startsWith("reminder-")) {
+        const targetPlan = displayPlans.find((plan) => plan.id === event.id);
+        if (targetPlan) {
+          console.log(`[CALENDAR] Deleting reminder event: ${event.id}`);
+          onDeletePlan(targetPlan);
+          return;
+        }
       }
-      const planId = event.id.slice(PLAN_EVENT_ID_PREFIX.length);
-      const targetPlan = displayPlans.find((plan) => plan.id === planId);
-      if (!targetPlan) {
-        return;
+
+      // Handle plan events (e.g., "plan-event-123")
+      if (event.id.startsWith(PLAN_EVENT_ID_PREFIX)) {
+        const planId = event.id.slice(PLAN_EVENT_ID_PREFIX.length);
+        const targetPlan = displayPlans.find((plan) => plan.id === planId);
+        if (targetPlan) {
+          console.log(`[CALENDAR] Deleting plan event: ${event.id}`);
+          onDeletePlan(targetPlan);
+          return;
+        }
       }
-      onDeletePlan(targetPlan);
+
+      console.warn(`[CALENDAR] Could not find plan/reminder for event: ${event.id}`);
     },
     [displayPlans, onDeletePlan]
   );
@@ -1611,7 +1625,7 @@ export function GrayDashboardView({
       events={mergedEvents}
       onCalendarsChange={onCalendarsChange}
       onEventsChange={onCalendarEventsChange}
-       onEventDelete={handleCalendarEventDelete}
+      onEventDelete={handleCalendarEventDelete}
       selectedDate={calendarSelectedDate}
       onSelectedDateChange={onCalendarSelectedDateChange}
       hourHeight={CALENDAR_PANEL_HOUR_HEIGHT}
