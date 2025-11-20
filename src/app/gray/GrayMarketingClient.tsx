@@ -18,9 +18,8 @@ import {
 import { motion } from "framer-motion";
 import Navigation from "@/app/components/Navigation";
 import FooterBackground from "@/app/components/FooterBackground";
-// Removed PerformanceChart as it's no longer used
+import PerformanceChart from "./components/PerformanceChart";
 
-import { HeroLanding } from '@/components/gray/HeroLanding';
 import { DiagnosticModule } from '@/components/gray/DiagnosticModule';
 import { FeaturesGrid } from '@/components/gray/FeaturesGrid';
 import { PricingSection } from '@/components/gray/PricingSection';
@@ -38,7 +37,59 @@ export default function GrayMarketingClient({
     <div className="fixed inset-0 overflow-y-auto bg-black text-white selection:bg-zinc-800 selection:text-zinc-200 font-sans">
       <Navigation />
 
-      <HeroLanding />
+      {/* Hero Section */}
+      <section className="pt-32 pb-20 md:pt-48 md:pb-32 px-4 md:px-6 relative">
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[500px] bg-zinc-900/50 blur-[120px] rounded-full -z-10" />
+
+        <div className="container mx-auto max-w-7xl">
+          <div className="grid lg:grid-cols-2 gap-12 items-center">
+            <div className="text-center lg:text-left">
+              <motion.h1
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5 }}
+                className="text-5xl md:text-7xl font-bold tracking-tight mb-6 leading-[1.1]"
+              >
+                Maximize human potential.
+              </motion.h1>
+
+              <motion.p
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.1 }}
+                className="text-xl md:text-2xl text-zinc-400 mb-10 max-w-xl mx-auto lg:mx-0 leading-relaxed"
+              >
+                Gray checks in throughout your day, remembers your patterns, and calls you out when you're avoiding the hard thing. For ambitious builders who need structure, not another to-do app.
+              </motion.p>
+
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.2 }}
+                className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4"
+              >
+                <Link
+                  href={tryGrayUrl}
+                  className="w-full sm:w-auto px-8 py-4 bg-white text-black font-medium rounded-full hover:bg-zinc-200 transition-colors flex items-center justify-center gap-2 group"
+                >
+                  Start Free
+                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                </Link>
+              </motion.div>
+            </div>
+
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.5, delay: 0.3 }}
+              className="w-full max-w-xl mx-auto lg:ml-auto relative z-10"
+            >
+              <PerformanceChart />
+            </motion.div>
+          </div>
+        </div>
+      </section>
+
       <DiagnosticModule />
       <FeaturesGrid />
       <PricingSection />
