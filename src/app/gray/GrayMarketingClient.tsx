@@ -12,7 +12,8 @@ import {
   Mail,
   Clock,
   Shield,
-  Menu
+  Menu,
+  Check
 } from "lucide-react";
 import { motion } from "framer-motion";
 import Navigation from "@/app/components/Navigation";
