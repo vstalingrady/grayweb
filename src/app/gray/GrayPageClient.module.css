@@ -1699,13 +1699,19 @@
 .historyView {
   display: flex;
   flex-direction: column;
-  gap: clamp(20px, 4vw, 32px);
-  padding: clamp(24px, 4vw, 36px) 0 0;
-  height: 100%;
+  gap: 24px;
+  padding: 32px;
+  height: auto;
+  max-height: 85vh;
   overflow: hidden;
   width: 100%;
   max-width: 800px;
   margin: 0 auto;
+  background: rgba(12, 12, 12, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 24px;
+  box-shadow: 0 32px 64px rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(12px);
 }
 
 .historyViewHeader {
@@ -1765,11 +1771,11 @@
   position: relative;
   flex: 1;
   overflow: hidden;
-  border-radius: 24px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(10, 10, 10, 0.4);
-  box-shadow: none;
-  margin-bottom: 24px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  background: rgba(0, 0, 0, 0.2);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
+  margin-bottom: 0;
 }
 
 .historyListShell ul {
@@ -2170,6 +2176,7 @@
 .main[data-view="reference"] {
   grid-template-rows: 1fr;
   justify-items: center;
+  align-items: center;
   padding: clamp(16px, 2vh, 24px) clamp(16px, 2vw, 32px);
   overflow: hidden;
 }
