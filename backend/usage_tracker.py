@@ -139,29 +139,32 @@ class UsageTracker:
             if now.month == 12:
                 next_reset = datetime.datetime(now.year + 1, 1, 1)
             else:
-                next_reset = datetime.datetime(now.year, now.month + 1, 1)
-            raise UsageLimitExceeded(f"Monthly cost limit of ${limits['monthly_cost']:.2f} reached.", tier, next_reset)
+                next_reset = datetime.datetime(now.year, now.month + 1, 1, tzinfo=datetime.timezone.utc)
+            raise UsageLimitExceeded(f"Monthly limit reached.", tier, next_reset)
 
         # Check Weekly
         current_weekly = usage_data["weekly_cost_usage"] or 0.0
         if current_weekly >= limits["weekly_cost"]:
-            # Reset is next Monday
+            # Reset is next Monday at 00:00 UTC
             days_ahead = 7 - now.weekday()
             if days_ahead == 0:
                 days_ahead = 7
-            next_reset = (now + datetime.timedelta(days=days_ahead)).replace(hour=0, minute=0, second=0, microsecond=0)
-            raise UsageLimitExceeded(f"Weekly cost limit of ${limits['weekly_cost']:.2f} reached.", tier, next_reset)
+            next_reset = (now + datetime.timedelta(days=days_ahead)).replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=datetime.timezone.utc)
+            raise UsageLimitExceeded(f"Weekly limit reached.", tier, next_reset)
 
         # Check 6-Hour
         current_six_hour = usage_data["six_hour_cost_usage"] or 0.0
         if current_six_hour >= limits["six_hour_cost"]:
             current_block = now.hour // 6
             next_block_hour = (current_block + 1) * 6
-            if next_block_hour >= 24:
-                 next_reset = (now + datetime.timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
-            else:
-                 next_reset = now.replace(hour=next_block_hour, minute=0, second=0, microsecond=0)
-            raise UsageLimitExceeded(f"6-hour burst limit of ${limits['six_hour_cost']:.2f} reached.", tier, next_reset)
+            
+            next_reset_day = now.date()
+            if next_block_hour >= 24: # If next block is past midnight
+                next_reset_day += datetime.timedelta(days=1)
+                next_block_hour = 0 # Reset to 00:00 for the next day
+
+            next_reset = datetime.datetime.combine(next_reset_day, datetime.time(next_block_hour, 0, 0), tzinfo=datetime.timezone.utc)
+            raise UsageLimitExceeded(f"6-hour burst limit reached.", tier, next_reset)
 
     async def track_usage(self, user_id: int, input_tokens: int, output_tokens: int):
         cost = (input_tokens * PRICE_INPUT_PER_MILLION / 1_000_000) + \

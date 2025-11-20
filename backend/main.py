@@ -3214,7 +3214,7 @@ async def stream_ai_response(
 
             limit_msg = (
                 f"**Usage Limit Reached**\n\n"
-                f"I've hit the usage cap for your **{e.tier.capitalize()}** plan ({e.message}).{reset_msg}\n\n"
+                f"I've hit the usage cap for your **{e.tier.capitalize()}** plan. {e.message}{reset_msg}\n\n"
                 f"To keep chatting without interruption, consider upgrading to a higher tier, or wait for the limit to reset."
             )
             # Yield the message as a delta so it appears, then finish.
@@ -3354,7 +3354,7 @@ async def generate_ai_response(
             
             limit_msg = (
                 f"**Usage Limit Reached**\n\n"
-                f"I've hit the usage cap for your **{e.tier.capitalize()}** plan ({e.message}).{reset_msg}\n\n"
+                f"I've hit the usage cap for your **{e.tier.capitalize()}** plan. {e.message}{reset_msg}\n\n"
                 f"To keep chatting without interruption, consider upgrading to a higher tier, or wait for the limit to reset."
             )
             return limit_msg, None
