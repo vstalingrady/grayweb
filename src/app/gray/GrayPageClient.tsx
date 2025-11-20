@@ -821,6 +821,7 @@ function GrayPageClientInner({
           reminderPlans={reminderPlans}
           proactivityDeliveryKeys={deliveredProactivityKeys}
           onReminderMove={handleReminderMove}
+          streakCount={streakCount}
         />
       );
     }
@@ -832,10 +833,10 @@ function GrayPageClientInner({
           hideThinkingIndicator={hideChatThinkingIndicator}
           introContent={
             activeNav !== "threads" &&
-            (supportsInlineChat || activeNav === "general") &&
-            currentChatId &&
-            generalSessionId &&
-            currentChatId === generalSessionId ? (
+              (supportsInlineChat || activeNav === "general") &&
+              currentChatId &&
+              generalSessionId &&
+              currentChatId === generalSessionId ? (
               <GrayWorkspaceHeader
                 streakCount={streakCount}
                 planLabel={viewerPlanLabel}

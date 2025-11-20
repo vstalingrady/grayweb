@@ -30,7 +30,7 @@ export function useWorkspaceData(userId: number | null, variant: "general" | "da
 
   const refreshPlansAndHabits = useCallback(async () => {
     if (!userId) return;
-    
+
     try {
       const [planResponse, habitResponse] = await Promise.all([
         apiService.getUserPlans(userId),
@@ -39,23 +39,23 @@ export function useWorkspaceData(userId: number | null, variant: "general" | "da
 
       const mappedPlans: PlanItem[] = Array.isArray(planResponse)
         ? planResponse.map((plan) => ({
-            id: plan.id.toString(),
-            label: plan.label,
-            completed: Boolean(plan.completed),
-            deadline: plan.deadline ?? null,
-            scheduleSlot: plan.schedule_slot ?? null,
-            details: plan.description ?? null,
-          }))
+          id: plan.id.toString(),
+          label: plan.label,
+          completed: Boolean(plan.completed),
+          deadline: plan.deadline ?? null,
+          scheduleSlot: plan.schedule_slot ?? null,
+          details: plan.description ?? null,
+        }))
         : [];
 
       const mappedHabits: HabitItem[] = Array.isArray(habitResponse)
         ? habitResponse.map((habit) => ({
-            id: habit.id.toString(),
-            label: habit.label,
-            streakLabel: habit.streak_label,
-            previousLabel: habit.previous_label,
-            completed: false,
-          }))
+          id: habit.id.toString(),
+          label: habit.label,
+          streakLabel: habit.streak_label,
+          previousLabel: habit.previous_label,
+          completed: false,
+        }))
         : [];
 
       setPlans(mappedPlans);
@@ -102,10 +102,11 @@ export function useWorkspaceData(userId: number | null, variant: "general" | "da
             includeArchived: true,
           }),
           apiService
-            .getUserStreak(userId)
+            .touchUserStreak(userId)
             .catch((error) => {
-              console.error("Failed to load user streak:", error);
-              return null;
+              console.error("Failed to update user streak:", error);
+              // Fallback to getting the current streak if update fails
+              return apiService.getUserStreak(userId).catch(() => null);
             }),
         ]);
 
@@ -115,11 +116,11 @@ export function useWorkspaceData(userId: number | null, variant: "general" | "da
 
         const mappedCalendars: CalendarInfo[] = Array.isArray(calendarResponse)
           ? calendarResponse.map((calendar) => ({
-              id: calendar.id.toString(),
-              label: calendar.label,
-              color: sanitizeEventColor(calendar.color),
-              isVisible: Boolean(calendar.is_visible),
-            }))
+            id: calendar.id.toString(),
+            label: calendar.label,
+            color: sanitizeEventColor(calendar.color),
+            isVisible: Boolean(calendar.is_visible),
+          }))
           : [];
 
         const calendarColorMap = new Map<string, string>(
@@ -137,20 +138,20 @@ export function useWorkspaceData(userId: number | null, variant: "general" | "da
               ? event.calendar_id.toString()
               : fallbackCalendarId;
             return {
-                id: event.id.toString(),
-                calendarId: associatedCalendarId,
-                title: event.title,
-                start: new Date(event.start_time),
-                end: new Date(event.end_time),
-                color: sanitizeEventColor(
-                  calendarColorMap.get(associatedCalendarId) ?? fallbackEventColor
-                ),
-                entryType: "event",
-                description: event.description ?? undefined,
-              };
+              id: event.id.toString(),
+              calendarId: associatedCalendarId,
+              title: event.title,
+              start: new Date(event.start_time),
+              end: new Date(event.end_time),
+              color: sanitizeEventColor(
+                calendarColorMap.get(associatedCalendarId) ?? fallbackEventColor
+              ),
+              entryType: "event",
+              description: event.description ?? undefined,
+            };
           })
           : [];
-        
+
         const nowMs = Date.now();
         const includedReminders: Reminder[] = Array.isArray(reminderResponse)
           ? reminderResponse.filter((reminder) => shouldIncludeCalendarReminder(reminder, nowMs))
@@ -174,23 +175,23 @@ export function useWorkspaceData(userId: number | null, variant: "general" | "da
 
         const mappedPlans: PlanItem[] = Array.isArray(planResponse)
           ? planResponse.map((plan) => ({
-              id: plan.id.toString(),
-              label: plan.label,
-              completed: Boolean(plan.completed),
-              deadline: plan.deadline ?? null,
-              scheduleSlot: plan.schedule_slot ?? null,
-              details: plan.description ?? null,
-            }))
+            id: plan.id.toString(),
+            label: plan.label,
+            completed: Boolean(plan.completed),
+            deadline: plan.deadline ?? null,
+            scheduleSlot: plan.schedule_slot ?? null,
+            details: plan.description ?? null,
+          }))
           : [];
 
         const mappedHabits: HabitItem[] = Array.isArray(habitResponse)
           ? habitResponse.map((habit) => ({
-              id: habit.id.toString(),
-              label: habit.label,
-              streakLabel: habit.streak_label,
-              previousLabel: habit.previous_label,
-              completed: false,
-            }))
+            id: habit.id.toString(),
+            label: habit.label,
+            streakLabel: habit.streak_label,
+            previousLabel: habit.previous_label,
+            completed: false,
+          }))
           : [];
 
         setCalendarCalendars(mappedCalendars);

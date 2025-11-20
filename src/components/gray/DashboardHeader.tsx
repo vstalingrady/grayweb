@@ -1,3 +1,5 @@
+import { Flame } from "lucide-react";
+import styles from "@/app/gray/GrayPageClient.module.css";
 import calendarStyles from "@/components/calendar/GrayDashboardCalendar.module.css";
 import { ViewModeSelect } from "./ViewModeSelect";
 
@@ -18,6 +20,7 @@ export type DashboardHeaderProps = {
   rangeNavigationLabel?: string;
   className?: string;
   todayButtonLabel?: string;
+  streakCount?: number;
 };
 
 const DEFAULT_VIEW_OPTIONS: Array<{ value: "week" | "day"; label: string }> = [
@@ -42,6 +45,7 @@ export function DashboardHeader({
   rangeNavigationLabel = "range",
   className,
   todayButtonLabel = "Today",
+  streakCount = 0,
 }: DashboardHeaderProps) {
   const headerClassName = [
     calendarStyles.calendarSurfaceHeader,
@@ -67,6 +71,10 @@ export function DashboardHeader({
     showRangeNavigation ||
     showTodayButton ||
     showViewSelect;
+
+  const normalizedStreak = Number.isFinite(streakCount)
+    ? Math.max(0, Math.trunc(streakCount))
+    : 0;
 
   return (
     <header className={headerClassName}>
@@ -105,8 +113,14 @@ export function DashboardHeader({
           </div>
         )}
       </div>
-      {shouldRenderControls && (
-        <div className={calendarStyles.calendarSurfaceHeaderRight}>
+      <div className={calendarStyles.calendarSurfaceHeaderRight}>
+        {normalizedStreak > 0 ? (
+          <div className={styles.streakBadge} aria-label={`${normalizedStreak} day streak`}>
+            <Flame size={12} />
+            <span>{normalizedStreak}</span>
+          </div>
+        ) : null}
+        {shouldRenderControls && (
           <div className={calendarStyles.calendarSurfaceNav}>
             {showMonthNavigation && (
               <div className={calendarStyles.calendarSurfaceNavArrows}>
@@ -161,8 +175,8 @@ export function DashboardHeader({
               />
             )}
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </header>
   );
 }

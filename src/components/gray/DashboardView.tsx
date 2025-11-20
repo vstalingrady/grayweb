@@ -324,6 +324,7 @@ type GrayDashboardViewProps = {
   reminderPlans?: PlanItem[];
   proactivityDeliveryKeys?: ReadonlySet<string>;
   onReminderMove?: (reminderId: number, range: { start: Date; end: Date }) => Promise<void> | void;
+  streakCount?: number;
 };
 
 export function GrayDashboardView({
@@ -358,6 +359,7 @@ export function GrayDashboardView({
   reminderPlans,
   proactivityDeliveryKeys,
   onReminderMove,
+  streakCount = 0,
 }: GrayDashboardViewProps) {
   const hasPulseData = Boolean(currentPulse && pulseEntries.length > 0);
   const displayPlans = useMemo(() => {
