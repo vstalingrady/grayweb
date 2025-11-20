@@ -796,7 +796,7 @@ function GrayPageClientInner({
           hideThinkingIndicator={hideChatThinkingIndicator}
           introContent={
             activeNav !== "threads" &&
-              supportsInlineChat &&
+              (supportsInlineChat || activeNav === "general") &&
               !hasSeenGeneralChat &&
               currentChatId &&
               generalSessionId &&
