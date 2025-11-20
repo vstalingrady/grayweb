@@ -2759,10 +2759,8 @@ export function GrayChatView({
     const limit = contextLimit;
 
     // Count messages participating in the current session context.
-    const messageCount =
-      typeof conversationUsage?.messageCount === "number" && conversationUsage.messageCount >= 0
-        ? conversationUsage.messageCount
-        : session?.messages.length ?? 0;
+    // Always use the actual session message count as the source of truth
+    const messageCount = session?.messages.length ?? 0;
 
     // Prefer backend-accurate token usage; otherwise estimate from all session messages.
     const conversationTokens =
