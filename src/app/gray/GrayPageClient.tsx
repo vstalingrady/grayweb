@@ -853,9 +853,10 @@ function GrayPageClientInner({
   };
 
 
+
   // Fetch context usage for general session when personalization is open
   useEffect(() => {
-    if (isPersonalizationOpen && generalSessionId && !contextUsageSummary) {
+    if (isPersonalizationOpen && generalSessionId) {
       apiService.getConversationUsage(generalSessionId)
         .then((usage) => {
           if (usage) {
@@ -875,7 +876,7 @@ function GrayPageClientInner({
         })
         .catch((err) => console.error("Failed to fetch general session usage", err));
     }
-  }, [isPersonalizationOpen, generalSessionId, contextUsageSummary]);
+  }, [isPersonalizationOpen, generalSessionId]);
 
   const renderMainSurface = () => {
     if (viewMode === "general") {
