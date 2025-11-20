@@ -22,20 +22,13 @@ import { motion } from "framer-motion";
 import Navigation from "@/app/components/Navigation";
 import FooterBackground from "@/app/components/FooterBackground";
 import PerformanceChart from "./components/PerformanceChart";
-import { PricingPlansSection } from "@/app/pricing/PricingClient";
 
 type GrayMarketingClientProps = {
   tryGrayUrl: string;
-  storeId?: string;
-  voyagerVariantId?: string;
-  pioneerVariantId?: string;
 };
 
 export default function GrayMarketingClient({
   tryGrayUrl,
-  storeId,
-  voyagerVariantId,
-  pioneerVariantId,
 }: GrayMarketingClientProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
@@ -253,16 +246,7 @@ export default function GrayMarketingClient({
         </div>
       </section>
 
-      {/* Pricing Section (shared with /pricing) */}
-      <section id="pricing" className="py-24 bg-zinc-950 border-t border-zinc-900">
-        <div className="container mx-auto px-4 md:px-6">
-          <PricingPlansSection
-            storeId={storeId}
-            voyagerVariantId={voyagerVariantId}
-            pioneerVariantId={pioneerVariantId}
-          />
-        </div>
-      </section>
+
 
       {/* FAQ Section */}
       <section id="faq" className="py-24 px-4 md:px-6">
