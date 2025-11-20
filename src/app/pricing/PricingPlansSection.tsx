@@ -45,9 +45,13 @@ const VOYAGER_FEATURES: FeatureItem[] = [
         icon: Zap,
         subtext: "Gemini 2.5 Flash + Gemini 3 Pro",
     },
-    { label: "Expanded message limit (unlimited Gray Lite)", icon: MessageSquare },
     {
-        label: "4x permanent context memory",
+        label: "16x more message credits",
+        icon: MessageSquare,
+        subtext: "Plus unlimited Gray Lite",
+    },
+    {
+        label: "Full context memory",
         icon: Pin,
     },
     { label: "Reasoning mode toggle", icon: Brain },
@@ -63,11 +67,11 @@ const PIONEER_FEATURES: FeatureItem[] = [
     {
         label: "Model switcher",
         icon: Shuffle,
-        subtext: "Claude 4.5, Grok 4.1, GPT 5.1, DeepSeek V3.2, Kimi K2",
+        subtext: "Claude 4.5, Grok 4.1, GPT 5.1, DeepSeek V3.2, Kimi K2 Thinking",
     },
     { label: "Expanded reasoning budget", icon: InfinityIcon },
     {
-        label: "4x Voyager context",
+        label: "64x more message credits",
         icon: Pin,
     },
     { label: "Priority response time (during high load)", icon: Headphones },
