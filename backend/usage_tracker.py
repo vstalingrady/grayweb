@@ -10,13 +10,13 @@ PRICE_OUTPUT_PER_MILLION = 0.30
 
 LIMITS = {
     "scout": {
-        "monthly_cost": 1.00,
+        "monthly_cost": 1.50,
     },
     "voyager": {
-        "monthly_cost": 10.00,
+        "monthly_cost": 6.00,
     },
     "pioneer": {
-        "monthly_cost": 25.00,
+        "monthly_cost": 24.00,
     }
 }
 
