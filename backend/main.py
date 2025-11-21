@@ -4005,6 +4005,7 @@ async def chat_with_ai(request: ChatRequest, db: databases.Database = Depends(ge
         chat_session_query = chat_sessions.insert().values(
             user_id=request.user_id,
             title=session_title,
+            scope="thread",
             created_at=now,
             updated_at=now
         )
@@ -4210,6 +4211,7 @@ async def chat_with_ai_stream(request: ChatRequest, db: databases.Database = Dep
         chat_session_query = chat_sessions.insert().values(
             user_id=request.user_id,
             title=session_title,
+            scope="thread",
             created_at=now,
             updated_at=now
         )
@@ -5054,7 +5056,8 @@ async def get_user_chat_sessions(user_id: int, db: databases.Database = Depends(
 async def create_chat_session(user_id: int, session: ChatSessionCreate, db: databases.Database = Depends(get_database)):
     query = chat_sessions.insert().values(
         user_id=user_id,
-        title=session.title
+        title=session.title,
+        scope="thread"
     )
     session_id = await db.execute(query)
     return {**session.dict(), "id": session_id, "user_id": user_id}
