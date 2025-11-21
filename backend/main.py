@@ -726,13 +726,17 @@ class UserBase(BaseModel):
     role: str = "user"
     plan_tier: Optional[str] = None
     workspace_background_id: Optional[str] = None
-    maps_enabled: bool = False
-    has_seen_general_chat: bool = False
+    maps_enabled: Optional[bool] = False
+    has_seen_general_chat: Optional[bool] = False
     personalization_nickname: Optional[str] = None
     personalization_occupation: Optional[str] = None
     personalization_about: Optional[str] = None
     personalization_custom_instructions: Optional[str] = None
     auth_user_id: Optional[str] = None  # Link to Supabase Auth UUID
+    daily_token_usage: Optional[int] = 0
+    monthly_cost_usage: Optional[float] = 0.0
+    weekly_cost_usage: Optional[float] = 0.0
+    six_hour_cost_usage: Optional[float] = 0.0
 
 class UserCreate(UserBase):
     pass
