@@ -82,30 +82,28 @@ export function DashboardHeader({
     <header className={headerClassName}>
       <div className={calendarStyles.calendarSurfaceHeaderLeft}>
         <div className={calendarStyles.calendarSurfaceHeadingGroup}>
-          <div className={calendarStyles.calendarSurfaceTabs}>
-            {!hideCalendar && (
-              <>
-                <button
-                  type="button"
-                  className={calendarStyles.calendarSurfaceTab}
-                  data-active={activeTab === "pulse"}
-                  aria-pressed={activeTab === "pulse"}
-                  onClick={() => onSelectTab("pulse")}
-                >
-                  Pulse
-                </button>
-                <button
-                  type="button"
-                  className={calendarStyles.calendarSurfaceTab}
-                  data-active={activeTab === "calendar"}
-                  aria-pressed={activeTab === "calendar"}
-                  onClick={() => onSelectTab("calendar")}
-                >
-                  Calendar
-                </button>
-              </>
-            )}
-          </div>
+          {!hideCalendar && (
+            <div className={calendarStyles.calendarSurfaceTabs}>
+              <button
+                type="button"
+                className={calendarStyles.calendarSurfaceTab}
+                data-active={activeTab === "pulse"}
+                aria-pressed={activeTab === "pulse"}
+                onClick={() => onSelectTab("pulse")}
+              >
+                Pulse
+              </button>
+              <button
+                type="button"
+                className={calendarStyles.calendarSurfaceTab}
+                data-active={activeTab === "calendar"}
+                aria-pressed={activeTab === "calendar"}
+                onClick={() => onSelectTab("calendar")}
+              >
+                Calendar
+              </button>
+            </div>
+          )}
         </div>
         {(label || title || rangeLabel) && (
           <div>
