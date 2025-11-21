@@ -58,6 +58,7 @@ declare module 'three' {
     setAttribute(name: string, attribute: any): void;
     attributes: any;
     dispose(): void;
+    clone(): BufferGeometry;
   }
   class BufferAttribute {
     constructor(array: Float32Array, itemSize: number);

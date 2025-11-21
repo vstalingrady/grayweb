@@ -138,7 +138,7 @@ a:hover {
   display: block;
 }
 
-.grove-hero__paragraphs > * + * {
+.grove-hero__paragraphs>*+* {
   margin-top: 1rem;
 }
 
@@ -198,7 +198,7 @@ a:hover {
   color: rgba(255, 255, 255, 0.78);
 }
 
-.grove-mandate-card__paragraph > p {
+.grove-mandate-card__paragraph>p {
   margin: 0;
 }
 
@@ -566,7 +566,7 @@ a:hover {
   inset: 10%;
 }
 
-.grove-alignment__plexus > div {
+.grove-alignment__plexus>div {
   position: relative;
   width: 100%;
   height: 100%;
@@ -743,7 +743,10 @@ a:hover {
     justify-items: end;
   }
 
-  .founder-highlight__copy { justify-items: start; align-items: start; }
+  .founder-highlight__copy {
+    justify-items: start;
+    align-items: start;
+  }
 }
 
 @media (min-width: 960px) {
@@ -774,6 +777,7 @@ a:hover {
     text-align: center;
     gap: clamp(1.2rem, 5vw, 2.2rem);
   }
+
   .grove-alignment__bio--tight {
     text-align: center;
   }
@@ -1401,16 +1405,19 @@ a:hover {
 }
 
 @keyframes diagram-pulse {
+
   0%,
   60%,
   100% {
     opacity: 0;
     transform: scale(0.95);
   }
+
   20% {
     opacity: 0.5;
     transform: scale(1.05);
   }
+
   40% {
     opacity: 0.3;
     transform: scale(1.12);
@@ -1443,7 +1450,7 @@ a:hover {
   color: rgba(255, 255, 255, 0.82);
 }
 
-.value-card p + p {
+.value-card p+p {
   margin-top: 1.1rem;
 }
 
@@ -1682,8 +1689,10 @@ a:hover {
 
 .site-footer__image {
   object-fit: cover;
-  object-position: top center; /* align image to top */
-  transform: scale(1.15); /* enlarge for better visibility */
+  object-position: top center;
+  /* align image to top */
+  transform: scale(1.15);
+  /* enlarge for better visibility */
   transform-origin: top center;
   filter: saturate(110%);
   pointer-events: none;
@@ -2366,8 +2375,7 @@ a:hover {
   inset: 4%;
   transform-origin: 50% 50%;
   transform-box: fill-box;
-  filter: drop-shadow(0 0 10px #bfd3ff) drop-shadow(0 0 20px #ffc08c)
-    drop-shadow(0 0 30px #ff9f46) drop-shadow(0 0 40px #ff6c00);
+  filter: drop-shadow(0 0 10px #bfd3ff) drop-shadow(0 0 20px #ffc08c) drop-shadow(0 0 30px #ff9f46) drop-shadow(0 0 40px #ff6c00);
 }
 
 .logo-main img {
@@ -2669,7 +2677,7 @@ a:hover {
 }
 
 .hero-section--split {
-  background: #020202;
+  background: #000000;
   padding-block: clamp(3rem, 8vw, 5.5rem);
   padding-inline: clamp(2rem, 10vw, 8rem);
   width: 100vw;
@@ -2691,12 +2699,12 @@ a:hover {
   gap: clamp(2rem, 4vw, 5rem);
 }
 
-  .hero-split__text {
-    font-family: var(--font-sans), "Plus Jakarta Sans", "Helvetica Neue", Arial, sans-serif;
-    text-align: left;
-    flex: 1 1 clamp(380px, 60vw, 640px);
-    max-width: clamp(420px, 60vw, 720px);
-  }
+.hero-split__text {
+  font-family: var(--font-sans), "Plus Jakarta Sans", "Helvetica Neue", Arial, sans-serif;
+  text-align: left;
+  flex: 1 1 clamp(380px, 60vw, 640px);
+  max-width: clamp(420px, 60vw, 720px);
+}
 
 .hero-split__title {
   margin: 0;
@@ -2828,7 +2836,7 @@ a:hover {
     margin-right: auto;
     border-radius: clamp(1.4rem, 4vw, 2rem);
   }
-  
+
   .hero-split__visual {
     min-height: clamp(320px, 90vw, 420px);
     padding: 0;
@@ -3152,7 +3160,7 @@ a:hover {
   text-align: right;
 }
 
-.hero-values--text > p {
+.hero-values--text>p {
   margin: 0;
 }
 
@@ -3192,6 +3200,7 @@ a:hover {
   from {
     transform: translateX(var(--layer-shift, 0%)) scale(var(--layer-scale, 1)) rotate(0deg);
   }
+
   to {
     transform: translateX(var(--layer-shift, 0%)) scale(var(--layer-scale, 1)) rotate(360deg);
   }
@@ -3202,6 +3211,7 @@ a:hover {
     opacity: 0;
     transform: translateY(28px);
   }
+
   100% {
     opacity: 1;
     transform: translateY(0);
@@ -3213,6 +3223,7 @@ a:hover {
     opacity: 0;
     transform: translateY(32px);
   }
+
   100% {
     opacity: 1;
     transform: translateY(0);
@@ -3224,6 +3235,7 @@ a:hover {
     opacity: 0;
     transform: scale(0.88);
   }
+
   100% {
     opacity: 1;
     transform: scale(1);
@@ -3313,6 +3325,7 @@ a:hover {
     font-size: 0.8rem;
   }
 }
+
 /* Gray section float-wrap helpers */
 .gray-wrap {
   display: flex;
@@ -3331,7 +3344,7 @@ a:hover {
   margin-bottom: 0;
 }
 
-.gray-wrap .text-base + .text-base {
+.gray-wrap .text-base+.text-base {
   margin-top: 0.55rem;
 }
 
@@ -3349,10 +3362,12 @@ a:hover {
 }
 
 /* Utility */
-.clear-both { clear: both; }
+.clear-both {
+  clear: both;
+}
 
 /* Remove unintended top spacing right after a clear */
-.clear-both + .text-base,
+.clear-both+.text-base,
 .clear-both .text-base:first-child {
   margin-top: 0;
 }

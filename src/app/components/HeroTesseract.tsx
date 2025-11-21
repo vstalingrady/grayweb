@@ -26,14 +26,14 @@ const HeroTesseract = () => {
     const canvas = canvasRef.current;
     renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
     renderer.setSize(canvas.clientWidth, canvas.clientHeight);
-    renderer.setClearColor(0x000000, 0);
+    renderer.setClearColor(0x000000, 1); // Pure black background
 
     scene = new THREE.Scene();
     camera = new THREE.PerspectiveCamera(75, canvas.clientWidth / canvas.clientHeight, 0.1, 1000);
     camera.position.z = 5;
 
     container = new THREE.Group();
-    container.scale.set(0.7, 0.7, 0.7);
+    container.scale.set(1.2, 1.2, 1.2); // Bigger tesseract
     scene.add(container);
 
     // Create 4D hypercube vertices
@@ -63,13 +63,36 @@ const HeroTesseract = () => {
     geom.setAttribute('position', new THREE.BufferAttribute(pos, 3));
     geom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
+    // Create main bright lines
     lines = new THREE.LineSegments(geom, new THREE.LineBasicMaterial({
       vertexColors: true,
       transparent: true,
-      opacity: 0.65,
-      linewidth: 5
+      opacity: 1.0,
+      linewidth: 2
     }));
     container.add(lines);
+
+    // Add glow layers - multiple semi-transparent copies for bloom effect
+    const glowGeom1 = geom.clone();
+    const glowLines1 = new THREE.LineSegments(glowGeom1, new THREE.LineBasicMaterial({
+      vertexColors: true,
+      transparent: true,
+      opacity: 0.3,
+      linewidth: 4
+    }));
+    container.add(glowLines1);
+
+    const glowGeom2 = geom.clone();
+    const glowLines2 = new THREE.LineSegments(glowGeom2, new THREE.LineBasicMaterial({
+      vertexColors: true,
+      transparent: true,
+      opacity: 0.15,
+      linewidth: 6
+    }));
+    container.add(glowLines2);
+
+    // Store glow geometries for updates
+    const glowGeometries = [glowGeom1, glowGeom2];
 
     // 4D rotation
     function rotate4D(v: THREE.Vector4, a: number): THREE.Vector4 {
@@ -112,6 +135,17 @@ const HeroTesseract = () => {
 
       lines.geometry.attributes.position.needsUpdate = true;
       lines.geometry.attributes.color.needsUpdate = true;
+
+      // Update glow layers
+      glowGeometries.forEach(glowGeom => {
+        const glowPos = glowGeom.attributes.position.array as Float32Array;
+        const glowColors = glowGeom.attributes.color.array as Float32Array;
+        glowPos.set(pos);
+        glowColors.set(colors);
+        glowGeom.attributes.position.needsUpdate = true;
+        glowGeom.attributes.color.needsUpdate = true;
+      });
+
       container.rotation.x += speed3Dx;
       container.rotation.y += speed3Dy;
       renderer.render(scene, camera);
