@@ -4,6 +4,8 @@
 import os
 import sys
 from pathlib import Path
+from dotenv import load_dotenv # Added
+load_dotenv() # Added
 
 # Add backend to path
 backend_path = Path(__file__).parent / "backend"

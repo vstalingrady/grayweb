@@ -573,15 +573,19 @@ function GrayPageClientInner({
   const [planTab, setPlanTab] = useState<"plans" | "habits">("plans");
   const chatSubmitInFlightRef = useRef(false);
   const [hasSeenGeneralChat, setHasSeenGeneralChat] = useState(false);
+  const onboardingTriggeredRef = useRef(false);
 
   useEffect(() => {
     if (user?.has_seen_general_chat) {
       setHasSeenGeneralChat(true);
+      onboardingTriggeredRef.current = true;
     }
   }, [user?.has_seen_general_chat]);
 
   useEffect(() => {
     if (!user || loading) return;
+    if (onboardingTriggeredRef.current) return;
+
     // If we are in a view that shows the general chat
     if (activeNav !== "threads" && (supportsInlineChat || activeNav === "general")) {
       // And the user hasn't seen it yet
@@ -594,6 +598,7 @@ function GrayPageClientInner({
           sendGeneralMessage("");
           // Optimistically mark as seen to prevent double-trigger
           setHasSeenGeneralChat(true);
+          onboardingTriggeredRef.current = true;
         }
       }
     }

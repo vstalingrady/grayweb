@@ -3332,7 +3332,15 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
   // existing `general_chat_messages` rows render as the canonical General chat.
   useEffect(() => {
     const general = sessionsRef.current.find((session) => session.scope === "general");
-    if (!general || !user?.id || pathname !== "/g" || generalHistoryHydratedRef.current) {
+    const generalHasMessages = Boolean(general?.messages && general.messages.length > 0);
+
+    // Reset hydration flag if we're on /g but the session has no messages
+    // This handles page refreshes where the session state is lost
+    if (pathname === "/g" && !generalHasMessages) {
+      generalHistoryHydratedRef.current = false;
+    }
+
+    if (!general || !user?.id || pathname !== "/g" || generalHistoryHydratedRef.current || generalHasMessages) {
       return;
     }
 
