@@ -842,36 +842,48 @@ class ProactivityEngine:
         now = datetime.now(dt_timezone.utc).isoformat()
         try:
             if self.supabase is not None:
-                self.supabase.table("proactive_notifications").insert(
-                    {
-                        "user_id": user_id,
-                        "type": "check_in",
-                        "title": title,
-                        "message": message,
-                        "due_at": now,
-                        "sent_at": now,
-                        "created_at": now,
-                    }
-                ).execute()
-            else:
-                await self._ensure_connection()
-                query = """
-                    INSERT INTO proactive_notifications
-                    (user_id, type, title, message, due_at, sent_at, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                """
-                await self.db.execute(
-                    query,
-                    (
-                        user_id,
-                        "check_in",
-                        title,
-                        message,
-                        now,
-                        now,
-                        now,
-                    ),
-                )
+                try:
+                    self.supabase.table("proactive_notifications").insert(
+                        {
+                            "user_id": user_id,
+                            "type": "check_in",
+                            "title": title,
+                            "message": message,
+                            "due_at": now,
+                            "sent_at": now,
+                            "created_at": now,
+                        }
+                    ).execute()
+                    return True
+                except Exception as supabase_exc:
+                    # If Supabase insert fails (e.g., foreign key constraint), fall back to local DB
+                    logger.warning(
+                        f"Supabase notification insert failed for user {user_id}, falling back to local DB: {supabase_exc}",
+                        extra={
+                            "event_type": "proactivity_notification_supabase_fallback",
+                            "user_id": user_id,
+                        },
+                    )
+            
+            # Fallback to local database
+            await self._ensure_connection()
+            query = """
+                INSERT INTO proactive_notifications
+                (user_id, type, title, message, due_at, sent_at, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """
+            await self.db.execute(
+                query,
+                (
+                    user_id,
+                    "check_in",
+                    title,
+                    message,
+                    now,
+                    now,
+                    now,
+                ),
+            )
             return True
         except Exception as exc:
             logger.error(f"Failed to persist proactive notification: {exc}", exc_info=True)
