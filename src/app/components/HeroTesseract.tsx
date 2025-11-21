@@ -22,6 +22,7 @@ const HeroTesseract = () => {
     let scrollFactor = 1;
     let animationFrameId: number;
     let composer: any;
+    const sprites: { sprite: THREE.Sprite; angle: number }[] = [];
 
     // Initialize
     const canvas = canvasRef.current;
@@ -32,10 +33,10 @@ const HeroTesseract = () => {
 
     scene = new THREE.Scene();
     camera = new THREE.PerspectiveCamera(75, canvas.clientWidth / canvas.clientHeight, 0.1, 1000);
-    camera.position.z = 5;
+    camera.position.z = 6; // Moved back slightly to prevent clipping with larger scale
 
     container = new THREE.Group();
-    container.scale.set(2.0, 2.0, 2.0); // Much bigger tesseract
+    container.scale.set(1.1, 1.1, 1.1); // Increased scale but kept within bounds
     scene.add(container);
 
     // Create 4D hypercube vertices
@@ -65,19 +66,60 @@ const HeroTesseract = () => {
     geom.setAttribute('position', new THREE.BufferAttribute(pos, 3));
     geom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
-    // Thinner lines
     lines = new THREE.LineSegments(geom, new THREE.LineBasicMaterial({
       vertexColors: true,
-      transparent: false,
-      opacity: 1.0,
-      linewidth: 1
+      transparent: true,
+      opacity: 0.9,
+      linewidth: 1 // Thin lines as requested
     }));
     container.add(lines);
+
+    // Tech Logos Sprites
+    const techLogos = [
+      '/images/react.png',
+      '/images/python.png',
+      '/images/js.png',
+      '/images/html.png', // Corrected extension
+      '/images/css.png',
+      '/images/type.png',
+      '/images/sharp.png',
+      '/images/threee.png'
+    ];
+
+    const radius = 3.2;
+    const textureLoader = new THREE.TextureLoader();
+
+    techLogos.forEach((src, i) => {
+      textureLoader.load(src, (tex) => {
+        tex.minFilter = THREE.LinearFilter;
+        tex.generateMipmaps = false;
+
+        const spriteMat = new THREE.SpriteMaterial({
+          map: tex,
+          transparent: true,
+          opacity: 0.85,
+          alphaTest: 0.05
+        });
+
+        const sprite = new THREE.Sprite(spriteMat);
+        const angle = (i / techLogos.length) * Math.PI * 2;
+
+        sprite.position.set(
+          Math.cos(angle) * radius,
+          Math.sin(angle) * radius,
+          0.1
+        );
+
+        sprite.scale.set(0.5, 0.5, 0.5);
+
+        scene.add(sprite);
+        sprites.push({ sprite, angle });
+      });
+    });
 
     // Setup bloom effect
     async function setupBloom() {
       try {
-        // Import postprocessing modules
         const { EffectComposer } = await import('three/examples/jsm/postprocessing/EffectComposer.js');
         const { RenderPass } = await import('three/examples/jsm/postprocessing/RenderPass.js');
         const { UnrealBloomPass } = await import('three/examples/jsm/postprocessing/UnrealBloomPass.js');
@@ -94,14 +136,19 @@ const HeroTesseract = () => {
           0.85  // threshold
         );
         composer.addPass(bloomPass);
-
-        console.log('[HeroTesseract] Bloom effect initialized');
       } catch (error) {
         console.error('[HeroTesseract] Failed to load bloom effect:', error);
       }
     }
 
     setupBloom();
+
+    // Scroll interaction
+    const handleWheel = (e: WheelEvent) => {
+      scrollFactor += e.deltaY * -0.001;
+      scrollFactor = Math.max(0.2, Math.min(1.5, scrollFactor));
+    };
+    window.addEventListener('wheel', handleWheel);
 
     // 4D rotation
     function rotate4D(v: THREE.Vector4, a: number): THREE.Vector4 {
@@ -116,6 +163,7 @@ const HeroTesseract = () => {
     function animate() {
       animationFrameId = requestAnimationFrame(animate);
       angle4D += speed4D * scrollFactor;
+      const time = performance.now() * 0.001;
 
       const projected = pts.map(v => {
         const rv = rotate4D(v, angle4D);
@@ -129,10 +177,12 @@ const HeroTesseract = () => {
         const p2 = projected[edge[1]];
         pos.set([p1.x, p1.y, p1.z, p2.x, p2.y, p2.z], i * 6);
 
-        // White color
-        const r = 1.0;
-        const g = 1.0;
-        const b = 1.0;
+        // Rainbow color cycling from user code
+        const phase = time + i * 0.3;
+        const minBrightness = 0.2;
+        const r = ((Math.sin(phase * 9) + 1) / 2) * (1 - minBrightness) + minBrightness;
+        const g = ((Math.sin(phase * 9 + 1) + 1) / 2) * (1 - minBrightness) + minBrightness;
+        const b = ((Math.sin(phase * 9 + 2) + 1) / 2) * (1 - minBrightness) + minBrightness;
 
         for (let j = 0; j < 2; j++) {
           const idx = (i * 2 + j) * 3;
@@ -148,7 +198,18 @@ const HeroTesseract = () => {
       container.rotation.x += speed3Dx;
       container.rotation.y += speed3Dy;
 
-      // Render with bloom if available, otherwise normal render
+      // Update sprites
+      const orbitSpeedBase = 0.0015;
+      const orbitSpeed = Math.max(0.0005, orbitSpeedBase * scrollFactor);
+
+      sprites.forEach((item) => {
+        item.angle += orbitSpeed;
+        const r = 3.2;
+        const x = Math.cos(item.angle) * r;
+        const y = Math.sin(item.angle) * r;
+        item.sprite.position.set(x, y, item.sprite.position.z);
+      });
+
       if (composer) {
         composer.render();
       } else {
@@ -175,12 +236,17 @@ const HeroTesseract = () => {
     // Cleanup
     return () => {
       window.removeEventListener("resize", handleResize);
+      window.removeEventListener('wheel', handleWheel);
       cancelAnimationFrame(animationFrameId);
       renderer.dispose();
       geom.dispose();
       if (lines.material instanceof THREE.Material) {
         lines.material.dispose();
       }
+      sprites.forEach(({ sprite }) => {
+        if (sprite.material.map) sprite.material.map.dispose();
+        sprite.material.dispose();
+      });
     };
   }, []);
 

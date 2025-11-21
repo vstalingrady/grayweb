@@ -72,6 +72,7 @@ declare module 'three' {
     x: number;
     y: number;
     z: number;
+    set(x: number, y: number, z: number): void;
     clone(): Vector3;
     sub(v: Vector3): Vector3;
     normalize(): Vector3;
@@ -98,6 +99,29 @@ declare module 'three' {
     getDelta(): number;
   }
 
+  class Sprite {
+    constructor(material?: SpriteMaterial);
+    position: Vector3;
+    scale: Vector3;
+    material: SpriteMaterial;
+  }
+  class SpriteMaterial extends Material {
+    constructor(parameters?: any);
+    map: Texture | null;
+    transparent: boolean;
+    opacity: number;
+    alphaTest: number;
+  }
+  class Texture {
+    minFilter: any;
+    generateMipmaps: boolean;
+    dispose(): void;
+  }
+  class TextureLoader {
+    load(url: string, onLoad?: (texture: Texture) => void): Texture;
+  }
+  class LinearFilter { }
+
   namespace MathUtils {
     function degToRad(degrees: number): number;
   }
@@ -122,6 +146,11 @@ declare module 'three' {
     Vector2,
     Vector4,
     Material,
+    Sprite,
+    SpriteMaterial,
+    Texture,
+    TextureLoader,
+    LinearFilter,
     Clock,
     MathUtils,
   };
