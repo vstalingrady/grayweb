@@ -2723,8 +2723,8 @@ a:hover {
 }
 
 .hero-split__visual {
-  flex: 0 0 clamp(360px, 42vw, 560px);
-  max-width: clamp(360px, 42vw, 560px);
+  flex: 0 0 clamp(450px, 50vw, 800px);
+  max-width: clamp(450px, 50vw, 800px);
   min-height: clamp(480px, 70vw, 760px);
   display: flex;
   align-items: center;

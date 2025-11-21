@@ -133,9 +133,9 @@ const HeroTesseract = () => {
         // Balanced bloom settings
         const bloomPass = new UnrealBloomPass(
           new THREE.Vector2(canvas.clientWidth, canvas.clientHeight),
-          1.5,  // strength (reduced from 3.0)
-          0.5,  // radius (reduced from 1.0)
-          0.0   // threshold
+          1.5,  // strength
+          0.4,  // radius (reduced to prevent fog)
+          0.1   // threshold (increased to exclude background)
         );
         composer.addPass(bloomPass);
       } catch (error) {
