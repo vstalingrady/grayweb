@@ -177,12 +177,10 @@ const HeroTesseract = () => {
         const p2 = projected[edge[1]];
         pos.set([p1.x, p1.y, p1.z, p2.x, p2.y, p2.z], i * 6);
 
-        // Rainbow color cycling from user code
-        const phase = time + i * 0.3;
-        const minBrightness = 0.2;
-        const r = ((Math.sin(phase * 9) + 1) / 2) * (1 - minBrightness) + minBrightness;
-        const g = ((Math.sin(phase * 9 + 1) + 1) / 2) * (1 - minBrightness) + minBrightness;
-        const b = ((Math.sin(phase * 9 + 2) + 1) / 2) * (1 - minBrightness) + minBrightness;
+        // Pure white color
+        const r = 1.0;
+        const g = 1.0;
+        const b = 1.0;
 
         for (let j = 0; j < 2; j++) {
           const idx = (i * 2 + j) * 3;
