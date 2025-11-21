@@ -32,8 +32,18 @@ const HeroTesseract = () => {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
     scene = new THREE.Scene();
-    camera = new THREE.PerspectiveCamera(75, canvas.clientWidth / canvas.clientHeight, 0.1, 1000);
-    camera.position.z = 5; // Moved back to fit better
+    const aspect = canvas.clientWidth / canvas.clientHeight;
+    camera = new THREE.PerspectiveCamera(75, aspect, 0.1, 1000);
+
+    // Dynamic camera positioning based on aspect ratio
+    const updateCameraPosition = () => {
+      const currentAspect = camera.aspect;
+      // Base distance is 5. Increase distance as aspect ratio decreases to keep object in view.
+      const targetZ = 5 + Math.max(0, (1.2 - currentAspect) * 3.5);
+      camera.position.z = targetZ;
+    };
+
+    updateCameraPosition();
 
     container = new THREE.Group();
     container.scale.set(1.5, 1.5, 1.5); // Larger scale
@@ -226,6 +236,9 @@ const HeroTesseract = () => {
       const height = canvasRef.current.clientHeight;
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
+
+      updateCameraPosition();
+
       renderer.setSize(width, height);
       if (composer) {
         composer.setSize(width, height);

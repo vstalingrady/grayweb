@@ -2826,7 +2826,7 @@ a:hover {
   }
 
   .hero-tesseract {
-    width: 100%;
+    width: 94%;
     min-height: clamp(320px, 100vw, 560px);
     margin-left: auto;
     margin-right: auto;
