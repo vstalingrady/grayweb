@@ -22,22 +22,22 @@ const resolveMetadataBase = (): URL | undefined => {
 export const metadata: Metadata = {
   metadataBase: resolveMetadataBase(),
   title: {
-    default: "Alignment",
-    template: "%s | Alignment",
+    default: "Gray",
+    template: "%s | Gray",
   },
   description:
     "Gray: The Compassionate Architect / Proactive Life OS. A proactive AI mentor that helps people maximize their potential by checking in throughout the day, remembering everything about their life, and asking the hard questions they need to hear.",
   openGraph: {
-    title: "Alignment",
+    title: "Gray",
     description:
       "Gray: The Compassionate Architect / Proactive Life OS. A proactive AI mentor that helps people maximize their potential.",
-    siteName: "Alignment",
+    siteName: "Gray",
     locale: "en_US",
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Alignment",
+    title: "Gray",
     description:
       "Gray: The Compassionate Architect / Proactive Life OS. A proactive AI mentor that helps people maximize their potential.",
   },
