@@ -33,10 +33,10 @@ const HeroTesseract = () => {
 
     scene = new THREE.Scene();
     camera = new THREE.PerspectiveCamera(75, canvas.clientWidth / canvas.clientHeight, 0.1, 1000);
-    camera.position.z = 6; // Moved back slightly to prevent clipping with larger scale
+    camera.position.z = 4; // Closer camera for larger appearance
 
     container = new THREE.Group();
-    container.scale.set(1.1, 1.1, 1.1); // Increased scale but kept within bounds
+    container.scale.set(1.5, 1.5, 1.5); // Larger scale
     scene.add(container);
 
     // Create 4D hypercube vertices
@@ -66,11 +66,12 @@ const HeroTesseract = () => {
     geom.setAttribute('position', new THREE.BufferAttribute(pos, 3));
     geom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
+    // Thicker lines for better glow
     lines = new THREE.LineSegments(geom, new THREE.LineBasicMaterial({
       vertexColors: true,
       transparent: true,
-      opacity: 0.9,
-      linewidth: 1 // Thin lines as requested
+      opacity: 1.0,
+      linewidth: 2
     }));
     container.add(lines);
 
@@ -129,11 +130,12 @@ const HeroTesseract = () => {
         const renderPass = new RenderPass(scene, camera);
         composer.addPass(renderPass);
 
+        // Stronger bloom settings
         const bloomPass = new UnrealBloomPass(
           new THREE.Vector2(canvas.clientWidth, canvas.clientHeight),
-          1.5,  // strength
-          0.4,  // radius
-          0.85  // threshold
+          3.0,  // strength (much higher)
+          1.0,  // radius (wider glow)
+          0.0   // threshold (everything glows)
         );
         composer.addPass(bloomPass);
       } catch (error) {
