@@ -2769,13 +2769,13 @@ a:hover {
 .hero-tesseract {
   position: relative;
   flex: 0 0 auto;
-  width: min(100%, clamp(400px, 58vw, 800px));
-  min-height: clamp(460px, 62vw, 800px);
+  width: min(100%, clamp(500px, 65vw, 1000px));
+  min-height: clamp(500px, 70vw, 900px);
   border-radius: clamp(1.8rem, 4.5vw, 2.8rem);
   border: none;
   background: #000000;
   padding: 0;
-  overflow: hidden;
+  /* overflow: hidden; - Removed to prevent clipping */
   display: flex;
   align-items: center;
   justify-content: center;

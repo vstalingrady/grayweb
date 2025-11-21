@@ -33,7 +33,7 @@ const HeroTesseract = () => {
 
     scene = new THREE.Scene();
     camera = new THREE.PerspectiveCamera(75, canvas.clientWidth / canvas.clientHeight, 0.1, 1000);
-    camera.position.z = 4; // Closer camera for larger appearance
+    camera.position.z = 5; // Moved back to fit better
 
     container = new THREE.Group();
     container.scale.set(1.5, 1.5, 1.5); // Larger scale
@@ -130,12 +130,12 @@ const HeroTesseract = () => {
         const renderPass = new RenderPass(scene, camera);
         composer.addPass(renderPass);
 
-        // Stronger bloom settings
+        // Balanced bloom settings
         const bloomPass = new UnrealBloomPass(
           new THREE.Vector2(canvas.clientWidth, canvas.clientHeight),
-          3.0,  // strength (much higher)
-          1.0,  // radius (wider glow)
-          0.0   // threshold (everything glows)
+          1.5,  // strength (reduced from 3.0)
+          0.5,  // radius (reduced from 1.0)
+          0.0   // threshold
         );
         composer.addPass(bloomPass);
       } catch (error) {
