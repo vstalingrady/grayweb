@@ -2693,7 +2693,8 @@ a:hover {
   width: min(1600px, 100%);
   /* Increased from 1200px */
   margin: 0 auto;
-  min-height: clamp(420px, 70svh, 720px);
+  min-height: clamp(600px, 80svh, 900px);
+  /* Increased height */
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -2728,7 +2729,8 @@ a:hover {
   flex: 1 1 clamp(500px, 60vw, 900px);
   /* Increased flex-grow and basis */
   max-width: clamp(600px, 60vw, 1000px);
-  min-height: clamp(500px, 70vw, 800px);
+  min-height: clamp(600px, 80vw, 900px);
+  /* Increased height */
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2773,7 +2775,8 @@ a:hover {
   position: relative;
   flex: 0 0 auto;
   width: min(100%, clamp(500px, 65vw, 1000px));
-  min-height: clamp(500px, 70vw, 900px);
+  min-height: clamp(600px, 80vw, 900px);
+  /* Increased height */
   border-radius: clamp(1.8rem, 4.5vw, 2.8rem);
   border: none;
   background: #000000;
