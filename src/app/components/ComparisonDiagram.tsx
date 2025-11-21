@@ -70,86 +70,84 @@ const grayAdvantages = [
 
 const ComparisonDiagram = () => (
   <section id="depth" className="comparison-section section-shell">
-    <div className="contrast-shell">
-      <header className="contrast-header">
-        <span className="badge badge--amber">Why Gray</span>
-        <h2 className="contrast-heading text-balance">Wrappers wait. Gray works the problem with you.</h2>
-        <p className="contrast-subheading text-balance">
-          We rebuilt the assistant workflow so the burden of momentum, memory, and emotional context rests on the system—not on the human doing the work.
-        </p>
-      </header>
+    <header className="contrast-header">
+      <span className="badge badge--amber">Why Gray</span>
+      <h2 className="contrast-heading text-balance">Wrappers wait. Gray works the problem with you.</h2>
+      <p className="contrast-subheading text-balance">
+        We rebuilt the assistant workflow so the burden of momentum, memory, and emotional context rests on the system—not on the human doing the work.
+      </p>
+    </header>
 
-      <div className="contrast-grid">
-        <article className="contrast-card contrast-card--wrapper">
-          <header className="contrast-card__masthead">
-            <div className="contrast-flow">
-              <div className="contrast-flow__icon">
-                <UserIcon />
-              </div>
-              <FlowArrow />
-              <div className="contrast-flow__icon contrast-flow__icon--robot">
-                <RobotIcon />
-              </div>
-            </div>
-            <div>
-              <div className="contrast-chip">Typical GPT Wrapper</div>
-              <p>Cobbled together dashboards that still leave you solo.</p>
-            </div>
-          </header>
-
-          <div className="contrast-visual contrast-visual--error">
-            <div className="contrast-visual__placeholder" aria-hidden />
-          </div>
-
-          <ul className="contrast-list text-[0.9rem] opacity-90">
-            {wrapperPainPoints.map((point) => (
-              <li key={point}>{point}</li>
-            ))}
-          </ul>
-
-          <footer className="contrast-footer text-xs opacity-70">Feels like a prettier terminal—still your job to remember everything.</footer>
-        </article>
-
-        <article className="contrast-card contrast-card--gray">
-          <header className="contrast-card__masthead">
-            <div className="contrast-logo">
-              <Image src="/grayaiwhite.svg" alt="Gray logo" width={132} height={132} />
-            </div>
-            <div>
-              <div className="contrast-chip contrast-chip--glow">Gray: Symbiotic Companion</div>
-              <p>Intelligent choreography that keeps your intentional life in motion.</p>
-            </div>
-          </header>
-
-          <div className="contrast-flow contrast-flow--gray">
+    <div className="contrast-grid">
+      <article className="contrast-card contrast-card--wrapper">
+        <header className="contrast-card__masthead">
+          <div className="contrast-flow">
             <div className="contrast-flow__icon">
               <UserIcon />
             </div>
-            <FlowArrow className="contrast-arrow--glow" />
-            <div className="contrast-flow__logo">
-              <Image src="/grayaiwhite.svg" alt="Gray crest" fill sizes="72px" />
-            </div>
-            <FlowArrow className="contrast-arrow--glow contrast-arrow--reverse" />
-            <div className="contrast-flow__icon contrast-flow__icon--return">
-              <UserIcon />
+            <FlowArrow />
+            <div className="contrast-flow__icon contrast-flow__icon--robot">
+              <RobotIcon />
             </div>
           </div>
-
-          <div className="contrast-visual contrast-visual--gray p-0 overflow-hidden relative">
-            <MockChatInterface />
+          <div>
+            <div className="contrast-chip">Typical GPT Wrapper</div>
+            <p>Cobbled together dashboards that still leave you solo.</p>
           </div>
+        </header>
 
-          <ul className="contrast-list contrast-list--bright">
-            {grayAdvantages.map((point) => (
-              <li key={point}>{point}</li>
-            ))}
-          </ul>
+        <div className="contrast-visual contrast-visual--error">
+          <div className="contrast-visual__placeholder" aria-hidden />
+        </div>
 
-          <footer className="contrast-footer contrast-footer--bright">
-            Partnership, not prompts. Gray carries the rituals so you can pursue the work.
-          </footer>
-        </article>
-      </div>
+        <ul className="contrast-list text-[0.9rem] opacity-90">
+          {wrapperPainPoints.map((point) => (
+            <li key={point}>{point}</li>
+          ))}
+        </ul>
+
+        <footer className="contrast-footer text-xs opacity-70">Feels like a prettier terminal—still your job to remember everything.</footer>
+      </article>
+
+      <article className="contrast-card contrast-card--gray">
+        <header className="contrast-card__masthead">
+          <div className="contrast-logo">
+            <Image src="/grayaiwhite.svg" alt="Gray logo" width={132} height={132} />
+          </div>
+          <div>
+            <div className="contrast-chip contrast-chip--glow">Gray: Symbiotic Companion</div>
+            <p>Intelligent choreography that keeps your intentional life in motion.</p>
+          </div>
+        </header>
+
+        <div className="contrast-flow contrast-flow--gray">
+          <div className="contrast-flow__icon">
+            <UserIcon />
+          </div>
+          <FlowArrow className="contrast-arrow--glow" />
+          <div className="contrast-flow__logo">
+            <Image src="/grayaiwhite.svg" alt="Gray crest" fill sizes="72px" />
+          </div>
+          <FlowArrow className="contrast-arrow--glow contrast-arrow--reverse" />
+          <div className="contrast-flow__icon contrast-flow__icon--return">
+            <UserIcon />
+          </div>
+        </div>
+
+        <div className="contrast-visual contrast-visual--gray p-0 overflow-hidden relative">
+          <MockChatInterface />
+        </div>
+
+        <ul className="contrast-list contrast-list--bright">
+          {grayAdvantages.map((point) => (
+            <li key={point}>{point}</li>
+          ))}
+        </ul>
+
+        <footer className="contrast-footer contrast-footer--bright">
+          Partnership, not prompts. Gray carries the rituals so you can pursue the work.
+        </footer>
+      </article>
     </div>
   </section>
 );
