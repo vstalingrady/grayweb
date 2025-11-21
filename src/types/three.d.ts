@@ -25,12 +25,16 @@ declare module 'three' {
     constructor();
     add(object: any): void;
     rotation: { x: number; y: number; z: number };
+    scale: { set(x: number, y: number, z: number): void };
   }
   class Mesh {
     constructor(geometry?: any, material?: any);
   }
   class LineSegments {
     constructor(geometry?: any, material?: any);
+    geometry: BufferGeometry;
+    material: Material | Material[];
+    rotation: { x: number; y: number; z: number };
   }
   class ShaderMaterial {
     constructor(params?: any);
@@ -52,15 +56,21 @@ declare module 'three' {
   }
   class BufferGeometry {
     setAttribute(name: string, attribute: any): void;
+    attributes: any;
+    dispose(): void;
   }
   class BufferAttribute {
     constructor(array: Float32Array, itemSize: number);
+    needsUpdate: boolean;
   }
   class Color {
     constructor(color?: number);
   }
   class Vector3 {
     constructor(x?: number, y?: number, z?: number);
+    x: number;
+    y: number;
+    z: number;
     clone(): Vector3;
     sub(v: Vector3): Vector3;
     normalize(): Vector3;
@@ -71,6 +81,16 @@ declare module 'three' {
     x: number;
     y: number;
     set(x: number, y: number): void;
+  }
+  class Vector4 {
+    constructor(x?: number, y?: number, z?: number, w?: number);
+    x: number;
+    y: number;
+    z: number;
+    w: number;
+  }
+  class Material {
+    dispose(): void;
   }
   class Clock {
     constructor();
@@ -99,6 +119,8 @@ declare module 'three' {
     Color,
     Vector3,
     Vector2,
+    Vector4,
+    Material,
     Clock,
     MathUtils,
   };

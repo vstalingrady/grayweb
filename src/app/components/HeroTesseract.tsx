@@ -4,115 +4,126 @@ import { useEffect, useRef } from "react";
 import * as THREE from "three";
 
 const HeroTesseract = () => {
-  const canvasRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
     if (!canvasRef.current) return;
 
-    console.log('[HeroTesseract] Initializing...', {
-      width: canvasRef.current.clientWidth,
-      height: canvasRef.current.clientHeight
-    });
+    let scene: THREE.Scene;
+    let camera: THREE.PerspectiveCamera;
+    let renderer: THREE.WebGLRenderer;
+    let container: THREE.Group;
+    let lines: THREE.LineSegments;
+    let angle4D = 0;
+    const speed4D = 0.005;
+    const speed3Dx = 0.005;
+    const speed3Dy = 0.002;
+    const d = 3;
+    let scrollFactor = 1;
+    let animationFrameId: number;
 
-    // Scene setup
-    const scene = new THREE.Scene();
+    // Initialize
+    const canvas = canvasRef.current;
+    renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+    renderer.setSize(canvas.clientWidth, canvas.clientHeight);
+    renderer.setClearColor(0x000000, 0);
 
-    // Get dimensions with fallback
-    const width = canvasRef.current.clientWidth || 800;
-    const height = canvasRef.current.clientHeight || 600;
-
-    const camera = new THREE.PerspectiveCamera(
-      75,
-      width / height,
-      0.1,
-      1000
-    );
+    scene = new THREE.Scene();
+    camera = new THREE.PerspectiveCamera(75, canvas.clientWidth / canvas.clientHeight, 0.1, 1000);
     camera.position.z = 5;
 
-    const renderer = new THREE.WebGLRenderer({
-      antialias: true,
-      alpha: true,
-      powerPreference: "high-performance"
-    });
-    renderer.setSize(width, height);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.setClearColor(0x000000, 0); // Transparent background
-    canvasRef.current.appendChild(renderer.domElement);
+    container = new THREE.Group();
+    container.scale.set(0.7, 0.7, 0.7);
+    scene.add(container);
 
-    console.log('[HeroTesseract] Renderer initialized', {
-      width,
-      height,
-      domElement: renderer.domElement
-    });
+    // Create 4D hypercube vertices
+    const pts: THREE.Vector4[] = [];
+    [-1, 1].forEach(x =>
+      [-1, 1].forEach(y =>
+        [-1, 1].forEach(z =>
+          [-1, 1].forEach(w =>
+            pts.push(new THREE.Vector4(x, y, z, w))
+          ))));
 
-    // Create tesseract (hypercube) wireframe
-    const createTesseract = () => {
-      const group = new THREE.Group();
+    // Create edges
+    const edges: [number, number][] = [];
+    for (let i = 0; i < pts.length; i++) {
+      for (let j = i + 1; j < pts.length; j++) {
+        let diff = 0;
+        (['x', 'y', 'z', 'w'] as const).forEach(c => {
+          if (pts[i][c] !== pts[j][c]) diff++;
+        });
+        if (diff === 1) edges.push([i, j]);
+      }
+    }
 
-      // Inner cube - bright cyan/blue
-      const innerGeometry = new THREE.BoxGeometry(1.5, 1.5, 1.5);
-      const innerEdges = new THREE.EdgesGeometry(innerGeometry);
-      const innerLine = new THREE.LineSegments(
-        innerEdges,
-        new THREE.LineBasicMaterial({ color: 0x00ffff, linewidth: 2 })
-      );
-      group.add(innerLine);
+    const pos = new Float32Array(edges.length * 2 * 3);
+    const colors = new Float32Array(edges.length * 2 * 3);
+    const geom = new THREE.BufferGeometry();
+    geom.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    geom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
-      // Outer cube - bright magenta/purple
-      const outerGeometry = new THREE.BoxGeometry(2.5, 2.5, 2.5);
-      const outerEdges = new THREE.EdgesGeometry(outerGeometry);
-      const outerLine = new THREE.LineSegments(
-        outerEdges,
-        new THREE.LineBasicMaterial({ color: 0xff00ff, linewidth: 2 })
-      );
-      group.add(outerLine);
+    lines = new THREE.LineSegments(geom, new THREE.LineBasicMaterial({
+      vertexColors: true,
+      transparent: true,
+      opacity: 0.65,
+      linewidth: 5
+    }));
+    container.add(lines);
 
-      // Connect inner and outer cubes - white/light gray
-      const connectGeometry = new THREE.BufferGeometry();
-      const positions = new Float32Array([
-        -0.75, -0.75, -0.75, -1.25, -1.25, -1.25,
-        0.75, -0.75, -0.75, 1.25, -1.25, -1.25,
-        -0.75, 0.75, -0.75, -1.25, 1.25, -1.25,
-        0.75, 0.75, -0.75, 1.25, 1.25, -1.25,
-        -0.75, -0.75, 0.75, -1.25, -1.25, 1.25,
-        0.75, -0.75, 0.75, 1.25, -1.25, 1.25,
-        -0.75, 0.75, 0.75, -1.25, 1.25, 1.25,
-        0.75, 0.75, 0.75, 1.25, 1.25, 1.25,
-      ]);
-      connectGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-      const connectLine = new THREE.LineSegments(
-        connectGeometry,
-        new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: 1 })
-      );
-      group.add(connectLine);
+    // 4D rotation
+    function rotate4D(v: THREE.Vector4, a: number): THREE.Vector4 {
+      const x = v.x * Math.cos(a) - v.y * Math.sin(a);
+      const y = v.x * Math.sin(a) + v.y * Math.cos(a);
+      const z = v.z * Math.cos(a) - v.w * Math.sin(a);
+      const w = v.z * Math.sin(a) + v.w * Math.cos(a);
+      return new THREE.Vector4(x, y, z, w);
+    }
 
-      return group;
-    };
-
-    const tesseract = createTesseract();
-    scene.add(tesseract);
-
-    // Animation
-    let animationFrameId: number;
-    const animate = () => {
+    // Animation loop
+    function animate() {
       animationFrameId = requestAnimationFrame(animate);
+      angle4D += speed4D * scrollFactor;
 
-      // Rotate the tesseract
-      tesseract.rotation.x += 0.003;
-      tesseract.rotation.y += 0.005;
-      tesseract.rotation.z += 0.002;
+      const projected = pts.map(v => {
+        const rv = rotate4D(v, angle4D);
+        const f = d / (d - rv.w);
+        return new THREE.Vector3(rv.x * f, rv.y * f, rv.z * f);
+      });
 
+      for (let i = 0; i < edges.length; i++) {
+        const edge = edges[i];
+        const p1 = projected[edge[0]];
+        const p2 = projected[edge[1]];
+        pos.set([p1.x, p1.y, p1.z, p2.x, p2.y, p2.z], i * 6);
+
+        // White color
+        const r = 1.0;
+        const g = 1.0;
+        const b = 1.0;
+
+        for (let j = 0; j < 2; j++) {
+          const idx = (i * 2 + j) * 3;
+          colors[idx] = r;
+          colors[idx + 1] = g;
+          colors[idx + 2] = b;
+        }
+      }
+
+      lines.geometry.attributes.position.needsUpdate = true;
+      lines.geometry.attributes.color.needsUpdate = true;
+      container.rotation.x += speed3Dx;
+      container.rotation.y += speed3Dy;
       renderer.render(scene, camera);
-    };
+    }
+
     animate();
 
     // Handle resize
     const handleResize = () => {
       if (!canvasRef.current) return;
-
       const width = canvasRef.current.clientWidth;
       const height = canvasRef.current.clientHeight;
-
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
       renderer.setSize(width, height);
@@ -124,15 +135,16 @@ const HeroTesseract = () => {
       window.removeEventListener("resize", handleResize);
       cancelAnimationFrame(animationFrameId);
       renderer.dispose();
-      if (canvasRef.current && renderer.domElement) {
-        canvasRef.current.removeChild(renderer.domElement);
+      geom.dispose();
+      if (lines.material instanceof THREE.Material) {
+        lines.material.dispose();
       }
     };
   }, []);
 
   return (
     <div className="hero-tesseract">
-      <div
+      <canvas
         ref={canvasRef}
         className="hero-tesseract__canvas"
         style={{
