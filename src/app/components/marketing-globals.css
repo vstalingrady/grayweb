@@ -2765,7 +2765,7 @@ a:hover {
   min-height: clamp(460px, 62vw, 800px);
   border-radius: clamp(1.8rem, 4.5vw, 2.8rem);
   border: none;
-  background: radial-gradient(circle at 50% 40%, rgba(255, 255, 255, 0.06), rgba(0, 0, 0, 0.85) 70%);
+  background: #000000;
   padding: 0;
   overflow: hidden;
   display: flex;

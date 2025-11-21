@@ -5,7 +5,7 @@ const HeroSection = () => (
     <div className="hero-split">
       <div className="hero-split__text">
         <h1 id="hero-heading" className="hero-split__title">
-          You know you're capable of more. Let's prove it.
+          Maximize human potential.
         </h1>
         <p className="hero-split__subtitle">AI alignment research for all of humanity</p>
       </div>

@@ -3,6 +3,12 @@ declare module 'three' {
     constructor();
     add(object: any): void;
   }
+  class PerspectiveCamera {
+    constructor(fov: number, aspect: number, near: number, far: number);
+    position: { z: number; x: number; y: number };
+    aspect: number;
+    updateProjectionMatrix(): void;
+  }
   class OrthographicCamera {
     constructor(left: number, right: number, top: number, bottom: number, near: number, far: number);
   }
@@ -11,11 +17,19 @@ declare module 'three' {
     setPixelRatio(pixelRatio: number): void;
     setSize(width: number, height: number): void;
     setClearColor(color: number, alpha: number): void;
-    render(scene: Scene, camera: OrthographicCamera): void;
+    render(scene: Scene, camera: any): void;
     dispose(): void;
     domElement: HTMLElement;
   }
+  class Group {
+    constructor();
+    add(object: any): void;
+    rotation: { x: number; y: number; z: number };
+  }
   class Mesh {
+    constructor(geometry?: any, material?: any);
+  }
+  class LineSegments {
     constructor(geometry?: any, material?: any);
   }
   class ShaderMaterial {
@@ -23,9 +37,24 @@ declare module 'three' {
     uniforms: any;
     dispose(): void;
   }
+  class LineBasicMaterial {
+    constructor(params?: any);
+  }
+  class BoxGeometry {
+    constructor(width: number, height: number, depth: number);
+  }
   class PlaneGeometry {
     constructor(width: number, height: number);
     dispose(): void;
+  }
+  class EdgesGeometry {
+    constructor(geometry: any);
+  }
+  class BufferGeometry {
+    setAttribute(name: string, attribute: any): void;
+  }
+  class BufferAttribute {
+    constructor(array: Float32Array, itemSize: number);
   }
   class Color {
     constructor(color?: number);
@@ -43,7 +72,6 @@ declare module 'three' {
     y: number;
     set(x: number, y: number): void;
   }
-  class BufferGeometry {}
   class Clock {
     constructor();
     getDelta(): number;
@@ -55,15 +83,22 @@ declare module 'three' {
 
   export {
     Scene,
+    PerspectiveCamera,
     OrthographicCamera,
     WebGLRenderer,
+    Group,
     Mesh,
+    LineSegments,
     ShaderMaterial,
+    LineBasicMaterial,
+    BoxGeometry,
     PlaneGeometry,
+    EdgesGeometry,
+    BufferGeometry,
+    BufferAttribute,
     Color,
     Vector3,
     Vector2,
-    BufferGeometry,
     Clock,
     MathUtils,
   };
