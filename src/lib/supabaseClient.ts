@@ -16,11 +16,11 @@ export const getSupabaseClient = (): SupabaseClient | null => {
     cached = createClient(supabaseUrl, supabaseAnonKey, {
       auth: {
         storageKey,
-        // Avoid persisting auth state in localStorage; sessions are backed by
-        // Supabase and our own backend.
-        persistSession: false,
+        // Enable session persistence to maintain authentication state
+        persistSession: true,
         autoRefreshToken: true,
-        detectSessionInUrl: false,
+        // Enable URL session detection for OAuth callback handling
+        detectSessionInUrl: true,
       },
     });
   }

@@ -319,7 +319,7 @@ _ensure_sqlite_maps_enabled_column()
 _ensure_sqlite_usage_columns()
 _ensure_sqlite_workspace_background_column()
 
-database = databases.Database(DATABASE_URL)
+database = databases.Database(DATABASE_URL, statement_cache_size=0)
 metadata = sqlalchemy.MetaData()
 
 
@@ -1631,6 +1631,44 @@ proactivity_realtime_broker = ProactivityRealtimeBroker()
 
 
 @app.on_event("startup")
+async def _connect_database():
+    """Connect to the database on startup."""
+    try:
+        await database.connect()
+        db_logger.info("Database connection established via startup event", extra={
+            "event_type": "database_connected_startup"
+        })
+    except Exception as e:
+        db_logger.error(
+            f"Database connection failed on startup: {e}",
+            exc_info=True,
+            extra={
+                "event_type": "database_connection_failed_startup",
+                "error": str(e),
+            },
+        )
+        raise
+
+
+@app.on_event("shutdown")
+async def _disconnect_database():
+    """Disconnect from the database on shutdown."""
+    try:
+        await database.disconnect()
+        db_logger.info("Database connection closed via shutdown event", extra={
+            "event_type": "database_disconnected_shutdown"
+        })
+    except Exception as e:
+        db_logger.error(
+            f"Database disconnection failed on shutdown: {e}",
+            exc_info=True,
+            extra={
+                "event_type": "database_disconnection_failed_shutdown",
+                "error": str(e),
+            },
+        )
+
+@app.on_event("startup")
 async def _initialize_proactivity_engine():
     """Initialize the hybrid proactivity engine + scheduler."""
     global proactivity_engine, proactivity_scheduler
@@ -1744,43 +1782,11 @@ security = HTTPBearer()
 
 # Database dependency
 async def get_database():
-    db_logger.debug("Database connection requested", extra={
-        "event_type": "database_connection_requested"
-    })
-
-    start_time = datetime.utcnow()
-    try:
-        await database.connect()
-        connection_time = (datetime.utcnow() - start_time).total_seconds() * 1000
-
-        db_logger.info("Database connection established", extra={
-            "event_type": "database_connected",
-            "connection_time_ms": connection_time
-        })
-
-        try:
-            yield database
-        finally:
-            disconnect_start = datetime.utcnow()
-            await database.disconnect()
-            disconnect_time = (datetime.utcnow() - disconnect_start).total_seconds() * 1000
-
-            db_logger.debug("Database connection closed", extra={
-                "event_type": "database_disconnected",
-                "disconnect_time_ms": disconnect_time
-            })
-
-    except Exception as e:
-        db_logger.error(
-            f"Database connection failed: {e}",
-            exc_info=True,
-            extra={
-                "event_type": "database_connection_failed",
-                "error": str(e),
-                "connection_time_ms": (datetime.utcnow() - start_time).total_seconds() * 1000,
-            },
-        )
-        raise
+    """
+    Dependency to get the database connection.
+    Connection is managed globally by startup/shutdown events.
+    """
+    yield database
 
 # Helper functions
 def generate_initials(full_name: str) -> str:
@@ -4158,7 +4164,10 @@ async def chat_with_ai_stream(request: ChatRequest, db: databases.Database = Dep
                 await db.execute(
                     users.update()
                     .where(users.c.id == request.user_id)
-                    .values(has_seen_general_chat=True)
+                    .values(
+                        has_seen_general_chat=True,
+                        updated_at=datetime.utcnow()
+                    )
                 )
                 api_logger.info(f"User {request.user_id} started onboarding flow")
 
@@ -4346,20 +4355,21 @@ async def chat_with_ai_stream(request: ChatRequest, db: databases.Database = Dep
         return StreamingResponse(event_stream(), media_type="text/event-stream", headers=headers)
     except Exception as error:
         total_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+        error_msg = str(error)
         api_logger.error(
-            f"Chat stream request failed: {error}",
+            f"Chat stream request failed: {error_msg}",
             exc_info=True,
             extra={
                 "event_type": "chat_stream_request_error",
                 "user_id": request.user_id,
-                "error": str(error),
+                "error": error_msg,
                 "total_time_ms": total_time,
                 "correlation_id": correlation_id,
             },
         )
 
         async def error_stream() -> AsyncGenerator[str, None]:
-            yield _sse_event("error", {"message": str(error)})
+            yield _sse_event("error", {"message": error_msg})
 
         clear_request_context()
         return StreamingResponse(error_stream(), status_code=500, media_type="text/event-stream")

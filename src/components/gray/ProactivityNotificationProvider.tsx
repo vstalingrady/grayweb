@@ -110,10 +110,10 @@ export function ProactivityNotificationProvider({ children }: ProactivityNotific
     const session = ensureSession(
       GENERAL_CHAT_SESSION_ID,
       () =>
-        ({
-          scope: "general",
-          messages: [],
-        } as any)
+      ({
+        scope: "general",
+        messages: [],
+      } as any)
     );
     return session.id;
   }, [generalSessionId, ensureSession]);
@@ -217,8 +217,13 @@ export function ProactivityNotificationProvider({ children }: ProactivityNotific
 
         let permission: NotificationPermission | null = Notification.permission;
 
+        // Do not automatically request permission here. 
+        // It should be requested only when the user explicitly enables notifications.
         if (permission === "default") {
-          permission = await requestNotificationPermission();
+          if (process.env.NODE_ENV !== "production") {
+            console.debug("[Proactivity] Permission is default, skipping auto-subscription");
+          }
+          return;
         }
 
         if (permission !== "granted") {
