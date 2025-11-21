@@ -26,11 +26,11 @@ export const metadata: Metadata = {
     template: "%s | Gray",
   },
   description:
-    "Gray: The Compassionate Architect / Proactive Life OS. A proactive AI mentor that helps people maximize their potential by checking in throughout the day, remembering everything about their life, and asking the hard questions they need to hear.",
+    "Your personal accelerator. An AI mentor that checks in throughout the day, remembers your goals, and helps you maximize your potential.",
   openGraph: {
     title: "Gray",
     description:
-      "Gray: The Compassionate Architect / Proactive Life OS. A proactive AI mentor that helps people maximize their potential.",
+      "Your personal accelerator. An AI mentor that checks in throughout the day, remembers your goals, and helps you maximize your potential.",
     siteName: "Gray",
     locale: "en_US",
     type: "website",
@@ -39,7 +39,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Gray",
     description:
-      "Gray: The Compassionate Architect / Proactive Life OS. A proactive AI mentor that helps people maximize their potential.",
+      "Your personal accelerator. An AI mentor that checks in throughout the day, remembers your goals, and helps you maximize your potential.",
   },
   icons: {
     icon: [
