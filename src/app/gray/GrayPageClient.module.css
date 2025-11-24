@@ -8391,7 +8391,7 @@ h1.greeting {
       "Segoe UI",
       sans-serif);
   font-size: 0.95rem;
-  padding: 5px;
+  padding: 12px 0;
   outline: none;
   min-width: 0;
 }
