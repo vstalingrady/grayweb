@@ -2460,12 +2460,14 @@ function GrayPageClientInner({
         {/* Mobile Header - only rendered after hydration to avoid SSR/CSR mismatch */}
         {isMounted && (
           <div className={styles.mobileHeader}>
-            <button
-              className={styles.mobileMenuButton}
-              onClick={() => setIsSidebarExpanded(!isSidebarExpanded)}
-            >
-              <Menu size={24} />
-            </button>
+            {!effectiveIsSidebarExpanded && (
+              <button
+                className={styles.mobileMenuButton}
+                onClick={() => setIsSidebarExpanded(!isSidebarExpanded)}
+              >
+                <Menu size={24} />
+              </button>
+            )}
 
             <div className={styles.mobileHeaderRight}>
               {streakCount > 0 && (
