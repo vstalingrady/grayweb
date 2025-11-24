@@ -49,18 +49,27 @@
 .backdrop {
   position: fixed;
   inset: 0;
-  background: url("https://upload.wikimedia.org/wikipedia/commons/a/a5/Tsunami_by_hokusai_19th_century.jpg") center / cover no-repeat;
+  background:
+    linear-gradient(0deg, rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0.6)),
+    url("https://upload.wikimedia.org/wikipedia/commons/a/a5/Tsunami_by_hokusai_19th_century.jpg") center / cover no-repeat;
   transform: scale(1.05);
-  filter: saturate(0.85) brightness(0.65);
+  filter: saturate(0.85) brightness(0.5);
   pointer-events: none;
 }
 
 .overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.64);
-  pointer-events: auto;
-  z-index: 90;
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .overlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 99;
+    pointer-events: auto;
+  }
 }
 
 .shell {
@@ -87,14 +96,27 @@
 }
 
 .layout[data-mobile-sidebar="true"] .sidebar {
-  position: fixed;
+  position: fixed !important;
   top: 0;
   left: 0;
   bottom: 0;
-  z-index: 100;
+  z-index: 9999 !important;
   width: 0;
   display: none;
   transition: width 0.3s ease;
+}
+
+@media (max-width: 768px) {
+  .sidebar {
+    position: fixed !important;
+    z-index: 50 !important;
+    height: 100%;
+  }
+
+  .sidebar[data-expanded="true"] {
+    width: 320px !important;
+    display: flex !important;
+  }
 }
 
 .layout[data-mobile-sidebar="true"] .sidebar[data-expanded="true"] {
@@ -102,6 +124,8 @@
   width: 100%;
   max-width: 320px;
 }
+
+/* Remove the previous broken overlay on sidebar::before */
 
 .layout[data-mobile-sidebar="true"] .sidebarRail {
   display: none !important;
@@ -131,7 +155,7 @@
   padding: 16px 0 12px;
   width: 72px;
   border-radius: 0;
-  background: rgba(7, 7, 7, 0.96);
+  background: #070707;
   border: 1px solid rgba(255, 255, 255, 0.04);
   border-left: none;
   box-shadow: none;
@@ -302,7 +326,7 @@
   gap: 0;
   padding: 18px clamp(20px, 3.5vw, 30px) 12px;
   border-radius: 0;
-  background: rgba(7, 7, 7, 0.96);
+  background: #070707;
   border: 1px solid rgba(255, 255, 255, 0.04);
   border-left: none;
   width: 100%;
@@ -831,16 +855,35 @@
   justify-content: space-between;
   padding: 12px 16px;
   background: transparent;
-  position: fixed;
+  border-bottom: none;
+  position: absolute;
   top: 0;
   left: 0;
   right: 0;
-  z-index: 50;
+  z-index: 30;
   height: 60px;
+  transition: opacity 0.3s ease, visibility 0.3s ease;
 }
 
 .page[data-mobile-sidebar="true"] .mobileHeader {
   display: flex;
+}
+
+/* Push effect for main content when sidebar is expanded */
+/* Push effect removed for standard overlay behavior */
+.layout[data-mobile-sidebar="true"] .sidebar[data-expanded="true"]~* {
+  transform: none;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Ensure mobile header is pushed too if possible, or just let it be covered/visible */
+/* Since mobile header is outside layout, we can't easily push it with CSS sibling selector from sidebar.
+   But we can target it via the page data attribute */
+.page[data-sidebar-expanded="true"] .mobileHeader {
+  transform: none;
+  opacity: 1;
+  pointer-events: auto;
 }
 
 /* Show mobile header on mobile screens */
@@ -995,16 +1038,18 @@
   line-height: 1.2;
 }
 
+
+
 .mobileChatInputContainer {
   padding: 0;
-  padding-bottom: env(safe-area-inset-bottom);
   position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
+  bottom: 24px;
+  left: 16px;
+  right: 16px;
   background: rgba(10, 10, 10, 0.98);
   z-index: 40;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 24px;
   display: flex;
   justify-content: center;
 }
@@ -8149,7 +8194,8 @@ h1.greeting {
   margin: 0 auto;
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.16);
-  background: #111111;
+  background: rgba(17, 17, 17, 0.72);
+  backdrop-filter: blur(12px);
   padding: 6px 12px;
   position: relative;
   z-index: 1;
@@ -8161,7 +8207,8 @@ h1.greeting {
 }
 
 .layout[data-view="general"] .chatBar {
-  background: #050505;
+  background: rgba(5, 5, 5, 0.72);
+  backdrop-filter: blur(12px);
 }
 
 .layout[data-view="general"] .chatBar:focus-within {
@@ -8936,6 +8983,36 @@ h1.greeting {
   .planBadge {
     display: none;
   }
+
+  /* Hide desktop header and greeting on mobile */
+  .header {
+    display: none !important;
+  }
+
+  .greetingStack {
+    display: none !important;
+  }
+
+  .greetingDate {
+    display: none !important;
+  }
+
+  .greeting {
+    display: none !important;
+  }
+
+  .headerLeft {
+    display: none !important;
+  }
+
+  .headerRight {
+    display: none !important;
+  }
+
+  /* Explicitly hide desktop streak badge on mobile */
+  .headerRight .streakBadge {
+    display: none !important;
+  }
 }
 
 @media (max-width: 768px) {
@@ -8950,9 +9027,13 @@ h1.greeting {
     box-shadow: none !important;
   }
 
-  /* Ensure the chat bar itself doesn't have a background if it's the culprit */
-  .chatBar {
-    background: transparent !important;
+  /* Remove bottom padding on mobile to prevent chat bar from going below screen */
+  .generalChatComposer {
+    padding-bottom: 0;
+  }
+
+  .generalChatBarRow {
+    padding-bottom: 0;
   }
 }
 

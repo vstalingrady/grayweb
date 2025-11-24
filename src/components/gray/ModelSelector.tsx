@@ -94,7 +94,6 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
         type="button"
       >
         <span className={styles.triggerLabel}>
-          <span className={styles.hideOnMobile}>Gray </span>
           {activeOption.label.replace("Gray ", "")}
         </span>
         <ChevronUp

@@ -30,7 +30,7 @@ function GrayWorkspaceHeader({
   return (
     <header className={styles.header}>
       {children ? <div className={styles.headerLeft}>{children}</div> : null}
-      <div className={styles.headerRight}>
+      <div className={`${styles.headerRight} hidden md:flex`}>
         <button
           type="button"
           className={styles.planBadge}

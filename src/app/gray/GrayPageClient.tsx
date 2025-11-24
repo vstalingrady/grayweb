@@ -1,10 +1,11 @@
 "use client";
 
+// Force HMR update
 import { usePathname, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 // Icons used directly in this component's JSX
-import { Menu, Paperclip, Zap, ArrowUpRight, LoaderCircle } from "lucide-react";
+import { Menu, Zap } from "lucide-react";
 import { useUser } from "@/contexts/UserContext";
 import {
   apiService,
@@ -38,6 +39,7 @@ import {
   normalizeConversationIdValue,
   type ChatSession,
   type GrayReminderCreatedPayload,
+  buildGeneralConversationId,
 } from "@/components/gray/ChatProvider";
 import { DEFAULT_HISTORY_SECTIONS } from "@/components/gray/historySeed";
 import {
@@ -224,9 +226,10 @@ function GrayPageClientInner({
       return;
     }
     const host = window.location.host.toLowerCase();
-    const isAllowedHost = host === "gray.localhost:3000";
-    const isRootPath = pathname === "/";
-    setIsWorkspaceBackgroundAllowed(isAllowedHost && isRootPath);
+    const allowedHosts = ["gray.localhost:3000", "gray.alignment.id", "alignment.id"];
+    const isAllowedHost = allowedHosts.includes(host) || host.endsWith(".alignment.id");
+    const isWorkspacePath = pathname === "/" || pathname.startsWith("/gray");
+    setIsWorkspaceBackgroundAllowed(isAllowedHost && isWorkspacePath);
   }, [pathname]);
 
   // Include reminderPlans in derivedPlans so they appear in the pulse
@@ -322,7 +325,7 @@ function GrayPageClientInner({
     const handleResize = () => {
       const width = window.innerWidth || 0;
       const hasCoarsePointer = window.matchMedia("(pointer: coarse)").matches;
-      const shouldCollapseSidebar = width <= 768 || (hasCoarsePointer && width <= 1024);
+      const shouldCollapseSidebar = width <= 768;
 
       setIsMobileViewport(shouldCollapseSidebar);
 
@@ -358,12 +361,12 @@ function GrayPageClientInner({
   const [contextUsageSummary, setContextUsageSummary] = useState<ContextUsageSummary | null>(null);
   const [calendarSelectedDate, setCalendarSelectedDate] = useState<Date>(() => new Date(initialTimestamp));
   const [workspaceBackgrounds, setWorkspaceBackgrounds] = useState<WorkspaceBackgroundOption[]>([
-    SOLID_WHITE_BACKGROUND,
     SOLID_BLACK_BACKGROUND,
+    SOLID_WHITE_BACKGROUND,
     GREAT_WAVE_BACKGROUND,
   ]);
   const [workspaceBackgroundId, setWorkspaceBackgroundId] = useState<string>(() =>
-    user?.workspace_background_id ?? GREAT_WAVE_BACKGROUND.id
+    user?.workspace_background_id ?? SOLID_BLACK_BACKGROUND.id
   );
 
 
@@ -378,11 +381,11 @@ function GrayPageClientInner({
   const [workspaceBackgroundsError, setWorkspaceBackgroundsError] = useState<string | null>(null);
 
   const activeWorkspaceBackground = useMemo(() => {
-    const list = workspaceBackgrounds.length > 0 ? workspaceBackgrounds : [GREAT_WAVE_BACKGROUND];
+    const list = workspaceBackgrounds.length > 0 ? workspaceBackgrounds : [SOLID_BLACK_BACKGROUND];
     return list.find((option) => option.id === workspaceBackgroundId) ?? list[0];
   }, [workspaceBackgroundId, workspaceBackgrounds]);
   const workspaceBackdropStyle =
-    activeWorkspaceBackground?.backdropStyle ?? GREAT_WAVE_BACKGROUND.backdropStyle;
+    activeWorkspaceBackground?.backdropStyle ?? SOLID_BLACK_BACKGROUND.backdropStyle;
 
   useEffect(() => {
     ensureSessionRef.current = ensureSession;
@@ -433,7 +436,7 @@ function GrayPageClientInner({
           source: "database" as const,
         }))
         .filter((option) => option.id !== GREAT_WAVE_BACKGROUND.id);
-      setWorkspaceBackgrounds([SOLID_WHITE_BACKGROUND, SOLID_BLACK_BACKGROUND, GREAT_WAVE_BACKGROUND, ...dynamicOptions]);
+      setWorkspaceBackgrounds([SOLID_BLACK_BACKGROUND, SOLID_WHITE_BACKGROUND, GREAT_WAVE_BACKGROUND, ...dynamicOptions]);
     } catch (error) {
       if (isApiNetworkError(error)) {
         if (process.env.NODE_ENV !== "production") {
@@ -444,7 +447,7 @@ function GrayPageClientInner({
         console.error("Failed to load workspace backgrounds:", error);
         setWorkspaceBackgroundsError(error instanceof Error ? error.message : "Failed to load backgrounds");
       }
-      setWorkspaceBackgrounds((current) => (current.length > 0 ? current : [SOLID_WHITE_BACKGROUND, SOLID_BLACK_BACKGROUND, GREAT_WAVE_BACKGROUND]));
+      setWorkspaceBackgrounds((current) => (current.length > 0 ? current : [SOLID_BLACK_BACKGROUND, SOLID_WHITE_BACKGROUND, GREAT_WAVE_BACKGROUND]));
     } finally {
       setWorkspaceBackgroundsLoading(false);
     }
@@ -651,15 +654,25 @@ function GrayPageClientInner({
       return;
     }
 
+    // Use the user-specific general conversation ID if applicable
+    const effectiveConversationId =
+      generalSessionId === GENERAL_CHAT_SESSION_ID && userId
+        ? buildGeneralConversationId(userId)
+        : generalSessionId;
+
+    if (!effectiveConversationId) {
+      return;
+    }
+
     // Avoid refetching if we already have usage for this conversation
-    if (contextUsageSummary?.conversationId === generalSessionId) {
+    if (contextUsageSummary?.conversationId === effectiveConversationId) {
       return;
     }
 
     let cancelled = false;
 
     apiService
-      .getConversationUsage(generalSessionId)
+      .getConversationUsage(effectiveConversationId)
       .then((usage) => {
         if (!usage || cancelled) {
           return;
@@ -687,7 +700,7 @@ function GrayPageClientInner({
     return () => {
       cancelled = true;
     };
-  }, [isPersonalizationOpen, generalSessionId, contextUsageSummary?.conversationId]);
+  }, [isPersonalizationOpen, generalSessionId, contextUsageSummary?.conversationId, userId]);
 
   const renderMainSurface = () => {
     if (viewMode === "general" && activeNav !== "reference") {
@@ -702,7 +715,9 @@ function GrayPageClientInner({
             planLabel={viewerPlanLabel}
             onUpgradeClick={handleUpgradePlan}
           >
-            {renderWorkspaceGreeting()}
+            <div className="hidden md:block">
+              {renderWorkspaceGreeting()}
+            </div>
           </GrayWorkspaceHeader>
           {renderPrimaryView()}
         </div>
@@ -2440,6 +2455,7 @@ function GrayPageClientInner({
         data-workspace-background={Boolean(activeWorkspaceBackground && isWorkspaceBackgroundAllowed)}
         data-dashboard-tab={activeNav === "dashboard" ? dashboardTab : undefined}
         data-mobile-sidebar={effectiveIsMobileViewport ? "true" : "false"}
+        data-sidebar-expanded={effectiveIsSidebarExpanded ? "true" : "false"}
       >
         {/* Mobile Header - only rendered after hydration to avoid SSR/CSR mismatch */}
         {isMounted && (
@@ -2465,13 +2481,7 @@ function GrayPageClientInner({
                 </button>
               )}
 
-              <button className={styles.mobileProfileButton}>
-                {viewerAvatarUrl ? (
-                  <img src={viewerAvatarUrl} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
-                ) : (
-                  <div className={styles.mobileProfileAvatar}>{viewerInitials}</div>
-                )}
-              </button>
+
             </div>
           </div>
         )}
@@ -2491,6 +2501,14 @@ function GrayPageClientInner({
             data-view={viewMode}
             data-mobile-sidebar={effectiveIsMobileViewport ? "true" : "false"}
           >
+            {/* Mobile Sidebar Overlay */}
+            {effectiveIsSidebarExpanded && effectiveIsMobileViewport && (
+              <div
+                className={styles.overlay}
+                onClick={() => setIsSidebarExpanded(false)}
+              />
+            )}
+
             <GrayEnhancedSidebar
               activeNav={activeNav ?? "general"}
               isExpanded={effectiveIsSidebarExpanded}
@@ -2514,12 +2532,7 @@ function GrayPageClientInner({
             />
 
             {/* Mobile Sidebar Overlay */}
-            {effectiveIsSidebarExpanded && effectiveIsMobileViewport && (
-              <div
-                className={styles.overlay}
-                onClick={() => setIsSidebarExpanded(false)}
-              />
-            )}
+
 
             <div
               className={styles.main}
@@ -2539,52 +2552,13 @@ function GrayPageClientInner({
               {isDashboardView ? renderPrimaryView() : renderMainSurface()}
               {viewMode === "general" && activeNav !== "reference" ? (
                 <>
-                  {/* Desktop Chat Input */}
-                  <div className="hidden md:block">
-                    <ChatDraftInput
-                      variant="composer"
-                      onSubmitMessage={handleChatSubmit}
-                      showUnderline={false}
-                      onAddAttachment={openAttachmentPicker}
-                      attachmentTray={generalAttachmentTray}
-                    />
-                  </div>
-
-                  {/* Mobile Chat Input & Suggestions */}
-                  <div className="md:hidden">
-
-                    <div className={styles.mobileChatInputContainer}>
-                      <form
-                        className={styles.mobileChatInput}
-                        onSubmit={(e) => {
-                          e.preventDefault();
-                          const input = e.currentTarget.querySelector('input');
-                          if (input && input.value.trim()) {
-                            handleChatSubmit(input.value, { clear: () => { input.value = ''; }, restore: (v) => { input.value = v; } });
-                          }
-                        }}
-                      >
-                        <button type="button" className={styles.mobileChatActionButton} onClick={openAttachmentPicker}>
-                          <Paperclip size={20} />
-                        </button>
-                        <input
-                          type="text"
-                          placeholder="Ask anything"
-                          className={styles.mobileChatInputField}
-                          disabled={isResponding}
-                        />
-                        <ModelSelector className={styles.mobileModelSelector} />
-                        <button
-                          type="submit"
-                          className={styles.mobileChatActionButton}
-                          data-variant="primary"
-                          disabled={isResponding}
-                        >
-                          {isResponding ? <LoaderCircle size={20} className={styles.chatSpinner} /> : <ArrowUpRight size={20} />}
-                        </button>
-                      </form>
-                    </div>
-                  </div>
+                  <ChatDraftInput
+                    variant="composer"
+                    onSubmitMessage={handleChatSubmit}
+                    showUnderline={false}
+                    onAddAttachment={openAttachmentPicker}
+                    attachmentTray={generalAttachmentTray}
+                  />
 
                   <input
                     ref={attachmentInputRef}

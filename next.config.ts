@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 
+// Force server restart to clear HMR cache
 const rawProxyTarget =
   process.env.API_PROXY_TARGET ||
   process.env.NEXT_PUBLIC_API_URL ||
@@ -16,9 +17,15 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
-  // Enable persistent caching for faster rebuilds
-  webpack: (config, { isServer }) => {
-    // Enable persistent caching for faster rebuilds
+  // Only apply webpack config when not using Turbopack
+  webpack: (config, { isServer, dev, nextRuntime }) => {
+    // Skip webpack config in Turbo mode to avoid conflicts
+    const isTurbo = process.argv.includes('--turbo');
+    if (isTurbo) {
+      return config;
+    }
+
+    // Enable persistent caching for faster rebuilds in webpack mode
     config.cache = {
       type: 'filesystem',
       buildDependencies: {
@@ -32,10 +39,11 @@ const nextConfig: NextConfig = {
     // Keep optimizePackageImports conservative; three.js/@react-three/fiber can
     // break when the optimizer rewrites their entrypoints.
     optimizePackageImports: ['react-icons', 'recharts', 'framer-motion'],
-  },
-  modularizeImports: {
-    'lucide-react': {
-      transform: 'lucide-react/dist/esm/icons/{{kebabCase member}}',
+    // Turbopack-specific optimizations
+    turbo: {
+      rules: {
+        // Configure Turbopack rules if needed
+      },
     },
   },
   // Production optimizations
