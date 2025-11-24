@@ -26,7 +26,11 @@ const TIER_LEVELS: Record<string, number> = {
   pioneer: 2,
 };
 
-export const ModelSelector = memo(() => {
+type ModelSelectorProps = {
+  className?: string;
+};
+
+export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
   const { modelTier, setModelTier } = useChatStore();
   const { user } = useUser();
   const [isOpen, setIsOpen] = useState(false);
@@ -82,7 +86,7 @@ export const ModelSelector = memo(() => {
     <div className={styles.container} ref={containerRef}>
       {/* Trigger Button */}
       <button
-        className={styles.trigger}
+        className={`${styles.trigger} ${className || ""}`}
         onClick={() => setIsOpen(!isOpen)}
         aria-expanded={isOpen}
         aria-haspopup="menu"
@@ -139,7 +143,7 @@ export const ModelSelector = memo(() => {
           {nextTier && (
             <div className={styles.upgradeSection}>
               <div className={styles.upgradeContent}>
-              <div className={styles.upgradeIconWrapper}>
+                <div className={styles.upgradeIconWrapper}>
                   <Rocket size={18} />
                 </div>
                 <div className={styles.upgradeInfo}>

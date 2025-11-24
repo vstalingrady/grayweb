@@ -1059,6 +1059,15 @@
   color: black;
 }
 
+.mobileModelSelector {
+  composes: mobileChatActionButton;
+  width: auto;
+  padding: 0 12px;
+  border-radius: 20px;
+  gap: 6px;
+  font-size: 0.85rem;
+}
+
 .mobileSidebarOverlay {
   display: none;
 }
@@ -8935,6 +8944,7 @@ h1.greeting {
   z-index: 10;
   pointer-events: none;
 }
+
 @media (max-width: 768px) {
   .planBadge {
     display: none;

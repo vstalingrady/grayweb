@@ -3,7 +3,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { ChangeEvent, FormEvent, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Gem, MessageSquarePlus, LayoutDashboard, History, Search, FileText, Menu, Paperclip, Mic, Rocket, Ghost, Zap } from "lucide-react";
+import { Gem, MessageSquarePlus, LayoutDashboard, History, Search, FileText, Menu, Paperclip, Mic, Rocket, Ghost, Zap, ArrowUpRight, Loader2 } from "lucide-react";
 
 import { GrayEnhancedSidebar } from "@/components/gray/EnhancedSidebar";
 import { AddPlanHabitModal } from "@/components/gray/AddPlanHabitModal";
@@ -55,6 +55,7 @@ import {
 } from "@/components/gray/PersonalizationPanel";
 import { useProactivityNotifications } from "@/components/gray/ProactivityNotificationProvider";
 import { GrayChatView } from "@/components/gray/ChatView";
+import { ModelSelector } from "@/components/gray/ModelSelector";
 
 // New Imports for Refactoring
 import { useWorkspaceData } from "@/components/gray/hooks/useWorkspaceData";
@@ -2831,13 +2832,16 @@ function GrayPageClientInner({
                           type="text"
                           placeholder="Ask anything"
                           className={styles.mobileChatInputField}
+                          disabled={isResponding}
                         />
-                        <button type="button" className={styles.mobileChatActionButton} style={{ width: 'auto', padding: '0 12px', borderRadius: '20px', gap: '6px', fontSize: '0.85rem' }}>
-                          <Rocket size={16} />
-                          <span>Auto</span>
-                        </button>
-                        <button type="button" className={styles.mobileChatActionButton} data-variant="primary">
-                          <Mic size={20} />
+                        <ModelSelector className={styles.mobileModelSelector} />
+                        <button
+                          type="submit"
+                          className={styles.mobileChatActionButton}
+                          data-variant="primary"
+                          disabled={isResponding}
+                        >
+                          {isResponding ? <Loader2 size={20} className={styles.chatSpinner} /> : <ArrowUpRight size={20} />}
                         </button>
                       </form>
                     </div>
