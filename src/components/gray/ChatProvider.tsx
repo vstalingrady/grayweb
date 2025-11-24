@@ -1361,9 +1361,9 @@ const loadStoredSessions = (
 };
 
 const mapApiMessagesToChatMessages = (
-  history: { role: string; text: string; grounding_metadata?: GroundingMetadata | null; groundingMetadata?: GroundingMetadata | null }[],
+  history: { role: string; text: string; timestamp?: number; grounding_metadata?: GroundingMetadata | null; groundingMetadata?: GroundingMetadata | null }[],
   conversationId: string,
-  timestamp: number = Date.now()
+  fallbackTimestamp: number = Date.now()
 ): ChatMessage[] => {
   // Deduplicate consecutive identical backend messages to keep the
   // rendered history tidy.
@@ -1388,14 +1388,19 @@ const mapApiMessagesToChatMessages = (
       message.groundingMetadata ??
       null;
 
+    // Use the message's own timestamp if available, otherwise fall back to the provided timestamp
+    const messageTimestamp = typeof message.timestamp === 'number' && Number.isFinite(message.timestamp)
+      ? message.timestamp
+      : fallbackTimestamp;
+
     return {
       id:
         typeof crypto !== "undefined" && "randomUUID" in crypto
           ? crypto.randomUUID()
-          : `${conversationId}-${index}-${timestamp}`,
+          : `${conversationId}-${index}-${messageTimestamp}`,
       role,
       content: reminderExtraction.cleanText,
-      createdAt: timestamp,
+      createdAt: messageTimestamp,
       reminders:
         role === "assistant" && reminderExtraction.reminders.length
           ? reminderExtraction.reminders
@@ -3520,7 +3525,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       generalGreeting: generalGreetingRef.current
     });
 
-    if (isNotPersonalized && (isChatEmpty || !user.has_seen_general_chat)) {
+    if (!user.has_seen_general_chat) {
       console.log('[ChatProvider] Triggering "First Contact" onboarding flow');
       setShowIntro(true);
     }

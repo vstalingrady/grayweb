@@ -32,7 +32,8 @@ from urllib.parse import urlparse
 # Enhanced logging imports
 from logging_config import (
     setup_logging, create_logger, set_request_context, clear_request_context,
-    RequestLoggingMiddleware, log_performance, log_database_query, log_api_call
+    RequestLoggingMiddleware, log_performance, log_database_query, log_api_call,
+    get_log_level
 )
 from google_calendar import (
     GoogleCalendarCredentials,
@@ -74,7 +75,7 @@ load_dotenv(ROOT_DIR / ".env")
 
 # Initialize enhanced logging system
 app_logger = setup_logging(
-    log_level=logging.INFO,
+    log_level=get_log_level(),
     enable_console=True,
     enable_file=True,
     structured_format=os.getenv("ENVIRONMENT") == "production"
@@ -1238,9 +1239,23 @@ def _ensure_supabase_chat_tables(supabase_url: Optional[str]) -> None:
     if not project_ref or not password:
         return
 
-    dsn = f"postgresql://postgres:{password}@db.{project_ref}.supabase.co:5432/postgres"
+    host = f"db.{project_ref}.supabase.co"
+    dsn = f"postgresql://postgres:{password}@{host}:5432/postgres"
+    
+    connect_args = {"connect_timeout": 4}
     try:
-        conn = psycopg2.connect(dsn, connect_timeout=4)
+        # Force IPv4 resolution to avoid "Network is unreachable" on IPv6 failures
+        # Use getaddrinfo to specifically request IPv4 (AF_INET)
+        addr_info = socket.getaddrinfo(host, 5432, socket.AF_INET)
+        if addr_info:
+            # sockaddr is (ip, port) for AF_INET
+            ip_address = addr_info[0][4][0]
+            connect_args["hostaddr"] = ip_address
+    except Exception as e:
+        print(f"Warning: Failed to resolve IPv4 for Supabase host: {e}")
+
+    try:
+        conn = psycopg2.connect(dsn, **connect_args)
         conn.autocommit = True
     except Exception as exc:
         print(f"Warning: Skipping Supabase chat schema check (connection failed): {exc}")
@@ -1373,7 +1388,7 @@ def _load_general_conversation_history(user_id: int) -> List[Dict[str, Any]]:
         except Exception:
             pass
 
-        query = supabase.table("general_chat_messages").select("role, content, grounding_metadata").eq("user_id", user_id)
+        query = supabase.table("general_chat_messages").select("role, content, grounding_metadata, created_at").eq("user_id", user_id)
 
         if is_restricted:
             cutoff = datetime.utcnow() - timedelta(days=14)
@@ -1396,6 +1411,18 @@ def _load_general_conversation_history(user_id: int) -> List[Dict[str, Any]]:
         grounding_metadata = row.get("grounding_metadata")
         if grounding_metadata is not None:
             entry["grounding_metadata"] = grounding_metadata
+        
+        created_at = row.get("created_at")
+        if created_at is not None:
+            from dateutil import parser as dateutil_parser
+            try:
+                # Parse the ISO timestamp and convert to milliseconds since epoch
+                dt = dateutil_parser.isoparse(created_at)
+                timestamp_ms = int(dt.timestamp() * 1000)
+                entry["timestamp"] = timestamp_ms
+            except Exception:
+                pass
+        
         history.append(entry)
     return history
 
@@ -1786,10 +1813,28 @@ async def _connect_database():
 async def _disconnect_database():
     """Disconnect from the database on shutdown."""
     try:
-        await database.disconnect()
+        if proactivity_scheduler:
+            await proactivity_scheduler.shutdown(timeout=10.0)
+            app_logger.info("Proactivity scheduler shut down", extra={
+                "event_type": "proactivity_scheduler_shutdown"
+            })
+    except Exception as e:
+        app_logger.warning(
+            f"Proactivity scheduler shutdown failed: {e}",
+            exc_info=True,
+            extra={"event_type": "proactivity_scheduler_shutdown_failed", "error": str(e)},
+        )
+
+    try:
+        await wait_for(database.disconnect(), timeout=10.0)
         db_logger.info("Database connection closed via shutdown event", extra={
             "event_type": "database_disconnected_shutdown"
         })
+    except TimeoutError:
+        db_logger.warning(
+            "Timed out disconnecting database; asyncpg pool may still be closing",
+            extra={"event_type": "database_disconnection_timeout"},
+        )
     except Exception as e:
         db_logger.error(
             f"Database disconnection failed on shutdown: {e}",
@@ -2517,7 +2562,7 @@ async def _load_conversation_history(conversation_id: str) -> List[Dict[str, Any
   try:
     result = (
       supabase.table("user_chat_messages")
-      .select("role, text, grounding_metadata, attachments")
+      .select("role, text, grounding_metadata, attachments, created_at")
       .eq("thread_id", conversation_id)
       .order("created_at", desc=False)
       .execute()
@@ -2538,6 +2583,16 @@ async def _load_conversation_history(conversation_id: str) -> List[Dict[str, Any
       attachments = row.get("attachments")
       if attachments is not None:
         entry["attachments"] = attachments
+      created_at = row.get("created_at")
+      if created_at is not None:
+        from dateutil import parser as dateutil_parser
+        try:
+          # Parse the ISO timestamp and convert to milliseconds since epoch
+          dt = dateutil_parser.isoparse(created_at)
+          timestamp_ms = int(dt.timestamp() * 1000)
+          entry["timestamp"] = timestamp_ms
+        except Exception:
+          pass
       history.append(entry)
     return history
   except Exception as error:
@@ -4903,6 +4958,58 @@ async def get_conversation_usage(conversation_id: str):
             # Average English word ~= 1.3 tokens, average word ~= 5 chars
             total_chars = sum(len(msg.get("text", "")) for msg in history)
             total_tokens = int(total_chars / 3.8)  # More accurate than /4
+
+        async def _count_tokens_with_gemini(messages: List[Dict[str, Any]]) -> Optional[int]:
+            """Use the official Gemini token counter when available."""
+            client = getattr(GEMINI_SERVICE, "_client", None)
+            if not GEMINI_SERVICE.available or client is None:
+                return None
+
+            model_for_count = (
+                os.getenv("GEMINI_TOKEN_COUNT_MODEL")
+                or os.getenv("GEMINI_DEFAULT_MODEL")
+                or getattr(GEMINI_SERVICE, "default_model", None)
+                or "models/gemini-3-pro"
+            )
+
+            contents: List[types.Content] = []
+            for message in messages:
+                text = message.get("text")
+                if not text:
+                    continue
+                role = "user" if message.get("role") == "user" else "model"
+                contents.append(types.Content(role=role, parts=[types.Part(text=text)]))
+
+            if not contents:
+                return 0
+
+            try:
+                response = await client.aio.models.count_tokens(
+                    model=model_for_count,
+                    contents=contents,
+                )
+                token_total = None
+                if isinstance(response, dict):
+                    token_total = response.get("total_tokens") or response.get("total_token_count")
+                elif isinstance(response, (int, float)):
+                    token_total = int(response)
+                else:
+                    token_total = getattr(response, "total_tokens", None) or getattr(
+                        response, "total_token_count", None
+                    )
+                if token_total is None:
+                    return None
+                return int(token_total)
+            except Exception as token_error:
+                app_logger.warning(
+                    "Gemini token counting failed",
+                    extra={"error": str(token_error), "model": model_for_count},
+                )
+                return None
+
+        gemini_tokens = await _count_tokens_with_gemini(history)
+        if gemini_tokens is not None:
+            total_tokens = gemini_tokens
         
         # Determine context limit based on user tier
         # Extract user_id from conversation to lookup tier
@@ -4972,6 +5079,13 @@ async def get_conversation_usage(conversation_id: str):
         # Get provider info from environment
         provider = os.getenv("AI_PROVIDER", "gemini")
         model_name = os.getenv("AI_MODEL_NAME", None)
+        if gemini_tokens is not None and not model_name:
+            model_name = (
+                os.getenv("GEMINI_TOKEN_COUNT_MODEL")
+                or os.getenv("GEMINI_DEFAULT_MODEL")
+                or getattr(GEMINI_SERVICE, "default_model", None)
+                or "models/gemini-3-pro"
+            )
         
         return {
             "conversation_id": conversation_id,

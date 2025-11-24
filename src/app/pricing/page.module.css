@@ -9,7 +9,7 @@
       sans-serif);
   box-sizing: border-box;
   overflow-x: hidden;
-  overflow: hidden;
+  overflow-y: auto;
   z-index: 40;
   display: flex;
 }
@@ -91,7 +91,7 @@
   padding: clamp(0.75rem, 3vh, 1.75rem) clamp(1rem, 3vw, 2.5rem);
   display: flex;
   justify-content: center;
-  align-items: center;
+  align-items: flex-start;
 }
 
 .inner {
@@ -175,7 +175,7 @@
 .planGrid {
   display: grid;
   gap: clamp(1rem, 2vw, 2rem);
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
   max-width: 1200px;
   margin: 0 auto;
   align-items: stretch;
@@ -401,6 +401,10 @@
     min-height: 100vh;
     overflow-y: auto;
   }
+
+  .planGrid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 640px) {
@@ -410,5 +414,9 @@
 
   .billingToggle button {
     padding: 0.45rem 1rem;
+  }
+
+  .planGrid {
+    grid-template-columns: 1fr;
   }
 }

@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { LoaderCircle } from "lucide-react";
 import { FaDiscord, FaGoogle } from "react-icons/fa6";
 import ShaderBackground from "@/components/shaders/ShaderBackground";
 import { getSupabaseClient } from "@/lib/supabaseClient";
@@ -481,11 +481,10 @@ export default function LoginForm({ initialMode = "signin" }: LoginFormProps) {
       ? null
       : (
         <p
-          className={`${styles.authFeedback} ${
-            message.type === "success"
-              ? styles.authFeedbackSuccess
-              : styles.authFeedbackError
-          }`}
+          className={`${styles.authFeedback} ${message.type === "success"
+            ? styles.authFeedbackSuccess
+            : styles.authFeedbackError
+            }`}
         >
           {message.text}
         </p>
@@ -636,33 +635,33 @@ export default function LoginForm({ initialMode = "signin" }: LoginFormProps) {
 
               {renderedMessage}
 
-            <button
-              type="submit"
-              className={styles.authSubmit}
-              disabled={loading}
-            >
-              {loading ? (
-                <Loader2 size={18} className={styles.authSpinner} />
-              ) : (
-                submitLabel
-              )}
-            </button>
-          </form>
+              <button
+                type="submit"
+                className={styles.authSubmit}
+                disabled={loading}
+              >
+                {loading ? (
+                  <LoaderCircle size={18} className={styles.authSpinner} />
+                ) : (
+                  submitLabel
+                )}
+              </button>
+            </form>
 
-          <div className={styles.authFooter}>
-            <span className={styles.authFooterPrompt}>{footerPrompt}</span>
-            <button
-              type="button"
-              className={styles.authFooterLink}
-              onClick={handleModeToggle}
-              disabled={loading}
-            >
-              {footerAction}
-            </button>
+            <div className={styles.authFooter}>
+              <span className={styles.authFooterPrompt}>{footerPrompt}</span>
+              <button
+                type="button"
+                className={styles.authFooterLink}
+                onClick={handleModeToggle}
+                disabled={loading}
+              >
+                {footerAction}
+              </button>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      </div>
     </div>
-  </div>
   );
 }

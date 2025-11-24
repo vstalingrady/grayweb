@@ -4,6 +4,7 @@ import "katex/dist/katex.min.css";
 import ApiNetworkErrorHandler from "@/components/ApiNetworkErrorHandler";
 import { readServerSession } from "@/lib/auth/server";
 import { GrayProviders } from "@/components/GrayProviders";
+import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
 
 const resolveMetadataBase = (): URL | undefined => {
   const candidate =
@@ -145,6 +146,23 @@ export default async function RootLayout({
     <html lang="en">
       <head>
         <script dangerouslySetInnerHTML={{ __html: reactDevtoolsHotfix }} />
+
+        {/* PWA Manifest */}
+        <link rel="manifest" href="/manifest.json" />
+
+        {/* Mobile Web App Meta Tags */}
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-title" content="Gray" />
+
+        {/* Theme Color for Address Bar */}
+        <meta name="theme-color" content="#0a0a0a" media="(prefers-color-scheme: dark)" />
+        <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+
+        {/* Apple Touch Icons */}
+        <link rel="apple-touch-icon" href="/grayai.png" />
+
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link
@@ -154,6 +172,7 @@ export default async function RootLayout({
       </head>
       <body>
         <GrayProviders viewerEmail={session?.email ?? null}>
+          <ServiceWorkerRegister />
           <ApiNetworkErrorHandler />
           <svg style={{ display: "none" }} aria-hidden focusable="false">
             <filter id="grainy-noise">

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useCallback } from "react";
-import { Search, Upload, FileText, Loader2, X, CheckCircle2, AlertCircle } from "lucide-react";
+import { Search, Upload, FileText, LoaderCircle, X, CheckCircle2, AlertCircle } from "lucide-react";
 import { apiService } from "@/lib/api";
 import { useUser } from "@/contexts/UserContext";
 
@@ -141,7 +141,7 @@ export function ReferenceView() {
             title="Upload Files"
           >
             {isUploading ? (
-              <Loader2 size={20} className="animate-spin" />
+              <LoaderCircle size={20} className="animate-spin" />
             ) : (
               <Upload size={20} />
             )}
@@ -172,10 +172,10 @@ export function ReferenceView() {
                   {/* Status Icon */}
                   <div className="flex-shrink-0">
                     {doc.status === 'uploading' && (
-                      <Loader2 size={20} className="text-blue-400 animate-spin" />
+                      <LoaderCircle size={20} className="text-blue-400 animate-spin" />
                     )}
                     {doc.status === 'processing' && (
-                      <Loader2 size={20} className="text-yellow-400 animate-spin" />
+                      <LoaderCircle size={20} className="text-yellow-400 animate-spin" />
                     )}
                     {doc.status === 'ready' && (
                       <CheckCircle2 size={20} className="text-green-400" />

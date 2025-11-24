@@ -1,6 +1,6 @@
 
 import { useMemo, useCallback, useState, useEffect, type CSSProperties } from "react";
-import { CheckSquare, Square, Flame, Trash2, ChevronDown, Clock, Edit3, MessageCircle, LayoutDashboard, History, Search, ChevronsRight, LifeBuoy, LogOut, Monitor, Moon, Palette, Plus, Settings, Sun, X } from "lucide-react";
+import { CheckSquare, Square, Zap, Trash2, ChevronDown, Clock, Edit3, MessageCircle, LayoutDashboard, History, Search, ChevronsRight, LifeBuoy, LogOut, Monitor, Moon, Palette, Plus, Settings, Sun, X } from "lucide-react";
 import styles from "./GrayDashboard.module.css";
 
 
@@ -236,101 +236,101 @@ function PulseCard({
             <header className={styles["gray-pulse__column-header"]}>
               <h4>{group.title}</h4>
             </header>
-              <ul className={styles["gray-pulse__list"]}>
-                {group.items.map((item) => {
-                  const checkboxClasses = [styles["gray-pulse__checkbox"], styles[`gray-pulse__checkbox--${group.key}`]]
-                    .filter(Boolean)
-                    .join(" ");
-                  const hasStreak = group.key === "habits" && Boolean(item.streakId);
-                  const streakId = item.streakId ?? "";
-                  const currentStreak = hasStreak ? streakMap.get(streakId) : undefined;
-                  const currentStreakCount = currentStreak?.count ?? 0;
-                  const currentStreakLabel = `${currentStreakCount} day${currentStreakCount === 1 ? "" : "s"}`;
-                  const streakHistoryRecords = hasStreak ? streakHistoryMap?.get(streakId) ?? [] : [];
-                  const previousStreaks = hasStreak
-                    ? streakHistoryRecords
-                        .filter((record) => record.entryId !== entry.id && record.order > entryOrder)
-                        .sort((a, b) => a.order - b.order)
-                    : [];
-                  const previousSummary =
-                    hasStreak && previousStreaks.length > 0
-                      ? `Prev: ${previousStreaks
-                          .slice(0, 3)
-                          .map(
-                            (record) =>
-                              `${record.entryLabel} — ${record.count} day${record.count === 1 ? "" : "s"}`
-                          )
-                          .join(" • ")}`
-                      : "";
-                  const streakPill = hasStreak ? (
-                    <span className={`${styles["gray-pulse__streak-pill"]} ${styles[`gray-pulse__streak-pill--${group.key}`]}`}>
-                      <Flame size={14} strokeWidth={1.5} aria-hidden="true" />
-                      <span>{currentStreakLabel}</span>
-                    </span>
-                  ) : null;
+            <ul className={styles["gray-pulse__list"]}>
+              {group.items.map((item) => {
+                const checkboxClasses = [styles["gray-pulse__checkbox"], styles[`gray-pulse__checkbox--${group.key}`]]
+                  .filter(Boolean)
+                  .join(" ");
+                const hasStreak = group.key === "habits" && Boolean(item.streakId);
+                const streakId = item.streakId ?? "";
+                const currentStreak = hasStreak ? streakMap.get(streakId) : undefined;
+                const currentStreakCount = currentStreak?.count ?? 0;
+                const currentStreakLabel = `${currentStreakCount} day${currentStreakCount === 1 ? "" : "s"}`;
+                const streakHistoryRecords = hasStreak ? streakHistoryMap?.get(streakId) ?? [] : [];
+                const previousStreaks = hasStreak
+                  ? streakHistoryRecords
+                    .filter((record) => record.entryId !== entry.id && record.order > entryOrder)
+                    .sort((a, b) => a.order - b.order)
+                  : [];
+                const previousSummary =
+                  hasStreak && previousStreaks.length > 0
+                    ? `Prev: ${previousStreaks
+                      .slice(0, 3)
+                      .map(
+                        (record) =>
+                          `${record.entryLabel} — ${record.count} day${record.count === 1 ? "" : "s"}`
+                      )
+                      .join(" • ")}`
+                    : "";
+                const streakPill = hasStreak ? (
+                  <span className={`${styles["gray-pulse__streak-pill"]} ${styles[`gray-pulse__streak-pill--${group.key}`]}`}>
+                    <Zap size={14} strokeWidth={1.5} aria-hidden="true" />
+                    <span>{currentStreakLabel}</span>
+                  </span>
+                ) : null;
 
-                  return (
-                    <li key={item.id} className={`${styles["gray-pulse__list-item"]} ${item.complete ? styles["is-complete"] : ""}`}>
-                      <label className={styles["gray-pulse__list-label"]}>
-                        <span className={checkboxClasses}>
-                          <input
-                            type="checkbox"
-                            checked={Boolean(item.complete)}
-                            onChange={() => handleToggleItem(group.key, item.id)}
-                            disabled={!isInteractive}
-                            aria-label={`${group.title} item ${item.text}`}
-                          />
-                          <span className={styles["gray-pulse__checkbox-indicator"]} aria-hidden />
+                return (
+                  <li key={item.id} className={`${styles["gray-pulse__list-item"]} ${item.complete ? styles["is-complete"] : ""}`}>
+                    <label className={styles["gray-pulse__list-label"]}>
+                      <span className={checkboxClasses}>
+                        <input
+                          type="checkbox"
+                          checked={Boolean(item.complete)}
+                          onChange={() => handleToggleItem(group.key, item.id)}
+                          disabled={!isInteractive}
+                          aria-label={`${group.title} item ${item.text}`}
+                        />
+                        <span className={styles["gray-pulse__checkbox-indicator"]} aria-hidden />
+                      </span>
+                      <span className={styles["gray-pulse__list-text"]}>
+                        <span className={styles["gray-pulse__list-line"]}>
+                          <span className={styles["gray-pulse__list-line-text"]}>{item.text}</span>
                         </span>
-                        <span className={styles["gray-pulse__list-text"]}>
-                          <span className={styles["gray-pulse__list-line"]}>
-                            <span className={styles["gray-pulse__list-line-text"]}>{item.text}</span>
-                          </span>
-                          {previousSummary ? (
-                            <span className={styles["gray-pulse__streak-history"]}>{previousSummary}</span>
-                          ) : null}
-                          {item.note ? <span className={styles["gray-pulse__list-note"]}>{item.note}</span> : null}
-                        </span>
-                      </label>
-                      {(streakPill || isInteractive) && (
-                        <div className={styles["gray-pulse__list-trailing"]}>
-                          {streakPill}
-                          {isInteractive ? (
-                            <div className={styles["gray-pulse__list-actions"]}>
-                              <button
-                                type="button"
-                                className={styles["gray-pulse__list-action"]}
-                                onClick={() => handleEditItem(group.key, item)}
-                                aria-label={`Edit ${group.title} item ${item.text}`}
-                              >
-                                <Edit3 size={16} strokeWidth={1.7} />
-                              </button>
-                              <button
-                                type="button"
-                                className={`${styles["gray-pulse__list-action"]} ${styles["gray-pulse__list-action--remove"]}`}
-                                onClick={() => handleRemoveItem(group.key, item.id)}
-                                aria-label={`Remove ${group.title} item ${item.text}`}
-                              >
-                                <Trash2 size={16} strokeWidth={1.7} />
-                              </button>
-                            </div>
-                          ) : null}
-                        </div>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
-              <button
-                type="button"
-                className={styles["gray-pulse__add-button"]}
-                onClick={() => handleAddItem(group.key)}
-                disabled={!isInteractive}
-              >
-                {group.addLabel}
-              </button>
-            </section>
-          ))}
+                        {previousSummary ? (
+                          <span className={styles["gray-pulse__streak-history"]}>{previousSummary}</span>
+                        ) : null}
+                        {item.note ? <span className={styles["gray-pulse__list-note"]}>{item.note}</span> : null}
+                      </span>
+                    </label>
+                    {(streakPill || isInteractive) && (
+                      <div className={styles["gray-pulse__list-trailing"]}>
+                        {streakPill}
+                        {isInteractive ? (
+                          <div className={styles["gray-pulse__list-actions"]}>
+                            <button
+                              type="button"
+                              className={styles["gray-pulse__list-action"]}
+                              onClick={() => handleEditItem(group.key, item)}
+                              aria-label={`Edit ${group.title} item ${item.text}`}
+                            >
+                              <Edit3 size={16} strokeWidth={1.7} />
+                            </button>
+                            <button
+                              type="button"
+                              className={`${styles["gray-pulse__list-action"]} ${styles["gray-pulse__list-action--remove"]}`}
+                              onClick={() => handleRemoveItem(group.key, item.id)}
+                              aria-label={`Remove ${group.title} item ${item.text}`}
+                            >
+                              <Trash2 size={16} strokeWidth={1.7} />
+                            </button>
+                          </div>
+                        ) : null}
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+            <button
+              type="button"
+              className={styles["gray-pulse__add-button"]}
+              onClick={() => handleAddItem(group.key)}
+              disabled={!isInteractive}
+            >
+              {group.addLabel}
+            </button>
+          </section>
+        ))}
         {showProactivity ? (
           <section className={`${styles["gray-pulse__column"]} ${styles["gray-pulse__column--proactivity"]}`} aria-label="Proactivity">
             <header className={styles["gray-pulse__column-header"]}>

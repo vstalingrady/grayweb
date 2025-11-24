@@ -1,4 +1,4 @@
-import { Flame } from "lucide-react";
+import { Zap } from "lucide-react";
 import styles from "@/app/gray/GrayPageClient.module.css";
 import calendarStyles from "@/components/calendar/GrayDashboardCalendar.module.css";
 import { ViewModeSelect } from "./ViewModeSelect";
@@ -120,7 +120,7 @@ export function DashboardHeader({
       <div className={calendarStyles.calendarSurfaceHeaderRight}>
         {normalizedStreak > 0 ? (
           <div className={styles.streakBadge} aria-label={`${normalizedStreak} day streak`}>
-            <Flame size={12} />
+            <Zap size={12} />
             <span>{normalizedStreak}</span>
           </div>
         ) : null}

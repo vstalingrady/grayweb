@@ -32,7 +32,6 @@
     width: clamp(150px, 22vw, 260px);
     aspect-ratio: 1;
     margin: 0 auto 2.5rem;
-    animation: logoFloat 5s ease-in-out infinite;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -42,14 +41,9 @@
     position: absolute;
     inset: 0;
     border-radius: 32%;
-    background:
-        conic-gradient(from 160deg,
-            rgba(120, 174, 255, 0.22),
-            rgba(255, 214, 185, 0.16),
-            rgba(120, 174, 255, 0.22),
-            rgba(90, 124, 210, 0.16));
-    filter: blur(26px);
-    opacity: 0.75;
+    background: transparent;
+    filter: none;
+    opacity: 0;
     pointer-events: none;
 }
 

@@ -2,14 +2,9 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
-import { ChangeEvent, FormEvent, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Gem, MessageSquarePlus, LayoutDashboard, History, Search, FileText, Menu, Paperclip, Mic, Rocket, Ghost, Zap, ArrowUpRight, Loader2 } from "lucide-react";
-
-import { GrayEnhancedSidebar } from "@/components/gray/EnhancedSidebar";
-import { AddPlanHabitModal } from "@/components/gray/AddPlanHabitModal";
-import { GrayChatBar, type GrayChatBarProps } from "@/components/gray/ChatBar";
-import { GrayChatComposer } from "@/components/gray/ChatComposer";
-import AttachmentTray from "@/components/gray/AttachmentTray";
+import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+// Icons used directly in this component's JSX
+import { Menu, Paperclip, Zap, ArrowUpRight, LoaderCircle } from "lucide-react";
 import { useUser } from "@/contexts/UserContext";
 import {
   apiService,
@@ -45,7 +40,6 @@ import {
   type GrayReminderCreatedPayload,
 } from "@/components/gray/ChatProvider";
 import { DEFAULT_HISTORY_SECTIONS } from "@/components/gray/historySeed";
-import { GrayWorkspaceHeader } from "@/components/gray/WorkspaceHeader";
 import {
   type WorkspaceBackgroundOption,
   type WorkspaceBackgroundDraft,
@@ -54,8 +48,6 @@ import {
   SOLID_BLACK_BACKGROUND,
 } from "@/components/gray/PersonalizationPanel";
 import { useProactivityNotifications } from "@/components/gray/ProactivityNotificationProvider";
-import { GrayChatView } from "@/components/gray/ChatView";
-import { ModelSelector } from "@/components/gray/ModelSelector";
 
 // New Imports for Refactoring
 import { useWorkspaceData } from "@/components/gray/hooks/useWorkspaceData";
@@ -63,7 +55,66 @@ import { useProactivity } from "@/components/gray/hooks/useProactivity";
 import { usePulse } from "@/components/gray/hooks/usePulse";
 import { sanitizeEventColor, DEFAULT_EVENT_COLOR, REMINDER_RETENTION_WINDOW_MS } from "./constants";
 import { toDateKey, normalizeProactivityTimes, primaryProactivityTime, normalizeProactivityChannels } from "./utils";
-import { MobileSuggestionCards } from "@/components/gray/MobileSuggestionCards";
+// Type-only import
+import type { ChatDraftControls } from "@/components/gray/ChatDraftInput";
+import {
+  buildGeneralChatSession,
+  deriveReminderScheduleIso,
+  buildReminderEventKey,
+  buildCalendarEventFromReminder,
+  shouldIncludeCalendarReminder,
+  isGenericSessionTitle,
+  derivePlanTierLabel,
+  getSessionSeedFingerprint,
+  getReadableSessionTitle,
+  parseReminderPlanId,
+  extractReminderId,
+  deriveInitials,
+  greetingForDate
+} from "@/components/gray/utils/helperFunctions";
+import { SIDEBAR_EXPANDED_STORAGE_KEY, HISTORY_DUPLICATE_WINDOW_MS, REMINDER_PLAN_ID_PREFIX } from "@/components/gray/utils/constants";
+import { SIDEBAR_ITEMS, SIDEBAR_RAIL_ITEMS, NAVIGATION_ROUTES } from "@/components/gray/utils/sidebarConfig";
+
+// Lazy load all heavy components for better code splitting
+const GrayEnhancedSidebar = dynamic(
+  () => import("@/components/gray/EnhancedSidebar").then((mod) => mod.GrayEnhancedSidebar),
+  { loading: () => null }
+);
+
+const GrayWorkspaceHeader = dynamic(
+  () => import("@/components/gray/WorkspaceHeader").then((mod) => mod.GrayWorkspaceHeader),
+  { loading: () => null }
+);
+
+const GrayChatView = dynamic(
+  () => import("@/components/gray/ChatView").then((mod) => mod.GrayChatView),
+  { loading: () => null }
+);
+
+const ModelSelector = dynamic(
+  () => import("@/components/gray/ModelSelector").then((mod) => mod.ModelSelector),
+  { loading: () => null }
+);
+
+const ChatDraftInput = dynamic(
+  () => import("@/components/gray/ChatDraftInput").then((mod) => mod.ChatDraftInput),
+  { loading: () => null }
+);
+
+const AttachmentTray = dynamic(
+  () => import("@/components/gray/AttachmentTray"),
+  { loading: () => null }
+);
+
+const AddPlanHabitModal = dynamic(
+  () => import("@/components/gray/AddPlanHabitModal").then((mod) => mod.AddPlanHabitModal),
+  { loading: () => null }
+);
+
+const MobileSuggestionCards = dynamic(
+  () => import("@/components/gray/MobileSuggestionCards").then((mod) => mod.MobileSuggestionCards),
+  { loading: () => null }
+);
 
 const GrayDashboardView = dynamic(
   () => import("@/components/gray/DashboardView").then((mod) => mod.GrayDashboardView),
@@ -98,269 +149,7 @@ const SettingsModal = dynamic(
   { loading: () => null }
 );
 
-const SIDEBAR_EXPANDED_STORAGE_KEY = "gray-sidebar-expanded";
-
-const buildGeneralChatSession = (): ChatSession => ({
-  id: GENERAL_CHAT_SESSION_ID,
-  title: "General Chat",
-  titleMode: "auto",
-  createdAt: Date.now(),
-  updatedAt: Date.now(),
-  messages: [],
-  isResponding: false,
-  scope: "general",
-  conversationId: undefined,
-  pendingAutoStream: false,
-});
-
-const deriveReminderScheduleIso = (reminder: GrayReminderCreatedPayload): string | null => {
-  const reminderRecord = (reminder.data.reminder as Record<string, unknown> | null | undefined) ?? null;
-  if (reminderRecord && typeof reminderRecord["remind_at"] === "string") {
-    return reminderRecord["remind_at"] as string;
-  }
-  if (typeof reminder.data.time_iso === "string" && reminder.data.time_iso.trim().length > 0) {
-    return reminder.data.time_iso.trim();
-  }
-  return null;
-};
-
-const buildReminderEventKey = (reminder: GrayReminderCreatedPayload): string => {
-  const reminderRecord = (reminder.data.reminder as Record<string, unknown> | null | undefined) ?? null;
-  const legacyId =
-    typeof reminderRecord?.["reminder_id"] === "number"
-      ? `${reminderRecord["reminder_id"]}`
-      : typeof reminderRecord?.["reminder_id"] === "string"
-        ? reminderRecord["reminder_id"]
-        : typeof reminderRecord?.["id"] === "number"
-          ? `${reminderRecord["id"]}`
-          : typeof reminderRecord?.["id"] === "string"
-            ? reminderRecord["id"]
-            : undefined;
-
-  const numericId = Number(legacyId);
-  if (!Number.isNaN(numericId) && numericId > 0) {
-    return `${numericId}`;
-  }
-
-  const primaryId = reminder.data.id ?? legacyId ?? reminder.data.label ?? "reminder";
-  const scheduleIso = deriveReminderScheduleIso(reminder) ?? "unscheduled";
-  const source = reminder.source ?? "assistant";
-  return `${source}-${primaryId}-${scheduleIso}`;
-};
-
-const buildCalendarEventFromReminder = (
-  reminder: GrayReminderCreatedPayload,
-  eventKey: string,
-  calendarId: string,
-  color: string
-): CalendarEvent | null => {
-  const scheduleIso = deriveReminderScheduleIso(reminder);
-  if (!scheduleIso) {
-    return null;
-  }
-  const start = new Date(scheduleIso);
-  if (Number.isNaN(start.getTime())) {
-    return null;
-  }
-  const end = new Date(start.getTime() + 60_000);
-  const reminderRecord = (reminder.data.reminder as Record<string, unknown> | null | undefined) ?? null;
-  const rawRecord = (reminder.data.raw as Record<string, unknown> | null | undefined) ?? null;
-
-  // Check for color in metadata
-  let effectiveColor = color;
-  if (reminderRecord && typeof reminderRecord["metadata"] === "object" && reminderRecord["metadata"]) {
-    const metadata = reminderRecord["metadata"] as Record<string, unknown>;
-    if (typeof metadata["color"] === "string" && metadata["color"]) {
-      effectiveColor = metadata["color"];
-    }
-  }
-
-  const summaryCandidate =
-    reminder.data.summary ??
-    (reminderRecord && typeof reminderRecord["description"] === "string"
-      ? reminderRecord["description"]
-      : null) ??
-    (rawRecord && typeof rawRecord["description"] === "string"
-      ? rawRecord["description"]
-      : null);
-  const title = reminder.data.label?.trim() || "Reminder";
-  const description = summaryCandidate ? String(summaryCandidate) : undefined;
-  return {
-    id: `reminder-${eventKey}`,
-    calendarId,
-    title,
-    start,
-    end,
-    color: effectiveColor,
-    entryType: "reminder",
-    description,
-    displayHint: "line",
-  };
-};
-
-const shouldIncludeCalendarReminder = (reminder: Reminder, nowMs: number): boolean => {
-  if (reminder.status === "pending") {
-    return true;
-  }
-  if (reminder.status !== "delivered") {
-    return false;
-  }
-  const remindAt = Date.parse(reminder.remind_at);
-  if (!Number.isFinite(remindAt)) {
-    return false;
-  }
-  return remindAt >= nowMs - REMINDER_RETENTION_WINDOW_MS;
-};
-
-const isGenericSessionTitle = (title: string | null | undefined): boolean => {
-  if (!title) {
-    return true;
-  }
-  const trimmed = title.trim();
-  if (!trimmed) {
-    return true;
-  }
-  const normalized = trimmed.toLowerCase();
-  return normalized === "new chat" || normalized === "conversation start";
-};
-
-const HISTORY_DUPLICATE_WINDOW_MS = 8000;
-
-type PlanCarrierUser = User & { plan_tier?: string | null };
-
-const derivePlanTierLabel = (candidate?: PlanCarrierUser | null): string => {
-  if (!candidate) {
-    return "Scout";
-  }
-  const rawTier = (candidate.plan_tier ?? candidate.role ?? "").trim();
-  if (!rawTier) {
-    return "Scout";
-  }
-  const normalized = rawTier.toLowerCase();
-  if (normalized === "voyager") {
-    return "Voyager";
-  }
-  if (normalized === "pioneer") {
-    return "Pioneer";
-  }
-  const premiumTokens = new Set(["depth", "pro", "premium", "operator", "admin"]);
-  if (premiumTokens.has(normalized)) {
-    return "Depth";
-  }
-  return "Scout";
-};
-
-const getSessionSeedFingerprint = (session: ChatSession): string | null => {
-  if (!session || session.scope !== "thread" || !Array.isArray(session.messages)) {
-    return null;
-  }
-  const seedMessage = session.messages.find(
-    (message) => message.role === "user" && message.content.trim().length > 0
-  );
-  if (!seedMessage) {
-    return null;
-  }
-  return seedMessage.content.trim().toLowerCase();
-};
-
-const getReadableSessionTitle = (session: ChatSession): string => {
-  const title = session.title?.trim();
-  if (title && title.length > 0) {
-    return title;
-  }
-  return "New Chat";
-};
-
-const REMINDER_PLAN_ID_PREFIX = "reminder-";
-
-const parseReminderPlanId = (planId: string): number | null => {
-  if (!planId.startsWith(REMINDER_PLAN_ID_PREFIX)) {
-    return null;
-  }
-  const candidate = planId.slice(REMINDER_PLAN_ID_PREFIX.length);
-  if (!candidate) {
-    return null;
-  }
-  const parsed = Number(candidate);
-  return Number.isNaN(parsed) ? null : parsed;
-};
-
-const extractReminderId = (eventId: string): number | null => {
-  if (!eventId.startsWith("reminder-")) return null;
-  const parts = eventId.split("-");
-  // Expected: reminder-{source}-{id}-{iso}
-  // We assume source doesn't contain hyphens usually, but if it does, we might be in trouble.
-  // However, based on buildReminderEventKey, source is usually 'assistant'.
-  // Let's try to parse the 3rd part (index 2).
-  if (parts.length >= 3) {
-    const candidate = Number(parts[2]);
-    if (!Number.isNaN(candidate)) {
-      return candidate;
-    }
-  }
-  // Fallback: try regex
-  const match = eventId.match(/^reminder-[^-]+-(\d+)-/);
-  if (match) {
-    return Number(match[1]);
-  }
-  return null;
-};
-
-const SIDEBAR_ITEMS: SidebarNavItem[] = [
-  { id: "general", label: "General", icon: Gem },
-  { id: "threads", label: "Threads", icon: MessageSquarePlus },
-  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { id: "reference", label: "Reference", icon: FileText },
-  { id: "history", label: "History", icon: History },
-];
-
-const SIDEBAR_RAIL_ITEMS: SidebarNavItem[] = [
-  { id: "search", label: "Search", icon: Search },
-  ...SIDEBAR_ITEMS,
-];
-
-const NAVIGATION_ROUTES: Partial<Record<SidebarNavKey, string>> = {
-  general: "/g",
-  threads: "/",
-  dashboard: "/dashboard",
-  reference: "/reference",
-  history: "/history",
-};
-
-const deriveInitials = (fullName: string | null | undefined) => {
-  if (!fullName) {
-    return "";
-  }
-
-  const parts = fullName
-    .split(" ")
-    .map((part) => part.trim())
-    .filter(Boolean);
-
-  if (!parts.length) {
-    return "";
-  }
-
-  if (parts.length === 1) {
-    const [first] = parts;
-    return first.slice(0, Math.min(first.length, 2)).toUpperCase();
-  }
-
-  const firstInitial = parts[0][0] ?? "";
-  const lastInitial = parts[parts.length - 1][0] ?? "";
-  return `${firstInitial}${lastInitial}`.toUpperCase();
-};
-
-const greetingForDate = (date: Date) => {
-  const hour = date.getHours();
-  if (hour < 12) {
-    return "morning";
-  }
-  if (hour < 18) {
-    return "afternoon";
-  }
-  return "evening";
-};
+// Helper functions and constants imported from extracted modules
 
 type GrayPageClientProps = {
   initialTimestamp: number;
@@ -370,75 +159,6 @@ type GrayPageClientProps = {
 };
 
 type ViewMode = "general" | "dashboard" | "history" | "chat";
-
-type ChatDraftControls = {
-  clear: () => void;
-  restore: (value: string) => void;
-};
-
-type ChatDraftInputProps = Omit<GrayChatBarProps, "value" | "onChange" | "onSubmit"> & {
-  variant: "composer" | "bar";
-  onSubmitMessage: (draft: string, controls: ChatDraftControls) => void;
-  showUnderline?: boolean;
-  attachmentTray?: ReactNode;
-};
-
-const ChatDraftInput = ({
-  variant,
-  onSubmitMessage,
-  showUnderline = true,
-  attachmentTray,
-  ...rest
-}: ChatDraftInputProps) => {
-  const [value, setValue] = useState("");
-  const clear = useCallback(() => setValue(""), []);
-  const restore = useCallback((nextValue: string) => setValue(nextValue), []);
-  const controls = useMemo(
-    () => ({
-      clear,
-      restore,
-    }),
-    [clear, restore]
-  );
-
-  const handleChange = useCallback((nextValue: string) => {
-    setValue(nextValue);
-  }, []);
-
-  const handleSubmit = useCallback(
-    (event: FormEvent<HTMLFormElement>) => {
-      event.preventDefault();
-      const trimmed = value.trim();
-      if (!trimmed) {
-        return;
-      }
-      onSubmitMessage(trimmed, controls);
-    },
-    [value, controls, onSubmitMessage]
-  );
-
-  if (variant === "composer") {
-    return (
-      <GrayChatComposer
-        {...rest}
-        value={value}
-        onChange={handleChange}
-        onSubmit={handleSubmit}
-        showUnderline={showUnderline}
-        attachmentTray={attachmentTray}
-      />
-    );
-  }
-
-  return (
-    <GrayChatBar
-      {...rest}
-      value={value}
-      onChange={handleChange}
-      onSubmit={handleSubmit}
-    />
-  );
-};
 
 function GrayPageClientInner({
   initialTimestamp,
@@ -2686,7 +2406,7 @@ function GrayPageClientInner({
   const hideChatThinkingIndicator = false;
   const renderWorkspaceGreeting = useCallback(
     () => (
-      <div className={styles.greetingStack}>
+      <div className={`${styles.greetingStack} hidden md:block`}>
         <h1 className={styles.greeting}>{greeting}</h1>
         <p className={styles.greetingDate}>{workspaceDateLabel}</p>
       </div>
@@ -2731,20 +2451,28 @@ function GrayPageClientInner({
               <Menu size={24} />
             </button>
 
-            {isScout && (
-              <button className={styles.upgradePill} onClick={handleUpgradePlan}>
-                <Zap size={14} />
-                <span>Upgrade</span>
-              </button>
-            )}
-
-            <button className={styles.mobileProfileButton}>
-              {viewerAvatarUrl ? (
-                <img src={viewerAvatarUrl} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
-              ) : (
-                <div className={styles.mobileProfileAvatar}>{viewerInitials}</div>
+            <div className={styles.mobileHeaderRight}>
+              {streakCount > 0 && (
+                <div className={styles.streakBadge} aria-label={`${streakCount} day streak`}>
+                  <Zap size={12} />
+                  <span>{streakCount}</span>
+                </div>
               )}
-            </button>
+              {isScout && (
+                <button className={styles.upgradePill} onClick={handleUpgradePlan}>
+                  <Zap size={14} />
+                  <span>Upgrade</span>
+                </button>
+              )}
+
+              <button className={styles.mobileProfileButton}>
+                {viewerAvatarUrl ? (
+                  <img src={viewerAvatarUrl} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
+                ) : (
+                  <div className={styles.mobileProfileAvatar}>{viewerInitials}</div>
+                )}
+              </button>
+            </div>
           </div>
         )}
 
@@ -2852,7 +2580,7 @@ function GrayPageClientInner({
                           data-variant="primary"
                           disabled={isResponding}
                         >
-                          {isResponding ? <Loader2 size={20} className={styles.chatSpinner} /> : <ArrowUpRight size={20} />}
+                          {isResponding ? <LoaderCircle size={20} className={styles.chatSpinner} /> : <ArrowUpRight size={20} />}
                         </button>
                       </form>
                     </div>

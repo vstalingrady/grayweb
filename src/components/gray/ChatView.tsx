@@ -16,7 +16,7 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
-import { Loader2, RefreshCw, Copy, CheckCircle2, Trash2, SignalHigh, CalendarClock, Globe } from "lucide-react";
+import { LoaderCircle, RefreshCw, Copy, CheckCircle2, Trash2, SignalHigh, CalendarClock, Globe } from "lucide-react";
 import ReactMarkdown, { type Components } from "react-markdown";
 // Type definition for code component
 type CodeComponent = any;
@@ -1497,7 +1497,7 @@ const ChatMessagesList = memo(
                           isAssistant ? !isLatestAssistantMessage || isRegenerating : !rawContent.trim()
                         }
                       >
-                        {isAssistant && isRegenerating ? <Loader2 size={15} /> : <RefreshCw size={15} />}
+                        {isAssistant && isRegenerating ? <LoaderCircle size={15} /> : <RefreshCw size={15} />}
                       </button>
                       <button
                         type="button"

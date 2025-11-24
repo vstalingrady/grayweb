@@ -21,8 +21,6 @@ export default async function GeneralWorkspacePage() {
   const loginRedirect = `/login?redirect=${encodeURIComponent(redirectPath)}`;
   const session = await readServerSession();
 
-  console.log('Server: Session data:', session);
-
   if (!session) {
     redirect(loginRedirect);
   }

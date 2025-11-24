@@ -9,15 +9,41 @@ const normalizeProxyTarget = (value: string) => value.replace(/\/+$/, "");
 const proxyTarget = normalizeProxyTarget(rawProxyTarget);
 
 const nextConfig: NextConfig = {
-  output: 'standalone',
+  transpilePackages: ['three', '@react-three/fiber', 'react-reconciler'],
   eslint: {
     ignoreDuringBuilds: true,
   },
   typescript: {
     ignoreBuildErrors: true,
   },
+  // Enable persistent caching for faster rebuilds
+  webpack: (config, { isServer }) => {
+    // Enable persistent caching for faster rebuilds
+    config.cache = {
+      type: 'filesystem',
+      buildDependencies: {
+        config: [__filename],
+      },
+    };
+
+    return config;
+  },
   experimental: {
-    optimizePackageImports: ['lucide-react'],
+    // Keep optimizePackageImports conservative; three.js/@react-three/fiber can
+    // break when the optimizer rewrites their entrypoints.
+    optimizePackageImports: ['react-icons', 'recharts', 'framer-motion'],
+  },
+  modularizeImports: {
+    'lucide-react': {
+      transform: 'lucide-react/dist/esm/icons/{{kebabCase member}}',
+    },
+  },
+  // Production optimizations
+  productionBrowserSourceMaps: false, // Reduce build size
+  compress: true, // Enable gzip compression
+  images: {
+    formats: ['image/webp', 'image/avif'],
+    minimumCacheTTL: 60,
   },
   async rewrites() {
     return {

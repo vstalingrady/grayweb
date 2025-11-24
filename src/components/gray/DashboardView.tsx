@@ -10,7 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
-import { Check, Square, Flame, X, Plus, ChevronDown, Pencil, Trash2 } from "lucide-react";
+import { Check, Square, Zap, X, Plus, ChevronDown, Pencil, Trash2 } from "lucide-react";
 import styles from "@/app/gray/GrayPageClient.module.css";
 import { GrayDashboardCalendar } from "@/components/calendar/GrayDashboardCalendar";
 import type { CalendarEvent, CalendarInfo, PositionedEvent } from "@/components/calendar/types";
@@ -1487,7 +1487,7 @@ export function GrayDashboardView({
                     </span>
                   ) : null}
                   <span className={styles.habitStreak}>
-                    <Flame size={12} aria-hidden="true" />
+                    <Zap size={12} aria-hidden="true" />
                     <span>{habit.streakLabel}</span>
                   </span>
                 </span>

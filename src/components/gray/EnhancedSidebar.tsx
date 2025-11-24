@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -38,7 +38,7 @@ type GrayEnhancedSidebarProps = {
   onLogOut?: () => void;
 };
 
-export function GrayEnhancedSidebar({
+function GrayEnhancedSidebarComponent({
   isExpanded,
   viewerName,
   viewerInitials,
@@ -97,39 +97,39 @@ export function GrayEnhancedSidebar({
     };
   }, [isProfileMenuOpen]);
 
-  const handleProfileClick = () => {
+  const handleProfileClick = useCallback(() => {
     setIsProfileMenuOpen((previous) => !previous);
-  };
+  }, []);
 
-  const handleSidebarToggle = () => {
+  const handleSidebarToggle = useCallback(() => {
     setIsProfileMenuOpen(false);
     onToggle();
-  };
+  }, [onToggle]);
 
-  const handleOpenPersonalization = () => {
+  const handleOpenPersonalization = useCallback(() => {
     onOpenPersonalization?.();
     setIsProfileMenuOpen(false);
-  };
+  }, [onOpenPersonalization]);
 
-  const handleOpenSettings = () => {
+  const handleOpenSettings = useCallback(() => {
     onOpenSettings?.();
     setIsProfileMenuOpen(false);
-  };
+  }, [onOpenSettings]);
 
-  const handleOpenHelp = () => {
+  const handleOpenHelp = useCallback(() => {
     onOpenHelp?.();
     setIsProfileMenuOpen(false);
-  };
+  }, [onOpenHelp]);
 
-  const handleUpgradePlan = () => {
+  const handleUpgradePlan = useCallback(() => {
     onUpgradePlan?.();
     setIsProfileMenuOpen(false);
-  };
+  }, [onUpgradePlan]);
 
-  const handleLogOut = () => {
+  const handleLogOut = useCallback(() => {
     onLogOut?.();
     setIsProfileMenuOpen(false);
-  };
+  }, [onLogOut]);
 
   return (
     <aside className={styles.sidebar} data-expanded={isExpanded ? "true" : "false"}>
@@ -407,3 +407,7 @@ export function GrayEnhancedSidebar({
     </aside>
   );
 }
+
+GrayEnhancedSidebarComponent.displayName = "GrayEnhancedSidebar";
+
+export const GrayEnhancedSidebar = memo(GrayEnhancedSidebarComponent);

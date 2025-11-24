@@ -1,5 +1,5 @@
 import { memo, type ReactNode } from "react";
-import { Flame } from "lucide-react";
+import { Zap } from "lucide-react";
 import styles from "@/app/gray/GrayPageClient.module.css";
 
 type GrayWorkspaceHeaderProps = {
@@ -43,7 +43,7 @@ function GrayWorkspaceHeader({
         </button>
         {normalizedStreak > 0 ? (
           <div className={styles.streakBadge} aria-label={`${normalizedStreak} day streak`}>
-            <Flame size={12} />
+            <Zap size={12} />
             <span>{normalizedStreak}</span>
           </div>
         ) : null}

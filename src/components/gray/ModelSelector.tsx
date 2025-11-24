@@ -93,7 +93,10 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
         aria-label="Select model"
         type="button"
       >
-        <span className={styles.triggerLabel}>{activeOption.label}</span>
+        <span className={styles.triggerLabel}>
+          <span className={styles.hideOnMobile}>Gray </span>
+          {activeOption.label.replace("Gray ", "")}
+        </span>
         <ChevronUp
           className={`${styles.chevron} ${isOpen ? styles.chevronOpen : ""}`}
           size={18}

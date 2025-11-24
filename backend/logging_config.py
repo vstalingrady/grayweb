@@ -201,8 +201,8 @@ class RequestLoggingMiddleware:
 
 def get_log_level() -> int:
     """Get appropriate log level based on environment."""
-    env_log_level = os.getenv("LOG_LEVEL", "INFO").upper()
-    return getattr(logging, env_log_level, logging.INFO)
+    env_log_level = os.getenv("LOG_LEVEL", "WARNING").upper()
+    return getattr(logging, env_log_level, logging.WARNING)
 
 
 def setup_logging(

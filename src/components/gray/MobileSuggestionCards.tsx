@@ -1,8 +1,8 @@
-import React from "react";
+import { memo } from "react";
 import { Video, Camera, Mic, Sparkles } from "lucide-react";
 import styles from "@/app/gray/GrayPageClient.module.css";
 
-export const MobileSuggestionCards = () => {
+const MobileSuggestionCardsComponent = () => {
     return (
         <div className={styles.mobileSuggestionGrid}>
             <button className={styles.mobileSuggestionCard}>
@@ -32,3 +32,7 @@ export const MobileSuggestionCards = () => {
         </div>
     );
 };
+
+MobileSuggestionCardsComponent.displayName = "MobileSuggestionCards";
+
+export const MobileSuggestionCards = memo(MobileSuggestionCardsComponent);

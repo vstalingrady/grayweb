@@ -24,11 +24,11 @@ def _configure_logging() -> logging.Logger:
   """
   # Import our enhanced logging configuration
   try:
-      from logging_config import setup_logging, create_logger
+      from logging_config import setup_logging, create_logger, get_log_level
 
       # Use the enhanced logging setup for startup too
       logger = setup_logging(
-          log_level=logging.INFO,
+          log_level=get_log_level(),
           enable_console=True,
           enable_file=False,  # No file logging for startup to keep it simple
           structured_format=False  # Use colored format for startup
@@ -48,11 +48,12 @@ def _configure_logging() -> logging.Logger:
 
   except ImportError:
       # Fallback to basic logging if our enhanced config isn't available
+      log_level = getattr(logging, os.getenv("LOG_LEVEL", "WARNING").upper(), logging.WARNING)
       logger = logging.getLogger("backend.startup")
       if logger.handlers:
           return logger
 
-      logger.setLevel(logging.INFO)
+      logger.setLevel(log_level)
       handler = logging.StreamHandler()
       formatter = logging.Formatter("[backend.startup] %(asctime)s %(levelname)s: %(message)s")
       handler.setFormatter(formatter)
@@ -491,11 +492,13 @@ if __name__ == "__main__":
     })
 
     # Start the FastAPI server
+    # Use the effective level so uvicorn gets a valid string (named loggers default to NOTSET)
+    uvicorn_log_level = logging.getLevelName(LOG.getEffectiveLevel()).lower()
     server_start_info = {
         "host": "0.0.0.0",
         "port": 8000,
         "reload": True,
-        "log_level": "info",
+        "log_level": uvicorn_log_level,
         "access_log": False,
         "total_startup_time_ms": (time.time() - startup_start_time) * 1000
     }

@@ -1,5 +1,5 @@
 import { useMemo, useState, useCallback } from "react";
-import { CheckSquare, Square, Flame, Pencil, Trash2 } from "lucide-react";
+import { CheckSquare, Square, Zap, Pencil, Trash2 } from "lucide-react";
 import styles from "@/app/gray/GrayPageClient.module.css";
 import { GrayDashboardCalendar } from "@/components/calendar/GrayDashboardCalendar";
 import { AddPlanHabitModal } from "./AddPlanHabitModal";
@@ -319,7 +319,7 @@ export function GrayGeneralView({
                             </button>
                           </span>
                           <span className={styles.habitStreak}>
-                            <Flame size={12} aria-hidden="true" />
+                            <Zap size={12} aria-hidden="true" />
                             <span>{habit.streakLabel}</span>
                           </span>
                         </span>

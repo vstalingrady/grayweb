@@ -1,5 +1,4 @@
-import React from "react";
-import PricingClient from "./PricingClient";
+import PricingClientWrapper from "./PricingClientWrapper.tsx";
 
 export default function PricingPage() {
   const storeId = process.env.LEMONSQUEEZY_STORE_ID;
@@ -7,10 +6,10 @@ export default function PricingPage() {
   const pioneerVariantId = process.env.LEMONSQUEEZY_PIONEER;
 
   return (
-    <PricingClient 
-      storeId={storeId} 
-      voyagerVariantId={voyagerVariantId} 
-      pioneerVariantId={pioneerVariantId} 
+    <PricingClientWrapper
+      storeId={storeId}
+      voyagerVariantId={voyagerVariantId}
+      pioneerVariantId={pioneerVariantId}
     />
   );
 }

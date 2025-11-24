@@ -892,20 +892,29 @@ class ApiService {
 
       // Unexpected error logging
       if (shouldLogErrors) {
+        const errorDetails = error instanceof Error ? {
+          name: error.name,
+          message: error.message,
+          stack: error.stack,
+        } : error;
+
         console.error(`[ERROR][ApiService.fetch:unexpected-error]`, {
           requestId,
           endpoint,
           url,
           method: config.method ?? 'GET',
           baseUrl,
-          error: error instanceof Error ? {
-            name: error.name,
-            message: error.message,
-            stack: error.stack,
-          } : error,
+          error: errorDetails,
           responseTimeMs: errorTime,
           timestamp: new Date().toISOString(),
           eventType: 'api_unexpected_error',
+        });
+
+        // Also log to console in a more readable format
+        console.error(`API Request Failed:`, {
+          endpoint,
+          url,
+          error: error instanceof Error ? error.message : String(error),
         });
       }
       if (error instanceof Error) {

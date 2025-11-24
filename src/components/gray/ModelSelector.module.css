@@ -30,6 +30,22 @@
   font-weight: 600;
 }
 
+.hideOnMobile {
+  display: inline;
+}
+
+@media (max-width: 768px) {
+  .hideOnMobile {
+    display: none;
+  }
+
+  .trigger {
+    background: transparent !important;
+    border: none !important;
+    padding: 0 !important;
+  }
+}
+
 .chevron {
   opacity: 0.9;
   transform-origin: center;

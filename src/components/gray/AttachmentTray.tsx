@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2 } from "lucide-react";
+import { LoaderCircle } from "lucide-react";
 import styles from "@/app/gray/GrayPageClient.module.css";
 import type { MediaUpload } from "@/lib/api";
 
@@ -75,7 +75,7 @@ const AttachmentTray = ({
       {error ? <p className={styles.chatAttachmentError}>{error}</p> : null}
       {isUploading ? (
         <div className={styles.chatAttachmentUploadStatus}>
-          <Loader2 size={16} className={styles.chatAttachmentSpinner} aria-hidden="true" />
+          <LoaderCircle size={16} className={styles.chatAttachmentSpinner} aria-hidden="true" />
           <span>Uploading attachments…</span>
         </div>
       ) : null}

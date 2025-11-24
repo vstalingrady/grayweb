@@ -9,6 +9,7 @@ import json
 import logging
 import os
 import re
+import requests
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone as dt_timezone
 from typing import Any, Dict, List, Optional, Sequence, Tuple
@@ -512,6 +513,23 @@ class ProactivityEngine:
                             f"Failed to delete invalid push subscription for user {user_id}: {delete_exc}",
                             exc_info=True,
                         )
+            except requests.exceptions.RequestException as exc:
+                # Catch network-level errors, including DNS failures for invalid endpoints
+                # like 'permanently-removed.invalid' which some browsers use to signal dead subs.
+                logger.error(f"Web push network error for user {user_id}: {exc}", exc_info=True)
+                error_str = str(exc)
+                if "permanently-removed.invalid" in error_str or "Name or service not known" in error_str:
+                    try:
+                        await self.db.execute(
+                            f"DELETE FROM {PROACTIVITY_PUSH_TABLE} WHERE id = :id",
+                            {"id": row["id"]},
+                        )
+                        logger.info(f"Removed invalid push subscription for user {user_id} due to DNS error")
+                    except Exception as delete_exc:
+                        logger.error(
+                            f"Failed to delete invalid push subscription for user {user_id}: {delete_exc}",
+                            exc_info=True,
+                        )
 
     async def _generate_ai_checkin_message(
         self,
@@ -923,10 +941,24 @@ class ProactivitySchedulerManager:
         await self.refresh_jobs()
         self._started = True
 
-    async def shutdown(self) -> None:
-        if self.scheduler.running:
+    async def shutdown(self, *, timeout: float = 10.0) -> None:
+        if not self.scheduler.running:
+            self._started = False
+            return
+
+        try:
+            await asyncio.wait_for(
+                asyncio.to_thread(self.scheduler.shutdown, True),
+                timeout=timeout,
+            )
+        except asyncio.TimeoutError:
+            logger.warning(
+                "Proactivity scheduler shutdown timed out; forcing stop",
+                extra={"event_type": "proactivity_scheduler_shutdown_timeout"},
+            )
             self.scheduler.shutdown(wait=False)
-        self._started = False
+        finally:
+            self._started = False
 
     async def refresh_jobs(self) -> None:
         users = await self.engine.list_active_user_settings()

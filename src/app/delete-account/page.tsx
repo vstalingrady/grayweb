@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2 } from "lucide-react";
+import { LoaderCircle } from "lucide-react";
 import { useUser } from "@/contexts/UserContext";
 
 export default function DeleteAccountPage() {
@@ -45,7 +45,7 @@ export default function DeleteAccountPage() {
     if (loading || !user) {
       return (
         <div className="delete-account__card">
-          <Loader2 className="delete-account__spinner" size={20} />
+          <LoaderCircle className="delete-account__spinner" size={20} />
           <p>Verifying your session...</p>
         </div>
       );
