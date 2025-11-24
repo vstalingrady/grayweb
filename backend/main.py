@@ -74,7 +74,7 @@ load_dotenv(ROOT_DIR / ".env")
 
 # Initialize enhanced logging system
 app_logger = setup_logging(
-    log_level=logging.DEBUG,
+    log_level=logging.INFO,
     enable_console=True,
     enable_file=True,
     structured_format=os.getenv("ENVIRONMENT") == "production"
