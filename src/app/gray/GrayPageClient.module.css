@@ -2726,7 +2726,7 @@
   box-shadow: none;
   position: relative;
   --chat-column-max-width: min(828px, 100%);
-  --chat-bubble-max-width: min(70ch, 100%);
+  --chat-bubble-max-width: var(--chat-column-max-width);
   --chat-composer-overlap: calc(var(--gray-chat-bar-clearance) + clamp(10px, 2vh, 18px));
   --chat-composer-height: clamp(112px, 16vh, 180px);
   overflow: visible;
