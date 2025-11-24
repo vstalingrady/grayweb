@@ -26,7 +26,12 @@ const HeroTesseract = () => {
 
     // Initialize
     const canvas = canvasRef.current;
-    renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+    renderer = new THREE.WebGLRenderer({
+      canvas,
+      antialias: true,
+      alpha: true,
+      powerPreference: 'high-performance' // Optimize for performance
+    });
     renderer.setSize(canvas.clientWidth, canvas.clientHeight);
     renderer.setClearColor(0x000000, 1);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -38,15 +43,15 @@ const HeroTesseract = () => {
     // Dynamic camera positioning based on aspect ratio
     const updateCameraPosition = () => {
       const currentAspect = camera.aspect;
-      // Base distance is 5. Increase distance as aspect ratio decreases to keep object in view.
-      const targetZ = 5 + Math.max(0, (1.2 - currentAspect) * 3.5);
+      // Base distance optimized for smaller tesseract scale
+      const targetZ = 4.5 + Math.max(0, (1.2 - currentAspect) * 3.5);
       camera.position.z = targetZ;
     };
 
     updateCameraPosition();
 
     container = new THREE.Group();
-    container.scale.set(1.5, 1.5, 1.5); // Larger scale
+    container.scale.set(1.0, 1.0, 1.0); // Optimized scale
     scene.add(container);
 
     // Create 4D hypercube vertices
@@ -97,7 +102,7 @@ const HeroTesseract = () => {
       '/images/threee.png'
     ];
 
-    const radius = 3.2;
+    const radius = 2.6; // Optimized orbit radius
     const textureLoader = new THREE.TextureLoader();
 
     techLogos.forEach((src, i) => {
@@ -121,14 +126,14 @@ const HeroTesseract = () => {
           0.1
         );
 
-        sprite.scale.set(0.5, 0.5, 0.5);
+        sprite.scale.set(0.4, 0.4, 0.4); // Optimized sprite size
 
         scene.add(sprite);
         sprites.push({ sprite, angle });
       });
     });
 
-    // Setup bloom effect
+    // Setup selective bloom effect (only bright objects glow)
     async function setupBloom() {
       try {
         const { EffectComposer } = await import('three/examples/jsm/postprocessing/EffectComposer.js');
@@ -140,12 +145,12 @@ const HeroTesseract = () => {
         const renderPass = new RenderPass(scene, camera);
         composer.addPass(renderPass);
 
-        // Balanced bloom settings
+        // High threshold bloom: only bright white lines glow, background stays dark
         const bloomPass = new UnrealBloomPass(
           new THREE.Vector2(canvas.clientWidth, canvas.clientHeight),
-          1.5,  // strength
-          0.4,  // radius (reduced to prevent fog)
-          0.1   // threshold (increased to exclude background)
+          1.2,  // strength - moderate glow
+          0.3,  // radius - tight glow around lines
+          0.85  // threshold - only very bright objects (white lines) glow
         );
         composer.addPass(bloomPass);
       } catch (error) {
@@ -214,9 +219,8 @@ const HeroTesseract = () => {
 
       sprites.forEach((item) => {
         item.angle += orbitSpeed;
-        const r = 3.2;
-        const x = Math.cos(item.angle) * r;
-        const y = Math.sin(item.angle) * r;
+        const x = Math.cos(item.angle) * radius;
+        const y = Math.sin(item.angle) * radius;
         item.sprite.position.set(x, y, item.sprite.position.z);
       });
 

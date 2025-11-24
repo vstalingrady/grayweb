@@ -1147,11 +1147,15 @@ a:hover {
   place-items: center;
   width: clamp(72px, 10vw, 108px);
   aspect-ratio: 1;
-  border-radius: 28px;
-  background: radial-gradient(circle at center, rgba(255, 214, 150, 0.35), rgba(28, 22, 18, 0.88));
-  box-shadow: 0 20px 52px rgba(255, 168, 76, 0.35);
-  border: 1px solid rgba(255, 214, 150, 0.42);
+  border-radius: 20px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
+    rgba(18, 18, 22, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   padding: clamp(0.85rem, 2.5vw, 1.2rem);
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 .contrast-card__masthead p {
@@ -2683,7 +2687,7 @@ a:hover {
   width: 100vw;
   margin-left: calc(50% - 50vw);
   margin-right: calc(50% - 50vw);
-  min-height: 100svh;
+  min-height: calc(100svh - var(--nav-safe-space));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2693,7 +2697,7 @@ a:hover {
   width: min(1600px, 100%);
   /* Increased from 1200px */
   margin: 0 auto;
-  min-height: clamp(600px, 80svh, 900px);
+  min-height: clamp(550px, 72svh, 900px);
   /* Increased height */
   display: flex;
   align-items: center;
@@ -2707,6 +2711,7 @@ a:hover {
   flex: 1 1 clamp(300px, 40vw, 500px);
   /* Reduced max width to give space to visual */
   max-width: clamp(400px, 50vw, 600px);
+  padding-inline: clamp(0.5rem, 2vw, 1rem);
 }
 
 .hero-split__title {
@@ -2726,16 +2731,16 @@ a:hover {
 }
 
 .hero-split__visual {
-  flex: 1 1 clamp(500px, 60vw, 900px);
-  /* Increased flex-grow and basis */
-  max-width: clamp(600px, 60vw, 1000px);
-  min-height: clamp(600px, 80vw, 900px);
-  /* Increased height */
+  flex: 1 1 clamp(400px, 50vw, 700px);
+  /* Reduced flex-grow and basis */
+  max-width: clamp(500px, 50vw, 800px);
+  min-height: clamp(400px, 60vw, 700px);
+  /* Reduced height */
   display: flex;
   align-items: center;
   justify-content: center;
   align-self: stretch;
-  margin-left: auto;
+  margin: 0 auto;
   padding: 0;
 }
 
@@ -2774,9 +2779,11 @@ a:hover {
 .hero-tesseract {
   position: relative;
   flex: 0 0 auto;
-  width: min(100%, clamp(500px, 65vw, 1000px));
-  min-height: clamp(600px, 80vw, 900px);
-  /* Increased height */
+  width: min(100%, 520px);
+  max-width: 520px;
+  aspect-ratio: 4 / 3;
+  height: auto;
+  min-height: 0;
   border-radius: clamp(1.8rem, 4.5vw, 2.8rem);
   border: none;
   background: #000000;
@@ -2785,7 +2792,7 @@ a:hover {
   display: flex;
   align-items: center;
   justify-content: center;
-  margin: 0;
+  margin: 0 auto;
   box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
   /* Ensure proper vertical centering */
   align-self: center;
@@ -2804,48 +2811,94 @@ a:hover {
 
 @media (max-width: 900px) {
   .hero-section--split {
+    width: 100%;
+    margin-left: 0;
+    margin-right: 0;
     padding-block: clamp(2.5rem, 10vw, 4.5rem);
     padding-inline: clamp(1rem, 6vw, 2rem);
+    min-height: 100svh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
   }
 
   .hero-split {
     width: 100%;
     margin: 0;
+    display: flex;
     flex-direction: column;
-    align-items: stretch;
-    min-height: auto;
+    align-items: center;
+    justify-content: center;
+    gap: clamp(2rem, 8vw, 3.5rem);
+    min-height: 100svh;
+  }
+
+  .hero-split__text {
+    text-align: center;
+    margin: 0 auto;
+    max-width: 34rem;
+    align-items: center;
+    display: flex;
+    flex-direction: column;
+    padding-inline: clamp(1rem, 4vw, 2rem);
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    order: 2;
   }
 
   .hero-split__visual {
+    order: 1;
     width: 100%;
-    min-height: clamp(480px, 90vw, 600px);
+    height: 50vh;
+    min-height: 400px;
     max-width: none;
     margin-left: 0;
+    display: flex;
     justify-content: center;
+    align-items: center;
     padding-right: 0;
   }
 
+  .hero-split__visual.hero-visual {
+    justify-content: center;
+  }
+
   .hero-tesseract {
-    width: 94%;
-    min-height: clamp(450px, 100vw, 650px);
+    width: min(100%, 480px);
+    max-width: 480px;
+    aspect-ratio: 4 / 3;
+    height: auto;
+    min-height: 0;
     margin-left: auto;
     margin-right: auto;
+    display: block;
   }
 }
 
 /* Additional mobile media query for smaller devices */
 @media (max-width: 640px) {
   .hero-tesseract {
-    width: 96%;
-    min-height: clamp(400px, 85vw, 500px);
+    width: 100%;
+    max-width: 420px;
+    aspect-ratio: 4 / 3;
+    height: auto;
+    min-height: 0;
     margin-left: auto;
     margin-right: auto;
     border-radius: clamp(1.4rem, 4vw, 2rem);
   }
 
   .hero-split__visual {
-    min-height: clamp(420px, 90vw, 520px);
+    min-height: clamp(320px, 85vw, 480px);
     padding: 0;
+  }
+
+  .hero-split__text {
+    padding-inline: clamp(1.25rem, 5vw, 2rem);
+  }
+
+  .hero-split__title {
+    font-size: clamp(2.25rem, 9vw, 4rem);
   }
 }
 
@@ -2924,6 +2977,20 @@ a:hover {
   display: flex;
   align-items: center;
   padding-right: 0;
+}
+
+@media (max-width: 900px) {
+  .hero-section--split {
+    padding-top: calc(var(--nav-safe-space) + clamp(1rem, 4vw, 1.75rem));
+  }
+
+  .hero-section--split .hero-split__visual.hero-visual {
+    justify-content: center;
+  }
+
+  .hero-section--split .hero-split__visual {
+    align-items: center;
+  }
 }
 
 .hero-section--solo .hero-visual {

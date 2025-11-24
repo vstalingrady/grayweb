@@ -55,27 +55,27 @@ const CADENCE_OPTIONS: Array<{
   label: string;
   description: string;
 }> = [
-  {
-    key: "frequent",
-    label: "🔥 Frequent",
-    description: "3x a day • morning, midday, evening",
-  },
-  {
-    key: "daily",
-    label: "📅 Daily",
-    description: "One honest check-in each morning",
-  },
-  {
-    key: "weekly",
-    label: "📊 Weekly",
-    description: "Friday reflections + resets",
-  },
-  {
-    key: "custom",
-    label: "⚙️ Custom",
-    description: "You set the rhythm",
-  },
-];
+    {
+      key: "frequent",
+      label: "🔥 Frequent",
+      description: "3x a day • morning, midday, evening",
+    },
+    {
+      key: "daily",
+      label: "📅 Daily",
+      description: "One honest check-in each morning",
+    },
+    {
+      key: "weekly",
+      label: "📊 Weekly",
+      description: "Friday reflections + resets",
+    },
+    {
+      key: "custom",
+      label: "⚙️ Custom",
+      description: "You set the rhythm",
+    },
+  ];
 
 const cadenceFollowup = (key: CheckInCadence, customDetail?: string) => {
   switch (key) {
@@ -112,11 +112,21 @@ export function FirstChatOnboarding({ viewerName, onComplete, onSkip }: FirstCha
     createMessage(
       "gray",
       [
-        "Hey, I'm Gray.",
-        "I'm here to help you become your best self – not by giving you another to-do list, but by actually knowing you, checking in on you, and asking the questions you need to hear.",
-        "Think of me as the mentor/accountability partner you wish you had. Always in your pocket. Always honest.",
+        "👋 Hey, I'm Gray.",
+        "",
+        "I'm your AI accountability partner—think of me as the mentor/coach you wish you had, always in your pocket, always honest.",
+        "",
+        "**Here's what I do:**",
+        "• Check in with you regularly (you decide when)",
+        "• Remember everything about your goals, habits, and patterns",
+        "• Ask the hard questions you need to hear",
+        "• Call you out when you're bullshitting yourself",
+        "• Help you actually DO what you say you want to do",
+        "",
+        "This isn't another productivity app. It's having someone who genuinely cares about your growth and won't let you coast.",
+        "",
         "Ready to get started?",
-      ].join("\n\n")
+      ].join("\n")
     ),
   ]);
   const [stage, setStage] = useState<Stage>("intro");

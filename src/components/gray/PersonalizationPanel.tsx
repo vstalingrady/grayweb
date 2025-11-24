@@ -19,6 +19,7 @@ type PersonalizationPanelProps = {
   onClose: () => void;
   viewerName: string;
   viewerRole?: string;
+  viewerPlan?: string;
   contextUsage?: ContextUsageSummary | null;
   userId: number | null;
   profileNickname?: string | null;
@@ -119,6 +120,7 @@ export function PersonalizationPanel({
   onClose,
   viewerName,
   viewerRole = "Operator",
+  viewerPlan,
   contextUsage,
   userId,
   profileNickname,
@@ -176,6 +178,18 @@ export function PersonalizationPanel({
 
   const { user, updateUser: updateUserProfile } = useUser();
   const mapsEnabled = user?.maps_enabled ?? false;
+  const showCalendar = user?.personalization_show_calendar ?? true;
+
+  const isScout = (viewerPlan || "").toLowerCase() === "scout";
+
+  const handleCalendarToggle = async () => {
+    if (!user?.id) return;
+    try {
+      await updateUserProfile({ personalization_show_calendar: !showCalendar });
+    } catch (e) {
+      console.error("Failed to toggle calendar", e);
+    }
+  };
 
   const handleMapsToggle = async () => {
     if (!user?.id) return;
@@ -658,6 +672,24 @@ export function PersonalizationPanel({
                     <span className={styles.personalizationSlider} />
                   </span>
                 </button>
+
+                {!isScout && (
+                  <button
+                    type="button"
+                    className={styles.personalizationToggle}
+                    data-active={showCalendar ? "true" : "false"}
+                    aria-pressed={showCalendar}
+                    onClick={handleCalendarToggle}
+                  >
+                    <span>
+                      <span>Show Calendar</span>
+                      <span className={styles.personalizationToggleHint}>Display the daily schedule view.</span>
+                    </span>
+                    <span className={styles.personalizationSwitch} data-active={showCalendar ? "true" : "false"}>
+                      <span className={styles.personalizationSlider} />
+                    </span>
+                  </button>
+                )}
               </div>
             </section>
             <section className={styles.personalizationCard}>

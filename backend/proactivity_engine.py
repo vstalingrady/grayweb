@@ -830,16 +830,21 @@ class ProactivityEngine:
             else:
                 query = """
                     INSERT INTO general_chat_messages (user_id, role, content, created_at)
-                    VALUES (?, ?, ?, ?)
+                    VALUES (:user_id, :role, :content, :created_at)
                 """
-                await self.db.execute(query, user_id, role, content, now.isoformat())
+                await self.db.execute(query, {
+                    "user_id": user_id,
+                    "role": role,
+                    "content": content,
+                    "created_at": now  # Use datetime object for PostgreSQL
+                })
             return True
         except Exception as exc:
             logger.error(f"Failed to save general chat message: {exc}", exc_info=True)
             return False
 
     async def _send_browser_notification(self, user_id: int, title: str, message: str) -> bool:
-        now = datetime.now(dt_timezone.utc).isoformat()
+        now = datetime.now(dt_timezone.utc)
         try:
             if self.supabase is not None:
                 try:
@@ -849,9 +854,9 @@ class ProactivityEngine:
                             "type": "check_in",
                             "title": title,
                             "message": message,
-                            "due_at": now,
-                            "sent_at": now,
-                            "created_at": now,
+                            "due_at": now.isoformat(),
+                            "sent_at": now.isoformat(),
+                            "created_at": now.isoformat(),
                         }
                     ).execute()
                     return True
@@ -870,19 +875,19 @@ class ProactivityEngine:
             query = """
                 INSERT INTO proactive_notifications
                 (user_id, type, title, message, due_at, sent_at, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                VALUES (:user_id, :type, :title, :message, :due_at, :sent_at, :created_at)
             """
             await self.db.execute(
                 query,
-                (
-                    user_id,
-                    "check_in",
-                    title,
-                    message,
-                    now,
-                    now,
-                    now,
-                ),
+                {
+                    "user_id": user_id,
+                    "type": "check_in",
+                    "title": title,
+                    "message": message,
+                    "due_at": now,
+                    "sent_at": now,
+                    "created_at": now,
+                },
             )
             return True
         except Exception as exc:

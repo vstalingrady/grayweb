@@ -59,23 +59,8 @@
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.64);
-  pointer-events: none;
-}
-
-:global(:root) {
-  --gray-chat-bar-clearance: clamp(0px, 1.5vh, 16px);
-  --gray-general-max-width: 1220px;
-  --gray-general-inline-gutter: clamp(16px, 4vw, 36px);
-  --gray-dashboard-max-width: 1360px;
-}
-
-:global(html)::-webkit-scrollbar-button,
-:global(body)::-webkit-scrollbar-button {
-  display: none !important;
-  width: 0 !important;
-  height: 0 !important;
-  min-width: 0 !important;
-  min-height: 0 !important;
+  pointer-events: auto;
+  z-index: 90;
 }
 
 .shell {
@@ -95,6 +80,35 @@
 
 .layout[data-view="chat"] {
   gap: 0;
+}
+
+.layout[data-mobile-sidebar="true"] {
+  grid-template-columns: 1fr;
+}
+
+.layout[data-mobile-sidebar="true"] .sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  z-index: 100;
+  width: 0;
+  display: none;
+  transition: width 0.3s ease;
+}
+
+.layout[data-mobile-sidebar="true"] .sidebar[data-expanded="true"] {
+  display: flex;
+  width: 100%;
+  max-width: 320px;
+}
+
+.layout[data-mobile-sidebar="true"] .sidebarRail {
+  display: none !important;
+}
+
+.layout[data-mobile-sidebar="true"] .sidebarPanel {
+  width: 100%;
 }
 
 .sidebar {
@@ -806,10 +820,6 @@
   border-radius: 50%;
 }
 
-.personalizationSwitch[data-active="true"] .personalizationSlider {
-  background-color: rgba(255, 255, 255, 0.25);
-}
-
 .personalizationSwitch[data-active="true"] .personalizationSlider:before {
   transform: translateX(16px);
   background-color: #fff;
@@ -817,6 +827,236 @@
 
 .mobileHeader {
   display: none;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: transparent;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  height: 60px;
+}
+
+.page[data-mobile-sidebar="true"] .mobileHeader {
+  display: flex;
+}
+
+/* Show mobile header on mobile screens */
+@media (max-width: 768px) {
+  .mobileHeader {
+    display: flex;
+  }
+}
+
+.mobileMenuButton {
+  background: transparent;
+  border: none;
+  color: white;
+  padding: 8px;
+  cursor: pointer;
+}
+
+.upgradePill {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  padding: 6px 14px;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+}
+
+.upgradePill:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.mobileProfileButton {
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mobileProfileAvatar {
+  width: 36px;
+  height: 36px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+  letter-spacing: 0.05em;
+}
+
+.centerLogo {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  opacity: 0.08;
+  pointer-events: none;
+  z-index: 0;
+  width: 120px;
+  height: 120px;
+}
+
+.centerLogo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.mobileSegmentedControl {
+  display: flex;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  padding: 4px;
+  gap: 4px;
+}
+
+.mobileSegmentedButton {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.5);
+  padding: 6px 16px;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mobileSegmentedButton[data-active="true"] {
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.mobileSuggestionGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  padding: 0 16px;
+  margin-bottom: 16px;
+  width: 100%;
+  overflow-x: auto;
+}
+
+.mobileSuggestionCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 12px 8px;
+  min-height: 80px;
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+}
+
+.mobileSuggestionIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.mobileSuggestionLabel {
+  font-size: 0.7rem;
+  text-align: center;
+  line-height: 1.2;
+}
+
+.mobileChatInputContainer {
+  padding: 0;
+  padding-bottom: env(safe-area-inset-bottom);
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(10, 10, 10, 0.98);
+  z-index: 40;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  justify-content: center;
+}
+
+.mobileChatInput {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 8px 8px 8px 16px;
+  min-height: 56px;
+  width: 100%;
+  max-width: var(--chat-column-max-width);
+}
+
+.mobileChatInputField {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: white;
+  font-size: 1rem;
+  outline: none;
+}
+
+.mobileChatInputField::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.mobileChatActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mobileChatActionButton {
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  cursor: pointer;
+}
+
+.mobileChatActionButton[data-variant="primary"] {
+  background: white;
+  color: black;
 }
 
 .mobileSidebarOverlay {
@@ -834,31 +1074,29 @@
     top: 0;
     left: 0;
     bottom: 0;
-    z-index: 50;
+    z-index: 100;
     width: 0;
+    display: none;
     transition: width 0.3s ease;
   }
 
   .sidebar[data-expanded="true"] {
+    display: flex;
     width: 100%;
-    /* Full width on very small screens, or maybe just 80% */
     max-width: 320px;
   }
 
+  /* Hide the rail completely on mobile */
   .sidebarRail {
-    /* Hide the rail on mobile when collapsed, show when expanded? 
-       Actually, we probably want a hamburger menu in the main content to open the sidebar.
-       The sidebar itself will contain the rail content or be the full drawer.
-    */
-    display: none;
+    display: none !important;
   }
 
   .sidebar[data-expanded="true"] .sidebarRail {
-    display: none;
+    display: none !important;
   }
 
+  /* Show the panel when expanded */
   .sidebarPanel {
-    /* On mobile, the panel takes up the full drawer width */
     width: 100%;
   }
 
@@ -879,18 +1117,7 @@
     pointer-events: auto;
   }
 
-  /* Mobile Header */
-  .mobileHeader {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 12px 16px;
-    background: rgba(7, 7, 7, 0.96);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-    position: sticky;
-    top: 0;
-    z-index: 30;
-  }
+
 
   .mobileMenuButton {
     background: transparent;
@@ -901,8 +1128,17 @@
   }
 
   .main {
-    /* Adjust main content to account for mobile header if needed, 
-         but flex/grid should handle it if we structure it right. */
+    padding: 16px;
+    padding-top: 76px;
+    /* Account for mobile header (60px + 16px) */
+    padding-bottom: 100px;
+    /* Account for bottom input bar */
+  }
+
+  .main[data-view="chat"] {
+    padding: 16px;
+    padding-top: 76px;
+    padding-bottom: 100px;
   }
 }
 
@@ -2144,19 +2380,21 @@
 }
 
 .main {
-  display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
-  row-gap: clamp(12px, 2.4vw, 24px);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
   min-height: 0;
   height: 100%;
   width: 100%;
   align-items: stretch;
-  justify-items: center;
-  padding: 16px;
+  justify-content: flex-start;
+  padding: 0;
   overflow: hidden;
   --gray-sidebar-width: 72px;
   --chat-bar-horizontal-shift: calc(var(--gray-sidebar-width) / 2);
   background: var(--background, #050505);
+  --chat-column-max-width: min(828px, 100%);
 }
 
 .main::-webkit-scrollbar-button {
@@ -2235,7 +2473,7 @@
 .main[data-dashboard="true"][data-dashboard-free="true"] {
   grid-template-rows: minmax(0, 1fr);
   row-gap: 0;
-  padding: clamp(16px, 3vh, 36px) clamp(18px, 3vw, 64px);
+  padding: 0;
   justify-items: stretch;
   height: 100%;
   max-height: none;
@@ -2286,6 +2524,10 @@
 
 .page[data-compact="true"] .main[data-view="dashboard"] {
   padding-bottom: clamp(12px, 4vh, 24px);
+}
+
+.page[data-compact="true"] .main[data-dashboard="true"][data-dashboard-free="true"] {
+  padding: 0;
 }
 
 .page[data-compact="true"] .main[data-view="general"] {
@@ -2392,6 +2634,17 @@
   gap: clamp(16px, 4vh, 28px);
 }
 
+/* Reduce gap on smaller screens to make greeting and chat input touch */
+@media (max-width: 768px) {
+  .mainContent[data-view="general"] {
+    gap: 8px;
+  }
+
+  .mainContent[data-compact="true"] {
+    gap: 8px;
+  }
+}
+
 
 .generalViewSection {
   width: min(var(--gray-general-max-width, 1220px), 100%);
@@ -2464,7 +2717,7 @@
   flex-direction: column;
   gap: 0;
   width: 100%;
-  min-height: clamp(520px, 70vh, 900px);
+  min-height: 0;
   flex: 1 1 auto;
   height: 100%;
   align-self: stretch;
@@ -2531,6 +2784,13 @@
   display: none;
 }
 
+.chatComposerSpacer {
+  width: 100%;
+  height: var(--chat-composer-height, 120px);
+  flex-shrink: 0;
+  pointer-events: none;
+}
+
 
 .chatMessages {
   flex: 1;
@@ -2538,15 +2798,13 @@
   flex-direction: column;
   justify-content: flex-start;
   gap: clamp(8px, 1.5vh, 14px);
-  min-height: 100%;
-  padding:
-    clamp(8px, 2vh, 18px) 0 0 0;
-
-  overflow: auto;
+  min-height: 0;
+  padding: clamp(8px, 2vh, 18px) 0 clamp(80px, 12vh, 120px) 0;
+  overflow-y: auto;
   scroll-behavior: smooth;
   width: 100%;
-  max-width: 100%;
-  margin: 0;
+  max-width: var(--chat-column-max-width);
+  margin: 0 auto;
   align-items: stretch;
 }
 
@@ -2637,7 +2895,7 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 10px 14px;
+  padding: 10px;
   border-radius: 18px;
   max-width: min(var(--chat-bubble-max-width), 100%);
   width: fit-content;
@@ -3687,21 +3945,23 @@
 }
 
 .chatComposerDock {
-  position: sticky;
+  position: fixed;
   bottom: 0;
+  left: 0;
+  right: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 4px;
-  padding: 0;
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding: 0 0 clamp(16px, 3vh, 32px);
+  padding-bottom: max(clamp(16px, 3vh, 32px), env(safe-area-inset-bottom, 0px));
   background: transparent;
   z-index: 40;
   width: 100%;
-  align-self: stretch;
   margin-top: 0;
   box-shadow: none;
   overflow: visible;
+  pointer-events: none;
 }
 
 .chatComposerDock::before {
@@ -3716,6 +3976,18 @@
 .chatComposerDock .generalChatBarRow {
   width: min(var(--chat-column-max-width, 576px), calc(100% - clamp(24px, 8vw, 80px)));
   max-width: none;
+}
+
+/* Offset composer for sidebar */
+.layout:has(.sidebar) .chatComposerDock {
+  left: var(--gray-sidebar-width, 72px);
+  width: calc(100% - var(--gray-sidebar-width, 72px));
+}
+
+/* Reset offset on mobile sidebar (overlay mode) */
+.layout[data-mobile-sidebar="true"] .chatComposerDock {
+  left: 0;
+  width: 100%;
 }
 
 /* removed legacy chat tools */
@@ -4451,12 +4723,11 @@
   align-items: center;
   gap: 18px;
   width: min(1160px, 100%);
-  flex-wrap: wrap;
 }
 
 .headerLeft {
-  flex: 1 1 360px;
-  min-width: clamp(240px, 50%, 520px);
+  flex: 1 1 auto;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -4470,10 +4741,8 @@
   display: inline-flex;
   align-items: center;
   gap: 14px;
-  margin-left: auto;
   flex: 0 0 auto;
   justify-content: flex-end;
-  flex-wrap: wrap;
 }
 
 .planBadge {
@@ -4614,7 +4883,7 @@ h1.greeting {
 }
 
 .dashboardSectionHeader {
-  display: flex;
+  display: none !important;
   flex-direction: column;
   gap: 4px;
 }
@@ -5267,6 +5536,15 @@ h1.greeting {
   letter-spacing: 0.08em;
 }
 
+.cardSurface {
+  background: rgba(4, 4, 4, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 24px;
+  box-shadow:
+    0 28px 42px rgba(0, 0, 0, 0.45),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+}
+
 .dashboardCard {
   composes: cardSurface;
   padding: clamp(20px, 2.6vw, 28px);
@@ -5892,15 +6170,6 @@ h1.greeting {
   justify-self: stretch;
 }
 
-.cardSurface {
-  background: rgba(4, 4, 4, 0.9);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: 24px;
-  box-shadow:
-    0 28px 42px rgba(0, 0, 0, 0.45),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.02);
-}
-
 .calendarCard {
   composes: cardSurface;
   padding: 18px 18px 20px;
@@ -6075,25 +6344,31 @@ h1.greeting {
   padding: 0;
 }
 
+.dashboardCalendarSurface[data-compact="true"] {
+  overflow-y: auto;
+  padding-bottom: 24px;
+  /* Ensure scrollbar doesn't cover content */
+  scrollbar-gutter: stable;
+}
+
 .dashboardCompact {
   display: flex;
   flex-direction: column;
-  gap: clamp(14px, 4vh, 24px);
-  width: min(620px, 100%);
+  gap: 16px;
+  width: 100%;
   margin: 0 auto;
-  padding: clamp(18px, 5vw, 26px);
-  border-radius: 28px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(10, 10, 12, 0.86);
-  box-shadow:
-    0 24px 48px rgba(0, 0, 0, 0.38),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+  padding: 0 16px;
+  /* Keep some horizontal padding */
+  border-radius: 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
 }
 
 .dashboardCompactMeta {
-  display: flex;
+  display: none !important;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: rgba(236, 236, 236, 0.8);
@@ -7912,25 +8187,27 @@ h1.greeting {
 }
 
 .generalChatComposer {
-  position: sticky;
-  bottom: 0;
+  position: relative;
+  flex-shrink: 0;
   /* Added for absolute positioning of children like ModelSelector */
   display: flex;
   flex-direction: column;
   align-items: stretch;
   gap: 12px;
-  padding: 10px 14px calc(env(safe-area-inset-bottom, 0px) + 12px);
+  padding: 10px;
   border-top-left-radius: 0;
   border-top-right-radius: 0;
   background: transparent;
   box-shadow: none;
   border-top: none;
   width: 100%;
-  max-width: var(--page-content-max-width);
+  max-width: var(--chat-column-max-width);
   margin: 0 auto;
   z-index: 100;
   /* Ensure composer is above other page elements */
 }
+
+
 
 .modelSelectorContainer {
   position: absolute;
@@ -8114,7 +8391,7 @@ h1.greeting {
       "Segoe UI",
       sans-serif);
   font-size: 0.95rem;
-  padding: 12px 0;
+  padding: 5px;
   outline: none;
   min-width: 0;
 }
@@ -8170,11 +8447,7 @@ h1.greeting {
     --chat-bar-horizontal-shift: 0px;
   }
 
-  .sidebar {
-    width: 100%;
-    height: auto;
-    flex-direction: column;
-  }
+
 
   .page[data-dashboard-tab="pulse"] {
     overflow-y: auto;
@@ -8218,54 +8491,7 @@ h1.greeting {
     max-height: none;
   }
 
-  .sidebarRail {
-    flex-direction: row;
-    width: 100%;
-    padding: 16px 18px;
-    border-radius: 22px;
-    gap: 16px;
-  }
 
-  .railNav ul {
-    flex-direction: row;
-    gap: 12px;
-  }
-
-  .sidebarRailFooter {
-    flex-direction: row;
-    gap: 12px;
-  }
-
-  .sidebarScroll {
-    flex-direction: column;
-    gap: 16px;
-  }
-
-  .searchRow {
-    flex: 0 0 auto;
-    width: 100%;
-  }
-
-  .sidebarProfile {
-    margin-top: 18px;
-  }
-
-  .sidebarPanel {
-    transform: none;
-  }
-
-  .sidebarPanel[data-expanded="true"] {
-    width: 100%;
-  }
-
-  .sidebarPanelContent {
-    border-radius: 22px;
-    margin-top: 18px;
-  }
-
-  .sidebarHistory {
-    display: none;
-  }
 
   .main {
     margin-top: clamp(12px, 3vh, 18px);
@@ -8686,24 +8912,11 @@ h1.greeting {
   line-height: 1.4;
 }
 
-:global(html)::-webkit-scrollbar-button:single-button,
-:global(body)::-webkit-scrollbar-button:single-button {
+.chatScrollContainer::-webkit-scrollbar-button:vertical:decrement,
+.chatScrollContainer::-webkit-scrollbar-button:vertical:increment {
   display: none !important;
   width: 0 !important;
   height: 0 !important;
-  min-width: 0 !important;
-  min-height: 0 !important;
-}
-
-:global(html)::-webkit-scrollbar-button:vertical:increment,
-:global(html)::-webkit-scrollbar-button:vertical:decrement,
-:global(body)::-webkit-scrollbar-button:vertical:increment,
-:global(body)::-webkit-scrollbar-button:vertical:decrement {
-  display: none !important;
-  width: 0 !important;
-  height: 0 !important;
-  min-width: 0 !important;
-  min-height: 0 !important;
 }
 
 .planDerivedTag {

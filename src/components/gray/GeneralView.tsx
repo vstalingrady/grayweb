@@ -38,6 +38,7 @@ type GrayGeneralViewProps = {
   showGreeting?: boolean;
   userId?: number | null;
   onReminderMove?: (reminderId: number, range: { start: Date; end: Date }) => Promise<void> | void;
+  hideCalendar?: boolean;
 };
 
 export function GrayGeneralView({
@@ -65,6 +66,7 @@ export function GrayGeneralView({
   isCompactLayout = false,
   showGreeting = true,
   userId,
+  hideCalendar = false,
 }: GrayGeneralViewProps) {
   const [modalState, setModalState] = useState<{ isOpen: boolean; type: "plan" | "habit" | null }>({
     isOpen: false,
@@ -168,7 +170,7 @@ export function GrayGeneralView({
         className={styles.mainGrid}
         data-compact={isCompactLayout ? "true" : "false"}
       >
-        {!isCompactLayout ? (
+        {!isCompactLayout && !hideCalendar ? (
           <div className={`${styles.primaryColumn} ${styles.primaryColumnSlim}`}>
             <GrayDashboardCalendar
               initialDate={currentDate}
@@ -356,7 +358,7 @@ export function GrayGeneralView({
             await onSavePlan(planId, updates);
           }}
         />
-          ) : null}
+      ) : null}
     </>
   );
 }

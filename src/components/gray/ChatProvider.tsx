@@ -29,6 +29,8 @@ import {
 } from "@/lib/api";
 import { buildLocalTimeContext } from "@/lib/timeContext";
 import { formatReminderDateLabel, formatReminderSlotLabel } from "./reminderTimeUtils";
+import { type QuestionnaireSession } from "@/lib/questionnaire";
+import { IntroSequence, INTRO_MESSAGES } from "./IntroSequence";
 
 declare global {
   interface Window {
@@ -186,6 +188,9 @@ type ChatContextValue = {
   setReasoningMode: (value: boolean) => void;
   modelTier: "lite" | "base" | "pro";
   setModelTier: (value: "lite" | "base" | "pro") => void;
+  questionnaireSession: QuestionnaireSession | null;
+  startQuestionnaire: (mode: "quick" | "deep") => void;
+  cancelQuestionnaire: () => void;
 };
 
 type SaveContextCacheOptions = {
@@ -298,18 +303,17 @@ export const buildPersonalizedSystemPrompt = (user?: User | null, basePrompt?: s
       sections.push(
         [
           `IDENTITY BOUNDARY`,
-          `- Always address the user as "${nickname}".`,
-          "- Ignore any other names or identity details mentioned in older messages, summaries, or external data.",
-          "- Do NOT infer or invent identity attributes beyond what appears in the explicit personalization fields above.",
+          `- Address the user as "${nickname}".`,
+          "- Ignore any other names from metadata or past conversations.",
         ].join("\n")
       );
     } else {
       sections.push(
         [
           "IDENTITY BOUNDARY",
-          "- Do NOT assume a real name or identity for the user.",
-          "- Do NOT derive their identity from email, auth metadata, or prior conversations.",
-          "- Only use details that appear in the explicit personalization fields above when present.",
+          "- Do NOT assume a name for the user.",
+          "- Do NOT use the user's email or username to address them.",
+          "- If you don't know their name, just say 'hey' or 'there'.",
         ].join("\n")
       );
     }
@@ -328,7 +332,7 @@ export const buildPersonalizedSystemPrompt = (user?: User | null, basePrompt?: s
 
 export const buildAssistantReply = (prompt: string) => {
   void prompt;
-  return "I'm here and ready—feel free to share more details or ask another question.";
+  return "I encountered an unexpected issue and couldn't generate a response. Please try again.";
 };
 
 const buildAssistantErrorReply = (cause: unknown) => {
@@ -1407,8 +1411,9 @@ type ChatProviderProps = {
 };
 
 export function ChatProvider({ children, workspaceContext }: ChatProviderProps) {
-  const { user, waitForUser } = useUser();
+  const { user, waitForUser, updateUser } = useUser();
   const [defaultSystemPrompt, setDefaultSystemPrompt] = useState<string | null>(null);
+  const [showIntro, setShowIntro] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -1652,6 +1657,8 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
   const [modelTier, setModelTier] = useState<"lite" | "base" | "pro">("lite");
   const lastAutoCachedWorkspaceRef = useRef<string | null>(null);
   const autoCacheInFlightRef = useRef(false);
+
+  const [questionnaireSession, setQuestionnaireSession] = useState<QuestionnaireSession | null>(null);
 
   // Web search preference is now kept in memory for the current session only.
 
@@ -2965,7 +2972,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
             });
           } catch (error) {
             console.error("Failed to create AI chat session:", error);
-            const fallback = buildAssistantReply(trimmedInitial);
+            const fallback = buildAssistantErrorReply(error);
             if (assistantMessageId) {
               updateMessage(sessionId, assistantMessageId, { content: fallback });
             } else {
@@ -3004,8 +3011,96 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
     ]
   );
 
+  const startQuestionnaire = useCallback((_mode: "quick" | "deep") => {
+    // Premade questionnaire messaging has been retired; keep state reset.
+    setQuestionnaireSession(null);
+  }, []);
+
+  const cancelQuestionnaire = useCallback(() => {
+    setQuestionnaireSession(null);
+  }, []);
+
+  const handleQuestionnaireResponse = useCallback(
+    async (content: string, session: QuestionnaireSession) => {
+      const generalSession = ensureGeneralSession();
+      const trimmed = content.trim();
+
+      // 1. Append user message
+      appendMessage(generalSession.id, "user", trimmed);
+      updateSession(generalSession.id, { isResponding: true });
+
+      // 2. Process response
+      // For now, we just move to the next question in the quick list
+      // In a real implementation, we would use the Python logic (evaluateSmartGoal, etc.)
+      // and potentially call the LLM for "deep" mode.
+
+      let nextSession = { ...session };
+      let responseText = "";
+
+      if (session.phase === "foundation") {
+        const currentQ = session.quickQuestions[session.step];
+        if (currentQ) {
+          nextSession.foundationAnswers[currentQ.key] = trimmed;
+          nextSession.step += 1;
+        }
+
+        const nextQ = session.quickQuestions[nextSession.step];
+        if (nextQ) {
+          responseText = nextQ.prompt;
+          if (nextQ.clarification) {
+            responseText += `\n\n_${nextQ.clarification}_`;
+          }
+        } else {
+          // End of foundation
+          nextSession.phase = "personalized"; // or 'complete'
+          responseText = "Thanks! I've got the basics. I've updated your profile with this information.";
+
+          // Synthesize and save profile
+          const answers = nextSession.foundationAnswers;
+          const aboutParts: string[] = [];
+          if (answers.goals) aboutParts.push(`Goals: ${answers.goals}`);
+          if (answers.wins) aboutParts.push(`Wins: ${answers.wins}`);
+          if (answers.obstacles) aboutParts.push(`Obstacles: ${answers.obstacles}`);
+
+          const updatePayload = {
+            personalization_nickname: answers.name || null,
+            personalization_occupation: answers.focus || null,
+            personalization_about: aboutParts.length > 0 ? aboutParts.join('\n\n') : null,
+            personalization_custom_instructions: answers.support || null,
+            has_seen_general_chat: true, // Mark as seen so we don't trigger again
+          };
+
+          // Fire and forget update, or await if we want to be sure
+          void updateUser(updatePayload).catch(err => console.error("Failed to save questionnaire profile:", err));
+
+          setQuestionnaireSession(null); // End it for now
+        }
+      }
+
+      if (responseText) {
+        setTimeout(() => {
+          appendMessage(generalSession.id, "assistant", responseText);
+          updateSession(generalSession.id, { isResponding: false });
+        }, 500);
+      } else {
+        updateSession(generalSession.id, { isResponding: false });
+      }
+
+      if (nextSession.phase !== "personalized") { // If not finished
+        setQuestionnaireSession(nextSession);
+      }
+    },
+    [appendMessage, ensureGeneralSession, updateSession]
+  );
+
   const sendGeneralMessage = useCallback(
     async (content: string): Promise<string> => {
+      // Check if questionnaire is active
+      if (questionnaireSession) {
+        await handleQuestionnaireResponse(content, questionnaireSession);
+        return ensureGeneralSession().id;
+      }
+
       const trimmed = content.trim();
       const generalSession = ensureGeneralSession();
       const isGeneralScope = generalSession.scope === "general";
@@ -3413,78 +3508,36 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
     }
     generalGreetingRef.current = true;
 
-    let cancelled = false;
-    const fallbackGreeting = () => {
-      const preferredName =
-        user?.personalization_nickname?.trim() ||
-        user?.full_name?.split(" ")[0] ||
-        "there";
-      return [
-        `Hey ${preferredName}, I’m Gray.`,
-        "To get things rolling you can tell me what’s on deck today, ask for ideas, or just jot a reminder.",
-        "If nothing’s urgent, I can still help you plan the next move."
-      ].join(" ");
-    };
+    // Trigger AI-driven onboarding instead of hard-coded questionnaire
+    // The AI will use the onboarding prompt from backend/prompts/onboarding.txt
+    const isNotPersonalized = !user.personalization_nickname;
+    const isChatEmpty = !generalHasMessages;
 
-    const deliverStarterMessage = async () => {
-      const fallback = fallbackGreeting();
-      try {
-        // Only show a starter if the backend has no existing general history.
-        const generalConversationId = buildGeneralConversationId(user.id);
-        if (generalConversationId) {
-          try {
-            const history = await apiService.getConversation(generalConversationId);
-            if (Array.isArray(history) && history.length > 0) {
-              return;
-            }
-          } catch (historyError) {
-            console.error("Failed to load general conversation history for starter check:", historyError);
-          }
-        }
+    console.log('[ChatProvider] Checking AI onboarding trigger:', {
+      hasSeen: user.has_seen_general_chat,
+      nickname: user.personalization_nickname,
+      isChatEmpty,
+      generalGreeting: generalGreetingRef.current
+    });
 
-        const timeContext = buildLocalTimeContext();
-        const response = await apiService.requestChatStarter({
-          user_id: user.id,
-          name: user.full_name,
-          nickname: user.personalization_nickname,
-          occupation: user.personalization_occupation,
-          about: user.personalization_about,
-          custom_instructions: user.personalization_custom_instructions,
-          workspace_context: workspaceContextValue ?? null,
-          system_prompt: personalizedSystemPrompt || null,
-          time_context: timeContext,
-        });
-        if (cancelled) {
-          return;
-        }
-        const starter = response?.message?.trim() || fallback;
-        appendMessage(general.id, "assistant", starter);
-      } catch (error) {
-        console.error("Failed to generate chat starter", error);
-        if (!cancelled) {
-          appendMessage(general.id, "assistant", fallback);
-        }
-      }
-    };
+    if (isNotPersonalized && (isChatEmpty || !user.has_seen_general_chat)) {
+      console.log('[ChatProvider] Triggering "First Contact" onboarding flow');
+      setShowIntro(true);
+    }
 
-    void deliverStarterMessage();
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    appendMessage,
-    personalizedSystemPrompt,
-    pathname,
-    remoteConversationsLoaded,
-    sessions,
-    user?.full_name,
-    user?.id,
-    user?.personalization_about,
-    user?.personalization_custom_instructions,
-    user?.personalization_nickname,
-    user?.personalization_occupation,
-    workspaceContextValue,
-  ]);
+    return;
+  }, [pathname, remoteConversationsLoaded, user?.has_seen_general_chat, user?.id, user?.personalization_nickname]);
+
+  const handleIntroComplete = useCallback(async () => {
+    if (!user?.id) return;
+
+    setShowIntro(false);
+
+    // Trigger AI onboarding
+    // We send an empty message to kick off the "First Contact" flow
+    // The backend will see has_seen_general_chat=False and use the onboarding prompt
+    await sendGeneralMessage("");
+  }, [user?.id, sendGeneralMessage]);
 
   useEffect(() => {
     if (!user?.id || !generalSessionId) {
@@ -3643,6 +3696,9 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       setReasoningMode,
       modelTier,
       setModelTier,
+      questionnaireSession,
+      startQuestionnaire,
+      cancelQuestionnaire,
     }),
     [
       appendMessage,
@@ -3800,7 +3856,12 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
     }
   }, [sessions, user?.id]);
 
-  return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;
+  return (
+    <ChatContext.Provider value={value}>
+      {children}
+      {showIntro && <IntroSequence onComplete={handleIntroComplete} />}
+    </ChatContext.Provider>
+  );
 }
 
 export const useChatStore = () => {

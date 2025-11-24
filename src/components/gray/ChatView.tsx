@@ -1189,6 +1189,10 @@ const ChatMessagesList = memo(
             return null;
           }
 
+          if (isUser && !rawContent.trim()) {
+            return null;
+          }
+
           const responseDurationLabel = isAssistant ? getResponseDurationLabel(messageIndex) : null;
           const tokenCount = isAssistant ? estimateTokenCount(rawContent) : null;
           const hasTokenEstimate = typeof tokenCount === "number" && Number.isFinite(tokenCount) && tokenCount > 0;
@@ -1520,7 +1524,7 @@ const ChatMessagesList = memo(
           );
         })}
 
-        {showFirstMessageSpinner && (
+        {shouldShowPendingStreamIndicator && (
           <div className={styles.chatMessage} data-role="assistant">
             <div className={styles.chatAssistantBlock}>
               <GrayStreamingSpinner />
@@ -2286,7 +2290,7 @@ export function GrayChatView({
         clearAttachments();
         return accumulated;
       } catch (error) {
-        console.error("Failed to stream assistant reply:", error);
+        console.warn("Failed to stream assistant reply:", error);
         try {
           const fallbackResponse = await apiService.sendMessage({
             message: prompt,
@@ -2336,7 +2340,7 @@ export function GrayChatView({
           clearAttachments();
           return finalResponse;
         } catch (fallbackError) {
-          console.error("Fallback chat request failed:", fallbackError);
+          console.warn("Fallback chat request failed:", fallbackError);
           const fallback = buildAssistantReply(prompt);
           if (assistantMessageId) {
             updateMessage(targetSessionId, assistantMessageId, { content: fallback });
@@ -2493,6 +2497,19 @@ export function GrayChatView({
       return;
     }
 
+    // General chat handles its own optimistic append to avoid duplicate user messages
+    if (targetSession.scope === "general") {
+      setDraft("");
+      if (replyTimeout.current !== null) {
+        window.clearTimeout(replyTimeout.current);
+        replyTimeout.current = null;
+      }
+      void sendGeneralMessage(content).finally(() => {
+        isSubmittingRef.current = false;
+      });
+      return;
+    }
+
     // Generate a temp ID and mark it as already triggered BEFORE appending
     // This prevents the auto-stream effect from racing with our own streaming
     const tempUserMessageId = typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -2507,19 +2524,13 @@ export function GrayChatView({
     }
 
     if (userMessage) {
-      if (targetSession.scope === "general") {
-        void sendGeneralMessage(content).finally(() => {
-          isSubmittingRef.current = false;
-        });
-      } else {
-        void streamAssistantReply(
-          targetSession.id,
-          content,
-          targetSession.conversationId ?? null
-        ).finally(() => {
-          isSubmittingRef.current = false;
-        });
-      }
+      void streamAssistantReply(
+        targetSession.id,
+        content,
+        targetSession.conversationId ?? null
+      ).finally(() => {
+        isSubmittingRef.current = false;
+      });
       return;
     }
 
@@ -2915,19 +2926,7 @@ export function GrayChatView({
       <div className={styles.chatHeaderControls}>
       </div>
       <div className={styles.chatViewport}>
-        {shouldShowPendingStreamIndicator && !showFirstMessageSpinner && (
-          <div className={styles.chatThinkingIndicator}>
-            <div className={styles.chatStreamingStatus} role="status" aria-live="polite">
-              <GrayStreamingSpinner />
-              <span className={styles.chatStreamingStatusText}>
-                {streamingStatusLabel}
-                <span className={styles.chatThinkingDots} aria-hidden="true">
-                  {thinkingDots || "..."}
-                </span>
-              </span>
-            </div>
-          </div>
-        )}
+
         <div className={styles.chatFade} aria-hidden="true" />
         {showIntro ? (
           <div className={styles.chatIntro}>

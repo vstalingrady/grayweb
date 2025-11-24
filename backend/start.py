@@ -111,7 +111,7 @@ if __name__ == "__main__":
         "event_type": "database_setup_start",
         "database_url_safe": DATABASE_URL.split('?')[0] if DATABASE_URL else None
     })
-    engine = sqlalchemy.create_engine(DATABASE_URL.replace("sqlite:///", "sqlite:///"))
+    engine = sqlalchemy.create_engine(DATABASE_URL.replace("sqlite:///", "sqlite:///"), echo=False)
     metadata = sqlalchemy.MetaData()
 
     # Define tables

@@ -165,7 +165,7 @@
 .miniMonthWeekdays {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 4px;
+  gap: 2px;
   font-size: 0.54rem;
   letter-spacing: 0.24em;
   text-transform: uppercase;
@@ -176,18 +176,21 @@
 .miniMonthGrid {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
 }
 
 .miniMonthRow {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 6px;
+  gap: 2px;
+  justify-items: center;
 }
 
 .miniMonthCell {
-  width: 32px;
-  height: 32px;
+  width: 100%;
+  max-width: 32px;
+  aspect-ratio: 1;
+  height: auto;
   border-radius: 999px;
   border: 1px solid transparent;
   background: transparent;

@@ -82,14 +82,7 @@ export function useWorkspaceData(userId: number | null, variant: "general" | "da
         const endWindow = new Date(now);
         endWindow.setMonth(now.getMonth() + 12);
 
-        const [
-          calendarResponse,
-          eventResponse,
-          planResponse,
-          habitResponse,
-          reminderResponse,
-          streakResponse,
-        ] = await Promise.all([
+        const results = await Promise.allSettled([
           apiService.getUserCalendars(userId),
           apiService.getUserCalendarEvents(userId, {
             startDate: startWindow.toISOString(),
@@ -101,17 +94,41 @@ export function useWorkspaceData(userId: number | null, variant: "general" | "da
             limit: 50,
             includeArchived: true,
           }),
-          apiService
-            .getUserStreak(userId)
-            .catch((error) => {
-              console.error("Failed to fetch user streak:", error);
-              return null;
-            }),
+          apiService.getUserStreak(userId),
         ]);
 
         if (!isMounted) {
           return;
         }
+
+        const [
+          calendarResult,
+          eventResult,
+          planResult,
+          habitResult,
+          reminderResult,
+          streakResult,
+        ] = results;
+
+        const calendarResponse = calendarResult.status === 'fulfilled' ? calendarResult.value : [];
+        if (calendarResult.status === 'rejected') console.error('Failed to load calendars:', calendarResult.reason);
+
+        const eventResponse = eventResult.status === 'fulfilled' ? eventResult.value : [];
+        if (eventResult.status === 'rejected') console.error('Failed to load events:', eventResult.reason);
+
+        const planResponse = planResult.status === 'fulfilled' ? planResult.value : [];
+        if (planResult.status === 'rejected') console.error('Failed to load plans:', planResult.reason);
+
+        const habitResponse = habitResult.status === 'fulfilled' ? habitResult.value : [];
+        if (habitResult.status === 'rejected') console.error('Failed to load habits:', habitResult.reason);
+
+        const reminderResponse = reminderResult.status === 'fulfilled' ? reminderResult.value : [];
+        if (reminderResult.status === 'rejected') console.error('Failed to load reminders:', reminderResult.reason);
+
+        const streakResponse = streakResult.status === 'fulfilled' ? streakResult.value : null;
+        if (streakResult.status === 'rejected') console.error('Failed to load streak:', streakResult.reason);
+
+
 
         const mappedCalendars: CalendarInfo[] = Array.isArray(calendarResponse)
           ? calendarResponse.map((calendar) => ({

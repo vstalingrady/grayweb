@@ -19,6 +19,7 @@ import re
 import time
 from dotenv import load_dotenv
 from supabase import Client
+import psycopg2
 # Support both package and module import contexts
 try:
     from backend.supabase_utils import create_supabase_client, resolve_supabase_credentials  # type: ignore
@@ -26,6 +27,7 @@ except Exception:  # When running with backend/ on sys.path directly (tests)
     from supabase_utils import create_supabase_client, resolve_supabase_credentials  # type: ignore
 from uuid import UUID, uuid4
 from pathlib import Path
+from urllib.parse import urlparse
 
 # Enhanced logging imports
 from logging_config import (
@@ -56,6 +58,10 @@ try:
 except ImportError:
     from calendar_tools import CALENDAR_TOOLS
     from file_search import FileSearchService
+try:
+    from backend.onboarding_tools import ONBOARDING_TOOLS
+except ImportError:
+    from onboarding_tools import ONBOARDING_TOOLS
 from ai_message_generator import AIMessageGenerator
 from proactivity_engine import (
     ProactivityEngine,
@@ -109,6 +115,23 @@ def _int_env(var_name: str, default: int) -> int:
         return default
 
 
+def load_prompt_from_file(path: Path, fallback: str) -> str:
+    """Load a prompt from disk, falling back to the provided default."""
+    try:
+        content = path.read_text(encoding="utf-8").strip()
+        if content:
+            return content
+        app_logger.warning("Prompt file is empty; using fallback", extra={"prompt_path": str(path)})
+    except FileNotFoundError:
+        app_logger.warning("Prompt file missing; using fallback", extra={"prompt_path": str(path)})
+    except Exception as exc:
+        app_logger.error(
+            "Failed to load prompt file; using fallback",
+            extra={"prompt_path": str(path), "error": str(exc)},
+        )
+    return fallback.strip()
+
+
 AI_PROVIDER = (os.getenv("AI_PROVIDER") or "gemini").strip().lower()
 GUMROAD_WEBHOOK_SECRET = os.getenv("GUMROAD_WEBHOOK_SECRET") or None
 LEMONSQUEEZY_WEBHOOK_SECRET = os.getenv("LEMONSQUEEZY_WEBHOOK_SECRET") or None
@@ -155,6 +178,9 @@ SEARCH_TOOL = types.Tool(
 )
 
 DEFAULT_CHAT_TOOLS = [SEARCH_TOOL, *CALENDAR_TOOLS]
+
+PROMPTS_DIR = ROOT_DIR / "backend" / "prompts"
+ONBOARDING_PROMPT_PATH = PROMPTS_DIR / "onboarding.txt"
 
 
 def _ensure_sqlite_users_auth_column():
@@ -310,6 +336,29 @@ def _ensure_sqlite_workspace_background_column():
         )
 
 
+def _ensure_sqlite_personalization_show_calendar_column():
+    if not DATABASE_URL.startswith("sqlite"):
+        return
+    db_path = DATABASE_URL.replace("sqlite:///", "", 1)
+    if not db_path:
+        return
+    try:
+        conn = sqlite3.connect(db_path)
+        try:
+            cursor = conn.execute("PRAGMA table_info(users)")
+            columns = {row[1] for row in cursor.fetchall()}
+            if "personalization_show_calendar" not in columns:
+                conn.execute("ALTER TABLE users ADD COLUMN personalization_show_calendar BOOLEAN DEFAULT 1")
+                conn.commit()
+        finally:
+            conn.close()
+    except sqlite3.Error as exc:
+        app_logger.error(
+            "Failed to ensure personalization_show_calendar column on sqlite users table",
+            extra={"event_type": "sqlite_migration_error", "error": str(exc)},
+        )
+
+
 # Database configuration
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./test.db")
 
@@ -318,6 +367,7 @@ _ensure_sqlite_has_seen_chat_column()
 _ensure_sqlite_maps_enabled_column()
 _ensure_sqlite_usage_columns()
 _ensure_sqlite_workspace_background_column()
+_ensure_sqlite_personalization_show_calendar_column()
 
 database = databases.Database(DATABASE_URL, statement_cache_size=0)
 metadata = sqlalchemy.MetaData()
@@ -489,6 +539,7 @@ users = sqlalchemy.Table(
     sqlalchemy.Column("personalization_occupation", sqlalchemy.String, nullable=True),
     sqlalchemy.Column("personalization_about", sqlalchemy.String, nullable=True),
     sqlalchemy.Column("personalization_custom_instructions", sqlalchemy.String, nullable=True),
+    sqlalchemy.Column("personalization_show_calendar", sqlalchemy.Boolean, default=True),
     sqlalchemy.Column("plan_tier", sqlalchemy.String, nullable=True),
     sqlalchemy.Column("has_seen_general_chat", sqlalchemy.Boolean, default=False),
     sqlalchemy.Column("daily_token_usage", sqlalchemy.Integer, default=0),
@@ -732,6 +783,7 @@ class UserBase(BaseModel):
     personalization_occupation: Optional[str] = None
     personalization_about: Optional[str] = None
     personalization_custom_instructions: Optional[str] = None
+    personalization_show_calendar: Optional[bool] = True
     auth_user_id: Optional[str] = None  # Link to Supabase Auth UUID
     daily_token_usage: Optional[int] = 0
     monthly_cost_usage: Optional[float] = 0.0
@@ -753,6 +805,7 @@ class UserUpdate(BaseModel):
     personalization_occupation: Optional[str] = None
     personalization_about: Optional[str] = None
     personalization_custom_instructions: Optional[str] = None
+    personalization_show_calendar: Optional[bool] = None
 
 class User(UserBase):
     id: int
@@ -1158,8 +1211,83 @@ class ChatTitleRequest(BaseModel):
 class ChatTitleResponse(BaseModel):
     title: str
 
+
+def _extract_project_ref(url_value: Optional[str]) -> Optional[str]:
+    if not url_value:
+        return None
+    try:
+        parsed = urlparse(url_value)
+        host = parsed.hostname or ""
+        if host.endswith(".supabase.co"):
+            return host.split(".")[0]
+    except Exception:
+        return None
+    return None
+
+
+def _ensure_supabase_chat_tables(supabase_url: Optional[str]) -> None:
+    """Create chat persistence tables in Supabase when missing.
+
+    The deployment recently switched Supabase projects, and the new project is
+    missing the user_chat_* schema. This guard self-heals by applying the chat
+    migrations directly against the Supabase Postgres instance using the
+    service password so chat history can be stored again.
+    """
+    project_ref = _extract_project_ref(supabase_url)
+    password = os.getenv("SUPABASE_DB_PASSWORD")
+    if not project_ref or not password:
+        return
+
+    dsn = f"postgresql://postgres:{password}@db.{project_ref}.supabase.co:5432/postgres"
+    try:
+        conn = psycopg2.connect(dsn, connect_timeout=4)
+        conn.autocommit = True
+    except Exception as exc:
+        print(f"Warning: Skipping Supabase chat schema check (connection failed): {exc}")
+        return
+
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                select
+                  to_regclass('public.user_chat_threads'),
+                  to_regclass('public.user_chat_messages'),
+                  to_regclass('public.general_chat_messages'),
+                  to_regclass('public.user_data');
+                """
+            )
+            row = cursor.fetchone() or []
+            missing_tables = any(value is None for value in row)
+            if not missing_tables:
+                return
+
+            migration_paths = [
+                ROOT_DIR / "supabase" / "migrations" / "20251116140000_user_first_chat_schema.sql",
+                ROOT_DIR / "supabase" / "migrations" / "20251116133000_refactor_chat_tables.sql",
+                ROOT_DIR / "supabase" / "migrations" / "20251116143000_link_general_chat_to_user_data.sql",
+            ]
+            for path in migration_paths:
+                if not path.exists():
+                    continue
+                cursor.execute(path.read_text())
+
+            print(
+                "Supabase chat tables were missing; applied chat migrations so messages persist again."
+            )
+    except Exception as exc:
+        print(f"Warning: Failed to ensure Supabase chat tables exist: {exc}")
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
 # Supabase setup
 SUPABASE_URL, SUPABASE_KEY, SUPABASE_KEY_SOURCE = resolve_supabase_credentials()
+
+# Self-heal missing Supabase chat tables so conversation history can be stored.
+_ensure_supabase_chat_tables(SUPABASE_URL)
 
 # Initialize Supabase using unified helper
 supabase: Optional[Client] = None
@@ -1231,7 +1359,7 @@ def _general_conversation_user_id(conversation_id: Optional[str]) -> Optional[in
 
 
 def _load_general_conversation_history(user_id: int) -> List[Dict[str, Any]]:
-    if not supabase:
+    if not _conversation_store_available():
         return []
     try:
         # Check plan tier for retention policy (Scout = 14 days)
@@ -1280,7 +1408,7 @@ def _insert_general_conversation_message(
     grounding_metadata: Optional[Any] = None,
     attachments: Optional[Any] = None,
 ) -> None:
-    if not supabase:
+    if not _conversation_store_available():
         return
     user_data_id = _ensure_user_data_record(user_id)
     if user_data_id is None:
@@ -1302,7 +1430,7 @@ def _insert_general_conversation_message(
 
 
 def _replace_general_conversation_history(user_id: int, history: List[Dict[str, Any]]) -> None:
-    if not supabase:
+    if not _conversation_store_available():
         return
     try:
         user_data_id = _ensure_user_data_record(user_id)
@@ -1328,7 +1456,7 @@ def _replace_general_conversation_history(user_id: int, history: List[Dict[str, 
 
 
 def _delete_general_conversation_history(user_id: int) -> None:
-    if not supabase:
+    if not _conversation_store_available():
         return
     try:
         supabase.table("general_chat_messages").delete().eq("user_id", user_id).execute()
@@ -2731,6 +2859,20 @@ async def _delete_calendar_event(user_id: int, args: Dict[str, Any], db: databas
     return {"status": "success", "message": "Event deleted."}
 
 
+async def _complete_onboarding(user_id: int, args: Dict[str, Any], db: databases.Database) -> Dict[str, Any]:
+    core_blocker = args.get("core_blocker")
+    # Log the blocker to personalization_about
+    await db.execute(
+        users.update()
+        .where(users.c.id == user_id)
+        .values(
+            has_seen_general_chat=True,
+            personalization_about=f"Core Blocker: {core_blocker}",
+            updated_at=datetime.utcnow()
+        )
+    )
+    return {"status": "success", "message": "Onboarding completed."}
+
 async def _execute_function_call(
     function_call: types.FunctionCall,
     user_id: int,
@@ -2742,6 +2884,7 @@ async def _execute_function_call(
         "create_calendar_event": lambda u, a, d: _create_calendar_event(u, a, d),
         "update_calendar_event": lambda u, a, d: _update_calendar_event(u, a, d),
         "delete_calendar_event": lambda u, a, d: _delete_calendar_event(u, a, d),
+        "complete_onboarding": lambda u, a, d: _complete_onboarding(u, a, d),
     }.get(function_call.name)
     if not handler:
         raise HTTPException(status_code=501, detail=f"Unsupported function: {function_call.name}")
@@ -3367,6 +3510,7 @@ async def stream_ai_response(
     file_search_enabled: bool = False,
     should_generate_title: bool = False,
     reasoning_mode: bool = False,
+    tools: Optional[List[types.Tool]] = None,
 ) -> AsyncGenerator[Tuple[str, Any], None]:
     """Yield token chunks using the configured AI provider."""
     # Check usage limits
@@ -3435,7 +3579,10 @@ async def stream_ai_response(
     if file_search_enabled:
          file_search_tools = await _build_file_search_tools(db, user_id)
 
-    base_tools: List[types.Tool] = DEFAULT_CHAT_TOOLS if search_enabled else []
+    if tools is not None:
+        base_tools = tools
+    else:
+        base_tools = DEFAULT_CHAT_TOOLS if search_enabled else []
     tool_list = [*base_tools, *maps_tools, *file_search_tools]
     grounding_metadata: Optional[Dict[str, Any]] = None
     if GEMINI_SERVICE.available:
@@ -3467,6 +3614,16 @@ async def stream_ai_response(
                 accumulated += text_fragment
                 if text_fragment:
                     yield ("delta", text_fragment)
+                
+                # Check for function calls
+                if chunk.candidates:
+                    candidate = chunk.candidates[0]
+                    for part in candidate.content.parts:
+                        if part.function_call:
+                            try:
+                                await _execute_function_call(part.function_call, user_id, db)
+                            except Exception as e:
+                                api_logger.error(f"Tool execution failed: {e}")
             
             if final_usage and user_id is not None and db is not None:
                 tracker = UsageTracker(db)
@@ -3512,6 +3669,7 @@ async def generate_ai_response(
     file_search_enabled: bool = False,
     should_generate_title: bool = False,
     reasoning_mode: bool = False,
+    tools: Optional[List[types.Tool]] = None,
 ) -> Tuple[str, Optional[Dict[str, Any]]]:
     """Generate a structured response using the configured AI provider."""
     # Check usage limits if user context is available
@@ -3532,6 +3690,8 @@ async def generate_ai_response(
             return limit_msg, None
 
     conversation_history = _normalize_conversation_history(conversation_history)
+    if not (message or "").strip() and not conversation_history and not (attachments or []):
+        message = "Let's get started."
     provider = AI_PROVIDER or "gemini"
 
     cached_contents = None
@@ -3583,7 +3743,10 @@ async def generate_ai_response(
     if file_search_enabled:
          file_search_tools = await _build_file_search_tools(db, user_id)
 
-    base_tools: List[types.Tool] = DEFAULT_CHAT_TOOLS if search_enabled else []
+    if tools is not None:
+        base_tools = tools
+    else:
+        base_tools = DEFAULT_CHAT_TOOLS if search_enabled else []
     tool_list = [*base_tools, *maps_tools, *file_search_tools]
     grounding_metadata: Optional[Dict[str, Any]] = None
     if GEMINI_SERVICE.available:
@@ -3612,6 +3775,15 @@ async def generate_ai_response(
                     response.usage_metadata.prompt_token_count or 0,
                     response.usage_metadata.candidates_token_count or 0
                 )
+
+            if response.candidates:
+                candidate = response.candidates[0]
+                for part in candidate.content.parts:
+                    if part.function_call:
+                        try:
+                            await _execute_function_call(part.function_call, user_id, db)
+                        except Exception as e:
+                            api_logger.error(f"Tool execution failed: {e}")
 
             if response.candidates:
                 candidate = response.candidates[0]
@@ -3698,19 +3870,17 @@ def _starter_profile_context(payload: ChatStarterRequest) -> str:
 
 def _starter_fallback_message(payload: ChatStarterRequest) -> str:
     preferred = (payload.nickname or payload.name or "there").strip() or "there"
-    return (
-        f"Hey {preferred}, I’m Gray. "
-        "To get things rolling you can tell me what’s on deck today, ask for ideas, or just jot a reminder. "
-        "If nothing’s urgent, I can still help you plan the next move."
-    )
+    return f"Hey {preferred}! I'm Gray. I'm here to help you stay on track and build momentum. What's the main thing you're focused on right now?"
 
 
 def _build_starter_prompt(payload: ChatStarterRequest, profile_context: str) -> str:
     prompt_parts = [
-        "You are Gray, a pragmatic alignment coach who speaks in first person.",
-        "Write one short greeting (two sentences max) to kick off a chat.",
+        "You are Gray, a smart productivity partner here to help users gain clarity and momentum.",
+        "Write a warm, brief greeting (2-3 sentences) to kick off a chat with a new user.",
+        "Introduce yourself simply as Gray.",
+        "Ask them one specific question to get started, like 'What's the main thing you're focused on right now?'",
+        "Keep the tone casual, friendly, and encouraging. Avoid corporate speak or being overly formal.",
         "Reference the person’s preferred name if provided.",
-        "Invite them to share what’s on their mind without sounding generic.",
     ]
     if profile_context:
         prompt_parts.append(f"Profile hints:\n{profile_context}")
@@ -4110,27 +4280,28 @@ async def chat_with_ai(request: ChatRequest, db: databases.Database = Depends(ge
         raise HTTPException(status_code=500, detail=f"Chat error: {str(e)}")
 
 
-ONBOARDING_SYSTEM_PROMPT = """
-You are Gray, a smart financial command center and productivity partner.
-You are currently onboarding a new user. Your goal is to get to know them better to personalize their experience.
-Do not give them a to-do list yet.
-Ask them the following questions, one by one, in a conversational manner. Wait for their answer before asking the next one.
-1. What should I call you?
-2. Where are you based?
-3. What are you focused on this season? (Themes, pursuits, or arenas you want front and center)
-4. List 1-3 outcomes you want Gray to keep you accountable to. (Make them tangible)
-5. What recent wins or forward momentum are you proud of?
-6. Where does momentum slip, or what friction should I watch for?
-7. How should I support you week to week? (Rhythm, channel, check-ins)
+DEFAULT_ONBOARDING_SYSTEM_PROMPT = """
+You are Gray, a smart productivity partner here to help users gain clarity and momentum.
 
-After you have gathered all this information, summarize it back to them and welcome them to Gray.
-Keep your tone:
-- Raw and honest
-- Quick and clever humor
-- Talk like a member of Gen Z
-- Forward-thinking
-- Empathetic but holding them accountable
+This is a new user's first interaction. Keep it warm, brief, and action-oriented.
+
+Introduce yourself simply: "Hey! I'm Gray. I'm here to help you stay on track and build momentum."
+
+Then ask just 2-3 quick questions to get started:
+1. What name should I use when I hype you up?
+2. What's the main thing you're building toward right now?
+
+That's it. Keep it casual and encouraging. Don't overwhelm them with a long questionnaire.
+After they share, acknowledge what they said and let them know you're ready to help them stay accountable.
+
+Tone:
+- Warm and friendly, like a supportive friend
+- Brief and to the point
+- Encouraging without being pushy
+- Gen Z casual but not forced
 """
+
+ONBOARDING_SYSTEM_PROMPT = load_prompt_from_file(ONBOARDING_PROMPT_PATH, DEFAULT_ONBOARDING_SYSTEM_PROMPT)
 
 
 @app.post("/api/chat/stream")
@@ -4158,23 +4329,21 @@ async def chat_with_ai_stream(request: ChatRequest, db: databases.Database = Dep
         # Handle Onboarding Logic
         effective_message = request.message
         effective_system_prompt = request.system_prompt
+        tool_list = None
 
         if user_record and not user_record["has_seen_general_chat"]:
+            # Always use onboarding prompt for the first interaction
+            effective_system_prompt = ONBOARDING_SYSTEM_PROMPT
+            tool_list = list(ONBOARDING_TOOLS)
+            
+            # Force a capable model for onboarding tools
+            request.model = "models/gemini-1.5-flash"
+            
             # If this is the very first interaction (triggered by frontend with empty message usually)
             if not effective_message or not effective_message.strip():
                 effective_message = "Hi Gray, I'm new here. Let's get started."
-                effective_system_prompt = ONBOARDING_SYSTEM_PROMPT
-                
-                # Mark as seen so next time it's normal chat
-                await db.execute(
-                    users.update()
-                    .where(users.c.id == request.user_id)
-                    .values(
-                        has_seen_general_chat=True,
-                        updated_at=datetime.utcnow()
-                    )
-                )
-                api_logger.info(f"User {request.user_id} started onboarding flow")
+            
+            api_logger.info(f"User {request.user_id} is in onboarding flow")
 
         # Generate a title for the chat session (only if requested)
         session_title = None
@@ -4232,6 +4401,10 @@ async def chat_with_ai_stream(request: ChatRequest, db: databases.Database = Dep
         if conversation_id:
             conversation_history = await _load_conversation_history(conversation_id)
 
+        # Avoid sending an empty payload to the AI provider (Gemini rejects requests with no contents).
+        if not (effective_message or "").strip() and not conversation_history and not (request.attachments or []):
+            effective_message = "Let's get started."
+
         user_message_payload: Dict[str, Any] = {
             "role": "user",
             "text": effective_message,
@@ -4283,6 +4456,7 @@ async def chat_with_ai_stream(request: ChatRequest, db: databases.Database = Dep
                     file_search_enabled=request.file_search_enabled,
                     should_generate_title=request.should_generate_title,
                     reasoning_mode=effective_reasoning_mode,
+                    tools=tool_list,
                 ):
                     if kind == "delta":
                         if not payload:
@@ -4379,6 +4553,24 @@ async def chat_with_ai_stream(request: ChatRequest, db: databases.Database = Dep
 
         clear_request_context()
         return StreamingResponse(error_stream(), status_code=500, media_type="text/event-stream")
+
+class MessageCreateRequest(BaseModel):
+    role: str
+    text: str
+    user_id: Optional[int] = None
+
+@app.post("/api/conversation/{conversation_id}/messages")
+async def create_conversation_message(conversation_id: str, request: MessageCreateRequest):
+    """Manually append a message to a conversation history."""
+    try:
+        payload = {
+            "role": request.role,
+            "text": request.text
+        }
+        await save_conversation_message(conversation_id, payload, user_id=request.user_id)
+        return {"status": "success"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error saving message: {str(e)}")
 
 @app.get("/api/conversation/{conversation_id}")
 async def get_conversation(conversation_id: str):

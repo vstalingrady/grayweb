@@ -73,14 +73,79 @@ const adaptEnvBaseUrlForClientHost = (value: string): string => {
   return value;
 };
 
+const enforceSecureBaseUrl = (value: string): string => {
+  const trimmed = stripTrailingSlashes(value);
+  if (!trimmed || trimmed.startsWith('/')) {
+    return trimmed;
+  }
+
+  const lower = trimmed.toLowerCase();
+  const isInsecureHttp = lower.startsWith('http://');
+  const isSecureContext = typeof window !== 'undefined' && window.location?.protocol === 'https:';
+
+  if (!isSecureContext || !isInsecureHttp) {
+    return trimmed;
+  }
+
+  let hostname: string | null = null;
+  try {
+    hostname = new URL(trimmed).hostname;
+  } catch {
+    hostname = null;
+  }
+
+  if (hostname && isLocalLikeHostname(hostname)) {
+    return trimmed;
+  }
+
+  if (!isProxyDisabled()) {
+    return API_PROXY_PREFIX;
+  }
+
+  return stripTrailingSlashes(trimmed.replace(/^http:\/\//i, 'https://'));
+};
+
 export const resolveApiBaseUrl = () => {
+  // Hardcoded override to prevent Mixed Content errors on the production domain.
+  // This ensures we always use the relative proxy path instead of trying to hit port 8000 directly.
+  if (typeof window !== 'undefined') {
+    if (window.location.hostname === 'gray.alignment.id' || window.location.protocol === 'https:') {
+      return API_PROXY_PREFIX;
+    }
+  }
+
   const envUrl = process.env.NEXT_PUBLIC_API_URL?.trim();
   if (envUrl) {
     const adaptedUrl = adaptEnvBaseUrlForClientHost(envUrl);
+    let adaptedHostname: string | null = null;
+    try {
+      adaptedHostname = new URL(adaptedUrl, typeof window !== 'undefined' ? window.location.origin : undefined).hostname;
+    } catch {
+      adaptedHostname = null;
+    }
+    const isSecureContext = typeof window !== 'undefined' && window.location?.protocol === 'https:';
+    const usesInsecureHttp = adaptedUrl.toLowerCase().startsWith('http://');
+
+    // Force HTTPS or proxy for non-local hosts even during SSR to avoid mixed-content requests.
+    if (usesInsecureHttp && adaptedHostname && !isLocalLikeHostname(adaptedHostname)) {
+      if (!isProxyDisabled()) {
+        return API_PROXY_PREFIX;
+      }
+      return stripTrailingSlashes(adaptedUrl.replace(/^http:\/\//i, 'https://'));
+    }
+
+    // Avoid mixed-content fetches when the page is served over HTTPS.
+    if (isSecureContext && usesInsecureHttp) {
+      if (!isProxyDisabled()) {
+        return API_PROXY_PREFIX;
+      }
+      return stripTrailingSlashes(adaptedUrl.replace(/^http:\/\//i, 'https://'));
+    }
+
     if (shouldUseProxyBase(adaptedUrl)) {
       return API_PROXY_PREFIX;
     }
-    return stripTrailingSlashes(adaptedUrl);
+    return enforceSecureBaseUrl(adaptedUrl);
   }
 
   if (shouldUseProxyBase()) {
@@ -90,7 +155,7 @@ export const resolveApiBaseUrl = () => {
   if (typeof window !== 'undefined' && window.location) {
     const { origin, hostname } = window.location;
     if (hostname && hostname !== 'localhost' && hostname !== '127.0.0.1') {
-      return stripTrailingSlashes(origin);
+      return enforceSecureBaseUrl(origin);
     }
   }
 
@@ -102,10 +167,10 @@ export const resolveApiBaseUrl = () => {
 
   if (runtimeUrl && runtimeUrl.trim().length > 0) {
     const normalized = runtimeUrl.startsWith('http') ? runtimeUrl : `https://${runtimeUrl}`;
-    return stripTrailingSlashes(normalized);
+    return enforceSecureBaseUrl(normalized);
   }
 
-  return stripTrailingSlashes(DEV_FALLBACK_API_URL);
+  return enforceSecureBaseUrl(DEV_FALLBACK_API_URL);
 };
 
 const isDevEnv = () => process.env.NODE_ENV !== 'production';
@@ -173,6 +238,7 @@ export interface User {
   personalization_occupation?: string | null;
   personalization_about?: string | null;
   personalization_custom_instructions?: string | null;
+  personalization_show_calendar?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -612,6 +678,7 @@ export interface UserUpdate {
   personalization_occupation?: string | null;
   personalization_about?: string | null;
   personalization_custom_instructions?: string | null;
+  personalization_show_calendar?: boolean;
 }
 
 class ApiService {
@@ -672,19 +739,31 @@ class ApiService {
         const responseTime = performance.now() - startTime;
 
         if (shouldLogErrors) {
-          console.error(`[ERROR][ApiService.fetch:response-error]`, {
-            requestId,
-            endpoint,
-            url,
-            method: config.method ?? 'GET',
-            status: response.status,
-            statusText: response.statusText,
-            errorDetail: (errorData as { detail?: unknown })?.detail ?? null,
-            responseTimeMs: responseTime,
-            contentType: response.headers.get('content-type'),
-            timestamp: new Date().toISOString(),
-            eventType: 'api_response_error',
-          });
+          // Don't log 404s as errors, as they are often used for control flow (e.g. checking if user exists)
+          if (response.status === 404) {
+            console.debug(`[INFO][ApiService.fetch:response-404]`, {
+              requestId,
+              endpoint,
+              url,
+              method: config.method ?? 'GET',
+              status: response.status,
+              timestamp: new Date().toISOString(),
+            });
+          } else {
+            console.error(`[ERROR][ApiService.fetch:response-error]`, {
+              requestId,
+              endpoint,
+              url,
+              method: config.method ?? 'GET',
+              status: response.status,
+              statusText: response.statusText,
+              errorDetail: (errorData as { detail?: unknown })?.detail ?? null,
+              responseTimeMs: responseTime,
+              contentType: response.headers.get('content-type'),
+              timestamp: new Date().toISOString(),
+              eventType: 'api_response_error',
+            });
+          }
         }
 
         throw new ApiError(
@@ -749,7 +828,7 @@ class ApiService {
 
       if (error instanceof ApiError && error.status === 404) {
         if (shouldLogErrors) {
-          console.log(`[${logLevel.toUpperCase()}][ApiService.fetch:404-error]`, {
+          console.debug(`[DEBUG][ApiService.fetch:404-error]`, {
             requestId,
             endpoint,
             url,
@@ -1573,6 +1652,13 @@ class ApiService {
     await this.fetch<void>(`/api/conversation/${encodeURIComponent(conversationId)}/history`, {
       method: 'PUT',
       body: JSON.stringify({ messages }),
+    });
+  }
+
+  async saveMessage(conversationId: string, role: 'user' | 'model', text: string, userId?: number): Promise<void> {
+    await this.fetch(`/api/conversation/${conversationId}/messages`, {
+      method: 'POST',
+      body: JSON.stringify({ role, text, user_id: userId }),
     });
   }
 

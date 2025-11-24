@@ -604,18 +604,21 @@ export function GrayDashboardView({
   const [customSettings, setCustomSettings] = useState<CustomSettingsState>(() => ({
     times: activeProactivityTimes.length > 0 ? activeProactivityTimes : [...DEFAULT_CUSTOM_SETTINGS.times],
   }));
-  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | "unsupported">(() => {
+  const resolveNotificationPermission = useCallback((): NotificationPermission | "unsupported" => {
     if (typeof window === "undefined" || typeof Notification === "undefined") {
       return "unsupported";
     }
-    return Notification.permission;
-  });
-  useEffect(() => {
-    if (typeof window === "undefined" || typeof Notification === "undefined") {
-      return;
+    if (window.isSecureContext === false) {
+      return "unsupported";
     }
-    setNotificationPermission(Notification.permission);
+    return Notification.permission;
   }, []);
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | "unsupported">(() =>
+    resolveNotificationPermission()
+  );
+  useEffect(() => {
+    setNotificationPermission(resolveNotificationPermission());
+  }, [resolveNotificationPermission]);
   const handleNotificationEnable = useCallback(async () => {
     const permission = await requestNotificationPermission();
     if (permission) {
@@ -670,7 +673,7 @@ export function GrayDashboardView({
     notificationPermission !== "granted" && notificationPermission !== "unsupported";
   const notificationBannerLabel =
     notificationPermission === "denied"
-      ? "Desktop alerts are blocked in your browser settings."
+      ? "Desktop alerts are off. Allow notifications in your browser settings to get nudges."
       : "Enable desktop alerts so Gray can nudge you when check-ins land.";
   const pulseEntriesByDate = useMemo(() => {
     const map = new Map<string, PulseEntry>();
@@ -1544,26 +1547,15 @@ export function GrayDashboardView({
             : (section as any).layout === "stacked"
               ? `${styles.dashboardGrid} ${styles.pulseGridStacked}`
               : styles.dashboardGrid;
-        const showHeader = variant === "compact";
+        const showHeader = false; // Don't show section headers in pulse view
         return (
-          <section
-            key={section.id}
-            className={`${styles.dashboardSection} ${variant === "compact" ? styles.dashboardSectionCompact : ""}`}
-          >
-            {showHeader ? (
-              <header className={styles.dashboardSectionHeader}>
-                <p className={styles.dashboardSectionEyebrow}>{section.subtitle}</p>
-                <h3>{section.title}</h3>
-              </header>
-            ) : null}
-            <div className={gridClass}>
-              {section.cards.map(({ id, element }) => (
-                <div key={`${section.id}-${id}`} className={styles.dashboardSectionCard}>
-                  {element}
-                </div>
-              ))}
-            </div>
-          </section>
+          <div key={section.id} className={gridClass}>
+            {section.cards.map(({ id, element }) => (
+              <div key={`${section.id}-${id}`} className={styles.dashboardSectionCard}>
+                {element}
+              </div>
+            ))}
+          </div>
         );
       });
     },
@@ -1629,13 +1621,11 @@ export function GrayDashboardView({
         activeTab={activeTab}
         onSelectTab={onSelectTab}
         className={headerClassName}
+        hideCalendar={hideCalendar}
       />
       <div className={styles.dashboardCompact}>
-        <div className={styles.dashboardCompactMeta}>
-          <span className={styles.dashboardCompactRange}>{pulseRangeLabel}</span>
-          <span className={styles.dashboardCompactTimezone}>{timezoneLabel}</span>
-        </div>
-        <div className={styles.dashboardCompactGrid}>{renderDashboardSections("compact")}</div>
+
+        {renderDashboardSections("compact")}
       </div>
     </>
   );

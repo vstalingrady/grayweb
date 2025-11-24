@@ -48,6 +48,10 @@
   --radius-sm: 12px;
   --shadow-deep: 0 64px 120px rgba(0, 0, 0, 0.85);
   --shadow-soft: 0 24px 54px rgba(0, 0, 0, 0.5);
+  --gray-chat-bar-clearance: clamp(0px, 1.5vh, 16px);
+  --gray-general-max-width: 1220px;
+  --gray-general-inline-gutter: clamp(16px, 4vw, 36px);
+  --gray-dashboard-max-width: 1360px;
 }
 
 *,
@@ -94,21 +98,27 @@ html::-webkit-scrollbar-track {
 .plus-jakarta-sans-200 {
   font-weight: 200;
 }
+
 .plus-jakarta-sans-300 {
   font-weight: 300;
 }
+
 .plus-jakarta-sans-400 {
   font-weight: 400;
 }
+
 .plus-jakarta-sans-500 {
   font-weight: 500;
 }
+
 .plus-jakarta-sans-600 {
   font-weight: 600;
 }
+
 .plus-jakarta-sans-700 {
   font-weight: 700;
 }
+
 .plus-jakarta-sans-800 {
   font-weight: 800;
 }
@@ -206,10 +216,13 @@ html::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.28);
 }
 
-html::-webkit-scrollbar-button {
-  display: none;
-  width: 0;
-  height: 0;
+html::-webkit-scrollbar-button,
+body::-webkit-scrollbar-button {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
 }
 
 body {
@@ -427,7 +440,7 @@ pre {
   line-height: 1.6;
 }
 
-.legal-article li + li {
+.legal-article li+li {
   margin-top: 0.35rem;
 }
 

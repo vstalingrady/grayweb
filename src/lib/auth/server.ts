@@ -9,6 +9,8 @@ export const readServerSession = async (): Promise<ServerSession | null> => {
   const authCookie = cookieStore.get("gray-auth");
   const emailCookie = cookieStore.get("gray-auth-email");
 
+
+
   if (!authCookie || !emailCookie?.value) {
     return null;
   }

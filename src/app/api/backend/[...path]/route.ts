@@ -98,15 +98,12 @@ const proxyRequest = async (request: NextRequest, pathSegments: string[] = []) =
 
 export const runtime = "nodejs";
 
-// Align with Next 16 route handler typing where `context.params` may be a Promise
-// in the type definition. We defensively support both sync and async params.
-type RouteParams = { path?: string[] } | Promise<{ path?: string[] }>;
-type RouteContext = { params: RouteParams };
+// In Next.js 15, route params are always async and must be awaited
+type RouteParams = { path?: string[] };
+type RouteContext = { params: Promise<RouteParams> };
 
 const getPathSegments = async (context: RouteContext) => {
-  const params = (typeof (context as any).params?.then === "function")
-    ? await (context.params as Promise<{ path?: string[] }>)
-    : (context.params as { path?: string[] } | undefined);
+  const params = await context.params;
   return params?.path ?? [];
 };
 

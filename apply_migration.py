@@ -31,7 +31,7 @@ async def apply_migration():
         print("✅ Connected to database")
         
         # Read migration file
-        migration_file = Path(__file__).parent / 'supabase' / 'migrations' / '20251121000003_add_last_six_hour_reset.sql'
+        migration_file = Path(__file__).parent / 'supabase' / 'migrations' / '20251116133000_refactor_chat_tables.sql'
         
         if not migration_file.exists():
             print(f"❌ Migration file not found: {migration_file}")

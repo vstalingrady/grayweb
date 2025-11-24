@@ -1,6 +1,7 @@
 from google.genai import types
 
-LIST_CALENDAR_EVENTS_TOOL = types.Tool(
+
+CALENDAR_TOOL = types.Tool(
     function_declarations=[
         types.FunctionDeclaration(
             name="list_calendar_events",
@@ -23,12 +24,7 @@ LIST_CALENDAR_EVENTS_TOOL = types.Tool(
                 },
                 required=[],
             ),
-        )
-    ]
-)
-
-CREATE_CALENDAR_EVENT_TOOL = types.Tool(
-    function_declarations=[
+        ),
         types.FunctionDeclaration(
             name="create_calendar_event",
             description="Create a new calendar event.",
@@ -58,12 +54,7 @@ CREATE_CALENDAR_EVENT_TOOL = types.Tool(
                 },
                 required=["title", "start_time", "end_time"],
             ),
-        )
-    ]
-)
-
-UPDATE_CALENDAR_EVENT_TOOL = types.Tool(
-    function_declarations=[
+        ),
         types.FunctionDeclaration(
             name="update_calendar_event",
             description="Update an existing calendar event.",
@@ -97,12 +88,7 @@ UPDATE_CALENDAR_EVENT_TOOL = types.Tool(
                 },
                 required=["event_id"],
             ),
-        )
-    ]
-)
-
-DELETE_CALENDAR_EVENT_TOOL = types.Tool(
-    function_declarations=[
+        ),
         types.FunctionDeclaration(
             name="delete_calendar_event",
             description="Delete a calendar event.",
@@ -120,9 +106,5 @@ DELETE_CALENDAR_EVENT_TOOL = types.Tool(
     ]
 )
 
-CALENDAR_TOOLS = [
-    LIST_CALENDAR_EVENTS_TOOL,
-    CREATE_CALENDAR_EVENT_TOOL,
-    UPDATE_CALENDAR_EVENT_TOOL,
-    DELETE_CALENDAR_EVENT_TOOL,
-]
+# Export as a list to maintain compatibility with main.py unpacking
+CALENDAR_TOOLS = [CALENDAR_TOOL]

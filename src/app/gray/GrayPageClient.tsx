@@ -3,7 +3,8 @@
 import { usePathname, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { ChangeEvent, FormEvent, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Gem, MessageSquarePlus, LayoutDashboard, History, Search, FileText } from "lucide-react";
+import { Gem, MessageSquarePlus, LayoutDashboard, History, Search, FileText, Menu, Paperclip, Mic, Rocket, Ghost, Zap } from "lucide-react";
+
 import { GrayEnhancedSidebar } from "@/components/gray/EnhancedSidebar";
 import { AddPlanHabitModal } from "@/components/gray/AddPlanHabitModal";
 import { GrayChatBar, type GrayChatBarProps } from "@/components/gray/ChatBar";
@@ -61,6 +62,7 @@ import { useProactivity } from "@/components/gray/hooks/useProactivity";
 import { usePulse } from "@/components/gray/hooks/usePulse";
 import { sanitizeEventColor, DEFAULT_EVENT_COLOR, REMINDER_RETENTION_WINDOW_MS } from "./constants";
 import { toDateKey, normalizeProactivityTimes, primaryProactivityTime, normalizeProactivityChannels } from "./utils";
+import { MobileSuggestionCards } from "@/components/gray/MobileSuggestionCards";
 
 const GrayDashboardView = dynamic(
   () => import("@/components/gray/DashboardView").then((mod) => mod.GrayDashboardView),
@@ -582,30 +584,53 @@ function GrayPageClientInner({
     }
   }, [user?.has_seen_general_chat]);
 
-  useEffect(() => {
-    if (!user || loading) return;
-    if (onboardingTriggeredRef.current) return;
-
-    // If we are in a view that shows the general chat
-    if (activeNav !== "threads" && (supportsInlineChat || activeNav === "general")) {
-      // And the user hasn't seen it yet
-      if (!user.has_seen_general_chat && !hasSeenGeneralChat && generalSessionId) {
-        const session = getSession(generalSessionId);
-        // Only trigger if the session is empty (new)
-        if (session && session.messages.length === 0 && !session.isResponding) {
-          console.log("[GrayPageClient] Triggering onboarding flow...");
-          // Send empty message to trigger backend onboarding logic
-          sendGeneralMessage("");
-          // Optimistically mark as seen to prevent double-trigger
-          setHasSeenGeneralChat(true);
-          onboardingTriggeredRef.current = true;
-        }
-      }
-    }
-  }, [user, loading, activeNav, supportsInlineChat, hasSeenGeneralChat, generalSessionId, getSession, sendGeneralMessage]);
-
-  const [isSidebarExpanded, setIsSidebarExpanded] = useState<boolean>(true);
+  const [isSidebarExpanded, setIsSidebarExpanded] = useState<boolean>(false);
   const [hasLoadedSidebarPref, setHasLoadedSidebarPref] = useState(false);
+  const [isMobileViewport, setIsMobileViewport] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const handleResize = () => {
+      const width = window.innerWidth || 0;
+      const hasCoarsePointer = window.matchMedia("(pointer: coarse)").matches;
+      const shouldCollapseSidebar = width <= 768 || (hasCoarsePointer && width <= 1024);
+
+      setIsMobileViewport(shouldCollapseSidebar);
+
+      setIsSidebarExpanded((previous) => {
+        if (shouldCollapseSidebar) {
+          return false;
+        }
+        if (!hasLoadedSidebarPref) {
+          return true;
+        }
+        return previous;
+      });
+
+      if (!hasLoadedSidebarPref) {
+        setHasLoadedSidebarPref(true);
+      }
+    };
+
+    // Initial check
+    handleResize();
+
+    window.addEventListener("resize", handleResize);
+    window.addEventListener("orientationchange", handleResize);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      window.removeEventListener("orientationchange", handleResize);
+    };
+  }, [hasLoadedSidebarPref]);
+
   const [dashboardTab, setDashboardTab] = useState<"pulse" | "calendar">("pulse");
   const [isPersonalizationOpen, setIsPersonalizationOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -619,6 +644,8 @@ function GrayPageClientInner({
   const [workspaceBackgroundId, setWorkspaceBackgroundId] = useState<string>(() =>
     user?.workspace_background_id ?? GREAT_WAVE_BACKGROUND.id
   );
+
+
 
   useEffect(() => {
     if (user?.workspace_background_id) {
@@ -830,7 +857,7 @@ function GrayPageClientInner({
           proactivityDeliveryKeys={deliveredProactivityKeys}
           onReminderMove={handleReminderMove}
           streakCount={streakCount}
-          hideCalendar={isScout}
+          hideCalendar={isScout || !(user?.personalization_show_calendar ?? true)}
         />
       );
     }
@@ -859,6 +886,7 @@ function GrayPageClientInner({
     return (
       <div className={styles.generalViewSection}>
         <GrayGeneralView
+          hideCalendar={isScout || !(user?.personalization_show_calendar ?? true)}
           greeting={greeting}
           dateLabel={workspaceDateLabel}
           calendarEvents={derivedEvents}
@@ -888,15 +916,13 @@ function GrayPageClientInner({
     );
   };
 
-  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
-
   // Close mobile sidebar on navigation
   const handleMobileNavigate = (nav: SidebarNavKey) => {
     handleNavigate(nav);
-    setIsMobileSidebarOpen(false);
+    if (isMobileViewport) {
+      setIsSidebarExpanded(false);
+    }
   };
-
-
 
   // Fetch context usage for general session when personalization is open
   useEffect(() => {
@@ -2672,60 +2698,88 @@ function GrayPageClientInner({
       />
     )
     : null;
+  const effectiveIsMobileViewport = isMounted ? isMobileViewport : false;
+  const effectiveIsSidebarExpanded = isMounted ? isSidebarExpanded : false;
 
   return (
     <>
       <div
         className={styles.page}
-        data-variant={variant}
-        data-dashboard-tab={dashboardTabAttr}
-        data-compact={isCompactLayout ? "true" : "false"}
-        data-general-attachments={generalAttachmentsActive ? "true" : "false"}
-        data-workspace-background={shouldShowWorkspaceBackground ? "true" : "false"}
-        data-chat-layout={isFullPageChatLayout ? "full" : "embedded"}
+        data-workspace-background={Boolean(activeWorkspaceBackground && isWorkspaceBackgroundAllowed)}
+        data-dashboard-tab={activeNav === "dashboard" ? dashboardTab : undefined}
+        data-mobile-sidebar={effectiveIsMobileViewport ? "true" : "false"}
       >
-        {shouldShowWorkspaceBackground ? (
-          <>
-            <div
-              className={styles.backdrop}
-              aria-hidden="true"
-              style={{ background: workspaceBackdropStyle }}
-            />
-            <div className={styles.overlay} aria-hidden="true" />
-          </>
-        ) : null}
+        {/* Mobile Header - only rendered after hydration to avoid SSR/CSR mismatch */}
+        {isMounted && (
+          <div className={styles.mobileHeader}>
+            <button
+              className={styles.mobileMenuButton}
+              onClick={() => setIsSidebarExpanded(!isSidebarExpanded)}
+            >
+              <Menu size={24} />
+            </button>
+
+            {isScout && (
+              <button className={styles.upgradePill} onClick={handleUpgradePlan}>
+                <Zap size={14} />
+                <span>Upgrade</span>
+              </button>
+            )}
+
+            <button className={styles.mobileProfileButton}>
+              {viewerAvatarUrl ? (
+                <img src={viewerAvatarUrl} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
+              ) : (
+                <div className={styles.mobileProfileAvatar}>{viewerInitials}</div>
+              )}
+            </button>
+          </div>
+        )}
+
+        {activeWorkspaceBackground && isWorkspaceBackgroundAllowed && (
+          <div
+            className={styles.backdrop}
+            style={{
+              background: workspaceBackdropStyle,
+            }}
+          />
+        )}
+
         <div className={styles.shell}>
-          <div className={styles.layout} data-view={viewMode}>
-            {/* Mobile Overlay */}
-            <div
-              className={styles.mobileSidebarOverlay}
-              data-visible={isMobileSidebarOpen ? "true" : "false"}
-              onClick={() => setIsMobileSidebarOpen(false)}
-            />
+          <div
+            className={styles.layout}
+            data-view={viewMode}
+            data-mobile-sidebar={effectiveIsMobileViewport ? "true" : "false"}
+          >
             <GrayEnhancedSidebar
-              isExpanded={isSidebarExpanded || isMobileSidebarOpen}
+              activeNav={activeNav ?? "general"}
+              isExpanded={effectiveIsSidebarExpanded}
+              onToggle={() => setIsSidebarExpanded((prev) => !prev)}
+              onExpand={() => setIsSidebarExpanded(true)}
+              onCollapse={() => setIsSidebarExpanded(false)}
               viewerName={viewerName}
               viewerInitials={viewerInitials}
               viewerAvatarUrl={viewerAvatarUrl}
               viewerPlanLabel={viewerPlanLabel}
-              activeNav={sidebarActiveNav}
-              railItems={filteredRailItems}
               navItems={filteredSidebarItems}
+              railItems={filteredRailItems}
               historySections={historySections}
-              onExpand={() => setIsSidebarExpanded(true)}
-              onCollapse={() => {
-                setIsSidebarExpanded(false);
-                setIsMobileSidebarOpen(false);
-              }}
-              onToggle={() => setIsSidebarExpanded((previous) => !previous)}
               onNavigate={handleMobileNavigate}
-              activeChatId={currentChatId}
+              activeChatId={activeChatId ?? generalSessionId}
               onOpenPersonalization={handleOpenPersonalization}
               onOpenSettings={handleOpenSettings}
               onOpenHelp={handleOpenHelp}
               onUpgradePlan={handleUpgradePlan}
               onLogOut={handleLogOut}
             />
+
+            {/* Mobile Sidebar Overlay */}
+            {effectiveIsSidebarExpanded && effectiveIsMobileViewport && (
+              <div
+                className={styles.overlay}
+                onClick={() => setIsSidebarExpanded(false)}
+              />
+            )}
 
             <div
               className={styles.main}
@@ -2736,27 +2790,63 @@ function GrayPageClientInner({
               data-general-attachments={generalAttachmentsActive ? "true" : "false"}
               data-dashboard-free="true"
             >
-              {/* Mobile Header */}
-              <div className={styles.mobileHeader}>
-                <button
-                  className={styles.mobileMenuButton}
-                  onClick={() => setIsMobileSidebarOpen(true)}
-                >
-                  <LayoutDashboard size={24} />
-                </button>
-                <span style={{ fontWeight: 600 }}>Gray</span>
-                <div style={{ width: 24 }} /> {/* Spacer */}
-              </div>
+              {/* Centered Transparent Logo */}
+              {viewMode === "general" && !activeChatId && (
+                <div className={styles.centerLogo}>
+                  <img src="/grayaiwhitenotspinning.svg" alt="" />
+                </div>
+              )}
               {isDashboardView ? renderPrimaryView() : renderMainSurface()}
               {viewMode === "general" && activeNav !== "reference" ? (
                 <>
-                  <ChatDraftInput
-                    variant="composer"
-                    onSubmitMessage={handleChatSubmit}
-                    showUnderline={false}
-                    onAddAttachment={openAttachmentPicker}
-                    attachmentTray={generalAttachmentTray}
-                  />
+                  {/* Desktop Chat Input */}
+                  <div className="hidden md:block">
+                    <ChatDraftInput
+                      variant="composer"
+                      onSubmitMessage={handleChatSubmit}
+                      showUnderline={false}
+                      onAddAttachment={openAttachmentPicker}
+                      attachmentTray={generalAttachmentTray}
+                    />
+                  </div>
+
+                  {/* Mobile Chat Input & Suggestions */}
+                  <div className="md:hidden">
+                    {!activeChatId && (
+                      <div style={{ position: 'fixed', bottom: 80, left: 0, right: 0, zIndex: 35 }}>
+                        <MobileSuggestionCards />
+                      </div>
+                    )}
+                    <div className={styles.mobileChatInputContainer}>
+                      <form
+                        className={styles.mobileChatInput}
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          const input = e.currentTarget.querySelector('input');
+                          if (input && input.value.trim()) {
+                            handleChatSubmit(input.value, { clear: () => { input.value = ''; }, restore: (v) => { input.value = v; } });
+                          }
+                        }}
+                      >
+                        <button type="button" className={styles.mobileChatActionButton} onClick={openAttachmentPicker}>
+                          <Paperclip size={20} />
+                        </button>
+                        <input
+                          type="text"
+                          placeholder="Ask anything"
+                          className={styles.mobileChatInputField}
+                        />
+                        <button type="button" className={styles.mobileChatActionButton} style={{ width: 'auto', padding: '0 12px', borderRadius: '20px', gap: '6px', fontSize: '0.85rem' }}>
+                          <Rocket size={16} />
+                          <span>Auto</span>
+                        </button>
+                        <button type="button" className={styles.mobileChatActionButton} data-variant="primary">
+                          <Mic size={20} />
+                        </button>
+                      </form>
+                    </div>
+                  </div>
+
                   <input
                     ref={attachmentInputRef}
                     type="file"
@@ -2786,6 +2876,7 @@ function GrayPageClientInner({
           <PersonalizationPanel
             viewerName={viewerName}
             viewerRole={user?.role || "Operator"}
+            viewerPlan={viewerPlanLabel}
             userId={userId}
             profileNickname={user?.personalization_nickname ?? null}
             profileOccupation={user?.personalization_occupation ?? null}

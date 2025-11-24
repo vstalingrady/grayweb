@@ -215,15 +215,8 @@ export const humanizeIdentifier = (input?: string | null): string | null => {
     return null;
   }
 
-  if (!/^[a-z]+$/i.test(token)) {
-    return TITLE_CASE(token);
-  }
-
-  const compoundSplit = splitCompactName(token);
-  if (compoundSplit) {
-    return compoundSplit.map(TITLE_CASE).join(" ");
-  }
-
+  // Disable aggressive splitting of compact names (e.g. vstalingrady -> Vstalin Grady)
+  // to respect user privacy and avoid hallucinating names.
   return TITLE_CASE(token);
 };
 
@@ -236,10 +229,7 @@ export const formatDisplayName = (
     return primaryName;
   }
 
-  const fallbackName = humanizeIdentifier(fallbackIdentifier);
-  if (fallbackName) {
-    return fallbackName;
-  }
-
-  return "Operator";
+  // If we don't have an explicit name, don't try to guess one from the email/ID.
+  // Just return "User" to be safe and polite.
+  return "User";
 };

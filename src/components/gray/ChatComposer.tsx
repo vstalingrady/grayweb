@@ -42,7 +42,7 @@ const GrayChatComposerBase = ({
         {showUnderline ? <div className={styles.chatBarUnderline} aria-hidden="true" /> : null}
       </div>
       {attachmentTray}
-      <p className={styles.chatDisclaimer}>Gray can make mistakes. Check important info.</p>
+
     </div>
   );
 };

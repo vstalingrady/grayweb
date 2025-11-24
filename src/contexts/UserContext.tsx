@@ -31,7 +31,9 @@ interface UserContextType {
     personalization_occupation?: string | null;
     personalization_about?: string | null;
     personalization_custom_instructions?: string | null;
+    personalization_show_calendar?: boolean;
     maps_enabled?: boolean;
+    has_seen_general_chat?: boolean;
   }) => Promise<void>;
   refreshUser: () => Promise<void>;
   waitForUser: () => Promise<User | null>;
@@ -140,6 +142,8 @@ const sanitizeCachedUser = (value: unknown): { user: User; timestamp: number } |
         raw.personalization_custom_instructions.length > 0
         ? raw.personalization_custom_instructions
         : null,
+    personalization_show_calendar:
+      typeof raw.personalization_show_calendar === 'boolean' ? raw.personalization_show_calendar : true,
     created_at:
       typeof raw.created_at === 'string' && raw.created_at.trim().length > 0
         ? raw.created_at
@@ -188,6 +192,8 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(() => Boolean(userEmail));
   const [error, setError] = useState<string | null>(null);
+  const isMountedRef = useRef(true);
+  const activeRequestIdRef = useRef(0);
   const pendingUserResolversRef = useRef<Set<(value: User | null) => void>>(new Set());
 
   const deriveNameFromEmail = (email: string) => humanizeIdentifier(email) ?? 'Operator';
@@ -198,6 +204,8 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
       if (!supabase) {
         return null;
       }
+
+
 
       const { data, error: supabaseError } = await supabase.auth.getUser();
       if (supabaseError) {
@@ -260,7 +268,8 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
     } catch (supabaseError) {
       // Avoid crashing the UI when Supabase is not configured.
       if (process.env.NODE_ENV !== 'production') {
-        console.warn('Supabase profile lookup failed:', supabaseError);
+        // Use log instead of warn to avoid triggering error overlays for non-critical failures
+        console.log('Supabase profile lookup failed (non-critical):', supabaseError);
       }
       return null;
     }
@@ -268,16 +277,26 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
 
   const loadUser = async (email: string, options?: { silent?: boolean }) => {
     const silent = Boolean(options?.silent);
+    const requestId = ++activeRequestIdRef.current;
+    const isStale = () => !isMountedRef.current || activeRequestIdRef.current !== requestId;
+
     try {
-      if (!silent) {
+      if (!silent && !isStale()) {
         setLoading(true);
       }
-      setError(null);
+      if (!isStale()) {
+        setError(null);
+      }
 
       console.log('loadUser: Starting to load user with email:', email);
 
       const supabaseProfile = await fetchSupabaseProfile();
-      const preferredName = supabaseProfile?.fullName ?? deriveNameFromEmail(email);
+      if (isStale()) {
+        return;
+      }
+      const supabaseName = supabaseProfile?.fullName;
+      const derivedName = deriveNameFromEmail(email);
+      const preferredName = supabaseName ?? derivedName;
       const preferredAvatar = supabaseProfile?.avatarUrl ?? undefined;
       const preferredPlanTier = supabaseProfile?.planTier ?? null;
 
@@ -286,10 +305,23 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
       try {
         console.log('loadUser: Attempting to get user by email from API...');
         const userData = await apiService.getUserByEmail(email);
+        if (isStale()) {
+          return;
+        }
         console.log('loadUser: User data retrieved:', userData);
 
         const updates: { full_name?: string; profile_picture_url?: string; plan_tier?: string | null } = {};
-        if (preferredName && preferredName !== userData.full_name) {
+
+        // Only update name if:
+        // 1. We have a name from Supabase (authoritative source)
+        // 2. OR the current user has no name (we are filling a gap)
+        // 3. AND the new name is different
+        const shouldUpdateName =
+          preferredName &&
+          preferredName !== userData.full_name &&
+          (supabaseName || !userData.full_name || userData.full_name.trim() === '');
+
+        if (shouldUpdateName) {
           updates.full_name = preferredName;
         }
         if (preferredAvatar && preferredAvatar !== userData.profile_picture_url) {
@@ -303,25 +335,32 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
           try {
             console.log('loadUser: Updating user profile with:', updates);
             const updatedUser = await apiService.updateUser(userData.id, updates);
+            if (isStale()) {
+              return;
+            }
             setUser(updatedUser);
             persistCachedUser(updatedUser.email, updatedUser);
             touchDailyStreakOnce(updatedUser.id);
           } catch (updateError) {
-            console.error('Error updating user profile:', updateError);
+            console.debug('[v2] Error updating user profile:', updateError);
+            if (!isStale()) {
+              setUser(userData);
+              persistCachedUser(userData.email, userData);
+              touchDailyStreakOnce(userData.id);
+            }
+          }
+        } else {
+          if (!isStale()) {
             setUser(userData);
             persistCachedUser(userData.email, userData);
             touchDailyStreakOnce(userData.id);
           }
-        } else {
-          setUser(userData);
-          persistCachedUser(userData.email, userData);
-          touchDailyStreakOnce(userData.id);
         }
       } catch (userError) {
-        console.log('loadUser: Error getting user, checking if user not found...');
+        console.log('[v2] loadUser: Error getting user, checking if user not found...');
         // If user doesn't exist, create them
         if (isMissingUserError(userError)) {
-          console.log('loadUser: User not found, creating new user...');
+          console.log('[v2] loadUser: User not found, creating new user...');
           const defaultUserData = {
             email,
             full_name: preferredName,
@@ -330,25 +369,29 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
             plan_tier: preferredPlanTier,
           };
           const newUser = await apiService.createUser(defaultUserData);
-          console.log('loadUser: New user created:', newUser);
-          setUser(newUser);
-          persistCachedUser(newUser.email, newUser);
-          touchDailyStreakOnce(newUser.id);
+          console.log('[v2] loadUser: New user created:', newUser);
+          if (!isStale()) {
+            setUser(newUser);
+            persistCachedUser(newUser.email, newUser);
+            touchDailyStreakOnce(newUser.id);
+          }
         } else {
-          console.error('loadUser: Unexpected error getting user:', userError);
+          console.debug('[v2] loadUser: Unexpected error getting user:', userError);
           throw userError;
         }
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load user');
+      if (!isStale()) {
+        setError(err instanceof Error ? err.message : 'Failed to load user');
+      }
       const shouldSkipLog = isApiNetworkError(err);
       if (!shouldSkipLog) {
-        console.error('Error loading user:', err);
+        console.debug('[v2] Error loading user:', err);
       } else if (process.env.NODE_ENV !== 'production') {
-        console.debug('API unreachable while loading user profile:', err);
+        console.debug('[v2] API unreachable while loading user profile:', err);
       }
     } finally {
-      if (!silent) {
+      if (!silent && !isStale()) {
         setLoading(false);
       }
     }
@@ -376,7 +419,9 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
     personalization_occupation?: string | null;
     personalization_about?: string | null;
     personalization_custom_instructions?: string | null;
+    personalization_show_calendar?: boolean;
     maps_enabled?: boolean;
+    has_seen_general_chat?: boolean;
   }) => {
     if (!user) throw new Error('No user logged in');
 
@@ -390,7 +435,9 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
       personalization_occupation?: string | null;
       personalization_about?: string | null;
       personalization_custom_instructions?: string | null;
+      personalization_show_calendar?: boolean;
       maps_enabled?: boolean;
+      has_seen_general_chat?: boolean;
     } = {};
 
     if (typeof userData.full_name === 'string') {
@@ -420,6 +467,12 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
     }
     if (typeof userData.maps_enabled === 'boolean') {
       payload.maps_enabled = userData.maps_enabled;
+    }
+    if (typeof userData.personalization_show_calendar === 'boolean') {
+      payload.personalization_show_calendar = userData.personalization_show_calendar;
+    }
+    if (typeof userData.has_seen_general_chat === 'boolean') {
+      payload.has_seen_general_chat = userData.has_seen_general_chat;
     }
 
     if (Object.keys(payload).length === 0) {
@@ -498,43 +551,31 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
     }
   }, [loading, user]);
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
       const pending = Array.from(pendingUserResolversRef.current);
       pendingUserResolversRef.current.clear();
       pending.forEach((resolve) => resolve(null));
-    },
-    []
-  );
-
-  useEffect(() => {
-    if (!userEmail) {
-      return;
-    }
-    if (cachedUser) {
-      setUser(cachedUser);
-      setLoading(false);
-    } else {
-      setUser(null);
-      setLoading(true);
-    }
-  }, [cachedUser, userEmail]);
+    };
+  }, []);
 
   useEffect(() => {
     if (userEmail) {
-      console.log('UserContext: Loading user with email:', userEmail);
+      console.log('[v2] UserContext: Loading user with email:', userEmail);
       loadUser(userEmail, { silent: Boolean(user) }).catch((err) => {
         if (isApiNetworkError(err)) {
           if (process.env.NODE_ENV !== 'production') {
-            console.debug('User profile API unreachable while bootstrapping:', err);
+            console.debug('[v2] User profile API unreachable while bootstrapping:', err);
           }
           return;
         }
-        console.error('Failed to load user profile:', err);
-        console.error('User load error details:', err);
+        console.debug('[v2] Failed to load user profile:', err);
+        console.debug('[v2] User load error details:', err);
       });
     } else {
-      console.log('UserContext: No userEmail provided');
+      console.log('[v2] UserContext: No userEmail provided');
       setUser(null);
       setLoading(false);
       removeCachedUser(null);

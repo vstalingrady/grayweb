@@ -307,8 +307,14 @@ def _configure_specific_loggers():
     logging.getLogger("uvicorn.access").disabled = True
     logging.getLogger("uvicorn.error").setLevel(logging.WARNING)
     logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
+    logging.getLogger("httpcore.http2").setLevel(logging.WARNING)
     logging.getLogger("urllib3.connectionpool").setLevel(logging.WARNING)
-    logging.getLogger("sqlalchemy.engine").setLevel(logging.INFO)
+    logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
+    logging.getLogger("databases").setLevel(logging.WARNING)
+    logging.getLogger("watchfiles").setLevel(logging.WARNING)
+    logging.getLogger("apscheduler").setLevel(logging.INFO)
+    logging.getLogger("google_genai").setLevel(logging.WARNING)
 
     # Enable detailed logging for our application
     logging.getLogger("backend").setLevel(logging.DEBUG)
