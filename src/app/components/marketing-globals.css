@@ -2871,7 +2871,9 @@ a:hover {
     min-height: 0;
     margin-left: auto;
     margin-right: auto;
-    display: block;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 }
 

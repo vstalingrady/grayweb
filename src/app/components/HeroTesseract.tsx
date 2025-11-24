@@ -234,25 +234,34 @@ const HeroTesseract = () => {
     animate();
 
     // Handle resize
+    // Handle resize with ResizeObserver for better reliability
     const handleResize = () => {
       if (!canvasRef.current) return;
       const width = canvasRef.current.clientWidth;
       const height = canvasRef.current.clientHeight;
+
+      if (width === 0 || height === 0) return;
+
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
 
       updateCameraPosition();
 
-      renderer.setSize(width, height);
+      renderer.setSize(width, height, false); // false prevents setting style.width/height
       if (composer) {
         composer.setSize(width, height);
       }
     };
-    window.addEventListener("resize", handleResize);
+
+    const resizeObserver = new ResizeObserver(() => {
+      handleResize();
+    });
+
+    resizeObserver.observe(canvas);
 
     // Cleanup
     return () => {
-      window.removeEventListener("resize", handleResize);
+      resizeObserver.disconnect();
       window.removeEventListener('wheel', handleWheel);
       cancelAnimationFrame(animationFrameId);
       renderer.dispose();
