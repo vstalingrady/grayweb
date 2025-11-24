@@ -1351,6 +1351,17 @@ function GrayPageClientInner({
     return sessions.find((session) => session.id === currentChatId) ?? null;
   }, [currentChatId, sessions]);
 
+  const isResponding = useMemo(() => {
+    if (currentChatSession) {
+      return Boolean(currentChatSession.isResponding);
+    }
+    if (generalSessionId) {
+      const generalSession = sessions.find((s) => s.id === generalSessionId);
+      return Boolean(generalSession?.isResponding);
+    }
+    return false;
+  }, [currentChatSession, generalSessionId, sessions]);
+
   const documentTitle = useMemo(() => {
     if (viewMode === "chat") {
       if (currentChatId && generalSessionId && currentChatId === generalSessionId) {
