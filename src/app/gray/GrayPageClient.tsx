@@ -2812,11 +2812,7 @@ function GrayPageClientInner({
 
                   {/* Mobile Chat Input & Suggestions */}
                   <div className="md:hidden">
-                    {!activeChatId && (
-                      <div style={{ position: 'fixed', bottom: 80, left: 0, right: 0, zIndex: 35 }}>
-                        <MobileSuggestionCards />
-                      </div>
-                    )}
+
                     <div className={styles.mobileChatInputContainer}>
                       <form
                         className={styles.mobileChatInput}

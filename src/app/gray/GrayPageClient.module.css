@@ -8935,3 +8935,8 @@ h1.greeting {
   z-index: 10;
   pointer-events: none;
 }
+@media (max-width: 768px) {
+  .planBadge {
+    display: none;
+  }
+}
