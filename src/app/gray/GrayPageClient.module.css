@@ -8344,6 +8344,7 @@ h1.greeting {
   box-shadow: none;
   border-top: none;
   width: 100%;
+  max-width: var(--chat-column-max-width);
   margin: 0 auto;
   z-index: 100;
   /* Ensure composer is above other page elements */
