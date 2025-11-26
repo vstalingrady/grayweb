@@ -15,6 +15,7 @@
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
+  line-height: 1;
 }
 
 .trigger:hover {
@@ -28,6 +29,9 @@
 .triggerLabel {
   margin-right: 2px;
   font-weight: 600;
+  line-height: 1;
+  display: flex;
+  align-items: center;
 }
 
 .hideOnMobile {
@@ -50,6 +54,8 @@
   opacity: 0.9;
   transform-origin: center;
   transition: transform 0.18s ease;
+  display: flex;
+  flex-shrink: 0;
 }
 
 .chevronOpen {
@@ -62,7 +68,7 @@
   right: 0;
   /* Align to right edge of trigger */
   left: auto;
-  width: 280px;
+  width: min(280px, 92vw);
   background: #1a1a1a;
   /* Fallback */
   background: var(--color-background-elevated, #1a1a1a);

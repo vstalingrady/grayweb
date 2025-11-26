@@ -52,10 +52,10 @@ class GeminiService:
         self._response_mime_type = os.getenv("GEMINI_RESPONSE_MIME_TYPE")
 
         self._api_key = self._first_valid_api_key()
-        # Default to Gemini Flash Lite for hackathon setup; can be overridden via env.
-        self._default_model = os.getenv("GEMINI_DEFAULT_MODEL", "models/gemini-flash-lite-latest")
-        self._light_model = os.getenv("GEMINI_LIGHT_MODEL", "models/gemini-flash-lite-latest")
-        # Optional dedicated model for \"pro\" tier; falls back to default if unset.
+        # Default to Gemini 2.5 Flash Lite (stable version with full tool support)
+        self._default_model = os.getenv("GEMINI_DEFAULT_MODEL", "models/gemini-2.5-flash-lite")
+        self._light_model = os.getenv("GEMINI_LIGHT_MODEL", "models/gemini-2.5-flash-lite")
+        # Optional dedicated model for "pro" tier; falls back to default if unset.
         self._pro_model = os.getenv("GEMINI_PRO_MODEL", self._default_model)
 
         if self._api_key:
@@ -283,23 +283,8 @@ class GeminiService:
 
         selected_model = self._choose_model(model)
 
-        # Hotfix: The current flash-lite-latest endpoint reports "Tool use with function calling is unsupported"
-        # We explicitly disable function calling tools for this model but keep Google Search.
-        if "flash-lite" in selected_model and tools:
-            filtered_tools = []
-            for tool in tools:
-                # Keep Google Search tools
-                if getattr(tool, "google_search", None):
-                    filtered_tools.append(tool)
-                # Skip tools with function declarations
-                elif getattr(tool, "function_declarations", None):
-                    print(f"[Gemini] Warning: Dropping function calling tool for {selected_model}")
-                    continue
-                else:
-                    filtered_tools.append(tool)
-            tools = filtered_tools if filtered_tools else None
-            if not tools:
-                tool_config = None
+        effective_tools = tools
+        effective_tool_config = tool_config
 
         contents = self._build_contents(conversation_history, message, attachments, extra_contents)
         config = self._build_config(
@@ -308,8 +293,8 @@ class GeminiService:
             time_context,
             response_schema=response_schema,
             response_mime_type=response_mime_type,
-            tools=tools,
-            tool_config=tool_config,
+            tools=effective_tools,
+            tool_config=effective_tool_config,
             reasoning_mode=reasoning_mode,
         )
 
@@ -341,23 +326,8 @@ class GeminiService:
 
         selected_model = self._choose_model(model)
 
-        # Hotfix: The current flash-lite-latest endpoint reports "Tool use with function calling is unsupported"
-        # We explicitly disable function calling tools for this model but keep Google Search.
-        if "flash-lite" in selected_model and tools:
-            filtered_tools = []
-            for tool in tools:
-                # Keep Google Search tools
-                if getattr(tool, "google_search", None):
-                    filtered_tools.append(tool)
-                # Skip tools with function declarations
-                elif getattr(tool, "function_declarations", None):
-                    print(f"[Gemini] Warning: Dropping function calling tool for {selected_model}")
-                    continue
-                else:
-                    filtered_tools.append(tool)
-            tools = filtered_tools if filtered_tools else None
-            if not tools:
-                tool_config = None
+        effective_tools = tools
+        effective_tool_config = tool_config
 
         contents = self._build_contents(conversation_history, message, attachments, extra_contents)
         config = self._build_config(
@@ -366,8 +336,8 @@ class GeminiService:
             time_context,
             response_schema=response_schema,
             response_mime_type=response_mime_type,
-            tools=tools,
-            tool_config=tool_config,
+            tools=effective_tools,
+            tool_config=effective_tool_config,
             reasoning_mode=reasoning_mode,
         )
 

@@ -2257,79 +2257,38 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
     [applyAutoTitle, persistSessions]
   );
 
-  // Debounced version of updateMessage for streaming (reduces re-renders)
-  const updateMessageDebounced = useCallback(
-    (sessionId: string, messageId: string, partial: Partial<ChatMessage>, delay = 100) => {
-      const key = `${sessionId}:${messageId}`;
+  // Throttled version of updateMessage for streaming (ensures updates every ~30ms)
+  const pendingUpdatesRef = useRef<Map<string, Partial<ChatMessage>>>(new Map());
+  const throttledUpdateTimeoutsRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
 
-      // Clear existing timeout
-      const existingTimeout = debouncedUpdateTimeoutsRef.current.get(key);
-      if (existingTimeout) {
-        clearTimeout(existingTimeout);
+  const updateMessageThrottled = useCallback(
+    (sessionId: string, messageId: string, partial: Partial<ChatMessage>, throttleMs = 30) => {
+      const key = `${sessionId}:${messageId}`;
+      pendingUpdatesRef.current.set(key, partial);
+
+      if (throttledUpdateTimeoutsRef.current.has(key)) {
+        return;
       }
 
-      // Set new timeout
       const timeout = setTimeout(() => {
-        let assistantAutoTitle: string | null = null;
-        debouncedUpdateTimeoutsRef.current.delete(key);
-        // Use setSessions directly to avoid circular dependency
-        setSessions((prev) => {
-          let didUpdate = false;
-          const next = prev.map((session) => {
-            if (session.id !== sessionId) {
-              return session;
-            }
-            const messages = session.messages.map((message) => {
-              if (message.id !== messageId) {
-                return message;
-              }
-              didUpdate = true;
-              let nextPartial = partial;
-              if (typeof partial.content === "string" && message.role === "assistant") {
-                const parsedContent = parseGrayTitleMarkers(partial.content);
-                const normalized = normalizeAssistantMessage(message.role, parsedContent.cleanText);
-                nextPartial = {
-                  ...partial,
-                  content: normalized.content,
-                  reminders: normalized.reminders,
-                };
-                if (parsedContent.title) {
-                  assistantAutoTitle = parsedContent.title;
-                }
-              }
-              return { ...message, ...nextPartial };
-            });
-            if (!didUpdate) {
-              return session;
-            }
-            return {
-              ...session,
-              messages,
-            };
-          });
-          if (!didUpdate) {
-            return prev;
-          }
-          const ordered = normalizeSessionsList(next);
-          persistSessions(ordered);
-          return ordered;
-        });
-
-        if (assistantAutoTitle) {
-          applyAutoTitle(sessionId, assistantAutoTitle);
+        throttledUpdateTimeoutsRef.current.delete(key);
+        const latestPartial = pendingUpdatesRef.current.get(key);
+        if (latestPartial) {
+          updateMessage(sessionId, messageId, latestPartial);
+          pendingUpdatesRef.current.delete(key);
         }
-      }, delay);
+      }, throttleMs);
 
-      debouncedUpdateTimeoutsRef.current.set(key, timeout);
+      throttledUpdateTimeoutsRef.current.set(key, timeout);
     },
-    [applyAutoTitle, persistSessions]
+    [updateMessage]
   );
 
   // Cleanup timeouts on unmount
   useEffect(() => {
     return () => {
-      debouncedUpdateTimeoutsRef.current.forEach((timeout) => clearTimeout(timeout));
-      debouncedUpdateTimeoutsRef.current.clear();
+      throttledUpdateTimeoutsRef.current.forEach((timeout) => clearTimeout(timeout));
+      throttledUpdateTimeoutsRef.current.clear();
     };
   }, []);
 
@@ -2928,7 +2887,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
                   : accumulated + delta;
                 const content = accumulated;
                 if (assistantMessageId) {
-                  updateMessageDebounced(sessionId, assistantMessageId, { content }, 100);
+                  updateMessageThrottled(sessionId, assistantMessageId, { content }, 30);
                 }
                 continue;
               }
@@ -3001,7 +2960,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       appendMessage,
       persistSessions,
       updateMessage,
-      updateMessageDebounced,
+      updateMessageThrottled,
       updateSession,
       resolveChatUser,
       workspaceContextValue,
@@ -3607,7 +3566,17 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
           }
         }
       } catch (error) {
-        console.error("Failed to poll reminders:", error);
+        // Soft-handle network/unavailable backend errors to avoid noisy logs
+        const isNetworkish =
+          isApiNetworkError(error) ||
+          (error instanceof Error && "status" in error && typeof (error as any).status === "number" && (error as any).status >= 500);
+        if (isNetworkish) {
+          if (process.env.NODE_ENV !== "production") {
+            console.debug("Skipping reminder poll; backend unavailable.", error);
+          }
+        } else {
+          console.error("Failed to poll reminders:", error);
+        }
       } finally {
         if (!cancelled) {
           const nextDelay = computeNextReminderPollDelay(fetchedReminders);

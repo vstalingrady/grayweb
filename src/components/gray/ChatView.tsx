@@ -1950,8 +1950,19 @@ export function GrayChatView({
     if (!streamingContentSignature || !scrollAnchorRef.current) {
       return;
     }
-    scrollAnchorRef.current.scrollIntoView({ behavior: "auto" });
+    scrollAnchorRef.current.scrollIntoView({ behavior: "smooth" });
   }, [streamingContentSignature]);
+
+  // Auto-scroll during active streaming
+  useEffect(() => {
+    if (!isResponding || !scrollAnchorRef.current) {
+      return;
+    }
+    const lastMessage = messages[messages.length - 1];
+    if (lastMessage?.role === "assistant") {
+      scrollAnchorRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages, isResponding]);
 
   useLayoutEffect(() => {
     const node = composerDockRef.current;
@@ -1967,6 +1978,21 @@ export function GrayChatView({
     return () => {
       observer.disconnect();
     };
+  }, []);
+
+  useEffect(() => {
+    if (!composerDockRef.current) return;
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const height = entry.contentRect.height;
+        const chatView = composerDockRef.current?.closest(`.${styles.chatView}`) as HTMLElement;
+        if (chatView) {
+          chatView.style.setProperty("--chat-composer-height", `${height}px`);
+        }
+      }
+    });
+    observer.observe(composerDockRef.current);
+    return () => observer.disconnect();
   }, []);
 
   const chatViewStyle: CSSProperties | undefined =
@@ -2920,6 +2946,8 @@ export function GrayChatView({
   const showFirstMessageSpinner =
     (isResponding || sessionPendingAutoStream) &&
     !messages.some((m) => m.role === "assistant");
+
+
 
   return (
     <div className={styles.chatView} aria-live="polite" style={chatViewStyle}>

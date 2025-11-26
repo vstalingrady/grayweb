@@ -236,6 +236,30 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Mobile viewport fixes */
+@media (max-width: 768px) {
+
+  html,
+  body {
+    position: fixed;
+    width: 100%;
+    height: 100vh;
+    height: 100dvh;
+    /* Dynamic viewport height for mobile */
+    overflow: hidden;
+  }
+
+  body {
+    min-height: 100vh;
+    min-height: 100dvh;
+  }
+
+  #__next {
+    height: 100%;
+    overflow: hidden;
+  }
+}
+
 a {
   color: inherit;
   text-decoration: none;

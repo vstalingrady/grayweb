@@ -108,6 +108,7 @@
   justify-content: space-between;
   align-items: flex-start;
   gap: 12px;
+  padding-left: 12px;
 }
 
 .calendarSidebarEyebrow {
@@ -132,6 +133,7 @@
   gap: 18px;
   min-height: 0;
   transition: opacity 0.2s ease;
+  padding-left: 12px;
 }
 
 .calendarSidebarContent[data-visible="false"] {

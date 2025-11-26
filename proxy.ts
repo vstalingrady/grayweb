@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { hostFromHeaders, isPayHost } from "@/lib/grayRouting";
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const host = hostFromHeaders(request.headers);
   const normalizedHost = host ?? "";
 

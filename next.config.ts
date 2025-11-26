@@ -11,21 +11,16 @@ const proxyTarget = normalizeProxyTarget(rawProxyTarget);
 
 const nextConfig: NextConfig = {
   transpilePackages: ['three', '@react-three/fiber', 'react-reconciler'],
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
+
+
+
   typescript: {
     ignoreBuildErrors: true,
   },
-  // Only apply webpack config when not using Turbopack
-  webpack: (config, { isServer, dev, nextRuntime }) => {
-    // Skip webpack config in Turbo mode to avoid conflicts
-    const isTurbo = process.argv.includes('--turbo');
-    if (isTurbo) {
-      return config;
-    }
 
-    // Enable persistent caching for faster rebuilds in webpack mode
+  // Webpack config (use --webpack flag to use webpack instead of turbopack)
+  webpack: (config, { isServer, dev, nextRuntime }) => {
+    // Enable persistent caching for faster rebuilds
     config.cache = {
       type: 'filesystem',
       buildDependencies: {
@@ -35,24 +30,27 @@ const nextConfig: NextConfig = {
 
     return config;
   },
+
   experimental: {
     // Keep optimizePackageImports conservative; three.js/@react-three/fiber can
     // break when the optimizer rewrites their entrypoints.
-    optimizePackageImports: ['react-icons', 'recharts', 'framer-motion'],
-    // Turbopack-specific optimizations
-    turbo: {
-      rules: {
-        // Configure Turbopack rules if needed
-      },
-    },
+    optimizePackageImports: ['react-icons', 'recharts', 'framer-motion']
   },
+
   // Production optimizations
-  productionBrowserSourceMaps: false, // Reduce build size
-  compress: true, // Enable gzip compression
+  // Reduce build size
+  productionBrowserSourceMaps: false,
+
+  // Enable gzip compression
+  compress: true,
+
   images: {
     formats: ['image/webp', 'image/avif'],
+    // Next.js 16 default is 4 hours (14400 seconds)
+    // Setting to 60 seconds to maintain previous behavior
     minimumCacheTTL: 60,
   },
+
   async rewrites() {
     return {
       beforeFiles: [],
@@ -65,6 +63,12 @@ const nextConfig: NextConfig = {
       fallback: [],
     };
   },
+
+  turbopack: {
+    rules: {
+      // Configure Turbopack rules if needed
+    }
+  }
 };
 
 export default nextConfig;

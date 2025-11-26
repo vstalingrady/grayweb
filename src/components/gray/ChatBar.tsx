@@ -2,7 +2,7 @@
 
 import styles from "@/app/gray/GrayPageClient.module.css";
 import { LoaderCircle, Paperclip, Lightbulb, Search, ArrowUpRight } from "lucide-react";
-import { type FormEvent } from "react";
+import { type FormEvent, useRef, useEffect, useCallback, useState } from "react";
 
 export type GrayChatBarProps = {
   value: string;
@@ -37,9 +37,59 @@ export function GrayChatBar({
 }: GrayChatBarProps) {
   const computedDisabled =
     typeof isSubmitDisabled === "boolean" ? isSubmitDisabled : value.trim().length === 0;
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [isMobile, setIsMobile] = useState(false);
+
+  const adjustHeight = useCallback(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    // Reset height to 'inherit' to correctly calculate scrollHeight
+    // This allows the textarea to shrink when text is deleted
+    textarea.style.height = "inherit";
+
+    // Calculate new height
+    const computedStyle = window.getComputedStyle(textarea);
+    const newHeight = Math.min(textarea.scrollHeight, 200);
+
+    textarea.style.height = `${newHeight}px`;
+
+    // Show scrollbar only if we hit the max height
+    textarea.style.overflowY = newHeight >= 200 ? "auto" : "hidden";
+  }, []);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.matchMedia("(pointer: coarse)").matches);
+      adjustHeight();
+    };
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, [adjustHeight]);
+
+  useEffect(() => {
+    adjustHeight();
+  }, [value, adjustHeight]);
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      if (!isMobile) {
+        event.preventDefault();
+        if (!computedDisabled) {
+          // Create a synthetic event to match the expected signature
+          const syntheticEvent = {
+            preventDefault: () => { },
+          } as FormEvent<HTMLFormElement>;
+          onSubmit(syntheticEvent);
+        }
+      }
+      // On mobile, let default behavior happen (newline)
+    }
+  };
 
   return (
-    <form className={styles.chatBar} onSubmit={onSubmit}>
+    <form className={styles.chatBarRounded} onSubmit={onSubmit}>
       {onAddAttachment ? (
         <button
           type="button"
@@ -51,14 +101,20 @@ export function GrayChatBar({
         </button>
       ) : null}
       <div className={styles.chatInputWrapper}>
-        <input
+        <textarea
+          ref={textareaRef}
           value={value}
           onChange={(event) => onChange(event.target.value)}
+          onKeyDown={handleKeyDown}
           placeholder={placeholder}
           className={styles.chatInput}
           aria-label={placeholder}
+          rows={1}
+          style={{ resize: "none", overflowY: "auto" }}
         />
-        {modelSelector}
+        <div className={styles.chatModelSelectorWrapper}>
+          {modelSelector}
+        </div>
       </div>
       <button
         type="submit"

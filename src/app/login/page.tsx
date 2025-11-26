@@ -11,7 +11,7 @@ import {
 } from "@/lib/grayRouting";
 
 type LoginPageProps = {
-  searchParams?: Record<string, string | string[] | undefined>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 };
 
 const sanitizeRedirect = (
@@ -45,8 +45,9 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
     const requestHeaders = await headers();
     const host = hostFromHeaders(requestHeaders);
     const workspaceHost = resolveWorkspaceHost(host) ?? host;
+    const params = await searchParams;
     const redirectTarget =
-      sanitizeRedirect(searchParams?.redirect) ??
+      sanitizeRedirect(params?.redirect) ??
       resolveDefaultWorkspacePath(workspaceHost);
     const destination = normalizeWorkspaceRedirect(
       redirectTarget,

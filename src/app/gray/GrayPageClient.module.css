@@ -62,12 +62,33 @@
 }
 
 @media (max-width: 768px) {
+
+  /* Prevent mobile scrolling - use dynamic viewport height */
+  .page {
+    overflow: hidden;
+    height: 100vh;
+    height: 100dvh;
+    /* Use dynamic viewport height for mobile browsers */
+    max-height: 100vh;
+    max-height: 100dvh;
+    position: fixed;
+    width: 100%;
+  }
+
+  /* Overlay for mobile sidebar */
   .overlay {
     display: block;
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.5);
-    z-index: 99;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 9998;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+  }
+
+  .overlay[data-visible="true"] {
+    opacity: 1;
     pointer-events: auto;
   }
 }
@@ -107,15 +128,66 @@
 }
 
 @media (max-width: 768px) {
-  .sidebar {
-    position: fixed !important;
-    z-index: 50 !important;
-    height: 100%;
+
+  /* Change sidebar to relative positioning for push behavior */
+  .layout[data-mobile-sidebar="true"] {
+    display: flex;
+    overflow-x: hidden;
+    /* Prevent horizontal scroll when pushed */
   }
 
-  .sidebar[data-expanded="true"] {
+  .layout[data-mobile-sidebar="true"] .sidebar {
+    position: fixed !important;
+    left: 0;
+    /* Fixed at left edge */
+    top: 0;
+    bottom: 0;
+    z-index: 1;
+    /* Below main content initially, or same level */
     width: 320px !important;
+    height: 100%;
+    /* No transition on sidebar itself needed if it stays fixed, 
+       but if we want it to slide in with content, we can animate it too.
+       ChatGPT style: Sidebar is fixed, content slides over it? 
+       Or content slides right revealing sidebar?
+       User said "pushing to the side", usually means content moves right.
+       Let's keep sidebar fixed at left: 0, and move .main right.
+    */
+    display: none;
+  }
+
+  .layout[data-mobile-sidebar="true"] .sidebar[data-expanded="true"] {
     display: flex !important;
+    z-index: 1;
+    /* Ensure it's visible */
+  }
+
+  .layout[data-mobile-sidebar="true"] .main {
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    background: var(--background);
+    /* Ensure opaque background */
+    z-index: 2;
+    /* Above sidebar */
+    position: relative;
+    width: 100%;
+    flex-shrink: 0;
+    padding-top: 48px;
+    padding-top: calc(48px + env(safe-area-inset-top));
+    /* Account for mobile header */
+  }
+
+  /* Push main content when sidebar is open */
+  .layout[data-mobile-sidebar="true"][data-sidebar-expanded="true"] .main {
+    transform: translateX(320px);
+  }
+
+  /* Move overlay with main content or keep it fixed? 
+     If overlay is inside main, it moves. 
+     If overlay is fixed inset:0, it covers screen.
+     We want overlay to cover MAIN content.
+  */
+  .layout[data-mobile-sidebar="true"][data-sidebar-expanded="true"] .overlay {
+    /* If overlay is fixed, it stays. If absolute in main, it moves. */
   }
 }
 
@@ -272,6 +344,7 @@
   font-weight: 600;
   letter-spacing: 0.08em;
   color: rgba(244, 244, 244, 0.94);
+  flex-shrink: 0;
 }
 
 .sidebarRailAvatarImage[data-has-image="true"] {
@@ -853,37 +926,35 @@
   display: none;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px;
-  background: transparent;
+  padding: 8px 16px;
+  padding-top: calc(8px + env(safe-area-inset-top));
+  background: var(--background, #050505);
   border-bottom: none;
-  position: absolute;
+  position: fixed;
   top: 0;
   left: 0;
   right: 0;
-  z-index: 30;
-  height: 60px;
-  transition: opacity 0.3s ease, visibility 0.3s ease;
+  z-index: 100;
+  height: 48px;
+  height: calc(48px + env(safe-area-inset-top));
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: none;
+  transition: all 0.3s ease;
 }
 
 .page[data-mobile-sidebar="true"] .mobileHeader {
   display: flex;
 }
 
-/* Push effect for main content when sidebar is expanded */
-/* Push effect removed for standard overlay behavior */
-.layout[data-mobile-sidebar="true"] .sidebar[data-expanded="true"]~* {
-  transform: none;
-  opacity: 1;
-  pointer-events: auto;
+/* Push mobile header when sidebar is expanded */
+.page[data-mobile-sidebar="true"][data-sidebar-expanded="true"] .mobileHeader {
+  left: 320px;
 }
 
-/* Ensure mobile header is pushed too if possible, or just let it be covered/visible */
-/* Since mobile header is outside layout, we can't easily push it with CSS sibling selector from sidebar.
-   But we can target it via the page data attribute */
-.page[data-sidebar-expanded="true"] .mobileHeader {
-  transform: none;
-  opacity: 1;
-  pointer-events: auto;
+/* Hide mobile header right (streak/upgrade) when sidebar is open */
+.page[data-sidebar-expanded="true"] .mobileHeaderRight {
+  display: none;
 }
 
 /* Show mobile header on mobile screens */
@@ -905,10 +976,10 @@
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 999px;
-  padding: 6px 14px;
+  padding: 6px 12px;
   color: rgba(255, 255, 255, 0.9);
-  font-size: 0.85rem;
-  font-weight: 500;
+  font-size: 0.75rem;
+  font-weight: 600;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -1183,16 +1254,22 @@
 
   .main {
     padding: 16px;
-    padding-top: 76px;
-    /* Account for mobile header (60px + 16px) */
-    padding-bottom: 100px;
-    /* Account for bottom input bar */
+    padding-top: 60px;
+    padding-top: calc(60px + env(safe-area-inset-top));
+    /* Account for mobile header */
+    padding-bottom: 0;
+    /* No bottom padding - let flexbox handle it */
+    height: 100%;
+    overflow: hidden;
   }
 
   .main[data-view="chat"] {
     padding: 16px;
-    padding-top: 76px;
-    padding-bottom: 100px;
+    padding-top: 60px;
+    padding-top: calc(60px + env(safe-area-inset-top));
+    padding-bottom: 0;
+    height: 100%;
+    overflow: hidden;
   }
 }
 
@@ -2355,6 +2432,7 @@
   align-items: center;
   justify-content: center;
   color: rgba(238, 240, 244, 0.88);
+  flex-shrink: 0;
 }
 
 .profileAvatar[data-has-image="true"] {
@@ -2691,11 +2769,16 @@
 /* Reduce gap on smaller screens to make greeting and chat input touch */
 @media (max-width: 768px) {
   .mainContent[data-view="general"] {
-    gap: 8px;
+    gap: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-top: 0;
   }
 
   .mainContent[data-compact="true"] {
-    gap: 8px;
+    gap: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
   }
 }
 
@@ -2722,7 +2805,7 @@
 }
 
 .mainContent[data-view="general"]>* {
-  width: min(var(--gray-general-max-width), 100%);
+  width: min(var(--chat-column-max-width, 828px), 100%);
   margin-left: auto;
   margin-right: auto;
   padding-left: var(--gray-general-inline-gutter);
@@ -2736,7 +2819,7 @@
   align-self: stretch;
   width: 100%;
   /* Match alignmentid: keep the workspace band centered with fixed max width */
-  max-width: min(960px, 100%);
+  max-width: min(var(--chat-column-max-width, 828px), 100%);
   margin: clamp(8px, 2vh, 16px) auto 0;
   padding: 0 clamp(10px, 2vw, 18px);
   box-sizing: border-box;
@@ -2779,7 +2862,7 @@
   background: transparent;
   box-shadow: none;
   position: relative;
-  --chat-column-max-width: min(828px, 100%);
+  --chat-column-max-width: min(600px, 100%);
   --chat-bubble-max-width: var(--chat-column-max-width);
   --chat-composer-overlap: calc(var(--gray-chat-bar-clearance) + clamp(10px, 2vh, 18px));
   --chat-composer-height: clamp(112px, 16vh, 180px);
@@ -2853,7 +2936,7 @@
   justify-content: flex-start;
   gap: clamp(8px, 1.5vh, 14px);
   min-height: 0;
-  padding: clamp(8px, 2vh, 18px) 0 clamp(80px, 12vh, 120px) 0;
+  padding: clamp(8px, 2vh, 18px) 0 20px 0;
   overflow-y: auto;
   scroll-behavior: smooth;
   width: 100%;
@@ -2927,6 +3010,18 @@
   scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
 }
 
+@media (max-width: 768px) {
+  .chatMessages {
+    padding-left: max(14px, env(safe-area-inset-left, 0px));
+    padding-right: max(14px, env(safe-area-inset-right, 0px));
+  }
+
+  .chatIntro {
+    padding-left: max(14px, env(safe-area-inset-left, 0px));
+    padding-right: max(14px, env(safe-area-inset-right, 0px));
+  }
+}
+
 .chatMessage {
   display: flex;
   flex-direction: column;
@@ -2949,7 +3044,7 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 10px;
+  padding: 8px 16px;
   border-radius: 18px;
   max-width: min(var(--chat-bubble-max-width), 100%);
   width: fit-content;
@@ -3169,7 +3264,7 @@
   align-self: stretch;
   max-width: 100%;
   width: 100%;
-  font-size: 0.95rem;
+  font-size: 0.88rem;
 }
 
 .chatMessage[data-role="user"] .chatMarkdown,
@@ -3178,7 +3273,7 @@
   align-self: stretch;
   max-width: 100%;
   width: 100%;
-  font-size: 0.95rem;
+  font-size: 0.88rem;
 }
 
 .chatMarkdown :where(h1, h2, h3, h4, h5, h6) {
@@ -4010,13 +4105,13 @@
 }
 
 .chatComposerDock .chatBarRow {
-  width: min(var(--chat-column-max-width, 828px), 100%);
+  width: 100%;
+  max-width: var(--chat-column-max-width);
   margin: 0 auto;
 }
 
 .chatComposerDock .generalChatBarRow {
-  width: min(var(--chat-column-max-width, 576px), calc(100% - clamp(24px, 8vw, 80px)));
-  max-width: none;
+  /* Allow max-width to be inherited from chatBarRow */
 }
 
 /* Offset composer for sidebar */
@@ -4306,7 +4401,7 @@
 
 .generalChatComposer .chatAttachmentList {
   width: 100%;
-  max-height: clamp(220px, 32vh, 320px);
+  max-height: clamp(140px, 20vh, 180px);
   overflow-y: auto;
   padding-right: 6px;
 }
@@ -4379,7 +4474,7 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
-  min-height: 210px;
+  min-height: 120px;
 }
 
 .chatAttachmentItem[data-status="error"] {
@@ -4390,7 +4485,7 @@
 .chatAttachmentPreview {
   position: relative;
   width: 100%;
-  aspect-ratio: 4 / 3;
+  aspect-ratio: 16 / 9;
   border-radius: 20px;
   overflow: hidden;
   background: rgba(255, 255, 255, 0.05);
@@ -4788,17 +4883,17 @@
 
 .planBadge {
   display: inline-flex;
-  flex-direction: column;
+  flex-direction: row;
   justify-content: center;
   align-items: center;
-  gap: 2px;
-  padding: 8px 22px;
+  gap: 6px;
+  padding: 6px 12px;
   border-radius: 999px;
   border: none;
   background: rgba(255, 255, 255, 0.06);
   color: rgba(248, 248, 248, 0.92);
-  letter-spacing: 0.28em;
-  font-size: 0.6rem;
+  font-size: 0.75rem;
+  font-weight: 600;
   cursor: pointer;
 }
 
@@ -4809,7 +4904,7 @@
 }
 
 .planBadgeLabel {
-  font-size: 0.6rem;
+  font-size: inherit;
 }
 
 .planBadgeHint {
@@ -4847,13 +4942,12 @@
 .streakBadge {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   padding: 6px 12px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.06);
-  font-size: 0.62rem;
-  letter-spacing: 0.24em;
-  text-transform: uppercase;
+  font-size: 0.75rem;
+  font-weight: 600;
   color: rgba(248, 248, 248, 0.92);
 }
 
@@ -5063,7 +5157,7 @@ h1.greeting {
   gap: clamp(20px, 3vw, 32px);
   min-height: 0;
   overflow-y: auto;
-  padding-right: clamp(6px, 1vw, 14px);
+  padding-right: clamp(16px, 2.5vw, 24px);
   flex: 1 1 auto;
 }
 
@@ -5082,6 +5176,7 @@ h1.greeting {
   min-height: 0;
   align-self: stretch;
   width: 100%;
+  padding-left: clamp(16px, 2.5vw, 24px);
 }
 
 .calendarSidebarColumn>* {
@@ -8094,8 +8189,8 @@ h1.greeting {
 }
 
 .secondaryAction {
-  align-self: flex-end;
-  margin-left: auto;
+  align-self: flex-start;
+  margin-top: auto;
   width: auto;
   display: inline-flex;
   justify-content: center;
@@ -8186,32 +8281,35 @@ h1.greeting {
   color: rgba(230, 230, 230, 0.85);
 }
 
-.chatBar {
+.chatBarRounded {
   width: 100%;
+  max-width: var(--chat-column-max-width);
   display: flex;
+  flex-wrap: nowrap;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
   margin: 0 auto;
-  border-radius: 999px;
+  border-radius: 26px;
   border: 1px solid rgba(255, 255, 255, 0.16);
-  background: rgba(17, 17, 17, 0.72);
-  backdrop-filter: blur(12px);
-  padding: 6px 12px;
+  background: #111111;
+  backdrop-filter: none;
+  padding: 12px;
   position: relative;
   z-index: 1;
+  transition: background 0.2s ease, border-color 0.2s ease;
 }
 
-.chatBar:focus-within {
-  border-color: rgba(255, 255, 255, 0.16);
+.chatBarRounded:focus-within {
+  border-color: rgba(255, 255, 255, 0.24);
   background: #111111;
 }
 
-.layout[data-view="general"] .chatBar {
-  background: rgba(5, 5, 5, 0.72);
-  backdrop-filter: blur(12px);
+.layout[data-view="general"] .chatBarRounded {
+  background: #050505;
+  backdrop-filter: none;
 }
 
-.layout[data-view="general"] .chatBar:focus-within {
+.layout[data-view="general"] .chatBarRounded:focus-within {
   background: #050505;
 }
 
@@ -8229,6 +8327,8 @@ h1.greeting {
   pointer-events: auto;
 }
 
+
+
 .generalChatComposer {
   position: relative;
   flex-shrink: 0;
@@ -8237,14 +8337,13 @@ h1.greeting {
   flex-direction: column;
   align-items: stretch;
   gap: 12px;
-  padding: 10px;
+  padding: 0;
   border-top-left-radius: 0;
   border-top-right-radius: 0;
   background: transparent;
   box-shadow: none;
   border-top: none;
   width: 100%;
-  max-width: var(--chat-column-max-width);
   margin: 0 auto;
   z-index: 100;
   /* Ensure composer is above other page elements */
@@ -8296,7 +8395,6 @@ h1.greeting {
 
 .generalChatComposer>* {
   width: 100%;
-  max-width: min(var(--chat-column-max-width, 828px), 100%);
   margin: 0 auto;
   pointer-events: auto;
 }
@@ -8304,20 +8402,18 @@ h1.greeting {
 .generalChatComposer .chatDisclaimer,
 .generalChatComposer .generalChatBarRow {
   width: 100%;
-  max-width: min(var(--chat-column-max-width, 828px), 100%);
+  max-width: var(--chat-column-max-width);
   margin: 0 auto;
 }
 
 .generalChatBarRow,
 .dashboardChatBarRow {
   width: 100%;
-  max-width: min(var(--chat-column-max-width, 828px), 100%);
 }
 
 .generalChatBarRow {
   width: 100%;
-  max-width: min(var(--chat-column-max-width, 828px), 100%);
-  padding-bottom: 18px;
+  padding-bottom: 8px;
   margin: 0 auto;
 }
 
@@ -8345,6 +8441,7 @@ h1.greeting {
     0 12px 24px rgba(0, 0, 0, 0.28);
   pointer-events: none;
   z-index: 0;
+  display: block;
 }
 
 .chatIconButton,
@@ -8406,12 +8503,7 @@ h1.greeting {
   color: #050505;
 }
 
-.chatBar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-}
+
 
 .chatInputWrapper {
   flex: 1;
@@ -8419,6 +8511,17 @@ h1.greeting {
   align-items: center;
   background: transparent;
   min-width: 0;
+  position: relative;
+}
+
+.chatModelSelectorWrapper {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  padding-right: 0;
 }
 
 .chatInput {
@@ -8434,9 +8537,12 @@ h1.greeting {
       "Segoe UI",
       sans-serif);
   font-size: 0.95rem;
-  padding: 12px 0;
+  padding: 0 85px 0 0;
   outline: none;
   min-width: 0;
+  line-height: 1.5;
+  vertical-align: middle;
+  box-sizing: border-box;
 }
 
 .chatInput::placeholder {
@@ -8537,7 +8643,7 @@ h1.greeting {
 
 
   .main {
-    margin-top: clamp(12px, 3vh, 18px);
+    margin-top: 0;
   }
 
   .greeting {
@@ -9027,9 +9133,30 @@ h1.greeting {
     box-shadow: none !important;
   }
 
-  /* Remove bottom padding on mobile to prevent chat bar from going below screen */
+  /* Add bottom padding on mobile to lift chat bar above screen edge */
   .generalChatComposer {
-    padding-bottom: 0;
+    padding: 6px 12px;
+    padding-bottom: max(6px, env(safe-area-inset-bottom));
+  }
+
+  .chatInput {
+    padding-top: 6px !important;
+    padding-bottom: 6px !important;
+    font-size: 16px !important;
+    /* Prevent iOS zoom */
+  }
+
+  .chatBarRounded {
+    gap: 6px !important;
+    padding: 12px !important;
+    border-radius: 20px !important;
+  }
+
+  .chatIconButton,
+  .chatActionButton {
+    width: 32px !important;
+    height: 32px !important;
+    padding: 6px !important;
   }
 
   .generalChatBarRow {

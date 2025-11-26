@@ -823,8 +823,10 @@ class ProactivityEngine:
 
     async def _save_general_message(self, user_id: int, role: str, content: str) -> bool:
         now = datetime.now(dt_timezone.utc)
-        try:
-            if self.supabase:
+        supabase_success = False
+        
+        if self.supabase:
+            try:
                 user_data_id = self._ensure_user_data_record(user_id)
                 if not user_data_id:
                     logger.warning(
@@ -844,21 +846,35 @@ class ProactivityEngine:
                         "attachments": None,
                         "grounding_metadata": None,
                     }).execute()
-                    return True
-            else:
-                query = """
-                    INSERT INTO general_chat_messages (user_id, role, content, created_at)
-                    VALUES (:user_id, :role, :content, :created_at)
-                """
-                await self.db.execute(query, {
-                    "user_id": user_id,
-                    "role": role,
-                    "content": content,
-                    "created_at": now  # Use datetime object for PostgreSQL
-                })
+                    supabase_success = True
+            except Exception as exc:
+                logger.warning(
+                    f"Supabase insert failed for general chat message, falling back to local DB: {exc}",
+                    extra={
+                        "event_type": "proactivity_general_chat_supabase_fallback",
+                        "user_id": user_id,
+                    },
+                )
+
+        if supabase_success:
+            return True
+
+        # Fallback to local database
+        try:
+            await self._ensure_connection()
+            query = """
+                INSERT INTO general_chat_messages (user_id, role, content, created_at)
+                VALUES (:user_id, :role, :content, :created_at)
+            """
+            await self.db.execute(query, {
+                "user_id": user_id,
+                "role": role,
+                "content": content,
+                "created_at": now  # Use datetime object for PostgreSQL/SQLite
+            })
             return True
         except Exception as exc:
-            logger.error(f"Failed to save general chat message: {exc}", exc_info=True)
+            logger.error(f"Failed to save general chat message (local fallback): {exc}", exc_info=True)
             return False
 
     async def _send_browser_notification(self, user_id: int, title: str, message: str) -> bool:

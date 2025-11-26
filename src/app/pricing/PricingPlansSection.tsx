@@ -31,7 +31,7 @@ const FREE_FEATURES: FeatureItem[] = [
     {
         label: "Gray Lite only",
         icon: Zap,
-        subtext: "Gemini 2.5 Flash Lite"
+        subtext: "x-ai/grok-4.1-fast:free",
     },
     { label: "Limited daily messages", icon: MessageSquare },
     { label: "14-day chat memory", icon: Pin },
@@ -76,7 +76,7 @@ const PIONEER_FEATURES: FeatureItem[] = [
     {
         label: "Model switcher",
         icon: Shuffle,
-        subtext: "Claude 4.5, Grok 4.1, GPT 5.1, DeepSeek V3.2, Kimi K2 Thinking (coming soon)",
+        subtext: "OpenRouter: Claude 4.5, Grok 4.1, GPT 5.1, DeepSeek V3.2, Kimi K2 Thinking",
     },
     { label: "Expanded reasoning budget", icon: InfinityIcon },
     {
@@ -227,15 +227,9 @@ export function PricingPlansSection({ storeId, voyagerVariantId, pioneerVariantI
                         </ul>
                     </div>
                     <div className={styles.cardFooter}>
-                        {voyagerCheckoutHref ? (
-                            <a href={voyagerCheckoutHref} className={`${styles.planButton} ${styles.planButtonOutline} lemonsqueezy-button`}>
-                                Upgrade to Voyager
-                            </a>
-                        ) : (
-                            <div className={`${styles.planButton} ${styles.planButtonOutline}`} aria-disabled="true">
-                                Coming soon
-                            </div>
-                        )}
+                        <div className={`${styles.planButton} ${styles.planButtonOutline}`} aria-disabled="true">
+                            Coming Soon
+                        </div>
                     </div>
                 </article>
 
@@ -273,15 +267,9 @@ export function PricingPlansSection({ storeId, voyagerVariantId, pioneerVariantI
                         </ul>
                     </div>
                     <div className={styles.cardFooter}>
-                        {pioneerCheckoutHref ? (
-                            <a href={pioneerCheckoutHref} className={`${styles.planButton} ${styles.planButtonPrimary} lemonsqueezy-button`}>
-                                Upgrade to Pioneer
-                            </a>
-                        ) : (
-                            <div className={`${styles.planButton} ${styles.planButtonPrimary}`} aria-disabled="true">
-                                Coming soon
-                            </div>
-                        )}
+                        <div className={`${styles.planButton} ${styles.planButtonPrimary}`} aria-disabled="true">
+                            Coming Soon
+                        </div>
                     </div>
                 </article>
             </section>

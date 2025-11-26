@@ -216,6 +216,7 @@ class ApiNetworkError extends Error {
 
 export const isApiNetworkError = (value: unknown): value is ApiNetworkError =>
   value instanceof ApiNetworkError;
+export { ApiError, ApiNetworkError };
 
 export interface FileSearchUploadResponse {
   name: string;
@@ -737,6 +738,8 @@ class ApiService {
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         const responseTime = performance.now() - startTime;
+        const upstreamTimeoutStatuses = [520, 521, 522, 523, 524, 525, 526, 527, 598, 599];
+        const isUpstreamTimeout = upstreamTimeoutStatuses.includes(response.status);
 
         if (shouldLogErrors) {
           // Don't log 404s as errors, as they are often used for control flow (e.g. checking if user exists)
@@ -748,6 +751,20 @@ class ApiService {
               method: config.method ?? 'GET',
               status: response.status,
               timestamp: new Date().toISOString(),
+            });
+          } else if (isUpstreamTimeout) {
+            const logMethod = isDevEnv() ? console.warn : console.error;
+            logMethod(`[WARN][ApiService.fetch:upstream-timeout]`, {
+              requestId,
+              endpoint,
+              url,
+              method: config.method ?? 'GET',
+              status: response.status,
+              statusText: response.statusText,
+              errorDetail: (errorData as { detail?: unknown })?.detail ?? null,
+              responseTimeMs: responseTime,
+              timestamp: new Date().toISOString(),
+              eventType: 'api_upstream_timeout',
             });
           } else {
             console.error(`[ERROR][ApiService.fetch:response-error]`, {
@@ -764,6 +781,12 @@ class ApiService {
               eventType: 'api_response_error',
             });
           }
+        }
+
+        if (isUpstreamTimeout) {
+          throw new ApiNetworkError(
+            `Upstream timeout (${response.status}) while calling ${endpoint}`
+          );
         }
 
         throw new ApiError(

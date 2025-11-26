@@ -363,18 +363,51 @@ def _ensure_sqlite_personalization_show_calendar_column():
 # Database configuration
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./test.db")
 
+def _ensure_sqlite_general_chat_table():
+    if not DATABASE_URL.startswith("sqlite"):
+        return
+    db_path = DATABASE_URL.replace("sqlite:///", "", 1)
+    if not db_path:
+        return
+    try:
+        conn = sqlite3.connect(db_path)
+        try:
+            cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='general_chat_messages'")
+            if not cursor.fetchone():
+                conn.execute("""
+                    CREATE TABLE general_chat_messages (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id INTEGER,
+                        user_data_id INTEGER,
+                        role VARCHAR,
+                        content VARCHAR,
+                        grounding_metadata JSON,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY(user_id) REFERENCES users(id)
+                    )
+                """)
+                conn.commit()
+        finally:
+            conn.close()
+    except sqlite3.Error as exc:
+        app_logger.error(
+            "Failed to ensure general_chat_messages table on sqlite",
+            extra={"event_type": "sqlite_migration_error", "error": str(exc)},
+        )
+
 _ensure_sqlite_users_auth_column()
 _ensure_sqlite_has_seen_chat_column()
 _ensure_sqlite_maps_enabled_column()
 _ensure_sqlite_usage_columns()
 _ensure_sqlite_workspace_background_column()
 _ensure_sqlite_personalization_show_calendar_column()
+_ensure_sqlite_general_chat_table()
 
 database = databases.Database(DATABASE_URL, statement_cache_size=0)
 metadata = sqlalchemy.MetaData()
 
 
-STREAMING_TOKEN_DELAY = max(0.0, _float_env("GRAY_STREAMING_TOKEN_DELAY_SECONDS", 0.045))
+STREAMING_TOKEN_DELAY = max(0.0, _float_env("GRAY_STREAMING_TOKEN_DELAY_SECONDS", 0.0))
 
 DEFAULT_DEV_ORIGIN_PORTS = (3000, 5173)
 
@@ -671,6 +704,18 @@ proactivity_push_subscriptions = sqlalchemy.Table(
     sqlalchemy.Column("auth", sqlalchemy.String, nullable=False),
     sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
     sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
+)
+
+general_chat_messages = sqlalchemy.Table(
+    "general_chat_messages",
+    metadata,
+    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True, index=True),
+    sqlalchemy.Column("user_id", sqlalchemy.ForeignKey("users.id")),
+    sqlalchemy.Column("user_data_id", sqlalchemy.Integer, nullable=True),
+    sqlalchemy.Column("role", sqlalchemy.String),
+    sqlalchemy.Column("content", sqlalchemy.String),
+    sqlalchemy.Column("grounding_metadata", sqlalchemy.JSON, nullable=True),
+    sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
 )
 
 user_streaks = sqlalchemy.Table(
@@ -1373,61 +1418,100 @@ def _general_conversation_user_id(conversation_id: Optional[str]) -> Optional[in
         return None
 
 
-def _load_general_conversation_history(user_id: int) -> List[Dict[str, Any]]:
-    if not _conversation_store_available():
-        return []
-    try:
-        # Check plan tier for retention policy (Scout = 14 days)
-        is_restricted = True
-        try:
-            user_res = supabase.table("users").select("plan_tier").eq("id", user_id).single().execute()
-            if user_res.data:
-                tier = (user_res.data.get("plan_tier") or "").lower()
-                if tier in ("voyager", "pioneer", "depth"):
-                    is_restricted = False
-        except Exception:
-            pass
-
-        query = supabase.table("general_chat_messages").select("role, content, grounding_metadata, created_at").eq("user_id", user_id)
-
-        if is_restricted:
-            cutoff = datetime.utcnow() - timedelta(days=14)
-            query = query.gte("created_at", cutoff.isoformat())
-
-        result = query.order("created_at", desc=False).execute()
-    except Exception as error:
-        _handle_conversation_store_error("Warning: General chat history unavailable", error)
-        return []
-    rows = result.data or []
+async def _load_general_conversation_history(user_id: int) -> List[Dict[str, Any]]:
     history: List[Dict[str, Any]] = []
-    for row in rows:
-        role = row.get("role")
-        if role not in {"user", "model"}:
-            continue
-        entry: Dict[str, Any] = {
-            "role": role,
-            "text": row.get("content") or "",
-        }
-        grounding_metadata = row.get("grounding_metadata")
-        if grounding_metadata is not None:
-            entry["grounding_metadata"] = grounding_metadata
-        
-        created_at = row.get("created_at")
-        if created_at is not None:
-            from dateutil import parser as dateutil_parser
+    
+    # 1. Try Supabase
+    if _conversation_store_available():
+        try:
+            # Check plan tier for retention policy (Scout = 14 days)
+            is_restricted = True
             try:
-                # Parse the ISO timestamp and convert to milliseconds since epoch
-                dt = dateutil_parser.isoparse(created_at)
-                timestamp_ms = int(dt.timestamp() * 1000)
-                entry["timestamp"] = timestamp_ms
+                user_res = supabase.table("users").select("plan_tier").eq("id", user_id).single().execute()
+                if user_res.data:
+                    tier = (user_res.data.get("plan_tier") or "").lower()
+                    if tier in ("voyager", "pioneer", "depth"):
+                        is_restricted = False
             except Exception:
                 pass
+
+            query = (
+                supabase.table("general_chat_messages")
+                .select("role, content, grounding_metadata, created_at")
+                .eq("user_id", user_id)
+                .order("created_at", desc=True)
+                .limit(100)
+            )
+            
+            if is_restricted:
+                cutoff = (datetime.utcnow() - timedelta(days=14)).isoformat()
+                query = query.gte("created_at", cutoff)
+
+            result = query.execute()
+            rows = getattr(result, "data", None) or []
+            
+            for row in reversed(rows):
+                entry = {
+                    "role": row.get("role"),
+                    "text": row.get("content"),
+                }
+                grounding_metadata = row.get("grounding_metadata")
+                if grounding_metadata is not None:
+                    entry["grounding_metadata"] = grounding_metadata
+                
+                created_at = row.get("created_at")
+                if created_at is not None:
+                    from dateutil import parser as dateutil_parser
+                    try:
+                        dt = dateutil_parser.isoparse(created_at)
+                        timestamp_ms = int(dt.timestamp() * 1000)
+                        entry["timestamp"] = timestamp_ms
+                    except Exception:
+                        pass
+                
+                history.append(entry)
+            
+            # If we got data, return it. If empty, we might still want to check SQLite 
+            # in case the user was offline/local-only recently.
+            if history:
+                return history
+                
+        except Exception as error:
+            _handle_conversation_store_error(
+                "Warning: General chat messages table not found or inaccessible (Supabase)",
+                error,
+            )
+            # Fall through to SQLite
+
+    # 2. Fallback to SQLite
+    try:
+        query = general_chat_messages.select().where(general_chat_messages.c.user_id == user_id).order_by(general_chat_messages.c.created_at.desc()).limit(100)
+        rows = await database.fetch_all(query)
         
-        history.append(entry)
-    return history
+        local_history = []
+        for row in reversed(rows):
+            entry = {
+                "role": row["role"],
+                "text": row["content"],
+            }
+            if row["grounding_metadata"]:
+                entry["grounding_metadata"] = _parse_json_field(row["grounding_metadata"]) if isinstance(row["grounding_metadata"], str) else row["grounding_metadata"]
+            
+            if row["created_at"]:
+                entry["timestamp"] = int(row["created_at"].replace(tzinfo=timezone.utc).timestamp() * 1000)
+            
+            local_history.append(entry)
+            
+        return local_history
+    except Exception as error:
+        app_logger.error(
+            "Failed to load general chat history from SQLite",
+            extra={"event_type": "sqlite_history_load_error", "error": str(error)},
+        )
+        return []
 
 
-def _insert_general_conversation_message(
+async def _insert_general_conversation_message(
     *,
     user_id: int,
     role: str,
@@ -1435,51 +1519,99 @@ def _insert_general_conversation_message(
     grounding_metadata: Optional[Any] = None,
     attachments: Optional[Any] = None,
 ) -> None:
-    if not _conversation_store_available():
-        return
-    user_data_id = _ensure_user_data_record(user_id)
-    if user_data_id is None:
-        return
-    payload: Dict[str, Any] = {
-        "user_id": user_id,
-        "user_data_id": user_data_id,
-        "role": role,
-        "content": text,
-    }
-    if grounding_metadata is not None:
-        payload["grounding_metadata"] = grounding_metadata
-    if attachments is not None:
-        payload["attachments"] = attachments
-    try:
-        supabase.table("general_chat_messages").insert(payload).execute()
-    except Exception as error:
-        _handle_conversation_store_error("Error saving general conversation message", error)
-
-
-def _replace_general_conversation_history(user_id: int, history: List[Dict[str, Any]]) -> None:
-    if not _conversation_store_available():
-        return
-    try:
+    supabase_success = False
+    if _conversation_store_available():
         user_data_id = _ensure_user_data_record(user_id)
-        if user_data_id is None:
-            return
-        supabase.table("general_chat_messages").delete().eq("user_id", user_id).execute()
-        if history:
-            rows: List[Dict[str, Any]] = []
-            for entry in history:
-                rows.append(
-                    {
-                        "user_id": user_id,
-                        "user_data_id": user_data_id,
-                        "role": entry.get("role"),
-                        "content": entry.get("text") or "",
-                        "grounding_metadata": entry.get("grounding_metadata"),
-                    }
-                )
-            if rows:
-                supabase.table("general_chat_messages").insert(rows).execute()
+        if user_data_id is not None:
+            payload: Dict[str, Any] = {
+                "user_id": user_id,
+                "user_data_id": user_data_id,
+                "role": role,
+                "content": text,
+            }
+            if grounding_metadata is not None:
+                payload["grounding_metadata"] = grounding_metadata
+            if attachments is not None:
+                payload["attachments"] = attachments
+            try:
+                supabase.table("general_chat_messages").insert(payload).execute()
+                supabase_success = True
+            except Exception as error:
+                _handle_conversation_store_error("Error saving general conversation message (Supabase)", error)
+
+    if supabase_success:
+        return
+
+    # Fallback to SQLite
+    try:
+        query = """
+            INSERT INTO general_chat_messages (user_id, role, content, grounding_metadata, created_at)
+            VALUES (:user_id, :role, :content, :grounding_metadata, :created_at)
+        """
+        values = {
+            "user_id": user_id,
+            "role": role,
+            "content": text,
+            "grounding_metadata": json.dumps(grounding_metadata) if grounding_metadata else None,
+            "created_at": datetime.utcnow(),
+        }
+        await database.execute(query, values)
     except Exception as error:
-        _handle_conversation_store_error("Error replacing general conversation history", error)
+        app_logger.error(
+            "Error saving general conversation message (SQLite)",
+            extra={"event_type": "sqlite_message_insert_error", "error": str(error)},
+        )
+
+
+async def _replace_general_conversation_history(user_id: int, history: List[Dict[str, Any]]) -> None:
+    # 1. Delete from Supabase
+    if _conversation_store_available():
+        try:
+            user_data_id = _ensure_user_data_record(user_id)
+            if user_data_id is not None:
+                supabase.table("general_chat_messages").delete().eq("user_id", user_id).execute()
+                if history:
+                    rows: List[Dict[str, Any]] = []
+                    for entry in history:
+                        rows.append(
+                            {
+                                "user_id": user_id,
+                                "user_data_id": user_data_id,
+                                "role": entry.get("role"),
+                                "content": entry.get("text") or "",
+                                "grounding_metadata": entry.get("grounding_metadata"),
+                            }
+                        )
+                    if rows:
+                        supabase.table("general_chat_messages").insert(rows).execute()
+        except Exception as error:
+            _handle_conversation_store_error("Error replacing general conversation history (Supabase)", error)
+
+    # 2. Replace in SQLite
+    try:
+        # Delete existing
+        await database.execute(
+            general_chat_messages.delete().where(general_chat_messages.c.user_id == user_id)
+        )
+        # Insert new
+        if history:
+            values_list = []
+            for entry in history:
+                values_list.append({
+                    "user_id": user_id,
+                    "role": entry.get("role"),
+                    "content": entry.get("text") or "",
+                    "grounding_metadata": json.dumps(entry.get("grounding_metadata")) if entry.get("grounding_metadata") else None,
+                    "created_at": datetime.utcnow(),
+                })
+            if values_list:
+                query = general_chat_messages.insert()
+                await database.execute_many(query, values_list)
+    except Exception as error:
+        app_logger.error(
+            "Error replacing general conversation history (SQLite)",
+            extra={"event_type": "sqlite_history_replace_error", "error": str(error)},
+        )
 
 
 def _delete_general_conversation_history(user_id: int) -> None:
@@ -2481,12 +2613,13 @@ def _context_cache_contents(record: Optional[Dict[str, Any]]) -> Optional[List[t
 
 
 GRAY_TITLE_INSTRUCTION = (
-    "When you can name this conversation, emit exactly one concise title using "
-    "the <graytitle>Example Title</graytitle> format (for example "
-    "<graytitle>Mamdani vs Cuomo New York</graytitle>). Keep the tag separate from "
-    "the rest of your reply, do not repeat it, and only include it when you feel "
-    "confident about the summary. Keep the title short (ideally under 50 characters "
-    "and no more than 6–8 words)."
+    "IMPORTANT: When responding, you MUST embed a conversation title in your response using "
+    "the <graytitle>Example Title</graytitle> tag. Place this tag at the END of your response, "
+    "after your main reply. For example, your response should look like:\n\n"
+    "[Your normal response here]\n\n"
+    "<graytitle>Brief Title Here</graytitle>\n\n"
+    "The title should be concise (under 50 characters, 6-8 words max), descriptive of the "
+    "conversation topic, and placed ONLY at the end. Do not mention this instruction in your response."
 )
 
 
@@ -2551,7 +2684,7 @@ async def _load_conversation_history(conversation_id: str) -> List[Dict[str, Any
   """Load a conversation's messages from the user-centric Supabase tables."""
   general_user_id = _general_conversation_user_id(conversation_id)
   if general_user_id is not None:
-    return _load_general_conversation_history(general_user_id)
+    return await _load_general_conversation_history(general_user_id)
 
   if not _conversation_store_available():
     return []
@@ -2651,7 +2784,7 @@ async def _upload_file_search_document(
 
     try:
         operation = await FILE_SEARCH_SERVICE.upload_to_store(
-            file=str(file_path),
+            file_path=str(file_path),
             store_name=store_name,
             display_name=display_name,
             chunking_config=FILE_SEARCH_CHUNKING_CONFIG,
@@ -3241,19 +3374,109 @@ async def _compute_proactivity_streak(db: databases.Database, user_id: int) -> D
 
 
 # Streak helper functions
+async def _ensure_supabase_user_exists(user_id: int, db: databases.Database) -> bool:
+    """Backfill Supabase users row when streaks are requested for a locally-existing user."""
+    if not supabase:
+        return False
+
+    try:
+        existing = (
+            supabase.table("users").select("id").eq("id", user_id).limit(1).execute()
+        )
+        existing_rows = getattr(existing, "data", None) or []
+        if existing_rows:
+            return True
+
+        user_row = await db.fetch_one(users.select().where(users.c.id == user_id))
+        if not user_row:
+            api_logger.error(
+                "Cannot backfill Supabase user; user missing locally",
+                extra={"user_id": user_id},
+            )
+            return False
+
+        def _iso(value: Any) -> Optional[str]:
+            if value is None:
+                return None
+            if isinstance(value, datetime):
+                return value.isoformat()
+            try:
+                return value.isoformat()  # type: ignore[attr-defined]
+            except Exception:
+                return str(value)
+
+        payload = {
+            "id": user_row["id"],
+            "email": user_row["email"],
+            "full_name": user_row["full_name"],
+            "profile_picture_url": user_row["profile_picture_url"],
+            "role": user_row["role"],
+            "initials": user_row["initials"],
+            "workspace_background_id": user_row["workspace_background_id"],
+            "maps_enabled": user_row["maps_enabled"],
+            "personalization_nickname": user_row["personalization_nickname"],
+            "personalization_occupation": user_row["personalization_occupation"],
+            "personalization_about": user_row["personalization_about"],
+            "personalization_custom_instructions": user_row["personalization_custom_instructions"],
+            "personalization_show_calendar": user_row["personalization_show_calendar"],
+            "plan_tier": user_row["plan_tier"],
+            "has_seen_general_chat": user_row["has_seen_general_chat"],
+            "auth_user_id": user_row["auth_user_id"],
+            "created_at": _iso(user_row["created_at"]),
+            "updated_at": _iso(user_row["updated_at"]),
+        }
+
+        supabase.table("users").insert(payload).execute()
+        api_logger.info(
+            "Backfilled Supabase users row for streak tracking",
+            extra={"user_id": user_id},
+        )
+        return True
+    except Exception as error:  # pragma: no cover - defensive
+        api_logger.error(
+            "Failed to ensure Supabase user exists for streaks",
+            extra={"user_id": user_id, "error": str(error)},
+        )
+        return False
+
+
 async def get_or_create_user_streak(user_id: int, db: databases.Database) -> UserStreak:
     """Get existing user streak or create new one"""
+    # Return default streak if Supabase is not configured
     if not supabase:
-         raise HTTPException(status_code=503, detail="Supabase is not configured")
+        now = datetime.utcnow()
+        return UserStreak(
+            id=0,
+            user_id=user_id,
+            current_streak=0,
+            last_activity_date=None,
+            created_at=now,
+            updated_at=now
+        )
+
+    if not await _ensure_supabase_user_exists(user_id, db):
+        api_logger.error(
+            "Supabase user row missing; returning default streak",
+            extra={"user_id": user_id},
+        )
+        now = datetime.utcnow()
+        return UserStreak(
+            id=0,
+            user_id=user_id,
+            current_streak=0,
+            last_activity_date=None,
+            created_at=now,
+            updated_at=now
+        )
 
     try:
         result = supabase.table("user_streaks").select("*").eq("user_id", user_id).limit(1).execute()
         rows = getattr(result, "data", None) or []
         if rows:
-            return rows[0]
+            return UserStreak(**rows[0])
 
         now = datetime.utcnow().isoformat()
-        supabase.table("user_streaks").insert(
+        insert_result = supabase.table("user_streaks").insert(
             {
                 "user_id": user_id,
                 "current_streak": 0,
@@ -3268,13 +3491,34 @@ async def get_or_create_user_streak(user_id: int, db: databases.Database) -> Use
         )
         created_rows = getattr(created, "data", None) or []
         if created_rows:
-            return created_rows[0]
+            return UserStreak(**created_rows[0])
         
-        raise HTTPException(status_code=500, detail="Failed to retrieve created user streak from Supabase")
+        # If we still can't get the streak, return a default one instead of failing
+        api_logger.warning(f"Failed to retrieve created user streak from Supabase for user {user_id}, returning default")
+        now_dt = datetime.utcnow()
+        return UserStreak(
+            id=0,
+            user_id=user_id,
+            current_streak=0,
+            last_activity_date=None,
+            created_at=now_dt,
+            updated_at=now_dt
+        )
 
     except Exception as error:
-        logger.error(f"Critical: Failed to load or create user streak in Supabase for user {user_id}: {error}")
-        raise HTTPException(status_code=500, detail="Database write failed for user streak")
+        # Log the error but return a default streak instead of crashing the entire app
+        api_logger.error(
+            f"Failed to load or create user streak in Supabase for user {user_id}: {error}, returning default streak"
+        )
+        now = datetime.utcnow()
+        return UserStreak(
+            id=0,
+            user_id=user_id,
+            current_streak=0,
+            last_activity_date=None,
+            created_at=now,
+            updated_at=now
+        )
 
 async def update_user_streak(
     user_id: int,
@@ -3301,8 +3545,8 @@ async def update_user_streak(
         streak = await get_or_create_user_streak(user_id, db)
 
         # Check if last activity was yesterday
-        if streak['last_activity_date']:
-            last_activity = _coerce_activity_day(streak['last_activity_date'])
+        if streak.last_activity_date:
+            last_activity = _coerce_activity_day(streak.last_activity_date)
             if last_activity is None:
                 # If we can't parse the date, treat as first activity
                 new_streak = 1
@@ -3311,7 +3555,7 @@ async def update_user_streak(
 
                 if last_activity == yesterday:
                     # Continue streak
-                    new_streak = streak['current_streak'] + 1
+                    new_streak = streak.current_streak + 1
                 elif last_activity < yesterday:
                     # Streak broken, start new one
                     new_streak = 1
@@ -3329,7 +3573,7 @@ async def update_user_streak(
         try:
             now = datetime.utcnow().isoformat()
             # Optimistic locking: Ensure current_streak matches what we read
-            current_val = streak.get('current_streak', 0)
+            current_val = streak.current_streak
             
             res = supabase.table("user_streaks").update(
                 {
@@ -3347,7 +3591,9 @@ async def update_user_streak(
             continue
 
         except Exception as error:
-            logger.error(f"Critical: Failed to update user streak in Supabase for user {user_id}: {error}")
+            api_logger.error(
+                f"Critical: Failed to update user streak in Supabase for user {user_id}: {error}"
+            )
             raise HTTPException(status_code=500, detail="Database update failed for user streak")
 
     raise HTTPException(status_code=409, detail="Concurrency error updating streak")
@@ -3448,7 +3694,7 @@ async def save_conversation_message(
 
   general_user_id = _general_conversation_user_id(conversation_id)
   if general_user_id is not None:
-      _insert_general_conversation_message(
+      await _insert_general_conversation_message(
           user_id=general_user_id,
           role=role,
           text=text,
@@ -3602,7 +3848,12 @@ async def stream_ai_response(
     workspace_with_cache = workspace_context
     if cache_text_block:
         workspace_with_cache = "\n\n".join(filter(None, [workspace_context, cache_text_block]))
-    title_instruction_contents = _build_gray_title_instruction_contents(should_generate_title)
+    
+    # Append title generation instruction to system prompt instead of as user message
+    effective_system_prompt = system_prompt
+    if should_generate_title:
+        effective_system_prompt = f"{system_prompt or ''}\n\n{GRAY_TITLE_INSTRUCTION}"
+
 
     if provider == "anthropic":
         if not ANTHROPIC_SERVICE.available:
@@ -3612,7 +3863,7 @@ async def stream_ai_response(
             message,
             conversation_history,
             workspace_with_cache,
-            system_prompt,
+            effective_system_prompt,
             time_context,
             model,
         ):
@@ -3648,11 +3899,11 @@ async def stream_ai_response(
                 message,
                 conversation_history,
                 workspace_with_cache,
-                system_prompt,
+                effective_system_prompt,
                 time_context,
                 model,
                 attachments=media_attachments,
-                extra_contents=_merge_extra_contents(title_instruction_contents, cached_contents),
+                extra_contents=cached_contents,
                 tools=tool_list,
                 tool_config=maps_tool_config,
                 reasoning_mode=reasoning_mode,
@@ -3763,7 +4014,11 @@ async def generate_ai_response(
     workspace_with_cache = workspace_context
     if cache_text_block:
         workspace_with_cache = "\n\n".join(filter(None, [workspace_context, cache_text_block]))
-    title_instruction_contents = _build_gray_title_instruction_contents(should_generate_title)
+    
+    # Append title generation instruction to system prompt instead of as user message
+    effective_system_prompt = system_prompt
+    if should_generate_title:
+        effective_system_prompt = f"{system_prompt or ''}\n\n{GRAY_TITLE_INSTRUCTION}"
 
     if provider == "anthropic":
         if not ANTHROPIC_SERVICE.available:
@@ -3774,7 +4029,7 @@ async def generate_ai_response(
             message,
             conversation_history,
             workspace_with_cache,
-            system_prompt,
+            effective_system_prompt,
             time_context,
             model,
         )
@@ -3810,11 +4065,11 @@ async def generate_ai_response(
                 message,
                 conversation_history,
                 workspace_with_cache,
-                system_prompt,
+                effective_system_prompt,
                 time_context,
                 model,
                 attachments=attachment_payloads,
-                extra_contents=_merge_extra_contents(title_instruction_contents, cached_contents),
+                extra_contents=cached_contents,
                 response_schema=response_schema,
                 response_mime_type=response_mime_type,
                 tools=tool_list,
@@ -4392,7 +4647,7 @@ async def chat_with_ai_stream(request: ChatRequest, db: databases.Database = Dep
             tool_list = list(ONBOARDING_TOOLS)
             
             # Force a capable model for onboarding tools
-            request.model = "models/gemini-1.5-flash"
+            request.model = "models/gemini-flash-latest"
             
             # If this is the very first interaction (triggered by frontend with empty message usually)
             if not effective_message or not effective_message.strip():
@@ -4705,6 +4960,24 @@ async def create_conversation(request: ConversationCreateRequest):
         raise HTTPException(status_code=500, detail=f"Error creating conversation: {str(e)}")
 
 
+async def _delete_general_conversation_history(user_id: int) -> None:
+    # 1. Delete from Supabase
+    if _conversation_store_available():
+        try:
+            supabase.table("general_chat_messages").delete().eq("user_id", user_id).execute()
+        except Exception as error:
+            _handle_conversation_store_error("Error deleting general conversation history (Supabase)", error)
+
+    # 2. Delete from SQLite
+    try:
+        query = general_chat_messages.delete().where(general_chat_messages.c.user_id == user_id)
+        await database.execute(query)
+    except Exception as error:
+        app_logger.error(
+            "Error deleting general conversation history (SQLite)",
+            extra={"event_type": "sqlite_history_delete_error", "error": str(error)},
+        )
+
 @app.delete("/api/conversation/{conversation_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_conversation(conversation_id: str):
     """Delete a conversation and all of its stored messages.
@@ -4716,7 +4989,7 @@ async def delete_conversation(conversation_id: str):
     try:
         general_user_id = _general_conversation_user_id(conversation_id)
         if general_user_id is not None:
-            _delete_general_conversation_history(general_user_id)
+            await _delete_general_conversation_history(general_user_id)
             return
 
         if _conversation_store_available() and _is_valid_uuid(conversation_id):
@@ -4746,7 +5019,7 @@ async def overwrite_conversation_history(conversation_id: str, payload: Conversa
 
         general_user_id = _general_conversation_user_id(conversation_id)
         if general_user_id is not None:
-            _replace_general_conversation_history(general_user_id, normalized_history)
+            await _replace_general_conversation_history(general_user_id, normalized_history)
             return {
                 "id": conversation_id,
                 "message_count": len(normalized_history),
@@ -5044,9 +5317,13 @@ async def get_conversation_usage(conversation_id: str):
                 # Get user_id from the conversation metadata in Supabase
                 # Note: The column in user_chat_threads is 'user_identifier', not 'user_id'
                 if supabase:
-                    conv_result = supabase.table("user_chat_threads").select("user_identifier").eq("id", conversation_id).single().execute()
-                    if conv_result and conv_result.data:
-                        user_id = conv_result.data.get("user_identifier")
+                    try:
+                        conv_result = supabase.table("user_chat_threads").select("user_identifier").eq("id", conversation_id).single().execute()
+                        if conv_result and conv_result.data:
+                            user_id = conv_result.data.get("user_identifier")
+                    except Exception:
+                        # Conversation might not exist in Supabase yet, skip silently
+                        pass
             
             # If we found a user_id, look up their tier
             if user_id:
@@ -5054,15 +5331,15 @@ async def get_conversation_usage(conversation_id: str):
                 # The users table uses integer IDs for the primary key 'id'
                 # If user_identifier is a string (UUID), we might need to query by auth_user_id
                 
-                # Try querying by ID first (assuming it's the integer ID)
-                user_result = supabase.table("users").select("plan_tier").eq("id", user_id).single().execute()
-                
-                # If not found and it looks like a UUID, try auth_user_id? 
-                # Actually, the system seems to use integer IDs for internal linking mostly.
-                # Let's stick to ID for now as that's what the general chat uses.
-                
-                if user_result and user_result.data:
-                    user_tier = (user_result.data.get("plan_tier") or "scout").lower()
+                try:
+                    # Try querying by ID first (assuming it's the integer ID)
+                    user_result = supabase.table("users").select("plan_tier").eq("id", user_id).single().execute()
+                    
+                    if user_result and user_result.data:
+                        user_tier = (user_result.data.get("plan_tier") or "scout").lower()
+                except Exception:
+                    # User might not exist or query failed, use default tier
+                    pass
                     
         except Exception as tier_error:
             app_logger.warning(f"Could not determine user tier for conversation {conversation_id}: {tier_error}")

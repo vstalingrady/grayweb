@@ -509,6 +509,7 @@ export default function LoginForm({ initialMode = "signin" }: LoginFormProps) {
                       height={180}
                       priority
                       className={styles.authOrbLogo}
+                      style={{ height: "auto", width: "clamp(140px, 28vw, 180px)" }}
                     />
                   </div>
                 </div>

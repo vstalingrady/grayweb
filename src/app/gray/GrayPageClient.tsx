@@ -2461,30 +2461,30 @@ function GrayPageClientInner({
         {isMounted && (
           <div className={styles.mobileHeader}>
             {!effectiveIsSidebarExpanded && (
-              <button
-                className={styles.mobileMenuButton}
-                onClick={() => setIsSidebarExpanded(!isSidebarExpanded)}
-              >
-                <Menu size={24} />
-              </button>
-            )}
-
-            <div className={styles.mobileHeaderRight}>
-              {streakCount > 0 && (
-                <div className={styles.streakBadge} aria-label={`${streakCount} day streak`}>
-                  <Zap size={12} />
-                  <span>{streakCount}</span>
-                </div>
-              )}
-              {isScout && (
-                <button className={styles.upgradePill} onClick={handleUpgradePlan}>
-                  <Zap size={14} />
-                  <span>Upgrade</span>
+              <>
+                <button
+                  className={styles.mobileMenuButton}
+                  onClick={() => setIsSidebarExpanded(!isSidebarExpanded)}
+                >
+                  <Menu size={24} />
                 </button>
-              )}
 
-
-            </div>
+                <div className={styles.mobileHeaderRight}>
+                  {streakCount > 0 && (
+                    <div className={styles.streakBadge} aria-label={`${streakCount} day streak`}>
+                      <Zap size={12} />
+                      <span>{streakCount}</span>
+                    </div>
+                  )}
+                  {isScout && (
+                    <button className={styles.upgradePill} onClick={handleUpgradePlan}>
+                      <Zap size={14} />
+                      <span>Upgrade</span>
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
           </div>
         )}
 
@@ -2502,14 +2502,9 @@ function GrayPageClientInner({
             className={styles.layout}
             data-view={viewMode}
             data-mobile-sidebar={effectiveIsMobileViewport ? "true" : "false"}
+            {...(isMounted && { "data-sidebar-expanded": effectiveIsSidebarExpanded ? "true" : "false" })}
           >
-            {/* Mobile Sidebar Overlay */}
-            {effectiveIsSidebarExpanded && effectiveIsMobileViewport && (
-              <div
-                className={styles.overlay}
-                onClick={() => setIsSidebarExpanded(false)}
-              />
-            )}
+
 
             <GrayEnhancedSidebar
               activeNav={activeNav ?? "general"}
@@ -2534,8 +2529,6 @@ function GrayPageClientInner({
             />
 
             {/* Mobile Sidebar Overlay */}
-
-
             <div
               className={styles.main}
               data-dashboard={isDashboardView ? "true" : "false"}
@@ -2545,6 +2538,15 @@ function GrayPageClientInner({
               data-general-attachments={generalAttachmentsActive ? "true" : "false"}
               data-dashboard-free="true"
             >
+              {/* Mobile Sidebar Overlay */}
+              {isMounted && (
+                <div
+                  className={styles.overlay}
+                  data-visible={effectiveIsSidebarExpanded ? "true" : "false"}
+                  onClick={() => setIsSidebarExpanded(false)}
+                  aria-hidden="true"
+                />
+              )}
               {/* Centered Transparent Logo */}
               {viewMode === "general" && !activeChatId && (
                 <div className={styles.centerLogo}>
