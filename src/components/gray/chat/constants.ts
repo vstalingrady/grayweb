@@ -12,7 +12,6 @@ export const DUPLICATE_THREAD_WINDOW_MS = 15000;
 export const REMOTE_SESSION_MERGE_WINDOW_MS = 5 * 60 * 1000;
 export const REMINDER_POLL_MIN_INTERVAL = 60_000;
 export const REMINDER_POLL_SHORT_INTERVAL = 15_000;
-export const MIN_CONTEXT_MESSAGE_LENGTH = 48;
 
 // Placeholder session IDs
 export const PLACEHOLDER_SESSION_IDS = new Set([
@@ -44,6 +43,7 @@ export const WORKSPACE_CONTEXT_KEYWORDS = [
     "pulse",
     "streak",
     "history",
+    "reminder",
 ];
 
 export const LOW_SIGNAL_TITLE_WORDS = new Set<string>([

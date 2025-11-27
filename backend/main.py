@@ -61,8 +61,10 @@ except ImportError:
     from file_search import FileSearchService
 try:
     from backend.onboarding_tools import ONBOARDING_TOOLS
+    from backend.plan_tools import PLAN_TOOLS
 except ImportError:
     from onboarding_tools import ONBOARDING_TOOLS
+    from plan_tools import PLAN_TOOLS
 from ai_message_generator import AIMessageGenerator
 from proactivity_engine import (
     ProactivityEngine,
@@ -178,7 +180,7 @@ SEARCH_TOOL = types.Tool(
     google_search=types.GoogleSearch(),
 )
 
-DEFAULT_CHAT_TOOLS = [SEARCH_TOOL, *CALENDAR_TOOLS]
+DEFAULT_CHAT_TOOLS = [SEARCH_TOOL, *CALENDAR_TOOLS, *PLAN_TOOLS]
 
 PROMPTS_DIR = ROOT_DIR / "backend" / "prompts"
 ONBOARDING_PROMPT_PATH = PROMPTS_DIR / "onboarding.txt"
@@ -3047,6 +3049,285 @@ async def _delete_calendar_event(user_id: int, args: Dict[str, Any], db: databas
     return {"status": "success", "message": "Event deleted."}
 
 
+async def _list_plans_tool(user_id: int, args: Dict[str, Any], db: databases.Database) -> Dict[str, Any]:
+    limit = args.get("limit")
+    if supabase:
+        try:
+            query = (
+                supabase.table("plans")
+                .select("*")
+                .eq("user_id", user_id)
+                .order("created_at", desc=False)
+            )
+            if limit:
+                query = query.limit(limit)
+            result = query.execute()
+            if result.data is not None:
+                return {"plans": result.data}
+        except Exception as error:
+            pass # Fallback to local DB
+            
+    query = plans.select().where(plans.c.user_id == user_id).order_by(plans.c.created_at)
+    if limit:
+        query = query.limit(limit)
+    rows = await db.fetch_all(query)
+    return {"plans": [dict(row) for row in rows]}
+
+
+async def _list_habits_tool(user_id: int, args: Dict[str, Any], db: databases.Database) -> Dict[str, Any]:
+    limit = args.get("limit")
+    if supabase:
+        try:
+            query = (
+                supabase.table("habits")
+                .select("*")
+                .eq("user_id", user_id)
+                .order("created_at", desc=False)
+            )
+            if limit:
+                query = query.limit(limit)
+            result = query.execute()
+            if result.data is not None:
+                return {"habits": result.data}
+        except Exception as error:
+            _handle_supabase_table_error("Warning: Habits table not found or inaccessible", error)
+
+    query = habits.select().where(habits.c.user_id == user_id).order_by(habits.c.created_at)
+    if limit:
+        query = query.limit(limit)
+    rows = await db.fetch_all(query)
+    return {"habits": [dict(row) for row in rows]}
+
+
+async def _list_reminders_tool(user_id: int, args: Dict[str, Any], db: databases.Database) -> Dict[str, Any]:
+    status_filter = args.get("status")
+    limit = args.get("limit")
+    delivery_mode = args.get("delivery_mode")
+    entity_type = args.get("entity_type")
+    include_archived = bool(args.get("include_archived"))
+
+    if supabase:
+        try:
+            builder = (
+                supabase.table("reminders")
+                .select("*")
+                .eq("user_id", user_id)
+            )
+            if status_filter:
+                builder = builder.eq("status", status_filter)
+            elif not include_archived:
+                builder = builder.in_("status", ["pending", "delivered"])
+            if delivery_mode:
+                builder = builder.eq("delivery_mode", delivery_mode)
+            if entity_type:
+                builder = builder.eq("entity_type", entity_type)
+            builder = builder.order("remind_at", desc=False)
+            if limit:
+                builder = builder.limit(limit)
+            result = builder.execute()
+            rows = result.data if result.data is not None else []
+            return {"reminders": [_serialize_reminder_row(row) for row in rows]}
+        except Exception as error:
+            _handle_supabase_table_error("Warning: Reminders table not found or inaccessible", error)
+
+    query = reminders.select().where(reminders.c.user_id == user_id)
+    if status_filter:
+        query = query.where(reminders.c.status == status_filter)
+    elif not include_archived:
+        query = query.where(reminders.c.status.in_(["pending", "delivered"]))
+    if delivery_mode:
+        query = query.where(reminders.c.delivery_mode == delivery_mode)
+    if entity_type:
+        query = query.where(reminders.c.entity_type == entity_type)
+    query = query.order_by(reminders.c.remind_at.asc())
+    if limit:
+        query = query.limit(limit)
+    rows = await db.fetch_all(query)
+    return {"reminders": [_serialize_reminder_row(row) for row in rows]}
+
+
+async def _get_workspace_state_tool(user_id: int, args: Dict[str, Any], db: databases.Database) -> Dict[str, Any]:
+    plan_limit = args.get("plan_limit") or None
+    habit_limit = args.get("habit_limit") or None
+    reminder_limit = args.get("reminder_limit") or None
+    include_archived_reminders = bool(args.get("include_archived_reminders"))
+
+    plans_payload = await _list_plans_tool(user_id, {"limit": plan_limit}, db)
+    habits_payload = await _list_habits_tool(user_id, {"limit": habit_limit}, db)
+    reminders_payload = await _list_reminders_tool(
+        user_id,
+        {
+            "limit": reminder_limit,
+            "include_archived": include_archived_reminders,
+        },
+        db,
+    )
+
+    plans_list = plans_payload.get("plans") or []
+    habits_list = habits_payload.get("habits") or []
+    reminders_list = reminders_payload.get("reminders") or []
+    pending_reminders = [
+        reminder for reminder in reminders_list if str(reminder.get("status", "")).lower() == "pending"
+    ]
+
+    summary_parts: List[str] = []
+    summary_parts.append(f"{len(plans_list)} plans")
+    summary_parts.append(f"{len(habits_list)} habits")
+    summary_parts.append(f"{len(reminders_list)} reminders ({len(pending_reminders)} pending)")
+
+    return {
+        "summary": " | ".join(summary_parts),
+        "plans": plans_list,
+        "habits": habits_list,
+        "reminders": reminders_list,
+    }
+
+
+async def _create_plan_tool(user_id: int, args: Dict[str, Any], db: databases.Database) -> Dict[str, Any]:
+    label = args.get("label")
+    if not label:
+        return {"error": "label is required"}
+    
+    base_values = {
+        "user_id": user_id,
+        "label": label,
+        "completed": False,
+        "deadline": args.get("deadline"),
+        "schedule_slot": args.get("schedule_slot"),
+        "description": args.get("description"),
+    }
+    
+    if supabase:
+        timestamp = datetime.utcnow().isoformat()
+        payload = {**base_values, "created_at": timestamp, "updated_at": timestamp}
+        try:
+            result = supabase.table("plans").insert(payload).execute()
+            rows = getattr(result, "data", None) or []
+            if isinstance(rows, list) and rows:
+                return {"status": "success", "plan": rows[0], "message": f"Plan '{label}' created."}
+            if isinstance(rows, dict) and rows:
+                return {"status": "success", "plan": rows, "message": f"Plan '{label}' created."}
+            return {"error": "Failed to create plan in Supabase"}
+        except Exception as e:
+            # Fallback to local DB
+            api_logger.warning(f"Supabase plan creation failed, falling back to local DB: {e}")
+            pass
+
+    now = datetime.utcnow()
+    plan_id = await db.execute(
+        plans.insert().values(
+            **base_values,
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    return {"status": "success", "plan_id": plan_id, "message": f"Plan '{label}' created."}
+
+
+async def _update_plan_tool(user_id: int, args: Dict[str, Any], db: databases.Database) -> Dict[str, Any]:
+    plan_id = args.get("plan_id")
+    if not plan_id:
+        return {"error": "plan_id is required"}
+        
+    updates = {}
+    if "label" in args:
+        updates["label"] = args["label"]
+    if "description" in args:
+        updates["description"] = args["description"]
+    if "completed" in args:
+        updates["completed"] = args["completed"]
+    if "deadline" in args:
+        updates["deadline"] = args["deadline"]
+    if "schedule_slot" in args:
+        updates["schedule_slot"] = args["schedule_slot"]
+        
+    if not updates:
+        return {"status": "no_changes", "message": "No updates provided."}
+        
+    if supabase:
+        updates["updated_at"] = datetime.utcnow().isoformat()
+        try:
+            result = (
+                supabase.table("plans")
+                .update(updates)
+                .eq("id", plan_id)
+                .eq("user_id", user_id)
+                .execute()
+            )
+            rows = getattr(result, "data", None) or []
+            if rows:
+                return {"status": "success", "plan": rows[0], "message": "Plan updated."}
+            return {"error": "Plan not found or update failed."}
+        except Exception as e:
+            # Fallback to local DB
+            api_logger.warning(f"Supabase plan update failed, falling back to local DB: {e}")
+            pass
+
+    # Verify ownership locally
+    check_query = plans.select().where((plans.c.id == plan_id) & (plans.c.user_id == user_id))
+    existing = await db.fetch_one(check_query)
+    if not existing:
+        return {"error": "Plan not found or access denied."}
+
+    updates["updated_at"] = datetime.utcnow()
+    query = plans.update().where(plans.c.id == plan_id).values(**updates)
+    await db.execute(query)
+    return {"status": "success", "message": "Plan updated."}
+
+
+async def _delete_plan_tool(user_id: int, args: Dict[str, Any], db: databases.Database) -> Dict[str, Any]:
+    plan_id = args.get("plan_id")
+    if not plan_id:
+        return {"error": "plan_id is required"}
+        
+    if supabase:
+        try:
+            # Delete from plans table
+            result = supabase.table("plans").delete().eq("id", plan_id).eq("user_id", user_id).execute()
+            # Check if anything was deleted? Supabase delete returns data of deleted rows.
+            deleted_rows = getattr(result, "data", None)
+            if not deleted_rows:
+                 return {"error": "Plan not found."}
+            
+            # Attempt to sync with dashboard_pulses
+            try:
+                today_key = datetime.utcnow().strftime("%Y-%m-%d")
+                pulse_res = supabase.table("dashboard_pulses").select("*").eq("user_id", user_id).eq("date_key", today_key).execute()
+                if pulse_res.data:
+                    pulse = pulse_res.data[0]
+                    current_plans = pulse.get("plans", []) or []
+                    new_plans = [p for p in current_plans if str(p.get("id")) != str(plan_id)]
+                    
+                    if len(new_plans) != len(current_plans):
+                        supabase.table("dashboard_pulses").update({
+                            "plans": new_plans, 
+                            "updated_at": datetime.utcnow().isoformat()
+                        }).eq("id", pulse["id"]).execute()
+            except Exception:
+                pass # Best effort sync
+                
+            return {"status": "success", "message": "Plan deleted."}
+        except Exception as e:
+            # Fallback to local DB
+            api_logger.warning(f"Supabase plan deletion failed, falling back to local DB: {e}")
+            pass
+
+    # Delete from local DB
+    query = plans.delete().where((plans.c.id == plan_id) & (plans.c.user_id == user_id))
+    await db.execute(query)
+    return {"status": "success", "message": "Plan deleted."}
+
+    # Verify ownership locally
+    check_query = plans.select().where((plans.c.id == plan_id) & (plans.c.user_id == user_id))
+    existing = await db.fetch_one(check_query)
+    if not existing:
+        return {"error": "Plan not found or access denied."}
+
+    query = plans.delete().where(plans.c.id == plan_id)
+    await db.execute(query)
+    return {"status": "success", "message": "Plan deleted."}
+
+
 async def _complete_onboarding(user_id: int, args: Dict[str, Any], db: databases.Database) -> Dict[str, Any]:
     core_blocker = args.get("core_blocker")
     # Log the blocker to personalization_about
@@ -3073,6 +3354,13 @@ async def _execute_function_call(
         "update_calendar_event": lambda u, a, d: _update_calendar_event(u, a, d),
         "delete_calendar_event": lambda u, a, d: _delete_calendar_event(u, a, d),
         "complete_onboarding": lambda u, a, d: _complete_onboarding(u, a, d),
+        "list_plans": lambda u, a, d: _list_plans_tool(u, a, d),
+        "create_plan": lambda u, a, d: _create_plan_tool(u, a, d),
+        "update_plan": lambda u, a, d: _update_plan_tool(u, a, d),
+        "delete_plan": lambda u, a, d: _delete_plan_tool(u, a, d),
+        "list_habits": lambda u, a, d: _list_habits_tool(u, a, d),
+        "list_reminders": lambda u, a, d: _list_reminders_tool(u, a, d),
+        "get_workspace_state": lambda u, a, d: _get_workspace_state_tool(u, a, d),
     }.get(function_call.name)
     if not handler:
         raise HTTPException(status_code=501, detail=f"Unsupported function: {function_call.name}")

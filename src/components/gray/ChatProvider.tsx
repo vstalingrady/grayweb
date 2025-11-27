@@ -17,6 +17,7 @@ import { usePathname } from "next/navigation";
 import { useUser } from "@/contexts/UserContext";
 import {
   apiService,
+  isApiNetworkError,
   type ChatStreamTiming,
   type ConversationSummary,
   type ContextCache,
@@ -186,8 +187,8 @@ type ChatContextValue = {
   loadConversationMessages: (sessionId: string) => Promise<void>;
   reasoningMode: boolean;
   setReasoningMode: (value: boolean) => void;
-  modelTier: "lite" | "base" | "pro";
-  setModelTier: (value: "lite" | "base" | "pro") => void;
+  modelTier: "lite" | "pro";
+  setModelTier: (value: "lite" | "pro") => void;
   questionnaireSession: QuestionnaireSession | null;
   startQuestionnaire: (mode: "quick" | "deep") => void;
   cancelQuestionnaire: () => void;
@@ -534,12 +535,13 @@ const WORKSPACE_CONTEXT_KEYWORDS = [
   "pulse",
   "streak",
   "history",
+  "reminder",
 ];
 const MAP_TRIGGER_PATTERN =
   /\b(?:nearby|around|directions|route|map|maps|location|locations|address|restaurant|cafe|coffee|diner|bar|hotel|airport|station|train|bus|metro|tram|park|museum|landmark|beach|mall|district|city|town|village|neighborhood|venue|street|trip|plan)\b/i;
 const MAP_TRIGGER_PHRASE =
   /\b(?:near me|near here|around here|close to|within (?:a )?(?:mile|km|block|minute|minutes)|walking distance|driving distance|in (?:the )?(?:area|neighborhood|city))\b/i;
-const MIN_CONTEXT_MESSAGE_LENGTH = 48;
+const WORKSPACE_CONTEXT_COOLDOWN_MS = 3 * 60 * 1000;
 
 const toTimestamp = (value?: string | number | Date | null): number => {
   if (typeof value === "number" && Number.isFinite(value)) {
@@ -572,10 +574,6 @@ export const shouldIncludeWorkspaceContext = (message: string, context: string |
 
   // Explicit self-context and "what do you know" prompts
   if (SELF_CONTEXT_PATTERNS.some((pattern) => pattern.test(punctuationTrimmed))) {
-    return true;
-  }
-
-  if (punctuationTrimmed.length >= MIN_CONTEXT_MESSAGE_LENGTH) {
     return true;
   }
 
@@ -1488,6 +1486,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
   const [workspaceContextValue, setWorkspaceContextValue] = useState<string | null>(
     workspaceContext ?? null
   );
+  const workspaceContextUsageRef = useRef<Map<string, number>>(new Map());
   const [selectedAttachments, setSelectedAttachments] = useState<MediaUpload[]>([]);
   const attachmentsRef = useRef<MediaUpload[]>(selectedAttachments);
   useEffect(() => {
@@ -1659,13 +1658,39 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
   const [fileSearchImportStatus, setFileSearchImportStatus] = useState<string | null>(null);
   const [fileSearchUploadInputRef] = useState<RefObject<HTMLInputElement | null>>({ current: null });
   const [reasoningMode, setReasoningMode] = useState(false);
-  const [modelTier, setModelTier] = useState<"lite" | "base" | "pro">("lite");
+  const [modelTier, setModelTier] = useState<"lite" | "pro">("lite");
   const lastAutoCachedWorkspaceRef = useRef<string | null>(null);
   const autoCacheInFlightRef = useRef(false);
 
   const [questionnaireSession, setQuestionnaireSession] = useState<QuestionnaireSession | null>(null);
 
   // Web search preference is now kept in memory for the current session only.
+
+  useEffect(() => {
+    workspaceContextUsageRef.current.clear();
+  }, [workspaceContextValue]);
+
+  const shouldAttachWorkspaceContextForSession = useCallback(
+    (sessionId: string, message: string) => {
+      if (!workspaceContextValue) {
+        return false;
+      }
+      const wantsContext = shouldIncludeWorkspaceContext(message, workspaceContextValue);
+      if (!wantsContext) {
+        return false;
+      }
+      const normalized = message.trim().toLowerCase();
+      const forceContext = SELF_CONTEXT_PATTERNS.some((pattern) => pattern.test(normalized));
+      const lastUsed = workspaceContextUsageRef.current.get(sessionId);
+      const now = Date.now();
+      if (!forceContext && typeof lastUsed === "number" && now - lastUsed < WORKSPACE_CONTEXT_COOLDOWN_MS) {
+        return false;
+      }
+      workspaceContextUsageRef.current.set(sessionId, now);
+      return true;
+    },
+    [workspaceContextValue]
+  );
 
   const saveContextCache = useCallback(
     async (
@@ -2827,11 +2852,11 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
 
       const resolvedUserPromise = resolveChatUser();
 
-      const useWorkspaceContext = shouldIncludeWorkspaceContext(
-        trimmedInitial,
-        workspaceContextValue
+      const includeWorkspaceContext = shouldAttachWorkspaceContextForSession(
+        sessionId,
+        trimmedInitial
       );
-      const contextPayload = useWorkspaceContext ? workspaceContextValue ?? undefined : undefined;
+      const contextPayload = includeWorkspaceContext ? workspaceContextValue ?? undefined : undefined;
 
       const streamThreadResponse = () => {
         (async () => {
@@ -2971,6 +2996,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       markAutoStreamTriggered,
       buildAutoMapPayload,
       promptForLocationConsent,
+      shouldAttachWorkspaceContextForSession,
       webSearchEnabled,
     ]
   );
@@ -3123,11 +3149,11 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
 
       let streamedConversationId: string | null = requestConversationId ?? null;
 
-      const useWorkspaceContext = shouldIncludeWorkspaceContext(
-        trimmed,
-        workspaceContextValue
+      const includeWorkspaceContext = shouldAttachWorkspaceContextForSession(
+        generalSession.id,
+        trimmed
       );
-      const contextPayload = useWorkspaceContext ? workspaceContextValue ?? undefined : undefined;
+      const contextPayload = includeWorkspaceContext ? workspaceContextValue ?? undefined : undefined;
 
       const streamGeneralResponse = () => {
         (async () => {
@@ -3147,8 +3173,8 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
               attachments: attachmentPayloads,
               context_cache_id: selectedContextCacheId ?? undefined,
               should_generate_title: shouldRequestAutoTitleForSession(generalSession),
-              ...autoMapPayload,
-              web_search_enabled: webSearchEnabled,
+              web_search_enabled: modelTier === "lite" ? false : webSearchEnabled,
+              ...(modelTier === "lite" ? { maps_enabled: false, maps_widget: false } : autoMapPayload),
               model: modelTier,
             })) {
               if (event.type === "token") {
@@ -3262,6 +3288,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       buildAutoMapPayload,
       promptForLocationConsent,
       selectedContextCacheId,
+      shouldAttachWorkspaceContextForSession,
       webSearchEnabled,
     ]
   );

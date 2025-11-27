@@ -3,7 +3,6 @@ import type { User, Reminder } from "@/lib/api";
 import {
     GREETING_PATTERN,
     SELF_CONTEXT_PATTERNS,
-    MIN_CONTEXT_MESSAGE_LENGTH,
     WORKSPACE_CONTEXT_KEYWORDS,
     MAP_TRIGGER_PATTERN,
     MAP_TRIGGER_PHRASE,
@@ -127,10 +126,6 @@ export const shouldIncludeWorkspaceContext = (message: string, context: string |
     }
 
     if (SELF_CONTEXT_PATTERNS.some((pattern) => pattern.test(punctuationTrimmed))) {
-        return true;
-    }
-
-    if (punctuationTrimmed.length >= MIN_CONTEXT_MESSAGE_LENGTH) {
         return true;
     }
 
