@@ -177,6 +177,8 @@ MEDIA_UPLOAD_DIR = Path(
 )
 MEDIA_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
+# Optional base URL for serving uploaded media (e.g., CDN or site URL)
+STORAGE_BASE_URL = os.getenv("STORAGE_BASE_URL") or None
 
 SEARCH_TOOL = types.Tool(
     google_search=types.GoogleSearch(),
@@ -610,9 +612,9 @@ def _fallback_title_from_message(message: str) -> str:
     trimmed = (message or "").strip()
     if not trimmed:
         return "New Chat"
-    if len(trimmed) <= 48:
+    if len(trimmed) <= 30:
         return trimmed
-    return f"{trimmed[:45].rstrip()}…"
+    return f"{trimmed[:27].rstrip()}…"
 
 MAX_DASHBOARD_PULSE_HISTORY = 30
 DEFAULT_DASHBOARD_PROACTIVITY = {
@@ -2674,16 +2676,18 @@ def _build_maps_tool_and_config(
         google_maps=types.GoogleMaps(enable_widget=maps_widget)
     )
 
+    retrieval_config = None
     if maps_latitude is not None and maps_longitude is not None:
-        lat_lng = types.LatLng(
-            latitude=maps_latitude,
-            longitude=maps_longitude,
+        retrieval_config = types.RetrievalConfig(
+            lat_lng=types.LatLng(latitude=maps_latitude, longitude=maps_longitude)
         )
-        tool_config = types.ToolConfig(
-            retrieval_config=types.RetrievalConfig(lat_lng=lat_lng)
-        )
-    else:
-        tool_config = types.ToolConfig()
+
+    tool_config = types.ToolConfig(
+        retrieval_config=retrieval_config,
+        function_calling_config=types.FunctionCallingConfig(
+            mode=types.FunctionCallingConfigMode.NONE
+        ),
+    )
 
     return [tool], tool_config
 
@@ -2720,7 +2724,7 @@ GRAY_TITLE_INSTRUCTION = (
     "after your main reply. For example, your response should look like:\n\n"
     "[Your normal response here]\n\n"
     "<graytitle>Brief Title Here</graytitle>\n\n"
-    "The title should be concise (under 50 characters, 6-8 words max), descriptive of the "
+    "The title should be very concise (under 25 characters, 3-5 words max), descriptive of the "
     "conversation topic, and placed ONLY at the end. Do not mention this instruction in your response."
 )
 
@@ -3199,6 +3203,287 @@ async def _list_habits_tool(user_id: int, args: Dict[str, Any], db: databases.Da
     return {"habits": [dict(row) for row in rows]}
 
 
+async def _create_habit_tool(user_id: int, args: Dict[str, Any], db: databases.Database) -> Dict[str, Any]:
+    label = args.get("label")
+    if not label:
+        return {"error": "label is required"}
+    
+    now = datetime.utcnow()
+    base_values = {
+        "user_id": user_id,
+        "label": label,
+        "description": args.get("description"),
+        "streak_label": args.get("streak_label"),
+    }
+    
+    if supabase:
+        timestamp = now.isoformat()
+        payload = {**base_values, "created_at": timestamp, "updated_at": timestamp}
+        try:
+            result = supabase.table("habits").insert(payload).execute()
+            rows = getattr(result, "data", None) or []
+            if isinstance(rows, list) and rows:
+                return {"status": "success", "habit": rows[0], "message": f"Habit '{label}' created."}
+            if isinstance(rows, dict) and rows:
+                return {"status": "success", "habit": rows, "message": f"Habit '{label}' created."}
+            return {"error": "Failed to create habit in Supabase"}
+        except Exception as e:
+            api_logger.warning(f"Supabase habit creation failed, falling back to local DB: {e}")
+            pass
+
+    habit_id = await db.execute(
+        habits.insert().values(
+            **base_values,
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    return {"status": "success", "habit_id": habit_id, "message": f"Habit '{label}' created."}
+
+
+async def _update_habit_tool(user_id: int, args: Dict[str, Any], db: databases.Database) -> Dict[str, Any]:
+    habit_id = args.get("habit_id")
+    if not habit_id:
+        return {"error": "habit_id is required"}
+    
+    updates = {}
+    if "label" in args:
+        updates["label"] = args["label"]
+    if "description" in args:
+        updates["description"] = args["description"]
+    if "streak_label" in args:
+        updates["streak_label"] = args["streak_label"]
+        
+    if not updates:
+        return {"status": "no_change", "message": "No updates provided."}
+        
+    now = datetime.utcnow()
+    
+    if supabase:
+        payload = {**updates, "updated_at": now.isoformat()}
+        try:
+            result = supabase.table("habits").update(payload).eq("id", habit_id).eq("user_id", user_id).execute()
+            return {"status": "success", "message": f"Habit {habit_id} updated."}
+        except Exception as e:
+            api_logger.warning(f"Supabase habit update failed: {e}")
+            pass
+            
+    updates["updated_at"] = now
+    await db.execute(
+        habits.update()
+        .where((habits.c.id == habit_id) & (habits.c.user_id == user_id))
+        .values(**updates)
+    )
+    return {"status": "success", "message": f"Habit {habit_id} updated."}
+
+
+async def _delete_habit_tool(user_id: int, args: Dict[str, Any], db: databases.Database) -> Dict[str, Any]:
+    habit_id = args.get("habit_id")
+    if not habit_id:
+        return {"error": "habit_id is required"}
+        
+    if supabase:
+        try:
+            supabase.table("habits").delete().eq("id", habit_id).eq("user_id", user_id).execute()
+            return {"status": "success", "message": f"Habit {habit_id} deleted."}
+        except Exception as e:
+            api_logger.warning(f"Supabase habit deletion failed: {e}")
+            pass
+
+    await db.execute(
+        habits.delete().where((habits.c.id == habit_id) & (habits.c.user_id == user_id))
+    )
+    return {"status": "success", "message": f"Habit {habit_id} deleted."}
+
+
+
+async def _create_reminder_tool(user_id: int, args: Dict[str, Any], db: databases.Database) -> Dict[str, Any]:
+    label = args.get("label")
+    remind_at_str = args.get("remind_at")
+    description = args.get("description")
+    
+    if not label or not remind_at_str:
+        raise HTTPException(status_code=400, detail="label and remind_at are required")
+    
+    # Parse ISO datetime
+    try:
+        remind_at_dt = datetime.fromisoformat(remind_at_str.replace("Z", "+00:00"))
+    except (ValueError, AttributeError):
+        raise HTTPException(status_code=400, detail="Invalid remind_at format, use ISO 8601")
+    
+    now = datetime.utcnow()
+    
+    base_data = {
+        "user_id": user_id,
+        "label": label,
+        "description": description,
+        "status": "pending",
+        "delivery_mode": "reminder",
+        "entity_type": "plan",
+    }
+    
+    if supabase:
+        try:
+            supabase_payload = {
+                **base_data,
+                "remind_at": remind_at_dt.isoformat(),
+                "created_at": now.isoformat(),
+                "updated_at": now.isoformat(),
+            }
+            result = supabase.table("reminders").insert(supabase_payload).execute()
+            if result.data:
+                created = result.data[0]
+                return _build_reminder_payload(created, user_id, "created")
+        except Exception as error:
+            api_logger.warning(f"Supabase reminder insert failed: {error}")
+    
+    local_payload = {
+        **base_data,
+        "remind_at": remind_at_dt,
+        "created_at": now,
+        "updated_at": now,
+    }
+    query = reminders.insert().values(**local_payload)
+    result = await db.execute(query)
+    created_id = result
+    created = await db.fetch_one(reminders.select().where(reminders.c.id == created_id))
+    return _build_reminder_payload(dict(created), user_id, "created")
+
+
+async def _update_reminder_tool(user_id: int, args: Dict[str, Any], db: databases.Database) -> Dict[str, Any]:
+    reminder_id = args.get("reminder_id")
+    if not reminder_id:
+        raise HTTPException(status_code=400, detail="reminder_id is required")
+    
+    updates = {}
+    if "label" in args:
+        updates["label"] = args["label"]
+    if "description" in args:
+        updates["description"] = args["description"]
+    if "status" in args:
+        updates["status"] = args["status"]
+    if "remind_at" in args:
+        try:
+            remind_at_dt = datetime.fromisoformat(args["remind_at"].replace("Z", "+00:00"))
+            updates["remind_at"] = remind_at_dt
+        except (ValueError, AttributeError):
+            raise HTTPException(status_code=400, detail="Invalid remind_at format")
+    
+    if not updates:
+        raise HTTPException(status_code=400, detail="No fields to update")
+    
+    if supabase:
+        try:
+            result = (
+                supabase.table("reminders")
+                .update(updates)
+                .eq("id", reminder_id)
+                .eq("user_id", user_id)
+                .execute()
+            )
+            if result.data:
+                updated = result.data[0]
+                return _build_reminder_payload(updated, user_id, "updated")
+        except Exception as error:
+            api_logger.warning(f"Supabase reminder update failed: {error}")
+    
+    query = (
+        reminders.update()
+        .where(reminders.c.id == reminder_id)
+        .where(reminders.c.user_id == user_id)
+        .values(**updates)
+    )
+    await db.execute(query)
+    updated = await db.fetch_one(
+        reminders.select().where(reminders.c.id == reminder_id)
+    )
+    if not updated:
+        raise HTTPException(status_code=404, detail="Reminder not found")
+    return _build_reminder_payload(dict(updated), user_id, "updated")
+
+
+async def _delete_reminder_tool(user_id: int, args: Dict[str, Any], db: databases.Database) -> Dict[str, Any]:
+    reminder_id = args.get("reminder_id")
+    if not reminder_id:
+        raise HTTPException(status_code=400, detail="reminder_id is required")
+    
+    # Fetch before delete for payload
+    if supabase:
+        try:
+            fetch_result = (
+                supabase.table("reminders")
+                .select("*")
+                .eq("id", reminder_id)
+                .eq("user_id", user_id)
+                .execute()
+            )
+            if fetch_result.data:
+                reminder = fetch_result.data[0]
+                supabase.table("reminders").delete().eq("id", reminder_id).eq("user_id", user_id).execute()
+                return _build_reminder_payload(reminder, user_id, "deleted")
+        except Exception as error:
+            api_logger.warning(f"Supabase reminder delete failed: {error}")
+    
+    reminder = await db.fetch_one(
+        reminders.select()
+        .where(reminders.c.id == reminder_id)
+        .where(reminders.c.user_id == user_id)
+    )
+    if not reminder:
+        raise HTTPException(status_code=404, detail="Reminder not found")
+    
+    query = (
+        reminders.delete()
+        .where(reminders.c.id == reminder_id)
+        .where(reminders.c.user_id == user_id)
+    )
+    await db.execute(query)
+    return _build_reminder_payload(dict(reminder), user_id, "deleted")
+
+
+def _build_reminder_payload(reminder: Dict[str, Any], user_id: int, status: str) -> Dict[str, Any]:
+    """Build a gray.reminder payload compatible with the frontend."""
+    reminder_id = reminder.get("id")
+    label = reminder.get("label", "Reminder")
+    remind_at = reminder.get("remind_at")
+    description = reminder.get("description")
+    
+    # Convert remind_at to ISO string if it's a datetime
+    time_iso = None
+    if remind_at:
+        if isinstance(remind_at, datetime):
+            time_iso = remind_at.isoformat()
+        elif isinstance(remind_at, str):
+            time_iso = remind_at
+    
+    return {
+        "type": "gray.reminder",
+        "source": "mcp/plans-habits-server",
+        "status": status,
+        "entity": "plan",
+        "delivery_mode": reminder.get("delivery_mode", "reminder"),
+        "data": {
+            "id": reminder_id,
+            "user_id": user_id,
+            "label": label,
+            "time_iso": time_iso,
+            "raw": reminder,
+            "delivery_mode": reminder.get("delivery_mode", "reminder"),
+            "summary": description,
+            "reminder_id": reminder_id,
+            "reminder_status": reminder.get("status", "pending"),
+            "reminder": {
+                "id": reminder_id,
+                "remind_at": time_iso,
+                "status": reminder.get("status", "pending"),
+                "description": description,
+                "summary": description,
+            },
+        },
+    }
+
+
+
 async def _list_reminders_tool(user_id: int, args: Dict[str, Any], db: databases.Database) -> Dict[str, Any]:
     status_filter = args.get("status")
     limit = args.get("limit")
@@ -3459,7 +3744,13 @@ async def _execute_function_call(
         "update_plan": lambda u, a, d: _update_plan_tool(u, a, d),
         "delete_plan": lambda u, a, d: _delete_plan_tool(u, a, d),
         "list_habits": lambda u, a, d: _list_habits_tool(u, a, d),
+        "create_habit": lambda u, a, d: _create_habit_tool(u, a, d),
+        "update_habit": lambda u, a, d: _update_habit_tool(u, a, d),
+        "delete_habit": lambda u, a, d: _delete_habit_tool(u, a, d),
         "list_reminders": lambda u, a, d: _list_reminders_tool(u, a, d),
+        "create_reminder": lambda u, a, d: _create_reminder_tool(u, a, d),
+        "update_reminder": lambda u, a, d: _update_reminder_tool(u, a, d),
+        "delete_reminder": lambda u, a, d: _delete_reminder_tool(u, a, d),
         "get_workspace_state": lambda u, a, d: _get_workspace_state_tool(u, a, d),
     }.get(function_call.name)
     if not handler:
@@ -4340,84 +4631,129 @@ async def stream_ai_response(
                 base_tools = [t for t in base_tools if t != SEARCH_TOOL]
         tool_list = [*base_tools, *maps_tools, *file_search_tools]
         
-        # Ensure we have an explicit tool_config when tools are present to prevent AFC warnings
+        # Ensure we have an explicit tool_config when tools are present
         effective_tool_config = maps_tool_config
         if tool_list and not effective_tool_config:
+            # Use AUTO mode to allow the model to decide whether to call a tool
             effective_tool_config = types.ToolConfig(
                 function_calling_config=types.FunctionCallingConfig(
                     mode=types.FunctionCallingConfigMode.AUTO
                 )
             )
-        # Gemini SDK rejects function declarations without Python callables; to avoid
-        # request failures, skip tool wiring when using Gemini for text generation.
-        if tool_list:
-            api_logger.warning(
-                "Skipping tools for Gemini provider to avoid AFC incompatibility",
-                extra={
-                    "event_type": "ai_tools_disabled",
-                    "provider": provider,
-                    "tool_count": len(tool_list),
-                },
-            )
-            tool_list = []
-            effective_tool_config = None
+
     
     grounding_metadata: Optional[Dict[str, Any]] = None
     if GEMINI_SERVICE.available:
         try:
-            accumulated = ""
-            final_usage = None
-            async for chunk in GEMINI_SERVICE.stream(
-                message,
-                conversation_history,
-                workspace_with_cache,
-                effective_system_prompt,
-                time_context,
-                model,
-                attachments=media_attachments,
-                extra_contents=cached_contents,
-                tools=tool_list,
-                tool_config=effective_tool_config,
-                reasoning_mode=reasoning_mode,
-            ):
-                if chunk.usage_metadata:
-                    final_usage = chunk.usage_metadata
-
-                text_fragment = chunk.text or ""
-                if chunk.candidates:
-                    candidate = chunk.candidates[0]
-                    payload = _candidate_grounding_payload(candidate)
-                    if payload:
-                        grounding_metadata = payload
-                accumulated += text_fragment
-                if text_fragment:
-                    yield ("delta", text_fragment)
-                
-                # Check for function calls
-                if chunk.candidates:
-                    candidate = chunk.candidates[0]
-                    for part in candidate.content.parts:
-                        if part.function_call:
-                            try:
-                                await _execute_function_call(part.function_call, user_id, db)
-                            except Exception as e:
-                                api_logger.error(f"Tool execution failed: {e}")
+            # Initialize loop variables
+            current_history = list(conversation_history) if conversation_history else []
+            intermediate_history: List[types.Content] = []
             
-            if final_usage and user_id is not None and db is not None:
-                tracker = UsageTracker(db)
-                await tracker.track_usage(
-                    user_id,
-                    final_usage.prompt_token_count or 0,
-                    final_usage.candidates_token_count or 0
-                )
+            # We'll allow up to 5 turns of tool use to prevent infinite loops
+            max_tool_turns = 5
+            
+            for turn in range(max_tool_turns + 1):
+                accumulated = ""
+                final_usage = None
+                tool_calls_in_this_turn: List[types.FunctionCall] = []
+                
+                # Prepare extra contents for this turn
+                # This includes the initial cached context (if any) plus any intermediate turns from tool usage
+                current_extra_contents = []
+                if cached_contents:
+                    current_extra_contents.extend(cached_contents)
+                if intermediate_history:
+                    current_extra_contents.extend(intermediate_history)
 
-            final_payload = {"text": accumulated, "grounding_metadata": grounding_metadata}
-            if accumulated:
-                yield ("final", final_payload)
-                return
-            # Fallback for empty response (e.g. safety blocks)
-            yield ("final", {"text": "I'm unable to generate a response for that request.", "grounding_metadata": grounding_metadata})
-            return
+                # Stream response from Gemini
+                async for chunk in GEMINI_SERVICE.stream(
+                    message if turn == 0 else "", # Only send message on first turn, subsequent turns use history
+                    current_history,
+                    workspace_with_cache,
+                    effective_system_prompt,
+                    time_context,
+                    model,
+                    attachments=media_attachments if turn == 0 else None, # Attachments only on first turn
+                    extra_contents=current_extra_contents,
+                    tools=tool_list,
+                    tool_config=effective_tool_config,
+                    reasoning_mode=reasoning_mode,
+                ):
+                    if chunk.usage_metadata:
+                        final_usage = chunk.usage_metadata
+
+                    text_fragment = chunk.text or ""
+                    if chunk.candidates:
+                        candidate = chunk.candidates[0]
+                        payload = _candidate_grounding_payload(candidate)
+                        if payload:
+                            grounding_metadata = payload
+                    
+                    accumulated += text_fragment
+                    if text_fragment:
+                        yield ("delta", text_fragment)
+                    
+                    # Collect function calls
+                    if chunk.candidates:
+                        candidate = chunk.candidates[0]
+                        for part in candidate.content.parts:
+                            if part.function_call:
+                                tool_calls_in_this_turn.append(part.function_call)
+                
+                # End of stream for this turn.
+                
+                # If no tool calls, we are done.
+                if not tool_calls_in_this_turn:
+                    if final_usage and user_id is not None and db is not None:
+                        tracker = UsageTracker(db)
+                        await tracker.track_usage(
+                            user_id,
+                            final_usage.prompt_token_count or 0,
+                            final_usage.candidates_token_count or 0
+                        )
+
+                    final_payload = {"text": accumulated, "grounding_metadata": grounding_metadata}
+                    if accumulated:
+                        yield ("final", final_payload)
+                        return
+                    # Fallback for empty response (e.g. safety blocks)
+                    yield ("final", {"text": "I'm unable to generate a response for that request.", "grounding_metadata": grounding_metadata})
+                    return
+
+                # Handle tool calls
+                # Construct the model's message with function calls
+                model_parts = []
+                if accumulated:
+                    model_parts.append(types.Part.from_text(text=accumulated))
+                for fc in tool_calls_in_this_turn:
+                    model_parts.append(types.Part.from_function_call(name=fc.name, args=fc.args or {}))
+                
+                # Add the model's turn (text + tool calls) to intermediate history
+                intermediate_history.append(types.Content(role="model", parts=model_parts))
+                
+                # Execute tools and add results
+                for fc in tool_calls_in_this_turn:
+                    try:
+                        result = await _execute_function_call(fc, user_id, db)
+                        
+                        # Add the result to history
+                        intermediate_history.append(
+                            types.Content(
+                                role="user",
+                                parts=[types.Part.from_function_response(name=fc.name, response=result)]
+                            )
+                        )
+                    except Exception as e:
+                        api_logger.error(f"Tool execution failed: {e}")
+                        intermediate_history.append(
+                            types.Content(
+                                role="user",
+                                parts=[types.Part.from_function_response(name=fc.name, response={"error": str(e)})]
+                            )
+                        )
+                
+                # Loop continues to next turn, where intermediate_history will be included in extra_contents
+                
         except Exception as gemini_error:  # pragma: no cover - best effort logging
             print(f"[Gemini] Streaming failed: {gemini_error}")
             raise
@@ -4581,27 +4917,16 @@ async def generate_ai_response(
                 base_tools = [t for t in base_tools if t != SEARCH_TOOL]
         tool_list = [*base_tools, *maps_tools, *file_search_tools]
         
-        # Ensure we have an explicit tool_config when tools are present to prevent AFC warnings
+        # Ensure we have an explicit tool_config when tools are present
+        # Use NONE mode since we manually execute function calls via _execute_function_call
         effective_tool_config = maps_tool_config
         if tool_list and not effective_tool_config:
             effective_tool_config = types.ToolConfig(
                 function_calling_config=types.FunctionCallingConfig(
-                    mode=types.FunctionCallingConfigMode.AUTO
+                    mode=types.FunctionCallingConfigMode.NONE
                 )
             )
-        # Gemini SDK rejects function declarations without Python callables; to avoid
-        # request failures, skip tool wiring when using Gemini for text generation.
-        if tool_list:
-            api_logger.warning(
-                "Skipping tools for Gemini provider to avoid AFC incompatibility",
-                extra={
-                    "event_type": "ai_tools_disabled",
-                    "provider": provider,
-                    "tool_count": len(tool_list),
-                },
-            )
-            tool_list = []
-            effective_tool_config = None
+
     
     grounding_metadata: Optional[Dict[str, Any]] = None
     if GEMINI_SERVICE.available:
@@ -8176,7 +8501,7 @@ async def update_proactivity_settings_route(
 
     if proactivity_scheduler:
         try:
-            await proactivity_scheduler.refresh_jobs()
+            await proactivity_scheduler.refresh_jobs(user_id)
         except Exception as scheduler_error:
             api_logger.warning(f"Failed to refresh proactivity scheduler jobs: {scheduler_error}", extra={
                 "event_type": "proactivity_scheduler_refresh_error",

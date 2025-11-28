@@ -106,6 +106,68 @@ PLAN_TOOL = types.Tool(
             ),
         ),
         types.FunctionDeclaration(
+            name="create_habit",
+            description="Create a new habit.",
+            parameters=types.Schema(
+                type="OBJECT",
+                properties={
+                    "label": types.Schema(
+                        type="STRING",
+                        description="The name or label of the habit.",
+                    ),
+                    "description": types.Schema(
+                        type="STRING",
+                        description="Optional description of the habit.",
+                    ),
+                    "streak_label": types.Schema(
+                        type="STRING",
+                        description="Optional label for the streak (e.g. '5 days').",
+                    ),
+                },
+                required=["label"],
+            ),
+        ),
+        types.FunctionDeclaration(
+            name="update_habit",
+            description="Update an existing habit.",
+            parameters=types.Schema(
+                type="OBJECT",
+                properties={
+                    "habit_id": types.Schema(
+                        type="INTEGER",
+                        description="The ID of the habit to update.",
+                    ),
+                    "label": types.Schema(
+                        type="STRING",
+                        description="New label for the habit.",
+                    ),
+                    "description": types.Schema(
+                        type="STRING",
+                        description="New description.",
+                    ),
+                    "streak_label": types.Schema(
+                        type="STRING",
+                        description="New streak label.",
+                    ),
+                },
+                required=["habit_id"],
+            ),
+        ),
+        types.FunctionDeclaration(
+            name="delete_habit",
+            description="Delete a habit.",
+            parameters=types.Schema(
+                type="OBJECT",
+                properties={
+                    "habit_id": types.Schema(
+                        type="INTEGER",
+                        description="The ID of the habit to delete.",
+                    ),
+                },
+                required=["habit_id"],
+            ),
+        ),
+        types.FunctionDeclaration(
             name="list_reminders",
             description="List reminders for the current user.",
             parameters=types.Schema(
@@ -133,6 +195,72 @@ PLAN_TOOL = types.Tool(
                     ),
                 },
                 required=[],
+            ),
+        ),
+        types.FunctionDeclaration(
+            name="create_reminder",
+            description="Create a new reminder.",
+            parameters=types.Schema(
+                type="OBJECT",
+                properties={
+                    "label": types.Schema(
+                        type="STRING",
+                        description="Description of what to be reminded about.",
+                    ),
+                    "remind_at": types.Schema(
+                        type="STRING",
+                        description="ISO 8601 datetime string for the reminder time.",
+                    ),
+                    "description": types.Schema(
+                        type="STRING",
+                        description="Optional longer description.",
+                    ),
+                },
+                required=["label", "remind_at"],
+            ),
+        ),
+        types.FunctionDeclaration(
+            name="update_reminder",
+            description="Update an existing reminder.",
+            parameters=types.Schema(
+                type="OBJECT",
+                properties={
+                    "reminder_id": types.Schema(
+                        type="INTEGER",
+                        description="The ID of the reminder to update.",
+                    ),
+                    "label": types.Schema(
+                        type="STRING",
+                        description="New label.",
+                    ),
+                    "remind_at": types.Schema(
+                        type="STRING",
+                        description="New reminder time (ISO 8601).",
+                    ),
+                    "status": types.Schema(
+                        type="STRING",
+                        description="New status (pending, completed, cancelled).",
+                    ),
+                    "description": types.Schema(
+                        type="STRING",
+                        description="New description.",
+                    ),
+                },
+                required=["reminder_id"],
+            ),
+        ),
+        types.FunctionDeclaration(
+            name="delete_reminder",
+            description="Delete a reminder.",
+            parameters=types.Schema(
+                type="OBJECT",
+                properties={
+                    "reminder_id": types.Schema(
+                        type="INTEGER",
+                        description="The ID of the reminder to delete.",
+                    ),
+                },
+                required=["reminder_id"],
             ),
         ),
         types.FunctionDeclaration(
