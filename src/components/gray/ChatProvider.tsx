@@ -1048,13 +1048,32 @@ export const extractGrayRemindersFromText = (
   cleanText += stripReminderPreamble(raw.slice(cursor));
   cleanText = stripIncompleteReminderArtifacts(cleanText);
 
+  // Additional cleanup: remove any remaining bare JSON reminder objects that might have been missed
   cleanText = cleanText
     .replace(EMPTY_CODE_FENCE_REGEX, "")
     .replace(/\n{3,}/g, "\n\n")
+    // Remove JSON in code fences
     .replace(/```(?:json)?[\s\S]*?"type"\s*:\s*"gray(?:\.|_)reminder"[\s\S]*?```/gi, "")
     .replace(REMINDER_CODE_BLOCK_REGEX, "")
     .replace(REMINDER_GENERIC_FENCE_REGEX, "")
     .replace(/```[a-zA-Z0-9_-]*\s*```/gi, "");
+
+  // Remove bare JSON objects (more aggressive pattern)
+  // This catches lines that look like: {"type":"gray.reminder",...}
+  cleanText = cleanText
+    .split('\n')
+    .filter(line => {
+      const trimmed = line.trim();
+      // Skip lines that look like JSON objects with gray.reminder
+      if (trimmed.startsWith('{') && trimmed.includes('"type"') && trimmed.includes('gray.reminder')) {
+        return false;
+      }
+      if (trimmed.startsWith('{') && trimmed.includes('"type"') && trimmed.includes('gray_reminder')) {
+        return false;
+      }
+      return true;
+    })
+    .join('\n');
 
   cleanText = unwrapToolCallCodeFences(cleanText)
     .split("\n")

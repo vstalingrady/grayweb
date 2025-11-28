@@ -62,12 +62,12 @@
   background: rgba(8, 8, 8, 0.92);
   border: 1px solid rgba(255, 255, 255, 0.05);
   border-radius: 32px;
-  padding: 28px;
+  padding: 22px;
   display: flex;
   flex-direction: column;
-  gap: 28px;
+  gap: 22px;
   min-height: 0;
-  min-width: 280px;
+  min-width: 240px;
   box-shadow: none;
   backdrop-filter: blur(8px);
   overflow: hidden;
@@ -446,7 +446,7 @@
 }
 
 .calendarSurfaceBody[data-has-sidebar="true"] {
-  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+  grid-template-columns: minmax(200px, 260px) minmax(0, 1fr);
   column-gap: clamp(20px, 3vw, 32px);
 }
 
@@ -706,7 +706,7 @@
 
 .calendarHeaderRow {
   display: grid;
-  grid-template-columns: var(--calendar-timeline-width, 56px) repeat(var(--calendar-grid-columns, 7), minmax(128px, 1fr));
+  grid-template-columns: var(--calendar-timeline-width, 56px) repeat(var(--calendar-grid-columns, 7), minmax(120px, 1fr));
   gap: 0;
   align-items: end;
   font-size: 0.6rem;
@@ -893,7 +893,7 @@
 
 .calendarWeekColumns {
   display: grid;
-  grid-template-columns: repeat(7, minmax(128px, 1fr));
+  grid-template-columns: repeat(7, minmax(120px, 1fr));
   width: 100%;
   background: transparent;
   border: none;
@@ -1509,6 +1509,30 @@
   box-shadow: none;
 }
 
+@media (max-width: 1280px) {
+  .calendarSurfaceBody[data-has-sidebar="true"] {
+    grid-template-columns: minmax(0, 1fr);
+    column-gap: clamp(12px, 2vw, 18px);
+  }
+
+  .calendarSidebarPanel {
+    display: none;
+  }
+
+  .calendarHeaderRow {
+    grid-template-columns: var(--calendar-timeline-width, 56px) repeat(var(--calendar-grid-columns, 7), minmax(110px, 1fr));
+  }
+
+  .calendarWeekColumns {
+    grid-template-columns: repeat(7, minmax(110px, 1fr));
+  }
+
+  .calendarBoard {
+    border-left: none;
+    padding-left: clamp(6px, 1vw, 12px);
+  }
+}
+
 @media (max-width: 900px) {
   .calendarSurfaceHeader {
     flex-direction: column;
@@ -1553,11 +1577,6 @@
   .calendarHeaderRow {
     grid-template-columns: var(--calendar-timeline-width, 56px) repeat(var(--calendar-grid-columns, 7), minmax(80px, 1fr));
   }
-}
-
-.calendarSurfaceBody[data-has-sidebar="true"] {
-  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
-  column-gap: clamp(14px, 1.6vw, 24px);
 }
 
 .reminderHandle {

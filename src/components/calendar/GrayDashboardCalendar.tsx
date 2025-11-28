@@ -447,22 +447,24 @@ export function GrayDashboardCalendar({
 
 
   useEffect(() => {
-    if (viewMode !== "day") {
+    // Only auto-scroll once on initial mount, never interfere with user scrolling
+    if (hasInitialDayScrollRef.current || viewMode !== "day") {
       return;
     }
     const container = dayColumnRef.current;
-    if (!container || hasInitialDayScrollRef.current) {
+    if (!container) {
       return;
     }
+
+    // Scroll to current time indicator if available
     if (dayIndicatorOffset !== null) {
       const target = Math.max(dayIndicatorOffset - hourHeight, 0);
-      if (Math.abs(container.scrollTop - target) > 4) {
-        container.scrollTo({ top: target });
-      }
+      container.scrollTo({ top: target });
       hasInitialDayScrollRef.current = true;
       return;
     }
 
+    // Otherwise scroll to first event or top
     if (!dayLayouts.length) {
       container.scrollTop = 0;
       hasInitialDayScrollRef.current = true;
@@ -474,24 +476,21 @@ export function GrayDashboardCalendar({
       Number.POSITIVE_INFINITY
     );
     const target = Math.max(earliestTop - hourHeight, 0);
-    if (Math.abs(container.scrollTop - target) > 4) {
-      container.scrollTo({ top: target });
-    }
+    container.scrollTo({ top: target });
     hasInitialDayScrollRef.current = true;
   }, [dayIndicatorOffset, dayLayouts, hourHeight, viewMode]);
 
   useEffect(() => {
-    if (viewMode !== "week") {
+    // Only auto-scroll once on initial mount, never interfere with user scrolling
+    if (hasInitialWeekScrollRef.current || viewMode !== "week") {
       return;
     }
     const container = weekScrollRef.current;
-    if (!container || !weekNowIndicator || hasInitialWeekScrollRef.current) {
+    if (!container || !weekNowIndicator) {
       return;
     }
     const target = Math.max(weekNowIndicator.offset - hourHeight, 0);
-    if (Math.abs(container.scrollTop - target) > 4) {
-      container.scrollTo({ top: target });
-    }
+    container.scrollTo({ top: target });
     hasInitialWeekScrollRef.current = true;
   }, [hourHeight, viewMode, weekNowIndicator]);
 

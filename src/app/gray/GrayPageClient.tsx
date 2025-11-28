@@ -2473,14 +2473,21 @@ function GrayPageClientInner({
 
   const greeting = `Good ${greetingForDate(now)}, ${viewerName}`;
   const hideChatThinkingIndicator = false;
+  const shouldShowWorkspaceGreeting = variant !== "chat";
+
   const renderWorkspaceGreeting = useCallback(
-    () => (
-      <div className={`${styles.greetingStack} hidden md:block`}>
-        <h1 className={styles.greeting}>{greeting}</h1>
-        <p className={styles.greetingDate}>{workspaceDateLabel}</p>
-      </div>
-    ),
-    [greeting, workspaceDateLabel]
+    () => {
+      if (!shouldShowWorkspaceGreeting) {
+        return null;
+      }
+      return (
+        <div className={`${styles.greetingStack} hidden md:block`}>
+          <h1 className={styles.greeting}>{greeting}</h1>
+          <p className={styles.greetingDate}>{workspaceDateLabel}</p>
+        </div>
+      );
+    },
+    [greeting, shouldShowWorkspaceGreeting, workspaceDateLabel]
   );
   const dashboardTabAttr = isDashboardView ? dashboardTab : undefined;
 
