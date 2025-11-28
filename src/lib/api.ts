@@ -1,3 +1,5 @@
+import { getSupabaseClient } from './supabaseClient';
+
 const DEV_FALLBACK_API_URL = 'http://localhost:8000';
 const API_PROXY_PREFIX = '/api/backend';
 
@@ -745,6 +747,15 @@ class ApiService {
       headers.set('Content-Type', 'application/json');
     }
 
+    // Inject Supabase Auth Token
+    const supabase = getSupabaseClient();
+    if (supabase) {
+      const { data } = await supabase.auth.getSession();
+      if (data.session?.access_token) {
+        headers.set('Authorization', `Bearer ${data.session.access_token}`);
+      }
+    }
+
     const config: RequestInit = {
       ...options,
       headers,
@@ -754,6 +765,18 @@ class ApiService {
       const response = await fetch(url, config);
 
       if (!response.ok) {
+        // Handle Authentication Errors
+        if (response.status === 401) {
+          if (typeof window !== 'undefined') {
+            window.location.href = '/login';
+          }
+          throw new ApiError(401, 'Unauthorized');
+        }
+
+        if (response.status === 403) {
+          throw new ApiError(403, 'Access forbidden');
+        }
+
         const errorData = await response.json().catch(() => ({}));
         const responseTime = performance.now() - startTime;
         const upstreamTimeoutStatuses = [520, 521, 522, 523, 524, 525, 526, 527, 598, 599];
@@ -1340,9 +1363,8 @@ class ApiService {
     );
   }
 
-  async uploadMediaFile(userId: number, file: File): Promise<MediaUpload> {
+  async uploadMediaFile(file: File): Promise<MediaUpload> {
     const form = new FormData();
-    form.append('user_id', String(userId));
     form.append('file', file);
     return this.fetch<MediaUpload>('/api/uploads', {
       method: 'POST',
@@ -1475,12 +1497,24 @@ class ApiService {
       });
     }
 
+    const headers: HeadersInit = {
+      Accept: 'text/event-stream',
+      'Content-Type': 'application/json',
+    };
+
+    // Inject Supabase Auth Token
+    const supabase = getSupabaseClient();
+    if (supabase) {
+      const { data } = await supabase.auth.getSession();
+      if (data.session?.access_token) {
+        // @ts-ignore - HeadersInit type is complex but this is valid
+        headers['Authorization'] = `Bearer ${data.session.access_token}`;
+      }
+    }
+
     const response = await fetch(url, {
       method: 'POST',
-      headers: {
-        Accept: 'text/event-stream',
-        'Content-Type': 'application/json',
-      },
+      headers,
       body: JSON.stringify(request),
       signal: options?.signal,
     });
