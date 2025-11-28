@@ -123,8 +123,8 @@ export type ChatContextValue = {
     loadConversationMessages: (sessionId: string) => Promise<void>;
     reasoningMode: boolean;
     setReasoningMode: (value: boolean) => void;
-    modelTier: "lite" | "base" | "pro";
-    setModelTier: (value: "lite" | "base" | "pro") => void;
+    modelTier: "lite" | "pro";
+    setModelTier: (value: "lite" | "pro") => void;
     questionnaireSession: QuestionnaireSession | null;
     startQuestionnaire: (mode: "quick" | "deep") => void;
     cancelQuestionnaire: () => void;

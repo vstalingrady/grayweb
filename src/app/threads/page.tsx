@@ -6,7 +6,7 @@ import { readServerSession } from "@/lib/auth/server";
 import { hostFromHeaders, isGrayWorkspaceHost } from "@/lib/grayRouting";
 
 export const metadata: Metadata = {
-  title: "Threads",
+  title: "New Chat",
 };
 
 export default async function ThreadsRoute() {

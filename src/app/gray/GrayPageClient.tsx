@@ -57,6 +57,7 @@ import { useProactivity } from "@/components/gray/hooks/useProactivity";
 import { usePulse } from "@/components/gray/hooks/usePulse";
 import { sanitizeEventColor, DEFAULT_EVENT_COLOR, REMINDER_RETENTION_WINDOW_MS } from "./constants";
 import { toDateKey, normalizeProactivityTimes, primaryProactivityTime, normalizeProactivityChannels } from "./utils";
+import { UsageLimitBanner } from "@/components/gray/UsageLimitBanner";
 // Type-only import
 import type { ChatDraftControls } from "@/components/gray/ChatDraftInput";
 import {
@@ -168,7 +169,9 @@ function GrayPageClientInner({
   variant = "general",
   activeChatId = null,
 }: GrayPageClientProps) {
-  const { user, loading } = useUser();
+  const { user, loading: userLoading, updateUser } = useUser();
+  const usageStatus = user?.usage_status;
+  const isUsageLimitReached = usageStatus?.is_monthly_limit_reached || usageStatus?.is_six_hour_limit_reached;
   const router = useRouter();
   const pathname = usePathname();
   const [now, setNow] = useState(() => new Date(initialTimestamp));
@@ -417,6 +420,15 @@ function GrayPageClientInner({
   const openAttachmentPicker = useCallback(() => {
     attachmentInputRef.current?.click();
   }, []);
+  const handleAttachmentPaste = useCallback(
+    (files: File[]) => {
+      if (!files || files.length === 0) {
+        return;
+      }
+      uploadAttachments(files);
+    },
+    [uploadAttachments]
+  );
 
   // Dashboard appearance preferences (sidebar + background) are now per-session
   // only, so we no longer read from or write to localStorage here.
@@ -518,6 +530,21 @@ function GrayPageClientInner({
     [deriveBackgroundLabel, loadWorkspaceBackgrounds, userId]
   );
 
+  const handleTestProactivity = useCallback(
+    async (proactivityId: string) => {
+      if (!userId) {
+        return;
+      }
+      try {
+        await apiService.triggerProactivityForUser(userId);
+        // We don't need to do anything else, the SSE stream will handle the notification
+      } catch (err) {
+        console.error("Failed to trigger proactivity test:", err);
+      }
+    },
+    [userId]
+  );
+
   const baseViewMode: ViewMode =
     variant === "chat"
       ? "chat"
@@ -553,6 +580,7 @@ function GrayPageClientInner({
           proactivityFallback={proactivity}
           onProactivitySelect={selectProactivityPreset}
           onProactivityRemove={removeProactivity}
+          onTestProactivity={handleTestProactivity}
           onTogglePlan={togglePlan}
           onToggleHabit={toggleHabit}
           onSavePlan={savePlan}
@@ -572,7 +600,13 @@ function GrayPageClientInner({
           onRefreshData={refreshPlansAndHabits}
           chatBar={
             shouldShowDashboardChatBar ? (
-              <ChatDraftInput variant="bar" onSubmitMessage={handleChatSubmit} />
+              shouldShowDashboardChatBar ? (
+                <ChatDraftInput
+                  variant="composer"
+                  onSubmitMessage={handleChatSubmit}
+                  isSubmitDisabled={isUsageLimitReached}
+                />
+              ) : undefined
             ) : undefined
           }
           isCompactLayout={isCompactLayout}
@@ -703,6 +737,26 @@ function GrayPageClientInner({
   }, [isPersonalizationOpen, generalSessionId, contextUsageSummary?.conversationId, userId]);
 
   const renderMainSurface = () => {
+    if (viewMode === "chat") {
+      return (
+        <div
+          className={styles.mainContent}
+          data-view={viewMode}
+          data-compact={isCompactLayout ? "true" : "false"}
+        >
+          <GrayWorkspaceHeader
+            streakCount={streakCount}
+            planLabel={viewerPlanLabel}
+            onUpgradeClick={handleUpgradePlan}
+          >
+            <div className="hidden md:block">
+              {renderWorkspaceGreeting()}
+            </div>
+          </GrayWorkspaceHeader>
+          {renderPrimaryView()}
+        </div>
+      );
+    }
     if (viewMode === "general" && activeNav !== "reference") {
       return (
         <div
@@ -763,11 +817,11 @@ function GrayPageClientInner({
   }, []);
 
   const viewerName = useMemo(() => {
-    if (loading) {
+    if (userLoading) {
       return "Loading...";
     }
     return formatDisplayName(user?.full_name, user?.email);
-  }, [loading, user?.email, user?.full_name]);
+  }, [userLoading, user?.email, user?.full_name]);
 
   const viewerAvatarUrl =
     user?.profile_picture_url && user.profile_picture_url.trim().length > 0
@@ -788,14 +842,14 @@ function GrayPageClientInner({
   }, [isScout, dashboardTab]);
 
   const viewerInitials = useMemo(() => {
-    if (loading) {
+    if (userLoading) {
       return "--";
     }
     if (user?.initials) {
       return user.initials;
     }
     return deriveInitials(user?.full_name ?? viewerName) || "OP";
-  }, [user, loading, viewerName]);
+  }, [user, userLoading, viewerName]);
 
   const filteredSidebarItems = useMemo(() => {
     const isPioneerOrHigher = ["Pioneer", "Depth"].includes(viewerPlanLabel);
@@ -1115,7 +1169,7 @@ function GrayPageClientInner({
       return "History";
     }
     if (activeNav === "threads") {
-      return "Threads";
+      return "New Chat";
     }
     if (activeNav === "general") {
       return "General";
@@ -2434,6 +2488,7 @@ function GrayPageClientInner({
   const isFullPageChatLayout = variant === "chat" && activeNav === "general";
   const generalAttachmentsActive =
     viewMode === "general" && (attachments.length > 0 || isAttachmentUploading);
+  const generalAttachmentsFlag = generalAttachmentsActive;
   const generalAttachmentTray = viewMode === "general"
     ? (
       <AttachmentTray
@@ -2456,6 +2511,7 @@ function GrayPageClientInner({
         data-dashboard-tab={activeNav === "dashboard" ? dashboardTab : undefined}
         data-mobile-sidebar={effectiveIsMobileViewport ? "true" : "false"}
         data-sidebar-expanded={effectiveIsSidebarExpanded ? "true" : "false"}
+        {...(isMounted && { "data-general-attachments": generalAttachmentsFlag ? "true" : "false" })}
       >
         {/* Mobile Header - only rendered after hydration to avoid SSR/CSR mismatch */}
         {isMounted && (
@@ -2535,15 +2591,19 @@ function GrayPageClientInner({
               data-view={viewMode}
               data-dashboard-tab={dashboardTabAttr}
               data-compact={isCompactLayout ? "true" : "false"}
-              data-general-attachments={generalAttachmentsActive ? "true" : "false"}
+              {...(isMounted && { "data-general-attachments": generalAttachmentsFlag ? "true" : "false" })}
               data-dashboard-free="true"
             >
               {/* Mobile Sidebar Overlay */}
               {isMounted && (
                 <div
                   className={styles.overlay}
-                  data-visible={effectiveIsSidebarExpanded ? "true" : "false"}
-                  onClick={() => setIsSidebarExpanded(false)}
+                  data-visible={effectiveIsMobileViewport && effectiveIsSidebarExpanded ? "true" : "false"}
+                  onClick={() => {
+                    if (effectiveIsMobileViewport) {
+                      setIsSidebarExpanded(false);
+                    }
+                  }}
                   aria-hidden="true"
                 />
               )}
@@ -2554,16 +2614,9 @@ function GrayPageClientInner({
                 </div>
               )}
               {isDashboardView ? renderPrimaryView() : renderMainSurface()}
-              {viewMode === "general" && activeNav !== "reference" ? (
-                <>
-                  <ChatDraftInput
-                    variant="composer"
-                    onSubmitMessage={handleChatSubmit}
-                    showUnderline={false}
-                    onAddAttachment={openAttachmentPicker}
-                    attachmentTray={generalAttachmentTray}
-                  />
-
+              {isMounted && viewMode === "general" && activeNav !== "reference" ? (
+                <div className={styles.chatComposerDock} data-surface="threads">
+                  <div className={styles.chatAttachmentTopTray}>{generalAttachmentTray}</div>
                   <input
                     ref={attachmentInputRef}
                     type="file"
@@ -2572,7 +2625,18 @@ function GrayPageClientInner({
                     className={styles.chatAttachmentInput}
                     onChange={handleAttachmentInputChange}
                   />
-                </>
+                  {isUsageLimitReached && usageStatus && (
+                    <UsageLimitBanner usageStatus={usageStatus} />
+                  )}
+                  <ChatDraftInput
+                    variant="composer"
+                    onSubmitMessage={handleChatSubmit}
+                    showUnderline={false}
+                    onAddAttachment={openAttachmentPicker}
+                    onPasteFiles={handleAttachmentPaste}
+                    isSubmitDisabled={isUsageLimitReached}
+                  />
+                </div>
               ) : null}
             </div>
           </div>

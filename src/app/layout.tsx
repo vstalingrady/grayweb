@@ -153,7 +153,7 @@ export default async function RootLayout({
   return (
     <html lang="en">
       <head>
-        <script dangerouslySetInnerHTML={{ __html: reactDevtoolsHotfix }} />
+        <script dangerouslySetInnerHTML={{ __html: reactDevtoolsHotfix }} suppressHydrationWarning />
 
         {/* PWA Manifest */}
         <link rel="manifest" href="/manifest.json" />

@@ -302,6 +302,7 @@ type GrayDashboardViewProps = {
   proactivityFallback: ProactivityItem | null;
   onProactivitySelect?: (next: ProactivityItem) => void;
   onProactivityRemove?: () => void;
+  onTestProactivity?: (proactivityId: string) => void;
   onTogglePlan: (id: string) => void;
   onToggleHabit?: (id: string) => void;
   onSavePlan?: (planId: string, updates: PlanUpdates) => Promise<void> | void;
@@ -338,6 +339,7 @@ export function GrayDashboardView({
   proactivityFallback,
   onProactivitySelect,
   onProactivityRemove,
+  onTestProactivity,
   onTogglePlan,
   onSavePlan,
   onDeletePlan,
@@ -1731,9 +1733,7 @@ export function GrayDashboardView({
         </div>
         {isChatBarVisible ? (
           <div className={styles.chatComposerDock} ref={chatDockRef}>
-            <div className={`${styles.chatBarRow} ${styles.dashboardChatBarRow}`}>
-              {chatBar}
-            </div>
+            {chatBar}
             <p className={styles.chatDisclaimer}>Gray can make mistakes. Check important info.</p>
           </div>
         ) : null}

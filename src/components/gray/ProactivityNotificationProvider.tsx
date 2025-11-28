@@ -101,343 +101,124 @@ export function ProactivityNotificationProvider({ children }: ProactivityNotific
   const userId = typeof user?.id === "number" ? user.id : null;
   const { appendMessage, generalSessionId, ensureSession } = useChatStore();
   const [deliveredKeys, setDeliveredKeys] = useState<Set<string>>(new Set());
-  const deliveredRef = useRef<Set<string>>(new Set());
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  const getOrEnsureGeneralSessionId = useCallback(() => {
-    if (generalSessionId) {
-      return generalSessionId;
-    }
-    const session = ensureSession(
-      GENERAL_CHAT_SESSION_ID,
-      () =>
-      ({
-        scope: "general",
-        messages: [],
-      } as any)
-    );
-    return session.id;
-  }, [generalSessionId, ensureSession]);
-
-  const markDelivered = useCallback((key: string) => {
-    deliveredRef.current.add(key);
-    setDeliveredKeys((previous) => {
-      if (previous.has(key)) {
-        return previous;
+  const handleProactivityMessage = useCallback(
+    (payload: any) => {
+      // 1. Append to chat if we have a session ID
+      const targetSessionId = payload.session_id || GENERAL_CHAT_SESSION_ID;
+      if (targetSessionId && payload.message) {
+        appendMessage(targetSessionId, "assistant", payload.message);
       }
-      const next = new Set(previous);
-      next.add(key);
-      return next;
-    });
-  }, []);
 
-  // Hydrate deliveries from the backend so that proactivity slots can render as
-  // "checked" even after refresh.
-  useEffect(() => {
-    if (!userId) {
-      return;
-    }
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    const hydrate = async () => {
-      try {
-        const base = resolveApiBaseUrl();
-        const url = `${base.replace(/\/+$/, "")}/users/${userId}/proactivity/deliveries`;
-        const response = await fetch(url, {
-          method: "GET",
-          credentials: "include",
+      // 2. Show browser notification if enabled
+      if (Notification.permission === "granted") {
+        new Notification("Gray", {
+          body: payload.message || "New message from Gray",
+          icon: "/grayai.png",
         });
-        if (!response.ok) {
-          return;
-        }
-        const payload = (await response.json()) as { sent_at?: string[] };
-        const values = Array.isArray(payload.sent_at) ? payload.sent_at : [];
-        const nextKeys = new Set<string>();
-        values.forEach((iso) => {
-          const date = new Date(iso);
-          if (Number.isNaN(date.getTime())) {
-            return;
-          }
-          const key = `${toDateKey(date)}T${String(date.getHours()).padStart(2, "0")}:${String(
-            date.getMinutes()
-          ).padStart(2, "0")}`;
-          nextKeys.add(key);
-        });
-        if (nextKeys.size === 0) {
-          return;
-        }
-        setDeliveredKeys((previous) => {
-          const merged = new Set(previous);
-          nextKeys.forEach((key) => merged.add(key));
-          deliveredRef.current = merged;
-          return merged;
-        });
-      } catch (error) {
-        if (process.env.NODE_ENV !== "production") {
-          console.error("[Proactivity] Failed to hydrate deliveries from backend", error);
-        }
-      }
-    };
-
-    hydrate().catch(() => undefined);
-  }, [userId]);
-
-  useEffect(() => {
-    if (!userId) {
-      return;
-    }
-    if (
-      typeof window === "undefined" ||
-      !("serviceWorker" in navigator) ||
-      !("PushManager" in window) ||
-      typeof Notification === "undefined"
-    ) {
-      return;
-    }
-
-    const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-    if (!vapidPublicKey) {
-      if (process.env.NODE_ENV !== "production") {
-        console.warn("[Proactivity] VAPID public key is not configured");
-      }
-      return;
-    }
-
-    let cancelled = false;
-
-    const subscribe = async () => {
-      try {
-        if (!window.isSecureContext) {
-          if (process.env.NODE_ENV !== "production") {
-            console.warn("[Proactivity] Push subscription requires a secure context (HTTPS or localhost)");
-          }
-          return;
-        }
-
-        let permission: NotificationPermission | null = Notification.permission;
-
-        // Do not automatically request permission here. 
-        // It should be requested only when the user explicitly enables notifications.
-        if (permission === "default") {
-          if (process.env.NODE_ENV !== "production") {
-            console.debug("[Proactivity] Permission is default, skipping auto-subscription");
-          }
-          return;
-        }
-
-        if (permission !== "granted") {
-          if (process.env.NODE_ENV !== "production") {
-            console.warn("[Proactivity] Push subscription skipped because notification permission is not granted");
-          }
-          return;
-        }
-
-        const registration = await navigator.serviceWorker.register("/sw-proactivity.js");
-        let subscription = await registration.pushManager.getSubscription();
-        if (!subscription) {
-          subscription = await registration.pushManager.subscribe({
-            userVisibleOnly: true,
-            applicationServerKey: urlBase64ToUint8Array(vapidPublicKey) as any,
-          });
-        }
-
-        if (cancelled || !subscription) {
-          return;
-        }
-
-        const base = resolveApiBaseUrl();
-        const url = `${base.replace(/\/+$/, "")}/users/${userId}/proactivity/subscription`;
-        try {
-          await fetch(url, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            credentials: "include",
-            body: JSON.stringify(subscription),
-          });
-        } catch (error) {
-          if (process.env.NODE_ENV !== "production") {
-            console.error("[Proactivity] Failed to register subscription with backend", error);
-          }
-        }
-      } catch (error) {
-        if (process.env.NODE_ENV !== "production") {
-          console.error("[Proactivity] Failed to register push subscription", error);
-        }
-      }
-    };
-
-    subscribe().catch(() => undefined);
-
-    return () => {
-      cancelled = true;
-    };
-  }, [userId]);
-
-  useEffect(() => {
-    if (!userId) {
-      return;
-    }
-    if (typeof window === "undefined" || typeof window.EventSource === "undefined") {
-      return;
-    }
-
-    let cancelled = false;
-    let eventSource: EventSource | null = null;
-    let reconnectTimer: number | null = null;
-    const streamPath = `/users/${userId}/proactivity/stream`;
-
-    const buildStreamUrl = () => {
-      const base = resolveApiBaseUrl();
-      const normalizedBase = base.replace(/\/+$/, "");
-      if (!normalizedBase) {
-        return streamPath;
-      }
-      return `${normalizedBase}${streamPath}`;
-    };
-
-    const closeStream = () => {
-      if (eventSource) {
-        eventSource.close();
-        eventSource = null;
-      }
-    };
-
-    const handleProactivityMessage = async (event: MessageEvent) => {
-      let payload: Record<string, unknown> | null = null;
-      try {
-        payload = event.data ? JSON.parse(event.data as string) : null;
-      } catch (error) {
-        if (process.env.NODE_ENV !== "production") {
-          console.warn("[Proactivity] Failed to parse payload", error);
-        }
-        return;
-      }
-      if (!payload) {
-        return;
       }
 
-      const payloadRecord = payload as Record<string, unknown>;
-      const rawMessage = payloadRecord["message"];
-      const message = typeof rawMessage === "string" ? rawMessage.trim() : "";
-      if (!message) {
-        return;
-      }
+      // 3. Show in-app toast
+      setToastMessage(payload.message || "New message");
 
-      const sessionId = getOrEnsureGeneralSessionId();
-      appendMessage(sessionId, "assistant", message);
-
-      const sentAtRaw = payloadRecord["sent_at"];
-      const sentAtIso =
-        typeof sentAtRaw === "string" && sentAtRaw ? sentAtRaw : new Date().toISOString();
-      const sentAtDate = new Date(sentAtIso);
-      if (!Number.isNaN(sentAtDate.getTime())) {
-        const dedupeKey = `${toDateKey(sentAtDate)}T${String(sentAtDate.getHours()).padStart(2, "0")}:${String(
-          sentAtDate.getMinutes()
-        ).padStart(2, "0")}`;
-        markDelivered(dedupeKey);
-      }
-
-      try {
-        const permission = await requestNotificationPermission();
-        const cadenceRaw = payloadRecord["cadence"];
-        const cadenceLabel =
-          typeof cadenceRaw === "string" && cadenceRaw.trim().length > 0
-            ? cadenceRaw.trim()
-            : "Check-in";
-        const sourceRaw = payloadRecord["source"];
-        const timezoneRaw = payloadRecord["timezone"];
-        const eventNameRaw = payloadRecord["event"];
-        const notification: ProactivityNotification = {
-          id: sentAtDate.getTime() || Date.now(),
-          user_id: userId,
-          type: "proactivity_message",
-          title: `🔔 ${cadenceLabel} Check-in`,
-          message,
-          metadata: {
-            source: typeof sourceRaw === "string" && sourceRaw ? sourceRaw : "proactivity_engine",
-            timezone: typeof timezoneRaw === "string" && timezoneRaw ? timezoneRaw : null,
-            event: typeof eventNameRaw === "string" && eventNameRaw ? eventNameRaw : "proactivity_message",
-          },
-          due_at: sentAtIso,
-          sent_at: sentAtIso,
-          read_at: null,
-          completed_at: null,
-          created_at: sentAtIso,
-        };
-        if (permission) {
-          showBrowserNotification(notification, permission);
-        }
-      } catch (error) {
-        if (process.env.NODE_ENV !== "production") {
-          console.warn("[Proactivity] Failed to show browser notification", error);
-        }
-      }
-    };
-
-    function scheduleReconnect() {
-      if (cancelled) {
-        return;
-      }
-      if (reconnectTimer) {
-        window.clearTimeout(reconnectTimer);
-      }
-      reconnectTimer = window.setTimeout(() => {
-        reconnectTimer = null;
-        connect();
-      }, 3000);
-    }
-
-    function handleError(event?: Event) {
-      if (process.env.NODE_ENV !== "production") {
-        console.warn("[Proactivity] Stream error", event);
-      }
-      closeStream();
-      scheduleReconnect();
-    }
-
-    function connect() {
-      if (cancelled) {
-        return;
-      }
-      const url = buildStreamUrl();
-      try {
-        eventSource = new EventSource(url, { withCredentials: true });
-      } catch (error) {
-        if (process.env.NODE_ENV !== "production") {
-          console.error("[Proactivity] Failed to initialize stream", error);
-        }
-        scheduleReconnect();
-        return;
-      }
-      eventSource.addEventListener("error", handleError as EventListener);
-      eventSource.addEventListener("ready", () => undefined);
-      eventSource.addEventListener("proactivity_message", (event) => {
-        void handleProactivityMessage(event as MessageEvent);
-      });
-    }
-
-    connect();
-
-    return () => {
-      cancelled = true;
-      if (reconnectTimer) {
-        window.clearTimeout(reconnectTimer);
-      }
-      closeStream();
-    };
-  }, [userId, appendMessage, getOrEnsureGeneralSessionId, markDelivered]);
-
-  const contextValue = useMemo(
-    () => ({
-      deliveredKeys,
-    }),
-    [deliveredKeys]
+      // Auto-dismiss toast after 5 seconds
+      setTimeout(() => setToastMessage(null), 5000);
+    },
+    []
   );
 
+  useEffect(() => {
+    if (!userId) return;
+
+    const url = resolveApiBaseUrl();
+    const eventSource = new EventSource(`${url}/users/${userId}/proactivity/stream`);
+
+    eventSource.onopen = () => {
+      console.log("[Proactivity] SSE Connected");
+    };
+
+    eventSource.addEventListener("ping", (event) => {
+      // Keep-alive, ignore
+    });
+
+    const handleEvent = (event: MessageEvent) => {
+      try {
+        const data = JSON.parse(event.data);
+        console.log("[Proactivity] Message received:", data);
+        handleProactivityMessage(data);
+
+        // Track delivery to avoid re-showing
+        const key = data.delivery_key;
+        if (key) {
+          setDeliveredKeys(prev => {
+            const next = new Set(prev);
+            next.add(key);
+            return next;
+          });
+        }
+      } catch (err) {
+        console.error("[Proactivity] Failed to parse message:", err);
+      }
+    };
+
+    eventSource.addEventListener("message", handleEvent);
+    eventSource.addEventListener("proactivity_message", handleEvent);
+
+    eventSource.onerror = (err) => {
+      console.error("[Proactivity] SSE Error:", err);
+      eventSource.close();
+    };
+
+    return () => {
+      eventSource.close();
+    };
+  }, [userId, handleProactivityMessage]);
+
   return (
-    <ProactivityNotificationContext.Provider value={contextValue}>
+    <ProactivityNotificationContext.Provider value={{ deliveredKeys }}>
       {children}
+      {toastMessage && (
+        <div style={{
+          position: 'fixed',
+          bottom: '24px',
+          right: '24px',
+          backgroundColor: '#1a1a1a',
+          color: '#fff',
+          padding: '12px 20px',
+          borderRadius: '8px',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+          zIndex: 9999,
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          maxWidth: '320px',
+          border: '1px solid #333',
+          fontFamily: 'var(--font-sans)',
+          fontSize: '14px',
+          animation: 'slideIn 0.3s ease-out'
+        }}>
+          <div style={{ flex: 1 }}>{toastMessage}</div>
+          <button
+            onClick={() => setToastMessage(null)}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: '#888',
+              cursor: 'pointer',
+              padding: '4px'
+            }}
+          >
+            ✕
+          </button>
+        </div>
+      )}
+      <style jsx global>{`
+        @keyframes slideIn {
+          from { transform: translateY(100%); opacity: 0; }
+          to { transform: translateY(0); opacity: 1; }
+        }
+      `}</style>
     </ProactivityNotificationContext.Provider>
   );
 }

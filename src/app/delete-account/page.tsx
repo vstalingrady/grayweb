@@ -10,6 +10,7 @@ export default function DeleteAccountPage() {
   const { user, loading, deleteUserAccount } = useUser();
   const [status, setStatus] = useState<"idle" | "deleting" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
+  const [confirmationEmail, setConfirmationEmail] = useState("");
 
   useEffect(() => {
     if (!loading && !user) {
@@ -22,6 +23,12 @@ export default function DeleteAccountPage() {
     if (!user || status === "deleting") {
       return;
     }
+
+    if (confirmationEmail !== user.email) {
+      setError("Email does not match.");
+      return;
+    }
+
     setStatus("deleting");
     setError(null);
     try {
@@ -33,13 +40,7 @@ export default function DeleteAccountPage() {
       setError(message);
       setStatus("error");
     }
-  }, [deleteUserAccount, router, status, user]);
-
-  useEffect(() => {
-    if (!loading && user && status === "idle") {
-      handleDelete();
-    }
-  }, [handleDelete, loading, status, user]);
+  }, [deleteUserAccount, router, status, user, confirmationEmail]);
 
   const renderBody = () => {
     if (loading || !user) {
@@ -54,22 +55,49 @@ export default function DeleteAccountPage() {
     const description =
       status === "deleting"
         ? "Deleting your workspace data..."
-        : "You re-authenticated successfully. Confirm deletion below.";
+        : "You re-authenticated successfully. This action cannot be undone.";
+
+    const isMatch = confirmationEmail === user.email;
+
     return (
       <div className="delete-account__card">
         <h1>Delete Account</h1>
         <p className="delete-account__description">
-          {description} Signed in as <strong>{user.email}</strong>.
+          {description} To confirm, please type your email <strong>{user.email}</strong> below.
         </p>
-        {error ? <p className="delete-account__error">{error}</p> : null}
-        <button
-          type="button"
-          className="delete-account__button"
+
+        <input
+          type="email"
+          className="delete-account__input"
+          placeholder={user.email}
+          value={confirmationEmail}
+          onChange={(e) => {
+            setConfirmationEmail(e.target.value);
+            if (error) setError(null);
+          }}
           disabled={status === "deleting"}
-          onClick={handleDelete}
-        >
-          {status === "deleting" ? "Deleting..." : status === "error" ? "Retry delete" : "Delete account"}
-        </button>
+        />
+
+        {error ? <p className="delete-account__error">{error}</p> : null}
+
+        <div className="delete-account__actions">
+          <button
+            type="button"
+            className="delete-account__cancel"
+            onClick={() => router.back()}
+            disabled={status === "deleting"}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="delete-account__button"
+            disabled={status === "deleting" || !isMatch}
+            onClick={handleDelete}
+          >
+            {status === "deleting" ? "Deleting..." : status === "error" ? "Retry delete" : "Delete account"}
+          </button>
+        </div>
       </div>
     );
   };
@@ -111,29 +139,63 @@ export default function DeleteAccountPage() {
           line-height: 1.6;
           color: rgba(245, 245, 245, 0.85);
         }
+        .delete-account__input {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 12px 16px;
+            color: #fff;
+            font-size: 1rem;
+            width: 100%;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .delete-account__input:focus {
+            border-color: rgba(255, 255, 255, 0.3);
+        }
         .delete-account__error {
           margin: 0;
           color: #ff9a9a;
           font-size: 0.9rem;
         }
+        .delete-account__actions {
+            display: flex;
+            gap: 12px;
+            margin-top: 8px;
+        }
         .delete-account__button {
+          flex: 1;
           border: none;
           border-radius: 999px;
           padding: 12px 16px;
           background: rgba(255, 71, 87, 0.2);
           color: #fff;
           font-size: 0.85rem;
-          letter-spacing: 0.2em;
+          letter-spacing: 0.1em;
           text-transform: uppercase;
           cursor: pointer;
-          transition: background 0.2s ease;
+          transition: all 0.2s ease;
+          font-weight: 600;
         }
         .delete-account__button:hover:not(:disabled) {
           background: rgba(255, 71, 87, 0.35);
         }
         .delete-account__button:disabled {
-          opacity: 0.6;
+          opacity: 0.4;
           cursor: not-allowed;
+          background: rgba(255, 255, 255, 0.05);
+        }
+        .delete-account__cancel {
+            border: none;
+            background: transparent;
+            color: rgba(255, 255, 255, 0.6);
+            padding: 12px 16px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+        .delete-account__cancel:hover {
+            color: #fff;
         }
         .delete-account__spinner {
           animation: delete-spin 1s linear infinite;

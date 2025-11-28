@@ -10,7 +10,7 @@ PRICE_OUTPUT_PER_MILLION = 0.40
 
 LIMITS = {
     "scout": {
-        "monthly_cost": 0.1875,
+        "monthly_cost": 1.50,
     },
     "voyager": {
         "monthly_cost": 6.00,
@@ -116,9 +116,25 @@ class UsageTracker:
         current_monthly = usage_data["monthly_cost_usage"] or 0.0
         if current_monthly >= limits["monthly_cost"]:
             if now.month == 12:
-                next_reset = datetime.datetime(now.year + 1, 1, 1)
+                next_reset = datetime.datetime(now.year + 1, 1, 1, tzinfo=datetime.timezone.utc)
             else:
                 next_reset = datetime.datetime(now.year, now.month + 1, 1, tzinfo=datetime.timezone.utc)
+            
+            # Defensive check: Ensure reset is in the future
+            if next_reset <= now:
+                next_reset = now + datetime.timedelta(minutes=1)
+
+            logger.warning(
+                "Monthly usage limit exceeded",
+                extra={
+                    "user_id": user_id,
+                    "tier": tier,
+                    "usage": float(current_monthly),
+                    "limit": float(limits["monthly_cost"]),
+                    "next_reset": next_reset.isoformat() if next_reset else None,
+                    "last_monthly_reset": usage_data.get("last_monthly_reset"),
+                },
+            )
             raise UsageLimitExceeded(f"Monthly limit reached.", tier, next_reset)
 
         # Check 6-Hour
@@ -133,7 +149,71 @@ class UsageTracker:
                 next_block_hour = 0 # Reset to 00:00 for the next day
 
             next_reset = datetime.datetime.combine(next_reset_day, datetime.time(next_block_hour, 0, 0), tzinfo=datetime.timezone.utc)
+            
+            # Defensive check: Ensure reset is in the future
+            if next_reset <= now:
+                next_reset = now + datetime.timedelta(minutes=1)
+
+            logger.warning(
+                "6-hour usage limit exceeded",
+                extra={
+                    "user_id": user_id,
+                    "tier": tier,
+                    "usage": float(current_six_hour),
+                    "limit": float(limits["six_hour_cost"]),
+                    "next_reset": next_reset.isoformat() if next_reset else None,
+                    "last_six_hour_reset": usage_data.get("last_six_hour_reset"),
+                },
+            )
             raise UsageLimitExceeded(f"6-hour burst limit reached.", tier, next_reset)
+
+    async def get_usage_status(self, user_id: int) -> dict:
+        usage_data = await self._get_user_usage(user_id)
+        if not usage_data:
+            return None
+            
+        usage_data = await self._reset_counters_if_needed(user_id, usage_data)
+        
+        tier = (usage_data["plan_tier"] or "scout").lower()
+        limits = get_limits_for_tier(tier)
+        now = datetime.datetime.utcnow()
+        
+        # Calculate Monthly Status
+        current_monthly = usage_data["monthly_cost_usage"] or 0.0
+        monthly_limit = limits["monthly_cost"]
+        is_monthly_limit_reached = current_monthly >= monthly_limit
+        
+        if now.month == 12:
+            next_monthly_reset = datetime.datetime(now.year + 1, 1, 1)
+        else:
+            next_monthly_reset = datetime.datetime(now.year, now.month + 1, 1, tzinfo=datetime.timezone.utc)
+
+        # Calculate 6-Hour Status
+        current_six_hour = usage_data["six_hour_cost_usage"] or 0.0
+        six_hour_limit = limits["six_hour_cost"]
+        is_six_hour_limit_reached = current_six_hour >= six_hour_limit
+        
+        current_block = now.hour // 6
+        next_block_hour = (current_block + 1) * 6
+        
+        next_reset_day = now.date()
+        if next_block_hour >= 24: # If next block is past midnight
+            next_reset_day += datetime.timedelta(days=1)
+            next_block_hour = 0 # Reset to 00:00 for the next day
+
+        next_six_hour_reset = datetime.datetime.combine(next_reset_day, datetime.time(next_block_hour, 0, 0), tzinfo=datetime.timezone.utc)
+
+        return {
+            "tier": tier,
+            "monthly_usage": float(current_monthly),
+            "monthly_limit": float(monthly_limit),
+            "is_monthly_limit_reached": is_monthly_limit_reached,
+            "next_monthly_reset": next_monthly_reset.isoformat(),
+            "six_hour_usage": float(current_six_hour),
+            "six_hour_limit": float(six_hour_limit),
+            "is_six_hour_limit_reached": is_six_hour_limit_reached,
+            "next_six_hour_reset": next_six_hour_reset.isoformat(),
+        }
 
     async def track_usage(self, user_id: int, input_tokens: int, output_tokens: int):
         cost = (input_tokens * PRICE_INPUT_PER_MILLION / 1_000_000) + \

@@ -224,6 +224,18 @@ export interface FileSearchUploadResponse {
   uri?: string;
 }
 
+export interface UsageStatus {
+  tier: string;
+  monthly_usage: number;
+  monthly_limit: number;
+  is_monthly_limit_reached: boolean;
+  next_monthly_reset: string;
+  six_hour_usage: number;
+  six_hour_limit: number;
+  is_six_hour_limit_reached: boolean;
+  next_six_hour_reset: string;
+}
+
 export interface User {
   id: number;
   email: string;
@@ -242,6 +254,7 @@ export interface User {
   personalization_show_calendar?: boolean;
   created_at: string;
   updated_at: string;
+  usage_status?: UsageStatus | null;
 }
 
 export interface ChatSession {
@@ -629,7 +642,12 @@ export type ChatStreamErrorEvent = {
   message: string;
 };
 
-export type ChatStreamEvent = ChatStreamTokenEvent | ChatStreamEndEvent | ChatStreamErrorEvent;
+export type ChatStreamRemindersEvent = {
+  type: 'reminders';
+  reminders: unknown[];
+};
+
+export type ChatStreamEvent = ChatStreamTokenEvent | ChatStreamEndEvent | ChatStreamErrorEvent | ChatStreamRemindersEvent;
 
 type StreamPayload = {
   delta?: string;
@@ -1411,6 +1429,12 @@ class ApiService {
     });
   }
 
+  async triggerProactivityForUser(userId: number): Promise<void> {
+    return this.fetch<void>(`/users/${userId}/proactivity/evaluate`, {
+      method: 'POST',
+    });
+  }
+
   // AI Chat endpoints
   async sendMessage(request: ChatRequest): Promise<ChatResponse> {
     return this.fetch<ChatResponse>('/api/chat', {
@@ -1594,6 +1618,17 @@ class ApiService {
           type: 'error',
           message: (payload as any).message ?? (payload as any).error ?? 'Stream error',
         };
+      }
+
+      if (eventType === 'reminders') {
+        const reminders = (payload as any).reminders;
+        if (Array.isArray(reminders)) {
+          return {
+            type: 'reminders',
+            reminders,
+          };
+        }
+        return null;
       }
 
       const fallbackDelta = (payload as any).delta ?? (payload as any).token ?? (payload as any).text;

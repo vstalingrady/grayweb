@@ -30,8 +30,8 @@ except ImportError:  # graceful fallback if pywebpush isn't available
 logger = logging.getLogger(__name__)
 
 # Avoid duplicate sends if a user gets evaluated twice in a short window.
-# Set to 3 hours to prevent duplicate messages within the same time window
-MIN_SEND_INTERVAL_SECONDS = 10800  # 3 hours
+# Keep the guard short so scheduled touchpoints aren't skipped after manual triggers.
+MIN_SEND_INTERVAL_SECONDS = 300  # 5 minutes
 
 PROACTIVITY_PUSH_TABLE = "proactivity_push_subscriptions"
 
@@ -261,7 +261,7 @@ class ProactivityEngine:
             fallback = settings.get("time")
             if fallback:
                 times = [fallback]
-        return times or ["09:00"]
+        return times or []
 
     async def _last_notification_timestamp(self, user_id: int) -> Optional[datetime]:
         """Return the timestamp of the most recent proactive notification."""
@@ -338,6 +338,69 @@ class ProactivityEngine:
         else:
             last = last.astimezone(dt_timezone.utc)
         return start_utc <= last <= end_utc
+
+    async def get_user_status(self, user_id: int) -> Dict[str, Any]:
+        """
+        Return a summary of the user's proactivity configuration and state,
+        similar to the 'status' command in other interfaces.
+        """
+        await self._ensure_connection()
+        
+        settings_record = await self.db.fetch_one(
+            "SELECT payload FROM proactivity_settings WHERE user_id = :user_id",
+            {"user_id": user_id},
+        )
+        
+        payload = {}
+        if settings_record:
+            payload = self._deserialize_payload(settings_record[0]) or {}
+
+        timezone = payload.get("timezone") or "UTC"
+        cadence = (payload.get("cadence") or "daily").lower()
+        enabled = cadence not in {"manual", "paused"}
+        
+        last_sent_at = await self._last_notification_timestamp(user_id)
+        
+        # Calculate next check-in
+        next_checkin: Optional[datetime] = None
+        if enabled:
+            try:
+                tz = self._resolve_timezone(timezone)
+                now_local = datetime.now(tz)
+                times = self._extract_times(payload)
+                
+                candidates = []
+                for t_str in times:
+                    parts = t_str.split(":")
+                    if len(parts) >= 2:
+                        try:
+                            h, m = int(parts[0]), int(parts[1])
+                            # Candidate for today
+                            cand_today = now_local.replace(hour=h, minute=m, second=0, microsecond=0)
+                            if cand_today > now_local:
+                                candidates.append(cand_today)
+                            # Candidate for tomorrow
+                            cand_tmrw = cand_today + timedelta(days=1)
+                            candidates.append(cand_tmrw)
+                        except ValueError:
+                            continue
+                
+                if candidates:
+                    next_checkin = min(candidates).astimezone(dt_timezone.utc)
+            except Exception as e:
+                logger.warning(f"Failed to calculate next checkin for user {user_id}: {e}")
+
+        # Fetch recent activity stats
+        activity = await self._get_user_recent_activity(user_id)
+        
+        return {
+            "timezone": timezone,
+            "cadence": cadence,
+            "enabled": enabled,
+            "last_sent_at": last_sent_at.isoformat() if last_sent_at else None,
+            "next_checkin": next_checkin.isoformat() if next_checkin else None,
+            "recent_activity": activity
+        }
 
     async def _send_proactivity_message(
         self,

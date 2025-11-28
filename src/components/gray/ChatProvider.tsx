@@ -631,10 +631,16 @@ const REMINDER_PRE_BLOCK_REGEX = /(?:```[a-z0-9_-]*[^\S\r\n]*\n\s*)?gray[._]remi
 const REMINDER_CODE_BLOCK_REGEX = /```[a-z0-9_-]*[^\S\r\n]*\n[\s\S]*?gray[._]reminder[\s\S]*?```/gi;
 const REMINDER_GENERIC_FENCE_REGEX = /```[a-z0-9_-]*[\s\S]*?(gray[\s\S]{0,120}?reminder)[\s\S]*?```/gi;
 
+type GrayReminderWrapper = {
+  message: string;
+  reminders: unknown[];
+};
+
 type ParsedReminderBlock = {
   start: number;
   end: number;
-  reminder: GrayReminderCreatedPayload;
+  reminder?: GrayReminderCreatedPayload;
+  wrapper?: GrayReminderWrapper;
 };
 
 const isFullReminderPayload = (candidate: Partial<GrayReminderCreatedPayload>): candidate is GrayReminderCreatedPayload => {
@@ -959,14 +965,28 @@ const parseReminderBlocks = (raw: string): ParsedReminderBlock[] => {
       if (depth === 0 && startIndex !== -1) {
         const blockText = raw.slice(startIndex, i + 1);
         try {
-          const parsed = JSON.parse(blockText) as Partial<GrayReminderCreatedPayload>;
-          const payload = coerceReminderPayload(parsed);
-          if (payload) {
+          const parsed = JSON.parse(blockText);
+
+          if (
+            parsed &&
+            typeof parsed === "object" &&
+            typeof parsed.message === "string" &&
+            Array.isArray(parsed.reminders)
+          ) {
             matches.push({
               start: startIndex,
               end: i + 1,
-              reminder: payload,
+              wrapper: parsed as GrayReminderWrapper
             });
+          } else {
+            const payload = coerceReminderPayload(parsed);
+            if (payload) {
+              matches.push({
+                start: startIndex,
+                end: i + 1,
+                reminder: payload,
+              });
+            }
           }
         } catch {
           // Ignore blocks that aren't valid JSON.
@@ -996,12 +1016,24 @@ export const extractGrayRemindersFromText = (
   const seenReminders = new Set<string>();
   const reminders: GrayReminderCreatedPayload[] = [];
   for (const block of blocks) {
-    const key = buildReminderKey(block.reminder);
-    if (seenReminders.has(key)) {
-      continue;
+    if (block.wrapper) {
+      for (const candidate of block.wrapper.reminders) {
+        const payload = coerceReminderPayload(candidate);
+        if (payload) {
+          const key = buildReminderKey(payload);
+          if (!seenReminders.has(key)) {
+            seenReminders.add(key);
+            reminders.push(payload);
+          }
+        }
+      }
+    } else if (block.reminder) {
+      const key = buildReminderKey(block.reminder);
+      if (!seenReminders.has(key)) {
+        seenReminders.add(key);
+        reminders.push(block.reminder);
+      }
     }
-    seenReminders.add(key);
-    reminders.push(block.reminder);
   }
   const hasModernReminder = reminders.some((reminder) => reminder.source === "mcp/plans-habits-server");
   const filteredReminders = hasModernReminder
@@ -2026,7 +2058,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
           const upload = await apiService.uploadMediaFile(resolvedUser.id, file);
           const previewUrl = file.type?.toLowerCase().startsWith("image/")
             ? URL.createObjectURL(file)
-            : undefined;
+            : (upload as any)?.publicUrl || (upload as any)?.url || null;
           uploads.push({ ...upload, previewUrl });
         }
         if (uploads.length > 0) {
@@ -2881,10 +2913,9 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
             }
             const streamingUserId = resolvedUser.id;
 
+            let streamedConversationId = normalizeConversationIdValue(baseSession.conversationId) ?? sessionId;
             let accumulated = "";
-            let streamedConversationId: string | null =
-              normalizeConversationIdValue(baseSession.conversationId) ?? sessionId;
-
+            let capturedReminders: unknown[] = [];
             const timeContext = buildLocalTimeContext();
             const attachmentPayloads = attachmentsRef.current.map((attachment) => ({
               id: attachment.id,
@@ -2917,6 +2948,14 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
                 continue;
               }
 
+              if (event.type === "reminders") {
+                // Capture structured reminders sent via SSE
+                if (Array.isArray(event.reminders) && event.reminders.length > 0) {
+                  capturedReminders = event.reminders;
+                }
+                continue;
+              }
+
               if (event.type === "end") {
                 streamedConversationId =
                   normalizeConversationIdValue(event.conversationId) ?? streamedConversationId;
@@ -2930,10 +2969,46 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
                 }
                 const metadata = event.groundingMetadata ?? undefined;
                 const timingUpdate = event.timing ? { backendTimings: event.timing } : undefined;
+
+                // Process reminders: prefer SSE-sent reminders, fallback to text extraction
+                let finalReminders: GrayReminderCreatedPayload[] | undefined;
+                if (capturedReminders.length > 0) {
+                  // Use structured reminders sent via SSE
+                  finalReminders = capturedReminders
+                    .map((r) => {
+                      try {
+                        // Validate it's a proper reminder payload
+                        if (r && typeof r === 'object' && 'type' in r && r.type === 'gray.reminder') {
+                          return r as GrayReminderCreatedPayload;
+                        }
+                      } catch {
+                        return null;
+                      }
+                      return null;
+                    })
+                    .filter((r): r is GrayReminderCreatedPayload => r !== null);
+                } else {
+                  // Fallback: extract reminders from text (backward compatibility)
+                  const extracted = extractGrayRemindersFromText(content);
+                  if (extracted.reminders.length > 0) {
+                    finalReminders = extracted.reminders;
+                  }
+                }
+
+                // If we have reminders but no text, generate a friendly confirmation message
+                let finalContent = content;
+                if (finalReminders && finalReminders.length > 0 && !content.trim()) {
+                  const confirmationText = buildReminderConfirmationText(finalReminders);
+                  if (confirmationText) {
+                    finalContent = confirmationText;
+                  }
+                }
+
                 if (assistantMessageId) {
                   updateMessage(sessionId, assistantMessageId, {
-                    content,
+                    content: finalContent,
                     groundingMetadata: metadata,
+                    reminders: finalReminders,
                     ...(timingUpdate ?? {}),
                   });
                 }
@@ -3158,6 +3233,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       const streamGeneralResponse = () => {
         (async () => {
           let accumulated = "";
+          let capturedReminders: unknown[] = [];
           const streamingUserId = resolvedUser.id;
           try {
             const timeContext = buildLocalTimeContext();
@@ -3190,6 +3266,14 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
                 continue;
               }
 
+              if (event.type === "reminders") {
+                // Capture structured reminders sent via SSE
+                if (Array.isArray(event.reminders) && event.reminders.length > 0) {
+                  capturedReminders = event.reminders;
+                }
+                continue;
+              }
+
               if (event.type === "end") {
                 streamedConversationId =
                   coerceConversationIdForRequest(event.conversationId) ?? streamedConversationId;
@@ -3198,10 +3282,44 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
                 const metadata = event.groundingMetadata ?? undefined;
                 const timingUpdate = event.timing ? { backendTimings: event.timing } : undefined;
 
+                // Process reminders: prefer SSE-sent reminders, fallback to text extraction
+                let finalReminders: GrayReminderCreatedPayload[] | undefined;
+                if (capturedReminders.length > 0) {
+                  // Use structured reminders sent via SSE
+                  finalReminders = capturedReminders
+                    .map((r) => {
+                      try {
+                        if (r && typeof r === 'object' && 'type' in r && r.type === 'gray.reminder') {
+                          return r as GrayReminderCreatedPayload;
+                        }
+                      } catch {
+                        return null;
+                      }
+                      return null;
+                    })
+                    .filter((r): r is GrayReminderCreatedPayload => r !== null);
+                } else {
+                  // Fallback: extract reminders from text (backward compatibility)
+                  const extracted = extractGrayRemindersFromText(content);
+                  if (extracted.reminders.length > 0) {
+                    finalReminders = extracted.reminders;
+                  }
+                }
+
+                // If we have reminders but no text, generate a friendly confirmation message
+                let finalContent = content;
+                if (finalReminders && finalReminders.length > 0 && !content.trim()) {
+                  const confirmationText = buildReminderConfirmationText(finalReminders);
+                  if (confirmationText) {
+                    finalContent = confirmationText;
+                  }
+                }
+
                 if (assistantMessageId) {
                   updateMessage(generalSession.id, assistantMessageId, {
-                    content,
+                    content: finalContent,
                     groundingMetadata: metadata,
+                    reminders: finalReminders,
                     ...(timingUpdate ?? {}),
                   });
                 } else {

@@ -88,23 +88,20 @@ class GeminiService:
         """
         Resolve the concrete Gemini model to use.
 
-        The frontend currently passes tier labels like \"lite\", \"base\", or \"pro\"
+        The frontend currently passes tier labels like "lite" or "pro"
         instead of full model IDs. To keep that simple on the client, we translate
         those tier labels here into concrete model names.
 
         Per request:
-          - Gray Base  -> models/gemini-flash-latest
           - Gray Pro   -> models/gemini-3-pro-preview
           - Gray Lite  -> current light model (env or default)
         """
         if override:
             tier = override.strip().lower()
-            if tier in {"lite", "gray-lite"}:
+            if tier in {"lite", "gray-lite", "base", "gray-base"}:
                 # Keep Lite mapped to the configured light model.
+                # "base" is deprecated and falls back to lite.
                 return self._light_model
-            if tier in {"base", "gray-base"}:
-                # Hard-coded mapping for Gray Base.
-                return "models/gemini-flash-latest"
             if tier in {"pro", "gray-pro"}:
                 # Hard-coded mapping for Gray Pro.
                 return "models/gemini-3-pro-preview"

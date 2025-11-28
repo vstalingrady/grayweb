@@ -52,6 +52,7 @@ from google_calendar import (
 from google.genai import types
 from gemini_client import GeminiAttachment, GeminiService
 from anthropic_client import AnthropicService
+from openrouter_client import OpenRouterService
 from usage_tracker import UsageTracker, UsageLimitExceeded
 try:
     from backend.calendar_tools import CALENDAR_TOOLS
@@ -96,7 +97,7 @@ logging.getLogger("uvicorn.access").disabled = True
 app_logger.info("Backend application starting up", extra={
     "event_type": "application_startup",
     "environment": os.getenv("ENVIRONMENT", "development"),
-    "ai_provider": os.getenv("AI_PROVIDER", "gemini"),
+    "ai_provider": os.getenv("AI_PROVIDER", "openrouter"),
     "file_search_enabled": os.getenv("ENABLE_FILE_SEARCH", "false").lower() == "true"
 })
 
@@ -135,7 +136,7 @@ def load_prompt_from_file(path: Path, fallback: str) -> str:
     return fallback.strip()
 
 
-AI_PROVIDER = (os.getenv("AI_PROVIDER") or "gemini").strip().lower()
+AI_PROVIDER = (os.getenv("AI_PROVIDER") or "openrouter").strip().lower()
 GUMROAD_WEBHOOK_SECRET = os.getenv("GUMROAD_WEBHOOK_SECRET") or None
 LEMONSQUEEZY_WEBHOOK_SECRET = os.getenv("LEMONSQUEEZY_WEBHOOK_SECRET") or None
 LEMONSQUEEZY_VOYAGER_VARIANT_ID = os.getenv("LEMONSQUEEZY_VOYAGER") or None
@@ -143,6 +144,7 @@ LEMONSQUEEZY_PIONEER_VARIANT_ID = os.getenv("LEMONSQUEEZY_PIONEER") or None
 
 GEMINI_SERVICE = GeminiService()
 ANTHROPIC_SERVICE = AnthropicService()
+OPENROUTER_SERVICE = OpenRouterService()
 VALIDATE_GEMINI_ON_STARTUP = os.getenv("VALIDATE_GEMINI_ON_STARTUP", "true").strip().lower() not in {
     "0",
     "false",
@@ -413,11 +415,74 @@ STREAMING_TOKEN_DELAY = max(0.0, _float_env("GRAY_STREAMING_TOKEN_DELAY_SECONDS"
 
 DEFAULT_DEV_ORIGIN_PORTS = (3000, 5173)
 
+REMINDER_RESPONSE_FORMAT = {
+    "type": "json_schema",
+    "json_schema": {
+        "name": "gray_reminder_payload",
+        "strict": True,
+        "schema": {
+            "type": "object",
+            "properties": {
+                "message": {"type": "string", "description": "User-facing reply text."},
+                "reminders": {
+                    "type": "array",
+                    "description": "List of reminder payloads to render and execute.",
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": True,
+                    },
+                },
+            },
+            "required": ["message"],
+            "additionalProperties": False,
+        },
+    },
+}
+
 
 def _split_env_list(value: Optional[str]) -> List[str]:
     if not value:
         return []
     return [item.strip() for item in value.split(",") if item.strip()]
+
+
+def _should_request_structured_reminders(message: str) -> bool:
+    normalized = (message or "").lower()
+    if not normalized:
+        return False
+    keywords = [
+        "reminder",
+        "goal",
+        "plan",
+        "habit",
+        "schedule",
+        "deadline",
+        "due",
+    ]
+    return any(keyword in normalized for keyword in keywords)
+
+
+def _materialize_structured_reminders(raw_text: str) -> Tuple[str, Optional[List[Dict[str, Any]]]]:
+    """
+    Attempt to parse a structured reminder payload of the form:
+    { "message": "...", "reminders": [ { ...gray.reminder... } ] }
+    Returns (text, reminders) where reminders is None on failure.
+    """
+    try:
+        payload = json.loads(raw_text)
+    except Exception:
+        return raw_text, None
+
+    if not isinstance(payload, dict):
+        return raw_text, None
+
+    message = payload.get("message")
+    reminders = payload.get("reminders")
+    if not isinstance(message, str):
+        return raw_text, None
+    if reminders is not None and not isinstance(reminders, list):
+        return message, None
+    return message, reminders if isinstance(reminders, list) else None
 
 
 def _origin_variants(origin: str) -> List[str]:
@@ -855,11 +920,23 @@ class UserUpdate(BaseModel):
     personalization_custom_instructions: Optional[str] = None
     personalization_show_calendar: Optional[bool] = None
 
+class UsageStatus(BaseModel):
+    tier: str
+    monthly_usage: float
+    monthly_limit: float
+    is_monthly_limit_reached: bool
+    next_monthly_reset: str
+    six_hour_usage: float
+    six_hour_limit: float
+    is_six_hour_limit_reached: bool
+    next_six_hour_reset: str
+
 class User(UserBase):
     id: int
     initials: str
     created_at: datetime
     updated_at: Optional[datetime] = None
+    usage_status: Optional[UsageStatus] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -1035,6 +1112,7 @@ class MediaUpload(MediaUploadBase):
     id: int
     user_id: int
     created_at: datetime
+    public_url: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -1522,8 +1600,8 @@ async def _insert_general_conversation_message(
     attachments: Optional[Any] = None,
 ) -> None:
     supabase_success = False
+    user_data_id = _ensure_user_data_record(user_id)
     if _conversation_store_available():
-        user_data_id = _ensure_user_data_record(user_id)
         if user_data_id is not None:
             payload: Dict[str, Any] = {
                 "user_id": user_id,
@@ -1546,12 +1624,14 @@ async def _insert_general_conversation_message(
 
     # Fallback to SQLite
     try:
+        effective_user_data_id = user_data_id if user_data_id is not None else user_id
         query = """
-            INSERT INTO general_chat_messages (user_id, role, content, grounding_metadata, created_at)
-            VALUES (:user_id, :role, :content, :grounding_metadata, :created_at)
+            INSERT INTO general_chat_messages (user_id, user_data_id, role, content, grounding_metadata, created_at)
+            VALUES (:user_id, :user_data_id, :role, :content, :grounding_metadata, :created_at)
         """
         values = {
             "user_id": user_id,
+            "user_data_id": effective_user_data_id,
             "role": role,
             "content": text,
             "grounding_metadata": json.dumps(grounding_metadata) if grounding_metadata else None,
@@ -1566,26 +1646,32 @@ async def _insert_general_conversation_message(
 
 
 async def _replace_general_conversation_history(user_id: int, history: List[Dict[str, Any]]) -> None:
+    app_logger.info(f"Replacing general history for user {user_id}", extra={"event_type": "general_history_replace_start", "history_length": len(history)})
     # 1. Delete from Supabase
+    user_data_id = _ensure_user_data_record(user_id)
+    if user_data_id is None:
+        app_logger.warning(f"Could not resolve user_data_id for user {user_id}; skipping Supabase update", extra={"event_type": "general_history_replace_skip_supabase"})
+
     if _conversation_store_available():
         try:
-            user_data_id = _ensure_user_data_record(user_id)
-            if user_data_id is not None:
-                supabase.table("general_chat_messages").delete().eq("user_id", user_id).execute()
-                if history:
-                    rows: List[Dict[str, Any]] = []
-                    for entry in history:
-                        rows.append(
-                            {
-                                "user_id": user_id,
-                                "user_data_id": user_data_id,
-                                "role": entry.get("role"),
-                                "content": entry.get("text") or "",
-                                "grounding_metadata": entry.get("grounding_metadata"),
-                            }
-                        )
-                    if rows:
-                        supabase.table("general_chat_messages").insert(rows).execute()
+            # Always delete stale history first, even if we can't insert new history yet (e.g. missing user_data_id).
+            # This ensures we don't leave stale data that would shadow the correct local SQLite history.
+            supabase.table("general_chat_messages").delete().eq("user_id", user_id).execute()
+
+            if user_data_id is not None and history:
+                rows: List[Dict[str, Any]] = []
+                for entry in history:
+                    rows.append(
+                        {
+                            "user_id": user_id,
+                            "user_data_id": user_data_id,
+                            "role": entry.get("role"),
+                            "content": entry.get("text") or "",
+                            "grounding_metadata": entry.get("grounding_metadata"),
+                        }
+                    )
+                if rows:
+                    supabase.table("general_chat_messages").insert(rows).execute()
         except Exception as error:
             _handle_conversation_store_error("Error replacing general conversation history (Supabase)", error)
 
@@ -1597,22 +1683,34 @@ async def _replace_general_conversation_history(user_id: int, history: List[Dict
         )
         # Insert new
         if history:
+            effective_user_data_id = user_data_id if user_data_id is not None else user_id
             values_list = []
             for entry in history:
                 values_list.append({
                     "user_id": user_id,
+                    "user_data_id": effective_user_data_id,
                     "role": entry.get("role"),
                     "content": entry.get("text") or "",
                     "grounding_metadata": json.dumps(entry.get("grounding_metadata")) if entry.get("grounding_metadata") else None,
                     "created_at": datetime.utcnow(),
                 })
+
             if values_list:
+                # SQLite has a 999-parameter limit; chunk to avoid "too many SQL variables"
                 query = general_chat_messages.insert()
-                await database.execute_many(query, values_list)
+                chunk_size = 150  # 150 * 5 columns = 750 params (< 999)
+                for i in range(0, len(values_list), chunk_size):
+                    chunk = values_list[i:i + chunk_size]
+                    await database.execute_many(query, chunk)
     except Exception as error:
         app_logger.error(
             "Error replacing general conversation history (SQLite)",
-            extra={"event_type": "sqlite_history_replace_error", "error": str(error)},
+            exc_info=error,
+            extra={
+                "event_type": "sqlite_history_replace_error",
+                "error": str(error),
+                "history_length": len(history) if history else 0,
+            },
         )
 
 
@@ -1737,6 +1835,8 @@ def _ensure_user_data_record(user_identifier: int) -> Optional[int]:
                 return user_data_id
     except Exception as error:
         _handle_conversation_store_error("Error creating user data record", error)
+    
+    app_logger.error(f"Failed to ensure user_data record for {user_identifier}", extra={"event_type": "user_data_ensure_failed"})
     return None
 
 
@@ -3714,7 +3814,7 @@ async def _ensure_supabase_user_exists(user_id: int, db: databases.Database) -> 
             "updated_at": _iso(user_row["updated_at"]),
         }
 
-        supabase.table("users").insert(payload).execute()
+        supabase.table("users").upsert(payload).execute()
         api_logger.info(
             "Backfilled Supabase users row for streak tracking",
             extra={"user_id": user_id},
@@ -4122,7 +4222,7 @@ async def stream_ai_response(
             yield ("final", {"text": limit_msg, "grounding_metadata": None})
             return
 
-    provider = AI_PROVIDER or "gemini"
+    provider = AI_PROVIDER or "openrouter"
     conversation_history = _normalize_conversation_history(conversation_history)
     cached_contents = None
     cache_text_block: Optional[str] = None
@@ -4162,22 +4262,106 @@ async def stream_ai_response(
         yield ("final", {"text": accumulated, "grounding_metadata": None})
         return
 
-    media_attachments = await _resolve_media_attachments(db, attachments, user_id)
-    maps_tools, maps_tool_config = _build_maps_tool_and_config(
-        maps_enabled,
-        maps_latitude,
-        maps_longitude,
-        maps_widget,
-    )
-    file_search_tools = []
-    if file_search_enabled:
-         file_search_tools = await _build_file_search_tools(db, user_id)
+    request_structured_reminders = _should_request_structured_reminders(message)
 
-    if tools is not None:
-        base_tools = tools
-    else:
-        base_tools = DEFAULT_CHAT_TOOLS if search_enabled else []
-    tool_list = [*base_tools, *maps_tools, *file_search_tools]
+    request_structured_reminders = _should_request_structured_reminders(message)
+
+    if provider in {"openrouter", "grok", "grok-lite"}:
+        if not OPENROUTER_SERVICE.available:
+            api_logger.warning(
+                "OpenRouter unavailable; falling back to Gemini",
+                extra={"event_type": "ai_provider_unavailable", "provider": provider},
+            )
+        else:
+            if attachments:
+                api_logger.info(
+                    "OpenRouter does not support attachments in this flow; ignoring attachments",
+                    extra={"event_type": "ai_attachments_ignored", "provider": provider},
+                )
+            accumulated = ""
+            try:
+                response_format = REMINDER_RESPONSE_FORMAT if request_structured_reminders else None
+                async for chunk in OPENROUTER_SERVICE.stream(
+                    message,
+                    conversation_history,
+                    workspace_with_cache,
+                    effective_system_prompt,
+                    time_context,
+                    model,
+                    include_usage=False,
+                    response_format=response_format,
+                ):
+                    if isinstance(chunk, dict):
+                        continue
+                    accumulated += chunk
+                    if chunk:
+                        yield ("delta", chunk)
+                if response_format:
+                    text, structured_reminders = _materialize_structured_reminders(accumulated)
+                    # Reminders sent separately via final event, not embedded in text
+                    accumulated = text
+                    yield ("final", {
+                        "text": accumulated,
+                        "grounding_metadata": None,
+                        "reminders": structured_reminders if structured_reminders else None
+                    })
+                else:
+                    yield ("final", {"text": accumulated, "grounding_metadata": None})
+                return
+            except Exception as openrouter_error:  # pragma: no cover - best effort logging
+                api_logger.error(
+                    "OpenRouter streaming failed; falling back to Gemini",
+                    extra={
+                        "event_type": "ai_provider_fallback",
+                        "provider": provider,
+                        "error": str(openrouter_error),
+                    },
+                )
+
+    media_attachments = await _resolve_media_attachments(db, attachments, user_id)
+    tool_list: List[types.Tool] = []
+    effective_tool_config: Optional[types.ToolConfig] = None
+    if provider == "gemini":
+        maps_tools, maps_tool_config = _build_maps_tool_and_config(
+            maps_enabled,
+            maps_latitude,
+            maps_longitude,
+            maps_widget,
+        )
+        file_search_tools = []
+        if file_search_enabled:
+             file_search_tools = await _build_file_search_tools(db, user_id)
+
+        if tools is not None:
+            base_tools = tools
+        else:
+            base_tools = DEFAULT_CHAT_TOOLS
+            if not search_enabled:
+                base_tools = [t for t in base_tools if t != SEARCH_TOOL]
+        tool_list = [*base_tools, *maps_tools, *file_search_tools]
+        
+        # Ensure we have an explicit tool_config when tools are present to prevent AFC warnings
+        effective_tool_config = maps_tool_config
+        if tool_list and not effective_tool_config:
+            effective_tool_config = types.ToolConfig(
+                function_calling_config=types.FunctionCallingConfig(
+                    mode=types.FunctionCallingConfigMode.AUTO
+                )
+            )
+        # Gemini SDK rejects function declarations without Python callables; to avoid
+        # request failures, skip tool wiring when using Gemini for text generation.
+        if tool_list:
+            api_logger.warning(
+                "Skipping tools for Gemini provider to avoid AFC incompatibility",
+                extra={
+                    "event_type": "ai_tools_disabled",
+                    "provider": provider,
+                    "tool_count": len(tool_list),
+                },
+            )
+            tool_list = []
+            effective_tool_config = None
+    
     grounding_metadata: Optional[Dict[str, Any]] = None
     if GEMINI_SERVICE.available:
         try:
@@ -4193,7 +4377,7 @@ async def stream_ai_response(
                 attachments=media_attachments,
                 extra_contents=cached_contents,
                 tools=tool_list,
-                tool_config=maps_tool_config,
+                tool_config=effective_tool_config,
                 reasoning_mode=reasoning_mode,
             ):
                 if chunk.usage_metadata:
@@ -4286,7 +4470,7 @@ async def generate_ai_response(
     conversation_history = _normalize_conversation_history(conversation_history)
     if not (message or "").strip() and not conversation_history and not (attachments or []):
         message = "Let's get started."
-    provider = AI_PROVIDER or "gemini"
+    provider = AI_PROVIDER or "openrouter"
 
     cached_contents = None
     cache_text_block: Optional[str] = None
@@ -4325,27 +4509,100 @@ async def generate_ai_response(
             raise RuntimeError("AI response was empty")
         return response_text, None
 
+    if provider in {"openrouter", "grok", "grok-lite"}:
+        if not OPENROUTER_SERVICE.available:
+            api_logger.warning(
+                "OpenRouter unavailable; falling back to Gemini",
+                extra={"event_type": "ai_provider_unavailable", "provider": provider},
+            )
+        else:
+            if attachments:
+                api_logger.info(
+                    "OpenRouter does not support attachments in this flow; ignoring attachments",
+                    extra={"event_type": "ai_attachments_ignored", "provider": provider},
+                )
+            try:
+                response_format = REMINDER_RESPONSE_FORMAT if request_structured_reminders else None
+                response_text = await OPENROUTER_SERVICE.generate(
+                    message,
+                    conversation_history,
+                    workspace_with_cache,
+                    effective_system_prompt,
+                    time_context,
+                    model,
+                    include_usage=False,
+                    response_format=response_format,
+                )
+                if response_format:
+                    text, structured_reminders = _materialize_structured_reminders(response_text)
+                    # Reminders sent separately, not embedded in text
+                    response_text = text
+                    # Return reminders in metadata for non-streaming responses
+                    grounding_metadata = grounding_metadata or {}
+                    if structured_reminders:
+                        grounding_metadata["reminders"] = structured_reminders
+                if not response_text:
+                    raise RuntimeError("AI response was empty")
+                return response_text, grounding_metadata
+            except Exception as openrouter_error:  # pragma: no cover - best effort logging
+                api_logger.error(
+                    "OpenRouter generation failed; falling back to Gemini",
+                    extra={
+                        "event_type": "ai_provider_fallback",
+                        "provider": provider,
+                        "error": str(openrouter_error),
+                    },
+                )
+
     attachment_payloads: List[GeminiAttachment] = []
     if attachments:
         if user_id is None or db is None:
             raise HTTPException(status_code=400, detail="User information is required for attachments.")
         attachment_payloads = await _resolve_media_attachments(db, attachments, user_id)
 
-    maps_tools, maps_tool_config = _build_maps_tool_and_config(
-        maps_enabled,
-        maps_latitude,
-        maps_longitude,
-        maps_widget,
-    )
-    file_search_tools = []
-    if file_search_enabled:
-         file_search_tools = await _build_file_search_tools(db, user_id)
+    tool_list: List[types.Tool] = []
+    effective_tool_config: Optional[types.ToolConfig] = None
+    if provider == "gemini":
+        maps_tools, maps_tool_config = _build_maps_tool_and_config(
+            maps_enabled,
+            maps_latitude,
+            maps_longitude,
+            maps_widget,
+        )
+        file_search_tools = []
+        if file_search_enabled:
+             file_search_tools = await _build_file_search_tools(db, user_id)
 
-    if tools is not None:
-        base_tools = tools
-    else:
-        base_tools = DEFAULT_CHAT_TOOLS if search_enabled else []
-    tool_list = [*base_tools, *maps_tools, *file_search_tools]
+        if tools is not None:
+            base_tools = tools
+        else:
+            base_tools = DEFAULT_CHAT_TOOLS
+            if not search_enabled:
+                base_tools = [t for t in base_tools if t != SEARCH_TOOL]
+        tool_list = [*base_tools, *maps_tools, *file_search_tools]
+        
+        # Ensure we have an explicit tool_config when tools are present to prevent AFC warnings
+        effective_tool_config = maps_tool_config
+        if tool_list and not effective_tool_config:
+            effective_tool_config = types.ToolConfig(
+                function_calling_config=types.FunctionCallingConfig(
+                    mode=types.FunctionCallingConfigMode.AUTO
+                )
+            )
+        # Gemini SDK rejects function declarations without Python callables; to avoid
+        # request failures, skip tool wiring when using Gemini for text generation.
+        if tool_list:
+            api_logger.warning(
+                "Skipping tools for Gemini provider to avoid AFC incompatibility",
+                extra={
+                    "event_type": "ai_tools_disabled",
+                    "provider": provider,
+                    "tool_count": len(tool_list),
+                },
+            )
+            tool_list = []
+            effective_tool_config = None
+    
     grounding_metadata: Optional[Dict[str, Any]] = None
     if GEMINI_SERVICE.available:
         try:
@@ -4361,7 +4618,7 @@ async def generate_ai_response(
                 response_schema=response_schema,
                 response_mime_type=response_mime_type,
                 tools=tool_list,
-                tool_config=maps_tool_config,
+                tool_config=effective_tool_config,
                 reasoning_mode=reasoning_mode,
             )
 
@@ -4416,7 +4673,7 @@ async def generate_ai_response(
                     response_schema=response_schema,
                     response_mime_type=response_mime_type,
                     tools=tool_list,
-                    tool_config=maps_tool_config,
+                    tool_config=effective_tool_config,
                     reasoning_mode=reasoning_mode,
                 )
                 
@@ -4695,6 +4952,11 @@ async def upload_media(
     except OSError as error:
         raise HTTPException(status_code=500, detail=f"Failed to store upload: {error}") from error
 
+    public_url = None
+    if STORAGE_BASE_URL:
+        # Serve via configurable base (e.g., NEXT_PUBLIC_SITE_URL or CDN)
+        public_url = f"{STORAGE_BASE_URL.rstrip('/')}/{storage_name}"
+
     now = datetime.utcnow()
     query = media_uploads.insert().values(
         user_id=user_id,
@@ -4716,6 +4978,7 @@ async def upload_media(
         mime_type=content_type,
         size=len(file_bytes),
         created_at=now,
+        public_url=public_url,
     )
 
 
@@ -5068,14 +5331,20 @@ async def chat_with_ai_stream(request: ChatRequest, db: databases.Database = Dep
                         else:
                             await sleep(0)
                     elif kind == "final":
+                        reminders_payload = None
                         if isinstance(payload, dict):
                             final_response = payload.get("text") or accumulated_visible
                             grounding_metadata_payload = payload.get("grounding_metadata")
+                            reminders_payload = payload.get("reminders")
                         elif payload:
                             final_response = payload
 
                 if final_response is None:
                     final_response = accumulated_visible
+                
+                # Send reminders as a separate SSE event if they exist
+                if reminders_payload:
+                    yield _sse_event("reminders", {"reminders": reminders_payload})
 
                 assistant_message_payload: Dict[str, Any] = {
                     "role": "model",
@@ -5302,6 +5571,7 @@ async def overwrite_conversation_history(conversation_id: str, payload: Conversa
     server-side history matches the locally edited conversation.
     """
     try:
+        app_logger.info(f"Overwriting history for conversation {conversation_id}", extra={"event_type": "history_overwrite_start", "message_count": len(payload.messages)})
         normalized_history = _normalize_conversation_history(payload.messages)
         updated_at_iso = datetime.utcnow().isoformat() + "Z"
 
@@ -5584,7 +5854,7 @@ async def get_conversation_usage(conversation_id: str):
                 "message_count": 0,
                 "conversation_tokens": 0,
                 "limit": 65_536, # Scout limit
-                "provider": os.getenv("AI_PROVIDER", "gemini"),
+                "provider": os.getenv("AI_PROVIDER", "openrouter"),
                 "model_name": os.getenv("AI_MODEL_NAME", None),
                 "model_label": os.getenv("AI_MODEL_NAME", None),
                 "user_tier": "scout",
@@ -5642,7 +5912,7 @@ async def get_conversation_usage(conversation_id: str):
         context_limit = TIER_CONTEXT_LIMITS.get(user_tier, TIER_CONTEXT_LIMITS["scout"])
         
         # Get provider info from environment
-        provider = os.getenv("AI_PROVIDER", "gemini")
+        provider = os.getenv("AI_PROVIDER", "openrouter")
         model_name = os.getenv("AI_MODEL_NAME", None)
         if gemini_tokens is not None and not model_name:
             model_name = (
@@ -5695,16 +5965,24 @@ Conversation:
 
 Summary:"""
         
-        # Use Gemini to generate summary
-        gemini = get_gemini_client()
-        summary_response = await gemini.generate_text(
-            prompt=summary_prompt,
-            user_id=None,
-            conversation_id=None,
-            timezone="UTC"
-        )
-        
-        summary_text = summary_response.get("text", "")
+        # Use Gemini to generate summary (fallback to OpenRouter if unavailable)
+        summary_text = ""
+        if GEMINI_SERVICE.available:
+            try:
+                summary_response = await GEMINI_SERVICE.generate(
+                    summary_prompt,
+                    conversation_history=[],
+                    workspace_context=None,
+                    system_prompt=None,
+                    time_context="UTC",
+                    model=None,
+                )
+                summary_text = getattr(summary_response, "text", "") or ""
+            except Exception as gemini_error:
+                api_logger.warning(
+                    "Gemini summary generation failed; skipping compression",
+                    extra={"error": str(gemini_error)},
+                )
         
         if not summary_text:
             return {
@@ -5827,7 +6105,16 @@ async def get_user(user_id: int, db: databases.Database = Depends(get_database))
     user = await db.fetch_one(query)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    return user
+    
+    # Enrich with usage status
+    tracker = UsageTracker(db)
+    usage_status = await tracker.get_usage_status(user_id)
+    
+    # Convert Row to dict to allow modification
+    user_dict = dict(user)
+    user_dict["usage_status"] = usage_status
+    
+    return user_dict
 
 @app.put("/users/{user_id}", response_model=User)
 async def update_user(user_id: int, user_update: UserUpdate, db: databases.Database = Depends(get_database)):
@@ -7365,7 +7652,9 @@ async def stream_user_proactivity(user_id: int):
             yield _sse_event("ready", {"user_id": user_id})
             # For realtime sessions, respect the duplicate guard so reconnects
             # (e.g., on backend restarts) don't re-send the same ping each time.
-            await proactivity_engine.dispatch_user_if_due(user_id, source="realtime")
+            # We run this in the background so we don't block the yield of the "ready" event
+            # or the loop entry.
+            asyncio.create_task(proactivity_engine.dispatch_user_if_due(user_id, source="realtime"))
 
             while True:
                 try:
@@ -7388,6 +7677,18 @@ async def stream_user_proactivity(user_id: int):
     }
 
     return StreamingResponse(event_stream(), media_type="text/event-stream", headers=headers)
+
+
+@app.get("/users/{user_id}/proactivity/status")
+async def get_proactivity_status(user_id: int):
+    """
+    Get the current configuration and status of proactivity for a user.
+    """
+    global proactivity_engine
+    if not proactivity_engine:
+        raise HTTPException(status_code=503, detail="Proactivity engine not initialized")
+    
+    return await proactivity_engine.get_user_status(user_id)
 
 
 @app.post("/users/{user_id}/proactivity", response_model=ProactivityLog, status_code=status.HTTP_201_CREATED)

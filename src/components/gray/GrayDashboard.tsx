@@ -1,6 +1,6 @@
 
 import { useMemo, useCallback, useState, useEffect, type CSSProperties } from "react";
-import { CheckSquare, Square, Zap, Trash2, ChevronDown, Clock, Edit3, MessageCircle, LayoutDashboard, History, Search, ChevronsRight, LifeBuoy, LogOut, Monitor, Moon, Palette, Plus, Settings, Sun, X } from "lucide-react";
+import { CheckSquare, Square, Zap, Trash2, ChevronDown, Clock, Edit3, MessageCircle, LayoutDashboard, History, Search, ChevronsRight, LifeBuoy, LogOut, Monitor, Moon, Palette, Plus, Settings, Sun, X, Play } from "lucide-react";
 import styles from "./GrayDashboard.module.css";
 
 
@@ -91,6 +91,7 @@ type PulseCardProps = {
     updates: Partial<PulseProactivityEntry>
   ) => void;
   onRemoveProactivity?: (entryId: string, proactivityId: string) => void;
+  onTestProactivity?: (entryId: string, proactivityId: string) => void;
   showProactivity?: boolean;
   showStreaks?: boolean;
   visibleGroupKey?: PulseChecklistGroupKey | "all";
@@ -110,6 +111,7 @@ function PulseCard({
   onAddProactivity,
   onUpdateProactivity,
   onRemoveProactivity,
+  onTestProactivity,
   showProactivity = true,
   showStreaks: _showStreaks = false,
   visibleGroupKey = "all",
@@ -188,6 +190,13 @@ function PulseCard({
       return;
     }
     onRemoveProactivity?.(entry.id, proactivityId);
+  };
+
+  const handleTestProactivity = (proactivityId: string) => {
+    if (!isInteractive || !onTestProactivity) {
+      return;
+    }
+    onTestProactivity(entry.id, proactivityId);
   };
 
   const resetProactivityForm = () => {
@@ -362,14 +371,27 @@ function PulseCard({
                       </span>
                     </label>
                     {isInteractive ? (
-                      <button
-                        type="button"
-                        className={`${styles["gray-pulse__icon-button"]} ${styles["gray-pulse__icon-button--danger"]}`}
-                        onClick={() => handleRemoveProactivity(proactivity.id)}
-                        aria-label={`Remove ${proactivity.name}`}
-                      >
-                        <Trash2 size={16} strokeWidth={1.7} />
-                      </button>
+                      <div className={styles["gray-pulse__icon-group"]}>
+                        {onTestProactivity ? (
+                          <button
+                            type="button"
+                            className={styles["gray-pulse__icon-button"]}
+                            onClick={() => handleTestProactivity(proactivity.id)}
+                            aria-label={`Test ${proactivity.name}`}
+                            title="Send test notification now"
+                          >
+                            <Play size={16} strokeWidth={1.7} />
+                          </button>
+                        ) : null}
+                        <button
+                          type="button"
+                          className={`${styles["gray-pulse__icon-button"]} ${styles["gray-pulse__icon-button--danger"]}`}
+                          onClick={() => handleRemoveProactivity(proactivity.id)}
+                          aria-label={`Remove ${proactivity.name}`}
+                        >
+                          <Trash2 size={16} strokeWidth={1.7} />
+                        </button>
+                      </div>
                     ) : null}
                   </div>
                   <div className={styles["gray-pulse__proactivity-controls"]}>

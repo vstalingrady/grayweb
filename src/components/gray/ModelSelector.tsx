@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useCallback, useMemo, useState, useRef, useEffect } from "react";
-import { Zap, Box, Sparkles, Lock, ChevronUp, Rocket, Grid } from "lucide-react";
+import { Zap, Sparkles, Lock, ChevronUp, Rocket, Grid } from "lucide-react";
 import { useChatStore } from "@/components/gray/ChatProvider";
 import { useUser } from "@/contexts/UserContext";
 import styles from "./ModelSelector.module.css";
@@ -16,7 +16,6 @@ type ModelOption = {
 
 const OPTIONS: ModelOption[] = [
   { id: "lite", label: "Gray Lite", description: "Quick responses", icon: Zap, tierRequired: "scout" },
-  { id: "base", label: "Gray Base", description: "Balanced intelligence", icon: Box, tierRequired: "voyager" },
   { id: "pro", label: "Gray Pro", description: "Complex tasks", icon: Sparkles, tierRequired: "voyager" },
 ];
 
@@ -40,8 +39,7 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
   const currentLevel = TIER_LEVELS[currentTier] ?? 0;
 
   const activeOption = useMemo(() => {
-    if (modelTier === "pro") return OPTIONS[2];
-    if (modelTier === "base") return OPTIONS[1];
+    if (modelTier === "pro") return OPTIONS[1];
     return OPTIONS[0];
   }, [modelTier]);
 
@@ -54,8 +52,7 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
         return;
       }
 
-      if (index === 2) setModelTier("pro");
-      else if (index === 1) setModelTier("base");
+      if (index === 1) setModelTier("pro");
       else setModelTier("lite");
 
       setIsOpen(false);

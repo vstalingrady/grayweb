@@ -1,16 +1,16 @@
 # Scout Plan Budget Allocation
 
 ## Overview
-The Scout plan has a **$0.1875 per month** budget allocation per user, with 6-hour rolling windows to ensure fair usage and cost control.
+The Scout plan has a **$1.50 per month** budget allocation per user, with 6-hour rolling windows to ensure fair usage and cost control.
 
 ## Budget Breakdown
 
 ### Monthly Budget
-- **Total**: $0.1875/month per user
+- **Total**: $1.50/month per user
 
 ### 6-Hour Window Allocation
 - **Formula**: Monthly ÷ 120 (30 days × 4 six-hour blocks per day)
-- **Amount**: $0.0015625 per 6-hour block
+- **Amount**: $0.0125 per 6-hour block
 - **Purpose**: Spreads the monthly budget equally across all 6-hour blocks in the month
 
 ## How It Works
@@ -20,8 +20,8 @@ The Scout plan has a **$0.1875 per month** budget allocation per user, with 6-ho
 2. **Monthly**: Resets on the 1st of each month at 00:00 UTC
 
 ### Limits Enforced
-- **6-Hour Limit**: Primary throttle - once you spend $0.0015625 in a 6-hour window, wait for the next window
-- **Monthly Limit**: Hard cap - once you spend $0.1875 in a month, wait for next month
+- **6-Hour Limit**: Primary throttle - once you spend $0.0125 in a 6-hour window, wait for the next window
+- **Monthly Limit**: Hard cap - once you spend $1.50 in a month, wait for next month
 
 ### What Happens When a Limit is Reached
 
@@ -50,13 +50,13 @@ To keep chatting without interruption, consider upgrading to a higher tier, or w
 
 ## Approximate Token Budget for Scout Users
 
-With the $0.1875/month budget:
-- **Monthly**: ~468,750 input tokens OR ~468,750 output tokens (weighted average)
-- **Per 6-hour window**: ~3,906 tokens
+With the $1.50/month budget:
+- **Monthly**: ~3.75 million input tokens OR ~3.75 million output tokens (weighted average)
+- **Per 6-hour window**: ~31,250 tokens
 
 This translates to roughly:
-- **~1-2 medium conversations per 6-hour window** (depending on complexity)
-- **~120-240 conversations per month** (if evenly distributed)
+- **~12-15 medium conversations per 6-hour window** (depending on complexity)
+- **~900-1,800 conversations per month** (if evenly distributed)
 
 ## Implementation Details
 
@@ -76,6 +76,6 @@ The user table tracks:
 ## Upgrade Path
 
 Users who frequently hit limits are encouraged to upgrade to:
-- **Voyager**: $6.00/month (32x more budget)
-- **Pioneer**: $24.00/month (128x more budget)
+- **Voyager**: $6.00/month (4x more budget)
+- **Pioneer**: $24.00/month (16x more budget)
 

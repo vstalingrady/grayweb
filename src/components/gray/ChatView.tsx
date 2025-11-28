@@ -233,6 +233,7 @@ const GrayStreamingSpinner = () => (
   </div>
 );
 import { useUser } from "@/contexts/UserContext";
+import { UsageLimitBanner } from "@/components/gray/UsageLimitBanner";
 import { apiService, type ConversationUsage, type GroundingMetadata } from "@/lib/api";
 import { buildLocalTimeContext } from "@/lib/timeContext";
 import type { ContextUsageSummary } from "@/components/gray/types";
@@ -1081,7 +1082,6 @@ const ReminderCard = ({ reminder }: { reminder: GrayReminderCreatedPayload }) =>
     reminder: "Reminder",
   };
   const { primary: scheduleLabel } = formatReminderDisplayLabels(scheduleIso);
-  const displayLabel = scheduleLabel ?? "Flexible timing";
 
   return (
     <article className={styles.reminderCard} data-mode={mode}>
@@ -1095,14 +1095,16 @@ const ReminderCard = ({ reminder }: { reminder: GrayReminderCreatedPayload }) =>
           {statusLabel}
         </span>
       </header>
-      <div className={styles.reminderCardTimeRow}>
-        <div className={styles.reminderCardTimeIcon}>
-          <CalendarClock size={16} />
+      {scheduleLabel && (
+        <div className={styles.reminderCardTimeRow}>
+          <div className={styles.reminderCardTimeIcon}>
+            <CalendarClock size={16} />
+          </div>
+          <div>
+            <strong>{scheduleLabel}</strong>
+          </div>
         </div>
-        <div>
-          <strong>{displayLabel}</strong>
-        </div>
-      </div>
+      )}
     </article>
   );
 };
@@ -1223,7 +1225,6 @@ const ChatMessagesList = memo(
               data-streaming={isStreamingMessage ? "true" : undefined}
             >
               <div className={messageBodyClassName}>
-                {showStreamingIndicator ? <GrayStreamingSpinner /> : null}
                 {assistantReminders.length > 0 ? (
                   <div className={styles.reminderCardList}>
                     {assistantReminders.map((reminder, reminderIndex) => (
@@ -1531,6 +1532,7 @@ const ChatMessagesList = memo(
             </div>
           </div>
         )}
+        <div className={styles.chatComposerSpacer} aria-hidden="true" />
         <div ref={scrollAnchorRef} />
       </div>
     );
@@ -1799,6 +1801,7 @@ export function GrayChatView({
     webSearchEnabled,
     loadConversationMessages,
     sendGeneralMessage,
+    modelTier,
   } = useChatStore();
   const session = sessionId ? getSession(sessionId) : undefined;
   const sessionExists = Boolean(session);
@@ -1842,6 +1845,15 @@ export function GrayChatView({
   const openAttachmentPicker = useCallback(() => {
     attachmentInputRef.current?.click();
   }, []);
+  const handleAttachmentPaste = useCallback(
+    (files: File[]) => {
+      if (!files || files.length === 0) {
+        return;
+      }
+      uploadAttachments(files);
+    },
+    [uploadAttachments]
+  );
   const activeSessionId = session?.id ?? null;
   const activeConversationId =
     session?.conversationId && session.conversationId !== GENERAL_CHAT_SESSION_ID
@@ -1887,6 +1899,15 @@ export function GrayChatView({
     : "";
   const showIntro = Boolean(introContent) && (!session || messages.length === 0);
   const showAttachmentTray = session?.scope === "general";
+  const topAttachmentTray = showAttachmentTray ? (
+    <AttachmentTray
+      attachments={attachments}
+      isUploading={isAttachmentUploading}
+      error={attachmentError}
+      onAddAttachment={openAttachmentPicker}
+      onRemoveAttachment={removeAttachment}
+    />
+  ) : null;
   const attachmentTrayNode = showAttachmentTray ? (
     <AttachmentTray
       attachments={attachments}
@@ -1980,20 +2001,7 @@ export function GrayChatView({
     };
   }, []);
 
-  useEffect(() => {
-    if (!composerDockRef.current) return;
-    const observer = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        const height = entry.contentRect.height;
-        const chatView = composerDockRef.current?.closest(`.${styles.chatView}`) as HTMLElement;
-        if (chatView) {
-          chatView.style.setProperty("--chat-composer-height", `${height}px`);
-        }
-      }
-    });
-    observer.observe(composerDockRef.current);
-    return () => observer.disconnect();
-  }, []);
+
 
   const chatViewStyle: CSSProperties | undefined =
     composerHeight > 0 ? ({ "--chat-composer-height": `${composerHeight}px` } as CSSProperties) : undefined;
@@ -2230,6 +2238,8 @@ export function GrayChatView({
           time_context: timeContext,
           attachments: buildAttachmentPayloads(),
           should_generate_title: requestTitleHint,
+          web_search_enabled: modelTier === "lite" ? false : webSearchEnabled,
+          ...(modelTier === "lite" ? { maps_enabled: false, maps_widget: false } : mapPayload),
         })) {
           if (event.type === "token") {
             didReceiveToken = true;
@@ -2330,9 +2340,9 @@ export function GrayChatView({
             timezone: resolveClientTimezone(),
             attachments: buildAttachmentPayloads(),
             context_cache_id: selectedContextCacheId ?? undefined,
-            web_search_enabled: webSearchEnabled,
+            web_search_enabled: modelTier === "lite" ? false : webSearchEnabled,
             should_generate_title: requestTitleHint,
-            ...mapPayload,
+            ...(modelTier === "lite" ? { maps_enabled: false, maps_widget: false } : mapPayload),
           });
           streamedConversationId =
             normalizeConversationIdValue(fallbackResponse.conversation_id) ?? streamedConversationId;
@@ -2956,6 +2966,7 @@ export function GrayChatView({
       <div className={styles.chatViewport}>
 
         <div className={styles.chatFade} aria-hidden="true" />
+        {topAttachmentTray}
         {showIntro ? (
           <div className={styles.chatIntro}>
             {introContent}
@@ -3023,6 +3034,7 @@ export function GrayChatView({
           isSubmitting={isResponding}
           onAddAttachment={openAttachmentPicker}
           attachmentTray={attachmentTrayNode}
+          onPasteFiles={handleAttachmentPaste}
         />
       </div>
     </div>

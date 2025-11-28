@@ -2,7 +2,14 @@
 
 import styles from "@/app/gray/GrayPageClient.module.css";
 import { LoaderCircle, Paperclip, Lightbulb, Search, ArrowUpRight } from "lucide-react";
-import { type FormEvent, useRef, useEffect, useCallback, useState } from "react";
+import {
+  type ClipboardEvent as ReactClipboardEvent,
+  type FormEvent,
+  useRef,
+  useEffect,
+  useCallback,
+  useState,
+} from "react";
 
 export type GrayChatBarProps = {
   value: string;
@@ -18,6 +25,7 @@ export type GrayChatBarProps = {
   isSearchEnabled?: boolean;
   onToggleSearch?: () => void;
   modelSelector?: React.ReactNode;
+  onPasteFiles?: (files: File[]) => void;
 };
 
 export function GrayChatBar({
@@ -34,6 +42,7 @@ export function GrayChatBar({
   isSearchEnabled = false,
   onToggleSearch,
   modelSelector,
+  onPasteFiles,
 }: GrayChatBarProps) {
   const computedDisabled =
     typeof isSubmitDisabled === "boolean" ? isSubmitDisabled : value.trim().length === 0;
@@ -88,6 +97,20 @@ export function GrayChatBar({
     }
   };
 
+  const handlePaste = useCallback(
+    (event: ReactClipboardEvent<HTMLTextAreaElement>) => {
+      if (!onPasteFiles) {
+        return;
+      }
+      const clipboardFiles = Array.from(event.clipboardData?.files ?? []);
+      if (clipboardFiles.length === 0) {
+        return;
+      }
+      onPasteFiles(clipboardFiles);
+    },
+    [onPasteFiles]
+  );
+
   return (
     <form className={styles.chatBarRounded} onSubmit={onSubmit}>
       {onAddAttachment ? (
@@ -106,6 +129,7 @@ export function GrayChatBar({
           value={value}
           onChange={(event) => onChange(event.target.value)}
           onKeyDown={handleKeyDown}
+          onPaste={handlePaste}
           placeholder={placeholder}
           className={styles.chatInput}
           aria-label={placeholder}

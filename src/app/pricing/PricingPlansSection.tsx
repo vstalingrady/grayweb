@@ -31,7 +31,7 @@ const FREE_FEATURES: FeatureItem[] = [
     {
         label: "Gray Lite only",
         icon: Zap,
-        subtext: "x-ai/grok-4.1-fast:free",
+        subtext: "Grok 4.1 Fast",
     },
     { label: "Limited daily messages", icon: MessageSquare },
     { label: "14-day chat memory", icon: Pin },
@@ -42,14 +42,13 @@ const FREE_FEATURES: FeatureItem[] = [
 
 const VOYAGER_FEATURES: FeatureItem[] = [
     {
-        label: "Gray Base + limited Gray Pro",
+        label: "Unlimited Gray Lite + limited Gray Pro",
         icon: Zap,
-        subtext: "Gemini 2.5 Flash + Gemini 3 Pro",
+        subtext: "Grok 4.1 Fast + Gemini 3 Pro",
     },
     {
         label: "32x more message credits",
         icon: MessageSquare,
-        subtext: "Plus unlimited Gray Lite",
     },
     {
         label: "Full context memory",
@@ -76,13 +75,13 @@ const PIONEER_FEATURES: FeatureItem[] = [
     {
         label: "Model switcher",
         icon: Shuffle,
-        subtext: "OpenRouter: Claude 4.5, Grok 4.1, GPT 5.1, DeepSeek V3.2, Kimi K2 Thinking",
+        subtext: "Claude Sonnet 4.5, Gemini 3, GPT 5.1, DeepSeek V3.2, Kimi K2 Thinking",
     },
     { label: "Expanded reasoning budget", icon: InfinityIcon },
     {
         label: "128x more message credits",
         icon: Pin,
-        subtext: "Plus unlimited Gray Base",
+        subtext: "Plus unlimited Gray Lite",
     },
     { label: "Priority response during peaks", icon: Headphones },
     { label: "Early access to experimental features", icon: FlaskConical },
@@ -96,13 +95,13 @@ const BILLING_CYCLES = [
 ];
 
 const VOYAGER_PRICING = {
-    monthly: { price: "$17", cadence: "month" },
-    annual: { price: "$177", cadence: "year" },
+    monthly: { price: "Rp 77.000,-", cadence: "month" },
+    annual: { price: "Rp 777.000,-", cadence: "year" },
 } as const;
 
 const PIONEER_PRICING = {
-    monthly: { price: "$37", cadence: "month" },
-    annual: { price: "$377", cadence: "year" },
+    monthly: { price: "Rp 377.000,-", cadence: "month" },
+    annual: { price: "Rp 3.777.000,-", cadence: "year" },
 } as const;
 
 interface PricingPlansSectionProps {
@@ -116,8 +115,8 @@ export function PricingPlansSection({ storeId, voyagerVariantId, pioneerVariantI
     const [billingCycle, setBillingCycle] = useState<"monthly" | "annual">("monthly");
     const { price: voyagerPrice, cadence: voyagerCadence } = VOYAGER_PRICING[billingCycle];
     const { price: pioneerPrice, cadence: pioneerCadence } = PIONEER_PRICING[billingCycle];
-    const voyagerSavingsLabel = billingCycle === "annual" ? "Save $27" : undefined;
-    const pioneerSavingsLabel = billingCycle === "annual" ? "Save $67" : undefined;
+    const voyagerSavingsLabel = billingCycle === "annual" ? "Save Rp 147.000,-" : undefined;
+    const pioneerSavingsLabel = billingCycle === "annual" ? "Save Rp 747.000,-" : undefined;
 
     const voyagerCheckoutHref = (storeId && voyagerVariantId)
         ? `https://${storeId}/buy/${voyagerVariantId}?embed=1&media=0&checkout[custom][billing_cycle]=${billingCycle}${userId ? `&checkout[custom][user_id]=${userId}` : ''}`
@@ -193,7 +192,7 @@ export function PricingPlansSection({ storeId, voyagerVariantId, pioneerVariantI
                     </div>
                 </article>
 
-                <article className={styles.planCard} data-variant="highlighted">
+                <article className={styles.planCard} data-variant="muted">
                     <div className={styles.cardBody}>
                         <div className={styles.cardIntro}>
                             <header className={styles.cardHeader}>

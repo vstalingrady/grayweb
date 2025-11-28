@@ -95,7 +95,7 @@ if __name__ == "__main__":
     env_info = {
         "event_type": "environment_loaded",
         "environment": os.getenv("ENVIRONMENT", "development"),
-        "ai_provider": os.getenv("AI_PROVIDER", "gemini"),
+        "ai_provider": os.getenv("AI_PROVIDER", "openrouter"),
         "file_search_enabled": os.getenv("ENABLE_FILE_SEARCH", "false"),
         "validate_gemini": os.getenv("VALIDATE_GEMINI_ON_STARTUP", "true")
     }

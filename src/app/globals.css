@@ -39,8 +39,8 @@
   --gray-calendar-event-slate: rgba(210, 210, 210, 0.42);
   --gray-calendar-grid-line: rgba(255, 255, 255, 0.05);
   --gray-calendar-time-column-width: clamp(62px, 5vw, 72px);
-  --gray-sidebar-collapsed-width: clamp(52px, 6vw, 68px);
-  --gray-sidebar-expanded-width: clamp(240px, 26vw, 320px);
+  --gray-sidebar-collapsed-width: clamp(52px, 6vw, 60px);
+  --gray-sidebar-expanded-width: clamp(220px, 26vw, 260px);
   --gray-sidebar-expanded-button-padding-inline: clamp(0.35rem, 0.85vw, 0.55rem);
   --gray-sidebar-button-gap: 0.45rem;
   --radius-lg: 28px;
@@ -49,7 +49,7 @@
   --shadow-deep: 0 64px 120px rgba(0, 0, 0, 0.85);
   --shadow-soft: 0 24px 54px rgba(0, 0, 0, 0.5);
   --gray-chat-bar-clearance: clamp(0px, 1.5vh, 16px);
-  --gray-general-max-width: 1220px;
+  --gray-general-max-width: 1420px;
   --gray-general-inline-gutter: clamp(16px, 4vw, 36px);
   --gray-dashboard-max-width: 1360px;
 }
@@ -582,7 +582,7 @@ pre {
     inset 0 1px 0 rgba(255, 255, 255, 0.02),
     0 42px 100px rgba(0, 0, 0, 0.6);
   backdrop-filter: blur(22px);
-  max-width: 1160px;
+  max-width: 1044px;
   width: 100%;
   margin-left: auto;
   margin-bottom: 0;

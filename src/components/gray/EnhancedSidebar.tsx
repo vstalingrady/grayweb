@@ -38,6 +38,10 @@ type GrayEnhancedSidebarProps = {
   onLogOut?: () => void;
 };
 
+const normalizeNavLabel = (item: SidebarNavItem): string => {
+  return item.label;
+};
+
 function GrayEnhancedSidebarComponent({
   isExpanded,
   viewerName,
@@ -155,7 +159,7 @@ function GrayEnhancedSidebarComponent({
               <li key={item.id}>
                 <button
                   type="button"
-                  aria-label={item.label}
+                  aria-label={normalizeNavLabel(item)}
                   data-active={item.id === activeNav ? "true" : "false"}
                   onClick={() => onNavigate(item.id)}
                 >
@@ -225,13 +229,13 @@ function GrayEnhancedSidebarComponent({
                       <button
                         type="button"
                         data-active={item.id === activeNav ? "true" : "false"}
-                        aria-label={item.label}
+                        aria-label={normalizeNavLabel(item)}
                         onClick={() => onNavigate(item.id)}
                       >
                         <span className={styles.navIcon}>
                           <item.icon size={18} />
                         </span>
-                        <span className={styles.navLabel}>{item.label}</span>
+                        <span className={styles.navLabel}>{normalizeNavLabel(item)}</span>
                       </button>
                     </li>
                   ))}
@@ -242,7 +246,7 @@ function GrayEnhancedSidebarComponent({
           {historyNavItem && isExpanded ? (
             <div className={styles.sidebarScroll} aria-label="Recent conversations">
               <div className={styles.sidebarHistorySection}>
-                <div className={styles.sidebarHistory}>
+                <div className={styles.sidebarHistoryFixed}>
                   {historySections.length > 0 ? (
                     historySections.map((group) => (
                       <div key={group.id} className={styles.sidebarHistoryGroup}>
@@ -273,7 +277,7 @@ function GrayEnhancedSidebarComponent({
                   )}
                 </div>
               </div>
-              <div className={styles.sidebarScrollFade} aria-hidden="true" />
+              <div className={styles.sidebarScrollFadeFixed} aria-hidden="true" />
             </div>
           ) : null}
           <div className={styles.sidebarBottom}>

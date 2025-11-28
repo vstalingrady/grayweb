@@ -3,6 +3,8 @@
   min-height: 100vh;
   height: 100vh;
   width: 100%;
+  --chat-column-max-width: min(680px, 88vw);
+  --mobile-sidebar-width: clamp(260px, 70vw, 540px);
   flex: 1 1 auto;
   background: var(--background, #050505);
   color: var(--foreground, #f5f5f5);
@@ -59,6 +61,8 @@
 
 .overlay {
   display: none;
+  pointer-events: none;
+  opacity: 0;
 }
 
 @media (max-width: 768px) {
@@ -82,12 +86,15 @@
     inset: 0;
     background: rgba(0, 0, 0, 0.6);
     z-index: 9998;
-    opacity: 0;
-    pointer-events: none;
     transition: opacity 0.3s ease;
   }
 
   .overlay[data-visible="true"] {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .layout[data-mobile-sidebar="true"][data-sidebar-expanded="true"] .overlay {
     opacity: 1;
     pointer-events: auto;
   }
@@ -106,6 +113,7 @@
   gap: 0;
   align-items: stretch;
   height: 100%;
+  --mobile-sidebar-width: clamp(260px, 70vw, 540px);
 }
 
 .layout[data-view="chat"] {
@@ -134,6 +142,7 @@
     display: flex;
     overflow-x: hidden;
     /* Prevent horizontal scroll when pushed */
+    --mobile-sidebar-width: clamp(260px, 70vw, 540px);
   }
 
   .layout[data-mobile-sidebar="true"] .sidebar {
@@ -144,7 +153,8 @@
     bottom: 0;
     z-index: 1;
     /* Below main content initially, or same level */
-    width: 320px !important;
+    width: var(--mobile-sidebar-width);
+    max-width: var(--mobile-sidebar-width);
     height: 100%;
     /* No transition on sidebar itself needed if it stays fixed, 
        but if we want it to slide in with content, we can animate it too.
@@ -158,6 +168,8 @@
 
   .layout[data-mobile-sidebar="true"] .sidebar[data-expanded="true"] {
     display: flex !important;
+    width: var(--mobile-sidebar-width);
+    max-width: var(--mobile-sidebar-width);
     z-index: 1;
     /* Ensure it's visible */
   }
@@ -178,7 +190,7 @@
 
   /* Push main content when sidebar is open */
   .layout[data-mobile-sidebar="true"][data-sidebar-expanded="true"] .main {
-    transform: translateX(320px);
+    transform: translateX(var(--mobile-sidebar-width));
   }
 
   /* Move overlay with main content or keep it fixed? 
@@ -193,8 +205,8 @@
 
 .layout[data-mobile-sidebar="true"] .sidebar[data-expanded="true"] {
   display: flex;
-  width: 100%;
-  max-width: 320px;
+  width: var(--mobile-sidebar-width);
+  max-width: var(--mobile-sidebar-width);
 }
 
 /* Remove the previous broken overlay on sidebar::before */
@@ -210,13 +222,13 @@
 .sidebar {
   position: relative;
   display: flex;
-  width: 72px;
+  width: 52px;
   height: 100%;
   overflow: hidden;
 }
 
 .sidebar[data-expanded="true"] {
-  width: 320px;
+  width: 260px;
 }
 
 .sidebarRail {
@@ -225,10 +237,10 @@
   align-items: center;
   justify-content: space-between;
   padding: 16px 0 12px;
-  width: 72px;
+  width: 52px;
   border-radius: 0;
-  background: #070707;
-  border: 1px solid rgba(255, 255, 255, 0.04);
+  background: #0f0f11;
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-left: none;
   box-shadow: none;
 
@@ -393,16 +405,27 @@
 }
 
 .sidebarPanelContent {
+
   display: flex;
+
   flex-direction: column;
+
   justify-content: flex-start;
+
   gap: 0;
-  padding: 18px clamp(20px, 3.5vw, 30px) 12px;
+
+  padding: 18px 16px 12px;
+
   border-radius: 0;
-  background: #070707;
-  border: 1px solid rgba(255, 255, 255, 0.04);
+
+  background: #0f0f11;
+
+  border: 1px solid rgba(255, 255, 255, 0.1);
+
   border-left: none;
+
   width: 100%;
+
   height: 100%;
 
 }
@@ -420,17 +443,17 @@
   position: absolute;
   left: 0;
   right: 0;
-  bottom: calc(100% + 6px);
+  bottom: calc(100% + 4px);
   width: 100%;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  padding: 5px 5px;
-  border-radius: 18px;
+  padding: 3px;
+  border-radius: 14px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(12, 12, 14, 0.96);
   box-shadow:
-    0 24px 48px rgba(0, 0, 0, 0.46),
+    0 20px 40px rgba(0, 0, 0, 0.46),
     inset 0 0 0 1px rgba(255, 255, 255, 0.04);
   backdrop-filter: blur(14px);
   z-index: 2;
@@ -949,12 +972,12 @@
 
 /* Push mobile header when sidebar is expanded */
 .page[data-mobile-sidebar="true"][data-sidebar-expanded="true"] .mobileHeader {
-  left: 320px;
+  left: var(--mobile-sidebar-width);
 }
 
-/* Hide mobile header right (streak/upgrade) when sidebar is open */
+/* Keep streak/upgrade visible even when sidebar is open on mobile */
 .page[data-sidebar-expanded="true"] .mobileHeaderRight {
-  display: none;
+  display: flex;
 }
 
 /* Show mobile header on mobile screens */
@@ -1135,7 +1158,7 @@
   padding: 8px 8px 8px 16px;
   min-height: 56px;
   width: 100%;
-  max-width: var(--chat-column-max-width);
+  max-width: min(var(--chat-column-max-width, 680px), 100%);
 }
 
 .mobileChatInputField {
@@ -1201,14 +1224,15 @@
     bottom: 0;
     z-index: 100;
     width: 0;
+    max-width: var(--mobile-sidebar-width);
     display: none;
     transition: width 0.3s ease;
   }
 
   .sidebar[data-expanded="true"] {
     display: flex;
-    width: 100%;
-    max-width: 320px;
+    width: var(--mobile-sidebar-width);
+    max-width: var(--mobile-sidebar-width);
   }
 
   /* Hide the rail completely on mobile */
@@ -1765,7 +1789,7 @@
   color: rgba(235, 235, 235, 0.68);
 }
 
-@media (max-width: 960px) {
+@media (max-width: 940px) {
   .personalizationOverlay {
     padding: clamp(12px, 6vw, 24px);
     align-items: flex-start;
@@ -1807,7 +1831,7 @@
   display: flex;
   flex-direction: column;
   gap: 0;
-  margin-top: 12px;
+  margin-top: 0;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
@@ -1821,6 +1845,7 @@
   display: none;
 }
 
+.sidebarScrollFadeFixed,
 .sidebarScrollFade {
   position: sticky;
   bottom: 0;
@@ -1831,9 +1856,9 @@
   flex-shrink: 0;
   pointer-events: none;
   background: linear-gradient(to bottom,
-      rgba(7, 7, 7, 0) 0%,
-      rgba(7, 7, 7, 0.24) 40%,
-      rgba(7, 7, 7, 0.96) 100%);
+      rgba(15, 15, 17, 0) 0%,
+      rgba(15, 15, 17, 0.4) 40%,
+      #0f0f11 100%);
   z-index: 1;
 }
 
@@ -1898,7 +1923,7 @@
 .sidebarNav {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -1908,27 +1933,30 @@
   width: 100%;
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 8px 0;
-  border-radius: 0;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 12px;
   border: none;
   background: transparent;
-  color: rgba(235, 235, 235, 0.72);
-  font-size: 0.82rem;
+  color: rgba(240, 240, 240, 0.9);
+  font-size: 0.75rem;
   letter-spacing: 0.04em;
   font-family: "Plus Jakarta Sans", var(--font-sans), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
     sans-serif;
   font-weight: 500;
   cursor: pointer;
-  transition: color 0.2s ease;
+  transition: color 0.18s ease, background 0.18s ease;
 }
 
 .sidebarNav button:hover {
-  color: rgba(255, 255, 255, 0.86);
+  color: rgba(255, 255, 255, 0.96);
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .sidebarNav button[data-active="true"] {
-  color: rgba(255, 255, 255, 0.92);
+  color: rgba(255, 255, 255, 1);
+  background: transparent;
+  font-weight: 600;
 }
 
 .sidebarNavItem {
@@ -1939,14 +1967,14 @@
 }
 
 .sidebarNavItem[data-nav="history"] button {
-  padding-bottom: 0;
+  padding-bottom: 6px;
 }
 
 .navIcon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
+  width: 15px;
   color: inherit;
 }
 
@@ -1963,40 +1991,48 @@
 }
 
 .sidebarHistorySection {
-  --history-line-offset: 9px;
+  /* Dimensions derived from Grok's layout */
+  --history-line-width: 2px;
+  --history-line-offset: 18px;
+  --history-content-padding: 37px;
+
   --history-line-color: rgba(255, 255, 255, 0.08);
   display: flex;
   flex-direction: column;
   gap: 0;
 }
 
+.sidebarHistoryFixed,
 .sidebarHistory {
   display: flex;
   flex-direction: column;
   gap: 0;
-  /* Changed from 10px, spacing now controlled by group margin and link padding */
-  padding-left: 8px;
+  /* Removed padding-left: 8px based on user feedback */
+  padding-left: 0;
+  padding-top: 12px;
+  padding-bottom: 12px;
   position: relative;
 }
 
+.sidebarHistoryFixed::before,
 .sidebarHistory::before {
   content: "";
   position: absolute;
   left: var(--history-line-offset);
-  top: 0;
+  top: 6px;
   /* Changed from 14px */
   bottom: 0;
   /* Changed from 6px */
-  width: 2px;
-  background: var(--history-line-color);
+  width: var(--history-line-width);
+  background: rgba(255, 255, 255, 0.06);
   pointer-events: none;
 }
 
 .sidebarHistoryGroup {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  margin-top: 10px;
+  gap: 1px;
+  margin-top: 6px;
 }
 
 .sidebarHistoryGroup:first-of-type {
@@ -2004,26 +2040,22 @@
 }
 
 .sidebarHistoryLabel {
-  font-size: 0.68rem;
+  font-size: 0.64rem;
   letter-spacing: 0.26em;
   text-transform: uppercase;
   font-weight: 500;
   color: rgba(235, 235, 235, 0.7);
-  padding-left: 12px;
-  /* Reduced */
+  padding-left: var(--history-content-padding);
   padding-bottom: 0;
-  /* Reduced */
 }
 
 .sidebarHistoryList {
   list-style: none;
   margin: 0;
-  padding: 0 0 0 16px;
-  /* Adjusted padding-left */
+  padding: 0 0 0 var(--history-content-padding);
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  /* Reduced gap */
+  gap: 1px;
 }
 
 .sidebarHistoryList li {
@@ -2032,17 +2064,19 @@
 
 .sidebarHistoryLink {
   display: block;
-  padding: 4px 8px;
-  border-radius: 8px;
-  align-items: center;
-  gap: 8px;
-  font-size: 0.9rem;
+  padding: 3px 6px;
+  border-radius: 6px;
+  font-size: 0.85rem;
   font-family: "Plus Jakarta Sans", var(--font-sans), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
     sans-serif;
   font-weight: 500;
   color: rgba(235, 235, 235, 0.84);
   text-decoration: none;
   transition: color 0.2s ease, background 0.2s ease;
+  white-space: nowrap;
+  overflow: hidden;
+  mask-image: linear-gradient(to right, black 80%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, black 80%, transparent 100%);
 }
 
 .sidebarHistoryLink:hover,
@@ -2366,9 +2400,9 @@
 .sidebarProfile {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   width: 100%;
-  margin-top: max(0px, calc(clamp(24px, 5vh, 36px) - 14px));
+  margin-top: max(0px, calc(clamp(16px, 4vh, 28px) - 10px));
 }
 
 .profileMenuWrapper {
@@ -2383,11 +2417,11 @@
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   border: none;
   background: transparent;
-  padding: 14px 18px;
-  border-radius: 18px;
+  padding: 6px 10px;
+  border-radius: 12px;
   cursor: pointer;
   color: inherit;
   text-align: left;
@@ -2415,14 +2449,14 @@
 .profileInfo {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 10px;
   flex: 1;
   min-width: 0;
 }
 
 .profileAvatar {
-  width: 44px;
-  height: 44px;
+  width: 36px;
+  height: 36px;
   border-radius: 999px;
   overflow: hidden;
   background: linear-gradient(145deg,
@@ -2448,33 +2482,33 @@
 }
 
 .profileAvatar svg {
-  width: 22px;
-  height: 22px;
+  width: 18px;
+  height: 18px;
 }
 
 .profileDetails {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 1px;
   flex: 1;
 }
 
 .profileDetails span:first-child {
-  font-size: 0.82rem;
+  font-size: 0.75rem;
   letter-spacing: 0.1em;
   font-weight: 600;
   color: rgba(246, 247, 250, 0.92);
 }
 
 .profileDetails span:last-child {
-  font-size: 0.68rem;
-  letter-spacing: 0.18em;
+  font-size: 0.58rem;
+  letter-spacing: 0.14em;
   color: rgba(210, 214, 220, 0.64);
 }
 
 .profileToggleButton {
-  width: 34px;
-  height: 34px;
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
   border: none;
   background: transparent;
@@ -2523,10 +2557,11 @@
   justify-content: flex-start;
   padding: 0;
   overflow: hidden;
-  --gray-sidebar-width: 72px;
+  --gray-sidebar-width: 52px;
   --chat-bar-horizontal-shift: calc(var(--gray-sidebar-width) / 2);
   background: var(--background, #050505);
-  --chat-column-max-width: min(828px, 100%);
+  --chat-column-max-width: min(680px, 88vw);
+  --chat-composer-height: clamp(112px, 16vh, 180px);
 }
 
 .main::-webkit-scrollbar-button {
@@ -2573,7 +2608,7 @@
 }
 
 .sidebar[data-expanded="true"]~.main {
-  --gray-sidebar-width: 320px;
+  --gray-sidebar-width: 240px;
   --chat-bar-horizontal-shift: calc(var(--gray-sidebar-width) / 2);
 }
 
@@ -2605,7 +2640,7 @@
 .main[data-dashboard="true"][data-dashboard-free="true"] {
   grid-template-rows: minmax(0, 1fr);
   row-gap: 0;
-  padding: 0;
+  padding: clamp(16px, 3vw, 28px);
   justify-items: stretch;
   height: 100%;
   max-height: none;
@@ -2622,7 +2657,7 @@
   display: flex;
   flex-direction: column;
   gap: clamp(18px, 4vh, 32px);
-  width: min(1180px, 100%);
+  width: min(var(--chat-column-max-width, 680px), 100%);
   margin: clamp(12px, 1.8vh, 20px) auto 0;
   padding: 0 clamp(20px, 6vw, 48px);
   box-sizing: border-box;
@@ -2637,14 +2672,8 @@
   justify-items: start;
   grid-template-rows: minmax(0, 1fr) auto;
   row-gap: 0;
-  --chat-column-max-width: min(828px, 100%);
-  /* Minimal bottom padding - chat composer is now positioned at the bottom */
-  padding-bottom: 0;
+  --chat-column-max-width: min(680px, 88vw);
   overflow: hidden;
-}
-
-.page[data-general-attachments="true"] .main[data-view="general"] {
-  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + clamp(160px, 26vh, 280px));
 }
 
 .page[data-compact="true"] .main {
@@ -2717,7 +2746,7 @@
 }
 
 .mainContent>* {
-  width: min(1180px, 100%);
+  width: min(var(--chat-column-max-width, 680px), 100%);
 }
 
 .mainContent[data-view="dashboard"]>* {
@@ -2756,9 +2785,13 @@
   justify-content: flex-start;
   gap: clamp(18px, 3.5vh, 36px);
   padding-top: clamp(24px, 5vh, 56px);
-  padding-bottom: 0;
+  padding-bottom: calc(var(--chat-composer-height, clamp(112px, 16vh, 180px)) + clamp(20px, 4vh, 36px));
   overflow-y: auto;
   scrollbar-gutter: stable both-edges;
+}
+
+.page[data-general-attachments="true"] .mainContent[data-view="general"] {
+  padding-bottom: calc(var(--chat-composer-height, clamp(112px, 16vh, 180px)) + clamp(200px, 28vh, 340px));
 }
 
 .mainContent[data-compact="true"] {
@@ -2784,8 +2817,8 @@
 
 
 .generalViewSection {
-  width: min(var(--gray-general-max-width, 1220px), 100%);
-  max-width: var(--gray-general-max-width, 1220px);
+  width: min(var(--chat-column-max-width, 680px), 100%);
+  max-width: var(--chat-column-max-width, 680px);
   margin: 0 auto;
   padding: 0 var(--gray-general-inline-gutter, clamp(16px, 4vw, 36px));
   box-sizing: border-box;
@@ -2805,7 +2838,7 @@
 }
 
 .mainContent[data-view="general"]>* {
-  width: min(var(--chat-column-max-width, 828px), 100%);
+  width: min(var(--chat-column-max-width, 680px), 100%);
   margin-left: auto;
   margin-right: auto;
   padding-left: var(--gray-general-inline-gutter);
@@ -2819,7 +2852,7 @@
   align-self: stretch;
   width: 100%;
   /* Match alignmentid: keep the workspace band centered with fixed max width */
-  max-width: min(var(--chat-column-max-width, 828px), 100%);
+  max-width: min(var(--chat-column-max-width, 680px), 100%);
   margin: clamp(8px, 2vh, 16px) auto 0;
   padding: 0 clamp(10px, 2vw, 18px);
   box-sizing: border-box;
@@ -2838,7 +2871,7 @@
 
 .mainContent>.chatView,
 .mainContent>.chatViewEmpty {
-  width: min(960px, 100%);
+  width: min(var(--chat-column-max-width, 680px), 100%);
 }
 
 .mainContent[data-view="chat"]>.chatView,
@@ -2862,10 +2895,9 @@
   background: transparent;
   box-shadow: none;
   position: relative;
-  --chat-column-max-width: min(600px, 100%);
   --chat-bubble-max-width: var(--chat-column-max-width);
   --chat-composer-overlap: calc(var(--gray-chat-bar-clearance) + clamp(10px, 2vh, 18px));
-  --chat-composer-height: clamp(112px, 16vh, 180px);
+  --chat-composer-height: clamp(64px, 10vh, 120px);
   overflow: visible;
 }
 
@@ -2906,7 +2938,7 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  justify-content: flex-end;
+  justify-content: flex-start;
   width: 100%;
   overflow: visible;
   scrollbar-width: none;
@@ -2940,7 +2972,7 @@
   overflow-y: auto;
   scroll-behavior: smooth;
   width: 100%;
-  max-width: var(--chat-column-max-width);
+  max-width: var(--chat-column-max-width, 680px);
   margin: 0 auto;
   align-items: stretch;
 }
@@ -3027,7 +3059,7 @@
   flex-direction: column;
   gap: 6px;
   width: 100%;
-  max-width: var(--chat-column-max-width);
+  max-width: min(var(--chat-column-max-width), 100%);
   margin: 0 auto;
 }
 
@@ -3046,7 +3078,7 @@
   gap: 8px;
   padding: 8px 16px;
   border-radius: 18px;
-  max-width: min(var(--chat-bubble-max-width), 100%);
+  max-width: var(--chat-column-max-width, 680px);
   width: fit-content;
   background: rgba(12, 12, 12, 0.95);
   color: rgba(240, 240, 240, 0.96);
@@ -3083,6 +3115,15 @@
 
 .chatAssistantBlock :global(p + p) {
   margin-top: 0.3em;
+}
+
+.chatAssistantBlock :global(hr),
+.chatMessage :global(hr) {
+  display: none;
+  border: none;
+  height: 0;
+  margin: 0;
+  padding: 0;
 }
 
 .chatAssistantStructured {
@@ -3424,7 +3465,6 @@
   width: 18px;
   height: 18px;
   animation: spin 1s linear infinite;
-  filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.25));
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
@@ -4089,7 +4129,7 @@
   flex-direction: column;
   align-items: center;
   gap: 4px;
-  padding: 0 0 clamp(8px, 1vh, 12px);
+  padding: 0;
   padding-bottom: max(clamp(8px, 1vh, 12px), env(safe-area-inset-bottom, 0px));
   background: transparent;
   z-index: 40;
@@ -4100,13 +4140,20 @@
   pointer-events: none;
 }
 
+.chatAttachmentTopTray {
+  width: 100%;
+  max-width: min(var(--chat-column-max-width, 680px), 100%);
+  margin: 0 auto clamp(4px, 1vh, 10px);
+  padding: 0;
+}
+
 .chatComposerDock::before {
   content: none;
 }
 
 .chatComposerDock .chatBarRow {
   width: 100%;
-  max-width: var(--chat-column-max-width);
+  max-width: min(var(--chat-column-max-width, 680px), 100%);
   margin: 0 auto;
 }
 
@@ -4115,15 +4162,29 @@
 }
 
 /* Offset composer for sidebar */
+/* Offset composer for sidebar */
 .layout:has(.sidebar) .chatComposerDock {
-  left: var(--gray-sidebar-width, 72px);
-  width: calc(100% - var(--gray-sidebar-width, 72px));
+  left: 52px;
+  /* Default collapsed width */
+  width: calc(100% - 52px);
+  transition: left 0.3s ease, width 0.3s ease;
+}
+
+.layout:has(.sidebar[data-expanded="true"]) .chatComposerDock {
+  left: 260px;
+  /* Expanded width */
+  width: calc(100% - 260px);
 }
 
 /* Reset offset on mobile sidebar (overlay mode) */
 .layout[data-mobile-sidebar="true"] .chatComposerDock {
   left: 0;
   width: 100%;
+}
+
+.layout[data-view="general"] .chatComposerDock,
+.layout[data-view="chat"] .chatComposerDock {
+  /* Padding removed to match chat messages width */
 }
 
 /* removed legacy chat tools */
@@ -4363,7 +4424,7 @@
 }
 
 .chatAttachmentTray {
-  width: min(var(--chat-column-max-width, 828px),
+  width: min(var(--chat-column-max-width, 680px),
       calc(100vw - clamp(32px, 8vw, 120px)));
   margin: 0 auto;
   display: flex;
@@ -4391,7 +4452,7 @@
 }
 
 .chatAttachmentList {
-  width: min(var(--chat-column-max-width, 828px),
+  width: min(var(--chat-column-max-width, 680px),
       calc(100vw - clamp(32px, 8vw, 120px)));
   margin: 0 auto;
   display: grid;
@@ -4794,7 +4855,7 @@
 }
 
 .chatDisclaimer {
-  width: min(var(--chat-column-max-width, 828px),
+  width: min(var(--chat-column-max-width, 680px),
       calc(100vw - clamp(32px, 8vw, 120px)));
   text-align: center;
   font-size: 0.7rem;
@@ -4817,7 +4878,7 @@
 }
 
 .chatComposerDock .chatDisclaimer {
-  width: min(var(--chat-column-max-width, 828px),
+  width: min(var(--chat-column-max-width, 680px),
       calc(100vw - clamp(32px, 8vw, 120px)));
   max-width: 720px;
   margin-bottom: env(safe-area-inset-bottom, 0px);
@@ -4858,7 +4919,7 @@
   justify-content: space-between;
   align-items: center;
   gap: 18px;
-  width: min(1160px, 100%);
+  width: min(var(--chat-column-max-width, 680px), 100%);
 }
 
 .headerLeft {
@@ -4966,17 +5027,17 @@
 }
 
 .greetingStack {
-  width: min(1160px, 100%);
+  width: min(var(--chat-column-max-width, 680px), 100%);
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 10px;
+  gap: 6px;
 }
 
 .greeting {
-  font-size: clamp(1.6rem, 3vw, 2.1rem);
+  font-size: clamp(1.3rem, 2.6vw, 1.7rem);
   font-weight: 500;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.02em;
   color: rgba(245, 245, 245, 0.92);
   width: 100%;
   text-align: left;
@@ -4990,22 +5051,22 @@ h1.greeting {
 
 .greetingDate {
   margin: 0;
-  font-size: 0.9rem;
-  letter-spacing: 0.24em;
+  font-size: 0.8rem;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
   color: rgba(210, 210, 210, 0.65);
 }
 
 .dashboardGrid {
   display: grid;
-  width: min(1160px, 100%);
+  width: min(var(--chat-column-max-width, 680px), 100%);
   margin: clamp(12px, 2.2vw, 28px) auto 0;
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
   gap: clamp(12px, 2vw, 24px);
 }
 
 .dashboardSection {
-  width: min(1160px, 100%);
+  width: min(var(--chat-column-max-width, 680px), 100%);
   margin: clamp(18px, 3vh, 32px) auto;
   display: flex;
   flex-direction: column;
@@ -5165,8 +5226,9 @@ h1.greeting {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: clamp(20px, 3vw, 32px);
+  gap: clamp(14px, 2.4vw, 22px);
   overflow-y: auto;
+  padding-bottom: clamp(10px, 2vh, 16px);
 }
 
 .calendarSidebarColumn {
@@ -5224,7 +5286,7 @@ h1.greeting {
   align-items: center;
   justify-content: flex-start;
   gap: clamp(18px, 3vw, 28px);
-  width: min(1160px, 100%);
+  width: min(var(--chat-column-max-width, 680px), 100%);
   margin: 0 auto;
   padding: clamp(18px, 2.6vw, 28px);
   border-radius: 28px;
@@ -5300,11 +5362,11 @@ h1.greeting {
 .pulseCardRow {
   width: 100%;
   margin: clamp(12px, 2vh, 24px) auto 0;
-  width: min(1160px, 100%);
+  width: min(var(--chat-column-max-width, 680px), 100%);
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
 }
 
-@media (max-width: 1180px) {
+@media (max-width: 940px) {
   .dashboardPulseLayout {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -5591,7 +5653,7 @@ h1.greeting {
 }
 
 .pulseHistoryBar {
-  width: min(1160px, 100%);
+  width: min(var(--chat-column-max-width, 680px), 100%);
   margin: clamp(16px, 2vw, 24px) auto 0;
 }
 
@@ -6250,7 +6312,7 @@ h1.greeting {
   gap: clamp(16px, 2vw, 24px);
   align-items: stretch;
   width: 100%;
-  max-width: 960px;
+  max-width: var(--chat-column-max-width, 680px);
   box-sizing: border-box;
   margin: 0 auto;
 }
@@ -7790,6 +7852,10 @@ h1.greeting {
   justify-content: flex-start;
 }
 
+.proactivityCard .secondaryAction {
+  margin-top: 6px;
+}
+
 .proactivityCard .planList {
   gap: 6px;
   padding: 0;
@@ -8283,13 +8349,13 @@ h1.greeting {
 
 .chatBarRounded {
   width: 100%;
-  max-width: var(--chat-column-max-width);
+  max-width: min(var(--chat-bubble-max-width, var(--chat-column-max-width, 780px)), 100%);
   display: flex;
   flex-wrap: nowrap;
   align-items: center;
   gap: 12px;
   margin: 0 auto;
-  border-radius: 26px;
+  border-radius: 30px;
   border: 1px solid rgba(255, 255, 255, 0.16);
   background: #111111;
   backdrop-filter: none;
@@ -8327,8 +8393,6 @@ h1.greeting {
   pointer-events: auto;
 }
 
-
-
 .generalChatComposer {
   position: relative;
   flex-shrink: 0;
@@ -8337,14 +8401,14 @@ h1.greeting {
   flex-direction: column;
   align-items: stretch;
   gap: 12px;
-  padding: 0 clamp(16px, 4vw, 32px);
+  padding: 0;
   border-top-left-radius: 0;
   border-top-right-radius: 0;
   background: transparent;
   box-shadow: none;
   border-top: none;
   width: 100%;
-  max-width: var(--chat-column-max-width);
+  max-width: min(var(--chat-column-max-width, 680px), 100%);
   margin: 0 auto;
   z-index: 100;
   /* Ensure composer is above other page elements */
@@ -8373,8 +8437,8 @@ h1.greeting {
   right: auto;
   padding-left: 0;
   padding-right: 0;
-  width: min(var(--gray-general-max-width, 1220px), 100%);
-  max-width: min(640px, 100%);
+  width: min(var(--gray-general-max-width, 680px), 100%);
+  max-width: min(540px, 100%);
   margin-top: 0;
   pointer-events: auto;
 }
@@ -8395,7 +8459,6 @@ h1.greeting {
 }
 
 .generalChatComposer>* {
-  width: 100%;
   margin: 0 auto;
   pointer-events: auto;
 }
@@ -8403,7 +8466,7 @@ h1.greeting {
 .generalChatComposer .chatDisclaimer,
 .generalChatComposer .generalChatBarRow {
   width: 100%;
-  max-width: var(--chat-column-max-width);
+  max-width: min(var(--chat-bubble-max-width, var(--chat-column-max-width, 680px)), 100%);
   margin: 0 auto;
 }
 
@@ -8428,13 +8491,13 @@ h1.greeting {
 
 .chatBarUnderline {
   position: absolute;
-  left: 0;
-  right: 0;
   top: 0;
   bottom: calc(-1 * clamp(26px, 4vh, 42px));
+  left: 0;
+  right: 0;
   margin: 0 auto;
-  width: 100%;
-  max-width: 100%;
+  width: min(var(--chat-column-max-width, 680px), 100%);
+  max-width: min(var(--chat-column-max-width, 680px), 100%);
   border-radius: 32px 32px 0 0;
   background: linear-gradient(180deg, rgba(8, 8, 8, 0.7), rgba(3, 3, 3, 0.6));
   box-shadow:
@@ -9136,21 +9199,27 @@ h1.greeting {
 
   /* Add bottom padding on mobile to lift chat bar above screen edge */
   .generalChatComposer {
-    padding: 6px 12px;
-    padding-bottom: max(6px, env(safe-area-inset-bottom));
+    padding: 0 !important;
+    padding-bottom: max(6px, env(safe-area-inset-bottom)) !important;
+    width: 100% !important;
+    max-width: none !important;
   }
 
   .chatInput {
-    padding-top: 6px !important;
-    padding-bottom: 6px !important;
+    padding-top: 2px !important;
+    padding-bottom: 2px !important;
+    padding-right: 40px !important;
     font-size: 16px !important;
     /* Prevent iOS zoom */
   }
 
   .chatBarRounded {
     gap: 6px !important;
-    padding: 12px !important;
-    border-radius: 20px !important;
+    padding: 6px !important;
+    border-radius: 24px !important;
+    width: 95% !important;
+    max-width: none !important;
+    margin: 0 auto !important;
   }
 
   .chatIconButton,
@@ -9162,6 +9231,13 @@ h1.greeting {
 
   .generalChatBarRow {
     padding-bottom: 0;
+    width: 100% !important;
+    max-width: none !important;
+  }
+
+  .chatComposerDock .chatBarRow {
+    width: 100% !important;
+    max-width: none !important;
   }
 }
 
@@ -9199,4 +9275,61 @@ h1.greeting {
   height: 28px;
   background: rgba(255, 255, 255, 0.1);
   border: none;
+}
+
+/* Usage Limit Banner */
+.usageLimitBanner {
+  margin: 0 auto 1rem auto;
+  width: 100%;
+  max-width: var(--chat-column-max-width);
+  padding: 0 1rem;
+}
+
+.usageLimitContent {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: 12px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.usageLimitHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #ef4444;
+}
+
+.usageLimitTitle {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.usageLimitMessage {
+  font-size: 0.875rem;
+  color: var(--foreground-secondary, #a1a1aa);
+  margin: 0;
+  line-height: 1.4;
+}
+
+.usageLimitTier {
+  font-weight: 600;
+  color: var(--foreground, #ffffff);
+  text-transform: capitalize;
+}
+
+.usageLimitTimer {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  color: #ef4444;
+  font-family: monospace;
+  margin-top: 0.25rem;
+  background: rgba(239, 68, 68, 0.1);
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
+  width: fit-content;
 }

@@ -14,6 +14,7 @@ export type ChatDraftInputProps = Omit<GrayChatBarProps, "value" | "onChange" | 
     onSubmitMessage: (draft: string, controls: ChatDraftControls) => void;
     showUnderline?: boolean;
     attachmentTray?: ReactNode;
+    isSubmitDisabled?: boolean;
 };
 
 export const ChatDraftInput = ({
@@ -21,6 +22,7 @@ export const ChatDraftInput = ({
     onSubmitMessage,
     showUnderline = true,
     attachmentTray,
+    isSubmitDisabled,
     ...rest
 }: ChatDraftInputProps) => {
     const [value, setValue] = useState("");
@@ -59,6 +61,7 @@ export const ChatDraftInput = ({
                 onSubmit={handleSubmit}
                 showUnderline={showUnderline}
                 attachmentTray={attachmentTray}
+                isSubmitDisabled={isSubmitDisabled}
             />
         );
     }
@@ -69,6 +72,7 @@ export const ChatDraftInput = ({
             value={value}
             onChange={handleChange}
             onSubmit={handleSubmit}
+            isSubmitDisabled={isSubmitDisabled}
         />
     );
 };
