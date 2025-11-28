@@ -258,7 +258,11 @@ const DUPLICATE_THREAD_WINDOW_MS = 15000;
 const REMOTE_SESSION_MERGE_WINDOW_MS = 5 * 60 * 1000;
 const REMINDER_POLL_MIN_INTERVAL = 60_000;
 const REMINDER_POLL_SHORT_INTERVAL = 15_000;
-export const buildPersonalizedSystemPrompt = (user?: User | null, basePrompt?: string | null) => {
+export const buildPersonalizedSystemPrompt = (
+  user?: User | null,
+  basePrompt?: string | null,
+  includeProfile: boolean = true
+) => {
   const sections: string[] = [];
 
   const trimmedBasePrompt = basePrompt?.trim();
@@ -266,7 +270,7 @@ export const buildPersonalizedSystemPrompt = (user?: User | null, basePrompt?: s
     sections.push(trimmedBasePrompt);
   }
 
-  if (user) {
+  if (user && includeProfile) {
     const profileLines: string[] = [];
 
     // Only treat explicit personalization fields as stable identity.
@@ -318,7 +322,13 @@ export const buildPersonalizedSystemPrompt = (user?: User | null, basePrompt?: s
         ].join("\n")
       );
     }
-  } else {
+  } else if (!includeProfile && user) {
+    // Minimal identity instructions when profile is excluded
+    const nickname = user.personalization_nickname?.trim();
+    if (nickname) {
+      sections.push(`Address the user as "${nickname}".`);
+    }
+  } else if (!user) {
     sections.push(
       [
         "IDENTITY BOUNDARY",
@@ -364,17 +374,14 @@ const formatReminderScheduleLabel = (iso?: string | null) => {
 
 const buildReminderPingMessage = (reminder: Reminder): string => {
   const label = normalizeReminderLabel(reminder.label);
-  const scheduleLabel = formatReminderScheduleLabel(reminder.remind_at);
   const note = reminder.summary ?? reminder.description ?? null;
-  const lines = [
-    `✨ Reminder ready: ${label}.`,
-    scheduleLabel ? `I'll nudge you at ${scheduleLabel}.` : "I'll ping you when the time comes.",
-  ];
+  
+  // Use a cleaner, less "bot-like" format for delivered reminders
+  const parts = [`🔔 ${label}`];
   if (note) {
-    lines.push(`Note: ${note}`);
+    parts.push(note);
   }
-  lines.push("Let me know if you want to shift this or turn it into a repeat habit.");
-  return lines.join("\n");
+  return parts.join("\n\n");
 };
 const REMINDER_NOTIFICATION_ICON = "/grayaiwhite.svg";
 
@@ -898,29 +905,18 @@ const stripIncompleteReminderArtifacts = (segment: string): string => {
   }
   let updated = segment;
 
-  const stripTailFromIndex = (index: number) => {
-    updated = updated.slice(0, index).trimEnd();
-  };
+  // Remove old, generic reminder code block regex which might remove valid JSON
+  updated = updated.replace(REMINDER_GENERIC_FENCE_REGEX, "");
 
-  const fenceStart = updated.lastIndexOf("```");
-  if (fenceStart !== -1) {
-    const fenceTail = updated.slice(fenceStart);
-    if (!/```/.test(fenceTail.slice(3)) && /gray[._]reminder/i.test(fenceTail)) {
-      stripTailFromIndex(fenceStart);
-      return updated;
-    }
-  }
+  // Remove any raw JSON-like structure that contains reminder keywords but isn't in a code block
+  // This is a backup for when the model forgets the code fences.
+  const rawJsonPattern = /\{[^{}]*(?:reminder_id|text|time|status|remind_at|label)[^{}]*\}/gi;
+  updated = updated.replace(rawJsonPattern, "");
 
-  const jsonMarker = updated.toLowerCase().lastIndexOf('"type":"gray.reminder"');
-  if (jsonMarker !== -1) {
-    const braceStart = updated.lastIndexOf("{", jsonMarker);
-    const braceEnd = updated.indexOf("}", jsonMarker);
-    if (braceStart !== -1 && braceEnd === -1) {
-      stripTailFromIndex(braceStart);
-    }
-  }
+  // Clean up extra blank lines
+  updated = updated.replace(/\n{3,}/g, "\n\n");
 
-  return updated;
+  return updated.trim();
 };
 
 const parseReminderBlocks = (raw: string): ParsedReminderBlock[] => {
@@ -1039,42 +1035,27 @@ export const extractGrayRemindersFromText = (
   const filteredReminders = hasModernReminder
     ? reminders.filter((reminder) => reminder.source === "mcp/plans-habits-server")
     : reminders;
-  let cleanText = "";
-  let cursor = 0;
+
+  // Reconstruct cleanText by omitting the raw blocks that were successfully parsed
+  let cleanTextParts: string[] = [];
+  let lastIndex = 0;
   for (const block of blocks) {
-    cleanText += stripReminderPreamble(raw.slice(cursor, block.start));
-    cursor = block.end;
+    if (block.reminder || block.wrapper) {
+      // If it's a parsed reminder or wrapper, we omit its raw text from the cleanText
+      cleanTextParts.push(raw.slice(lastIndex, block.start));
+      lastIndex = block.end;
+    } else {
+      // For non-reminder blocks, include them (or partial blocks leading up to them)
+      cleanTextParts.push(raw.slice(lastIndex, block.end));
+      lastIndex = block.end;
+    }
   }
-  cleanText += stripReminderPreamble(raw.slice(cursor));
+  cleanTextParts.push(raw.slice(lastIndex));
+  let cleanText = cleanTextParts.join("");
+
   cleanText = stripIncompleteReminderArtifacts(cleanText);
 
-  // Additional cleanup: remove any remaining bare JSON reminder objects that might have been missed
-  cleanText = cleanText
-    .replace(EMPTY_CODE_FENCE_REGEX, "")
-    .replace(/\n{3,}/g, "\n\n")
-    // Remove JSON in code fences
-    .replace(/```(?:json)?[\s\S]*?"type"\s*:\s*"gray(?:\.|_)reminder"[\s\S]*?```/gi, "")
-    .replace(REMINDER_CODE_BLOCK_REGEX, "")
-    .replace(REMINDER_GENERIC_FENCE_REGEX, "")
-    .replace(/```[a-zA-Z0-9_-]*\s*```/gi, "");
-
-  // Remove bare JSON objects (more aggressive pattern)
-  // This catches lines that look like: {"type":"gray.reminder",...}
-  cleanText = cleanText
-    .split('\n')
-    .filter(line => {
-      const trimmed = line.trim();
-      // Skip lines that look like JSON objects with gray.reminder
-      if (trimmed.startsWith('{') && trimmed.includes('"type"') && trimmed.includes('gray.reminder')) {
-        return false;
-      }
-      if (trimmed.startsWith('{') && trimmed.includes('"type"') && trimmed.includes('gray_reminder')) {
-        return false;
-      }
-      return true;
-    })
-    .join('\n');
-
+  // Final cleanup for tool call code fences that are not reminders
   cleanText = unwrapToolCallCodeFences(cleanText)
     .split("\n")
     .map((line) => line.trim())
@@ -2302,8 +2283,16 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
               nextPartial = {
                 ...partial,
                 content: normalized.content,
-                reminders: normalized.reminders,
               };
+              // Only overwrite reminders if new ones are found; otherwise preserve existing ones.
+              // This prevents flickering/disappearing cards during streaming updates where
+              // a chunk might trigger a state update that lacks the reminder payload.
+              if (normalized.reminders && normalized.reminders.length > 0) {
+                nextPartial.reminders = normalized.reminders;
+              } else if (message.reminders && message.reminders.length > 0) {
+                nextPartial.reminders = message.reminders;
+              }
+              
               if (parsedContent.title) {
                 assistantAutoTitle = parsedContent.title;
               }
@@ -2940,9 +2929,16 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
               id: attachment.id,
             }));
             const autoMapPayload = buildAutoMapPayload(trimmedInitial);
+
+            // Only include full profile on first message of the conversation
+            const isFirstMessage = baseSession.messages.length <= 1;
+            const systemPromptForRequest = isFirstMessage
+              ? personalizedSystemPrompt
+              : buildPersonalizedSystemPrompt(resolvedUser, defaultSystemPrompt, false);
+
             for await (const event of apiService.sendMessageStream({
               message: trimmedInitial,
-              system_prompt: personalizedSystemPrompt,
+              system_prompt: systemPromptForRequest,
               user_id: streamingUserId,
               context: contextPayload,
               conversation_id: streamedConversationId ?? sessionId,
@@ -3257,9 +3253,16 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
           try {
             const timeContext = buildLocalTimeContext();
             const autoMapPayload = buildAutoMapPayload(trimmed);
+
+            // Only include full profile on first message of the conversation
+            const isFirstMessage = generalSession.messages.length <= 1;
+            const systemPromptForRequest = isFirstMessage
+              ? personalizedSystemPrompt
+              : buildPersonalizedSystemPrompt(resolvedUser, defaultSystemPrompt, false);
+
             for await (const event of apiService.sendMessageStream({
               message: trimmed,
-              system_prompt: personalizedSystemPrompt,
+              system_prompt: systemPromptForRequest,
               user_id: streamingUserId,
               context: contextPayload,
               conversation_id: requestConversationId ?? undefined,
@@ -3721,8 +3724,16 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
             continue;
           }
           reminderDeliveryCacheRef.current.add(reminder.id);
-          appendMessage(generalSessionId, "assistant", buildReminderPingMessage(reminder));
-          sendReminderNotification(reminder);
+
+          // Client-side stale check: If > 15 mins late, mark delivered but don't nag.
+          // This protects against backend returning old pending items.
+          const isStale = (now - remindAt) > (15 * 60 * 1000); 
+
+          if (!isStale) {
+            appendMessage(generalSessionId, "assistant", buildReminderPingMessage(reminder));
+            sendReminderNotification(reminder);
+          }
+          
           try {
             await apiService.updateReminder(user.id, reminder.id, { status: "delivered" });
           } catch (updateError) {

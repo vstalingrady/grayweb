@@ -111,6 +111,21 @@ export function GrayChatBar({
     [onPasteFiles]
   );
 
+  const handleDrop = useCallback(
+    (event: React.DragEvent<HTMLTextAreaElement>) => {
+      if (!onPasteFiles) {
+        return;
+      }
+      event.preventDefault();
+      const droppedFiles = Array.from(event.dataTransfer.files ?? []);
+      if (droppedFiles.length === 0) {
+        return;
+      }
+      onPasteFiles(droppedFiles);
+    },
+    [onPasteFiles]
+  );
+
   return (
     <form className={styles.chatBarRounded} onSubmit={onSubmit}>
       {onAddAttachment ? (
@@ -130,6 +145,7 @@ export function GrayChatBar({
           onChange={(event) => onChange(event.target.value)}
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}
+          onDrop={handleDrop}
           placeholder={placeholder}
           className={styles.chatInput}
           aria-label={placeholder}

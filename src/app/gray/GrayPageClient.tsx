@@ -73,7 +73,8 @@ import {
   parseReminderPlanId,
   extractReminderId,
   deriveInitials,
-  greetingForDate
+  greetingForDate,
+  type PlanCarrierUser,
 } from "@/components/gray/utils/helperFunctions";
 import { SIDEBAR_EXPANDED_STORAGE_KEY, HISTORY_DUPLICATE_WINDOW_MS, REMINDER_PLAN_ID_PREFIX } from "@/components/gray/utils/constants";
 import { SIDEBAR_ITEMS, SIDEBAR_RAIL_ITEMS, NAVIGATION_ROUTES } from "@/components/gray/utils/sidebarConfig";
@@ -605,6 +606,18 @@ function GrayPageClientInner({
                   variant="composer"
                   onSubmitMessage={handleChatSubmit}
                   isSubmitDisabled={isUsageLimitReached}
+                  onPasteFiles={handleAttachmentPaste}
+                  attachmentTray={
+                    attachments.length > 0 ? (
+                      <AttachmentTray
+                        attachments={attachments}
+                        isUploading={isAttachmentUploading}
+                        error={attachmentError}
+                        onAddAttachment={openAttachmentPicker}
+                        onRemoveAttachment={removeAttachment}
+                      />
+                    ) : null
+                  }
                 />
               ) : undefined
             ) : undefined
@@ -1322,22 +1335,8 @@ function GrayPageClientInner({
       if (sections.length > 0) {
         sections.push("");
       }
-
-      const pulseLines = recentPulses.map((pulse) => {
-        const dateLabel = new Date(pulse.timestamp).toLocaleDateString([], {
-          weekday: "short",
-          month: "short",
-          day: "numeric",
-        });
-        const totalPlans = pulse.plans.length;
-        const completedPlans = pulse.plans.filter((plan) => plan.completed).length;
-        const totalHabits = pulse.habits.length;
-        const activeHabits = pulse.habits.filter((habit) => Boolean(habit.completed)).length;
-        const proactivityLabel = pulse.proactivity?.label ?? "No proactivity focus";
-        return `- ${dateLabel}: ${completedPlans}/${totalPlans} plans complete, ${activeHabits}/${totalHabits} habits on track, Proactivity: ${proactivityLabel}`;
-      });
-
-      sections.push("Pulse snapshots:", pulseLines.join("\n"));
+      // Pulse snapshots removed from context injection to reduce noise.
+      // The AI can fetch this state via get_workspace_state tool if needed.
     }
 
     const summary = sections.join("\n").trim();
@@ -1414,6 +1413,12 @@ function GrayPageClientInner({
 
   useEffect(() => {
     if (activeNav === "threads") {
+      return;
+    }
+    if (activeNav === "general" && generalSessionId) {
+      if (currentChatId !== generalSessionId) {
+        setCurrentChatId(generalSessionId);
+      }
       return;
     }
     if (!currentChatId && generalSessionId) {

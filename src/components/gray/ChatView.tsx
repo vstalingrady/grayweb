@@ -63,6 +63,23 @@ const INLINE_DOLLAR_LATEX_REGEX = /\$([^\n$]+?)\$/g;
 const DISPLAY_DOLLAR_LATEX_REGEX = /\$\$([\s\S]+?)\$\$/g;
 const MIN_TILDE_FENCE_LENGTH = 3;
 
+const looksLikeMathContent = (content: string): boolean => {
+  const trimmed = content.trim();
+  if (!trimmed) {
+    return false;
+  }
+  if (/[\\]/.test(trimmed)) {
+    return true;
+  }
+  if (/\d+\s*[%+\-/*=<>]\s*\d+/.test(trimmed)) {
+    return true;
+  }
+  if (/[{}^_=+\-/*<>]/.test(trimmed)) {
+    return true;
+  }
+  return /\\(begin|end|frac|sum|int|lim|sqrt)/i.test(trimmed);
+};
+
 const resolveClientTimezone = (): string => {
   if (typeof Intl === "undefined") {
     return "UTC";
@@ -106,7 +123,10 @@ const normalizeLatexSegment = (segment: string): string => {
 
   // Normalize inline math written as `$ ... $` into inline double-dollar
   // fences to avoid confusing currency like `$20`.
-  updated = updated.replace(INLINE_DOLLAR_LATEX_REGEX, (_match, content: string) => {
+  updated = updated.replace(INLINE_DOLLAR_LATEX_REGEX, (match, content: string) => {
+    if (!looksLikeMathContent(content)) {
+      return match;
+    }
     const inlineWrapped = wrapInlineMath(content);
     return inlineWrapped;
   });
@@ -1036,6 +1056,7 @@ const REMINDER_STATUS_LABELS: Record<string, string> = {
   completed: "Completed",
   cancelled: "Cancelled",
   failed: "Failed",
+  created: "Scheduled",
 };
 
 const resolveReminderMode = (
@@ -2870,6 +2891,11 @@ export function GrayChatView({
         }
         return <p {...rest}>{children}</p>;
       },
+      table: ({ children, node: _node, ...rest }: any) => (
+        <div className={styles.chatTableWrapper}>
+          <table {...rest}>{children}</table>
+        </div>
+      ),
     }),
     []
   );

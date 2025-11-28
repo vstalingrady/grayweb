@@ -82,17 +82,14 @@ const formatReminderScheduleLabel = (iso?: string | null) => {
 
 export const buildReminderPingMessage = (reminder: Reminder): string => {
     const label = normalizeReminderLabel(reminder.label);
-    const scheduleLabel = formatReminderScheduleLabel(reminder.remind_at);
     const note = reminder.summary ?? reminder.description ?? null;
-    const lines = [
-        `✨ Reminder ready: ${label}.`,
-        scheduleLabel ? `I'll nudge you at ${scheduleLabel}.` : "I'll ping you when the time comes.",
-    ];
+    
+    // Use a cleaner, less "bot-like" format
+    const parts = [`🔔 ${label}`];
     if (note) {
-        lines.push(`Note: ${note}`);
+        parts.push(note);
     }
-    lines.push("Let me know if you want to shift this or turn it into a repeat habit.");
-    return lines.join("\n");
+    return parts.join("\n\n");
 };
 
 export const buildReminderNotificationTitle = (reminder: Reminder) =>

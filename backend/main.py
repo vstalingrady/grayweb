@@ -3223,9 +3223,9 @@ async def _create_habit_tool(user_id: int, args: Dict[str, Any], db: databases.D
             result = supabase.table("habits").insert(payload).execute()
             rows = getattr(result, "data", None) or []
             if isinstance(rows, list) and rows:
-                return {"status": "success", "habit": rows[0], "message": f"Habit '{label}' created."}
+                return _build_reminder_payload(rows[0], user_id, "created", entity="habit")
             if isinstance(rows, dict) and rows:
-                return {"status": "success", "habit": rows, "message": f"Habit '{label}' created."}
+                return _build_reminder_payload(rows, user_id, "created", entity="habit")
             return {"error": "Failed to create habit in Supabase"}
         except Exception as e:
             api_logger.warning(f"Supabase habit creation failed, falling back to local DB: {e}")
@@ -3238,7 +3238,8 @@ async def _create_habit_tool(user_id: int, args: Dict[str, Any], db: databases.D
             updated_at=now,
         )
     )
-    return {"status": "success", "habit_id": habit_id, "message": f"Habit '{label}' created."}
+    created = await db.fetch_one(habits.select().where(habits.c.id == habit_id))
+    return _build_reminder_payload(dict(created), user_id, "created", entity="habit")
 
 
 async def _update_habit_tool(user_id: int, args: Dict[str, Any], db: databases.Database) -> Dict[str, Any]:
@@ -3441,17 +3442,19 @@ async def _delete_reminder_tool(user_id: int, args: Dict[str, Any], db: database
     return _build_reminder_payload(dict(reminder), user_id, "deleted")
 
 
-def _build_reminder_payload(reminder: Dict[str, Any], user_id: int, status: str) -> Dict[str, Any]:
+def _build_reminder_payload(reminder: Dict[str, Any], user_id: int, status: str, entity: str = "plan") -> Dict[str, Any]:
     """Build a gray.reminder payload compatible with the frontend."""
     reminder_id = reminder.get("id")
     label = reminder.get("label", "Reminder")
-    remind_at = reminder.get("remind_at")
+    remind_at = reminder.get("remind_at") or reminder.get("deadline")
     description = reminder.get("description")
     
     # Convert remind_at to ISO string if it's a datetime
     time_iso = None
     if remind_at:
         if isinstance(remind_at, datetime):
+            if remind_at.tzinfo is None:
+                remind_at = remind_at.replace(tzinfo=timezone.utc)
             time_iso = remind_at.isoformat()
         elif isinstance(remind_at, str):
             time_iso = remind_at
@@ -3460,15 +3463,15 @@ def _build_reminder_payload(reminder: Dict[str, Any], user_id: int, status: str)
         "type": "gray.reminder",
         "source": "mcp/plans-habits-server",
         "status": status,
-        "entity": "plan",
-        "delivery_mode": reminder.get("delivery_mode", "reminder"),
+        "entity": entity,
+        "delivery_mode": reminder.get("delivery_mode", entity),
         "data": {
             "id": reminder_id,
             "user_id": user_id,
             "label": label,
             "time_iso": time_iso,
             "raw": reminder,
-            "delivery_mode": reminder.get("delivery_mode", "reminder"),
+            "delivery_mode": reminder.get("delivery_mode", entity),
             "summary": description,
             "reminder_id": reminder_id,
             "reminder_status": reminder.get("status", "pending"),
@@ -3589,9 +3592,9 @@ async def _create_plan_tool(user_id: int, args: Dict[str, Any], db: databases.Da
             result = supabase.table("plans").insert(payload).execute()
             rows = getattr(result, "data", None) or []
             if isinstance(rows, list) and rows:
-                return {"status": "success", "plan": rows[0], "message": f"Plan '{label}' created."}
+                return _build_reminder_payload(rows[0], user_id, "created", entity="plan")
             if isinstance(rows, dict) and rows:
-                return {"status": "success", "plan": rows, "message": f"Plan '{label}' created."}
+                return _build_reminder_payload(rows, user_id, "created", entity="plan")
             return {"error": "Failed to create plan in Supabase"}
         except Exception as e:
             # Fallback to local DB
@@ -3606,7 +3609,8 @@ async def _create_plan_tool(user_id: int, args: Dict[str, Any], db: databases.Da
             updated_at=now,
         )
     )
-    return {"status": "success", "plan_id": plan_id, "message": f"Plan '{label}' created."}
+    created = await db.fetch_one(plans.select().where(plans.c.id == plan_id))
+    return _build_reminder_payload(dict(created), user_id, "created", entity="plan")
 
 
 async def _update_plan_tool(user_id: int, args: Dict[str, Any], db: databases.Database) -> Dict[str, Any]:
@@ -4696,9 +4700,10 @@ async def stream_ai_response(
                     # Collect function calls
                     if chunk.candidates:
                         candidate = chunk.candidates[0]
-                        for part in candidate.content.parts:
-                            if part.function_call:
-                                tool_calls_in_this_turn.append(part.function_call)
+                        if candidate.content and candidate.content.parts:
+                            for part in candidate.content.parts:
+                                if part.function_call:
+                                    tool_calls_in_this_turn.append(part.function_call)
                 
                 # End of stream for this turn.
                 
@@ -4735,6 +4740,15 @@ async def stream_ai_response(
                 for fc in tool_calls_in_this_turn:
                     try:
                         result = await _execute_function_call(fc, user_id, db)
+
+                        # Emit structured payloads (like reminders) directly to the client
+                        # so the frontend can render them immediately.
+                        if isinstance(result, dict) and result.get("type") == "gray.reminder":
+                            payload_json = json.dumps(result)
+                            # Wrap in a code block so it's robustly detected but not rendered as prose.
+                            # The frontend extractGrayRemindersFromText will strip this block.
+                            injection = f"\n```json\n{payload_json}\n```\n"
+                            yield ("delta", injection)
                         
                         # Add the result to history
                         intermediate_history.append(
@@ -7016,6 +7030,8 @@ def _serialize_reminder_row(row: Any) -> Dict[str, Any]:
   for key in ("remind_at", "created_at", "updated_at", "delivered_at"):
       value = record.get(key)
       if isinstance(value, datetime):
+          if value.tzinfo is None:
+              value = value.replace(tzinfo=timezone.utc)
           record[key] = value.isoformat()
   return record
 
@@ -7103,6 +7119,40 @@ async def list_user_reminders(
         query = query.limit(limit)
 
     rows = await db.fetch_all(query)
+    
+    # Self-healing for SQLite: Auto-DELETE stale pending reminders
+    if status_filter == "pending" and rows:
+        now = datetime.utcnow()
+        stale_threshold = now - timedelta(minutes=15)
+        stale_ids = []
+        filtered_rows = []
+        for row in rows:
+            try:
+                remind_at = row["remind_at"]
+                if isinstance(remind_at, str):
+                    remind_at = datetime.fromisoformat(remind_at.replace("Z", "+00:00")).replace(tzinfo=None)
+                
+                # Check if it's stale and hasn't been delivered
+                # Note: SQLite rows might not have 'delivered_at' populated if schema migration failed or old data
+                is_stale = remind_at < stale_threshold
+                if is_stale:
+                    stale_ids.append(row["id"])
+                else:
+                    filtered_rows.append(row)
+            except (ValueError, TypeError):
+                filtered_rows.append(row)
+        
+        if stale_ids:
+            try:
+                api_logger.info(f"Auto-deleting {len(stale_ids)} stale reminders (SQLite)", extra={"user_id": user_id, "reminder_ids": stale_ids})
+                # SQLite doesn't support .in_ with list directly in databases/sqlalchemy usually requires logic, 
+                # but delete().where(col.in_(...)) works.
+                delete_query = reminders.delete().where(reminders.c.id.in_(stale_ids))
+                await db.execute(delete_query)
+                rows = filtered_rows
+            except Exception as e:
+                api_logger.error(f"Failed to auto-delete stale reminders (SQLite): {e}")
+
     return [_serialize_reminder_row(row) for row in rows]
 
 
@@ -7958,6 +8008,53 @@ async def get_user_proactivity(user_id: int, db: databases.Database = Depends(ge
         })
 
     return formatted_results
+
+
+class PushSubscriptionCreate(BaseModel):
+    endpoint: str
+    p256dh: str
+    auth: str
+
+
+@app.post("/users/{user_id}/push/subscribe", status_code=status.HTTP_201_CREATED)
+async def subscribe_push_notifications(
+    user_id: int,
+    subscription: PushSubscriptionCreate,
+    db: databases.Database = Depends(get_database),
+):
+    """Register a Web Push subscription for the user."""
+    # Check if subscription already exists
+    existing = await db.fetch_one(
+        proactivity_push_subscriptions.select().where(
+            proactivity_push_subscriptions.c.endpoint == subscription.endpoint
+        )
+    )
+    
+    if existing:
+        # Update keys if needed, or just return success
+        await db.execute(
+            proactivity_push_subscriptions.update()
+            .where(proactivity_push_subscriptions.c.id == existing.id)
+            .values(
+                p256dh=subscription.p256dh,
+                auth=subscription.auth,
+                updated_at=datetime.utcnow(),
+            )
+        )
+        return {"status": "updated"}
+
+    # Create new subscription
+    await db.execute(
+        proactivity_push_subscriptions.insert().values(
+            user_id=user_id,
+            endpoint=subscription.endpoint,
+            p256dh=subscription.p256dh,
+            auth=subscription.auth,
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+        )
+    )
+    return {"status": "created"}
 
 
 @app.get("/users/{user_id}/proactivity/stream")

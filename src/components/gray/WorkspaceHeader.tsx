@@ -16,13 +16,17 @@ function GrayWorkspaceHeader({
   children,
 }: GrayWorkspaceHeaderProps) {
   const normalizedPlanLabel = planLabel.trim().length ? planLabel.trim() : "Scout";
+  const normalizedPlanLower = normalizedPlanLabel.toLowerCase();
   const normalizedStreak = Number.isFinite(streakCount)
     ? Math.max(0, Math.trunc(streakCount))
     : 0;
-  const isDepthMember = normalizedPlanLabel.toLowerCase() === "depth";
+  const isDepthMember = normalizedPlanLower === "depth";
+  const isUpgradeVisible = !isDepthMember
+    && normalizedPlanLower !== "voyager"
+    && normalizedPlanLower !== "pioneer";
 
   const handlePlanBadgeClick = () => {
-    if (isDepthMember) {
+    if (isDepthMember || !isUpgradeVisible) {
       return;
     }
     onUpgradeClick?.();
@@ -31,16 +35,20 @@ function GrayWorkspaceHeader({
     <header className={styles.header}>
       {children ? <div className={styles.headerLeft}>{children}</div> : null}
       <div className={`${styles.headerRight} hidden md:flex`}>
-        <button
-          type="button"
-          className={styles.planBadge}
-          data-state={isDepthMember ? "active" : "cta"}
-          aria-label={isDepthMember ? `${normalizedPlanLabel} plan` : "Upgrade"}
-          aria-disabled={isDepthMember ? "true" : "false"}
-          onClick={handlePlanBadgeClick}
-        >
-          <span className={styles.planBadgeLabel}>Upgrade</span>
-        </button>
+        {isUpgradeVisible ? (
+          <div className={styles.upgradeFloat}>
+            <button
+              type="button"
+              className={styles.planBadge}
+              data-state={isDepthMember ? "active" : "cta"}
+              aria-label={isDepthMember ? `${normalizedPlanLabel} plan` : "Upgrade"}
+              aria-disabled={isDepthMember ? "true" : "false"}
+              onClick={handlePlanBadgeClick}
+            >
+              <span className={styles.planBadgeLabel}>Upgrade</span>
+            </button>
+          </div>
+        ) : null}
         {normalizedStreak > 0 ? (
           <div className={styles.streakBadge} aria-label={`${normalizedStreak} day streak`}>
             <Zap size={12} />

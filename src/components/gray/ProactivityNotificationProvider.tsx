@@ -131,6 +131,45 @@ export function ProactivityNotificationProvider({ children }: ProactivityNotific
   useEffect(() => {
     if (!userId) return;
 
+    // Register service worker for push notifications
+    if ("serviceWorker" in navigator && "PushManager" in window) {
+      navigator.serviceWorker
+        .register("/sw-proactivity.js")
+        .then(async (registration) => {
+          try {
+            const subscription = await registration.pushManager.subscribe({
+              userVisibleOnly: true,
+              applicationServerKey: urlBase64ToUint8Array(
+                process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "BNoW7-tQZ8XwYt7-tQZ8XwY" // Placeholder or env var
+              ),
+            });
+
+            // Send subscription to backend
+            const endpoint = subscription.endpoint;
+            const p256dh = subscription.getKey("p256dh");
+            const auth = subscription.getKey("auth");
+
+            if (p256dh && auth) {
+              const apiBase = resolveApiBaseUrl();
+              await fetch(`${apiBase}/users/${userId}/push/subscribe`, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  endpoint,
+                  p256dh: btoa(String.fromCharCode(...new Uint8Array(p256dh))),
+                  auth: btoa(String.fromCharCode(...new Uint8Array(auth))),
+                }),
+              });
+            }
+          } catch (err) {
+            console.error("Failed to subscribe to push:", err);
+          }
+        })
+        .catch((err) => console.error("Service Worker registration failed:", err));
+    }
+
     const url = resolveApiBaseUrl();
     const eventSource = new EventSource(`${url}/users/${userId}/proactivity/stream`);
 

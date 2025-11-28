@@ -15,6 +15,7 @@ export type ChatDraftInputProps = Omit<GrayChatBarProps, "value" | "onChange" | 
     showUnderline?: boolean;
     attachmentTray?: ReactNode;
     isSubmitDisabled?: boolean;
+    onPasteFiles?: (files: File[]) => void;
 };
 
 export const ChatDraftInput = ({
@@ -23,6 +24,7 @@ export const ChatDraftInput = ({
     showUnderline = true,
     attachmentTray,
     isSubmitDisabled,
+    onPasteFiles,
     ...rest
 }: ChatDraftInputProps) => {
     const [value, setValue] = useState("");
@@ -62,6 +64,7 @@ export const ChatDraftInput = ({
                 showUnderline={showUnderline}
                 attachmentTray={attachmentTray}
                 isSubmitDisabled={isSubmitDisabled}
+                onPasteFiles={onPasteFiles}
             />
         );
     }
@@ -73,6 +76,7 @@ export const ChatDraftInput = ({
             onChange={handleChange}
             onSubmit={handleSubmit}
             isSubmitDisabled={isSubmitDisabled}
+            onPasteFiles={onPasteFiles}
         />
     );
 };

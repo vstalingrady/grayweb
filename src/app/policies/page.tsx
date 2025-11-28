@@ -7,7 +7,7 @@ export const metadata = {
 const policies = [
   {
     title: "Terms of Service",
-    description: "Your agreement with Alignment ID when you use the Gray workspace.",
+    description: "Your agreement with Alignment when you use the Gray workspace.",
     href: "/policies/tos",
   },
   {
@@ -27,11 +27,10 @@ export default function PoliciesIndexPage() {
     <main className="legal-page">
       <div className="legal-shell">
         <section className="legal-hero">
-          <p className="legal-meta">Alignment ID • Policy center</p>
           <h1>Policies &amp; Legal</h1>
           <p>
-            One place for the agreements that govern your use of the Alignment Gray workspace. Each entry links to a
-            living document that we update whenever our product or compliance posture changes.
+            One place for the agreements that govern your use of the Gray workspace. Each entry links to a living
+            document that we update whenever our product or compliance posture changes.
           </p>
         </section>
 

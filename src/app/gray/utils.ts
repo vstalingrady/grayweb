@@ -34,27 +34,27 @@ export const toDateKey = (date: Date) => {
     return `${String(normalizedHour).padStart(2, "0")}:${String(normalizedMinute).padStart(2, "0")}`;
   };
   
-  export const normalizeProactivityTimes = (
-    times: string[] | null | undefined,
-    fallback: string | null | undefined = null
-  ): string[] => {
-    const sourceTimes =
-      Array.isArray(times) && times.length > 0
-        ? times
-        : fallback
-          ? [fallback]
-          : [];
-  
-    const normalized = sourceTimes
-      .map((value) => normalizeTimeValue(value))
-      .filter((value, index, array) => array.indexOf(value) === index)
-      .sort();
-  
-    return normalized.length > 0 ? normalized : [normalizeTimeValue(null)];
-  };
-  
-  export const primaryProactivityTime = (times: string[] | null | undefined, fallback?: string | null) =>
-    normalizeProactivityTimes(times ?? null, fallback)[0];
+export const normalizeProactivityTimes = (
+  times: string[] | null | undefined,
+  fallback: string | null | undefined = null
+): string[] => {
+  const sourceTimes =
+    Array.isArray(times) && times.length > 0
+      ? times
+      : fallback
+        ? [fallback]
+        : [];
+
+  const normalized = sourceTimes
+    .map((value) => normalizeTimeValue(value))
+    .filter((value, index, array) => array.indexOf(value) === index)
+    .sort();
+
+  return normalized;
+};
+
+export const primaryProactivityTime = (times: string[] | null | undefined, fallback?: string | null) =>
+  normalizeProactivityTimes(times ?? null, fallback)[0];
   
   export const normalizeProactivityChannels = (channels: string[] | null | undefined): string[] => {
     if (!Array.isArray(channels)) {

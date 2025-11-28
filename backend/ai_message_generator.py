@@ -141,12 +141,14 @@ class AIMessageGenerator:
         text = getattr(response, "text", "") or ""
         if not text and getattr(response, "candidates", None):
             candidate = response.candidates[0]
-            parts = getattr(candidate, "content", None)
-            if parts and getattr(parts, "parts", None):
-                for part in parts.parts:
-                    value = getattr(part, "text", None)
-                    if value:
-                        text += value
+            content = getattr(candidate, "content", None)
+            if content:
+                parts_list = getattr(content, "parts", None)
+                if parts_list:
+                    for part in parts_list:
+                        value = getattr(part, "text", None)
+                        if value:
+                            text += value
 
         cleaned = (text or "").strip()
         if not cleaned:

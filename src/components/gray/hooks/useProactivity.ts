@@ -28,16 +28,21 @@ const mapSettingsToProactivity = (settings?: ProactivitySettings | null): Proact
     return null;
   }
   const normalizedTimes = normalizeProactivityTimes(settings.times ?? null, settings.time);
-  const cadenceValue = settings.cadence ?? PROACTIVITY_SEED.cadence;
+  const hasTimes = normalizedTimes.length > 0;
+  const cadenceValue = settings.cadence ?? null;
+  const resolvedCadence = cadenceValue ?? PROACTIVITY_SEED.cadence;
+  if (!hasTimes && !cadenceValue && !settings.time && !settings.channels && !settings.label && !settings.description) {
+    return null;
+  }
   const mappedTimes = ensureFrequentTimes(cadenceValue, normalizedTimes);
   const normalizedChannels = normalizeProactivityChannels(settings.channels ?? null);
   const mapped: ProactivityItem = {
     id: settings.id ?? PROACTIVITY_SEED.id,
     label: settings.label ?? PROACTIVITY_SEED.label,
     description: settings.description ?? PROACTIVITY_SEED.description,
-    cadence: cadenceValue,
+    cadence: resolvedCadence,
     times: mappedTimes,
-    time: primaryProactivityTime(mappedTimes, settings.time ?? PROACTIVITY_SEED.time),
+    time: primaryProactivityTime(mappedTimes, settings.time),
     channels: normalizedChannels,
     timezone: settings.timezone ?? null,
   };

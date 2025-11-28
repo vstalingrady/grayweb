@@ -129,7 +129,7 @@ export const isGenericSessionTitle = (title: string | null | undefined): boolean
     return normalized === "new chat" || normalized === "conversation start";
 };
 
-type PlanCarrierUser = User & { plan_tier?: string | null };
+export type PlanCarrierUser = User & { plan_tier?: string | null };
 
 export const derivePlanTierLabel = (candidate?: PlanCarrierUser | null): string => {
     if (!candidate) {

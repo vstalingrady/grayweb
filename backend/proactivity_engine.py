@@ -1039,26 +1039,66 @@ class ProactivitySchedulerManager:
         finally:
             self._started = False
 
-    async def refresh_jobs(self) -> None:
-        users = await self.engine.list_active_user_settings()
-        self.scheduler.remove_all_jobs()
+    async def refresh_jobs(self, user_id: Optional[int] = None) -> None:
+        """Refresh scheduler jobs. If user_id is provided, only refresh that user's jobs."""
+        if user_id is not None:
+            # Optimized path: only refresh one user's jobs
+            await self._refresh_user_jobs(user_id)
+        else:
+            # Full refresh: update all users
+            users = await self.engine.list_active_user_settings()
+            self.scheduler.remove_all_jobs()
 
-        for user in users:
-            tz = self.engine._resolve_timezone(user.timezone)
-            for idx, time_str in enumerate(self.engine._extract_times(user.payload)):
-                hour, minute = self._parse_time(time_str)
-                if hour is None or minute is None:
-                    continue
+            for user in users:
+                await self._refresh_user_jobs(user.user_id, user_settings=user)
+    
+    async def _refresh_user_jobs(self, user_id: int, user_settings: Optional[ProactivityUserSettings] = None) -> None:
+        """Refresh jobs for a specific user."""
+        # Remove existing jobs for this user
+        existing_jobs = [
+            job for job in self.scheduler.get_jobs()
+            if job.id.startswith(f"proactivity:{user_id}:")
+        ]
+        for job in existing_jobs:
+            self.scheduler.remove_job(job.id)
+        
+        # Get user settings if not provided
+        if user_settings is None:
+            settings_record = await self.engine.db.fetch_one(
+                "SELECT payload FROM proactivity_settings WHERE user_id = :user_id",
+                {"user_id": user_id},
+            )
+            if not settings_record:
+                return
+            
+            payload = self.engine._deserialize_payload(settings_record[0])
+            if not payload:
+                return
+            
+            timezone = payload.get("timezone") or "UTC"
+            user_settings = ProactivityUserSettings(user_id=user_id, payload=payload, timezone=timezone)
+        
+        # Check if user should have jobs (not paused/manual)
+        cadence = (user_settings.payload.get("cadence") or "").strip().lower()
+        if cadence in {"manual", "paused"}:
+            return
+        
+        # Add new jobs for this user
+        tz = self.engine._resolve_timezone(user_settings.timezone)
+        for idx, time_str in enumerate(self.engine._extract_times(user_settings.payload)):
+            hour, minute = self._parse_time(time_str)
+            if hour is None or minute is None:
+                continue
 
-                trigger = CronTrigger(hour=hour, minute=minute, timezone=tz)
-                job_id = f"proactivity:{user.user_id}:{idx}"
-                self.scheduler.add_job(
-                    self._run_job,
-                    trigger=trigger,
-                    id=job_id,
-                    kwargs={"user_id": user.user_id},
-                    replace_existing=True,
-                )
+            trigger = CronTrigger(hour=hour, minute=minute, timezone=tz)
+            job_id = f"proactivity:{user_settings.user_id}:{idx}"
+            self.scheduler.add_job(
+                self._run_job,
+                trigger=trigger,
+                id=job_id,
+                kwargs={"user_id": user_settings.user_id},
+                replace_existing=True,
+            )
 
     async def _run_job(self, user_id: int) -> None:
         try:

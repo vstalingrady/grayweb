@@ -368,6 +368,11 @@ pre {
   animation: none !important;
   transition: none !important;
   transform: none !important;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.75rem;
 }
 
 .legal-page .legal-hero p,
@@ -394,6 +399,7 @@ pre {
   display: flex;
   flex-direction: column;
   gap: clamp(18px, 2.2vw, 28px);
+  align-items: center;
 }
 
 .legal-hero,
@@ -503,6 +509,7 @@ pre {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: clamp(18px, 2.8vw, 32px);
+  justify-items: center;
 }
 
 .policy-card {
@@ -517,6 +524,9 @@ pre {
   color: var(--fg-hot);
   text-decoration: none;
   transition: none;
+  text-align: center;
+  width: 100%;
+  max-width: 360px;
 }
 
 .policy-card h2 {

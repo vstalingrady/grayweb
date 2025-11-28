@@ -282,7 +282,7 @@ const findNextCustomTime = (existingTimes: string[]): string => {
 
 const getProactivityTimes = (item: ProactivityItem | null | undefined) => {
   if (!item) {
-    return [DEFAULT_PROACTIVITY_TIME];
+    return [];
   }
   if (Array.isArray(item.times) && item.times.length > 0) {
     return dedupeTimes(item.times);
@@ -290,7 +290,7 @@ const getProactivityTimes = (item: ProactivityItem | null | undefined) => {
   if (item.time) {
     return dedupeTimes([item.time]);
   }
-  return [DEFAULT_PROACTIVITY_TIME];
+  return [];
 };
 
 type GrayDashboardViewProps = {

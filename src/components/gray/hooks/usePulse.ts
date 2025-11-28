@@ -49,8 +49,8 @@ const normalizeProactivityTimes = (
       .map((value) => normalizeTimeValue(value))
       .filter((value, index, array) => array.indexOf(value) === index)
       .sort();
-  
-    return normalized.length > 0 ? normalized : [normalizeTimeValue(null)];
+
+    return normalized;
   };
 
 const primaryProactivityTime = (times: string[] | null | undefined, fallback?: string | null) =>
@@ -263,9 +263,6 @@ export function usePulse(
       return [snapshot, ...previous].slice(0, MAX_PULSE_HISTORY);
     });
 
-    if (pulseChanged && onNotification) {
-      onNotification("Pulse updated", "Your pulse snapshot now reflects the latest plans and habits.");
-    }
   }, [userId, currentPlans, currentHabits, proactivity, todayAnchor, onNotification]);
 
   // Ensure active pulse selection

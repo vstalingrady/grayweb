@@ -38,6 +38,7 @@ const GrayChatComposerBase = ({
           isSearchEnabled={searchEnabled}
           onToggleSearch={() => setSearchEnabled(!searchEnabled)}
           modelSelector={<ModelSelector />}
+          onPasteFiles={rest.onPasteFiles}
         />
         {showUnderline ? <div className={styles.chatBarUnderline} aria-hidden="true" /> : null}
       </div>

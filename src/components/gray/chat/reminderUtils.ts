@@ -219,29 +219,27 @@ const stripIncompleteReminderArtifacts = (segment: string): string => {
     }
     let updated = segment;
 
-    const stripTailFromIndex = (index: number) => {
-        updated = updated.slice(0, index).trimEnd();
-    };
+    // 1. Aggressively remove any code block that contains "gray.reminder"
+    const fencePattern = /```(?:json)?\s*[\s\S]*?gray[._]reminder[\s\S]*?```/gi;
+    updated = updated.replace(fencePattern, "");
 
-    const fenceStart = updated.lastIndexOf("```");
-    if (fenceStart !== -1) {
-        const fenceTail = updated.slice(fenceStart);
-        if (!/```/.test(fenceTail.slice(3)) && /gray[._]reminder/i.test(fenceTail)) {
-            stripTailFromIndex(fenceStart);
-            return updated;
+    // 2. Remove any JSON code block that contains reminder-like fields
+    const jsonCodeBlockPattern = /```(?:json)?\s*\{[\s\S]*?\}\s*```/gi;
+    updated = updated.replace(jsonCodeBlockPattern, (match) => {
+        if (/(?:reminder_id|text|time|status|remind_at|label)/i.test(match)) {
+            return "";
         }
-    }
+        return match;
+    });
 
-    const jsonMarker = updated.toLowerCase().lastIndexOf('"type":"gray.reminder"');
-    if (jsonMarker !== -1) {
-        const braceStart = updated.lastIndexOf("{", jsonMarker);
-        const braceEnd = updated.indexOf("}", jsonMarker);
-        if (braceStart !== -1 && braceEnd === -1) {
-            stripTailFromIndex(braceStart);
-        }
-    }
+    // 3. Remove any raw JSON structure containing "gray.reminder"
+    const rawJsonPattern = /\{[^{}]*gray[._]reminder[^{}]*\}/gi;
+    updated = updated.replace(rawJsonPattern, "");
 
-    return updated;
+    // 4. Clean up extra blank lines
+    updated = updated.replace(/\n{3,}/g, "\n\n");
+
+    return updated.trim();
 };
 
 const parseReminderBlocks = (raw: string): ParsedReminderBlock[] => {
