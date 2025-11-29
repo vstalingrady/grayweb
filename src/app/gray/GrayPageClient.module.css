@@ -3552,8 +3552,8 @@
 .chatMetadataPopover {
   position: absolute;
   bottom: calc(100% + 8px);
-  left: 50%;
-  transform: translateX(-50%);
+  left: auto;
+  right: 0;
   display: flex;
   gap: 14px;
   padding: 10px 14px;
@@ -3566,7 +3566,8 @@
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
-  transform: translate(-50%, 6px) scale(0.98);
+  transform: translateY(6px) scale(0.98);
+  transform-origin: bottom right;
   transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s ease;
 }
 
@@ -3575,7 +3576,7 @@
   opacity: 1;
   visibility: visible;
   pointer-events: auto;
-  transform: translate(-50%, 0) scale(1);
+  transform: translateY(0) scale(1);
 }
 
 .chatMetadataPopover div {
@@ -8657,7 +8658,7 @@ h1.greeting {
       "Segoe UI",
       sans-serif);
   font-size: 0.95rem;
-  padding: 0 80px 0 0;
+  padding: 0 80px 0 6px;
   outline: none;
   min-width: 0;
   line-height: 1.5;
@@ -9271,6 +9272,7 @@ h1.greeting {
   .chatInput {
     padding-top: 2px !important;
     padding-bottom: 2px !important;
+    padding-left: 6px !important;
     padding-right: 112px !important;
     font-size: 16px !important;
     /* Prevent iOS zoom */

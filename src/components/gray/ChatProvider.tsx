@@ -2395,7 +2395,6 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       let historyPayload: ConversationHistoryEntryPayload[] | null = null;
       let conversationIdForSync: string | undefined;
       // Prevent auto-stream from firing while we're deleting to avoid extra AI responses.
-      resetAutoStreamState(sessionId);
 
       setSessions((prev) => {
         let didUpdate = false;
