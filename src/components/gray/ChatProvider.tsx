@@ -375,7 +375,7 @@ const formatReminderScheduleLabel = (iso?: string | null) => {
 const buildReminderPingMessage = (reminder: Reminder): string => {
   const label = normalizeReminderLabel(reminder.label);
   const note = reminder.summary ?? reminder.description ?? null;
-  
+
   // Use a cleaner, less "bot-like" format for delivered reminders
   const parts = [`🔔 ${label}`];
   if (note) {
@@ -1449,6 +1449,8 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
   const { user, waitForUser, updateUser } = useUser();
   const [defaultSystemPrompt, setDefaultSystemPrompt] = useState<string | null>(null);
   const [showIntro, setShowIntro] = useState(false);
+  const onboardingSeenRef = useRef(false);
+  const onboardingKickoffRef = useRef(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -1484,6 +1486,37 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
     () => buildPersonalizedSystemPrompt(user, defaultSystemPrompt),
     [user, defaultSystemPrompt]
   );
+  
+  // Persist "has seen" state from user profile to local ref to prevent re-showing
+  useEffect(() => {
+    if (user?.has_seen_general_chat) {
+      onboardingSeenRef.current = true;
+      onboardingKickoffRef.current = true;
+      // Also ensure state is synced if it was somehow set to true
+      setShowIntro(false);
+    } else {
+      // Only allow reset if user is loaded and explicitly has it false
+      // This prevents flashing if user is momentarily null/loading
+      if (user && !user.has_seen_general_chat) {
+         onboardingKickoffRef.current = false;
+      }
+    }
+  }, [user?.has_seen_general_chat, user?.id, user]);
+
+  const markHasSeenGeneralChat = useCallback(async () => {
+    if (!user || onboardingSeenRef.current || user.has_seen_general_chat) {
+      onboardingSeenRef.current = onboardingSeenRef.current || Boolean(user?.has_seen_general_chat);
+      return;
+    }
+
+    onboardingSeenRef.current = true;
+    try {
+      await updateUser({ has_seen_general_chat: true });
+    } catch (error) {
+      console.error("Failed to mark general chat as seen:", error);
+    }
+  }, [updateUser, user]);
+
   const [sessionsState, setSessionsState] = useState<ChatSession[]>(defaultSessions);
   const sessionsRef = useRef<ChatSession[]>(sessionsState);
   const setSessions = useCallback(
@@ -2055,7 +2088,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
           if (!file) {
             continue;
           }
-          const upload = await apiService.uploadMediaFile(resolvedUser.id, file);
+          const upload = await apiService.uploadMediaFile(file);
           const previewUrl = file.type?.toLowerCase().startsWith("image/")
             ? URL.createObjectURL(file)
             : (upload as any)?.publicUrl || (upload as any)?.url || null;
@@ -2292,7 +2325,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
               } else if (message.reminders && message.reminders.length > 0) {
                 nextPartial.reminders = message.reminders;
               }
-              
+
               if (parsedContent.title) {
                 assistantAutoTitle = parsedContent.title;
               }
@@ -2361,6 +2394,8 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
     (sessionId: string, messageId: string) => {
       let historyPayload: ConversationHistoryEntryPayload[] | null = null;
       let conversationIdForSync: string | undefined;
+      // Prevent auto-stream from firing while we're deleting to avoid extra AI responses.
+      resetAutoStreamState(sessionId);
 
       setSessions((prev) => {
         let didUpdate = false;
@@ -3183,6 +3218,13 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
 
       const trimmed = content.trim();
       const generalSession = ensureGeneralSession();
+      if (!trimmed) {
+        // Avoid triggering the onboarding kick-off twice while the intro overlay is finishing
+        if (onboardingKickoffRef.current) {
+          return generalSession.id;
+        }
+        onboardingKickoffRef.current = true;
+      }
       const isGeneralScope = generalSession.scope === "general";
       const resolvedGeneralConversationId =
         coerceConversationIdForRequest(generalSession.conversationId) ??
@@ -3191,6 +3233,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
 
       // Allow empty message only if it's the start of a session (e.g. onboarding trigger)
       if (!trimmed && generalSession.messages.length > 0) {
+        void markHasSeenGeneralChat();
         return generalSession.id;
       }
 
@@ -3363,6 +3406,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
                   isResponding: false,
                   pendingAutoStream: false,
                 });
+                void markHasSeenGeneralChat();
                 clearAttachments();
                 if (!isGeneralScope && event.title) {
                   applyAutoTitle(generalSession.id, event.title);
@@ -3403,6 +3447,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
             clearAttachments();
           } finally {
             endSearchTracking();
+            void markHasSeenGeneralChat();
           }
           clearAttachments();
         })();
@@ -3430,6 +3475,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       selectedContextCacheId,
       shouldAttachWorkspaceContextForSession,
       webSearchEnabled,
+      markHasSeenGeneralChat,
     ]
   );
 
@@ -3651,7 +3697,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       generalGreeting: generalGreetingRef.current
     });
 
-    if (!user.has_seen_general_chat) {
+    if (!user.has_seen_general_chat && !onboardingSeenRef.current) {
       console.log('[ChatProvider] Triggering "First Contact" onboarding flow');
       setShowIntro(true);
     }
@@ -3661,13 +3707,22 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
 
   const handleIntroComplete = useCallback(async () => {
     if (!user?.id) return;
-
+    if (onboardingKickoffRef.current) {
+      setShowIntro(false);
+      return;
+    }
+    onboardingKickoffRef.current = true;
     setShowIntro(false);
 
     // Trigger AI onboarding
     // We send an empty message to kick off the "First Contact" flow
     // The backend will see has_seen_general_chat=False and use the onboarding prompt
-    await sendGeneralMessage("");
+    try {
+      await sendGeneralMessage("");
+    } catch (error) {
+      onboardingKickoffRef.current = false;
+      console.error("Failed to trigger onboarding chat:", error);
+    }
   }, [user?.id, sendGeneralMessage]);
 
   useEffect(() => {
@@ -3727,13 +3782,13 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
 
           // Client-side stale check: If > 15 mins late, mark delivered but don't nag.
           // This protects against backend returning old pending items.
-          const isStale = (now - remindAt) > (15 * 60 * 1000); 
+          const isStale = (now - remindAt) > (15 * 60 * 1000);
 
           if (!isStale) {
             appendMessage(generalSessionId, "assistant", buildReminderPingMessage(reminder));
             sendReminderNotification(reminder);
           }
-          
+
           try {
             await apiService.updateReminder(user.id, reminder.id, { status: "delivered" });
           } catch (updateError) {
