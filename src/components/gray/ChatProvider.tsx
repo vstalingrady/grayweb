@@ -3635,6 +3635,11 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
           return;
         }
 
+        // Mark as synced immediately to prevent the sync effect from pushing
+        // this authoritative history back to the server, which can cause
+        // message duplication if the backend's replace logic is non-atomic.
+        syncedHistoryRef.current.add(generalConversationId);
+
         setSessions((prev) => {
           const index = prev.findIndex((session) => session.scope === "general");
           if (index === -1) {
