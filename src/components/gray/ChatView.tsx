@@ -1525,7 +1525,6 @@ const ChatMessagesList = memo(
                         type="button"
                         aria-label="Delete message"
                         onClick={() => handleDeleteMessage(message.id)}
-                        data-variant="danger"
                       >
                         <Trash2 size={15} />
                       </button>
@@ -2469,6 +2468,12 @@ export function GrayChatView({
       (!lastAssistantMessage ||
         lastAssistantMessage.createdAt < (lastUserMessage?.createdAt ?? 0) ||
         !assistantHasContent);
+
+    // If we have an assistant message that is just empty/loading, do not trigger a new one.
+    // This prevents double-triggering while the first one is being created or streamed.
+    if (lastAssistantMessage && !assistantHasContent) {
+      return;
+    }
 
     const hasAlreadyTriggeredForLastUser =
       lastUserMessage != null && hasAutoStreamTriggered(sessionAutoStreamId, lastUserMessage.id);
