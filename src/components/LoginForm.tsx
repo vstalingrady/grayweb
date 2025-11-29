@@ -169,7 +169,7 @@ const resolvePostAuthDestination = (): string => {
     }
   }
 
-  return resolveDefaultWorkspacePath(workspaceHost);
+  return "/g";
 };
 
 const buildLoopbackOrigin = (
