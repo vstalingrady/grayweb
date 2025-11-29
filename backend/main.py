@@ -1,4 +1,5 @@
 import logging
+import math
 import socket
 import asyncio
 import sqlite3
@@ -14,46 +15,97 @@ from datetime import datetime, timezone, date, timedelta
 from zoneinfo import ZoneInfo
 import os
 import json
+import statistics
 from asyncio import TimeoutError, wait_for, sleep
 import re
 import time
+import hmac
+import hashlib
+import shutil
+import subprocess
 from dotenv import load_dotenv
 from supabase import Client
 import psycopg2
 # Support both package and module import contexts
 try:
-    from backend.supabase_utils import create_supabase_client, resolve_supabase_credentials  # type: ignore
+    from backend.supabase_utils import (
+        create_supabase_client,
+        create_supabase_service_client,
+        resolve_supabase_credentials,
+    )  # type: ignore
 except Exception:  # When running with backend/ on sys.path directly (tests)
-    from supabase_utils import create_supabase_client, resolve_supabase_credentials  # type: ignore
+    from supabase_utils import (
+        create_supabase_client,
+        create_supabase_service_client,
+        resolve_supabase_credentials,
+    )  # type: ignore
 from uuid import UUID, uuid4
 from pathlib import Path
 from urllib.parse import urlparse
 
+# Environment flags used across CORS and rate limiting defaults
+NODE_ENV = os.getenv("NODE_ENV", "").strip().lower()
+ENVIRONMENT = os.getenv("ENVIRONMENT", "").strip().lower()
+IS_PRODUCTION = NODE_ENV == "production" or ENVIRONMENT == "production"
+
 # Enhanced logging imports
-from logging_config import (
-    setup_logging, create_logger, set_request_context, clear_request_context,
-    RequestLoggingMiddleware, log_performance, log_database_query, log_api_call,
-    get_log_level
-)
-from google_calendar import (
-    GoogleCalendarCredentials,
-    GoogleCalendarInfo,
-    GoogleCalendarEvent,
-    GoogleAuthRequest,
-    GoogleAuthCallbackRequest,
-    GoogleAuthResponse,
-    get_google_auth_url,
-    exchange_code_for_tokens,
-    get_google_calendar_service,
-    list_google_calendars,
-    list_google_events,
-    create_google_event
-)
-from google.genai import types
-from gemini_client import GeminiAttachment, GeminiService
-from anthropic_client import AnthropicService
-from openrouter_client import OpenRouterService
-from usage_tracker import UsageTracker, UsageLimitExceeded
+try:
+    from backend.logging_config import (
+        setup_logging, create_logger, set_request_context, clear_request_context,
+        RequestLoggingMiddleware, log_performance, log_database_query, log_api_call,
+        get_log_level
+    )
+except ImportError:
+    from logging_config import (
+        setup_logging, create_logger, set_request_context, clear_request_context,
+        RequestLoggingMiddleware, log_performance, log_database_query, log_api_call,
+        get_log_level
+    )
+
+try:
+    from backend.google_calendar import (
+        GoogleCalendarCredentials,
+        GoogleCalendarInfo,
+        GoogleCalendarEvent,
+        GoogleAuthRequest,
+        GoogleAuthCallbackRequest,
+        GoogleAuthResponse,
+        get_google_auth_url,
+        decode_state_token,
+        exchange_code_for_tokens,
+        get_google_calendar_service,
+        list_google_calendars,
+        list_google_events,
+        create_google_event,
+        encrypt_refresh_token,
+        decrypt_refresh_token,
+    )
+    from google.genai import types
+    from backend.gemini_client import GeminiAttachment, GeminiService
+    from backend.openrouter_client import OpenRouterService
+    from backend.usage_tracker import UsageTracker, UsageLimitExceeded
+except ImportError:
+    from google_calendar import (
+        GoogleCalendarCredentials,
+        GoogleCalendarInfo,
+        GoogleCalendarEvent,
+        GoogleAuthRequest,
+        GoogleAuthCallbackRequest,
+        GoogleAuthResponse,
+        get_google_auth_url,
+        decode_state_token,
+        exchange_code_for_tokens,
+        get_google_calendar_service,
+        list_google_calendars,
+        list_google_events,
+        create_google_event,
+        encrypt_refresh_token,
+        decrypt_refresh_token,
+    )
+    from google.genai import types
+    from gemini_client import GeminiAttachment, GeminiService
+    from openrouter_client import OpenRouterService
+    from usage_tracker import UsageTracker, UsageLimitExceeded
 try:
     from backend.calendar_tools import CALENDAR_TOOLS
     from backend.file_search import FileSearchService
@@ -66,15 +118,45 @@ try:
 except ImportError:
     from onboarding_tools import ONBOARDING_TOOLS
     from plan_tools import PLAN_TOOLS
-from ai_message_generator import AIMessageGenerator
-from proactivity_engine import (
+
+from backend.ai_message_generator import AIMessageGenerator
+from backend.proactivity_engine import (
     ProactivityEngine,
     ProactivityRealtimeBroker,
     ProactivitySchedulerManager,
 )
 
+# Authentication module
+try:
+    from backend.auth import get_current_user, get_current_user_optional, require_same_user, require_admin
+except ImportError:
+    from auth import get_current_user, get_current_user_optional, require_same_user, require_admin
+    from auth import get_current_user, get_current_user_optional, require_same_user, require_admin
+
+# Security utilities
+try:
+    from backend.security_utils import sanitize_for_logging
+except ImportError:
+    from security_utils import sanitize_for_logging
+
+# Database module
+try:
+    from backend.database import database, metadata, users, DATABASE_URL
+except ImportError:
+    from database import database, metadata, users, DATABASE_URL
+
+# Rate limiting
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+
+limiter = Limiter(key_func=get_remote_address)
+
 ROOT_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(ROOT_DIR / ".env")
+
+SUPABASE_POOLER_HOST = os.getenv("SUPABASE_POOLER_HOST", "aws-1-ap-south-1.pooler.supabase.com")
+SUPABASE_POOLER_PORT = int(os.getenv("SUPABASE_POOLER_PORT", "6543"))
 
 # Initialize enhanced logging system
 app_logger = setup_logging(
@@ -143,7 +225,6 @@ LEMONSQUEEZY_VOYAGER_VARIANT_ID = os.getenv("LEMONSQUEEZY_VOYAGER") or None
 LEMONSQUEEZY_PIONEER_VARIANT_ID = os.getenv("LEMONSQUEEZY_PIONEER") or None
 
 GEMINI_SERVICE = GeminiService()
-ANTHROPIC_SERVICE = AnthropicService()
 OPENROUTER_SERVICE = OpenRouterService()
 VALIDATE_GEMINI_ON_STARTUP = os.getenv("VALIDATE_GEMINI_ON_STARTUP", "true").strip().lower() not in {
     "0",
@@ -159,7 +240,16 @@ if FILE_SEARCH_ENABLED:
     except ValueError as exc:
         print(f"[FileSearch] Disabled: {exc}")
 
+
 AI_MESSAGE_GENERATOR = AIMessageGenerator()
+
+CLAMAV_SCAN_ENABLED = os.getenv("ENABLE_CLAMAV_SCAN", "false").strip().lower() in {"1", "true", "yes", "on"}
+CLAMAV_SCAN_BINARY = (
+    os.getenv("CLAMAV_SCAN_BINARY")
+    or shutil.which("clamdscan")
+    or shutil.which("clamscan")
+)
+CLAMAV_SCAN_TIMEOUT = _int_env("CLAMAV_SCAN_TIMEOUT_SECONDS", 30)
 
 
 FILE_SEARCH_MAX_TOKENS_PER_CHUNK = _int_env("FILE_SEARCH_MAX_TOKENS_PER_CHUNK", 200)
@@ -176,9 +266,291 @@ MEDIA_UPLOAD_DIR = Path(
     or Path(__file__).resolve().parent / "media_uploads"
 )
 MEDIA_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+MEDIA_UPLOAD_ROOT = MEDIA_UPLOAD_DIR.resolve()
+if MEDIA_UPLOAD_ROOT.is_symlink():
+    raise RuntimeError("MEDIA_UPLOAD_DIR must not be a symlink.")
+
+UPLOAD_READ_CHUNK_SIZE = 1024 * 1024
+MAX_MEDIA_UPLOAD_SIZE_BYTES = 10 * 1024 * 1024  # 10MB
+MAX_BACKGROUND_UPLOAD_SIZE_BYTES = 10 * 1024 * 1024  # Keep parity with chat uploads
+
+IMAGE_MIME_TYPES: Set[str] = {
+    "image/jpeg",
+    "image/jpg",
+    "image/png",
+    "image/gif",
+    "image/webp",
+    "image/bmp",
+}
+DOCUMENT_MIME_TYPES: Set[str] = {
+    "application/pdf",
+}
+CHAT_UPLOAD_MIME_TYPES: Set[str] = IMAGE_MIME_TYPES | DOCUMENT_MIME_TYPES
+BACKGROUND_UPLOAD_MIME_TYPES: Set[str] = IMAGE_MIME_TYPES
+
+IMAGE_EXTENSIONS: Set[str] = {
+    ".jpg",
+    ".jpeg",
+    ".png",
+    ".gif",
+    ".webp",
+    ".bmp",
+}
+CHAT_UPLOAD_EXTENSIONS: Set[str] = IMAGE_EXTENSIONS | {".pdf"}
+BACKGROUND_UPLOAD_EXTENSIONS: Set[str] = IMAGE_EXTENSIONS
+
+MIME_EXTENSION_MAP: Dict[str, Set[str]] = {
+    "image/jpeg": {".jpg", ".jpeg"},
+    "image/jpg": {".jpg", ".jpeg"},
+    "image/png": {".png"},
+    "image/gif": {".gif"},
+    "image/webp": {".webp"},
+    "image/bmp": {".bmp"},
+    "application/pdf": {".pdf"},
+}
+
+SUSPICIOUS_PATTERNS = (b"<script", b"javascript:", b"onerror=", b"<?php", b"#!/")
 
 # Optional base URL for serving uploaded media (e.g., CDN or site URL)
 STORAGE_BASE_URL = os.getenv("STORAGE_BASE_URL") or None
+
+
+def _sanitize_filename(filename: Optional[str]) -> str:
+  candidate = (filename or "upload").strip()
+  candidate = Path(candidate).name
+  candidate = re.sub(r"[^A-Za-z0-9._-]", "_", candidate)
+  while ".." in candidate:
+    candidate = candidate.replace("..", "")
+  if not candidate or candidate.startswith("."):
+    candidate = "upload"
+  return candidate[:255]
+
+
+def _normalize_mime(mime: Optional[str]) -> str:
+  if not mime:
+    return ""
+  normalized = mime.split(";")[0].strip().lower()
+  if normalized == "image/jpg":
+    return "image/jpeg"
+  return normalized
+
+
+def _sniff_mime_type(file_start: bytes) -> Optional[str]:
+  if file_start[:4] == b"%PDF":
+    return "application/pdf"
+  if file_start[:4] == b"\x89PNG":
+    return "image/png"
+  if file_start[:2] == b"\xff\xd8":
+    return "image/jpeg"
+  if file_start[:6] in (b"GIF87a", b"GIF89a"):
+    return "image/gif"
+  if file_start[:4] == b"RIFF" and file_start[8:12] == b"WEBP":
+    return "image/webp"
+  if file_start[:2] == b"BM":
+    return "image/bmp"
+  lowered = file_start.lower()
+  if lowered.lstrip().startswith(b"<svg"):
+    return "image/svg+xml"
+  return None
+
+
+def _reject_if_suspicious(chunk: bytes) -> None:
+  lowered = chunk.lower()
+  for pattern in SUSPICIOUS_PATTERNS:
+    if pattern in lowered:
+      raise HTTPException(
+          status_code=status.HTTP_400_BAD_REQUEST,
+          detail="File contains suspicious or executable content.",
+      )
+
+
+def _scan_file_for_malware(storage_path: Path) -> None:
+  if not CLAMAV_SCAN_ENABLED or not CLAMAV_SCAN_BINARY:
+    return
+
+  try:
+    result = subprocess.run(
+        [CLAMAV_SCAN_BINARY, "--no-summary", str(storage_path)],
+        capture_output=True,
+        text=True,
+        timeout=CLAMAV_SCAN_TIMEOUT,
+        check=False,
+    )
+  except FileNotFoundError:
+    return
+  except subprocess.TimeoutExpired:
+    storage_path.unlink(missing_ok=True)
+    raise HTTPException(
+        status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+        detail="Antivirus scan timed out.",
+    )
+
+  if result.returncode == 0:
+    return
+
+  storage_path.unlink(missing_ok=True)
+
+  if result.returncode == 1:
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="Upload failed antivirus scan.",
+    )
+
+  file_logger.warning(
+      "Antivirus scan failed",
+      extra={
+          "event_type": "upload_scan_error",
+          "path": str(storage_path),
+          "stdout": result.stdout,
+          "stderr": result.stderr,
+          "returncode": result.returncode,
+      },
+  )
+  raise HTTPException(
+      status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+      detail="Failed to scan file for malware.",
+  )
+
+
+def _ensure_storage_path(storage_name: str) -> Path:
+  candidate = MEDIA_UPLOAD_ROOT / storage_name
+  resolved_candidate = candidate.resolve()
+  if not resolved_candidate.is_relative_to(MEDIA_UPLOAD_ROOT):
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="Invalid storage target.",
+    )
+  if resolved_candidate.is_dir():
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="Invalid storage path.",
+    )
+  return resolved_candidate
+
+
+def _resolve_storage_path_from_record(raw_path: str) -> Path:
+  if not raw_path:
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="Attachment path is missing.",
+    )
+  candidate = Path(raw_path)
+  if candidate.is_absolute():
+    resolved = candidate.resolve()
+  else:
+    resolved = (MEDIA_UPLOAD_ROOT / candidate).resolve()
+  if not resolved.is_relative_to(MEDIA_UPLOAD_ROOT):
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="Attachment path is invalid.",
+    )
+  if resolved.is_symlink():
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail="Attachment file is no longer available.",
+    )
+  return resolved
+
+
+async def _persist_upload_file(
+    file: UploadFile,
+    *,
+    allowed_mime_types: Set[str],
+    allowed_extensions: Set[str],
+    max_size_bytes: int,
+) -> Tuple[Path, str, int, str, str]:
+  content_type = _normalize_mime(file.content_type)
+  if not content_type or content_type not in allowed_mime_types:
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="Unsupported or missing content type.",
+    )
+
+  sanitized_name = _sanitize_filename(file.filename)
+  extension = Path(sanitized_name).suffix.lower()
+  if extension not in allowed_extensions:
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail=f"Invalid file extension: {extension or 'none provided'}",
+    )
+
+  storage_name = f"{uuid4().hex}{extension}"
+  storage_path = _ensure_storage_path(storage_name)
+
+  first_chunk = await file.read(UPLOAD_READ_CHUNK_SIZE)
+  if not first_chunk:
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="Uploaded file is empty.",
+    )
+
+  sniffed_type = _normalize_mime(_sniff_mime_type(first_chunk))
+  resolved_mime = content_type
+  if sniffed_type:
+    if sniffed_type not in allowed_mime_types:
+      raise HTTPException(
+          status_code=status.HTTP_400_BAD_REQUEST,
+          detail="File content type is not allowed.",
+      )
+    expected_exts = MIME_EXTENSION_MAP.get(sniffed_type)
+    if expected_exts and extension not in expected_exts:
+      raise HTTPException(
+          status_code=status.HTTP_400_BAD_REQUEST,
+          detail="File extension does not match content.",
+      )
+    if content_type and content_type != sniffed_type:
+      raise HTTPException(
+          status_code=status.HTTP_400_BAD_REQUEST,
+          detail="Declared content type does not match file contents.",
+      )
+    resolved_mime = sniffed_type
+
+  _reject_if_suspicious(first_chunk[:4096])
+
+  bytes_written = 0
+  inspect_remaining = max(0, 4096 - len(first_chunk))
+  try:
+    with storage_path.open("wb") as buffer:
+      if len(first_chunk) > max_size_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"File too large. Maximum size is {max_size_bytes // (1024 * 1024)}MB.",
+        )
+      buffer.write(first_chunk)
+      bytes_written += len(first_chunk)
+
+      while True:
+        chunk = await file.read(UPLOAD_READ_CHUNK_SIZE)
+        if not chunk:
+          break
+        if bytes_written + len(chunk) > max_size_bytes:
+          raise HTTPException(
+              status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+              detail=f"File too large. Maximum size is {max_size_bytes // (1024 * 1024)}MB.",
+          )
+        if inspect_remaining > 0:
+          _reject_if_suspicious(chunk[:inspect_remaining])
+          inspect_remaining = max(0, inspect_remaining - len(chunk))
+        buffer.write(chunk)
+        bytes_written += len(chunk)
+  except HTTPException:
+    storage_path.unlink(missing_ok=True)
+    raise
+  except Exception as error:
+    storage_path.unlink(missing_ok=True)
+    raise HTTPException(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail=f"Failed to store upload: {error}",
+    ) from error
+  finally:
+    try:
+      await file.close()
+    except Exception:
+      pass
+
+  _scan_file_for_malware(storage_path)
+
+  return storage_path, resolved_mime, bytes_written, sanitized_name, storage_name
 
 SEARCH_TOOL = types.Tool(
     google_search=types.GoogleSearch(),
@@ -367,7 +739,7 @@ def _ensure_sqlite_personalization_show_calendar_column():
 
 
 # Database configuration
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./test.db")
+# DATABASE_URL imported from backend.database
 
 def _ensure_sqlite_general_chat_table():
     if not DATABASE_URL.startswith("sqlite"):
@@ -409,8 +781,7 @@ _ensure_sqlite_workspace_background_column()
 _ensure_sqlite_personalization_show_calendar_column()
 _ensure_sqlite_general_chat_table()
 
-database = databases.Database(DATABASE_URL, statement_cache_size=0)
-metadata = sqlalchemy.MetaData()
+# database and metadata imported from backend.database
 
 
 STREAMING_TOKEN_DELAY = max(0.0, _float_env("GRAY_STREAMING_TOKEN_DELAY_SECONDS", 0.0))
@@ -440,6 +811,34 @@ REMINDER_RESPONSE_FORMAT = {
         },
     },
 }
+
+REMINDER_MODEL = os.getenv("REMINDER_MODEL", "models/gemini-flash-lite-latest")
+GROK_TOOL_MODEL = os.getenv("GROK_TOOL_MODEL", "x-ai/grok-4.1-fast:free")
+GROK_DEFAULT_MODEL = os.getenv("GROK_DEFAULT_MODEL", OPENROUTER_SERVICE.lite_model if OPENROUTER_SERVICE else "x-ai/grok-4.1-fast:free")
+REMINDER_FUNCTION_NAMES = (
+    "create_reminder",
+    "update_reminder",
+    "delete_reminder",
+    "delete_latest_reminder",
+    "list_reminders",
+)
+
+def _needs_structured_tools(message: str) -> bool:
+    normalized = (message or "").lower()
+    if not normalized:
+        return False
+    tool_keywords = [
+        "reminder",
+        "remind",
+        "plan",
+        "habit",
+        "schedule",
+        "deadline",
+        "due",
+        "task",
+        "todo",
+    ]
+    return any(token in normalized for token in tool_keywords)
 
 
 def _split_env_list(value: Optional[str]) -> List[str]:
@@ -543,6 +942,10 @@ def _build_allowed_origins() -> List[str]:
         "https://127.0.0.1:5173",
     }
 
+    # In production, do not include default localhost origins unless explicitly allowed
+    if IS_PRODUCTION:
+        default_origins = set()
+
     candidate_env_vars = [
         os.getenv("NEXT_PUBLIC_SITE_URL"),
         os.getenv("SITE_URL"),
@@ -554,10 +957,7 @@ def _build_allowed_origins() -> List[str]:
         for variant in _origin_variants(candidate or ""):
             default_origins.add(variant)
 
-    node_env = os.getenv("NODE_ENV", "").strip().lower()
-    environment = os.getenv("ENVIRONMENT", "").strip().lower()
-    is_production = node_env == "production" or environment == "production"
-    if not is_production:
+    if not IS_PRODUCTION:
         for origin in _local_network_origins(DEFAULT_DEV_ORIGIN_PORTS):
             default_origins.add(origin)
 
@@ -573,10 +973,7 @@ LOCAL_NETWORK_ORIGIN_PATTERN = (
 
 
 def _local_network_origin_regex() -> Optional[str]:
-    node_env = os.getenv("NODE_ENV", "").strip().lower()
-    environment = os.getenv("ENVIRONMENT", "").strip().lower()
-    is_production = node_env == "production" or environment == "production"
-    if is_production:
+    if IS_PRODUCTION:
         return None
     return LOCAL_NETWORK_ORIGIN_PATTERN
 
@@ -608,6 +1005,12 @@ def _parse_json_field(value: Optional[str]) -> Optional[Dict[str, Any]]:
 ALLOWED_ORIGIN_REGEX = _local_network_origin_regex()
 ALLOWED_ORIGINS = _build_allowed_origins()
 
+if IS_PRODUCTION and not ALLOWED_ORIGINS and not ALLOWED_ORIGIN_REGEX:
+    app_logger.error(
+        "CORS misconfigured for production: no allowed origins found; set SITE_URL/NEXT_PUBLIC_SITE_URL or CORS_ALLOW_ORIGINS."
+    )
+    raise RuntimeError("CORS configuration missing in production")
+
 def _fallback_title_from_message(message: str) -> str:
     trimmed = (message or "").strip()
     if not trimmed:
@@ -626,36 +1029,7 @@ DEFAULT_DASHBOARD_PROACTIVITY = {
 }
 
 # Database tables
-users = sqlalchemy.Table(
-    "users",
-    metadata,
-    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True, index=True),
-    sqlalchemy.Column("auth_user_id", sqlalchemy.String, unique=True, nullable=True, index=True),  # Supabase Auth UUID
-    sqlalchemy.Column("email", sqlalchemy.String, unique=True, index=True),
-    sqlalchemy.Column("full_name", sqlalchemy.String),
-    sqlalchemy.Column("profile_picture_url", sqlalchemy.String, nullable=True),
-    sqlalchemy.Column("role", sqlalchemy.String, default="user"),
-    sqlalchemy.Column("initials", sqlalchemy.String),
-    sqlalchemy.Column("workspace_background_id", sqlalchemy.String, nullable=True),
-    sqlalchemy.Column("maps_enabled", sqlalchemy.Boolean, default=False),
-    sqlalchemy.Column("personalization_nickname", sqlalchemy.String, nullable=True),
-    sqlalchemy.Column("personalization_occupation", sqlalchemy.String, nullable=True),
-    sqlalchemy.Column("personalization_about", sqlalchemy.String, nullable=True),
-    sqlalchemy.Column("personalization_custom_instructions", sqlalchemy.String, nullable=True),
-    sqlalchemy.Column("personalization_show_calendar", sqlalchemy.Boolean, default=True),
-    sqlalchemy.Column("plan_tier", sqlalchemy.String, nullable=True),
-    sqlalchemy.Column("has_seen_general_chat", sqlalchemy.Boolean, default=False),
-    sqlalchemy.Column("daily_token_usage", sqlalchemy.Integer, default=0),
-    sqlalchemy.Column("monthly_cost_usage", sqlalchemy.Float, default=0.0),
-    sqlalchemy.Column("weekly_cost_usage", sqlalchemy.Float, default=0.0),
-    sqlalchemy.Column("six_hour_cost_usage", sqlalchemy.Float, default=0.0),
-    sqlalchemy.Column("last_daily_reset", sqlalchemy.String, nullable=True),
-    sqlalchemy.Column("last_monthly_reset", sqlalchemy.String, nullable=True),
-    sqlalchemy.Column("last_weekly_reset", sqlalchemy.String, nullable=True),
-    sqlalchemy.Column("last_six_hour_reset", sqlalchemy.String, nullable=True),
-    sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
-    sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
-)
+# users table imported from backend.database
 
 chat_sessions = sqlalchemy.Table(
     "chat_sessions",
@@ -884,6 +1258,19 @@ google_calendar_credentials = sqlalchemy.Table(
     sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
 )
 
+google_calendar_states = sqlalchemy.Table(
+    "google_calendar_states",
+    metadata,
+    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True, index=True),
+    sqlalchemy.Column("state_token", sqlalchemy.String, unique=True, nullable=False),
+    sqlalchemy.Column("user_id", sqlalchemy.ForeignKey("users.id")),
+    sqlalchemy.Column("nonce", sqlalchemy.String, nullable=False),
+    sqlalchemy.Column("redirect_uri", sqlalchemy.String, nullable=False),
+    sqlalchemy.Column("expires_at", sqlalchemy.DateTime, nullable=True),
+    sqlalchemy.Column("consumed_at", sqlalchemy.DateTime, nullable=True),
+    sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
+)
+
 # Pydantic models
 class UserBase(BaseModel):
     email: EmailStr
@@ -941,6 +1328,14 @@ class User(UserBase):
     usage_status: Optional[UsageStatus] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+def _serialize_user_row(row: Mapping[str, Any]) -> Dict[str, Any]:
+    """Normalize DB user rows for Pydantic response models."""
+    user_dict = dict(row)
+    if user_dict.get("auth_user_id") is not None:
+        user_dict["auth_user_id"] = str(user_dict["auth_user_id"])
+    return user_dict
 
 class ChatSessionBase(BaseModel):
     title: str
@@ -1366,14 +1761,16 @@ def _ensure_supabase_chat_tables(supabase_url: Optional[str]) -> None:
     if not project_ref or not password:
         return
 
-    host = f"db.{project_ref}.supabase.co"
-    dsn = f"postgresql://postgres:{password}@{host}:5432/postgres"
+    host = SUPABASE_POOLER_HOST
+    port = SUPABASE_POOLER_PORT
+    username = f"postgres.{project_ref}"
+    dsn = f"postgresql://{username}:{password}@{host}:{port}/postgres"
     
-    connect_args = {"connect_timeout": 4}
+    connect_args = {"connect_timeout": 4, "port": port}
     try:
         # Force IPv4 resolution to avoid "Network is unreachable" on IPv6 failures
         # Use getaddrinfo to specifically request IPv4 (AF_INET)
-        addr_info = socket.getaddrinfo(host, 5432, socket.AF_INET)
+        addr_info = socket.getaddrinfo(host, port, socket.AF_INET)
         if addr_info:
             # sockaddr is (ip, port) for AF_INET
             ip_address = addr_info[0][4][0]
@@ -1433,6 +1830,8 @@ _ensure_supabase_chat_tables(SUPABASE_URL)
 
 # Initialize Supabase using unified helper
 supabase: Optional[Client] = None
+supabase_admin: Optional[Client] = None
+SUPABASE_ADMIN_KEY_SOURCE: Optional[str] = None
 if SUPABASE_URL and SUPABASE_KEY and SUPABASE_URL != "your_supabase_url_here":
     supabase = create_supabase_client()
     if supabase is not None:
@@ -1442,6 +1841,16 @@ if SUPABASE_URL and SUPABASE_KEY and SUPABASE_URL != "your_supabase_url_here":
             print("Warning: Using SUPABASE_ANON_KEY may limit write operations; configure a service-role key for full functionality.")
     else:
         print("Warning: Failed to initialize Supabase client via helper; conversation history disabled.")
+
+    supabase_admin, SUPABASE_ADMIN_KEY_SOURCE = create_supabase_service_client()
+    if supabase_admin:
+        admin_label = SUPABASE_ADMIN_KEY_SOURCE or "SUPABASE_SERVICE_ROLE_KEY"
+        print(f"Supabase admin client initialized for privileged operations (source: {admin_label}).")
+    else:
+        if SUPABASE_ADMIN_KEY_SOURCE:
+            print(f"Warning: Supabase admin client failed to initialize with {SUPABASE_ADMIN_KEY_SOURCE}. Account deletions may leave Supabase data behind.")
+        else:
+            print("Warning: Supabase admin client not configured; set SUPABASE_SERVICE_ROLE_KEY for full account deletion.")
 else:
     print("Warning: Supabase credentials not configured. Conversation history will not be persisted.")
 
@@ -1498,6 +1907,48 @@ def _general_conversation_user_id(conversation_id: Optional[str]) -> Optional[in
         return int(conversation_id.split(":", 1)[1])
     except (ValueError, IndexError):
         return None
+
+
+async def _require_conversation_owner(conversation_id: str, current_user: Dict[str, Any]) -> None:
+    """Ensure the authenticated user owns the conversation being accessed."""
+    general_user_id = _general_conversation_user_id(conversation_id)
+    if general_user_id is not None:
+        require_same_user(general_user_id, current_user)
+        return
+
+    if not _conversation_store_available() or not _is_valid_uuid(conversation_id):
+        # Without Supabase storage, fail closed to the authenticated user context.
+        require_same_user(current_user["id"], current_user)
+        return
+
+    try:
+        result = (
+            supabase.table("user_chat_threads")
+            .select("user_identifier")
+            .eq("id", conversation_id)
+            .single()
+            .execute()
+        )
+        owner_raw = _row_get(getattr(result, "data", None) or {}, "user_identifier")
+        if owner_raw is None:
+            return
+        try:
+            owner_id = int(owner_raw)
+        except (TypeError, ValueError):
+            owner_id = owner_raw
+        if str(owner_id) != str(current_user["id"]):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only access your own conversations",
+            )
+    except HTTPException:
+        raise
+    except Exception as error:
+        _handle_conversation_store_error("Error verifying conversation ownership", error)
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only access your own conversations",
+        )
 
 
 async def _load_general_conversation_history(user_id: int) -> List[Dict[str, Any]]:
@@ -1726,8 +2177,17 @@ def _delete_general_conversation_history(user_id: int) -> None:
 
 
 def _delete_supabase_user_records(user_id: int) -> None:
-    if not supabase:
+    admin_client = supabase_admin or supabase
+    if not admin_client:
         api_logger.info("Supabase not configured, skipping remote deletion", extra={"user_id": user_id})
+        return
+
+    anon_sources = {"SUPABASE_ANON_KEY", "NEXT_PUBLIC_SUPABASE_ANON_KEY"}
+    if supabase_admin is None and SUPABASE_KEY_SOURCE in anon_sources:
+        api_logger.warning(
+            "Supabase service-role key missing; skipping Supabase data deletion to avoid permission errors",
+            extra={"user_id": user_id, "event_type": "account_deletion_skipped_supabase"},
+        )
         return
 
     api_logger.info(f"Starting Supabase data deletion for user {user_id}", extra={"user_id": user_id})
@@ -1737,7 +2197,7 @@ def _delete_supabase_user_records(user_id: int) -> None:
     try:
         # 1. Fetch all thread IDs belonging to the user
         threads_result = (
-            supabase.table("user_chat_threads")
+            admin_client.table("user_chat_threads")
             .select("id")
             .eq("user_identifier", user_id)
             .execute()
@@ -1749,7 +2209,7 @@ def _delete_supabase_user_records(user_id: int) -> None:
         if thread_ids:
             api_logger.info(f"Deleting chat messages for {len(thread_ids)} threads", extra={"user_id": user_id, "thread_count": len(thread_ids)})
             # Delete in batches if necessary, but for now assuming reasonable size
-            supabase.table("user_chat_messages").delete().in_("thread_id", thread_ids).execute()
+            admin_client.table("user_chat_messages").delete().in_("thread_id", thread_ids).execute()
             
     except Exception as error:
         _handle_supabase_table_error(
@@ -1780,7 +2240,7 @@ def _delete_supabase_user_records(user_id: int) -> None:
 
     for table_name, column in delete_targets:
         try:
-            supabase.table(table_name).delete().eq(column, user_id).execute()
+            admin_client.table(table_name).delete().eq(column, user_id).execute()
         except Exception as error:
             _handle_supabase_table_error(
                 f"Warning: Failed to delete Supabase data for user {user_id} in {table_name}",
@@ -1856,10 +2316,27 @@ def _deserialize_proactivity_settings_payload(payload: Any) -> Optional[Proactiv
         # Log deserialization errors for debugging
         api_logger.warning(f"Failed to deserialize proactivity settings: {e}", extra={
             "event_type": "proactivity_settings_deserialization_error",
-            "payload": candidate,
-            "error": str(e)
+            "error": str(e),
+            **_payload_log_summary(candidate)
         })
         return None
+
+
+def _payload_log_summary(payload: Any) -> Dict[str, Any]:
+    """Summarize potentially sensitive payloads for safe logging."""
+    if payload is None:
+        return {"payload_present": False}
+    if isinstance(payload, dict):
+        return {
+            "payload_present": True,
+            "payload_keys": sorted(str(key) for key in payload.keys()),
+            "payload_size": len(payload),
+        }
+    if isinstance(payload, list):
+        return {"payload_present": True, "payload_size": len(payload)}
+    if isinstance(payload, str):
+        return {"payload_present": True, "payload_length": len(payload)}
+    return {"payload_present": True, "payload_type": type(payload).__name__}
 
 
 def _fetch_supabase_proactivity_settings(user_id: int) -> Optional[ProactivitySettings]:
@@ -1892,11 +2369,14 @@ def _fetch_supabase_proactivity_settings(user_id: int) -> Optional[ProactivitySe
         })
         return None
     payload = rows[0].get("payload")
-    api_logger.debug(f"Retrieved proactivity settings from Supabase for user {user_id}", extra={
-        "event_type": "proactivity_settings_supabase_fetched",
-        "user_id": user_id,
-        "payload": payload
-    })
+    api_logger.debug(
+        f"Retrieved proactivity settings from Supabase for user {user_id}",
+        extra={
+            "event_type": "proactivity_settings_supabase_fetched",
+            "user_id": user_id,
+            **_payload_log_summary(payload)
+        }
+    )
     return _deserialize_proactivity_settings_payload(payload)
 
 
@@ -1964,11 +2444,14 @@ def _upsert_supabase_proactivity_settings(user_id: int, payload: Dict[str, Any])
         return
     timestamp = datetime.utcnow().isoformat()
     try:
-        api_logger.debug(f"Upserting proactivity settings to Supabase for user {user_id}", extra={
-            "event_type": "proactivity_settings_supabase_upsert_start",
-            "user_id": user_id,
-            "payload": payload
-        })
+        api_logger.debug(
+            f"Upserting proactivity settings to Supabase for user {user_id}",
+            extra={
+                "event_type": "proactivity_settings_supabase_upsert_start",
+                "user_id": user_id,
+                **_payload_log_summary(payload)
+            }
+        )
         (
             supabase.table("proactivity_settings")
             .upsert(
@@ -2010,8 +2493,55 @@ def _is_valid_uuid(value: Optional[str]) -> bool:
 # FastAPI app
 app = FastAPI(title="User Profile API with AI Chat", version="1.0.0")
 
-# Temporarily disable request logging middleware to debug 422 errors
-# app.add_middleware(RequestLoggingMiddleware, logger=api_logger)
+# Security Headers Middleware
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    
+    # Strict-Transport-Security (HSTS) - Force HTTPS for 1 year
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    
+    # X-Frame-Options - Prevent clickjacking
+    response.headers["X-Frame-Options"] = "DENY"
+    
+    # X-Content-Type-Options - Prevent MIME sniffing
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    
+    # X-XSS-Protection - Enable browser XSS filter
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    
+    # Referrer-Policy - Control referrer information
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    
+    # Permissions-Policy - Restrict browser features
+    response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+    
+    # Content-Security-Policy (CSP) - Prevent XSS and injection attacks
+    # Note: This is a restrictive policy. Adjust based on your frontend needs.
+    csp_directives = [
+        "default-src 'self'",
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://apis.google.com https://accounts.google.com",
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+        "font-src 'self' https://fonts.gstatic.com",
+        "img-src 'self' data: https: blob:",
+        "connect-src 'self' https://apis.google.com https://accounts.google.com",
+        "frame-src 'self' https://accounts.google.com",
+        "object-src 'none'",
+        "base-uri 'self'",
+        "form-action 'self'",
+        "frame-ancestors 'none'",
+        "upgrade-insecure-requests"
+    ]
+    response.headers["Content-Security-Policy"] = "; ".join(csp_directives)
+    
+    return response
+
+# Rate limiting
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# Middleware
+app.add_middleware(RequestLoggingMiddleware, logger=api_logger)
 
 app_logger.info("FastAPI application created with enhanced logging middleware", extra={
     "event_type": "fastapi_created",
@@ -2180,7 +2710,7 @@ app.add_middleware(
     allow_origins=ALLOWED_ORIGINS,
     allow_origin_regex=ALLOWED_ORIGIN_REGEX,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
@@ -2244,215 +2774,147 @@ def _datetime_to_ms(value: Optional[datetime]) -> int:
     return int(aware.timestamp() * 1000)
 
 
-@app.post("/api/payments/gumroad")
-async def gumroad_webhook(request: Request, db: databases.Database = Depends(get_database)):
-    """
-    Handle Gumroad webhook / ping events.
-
-    On a successful, non-refunded purchase we mark the associated user as a
-    premium ("Depth") member by setting `plan_tier = 'depth'` on the user row.
-    Gumroad is expected to send `custom_id` containing the local user id.
-    """
-    form = await request.form()
-
-    # Basic shared-secret validation; if no secret is configured locally,
-    # accept the ping but avoid mutating state.
-    configured_secret = GUMROAD_WEBHOOK_SECRET
-    incoming_secret = form.get("secret")
-    if configured_secret and incoming_secret != configured_secret:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid webhook signature")
-
-    custom_id = form.get("custom_id")
-    if not custom_id:
-        # Nothing to associate with a local user; acknowledge without changes.
-        return {"ok": True}
-
+def _parse_iso_timestamp(value: Optional[str]) -> Optional[datetime]:
+    if not value:
+        return None
     try:
-        user_id = int(str(custom_id).strip())
-    except (TypeError, ValueError):
-        return {"ok": True}
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo:
+        parsed = parsed.astimezone(timezone.utc)
+    return parsed.replace(tzinfo=None)
 
-    refunded_flag = str(form.get("refunded", "")).lower() == "true"
-    success_flag = str(form.get("success", "")).lower() in {"true", "1"}
-    sale_kind = (form.get("sale_kind") or form.get("resource_name") or "").lower()
 
-    is_charge_event = sale_kind in {"sale", "subscription_payment", "recurring_subscription_payment"} or not sale_kind
-    should_activate = success_flag and is_charge_event and not refunded_flag
+def _resolve_log_paths() -> Dict[str, Path]:
+    candidates = [
+        Path(__file__).resolve().parent / "logs",
+        ROOT_DIR / "logs",
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return {
+                "app": candidate / "app.log",
+                "error": candidate / "error.log",
+            }
+    fallback = ROOT_DIR / "logs"
+    return {
+        "app": fallback / "app.log",
+        "error": fallback / "error.log",
+    }
 
-    if not should_activate:
-        # For now we ignore refunds / cancellations; downgrade logic can be
-        # added later once product behavior is finalized.
-        return {"ok": True}
 
+def _iter_log_entries(path: Path) -> Iterable[Dict[str, Any]]:
+    if not path.exists():
+        return
     try:
-        await db.execute(
-            users.update()
-            .where(users.c.id == user_id)
-            .values(
-                plan_tier="depth",
-                updated_at=datetime.utcnow(),
-            )
-        )
-    except Exception as error:
-        api_logger.error(
-            "Failed to update user plan from Gumroad webhook",
-            exc_info=True,
-            extra={
-                "event_type": "gumroad_webhook_error",
-                "user_id": user_id,
-                "error": str(error),
-            },
-        )
-        # Do not surface internal errors to Gumroad; just acknowledge receipt.
-        return {"ok": False}
-
-    api_logger.info(
-        "Upgraded user via Gumroad webhook",
-        extra={
-            "event_type": "gumroad_webhook_upgrade",
-            "user_id": user_id,
-        },
-    )
-    return {"ok": True}
+        with path.open("r", encoding="utf-8") as handle:
+            for raw_line in handle:
+                raw = raw_line.strip()
+                if not raw:
+                    continue
+                try:
+                    parsed = json.loads(raw)
+                except Exception:
+                    continue
+                if isinstance(parsed, dict):
+                    yield parsed
+    except FileNotFoundError:
+        return
 
 
-@app.post("/lemonsqueezy-webhook")
-async def lemonsqueezy_webhook(request: Request, db: databases.Database = Depends(get_database)):
-    """
-    Handle LemonSqueezy webhook events for subscription purchases.
-    
-    Updates user plan_tier based on variant_id from subscription events.
-    Expects user_id to be passed in meta.custom_data during checkout.
-    """
-    import hmac
-    import hashlib
-    
-    # Verify webhook signature
-    body_bytes = await request.body()
-    if LEMONSQUEEZY_WEBHOOK_SECRET:
-        signature = request.headers.get("X-Signature")
-        if not signature:
-            api_logger.warning(
-                "LemonSqueezy webhook received without signature",
-                extra={"event_type": "lemonsqueezy_webhook_no_signature"},
-            )
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No signature")
-        
-        expected_signature = hmac.new(
-            LEMONSQUEEZY_WEBHOOK_SECRET.encode(),
-            body_bytes,
-            hashlib.sha256
-        ).hexdigest()
-        
-        if not hmac.compare_digest(signature, expected_signature):
-            api_logger.warning(
-                "LemonSqueezy webhook signature mismatch",
-                extra={"event_type": "lemonsqueezy_webhook_invalid_signature"},
-            )
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid signature")
-    
-    try:
-        payload = json.loads(body_bytes.decode())
-    except (json.JSONDecodeError, UnicodeDecodeError) as error:
-        api_logger.error(
-            "Failed to parse LemonSqueezy webhook payload",
-            exc_info=True,
-            extra={"event_type": "lemonsqueezy_webhook_parse_error", "error": str(error)},
-        )
-        return {"ok": False, "error": "Invalid JSON"}
-    
-    event_name = payload.get("meta", {}).get("event_name")
-    custom_data = payload.get("meta", {}).get("custom_data", {})
-    attributes = payload.get("data", {}).get("attributes", {})
-    
-    # Only process subscription events
-    if event_name not in ["subscription_created", "subscription_updated"]:
-        return {"ok": True}
-    
-    # Extract user_id from custom data
-    user_id = custom_data.get("user_id")
-    if not user_id:
-        api_logger.warning(
-            "LemonSqueezy webhook missing user_id",
-            extra={"event_type": "lemonsqueezy_webhook_no_user_id", "event_name": event_name},
-        )
-        return {"ok": True}
-    
-    try:
-        user_id = int(user_id)
-    except (TypeError, ValueError):
-        api_logger.warning(
-            "LemonSqueezy webhook invalid user_id format",
-            extra={"event_type": "lemonsqueezy_webhook_invalid_user_id", "user_id": user_id},
-        )
-        return {"ok": True}
-    
-    # Determine tier from variant_id
-    variant_id = str(attributes.get("variant_id", ""))
-    plan_tier = None
-    
-    if variant_id == LEMONSQUEEZY_VOYAGER_VARIANT_ID:
-        plan_tier = "voyager"
-    elif variant_id == LEMONSQUEEZY_PIONEER_VARIANT_ID:
-        plan_tier = "pioneer"
-    
-    if not plan_tier:
-        api_logger.warning(
-            "LemonSqueezy webhook unknown variant_id",
-            extra={
-                "event_type": "lemonsqueezy_webhook_unknown_variant",
-                "variant_id": variant_id,
-                "user_id": user_id,
-            },
-        )
-        return {"ok": True}
-    
-    # Check subscription status
-    subscription_status = attributes.get("status", "")
-    if subscription_status not in ["active", "on_trial"]:
-        # Don't upgrade if subscription is not active
-        api_logger.info(
-            "LemonSqueezy webhook skipping inactive subscription",
-            extra={
-                "event_type": "lemonsqueezy_webhook_inactive_subscription",
-                "user_id": user_id,
-                "status": subscription_status,
-            },
-        )
-        return {"ok": True}
-    
-    # Update user tier
-    try:
-        await db.execute(
-            users.update()
-            .where(users.c.id == user_id)
-            .values(
-                plan_tier=plan_tier,
-                updated_at=datetime.utcnow(),
-            )
-        )
-        api_logger.info(
-            "Updated user tier from LemonSqueezy webhook",
-            extra={
-                "event_type": "lemonsqueezy_webhook_tier_update",
-                "user_id": user_id,
-                "plan_tier": plan_tier,
-                "variant_id": variant_id,
-            },
-        )
-    except Exception as error:
-        api_logger.error(
-            "Failed to update user plan from LemonSqueezy webhook",
-            exc_info=True,
-            extra={
-                "event_type": "lemonsqueezy_webhook_error",
-                "user_id": user_id,
-                "error": str(error),
-            },
-        )
-        return {"ok": False}
-    
-    return {"ok": True}
+def _percentile(values: List[float], percentile: float) -> Optional[float]:
+    if not values:
+        return None
+    sorted_vals = sorted(values)
+    k = (len(sorted_vals) - 1) * (percentile / 100)
+    floor_index = math.floor(k)
+    ceil_index = math.ceil(k)
+    if floor_index == ceil_index:
+        return sorted_vals[int(k)]
+    return sorted_vals[floor_index] + (sorted_vals[ceil_index] - sorted_vals[floor_index]) * (k - floor_index)
+
+
+def _collect_latency_stats(since: Optional[datetime] = None) -> Dict[str, Any]:
+    log_paths = _resolve_log_paths()
+    app_log_path = log_paths["app"]
+    latencies: List[float] = []
+    for entry in _iter_log_entries(app_log_path):
+        timestamp = _parse_iso_timestamp(entry.get("timestamp"))
+        if since and timestamp and timestamp < since:
+            continue
+        if entry.get("event_type") == "chat_request_complete":
+            total_ms = entry.get("total_time_ms")
+            if isinstance(total_ms, (int, float)):
+                latencies.append(float(total_ms))
+
+    if not latencies:
+        return {
+            "count": 0,
+            "p50_ms": None,
+            "p95_ms": None,
+            "under_5s_ratio": None,
+            "log_path": str(app_log_path),
+            "sample_since": since.isoformat() if since else None,
+        }
+
+    p50 = statistics.median(latencies)
+    p95 = _percentile(latencies, 95)
+    under_five_seconds = len([value for value in latencies if value <= 5000])
+
+    return {
+        "count": len(latencies),
+        "p50_ms": round(p50, 2),
+        "p95_ms": round(p95, 2) if p95 is not None else None,
+        "under_5s_ratio": round(under_five_seconds / len(latencies), 3),
+        "log_path": str(app_log_path),
+        "sample_since": since.isoformat() if since else None,
+    }
+
+
+def _count_error_entries(since: Optional[datetime] = None) -> Dict[str, Any]:
+    log_paths = _resolve_log_paths()
+    app_log_path = log_paths["app"]
+    error_log_path = log_paths["error"]
+
+    def _within_window(ts: Optional[datetime]) -> bool:
+        if since is None:
+            return True
+        if ts is None:
+            return True
+        return ts >= since
+
+    error_log_entries = 0
+    error_log_client_server = 0
+    for entry in _iter_log_entries(error_log_path):
+        timestamp = _parse_iso_timestamp(entry.get("timestamp"))
+        if not _within_window(timestamp):
+            continue
+        error_log_entries += 1
+        status_code = entry.get("status_code") or entry.get("status")
+        message = str(entry.get("message") or "")
+        if isinstance(status_code, int) and status_code >= 400:
+            error_log_client_server += 1
+        elif " 400" in message or " 500" in message or "400 Bad Request" in message or "500" in message:
+            error_log_client_server += 1
+
+    http_error_entries = 0
+    for entry in _iter_log_entries(app_log_path):
+        timestamp = _parse_iso_timestamp(entry.get("timestamp"))
+        if not _within_window(timestamp):
+            continue
+        status_code = entry.get("status_code") or entry.get("status")
+        if isinstance(status_code, int) and status_code >= 400:
+            http_error_entries += 1
+
+    return {
+        "since": since.isoformat() if since else None,
+        "error_log_entries": error_log_entries,
+        "client_server_like_errors": error_log_client_server + http_error_entries,
+        "http_error_entries": http_error_entries,
+        "app_log_path": str(app_log_path),
+        "error_log_path": str(error_log_path),
+    }
 
 
 def _normalize_plan_items(raw: Any) -> List[Dict[str, Any]]:
@@ -2786,10 +3248,21 @@ def _normalize_conversation_history(history: Optional[List[Dict[str, Any]]]) -> 
   return normalized
 
 
-async def _load_conversation_history(conversation_id: str) -> List[Dict[str, Any]]:
-  """Load a conversation's messages from the user-centric Supabase tables."""
+async def _load_conversation_history(conversation_id: str, user_id: int) -> List[Dict[str, Any]]:
+  """Load a conversation's messages from the user-centric Supabase tables.
+  
+  CRITICAL: This function enforces data isolation by ensuring the conversation_id
+  belongs to the provided user_id.
+  """
   general_user_id = _general_conversation_user_id(conversation_id)
   if general_user_id is not None:
+    # Enforce ownership for general chat
+    if general_user_id != user_id:
+        app_logger.warning(
+            f"Access denied for general chat: user {user_id} tried to access {conversation_id}",
+            extra={"event_type": "security_violation_general_chat"}
+        )
+        return []
     return await _load_general_conversation_history(general_user_id)
 
   if not _conversation_store_available():
@@ -2797,6 +3270,31 @@ async def _load_conversation_history(conversation_id: str) -> List[Dict[str, Any
 
   if not _is_valid_uuid(conversation_id) or supabase is None:
     return []
+
+  # Enforce ownership for regular threads
+  try:
+      owner_check = (
+          supabase.table("user_chat_threads")
+          .select("user_identifier")
+          .eq("id", conversation_id)
+          .single()
+          .execute()
+      )
+      if not owner_check.data:
+          return []
+      
+      # Verify the owner matches the requester
+      # Supabase returns user_identifier as the stored type (int or string/uuid)
+      owner_id = owner_check.data.get("user_identifier")
+      if str(owner_id) != str(user_id):
+          app_logger.warning(
+            f"Access denied for thread: user {user_id} tried to access {conversation_id} (owned by {owner_id})",
+            extra={"event_type": "security_violation_thread"}
+          )
+          return []
+  except Exception:
+      # If check fails (e.g. not found), deny access safely
+      return []
 
   try:
     result = (
@@ -2885,21 +3383,28 @@ async def _upload_file_search_document(
     file_path: Path,
     display_name: Optional[str] = None,
 ) -> None:
-    if not FILE_SEARCH_ENABLED or not FILE_SEARCH_SERVICE:
-        return
+  if not FILE_SEARCH_ENABLED or not FILE_SEARCH_SERVICE:
+    return
 
-    try:
-        operation = await FILE_SEARCH_SERVICE.upload_to_store(
-            file_path=str(file_path),
-            store_name=store_name,
-            display_name=display_name,
-            chunking_config=FILE_SEARCH_CHUNKING_CONFIG,
-        )
-        await _wait_for_operation(operation)
-    except Exception as error:  # pragma: no cover - best effort logging
-        print(
-            f"[FileSearch] Failed to upload {file_path.name} to {store_name}: {error}"
-        )
+  safe_path = _resolve_storage_path_from_record(str(file_path))
+  if not safe_path.exists():
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="File no longer available for search indexing.",
+    )
+
+  try:
+    operation = await FILE_SEARCH_SERVICE.upload_to_store(
+        file_path=str(safe_path),
+        store_name=store_name,
+        display_name=display_name,
+        chunking_config=FILE_SEARCH_CHUNKING_CONFIG,
+    )
+    await _wait_for_operation(operation)
+  except Exception as error:  # pragma: no cover - best effort logging
+    print(
+        f"[FileSearch] Failed to upload {safe_path.name} to {store_name}: {error}"
+    )
 
 
 async def _get_user_file_search_store_names(
@@ -3442,6 +3947,62 @@ async def _delete_reminder_tool(user_id: int, args: Dict[str, Any], db: database
     return _build_reminder_payload(dict(reminder), user_id, "deleted")
 
 
+async def _delete_latest_reminder_tool(user_id: int, args: Dict[str, Any], db: databases.Database) -> Dict[str, Any]:
+    """
+    Delete the most recent reminder for the user, optionally filtering by a label substring or time window.
+    """
+    label_substring = (args.get("label_substring") or "").strip()
+    remind_before = args.get("remind_before")
+    remind_after = args.get("remind_after")
+    status_filter = (args.get("status") or "").strip()
+
+    query = reminders.select().where(reminders.c.user_id == user_id)
+
+    if label_substring:
+        query = query.where(reminders.c.label.ilike(f"%{label_substring}%"))
+
+    def _parse_dt(value: Optional[str]) -> Optional[datetime]:
+        if not value:
+            return None
+        try:
+            return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except (ValueError, TypeError):
+            return None
+
+    before_dt = _parse_dt(remind_before)
+    after_dt = _parse_dt(remind_after)
+    if before_dt:
+        query = query.where(reminders.c.remind_at <= before_dt)
+    if after_dt:
+        query = query.where(reminders.c.remind_at >= after_dt)
+
+    if status_filter:
+        query = query.where(reminders.c.status == status_filter)
+    else:
+        query = query.where(reminders.c.status.in_(["pending", "delivered"]))
+
+    query = query.order_by(reminders.c.created_at.desc(), reminders.c.id.desc()).limit(1)
+
+    record = await db.fetch_one(query)
+    if not record:
+        raise HTTPException(status_code=404, detail="No matching reminder found to delete.")
+
+    reminder_id = record["id"]
+    reminder_label = record.get("label")
+    reminder_time = record.get("remind_at")
+
+    await db.execute(
+        reminders.delete().where((reminders.c.id == reminder_id) & (reminders.c.user_id == user_id))
+    )
+
+    summary_parts = [f"Deleted reminder {reminder_id}"]
+    if reminder_label:
+        summary_parts.append(f'"{reminder_label}"')
+    if isinstance(reminder_time, datetime):
+        summary_parts.append(f"at {reminder_time.isoformat()}")
+
+    return {"status": "success", "message": " ".join(summary_parts)}
+
 def _build_reminder_payload(reminder: Dict[str, Any], user_id: int, status: str, entity: str = "plan") -> Dict[str, Any]:
     """Build a gray.reminder payload compatible with the frontend."""
     reminder_id = reminder.get("id")
@@ -3718,17 +4279,35 @@ async def _delete_plan_tool(user_id: int, args: Dict[str, Any], db: databases.Da
 
 
 async def _complete_onboarding(user_id: int, args: Dict[str, Any], db: databases.Database) -> Dict[str, Any]:
-    core_blocker = args.get("core_blocker")
-    # Log the blocker to personalization_about
-    await db.execute(
-        users.update()
-        .where(users.c.id == user_id)
-        .values(
-            has_seen_general_chat=True,
-            personalization_about=f"Core Blocker: {core_blocker}",
-            updated_at=datetime.utcnow()
-        )
-    )
+    def clean(value: Any) -> Optional[str]:
+        if value is None:
+            return None
+        text = str(value).strip()
+        return text or None
+
+    nickname = clean(args.get("nickname") or args.get("name"))
+    occupation = clean(args.get("occupation"))
+    about = clean(args.get("about") or args.get("about_you"))
+    core_blocker = clean(args.get("core_blocker"))
+
+    about_parts: List[str] = []
+    if about:
+        about_parts.append(about)
+    if core_blocker:
+        about_parts.append(f"Core blocker: {core_blocker}")
+
+    updates: Dict[str, Any] = {
+        "has_seen_general_chat": True,
+        "updated_at": datetime.utcnow(),
+    }
+    if nickname is not None:
+        updates["personalization_nickname"] = nickname
+    if occupation is not None:
+        updates["personalization_occupation"] = occupation
+    if about_parts:
+        updates["personalization_about"] = "\n\n".join(about_parts)
+
+    await db.execute(users.update().where(users.c.id == user_id).values(**updates))
     return {"status": "success", "message": "Onboarding completed."}
 
 async def _execute_function_call(
@@ -3755,6 +4334,7 @@ async def _execute_function_call(
         "create_reminder": lambda u, a, d: _create_reminder_tool(u, a, d),
         "update_reminder": lambda u, a, d: _update_reminder_tool(u, a, d),
         "delete_reminder": lambda u, a, d: _delete_reminder_tool(u, a, d),
+        "delete_latest_reminder": lambda u, a, d: _delete_latest_reminder_tool(u, a, d),
         "get_workspace_state": lambda u, a, d: _get_workspace_state_tool(u, a, d),
     }.get(function_call.name)
     if not handler:
@@ -3816,7 +4396,8 @@ async def _resolve_media_attachments(
     attachments: List[GeminiAttachment] = []
     for attachment_id in attachment_ids:
         record = records[attachment_id]
-        storage_path = Path(record["storage_path"])
+        storage_path_value = record["storage_path"]
+        storage_path = _resolve_storage_path_from_record(str(storage_path_value))
         if not storage_path.exists():
             raise HTTPException(
                 status_code=status.HTTP_410_GONE,
@@ -4287,6 +4868,41 @@ async def update_user_streak(
 async def root():
     return {"message": "User Profile API with AI Chat"}
 
+
+@app.get("/admin/metrics")
+async def get_admin_metrics(
+    db: databases.Database = Depends(get_database),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    """Lightweight metrics for local admin use."""
+    require_admin(current_user)
+    now = datetime.utcnow()
+    start_of_today = datetime.combine(now.date(), datetime.min.time())
+
+    total_users = await db.fetch_val(
+        sqlalchemy.select(sqlalchemy.func.count()).select_from(users)
+    )
+    messages_today = await db.fetch_val(
+        sqlalchemy.select(sqlalchemy.func.count())
+        .select_from(general_chat_messages)
+        .where(general_chat_messages.c.created_at >= start_of_today)
+    )
+
+    error_stats = _count_error_entries(since=start_of_today)
+    latency_stats = _collect_latency_stats(since=now - timedelta(days=1))
+
+    return {
+        "generated_at": now.replace(tzinfo=timezone.utc).isoformat(),
+        "totals": {"users": int(total_users or 0)},
+        "messages": {"today": int(messages_today or 0)},
+        "errors": error_stats,
+        "latency": latency_stats,
+        "manual_checks": {
+            "stability_mobile_keyboard": "Confirm the mobile keyboard does not cover the chat input.",
+            "onboarding_speed": "Verify signup finishes in under 60 seconds.",
+        },
+    }
+
 # AI Chat helper functions
 async def get_or_create_conversation(
   conversation_id: Optional[str],
@@ -4517,7 +5133,24 @@ async def stream_ai_response(
             yield ("final", {"text": limit_msg, "grounding_metadata": None})
             return
 
-    provider = AI_PROVIDER or "openrouter"
+    request_structured_reminders = _should_request_structured_reminders(message)
+    needs_structured_tools = request_structured_reminders or _needs_structured_tools(message)
+    if needs_structured_tools:
+        request_structured_reminders = True
+
+    explicit_model = (model or "").strip()
+    normalized_model = explicit_model.lower()
+    prefers_gemini = bool(tools) or normalized_model.startswith("models/") or normalized_model.startswith("gemini")
+
+    provider = "gemini"
+    if needs_structured_tools:
+        if not model:
+            model = REMINDER_MODEL
+    elif not prefers_gemini and OPENROUTER_SERVICE and OPENROUTER_SERVICE.available:
+        provider = "openrouter"
+        if not model:
+            model = GROK_DEFAULT_MODEL
+
     conversation_history = _normalize_conversation_history(conversation_history)
     cached_contents = None
     cache_text_block: Optional[str] = None
@@ -4537,30 +5170,6 @@ async def stream_ai_response(
     if should_generate_title:
         effective_system_prompt = f"{system_prompt or ''}\n\n{GRAY_TITLE_INSTRUCTION}"
 
-
-    if provider == "anthropic":
-        if not ANTHROPIC_SERVICE.available:
-            raise RuntimeError("Anthropic service unavailable")
-        accumulated = ""
-        async for fragment in ANTHROPIC_SERVICE.stream(
-            message,
-            conversation_history,
-            workspace_with_cache,
-            effective_system_prompt,
-            time_context,
-            model,
-        ):
-            if not fragment:
-                continue
-            accumulated += fragment
-            yield ("delta", fragment)
-        yield ("final", {"text": accumulated, "grounding_metadata": None})
-        return
-
-    request_structured_reminders = _should_request_structured_reminders(message)
-
-    request_structured_reminders = _should_request_structured_reminders(message)
-
     if provider in {"openrouter", "grok", "grok-lite"}:
         if not OPENROUTER_SERVICE.available:
             api_logger.warning(
@@ -4573,9 +5182,47 @@ async def stream_ai_response(
                     "OpenRouter does not support attachments in this flow; ignoring attachments",
                     extra={"event_type": "ai_attachments_ignored", "provider": provider},
                 )
+            
+            # WORKAROUND: OpenRouter client doesn't support tools yet.
+            # If we have tools (specifically onboarding), inject a system prompt to force JSON output,
+            # then intercept it here to execute the tool manually.
+            is_onboarding_tool = False
+            if tools:
+                # Check if it's the onboarding tool set
+                # We can check if 'complete_onboarding' is in the function declarations
+                for t in tools:
+                    if t.function_declarations:
+                        for fd in t.function_declarations:
+                            if fd.name == "complete_onboarding":
+                                is_onboarding_tool = True
+                                break
+            
+            if is_onboarding_tool:
+                json_instruction = (
+                    "\n\nIMPORTANT: When you have collected the user's nickname, occupation, and about blurb, "
+                    "you MUST output a JSON block to save it. Do not output normal text when saving.\n"
+                    "Output EXACTLY this format:\n"
+                    "```json\n"
+                    "{\n"
+                    '  "tool": "complete_onboarding",\n'
+                    '  "nickname": "...",\n'
+                    '  "occupation": "...",\n'
+                    '  "about": "...",\n'
+                    '  "core_blocker": "..."\n'
+                    "}\n"
+                    "```\n"
+                    "After outputting the JSON, stop generating."
+                )
+                effective_system_prompt = (effective_system_prompt or "") + json_instruction
+
             accumulated = ""
             try:
                 response_format = REMINDER_RESPONSE_FORMAT if request_structured_reminders else None
+                
+                # Buffer for detecting JSON tool calls
+                tool_buffer = ""
+                is_collecting_tool = False
+                
                 async for chunk in OPENROUTER_SERVICE.stream(
                     message,
                     conversation_history,
@@ -4588,9 +5235,71 @@ async def stream_ai_response(
                 ):
                     if isinstance(chunk, dict):
                         continue
-                    accumulated += chunk
-                    if chunk:
-                        yield ("delta", chunk)
+                        
+                    # If we are looking for a tool call, buffer the output
+                    if is_onboarding_tool:
+                        tool_buffer += chunk
+                        
+                        # Check if we entered a code block or JSON start
+                        if "```json" in tool_buffer or (tool_buffer.strip().startswith("{") and "tool" in tool_buffer):
+                            is_collecting_tool = True
+                        
+                        # If we are collecting a potential tool call, don't yield to user yet
+                        if is_collecting_tool:
+                            # Check if we have a complete JSON block
+                            if "```" in tool_buffer.split("```json")[-1] or "}" in tool_buffer:
+                                # Try to extract and parse
+                                try:
+                                    # Regex to find the JSON block
+                                    json_match = re.search(r"```json\s*({.*?})\s*```", tool_buffer, re.DOTALL)
+                                    if not json_match:
+                                        # Maybe raw JSON without blocks?
+                                        json_match = re.search(r"({.*\"tool\":\s*\"complete_onboarding\".*})", tool_buffer, re.DOTALL)
+                                    
+                                    if json_match:
+                                        json_str = json_match.group(1)
+                                        tool_data = json.loads(json_str)
+                                        
+                                        if tool_data.get("tool") == "complete_onboarding":
+                                            api_logger.info(f"Intercepted OpenRouter onboarding tool call for user {user_id}")
+                                            
+                                            # Execute the tool
+                                            await _complete_onboarding(user_id, tool_data, db)
+                                            
+                                            # Yield a confirmation message instead of the JSON
+                                            confirmation = "\n\n---\nSaved. I'm set with your name, what you do, and your blurb—ready whenever you are."
+                                            yield ("delta", confirmation)
+                                            accumulated += confirmation
+                                            
+                                            # Stop processing stream
+                                            return
+                                except Exception as e:
+                                    # If parsing fails, just flush the buffer as text (fallback)
+                                    api_logger.warning(f"Failed to parse intercepted tool JSON: {e}")
+                                    yield ("delta", tool_buffer)
+                                    accumulated += tool_buffer
+                                    tool_buffer = ""
+                                    is_collecting_tool = False
+                            continue
+                        
+                        # If not collecting tool, flush buffer (unless it's a partial match start)
+                        # This is a simple heuristic; for robustness we might buffer more, 
+                        # but for now let's just stream if it doesn't look like JSON start.
+                        if len(tool_buffer) > 20 and not is_collecting_tool:
+                             yield ("delta", tool_buffer)
+                             accumulated += tool_buffer
+                             tool_buffer = ""
+                    else:
+                        # Normal streaming
+                        accumulated += chunk
+                        if chunk:
+                            yield ("delta", chunk)
+                            
+                # Flush any remaining buffer
+                if is_onboarding_tool and tool_buffer:
+                     yield ("delta", tool_buffer)
+                     accumulated += tool_buffer
+
                 if response_format:
                     text, structured_reminders = _materialize_structured_reminders(accumulated)
                     # Reminders sent separately via final event, not embedded in text
@@ -4634,16 +5343,29 @@ async def stream_ai_response(
             if not search_enabled:
                 base_tools = [t for t in base_tools if t != SEARCH_TOOL]
         tool_list = [*base_tools, *maps_tools, *file_search_tools]
+
+        # Consolidate tools for Gemini to avoid issues with mixed tool types in the list
+        # The SDK/API can be sensitive to having multiple Tool objects, especially mixing
+        # Google Search and Function Declarations.
+        if provider == "gemini" and tool_list:
+            all_declarations = []
+            search_instance = None
+            
+            for t in tool_list:
+                if t.function_declarations:
+                    all_declarations.extend(t.function_declarations)
+                if t.google_search:
+                    search_instance = t.google_search
+            
+            # Rebuild a single tool if we have any components
+            if all_declarations or search_instance:
+                tool_list = [types.Tool(
+                    function_declarations=all_declarations if all_declarations else None,
+                    google_search=search_instance
+                )]
         
         # Ensure we have an explicit tool_config when tools are present
         effective_tool_config = maps_tool_config
-        if tool_list and not effective_tool_config:
-            # Use AUTO mode to allow the model to decide whether to call a tool
-            effective_tool_config = types.ToolConfig(
-                function_calling_config=types.FunctionCallingConfig(
-                    mode=types.FunctionCallingConfigMode.AUTO
-                )
-            )
 
     
     grounding_metadata: Optional[Dict[str, Any]] = None
@@ -4693,9 +5415,19 @@ async def stream_ai_response(
                         if payload:
                             grounding_metadata = payload
                     
-                    accumulated += text_fragment
-                    if text_fragment:
-                        yield ("delta", text_fragment)
+                    suppress_text = False
+                    if chunk.candidates:
+                        candidate = chunk.candidates[0]
+                        if candidate.content and candidate.content.parts:
+                            for part in candidate.content.parts:
+                                if part.function_call:
+                                    suppress_text = True
+                                    break
+
+                    if not suppress_text:
+                        accumulated += text_fragment
+                        if text_fragment:
+                            yield ("delta", text_fragment)
                     
                     # Collect function calls
                     if chunk.candidates:
@@ -4717,12 +5449,8 @@ async def stream_ai_response(
                             final_usage.candidates_token_count or 0
                         )
 
-                    final_payload = {"text": accumulated, "grounding_metadata": grounding_metadata}
-                    if accumulated:
-                        yield ("final", final_payload)
-                        return
-                    # Fallback for empty response (e.g. safety blocks)
-                    yield ("final", {"text": "I'm unable to generate a response for that request.", "grounding_metadata": grounding_metadata})
+                    final_payload = {"text": accumulated or "", "grounding_metadata": grounding_metadata}
+                    yield ("final", final_payload)
                     return
 
                 # Handle tool calls
@@ -4820,7 +5548,24 @@ async def generate_ai_response(
     conversation_history = _normalize_conversation_history(conversation_history)
     if not (message or "").strip() and not conversation_history and not (attachments or []):
         message = "Let's get started."
-    provider = AI_PROVIDER or "openrouter"
+    # Route tool-intent messages (reminders/plans/habits/etc.) to Gemini Flash Lite.
+    request_structured_reminders = _should_request_structured_reminders(message)
+    needs_structured_tools = request_structured_reminders or _needs_structured_tools(message)
+    if needs_structured_tools:
+        request_structured_reminders = True
+
+    explicit_model = (model or "").strip()
+    normalized_model = explicit_model.lower()
+    prefers_gemini = bool(tools) or normalized_model.startswith("models/") or normalized_model.startswith("gemini")
+
+    provider = "gemini"
+    if needs_structured_tools:
+        if not model:
+            model = REMINDER_MODEL
+    elif not prefers_gemini and OPENROUTER_SERVICE and OPENROUTER_SERVICE.available:
+        provider = "openrouter"
+        if not model:
+            model = GROK_DEFAULT_MODEL
 
     cached_contents = None
     cache_text_block: Optional[str] = None
@@ -4841,23 +5586,6 @@ async def generate_ai_response(
     effective_system_prompt = system_prompt
     if should_generate_title:
         effective_system_prompt = f"{system_prompt or ''}\n\n{GRAY_TITLE_INSTRUCTION}"
-
-    if provider == "anthropic":
-        if not ANTHROPIC_SERVICE.available:
-            raise HTTPException(status_code=503, detail="Anthropic service unavailable")
-        if attachments:
-            print("[Anthropic] Attachment support is not implemented; ignoring attachments for this request.")
-        response_text = await ANTHROPIC_SERVICE.generate(
-            message,
-            conversation_history,
-            workspace_with_cache,
-            effective_system_prompt,
-            time_context,
-            model,
-        )
-        if not response_text:
-            raise RuntimeError("AI response was empty")
-        return response_text, None
 
     if provider in {"openrouter", "grok", "grok-lite"}:
         if not OPENROUTER_SERVICE.available:
@@ -4932,12 +5660,12 @@ async def generate_ai_response(
         tool_list = [*base_tools, *maps_tools, *file_search_tools]
         
         # Ensure we have an explicit tool_config when tools are present
-        # Use NONE mode since we manually execute function calls via _execute_function_call
+        # Keep function calling enabled so the model can return calls we execute manually
         effective_tool_config = maps_tool_config
         if tool_list and not effective_tool_config:
             effective_tool_config = types.ToolConfig(
                 function_calling_config=types.FunctionCallingConfig(
-                    mode=types.FunctionCallingConfigMode.NONE
+                    mode=types.FunctionCallingConfigMode.AUTO
                 )
             )
 
@@ -5082,29 +5810,35 @@ def _build_starter_prompt(payload: ChatStarterRequest, profile_context: str) -> 
 
 
 @app.post("/api/chat/starter", response_model=ChatStarterResponse)
-async def generate_chat_starter(request: ChatStarterRequest) -> ChatStarterResponse:
+@limiter.limit("30/minute")
+async def generate_chat_starter(
+    request: Request,
+    payload: ChatStarterRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> ChatStarterResponse:
     """Return an AI-authored greeting for the General workspace."""
-    profile_context = _starter_profile_context(request)
-    prompt = _build_starter_prompt(request, profile_context)
-    fallback_message = _starter_fallback_message(request)
+    require_same_user(payload.user_id, current_user)
+    profile_context = _starter_profile_context(payload)
+    prompt = _build_starter_prompt(payload, profile_context)
+    fallback_message = _starter_fallback_message(payload)
     try:
         ai_logger.info(
             "Generating chat starter",
             extra={
                 "event_type": "chat_starter_request",
-                "user_id": request.user_id,
+                "user_id": payload.user_id,
                 "has_profile_context": bool(profile_context),
             },
         )
         response_text, _ = await generate_ai_response(
             prompt,
             conversation_history=[],
-            workspace_context=request.workspace_context,
-            system_prompt=request.system_prompt,
-            time_context=request.time_context,
+            workspace_context=payload.workspace_context,
+            system_prompt=payload.system_prompt,
+            time_context=payload.time_context,
             model=None,
             attachments=None,
-            user_id=request.user_id,
+            user_id=payload.user_id,
             db=database,
             search_enabled=False,
             should_generate_title=False,
@@ -5118,7 +5852,8 @@ async def generate_chat_starter(request: ChatStarterRequest) -> ChatStarterRespo
             "Chat starter generation failed",
             extra={
                 "event_type": "chat_starter_error",
-                "user_id": request.user_id,
+                "event_type": "chat_starter_error",
+                "user_id": payload.user_id,
             },
             exc_info=True,
         )
@@ -5127,24 +5862,34 @@ async def generate_chat_starter(request: ChatStarterRequest) -> ChatStarterRespo
 
 # AI Chat endpoints
 @app.post("/api/chat/title", response_model=ChatTitleResponse)
-async def create_chat_title(request: ChatTitleRequest):
+@limiter.limit("30/minute")
+async def create_chat_title(
+    request: Request,
+    payload: ChatTitleRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
     """Generate a chat title suggestion using local heuristics."""
+    _ = current_user  # Auth enforced via dependency
     suggestion: Optional[str] = None
     try:
-        suggestion = await generate_chat_title_suggestion(request.message)
+        suggestion = await generate_chat_title_suggestion(payload.message)
     except Exception as error:  # pragma: no cover - best effort logging
         print(f"Title generation error: {error}")
     if suggestion:
         return ChatTitleResponse(title=suggestion)
-    return ChatTitleResponse(title=_fallback_title_from_message(request.message))
+    return ChatTitleResponse(title=_fallback_title_from_message(payload.message))
 
 
 @app.post("/context-cache", response_model=ContextCache)
+@limiter.limit("60/minute")
 async def create_context_cache(
+    request: Request,
     payload: ContextCacheBase,
     user_id: int = Query(..., description="ID of the user creating the context cache"),
     db: databases.Database = Depends(get_database),
+    current_user: Dict[str, Any] = Depends(get_current_user),
 ) -> ContextCache:
+    require_same_user(user_id, current_user)
     now = datetime.utcnow()
     query = context_cache.insert().values(
         user_id=user_id,
@@ -5165,13 +5910,20 @@ async def create_context_cache(
 
 
 @app.get("/context-cache/{cache_id}", response_model=ContextCache)
-async def get_context_cache(cache_id: int, db: databases.Database = Depends(get_database)):
+@limiter.limit("120/minute")
+async def get_context_cache(
+    request: Request,
+    cache_id: int,
+    db: databases.Database = Depends(get_database),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
     record = await db.fetch_one(
         context_cache.select().where(context_cache.c.id == cache_id)
     )
     payload = _serialize_context_cache(record)
     if not payload:
         raise HTTPException(status_code=404, detail="Context cache not found.")
+    require_same_user(payload["user_id"], current_user)
     return ContextCache(**payload)
 
 
@@ -5204,21 +5956,29 @@ async def _wait_for_operation(operation: types.Operation) -> types.Operation:
 
 
 @app.post("/api/file-search/stores", response_model=Dict[str, Any])
+@limiter.limit("10/minute")
 async def create_file_search_store(
+    request: Request,
     payload: FileSearchStoreCreate,
+    current_user: Dict[str, Any] = Depends(get_current_user),
 ):
+    _ = current_user  # Auth enforced via dependency
     _ensure_file_search_enabled()
     store = await FILE_SEARCH_SERVICE.create_store(payload.display_name)
     return {"name": store.name, "display_name": store.display_name}
 
 
 @app.post("/api/file-search/upload", response_model=FileSearchUploadResponse)
+@limiter.limit("10/minute")
 async def upload_to_file_search_store(
+    request: Request,
     store_name: str = Form(...),
     file: UploadFile = File(...),
     display_name: Optional[str] = Form(None),
     chunking_config: Optional[str] = Form(None),
+    current_user: Dict[str, Any] = Depends(get_current_user),
 ):
+    _ = current_user  # Auth enforced via dependency
     _ensure_file_search_enabled()
     chunk_config = _parse_json_field(chunking_config)
     temp_path = MEDIA_UPLOAD_DIR / f"filesearch-{uuid4().hex}{Path(file.filename or 'upload').suffix}"
@@ -5245,9 +6005,13 @@ async def upload_to_file_search_store(
 
 
 @app.post("/api/file-search/import", response_model=FileSearchUploadResponse)
+@limiter.limit("5/minute")
 async def import_file_search(
+    request: Request,
     payload: FileSearchImportPayload,
+    current_user: Dict[str, Any] = Depends(get_current_user),
 ):
+    _ = current_user  # Auth enforced via dependency
     _ensure_file_search_enabled()
     operation = await FILE_SEARCH_SERVICE.import_file(
         payload.file_search_store_name,
@@ -5263,117 +6027,118 @@ async def import_file_search(
 
 
 @app.post("/api/uploads", response_model=MediaUpload)
+@limiter.limit("5/minute")
 async def upload_media(
-    user_id: int = Form(...),
+    request: Request,
     file: UploadFile = File(...),
+    current_user: Dict[str, Any] = Depends(get_current_user),
     db: databases.Database = Depends(get_database),
 ):
-    """Upload an image or PDF for later chat use."""
-    content_type = (file.content_type or "").lower()
-    if not content_type:
-        raise HTTPException(status_code=400, detail="Missing content type for upload.")
+  """Upload an image or PDF for later chat use."""
+  user_id = current_user["id"]
 
-    if not (content_type.startswith("image/") or content_type == "application/pdf"):
-        raise HTTPException(status_code=400, detail="Only image and PDF media are supported.")
+  storage_path, mime_type, size, sanitized_name, storage_name = await _persist_upload_file(
+      file,
+      allowed_mime_types=CHAT_UPLOAD_MIME_TYPES,
+      allowed_extensions=CHAT_UPLOAD_EXTENSIONS,
+      max_size_bytes=MAX_MEDIA_UPLOAD_SIZE_BYTES,
+  )
 
-    original_name = Path(file.filename or "").name or "upload"
-    extension = Path(original_name).suffix
-    media_id = uuid4().hex
-    storage_name = f"{media_id}{extension}"
-    storage_path = MEDIA_UPLOAD_DIR / storage_name
+  try:
+      storage_path_for_db = storage_path.relative_to(MEDIA_UPLOAD_ROOT)
+  except Exception:
+      storage_path_for_db = Path(storage_name)
 
-    file_bytes = await file.read()
-    if not file_bytes:
-        raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+  public_url = None
+  if STORAGE_BASE_URL:
+      public_url = f"{STORAGE_BASE_URL.rstrip('/')}/{storage_name}"
 
-    try:
-        storage_path.write_bytes(file_bytes)
-    except OSError as error:
-        raise HTTPException(status_code=500, detail=f"Failed to store upload: {error}") from error
-
-    public_url = None
-    if STORAGE_BASE_URL:
-        # Serve via configurable base (e.g., NEXT_PUBLIC_SITE_URL or CDN)
-        public_url = f"{STORAGE_BASE_URL.rstrip('/')}/{storage_name}"
-
-    now = datetime.utcnow()
-    query = media_uploads.insert().values(
-        user_id=user_id,
-        filename=original_name,
-        mime_type=content_type,
-        size=len(file_bytes),
-        storage_path=str(storage_path),
-        created_at=now,
-    )
-    media_record_id = await db.execute(query)
-    if FILE_SEARCH_ENABLED and FILE_SEARCH_SERVICE:
-        store_name = await _ensure_user_file_search_store(db, user_id)
-        if store_name:
-            await _upload_file_search_document(store_name, storage_path, original_name)
-    return MediaUpload(
-        id=media_record_id,
-        user_id=user_id,
-        filename=original_name,
-        mime_type=content_type,
-        size=len(file_bytes),
-        created_at=now,
-        public_url=public_url,
-    )
+  now = datetime.utcnow()
+  query = media_uploads.insert().values(
+      user_id=user_id,
+      filename=sanitized_name,
+      mime_type=mime_type,
+      size=size,
+      storage_path=str(storage_path_for_db),
+      created_at=now,
+  )
+  media_record_id = await db.execute(query)
+  if FILE_SEARCH_ENABLED and FILE_SEARCH_SERVICE:
+      store_name = await _ensure_user_file_search_store(db, user_id)
+      if store_name:
+          await _upload_file_search_document(store_name, storage_path, sanitized_name)
+  return MediaUpload(
+      id=media_record_id,
+      user_id=user_id,
+      filename=sanitized_name,
+      mime_type=mime_type,
+      size=size,
+      created_at=now,
+      public_url=public_url,
+  )
 
 
 @app.post("/api/chat", response_model=ChatResponse)
-async def chat_with_ai(request: ChatRequest, db: databases.Database = Depends(get_database)):
+@limiter.limit("20/minute")
+async def chat_endpoint(
+    request: Request,
+    chat_request: ChatRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db: databases.Database = Depends(get_database)
+):
     """Send a message to AI and get a response"""
+    # Force the request user to the authenticated user to avoid mismatches from stale client state.
+    chat_request.user_id = current_user["id"]
     start_time = datetime.utcnow()
 
     # Set request context for logging
     correlation_id = str(uuid4())
-    set_request_context(correlation_id, str(request.user_id)[:8])
+    set_request_context(correlation_id, str(chat_request.user_id)[:8])
 
     api_logger.info("Chat request received", extra={
         "event_type": "chat_request_start",
-        "user_id": request.user_id,
-        "message_length": len(request.message),
-        "conversation_id": request.conversation_id,
-        "model": request.model,
+        "user_id": chat_request.user_id,
+        "message_length": len(chat_request.message),
+        "conversation_id": chat_request.conversation_id,
+        "model": chat_request.model,
         "correlation_id": correlation_id
     })
 
     try:
         # Generate a title for the chat session (only if requested)
         session_title = None
-        if request.should_generate_title:
+        if chat_request.should_generate_title:
             try:
-                title_request = ChatTitleRequest(message=request.message)
+                title_request = ChatTitleRequest(message=chat_request.message)
                 # Add timeout to prevent title generation from blocking
                 title_response = await wait_for(
-                    create_chat_title(title_request),
+                    create_chat_title(title_request, current_user),
                     timeout=3.0
                 )
                 session_title = title_response.title
             except TimeoutError:
                 api_logger.warning("Title generation timeout, using fallback", extra={
                     "event_type": "title_generation_timeout",
-                    "user_id": request.user_id,
+                    "user_id": chat_request.user_id,
                     "correlation_id": correlation_id
                 })
-                session_title = _fallback_title_from_message(request.message)
+                session_title = _fallback_title_from_message(chat_request.message)
             except Exception as title_error:
                 api_logger.warning(f"Title generation failed: {title_error}", extra={
                     "event_type": "title_generation_error",
-                    "user_id": request.user_id,
+                    "user_id": chat_request.user_id,
                     "error": str(title_error),
                     "correlation_id": correlation_id
                 })
-                session_title = _fallback_title_from_message(request.message)
+                session_title = _fallback_title_from_message(chat_request.message)
 
         if not session_title:
-            session_title = _fallback_title_from_message(request.message)
+            session_title = _fallback_title_from_message(chat_request.message)
 
         # Create chat session
         now = datetime.utcnow()
         chat_session_query = chat_sessions.insert().values(
-            user_id=request.user_id,
+            user_id=chat_request.user_id,
             title=session_title,
             scope="thread",
             created_at=now,
@@ -5382,72 +6147,72 @@ async def chat_with_ai(request: ChatRequest, db: databases.Database = Depends(ge
         session_id = await db.execute(chat_session_query)
 
         # Determine conversation_id, only using Supabase when provided ID is valid or unspecified
-        requested_conversation_id = request.conversation_id
+        requested_conversation_id = chat_request.conversation_id
         valid_requested_conversation_id = _is_valid_uuid(requested_conversation_id)
         if requested_conversation_id and not valid_requested_conversation_id:
             conversation_id = requested_conversation_id
         else:
             conversation_id = await get_or_create_conversation(
                 requested_conversation_id if valid_requested_conversation_id else None,
-                request.user_id,
+                chat_request.user_id,
                 title=session_title,
             )
 
         # Get conversation history for context
-        conversation_history: List[Dict[str, Any]] = await _load_conversation_history(conversation_id)
+        conversation_history: List[Dict[str, Any]] = await _load_conversation_history(conversation_id, chat_request.user_id)
 
         # Save user message to local conversation store (after capturing prior history),
         # but avoid writing an identical message twice in a row (e.g., when a fallback
         # request replays the same prompt after a streaming failure).
         user_message_payload: Dict[str, Any] = {
             "role": "user",
-            "text": request.message
+            "text": chat_request.message
         }
         last_history_entry: Optional[Dict[str, Any]] = conversation_history[-1] if conversation_history else None
         should_persist_user = not (
             last_history_entry
             and last_history_entry.get("role") in {"user", "assistant", "model"}
-            and (last_history_entry.get("text") or "") == request.message
+            and (last_history_entry.get("text") or "") == chat_request.message
         )
         if should_persist_user:
-            await save_conversation_message(conversation_id, user_message_payload, user_id=request.user_id)
+            await save_conversation_message(conversation_id, user_message_payload, user_id=chat_request.user_id)
 
         # Enforce tier restrictions
         # Only Voyager and Pioneer users can use reasoning mode.
         # If the user is on the 'scout' plan (or no plan), force reasoning_mode to False.
-        user_record = await db.fetch_one(users.select().where(users.c.id == request.user_id))
+        user_record = await db.fetch_one(users.select().where(users.c.id == chat_request.user_id))
         plan_tier = user_record["plan_tier"] if user_record else None
         
         # Normalize tier to lowercase for comparison
         normalized_tier = (plan_tier or "scout").lower()
         
         # If user requested reasoning but is not eligible, disable it silently (or we could raise 403)
-        effective_reasoning_mode = request.reasoning_mode
+        effective_reasoning_mode = chat_request.reasoning_mode
         if effective_reasoning_mode and normalized_tier not in ("voyager", "pioneer"):
-            api_logger.info(f"Disabling reasoning mode for user {request.user_id} (tier: {normalized_tier})")
+            api_logger.info(f"Disabling reasoning mode for user {chat_request.user_id} (tier: {normalized_tier})")
             effective_reasoning_mode = False
 
         # Generate AI response
         ai_response, grounding_metadata = await generate_ai_response(
-            request.message,
+            chat_request.message,
             conversation_history,
-            request.context,
-            request.system_prompt,
-            request.time_context,
-            request.model,
-            request.attachments,
-            request.user_id,
+            chat_request.context,
+            chat_request.system_prompt,
+            chat_request.time_context,
+            chat_request.model,
+            chat_request.attachments,
+            chat_request.user_id,
             db,
-            response_schema=request.response_json_schema,
-            response_mime_type=request.response_mime_type,
-            context_cache_id=request.context_cache_id,
-            maps_enabled=request.maps_enabled,
-            maps_latitude=request.maps_latitude,
-            maps_longitude=request.maps_longitude,
-            maps_widget=request.maps_widget,
-            search_enabled=request.web_search_enabled,
-            file_search_enabled=request.file_search_enabled,
-            should_generate_title=request.should_generate_title,
+            response_schema=chat_request.response_json_schema,
+            response_mime_type=chat_request.response_mime_type,
+            context_cache_id=chat_request.context_cache_id,
+            maps_enabled=chat_request.maps_enabled,
+            maps_latitude=chat_request.maps_latitude,
+            maps_longitude=chat_request.maps_longitude,
+            maps_widget=chat_request.maps_widget,
+            search_enabled=chat_request.web_search_enabled,
+            file_search_enabled=chat_request.file_search_enabled,
+            should_generate_title=chat_request.should_generate_title,
             reasoning_mode=effective_reasoning_mode,
         )
 
@@ -5458,11 +6223,11 @@ async def chat_with_ai(request: ChatRequest, db: databases.Database = Depends(ge
         }
         if grounding_metadata:
             assistant_message_payload["grounding_metadata"] = grounding_metadata
-        await save_conversation_message(conversation_id, assistant_message_payload, user_id=request.user_id)
+        await save_conversation_message(conversation_id, assistant_message_payload, user_id=chat_request.user_id)
 
         # Extract title from AI response if title generation was requested
         extracted_title: Optional[str] = None
-        if request.should_generate_title:
+        if chat_request.should_generate_title:
             extracted_title = _extract_title_from_response(ai_response)
             if extracted_title:
                 # Update the title in the database with the AI-generated one
@@ -5505,30 +6270,38 @@ ONBOARDING_SYSTEM_PROMPT = load_prompt_from_file(ONBOARDING_PROMPT_PATH, DEFAULT
 
 
 @app.post("/api/chat/stream")
-async def chat_with_ai_stream(request: ChatRequest, db: databases.Database = Depends(get_database)):
+@limiter.limit("20/minute")
+async def chat_stream(
+    request: Request,
+    chat_request: ChatRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db: databases.Database = Depends(get_database)
+):
     """Stream an AI response token-by-token using Server-Sent Events."""
+    chat_request.user_id = current_user["id"]
     start_time = datetime.utcnow()
 
     # Set request context for logging
     correlation_id = str(uuid4())
-    set_request_context(correlation_id, str(request.user_id)[:8])
+    set_request_context(correlation_id, str(chat_request.user_id)[:8])
 
     api_logger.info("Chat stream request received", extra={
         "event_type": "chat_stream_request_start",
-        "user_id": request.user_id,
-        "message_length": len(request.message),
-        "conversation_id": request.conversation_id,
-        "model": request.model,
+        "user_id": chat_request.user_id,
+        "message_length": len(chat_request.message),
+        "conversation_id": chat_request.conversation_id,
+        "model": chat_request.model,
         "correlation_id": correlation_id
     })
 
     try:
         # Fetch user record for logic
-        user_record = await db.fetch_one(users.select().where(users.c.id == request.user_id))
+        user_record = await db.fetch_one(users.select().where(users.c.id == chat_request.user_id))
         
         # Handle Onboarding Logic
-        effective_message = request.message
-        effective_system_prompt = request.system_prompt
+        effective_message = chat_request.message
+        effective_system_prompt = chat_request.system_prompt
+        effective_model = chat_request.model
         tool_list = None
 
         if user_record and not user_record["has_seen_general_chat"]:
@@ -5537,36 +6310,36 @@ async def chat_with_ai_stream(request: ChatRequest, db: databases.Database = Dep
             tool_list = list(ONBOARDING_TOOLS)
             
             # Force a capable model for onboarding tools
-            request.model = "models/gemini-flash-latest"
+            effective_model = "models/gemini-flash-latest"
             
             # If this is the very first interaction (triggered by frontend with empty message usually)
             if not effective_message or not effective_message.strip():
-                effective_message = "Hi Gray, I'm new here. Let's get started."
+                effective_message = ""
             
-            api_logger.info(f"User {request.user_id} is in onboarding flow")
+            api_logger.info(f"User {chat_request.user_id} is in onboarding flow")
 
         # Generate a title for the chat session (only if requested)
         session_title = None
-        if request.should_generate_title:
+        if chat_request.should_generate_title:
             try:
                 title_request = ChatTitleRequest(message=effective_message)
                 # Add timeout to prevent title generation from blocking the stream
                 title_response = await wait_for(
-                    create_chat_title(title_request),
+                    create_chat_title(title_request, current_user),
                     timeout=3.0
                 )
                 session_title = title_response.title
             except TimeoutError:
                 api_logger.warning("Title generation timeout, using fallback", extra={
                     "event_type": "title_generation_timeout",
-                    "user_id": request.user_id,
+                    "user_id": chat_request.user_id,
                     "correlation_id": correlation_id
                 })
                 session_title = _fallback_title_from_message(effective_message)
             except Exception as title_error:
                 api_logger.warning(f"Title generation failed: {title_error}", extra={
                     "event_type": "title_generation_error",
-                    "user_id": request.user_id,
+                    "user_id": chat_request.user_id,
                     "error": str(title_error),
                     "correlation_id": correlation_id
                 })
@@ -5578,7 +6351,7 @@ async def chat_with_ai_stream(request: ChatRequest, db: databases.Database = Dep
         # Create chat session
         now = datetime.utcnow()
         chat_session_query = chat_sessions.insert().values(
-            user_id=request.user_id,
+            user_id=chat_request.user_id,
             title=session_title,
             scope="thread",
             created_at=now,
@@ -5586,23 +6359,23 @@ async def chat_with_ai_stream(request: ChatRequest, db: databases.Database = Dep
         )
         session_id = await db.execute(chat_session_query)
 
-        requested_conversation_id = request.conversation_id
+        requested_conversation_id = chat_request.conversation_id
         valid_requested_conversation_id = _is_valid_uuid(requested_conversation_id)
         if requested_conversation_id and not valid_requested_conversation_id:
             conversation_id = requested_conversation_id
         else:
             conversation_id = await get_or_create_conversation(
                 requested_conversation_id if valid_requested_conversation_id else None,
-                request.user_id,
+                chat_request.user_id,
                 title=session_title,
             )
 
         conversation_history: List[Dict[str, Any]] = []
         if conversation_id:
-            conversation_history = await _load_conversation_history(conversation_id)
+            conversation_history = await _load_conversation_history(conversation_id, chat_request.user_id)
 
         # Avoid sending an empty payload to the AI provider (Gemini rejects requests with no contents).
-        if not (effective_message or "").strip() and not conversation_history and not (request.attachments or []):
+        if not (effective_message or "").strip() and not conversation_history and not (chat_request.attachments or []):
             effective_message = "Let's get started."
 
         user_message_payload: Dict[str, Any] = {
@@ -5617,16 +6390,16 @@ async def chat_with_ai_stream(request: ChatRequest, db: databases.Database = Dep
             and (last_history_entry.get("text") or "") == effective_message
         )
         if should_persist_user:
-            await save_conversation_message(conversation_id, user_message_payload, user_id=request.user_id)
+            await save_conversation_message(conversation_id, user_message_payload, user_id=chat_request.user_id)
 
         # Enforce tier restrictions for streaming
         # user_record was already fetched above
         plan_tier = user_record["plan_tier"] if user_record else None
         normalized_tier = (plan_tier or "scout").lower()
         
-        effective_reasoning_mode = request.reasoning_mode
+        effective_reasoning_mode = chat_request.reasoning_mode
         if effective_reasoning_mode and normalized_tier not in ("voyager", "pioneer"):
-            api_logger.info(f"Disabling reasoning mode for user {request.user_id} (tier: {normalized_tier})")
+            api_logger.info(f"Disabling reasoning mode for user {chat_request.user_id} (tier: {normalized_tier})")
             effective_reasoning_mode = False
 
         async def event_stream() -> AsyncGenerator[str, None]:
@@ -5640,21 +6413,21 @@ async def chat_with_ai_stream(request: ChatRequest, db: databases.Database = Dep
                 async for kind, payload in stream_ai_response(
                     effective_message,
                     conversation_history,
-                    request.context,
+                    chat_request.context,
                     effective_system_prompt,
-                    user_id=request.user_id,
+                    user_id=chat_request.user_id,
                     db=db,
-                    time_context=request.time_context,
-                    model=request.model,
-                    attachments=request.attachments,
-                    context_cache_id=request.context_cache_id,
-                    maps_enabled=request.maps_enabled,
-                    maps_latitude=request.maps_latitude,
-                    maps_longitude=request.maps_longitude,
-                    maps_widget=request.maps_widget,
-                    search_enabled=request.web_search_enabled,
-                    file_search_enabled=request.file_search_enabled,
-                    should_generate_title=request.should_generate_title,
+                    time_context=chat_request.time_context,
+                    model=effective_model,
+                    attachments=chat_request.attachments,
+                    context_cache_id=chat_request.context_cache_id,
+                    maps_enabled=chat_request.maps_enabled,
+                    maps_latitude=chat_request.maps_latitude,
+                    maps_longitude=chat_request.maps_longitude,
+                    maps_widget=chat_request.maps_widget,
+                    search_enabled=chat_request.web_search_enabled,
+                    file_search_enabled=chat_request.file_search_enabled,
+                    should_generate_title=chat_request.should_generate_title,
                     reasoning_mode=effective_reasoning_mode,
                     tools=tool_list,
                 ):
@@ -5691,11 +6464,11 @@ async def chat_with_ai_stream(request: ChatRequest, db: databases.Database = Dep
                 }
                 if grounding_metadata_payload:
                     assistant_message_payload["grounding_metadata"] = grounding_metadata_payload
-                await save_conversation_message(conversation_id, assistant_message_payload, user_id=request.user_id)
+                await save_conversation_message(conversation_id, assistant_message_payload, user_id=chat_request.user_id)
 
                 # Extract title from AI response if title generation was requested
                 extracted_title: Optional[str] = None
-                if request.should_generate_title:
+                if chat_request.should_generate_title:
                     extracted_title = _extract_title_from_response(final_response)
                     if extracted_title:
                         # Update the title in the database with the AI-generated one
@@ -5730,7 +6503,7 @@ async def chat_with_ai_stream(request: ChatRequest, db: databases.Database = Dep
         total_time = (datetime.utcnow() - start_time).total_seconds() * 1000
         api_logger.info("Chat request completed successfully", extra={
             "event_type": "chat_request_complete",
-            "user_id": request.user_id,
+            "user_id": chat_request.user_id,
             "conversation_id": conversation_id,
             "total_time_ms": total_time,
             "response_length": len(final_response) if 'final_response' in locals() else 0,
@@ -5747,7 +6520,7 @@ async def chat_with_ai_stream(request: ChatRequest, db: databases.Database = Dep
             exc_info=True,
             extra={
                 "event_type": "chat_stream_request_error",
-                "user_id": request.user_id,
+                "user_id": chat_request.user_id,
                 "error": error_msg,
                 "total_time_ms": total_time,
                 "correlation_id": correlation_id,
@@ -5766,51 +6539,72 @@ class MessageCreateRequest(BaseModel):
     user_id: Optional[int] = None
 
 @app.post("/api/conversation/{conversation_id}/messages")
-async def create_conversation_message(conversation_id: str, request: MessageCreateRequest):
+@limiter.limit("60/minute")
+async def create_conversation_message(
+    request: Request,
+    conversation_id: str,
+    payload: MessageCreateRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
     """Manually append a message to a conversation history."""
     try:
-        payload = {
-            "role": request.role,
-            "text": request.text
+        await _require_conversation_owner(conversation_id, current_user)
+        if payload.user_id is not None:
+            require_same_user(payload.user_id, current_user)
+        payload_dict = {
+            "role": payload.role,
+            "text": payload.text
         }
-        await save_conversation_message(conversation_id, payload, user_id=request.user_id)
+        await save_conversation_message(conversation_id, payload_dict, user_id=payload.user_id)
         return {"status": "success"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error saving message: {str(e)}")
 
 @app.get("/api/conversation/{conversation_id}")
-async def get_conversation(conversation_id: str):
+@limiter.limit("120/minute")
+async def get_conversation(
+    request: Request,
+    conversation_id: str,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
   """Get conversation history."""
   try:
-    history = await _load_conversation_history(conversation_id)
+    await _require_conversation_owner(conversation_id, current_user)
+    history = await _load_conversation_history(conversation_id, current_user["id"])
     return history
   except Exception as e:
     raise HTTPException(status_code=500, detail=f"Error fetching conversation: {str(e)}")
 
 @app.post("/api/conversation")
-async def create_conversation(request: ConversationCreateRequest):
+@limiter.limit("30/minute")
+async def create_conversation(
+    request: Request,
+    payload: ConversationCreateRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
     """Create a new conversation"""
     try:
+        require_same_user(payload.user_id, current_user)
         if not _conversation_store_available():
             # Fallback: return mock conversation
             import uuid
             return {
                 "id": str(uuid.uuid4()),
-                "title": request.title,
+                "title": payload.title,
                 "history": [],
-                "user_id": request.user_id,
+                "user_id": payload.user_id,
             }
 
         try:
-            user_data_id = _ensure_user_data_record(request.user_id)
+            user_data_id = _ensure_user_data_record(payload.user_id)
             if user_data_id is None:
                 raise HTTPException(status_code=503, detail="User metadata storage is not available.")
             result = (
                 supabase.table("user_chat_threads")
                 .insert(
                     {
-                        "title": request.title or "New Conversation",
-                        "user_identifier": request.user_id,
+                        "title": payload.title or "New Conversation",
+                        "user_identifier": payload.user_id,
                         "user_data_id": user_data_id,
                         "context_snapshot": [],
                         "metadata": {},
@@ -5824,7 +6618,7 @@ async def create_conversation(request: ConversationCreateRequest):
                 fallback = (
                     supabase.table("user_chat_threads")
                     .select("id, title, created_at, updated_at")
-                    .eq("user_identifier", request.user_id)
+                    .eq("user_identifier", payload.user_id)
                     .order("created_at", desc=True)
                     .limit(1)
                     .execute()
@@ -5836,7 +6630,7 @@ async def create_conversation(request: ConversationCreateRequest):
                 return {
                     **row,
                     "history": [],
-                    "user_id": request.user_id,
+                    "user_id": payload.user_id,
                 }
             else:
                 raise HTTPException(status_code=500, detail="Failed to create conversation")
@@ -5847,9 +6641,9 @@ async def create_conversation(request: ConversationCreateRequest):
             import uuid
             return {
                 "id": str(uuid.uuid4()),
-                "title": request.title,
+                "title": payload.title,
                 "history": [],
-                "user_id": request.user_id,
+                "user_id": payload.user_id,
             }
 
     except Exception as e:
@@ -5875,7 +6669,12 @@ async def _delete_general_conversation_history(user_id: int) -> None:
         )
 
 @app.delete("/api/conversation/{conversation_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_conversation(conversation_id: str):
+@limiter.limit("20/minute")
+async def delete_conversation(
+    request: Request,
+    conversation_id: str,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
     """Delete a conversation and all of its stored messages.
 
     This is used by the frontend when a user deletes an entire chat.
@@ -5883,6 +6682,7 @@ async def delete_conversation(conversation_id: str):
     both Supabase (when available) and the in-memory fallback store.
     """
     try:
+        await _require_conversation_owner(conversation_id, current_user)
         general_user_id = _general_conversation_user_id(conversation_id)
         if general_user_id is not None:
             await _delete_general_conversation_history(general_user_id)
@@ -5903,13 +6703,20 @@ class ConversationHistoryPayload(BaseModel):
 
 
 @app.put("/api/conversation/{conversation_id}/history")
-async def overwrite_conversation_history(conversation_id: str, payload: ConversationHistoryPayload):
+@limiter.limit("20/minute")
+async def overwrite_conversation_history(
+    request: Request,
+    conversation_id: str,
+    payload: ConversationHistoryPayload,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
     """Replace the full message history for a conversation.
 
     The frontend uses this when the user deletes individual messages so that
     server-side history matches the locally edited conversation.
     """
     try:
+        await _require_conversation_owner(conversation_id, current_user)
         app_logger.info(f"Overwriting history for conversation {conversation_id}", extra={"event_type": "history_overwrite_start", "message_count": len(payload.messages)})
         normalized_history = _normalize_conversation_history(payload.messages)
         updated_at_iso = datetime.utcnow().isoformat() + "Z"
@@ -5967,8 +6774,11 @@ def _normalize_conversation_title(payload: ConversationUpdateRequest) -> str | N
 
 
 async def _apply_conversation_update(
-    conversation_id: str, payload: ConversationUpdateRequest
+    conversation_id: str,
+    payload: ConversationUpdateRequest,
+    current_user: Dict[str, Any],
 ) -> Dict[str, Any]:
+    await _require_conversation_owner(conversation_id, current_user)
     normalized_title = _normalize_conversation_title(payload)
     if normalized_title is None and payload.user_id is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No conversation fields provided")
@@ -5979,6 +6789,7 @@ async def _apply_conversation_update(
 
     user_data_id_for_update: Optional[int] = None
     if payload.user_id is not None:
+        require_same_user(payload.user_id, current_user)
         user_data_id_for_update = _ensure_user_data_record(payload.user_id)
 
     if storage_available and valid_conversation_id:
@@ -6095,26 +6906,43 @@ async def _apply_conversation_update(
 
 
 @app.patch("/api/conversation/{conversation_id}")
-async def update_conversation(conversation_id: str, payload: ConversationUpdateRequest):
+@limiter.limit("60/minute")
+async def update_conversation(
+    request: Request,
+    conversation_id: str,
+    payload: ConversationUpdateRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
     """Update conversation metadata such as its title."""
-    return await _apply_conversation_update(conversation_id, payload)
+    return await _apply_conversation_update(conversation_id, payload, current_user)
 
 
 @app.post("/api/conversation/{conversation_id}/metadata")
-async def update_conversation_metadata(conversation_id: str, payload: ConversationUpdateRequest):
+@limiter.limit("60/minute")
+async def update_conversation_metadata(
+    request: Request,
+    conversation_id: str,
+    payload: ConversationUpdateRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
     """Update metadata via POST for clients that cannot rely on PATCH."""
-    return await _apply_conversation_update(conversation_id, payload)
+    return await _apply_conversation_update(conversation_id, payload, current_user)
 
 @app.get("/api/conversation/{conversation_id}/usage")
-async def get_conversation_usage(conversation_id: str):
+@limiter.limit("120/minute")
+async def get_conversation_usage(
+    request: Request,
+    conversation_id: str,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
     """Get conversation usage statistics"""
     try:
-        # Load the actual conversation history
-        history = await _load_conversation_history(conversation_id)
-        
-        # Count messages
-        message_count = len(history)
-        
+            await _require_conversation_owner(conversation_id, current_user)
+            # Load the actual conversation history
+            history = await _load_conversation_history(conversation_id, current_user["id"])
+            
+            # Count messages
+            message_count = len(history)        
         # Better token estimation: use tiktoken if available, otherwise rough estimate
         try:
             import tiktoken
@@ -6275,11 +7103,17 @@ async def get_conversation_usage(conversation_id: str):
         raise HTTPException(status_code=500, detail=f"Error fetching conversation usage: {str(e)}")
 
 @app.post("/api/conversation/{conversation_id}/compress")
-async def compress_conversation(conversation_id: str):
+@limiter.limit("10/minute")
+async def compress_conversation(
+    request: Request,
+    conversation_id: str,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
     """Compress a conversation by summarizing its history"""
     try:
+        await _require_conversation_owner(conversation_id, current_user)
         # Load the current conversation history
-        history = await _load_conversation_history(conversation_id)
+        history = await _load_conversation_history(conversation_id, current_user["id"])
         
         if len(history) < 2:
             return {
@@ -6358,7 +7192,8 @@ Summary:"""
 
 # User endpoints
 @app.post("/users/", response_model=User, status_code=status.HTTP_201_CREATED)
-async def create_user(user: UserCreate, db: databases.Database = Depends(get_database)):
+@limiter.limit("10/minute")
+async def create_user(request: Request, user: UserCreate, db: databases.Database = Depends(get_database)):
     initials = generate_initials(user.full_name)
     now = datetime.utcnow()
     query = users.insert().values(
@@ -6422,24 +7257,40 @@ async def create_user(user: UserCreate, db: databases.Database = Depends(get_dat
 
     # Habits: no default placeholder data - users create their own
 
-    return {
+    return _serialize_user_row({
         **user.dict(),
         "id": user_id,
         "initials": initials,
         "created_at": now,
         "updated_at": now
-    }
+    })
 
 @app.get("/users/email/{email}", response_model=User)
-async def get_user_by_email(email: str, db: databases.Database = Depends(get_database)):
+async def get_user_by_email(
+    email: str,
+    db: databases.Database = Depends(get_database),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    normalized_email = email.lower()
+    current_email = str(current_user.get("email") or "").lower()
+    if current_user.get("role") != "admin" and current_email != normalized_email:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+
     query = users.select().where(users.c.email == email)
     user = await db.fetch_one(query)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    return user
+    return _serialize_user_row(user)
 
 @app.get("/users/{user_id}", response_model=User)
-async def get_user(user_id: int, db: databases.Database = Depends(get_database)):
+async def get_user(
+    user_id: int,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db: databases.Database = Depends(get_database)
+):
+    # Verify user can only access their own data
+    require_same_user(user_id, current_user)
+    
     query = users.select().where(users.c.id == user_id)
     user = await db.fetch_one(query)
     if not user:
@@ -6450,17 +7301,26 @@ async def get_user(user_id: int, db: databases.Database = Depends(get_database))
     usage_status = await tracker.get_usage_status(user_id)
     
     # Convert Row to dict to allow modification
-    user_dict = dict(user)
+    user_dict = _serialize_user_row(user)
     user_dict["usage_status"] = usage_status
     
     return user_dict
 
+
 @app.put("/users/{user_id}", response_model=User)
-async def update_user(user_id: int, user_update: UserUpdate, db: databases.Database = Depends(get_database)):
+async def update_user(
+    user_id: int,
+    user_update: UserUpdate,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db: databases.Database = Depends(get_database)
+):
+    # Verify user can only update their own data
+    require_same_user(user_id, current_user)
+    
     # Get current user
     query = users.select().where(users.c.id == user_id)
-    current_user = await db.fetch_one(query)
-    if not current_user:
+    current_user_record = await db.fetch_one(query)
+    if not current_user_record:
         raise HTTPException(status_code=404, detail="User not found")
 
     # Update fields
@@ -6475,11 +7335,18 @@ async def update_user(user_id: int, user_update: UserUpdate, db: databases.Datab
 
     # Return updated user
     query = users.select().where(users.c.id == user_id)
-    return await db.fetch_one(query)
+    updated = await db.fetch_one(query)
+    return _serialize_user_row(updated)
+
 
 
 @app.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_user_account(user_id: int, db: databases.Database = Depends(get_database)):
+async def delete_user_account(
+    user_id: int,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db: databases.Database = Depends(get_database)
+):
+    require_same_user(user_id, current_user)
     existing = await db.fetch_one(users.select().where(users.c.id == user_id))
     if not existing:
         raise HTTPException(status_code=404, detail="User not found")
@@ -6491,16 +7358,22 @@ async def delete_user_account(user_id: int, db: databases.Database = Depends(get
 
     _delete_supabase_user_records(user_id)
 
-    # Delete from Supabase Auth using the stored ID
-    if supabase and SUPABASE_KEY_SOURCE in {"SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_SERVICE_KEY", "SUPABASE_SECRET_KEY"}:
+    # Delete from Supabase Auth using a service-role client when available
+    admin_client = supabase_admin or supabase
+    service_sources = {"SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_SERVICE_KEY", "SUPABASE_SECRET_KEY"}
+    anon_sources = {"SUPABASE_ANON_KEY", "NEXT_PUBLIC_SUPABASE_ANON_KEY"}
+
+    if admin_client and (supabase_admin is not None or SUPABASE_KEY_SOURCE in service_sources):
         try:
             if auth_user_id:
-                supabase.auth.admin.delete_user(auth_user_id)
-                api_logger.info(f"Deleted Supabase Auth user {auth_user_id}", extra={"user_id": user_id, "auth_user_id": auth_user_id})
+                # Convert UUID to string if needed
+                auth_user_id_str = str(auth_user_id) if auth_user_id else None
+                admin_client.auth.admin.delete_user(auth_user_id_str)
+                api_logger.info(f"Deleted Supabase Auth user {auth_user_id_str}", extra={"user_id": user_id, "auth_user_id": auth_user_id_str})
             else:
                 # Fallback to email search only if auth_id is missing (legacy users)
                 api_logger.warning(f"auth_user_id missing for user {user_id}, attempting fallback search by email", extra={"user_id": user_id})
-                auth_users_response = supabase.auth.admin.list_users()
+                auth_users_response = admin_client.auth.admin.list_users()
                 auth_users = getattr(auth_users_response, "users", []) or []
                 
                 found_id = None
@@ -6510,13 +7383,20 @@ async def delete_user_account(user_id: int, db: databases.Database = Depends(get
                          break
                 
                 if found_id:
-                    supabase.auth.admin.delete_user(found_id)
+                    admin_client.auth.admin.delete_user(found_id)
                     api_logger.info(f"Deleted Supabase Auth user {found_id} (via fallback)", extra={"user_id": user_id, "auth_user_id": found_id})
                 else:
                     api_logger.warning(f"Could not find Supabase Auth user for email {user_email}", extra={"user_id": user_id})
                 
         except Exception as e:
             api_logger.error(f"Failed to delete Supabase Auth user: {e}", extra={"user_id": user_id, "error": str(e)})
+
+
+    elif admin_client and SUPABASE_KEY_SOURCE in anon_sources:
+        api_logger.warning(
+            "Supabase service-role key missing; skipped Supabase Auth deletion",
+            extra={"user_id": user_id, "event_type": "account_deletion_skipped_auth"},
+        )
 
     deletion_tables = [
         chat_sessions,
@@ -6540,17 +7420,35 @@ async def delete_user_account(user_id: int, db: databases.Database = Depends(get
     for table in deletion_tables:
         await db.execute(table.delete().where(table.c.user_id == user_id))
 
+    # Delete from raw SQL tables
+    try:
+        await db.execute("DELETE FROM general_chat_messages WHERE user_id = :user_id", {"user_id": user_id})
+    except Exception:
+        # Table might not exist or other error, ignore
+        pass
+
     await db.execute(users.delete().where(users.c.id == user_id))
     
     api_logger.info(f"User account {user_id} deleted successfully", extra={"user_id": user_id, "event_type": "account_deletion_complete"})
 
-@app.get("/users/{user_id}/chat-sessions", response_model=List[ChatSession])
-async def get_user_chat_sessions(user_id: int, db: databases.Database = Depends(get_database)):
-    query = chat_sessions.select().where(chat_sessions.c.user_id == user_id).order_by(chat_sessions.c.updated_at.desc())
+@app.get("/users/{user_id}/calendars", response_model=List[Calendar])
+async def get_user_calendars(
+    user_id: int,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db: databases.Database = Depends(get_database)
+):
+    require_same_user(user_id, current_user)
+    query = calendars.select().where(calendars.c.user_id == user_id).order_by(calendars.c.created_at.desc())
     return await db.fetch_all(query)
 
 @app.post("/users/{user_id}/chat-sessions", response_model=ChatSession, status_code=status.HTTP_201_CREATED)
-async def create_chat_session(user_id: int, session: ChatSessionCreate, db: databases.Database = Depends(get_database)):
+async def create_chat_session(
+    user_id: int,
+    session: ChatSessionCreate,
+    db: databases.Database = Depends(get_database),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    require_same_user(user_id, current_user)
     query = chat_sessions.insert().values(
         user_id=user_id,
         title=session.title,
@@ -6559,13 +7457,16 @@ async def create_chat_session(user_id: int, session: ChatSessionCreate, db: data
     session_id = await db.execute(query)
     return {**session.dict(), "id": session_id, "user_id": user_id}
 
-@app.get("/users/{user_id}/calendars", response_model=List[Calendar])
-async def get_user_calendars(user_id: int, db: databases.Database = Depends(get_database)):
-    query = calendars.select().where(calendars.c.user_id == user_id).order_by(calendars.c.created_at)
-    return await db.fetch_all(query)
+
 
 @app.post("/users/{user_id}/calendars", response_model=Calendar, status_code=status.HTTP_201_CREATED)
-async def create_calendar(user_id: int, calendar: CalendarCreate, db: databases.Database = Depends(get_database)):
+async def create_calendar(
+    user_id: int,
+    calendar: CalendarCreate,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db: databases.Database = Depends(get_database)
+):
+    require_same_user(user_id, current_user)
     now = datetime.utcnow()
     calendar_id = await db.execute(
         calendars.insert().values(
@@ -6581,7 +7482,14 @@ async def create_calendar(user_id: int, calendar: CalendarCreate, db: databases.
     return await db.fetch_one(query)
 
 @app.patch("/users/{user_id}/calendars/{calendar_id}", response_model=Calendar)
-async def update_calendar(user_id: int, calendar_id: int, calendar_update: CalendarUpdate, db: databases.Database = Depends(get_database)):
+async def update_calendar(
+    user_id: int,
+    calendar_id: int,
+    calendar_update: CalendarUpdate,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db: databases.Database = Depends(get_database)
+):
+    require_same_user(user_id, current_user)
     existing = await db.fetch_one(
         calendars.select().where(
             (calendars.c.id == calendar_id) & (calendars.c.user_id == user_id)
@@ -6608,8 +7516,10 @@ async def update_calendar(user_id: int, calendar_id: int, calendar_update: Calen
 async def get_user_plans(
     user_id: int,
     limit: Optional[int] = Query(None, gt=0),
-    db: databases.Database = Depends(get_database)
+    db: databases.Database = Depends(get_database),
+    current_user: Dict[str, Any] = Depends(get_current_user),
 ):
+    require_same_user(user_id, current_user)
     if supabase:
         try:
             query = (
@@ -6631,7 +7541,13 @@ async def get_user_plans(
     return await db.fetch_all(query)
 
 @app.post("/users/{user_id}/plans", response_model=Plan, status_code=status.HTTP_201_CREATED)
-async def create_plan(user_id: int, plan: PlanCreate, db: databases.Database = Depends(get_database)):
+async def create_plan(
+    user_id: int,
+    plan: PlanCreate,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db: databases.Database = Depends(get_database)
+):
+    require_same_user(user_id, current_user)
     base_values = {
         "user_id": user_id,
         "label": plan.label,
@@ -6667,7 +7583,14 @@ async def create_plan(user_id: int, plan: PlanCreate, db: databases.Database = D
     return await db.fetch_one(query)
 
 @app.patch("/users/{user_id}/plans/{plan_id}", response_model=Plan)
-async def update_plan(user_id: int, plan_id: int, plan_update: PlanUpdate, db: databases.Database = Depends(get_database)):
+async def update_plan(
+    user_id: int,
+    plan_id: int,
+    plan_update: PlanUpdate,
+    db: databases.Database = Depends(get_database),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    require_same_user(user_id, current_user)
     update_data = plan_update.dict(exclude_unset=True)
     if supabase:
         existing = (
@@ -6730,7 +7653,13 @@ async def update_plan(user_id: int, plan_id: int, plan_update: PlanUpdate, db: d
     return await db.fetch_one(query)
 
 @app.delete("/users/{user_id}/plans/{plan_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_plan(user_id: int, plan_id: int, db: databases.Database = Depends(get_database)):
+async def delete_plan(
+    user_id: int,
+    plan_id: int,
+    db: databases.Database = Depends(get_database),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    require_same_user(user_id, current_user)
     if supabase:
         existing = (
             supabase.table("plans")
@@ -6779,11 +7708,13 @@ async def delete_plan(user_id: int, plan_id: int, db: databases.Database = Depen
     return None
 
 @app.get("/users/{user_id}/habits", response_model=List[Habit])
-async def get_user_habits(
+async def get_habits(
     user_id: int,
+    current_user: Dict[str, Any] = Depends(get_current_user),
     limit: Optional[int] = Query(None, gt=0),
     db: databases.Database = Depends(get_database)
 ):
+    require_same_user(user_id, current_user)
     if supabase:
         try:
             query = (
@@ -6805,7 +7736,13 @@ async def get_user_habits(
     return await db.fetch_all(query)
 
 @app.post("/users/{user_id}/habits", response_model=Habit, status_code=status.HTTP_201_CREATED)
-async def create_habit(user_id: int, habit: HabitCreate, db: databases.Database = Depends(get_database)):
+async def create_habit(
+    user_id: int,
+    habit: HabitCreate,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db: databases.Database = Depends(get_database)
+):
+    require_same_user(user_id, current_user)
     base_values = {
         "user_id": user_id,
         "label": habit.label,
@@ -6840,7 +7777,14 @@ async def create_habit(user_id: int, habit: HabitCreate, db: databases.Database 
     return await db.fetch_one(query)
 
 @app.patch("/users/{user_id}/habits/{habit_id}", response_model=Habit)
-async def update_habit(user_id: int, habit_id: int, habit_update: HabitUpdate, db: databases.Database = Depends(get_database)):
+async def update_habit(
+    user_id: int,
+    habit_id: int,
+    habit_update: HabitUpdate,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db: databases.Database = Depends(get_database)
+):
+    require_same_user(user_id, current_user)
     update_data = habit_update.dict(exclude_unset=True)
     if supabase:
         existing = (
@@ -6906,7 +7850,13 @@ async def update_habit(user_id: int, habit_id: int, habit_update: HabitUpdate, d
     return await db.fetch_one(query)
 
 @app.delete("/users/{user_id}/habits/{habit_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_habit(user_id: int, habit_id: int, db: databases.Database = Depends(get_database)):
+async def delete_habit(
+    user_id: int,
+    habit_id: int,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db: databases.Database = Depends(get_database)
+):
+    require_same_user(user_id, current_user)
     if supabase:
         existing = (
             supabase.table("habits")
@@ -6955,21 +7905,35 @@ async def delete_habit(user_id: int, habit_id: int, db: databases.Database = Dep
     return None
 
 @app.get("/users/{user_id}/streak", response_model=UserStreak)
-async def get_user_streak(user_id: int, db: databases.Database = Depends(get_database)):
+async def get_user_streak(
+    user_id: int,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db: databases.Database = Depends(get_database)
+):
+    require_same_user(user_id, current_user)
     streak = await get_or_create_user_streak(user_id, db)
     return streak
 
 @app.post("/users/{user_id}/streak", response_model=UserStreak)
-async def touch_user_streak(user_id: int, db: databases.Database = Depends(get_database)):
+async def touch_user_streak(
+    user_id: int,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db: databases.Database = Depends(get_database)
+):
+    require_same_user(user_id, current_user)
     return await update_user_streak(user_id, db)
 
 @app.get("/users/{user_id}/calendar-events", response_model=List[CalendarEvent])
 async def get_user_calendar_events(
+
     user_id: int,
+    current_user: Dict[str, Any] = Depends(get_current_user),
     start_date: Optional[str] = Query(None),
     end_date: Optional[str] = Query(None),
     db: databases.Database = Depends(get_database)
+
 ):
+    require_same_user(user_id, current_user)
     # Supabase-first for calendar events.
     if supabase:
         try:
@@ -7045,7 +8009,9 @@ async def list_user_reminders(
     entity_type: Optional[str] = None,
     include_archived: bool = Query(False),
     db: databases.Database = Depends(get_database),
+    current_user: Dict[str, Any] = Depends(get_current_user),
 ):
+    require_same_user(user_id, current_user)
     if supabase:
         try:
             builder = (
@@ -7165,7 +8131,9 @@ async def create_user_reminder(
     user_id: int,
     payload: ReminderCreate,
     db: databases.Database = Depends(get_database),
+    current_user: Dict[str, Any] = Depends(get_current_user),
 ):
+    require_same_user(user_id, current_user)
     now = datetime.utcnow()
     values = {
         "user_id": user_id,
@@ -7213,7 +8181,9 @@ async def update_user_reminder(
     reminder_id: int,
     payload: ReminderUpdate,
     db: databases.Database = Depends(get_database),
+    current_user: Dict[str, Any] = Depends(get_current_user),
 ):
+    require_same_user(user_id, current_user)
     update_values: Dict[str, Any] = {}
     if payload.label is not None:
         update_values["label"] = payload.label
@@ -7308,7 +8278,9 @@ async def delete_user_reminder(
     user_id: int,
     reminder_id: int,
     db: databases.Database = Depends(get_database),
+    current_user: Dict[str, Any] = Depends(get_current_user),
 ):
+    require_same_user(user_id, current_user)
     api_logger.info(f"DELETE reminder request: user_id={user_id}, reminder_id={reminder_id}")
     if supabase:
         try:
@@ -7326,7 +8298,12 @@ async def delete_user_reminder(
             
             api_logger.info(f"Deleting reminder {reminder_id} from Supabase")
             result = supabase.table("reminders").delete().eq("id", reminder_id).eq("user_id", user_id).execute()
-            api_logger.info(f"Successfully deleted reminder {reminder_id}, result: {result.data}")
+            deleted_payload = getattr(result, "data", None)
+            deleted_count = len(deleted_payload) if isinstance(deleted_payload, list) else (1 if deleted_payload else 0)
+            api_logger.info(
+                f"Successfully deleted reminder {reminder_id}",
+                extra={"user_id": user_id, "deleted_count": deleted_count}
+            )
             
             # Verify deletion
             check = supabase.table("reminders").select("id").eq("id", reminder_id).execute()
@@ -7360,9 +8337,13 @@ async def delete_user_reminder(
 
 @app.get("/users/{user_id}/conversations", response_model=List[Dict[str, Any]])
 async def list_user_conversations(
+
     user_id: int,
+    current_user: Dict[str, Any] = Depends(get_current_user),
     limit: int = Query(100, ge=1, le=500),
+
 ):
+    require_same_user(user_id, current_user)
     if not _conversation_store_available():
         return []
 
@@ -7393,7 +8374,13 @@ async def list_user_conversations(
         return []
 
 @app.post("/users/{user_id}/calendar-events", response_model=CalendarEvent, status_code=status.HTTP_201_CREATED)
-async def create_calendar_event(user_id: int, event: CalendarEventCreate, db: databases.Database = Depends(get_database)):
+async def create_calendar_event(
+    user_id: int,
+    event: CalendarEventCreate,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db: databases.Database = Depends(get_database)
+):
+    require_same_user(user_id, current_user)
     now = datetime.utcnow()
     # Supabase-first create.
     if supabase:
@@ -7439,7 +8426,9 @@ async def update_calendar_event(
     event_id: int,
     event_update: CalendarEventUpdate,
     db: databases.Database = Depends(get_database),
+    current_user: Dict[str, Any] = Depends(get_current_user),
 ):
+    require_same_user(user_id, current_user)
     update_data = event_update.dict(exclude_unset=True)
 
     if supabase:
@@ -7522,7 +8511,9 @@ async def delete_calendar_event(
     user_id: int,
     event_id: int,
     db: databases.Database = Depends(get_database),
+    current_user: Dict[str, Any] = Depends(get_current_user),
 ):
+    require_same_user(user_id, current_user)
     if supabase:
         try:
             existing = (
@@ -7566,7 +8557,9 @@ async def list_dashboard_pulses(
     user_id: int,
     limit: int = MAX_DASHBOARD_PULSE_HISTORY,
     db: databases.Database = Depends(get_database),
+    current_user: Dict[str, Any] = Depends(get_current_user),
 ):
+    require_same_user(user_id, current_user)
     safe_limit = max(1, min(limit, MAX_DASHBOARD_PULSE_HISTORY))
 
     records: List[Any] = []
@@ -7607,10 +8600,13 @@ async def list_dashboard_pulses(
 
 @app.get("/users/{user_id}/dashboard/pulses/{date_key}", response_model=DashboardPulse)
 async def get_dashboard_pulse(
+    request: Request,
     user_id: int,
     date_key: str,
     db: databases.Database = Depends(get_database),
+    current_user: Dict[str, Any] = Depends(get_current_user),
 ):
+    require_same_user(user_id, current_user)
     if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date_key):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid date key; expected YYYY-MM-DD")
 
@@ -7625,8 +8621,10 @@ async def get_dashboard_pulse(
 async def create_dashboard_pulse(
     user_id: int,
     pulse: DashboardPulseCreate,
+    current_user: Dict[str, Any] = Depends(get_current_user),
     db: databases.Database = Depends(get_database),
 ):
+    require_same_user(user_id, current_user)
     timestamp_dt = _timestamp_ms_to_datetime(pulse.timestamp)
     plans_payload = _normalize_plan_items([item.dict() for item in pulse.plans])
     habits_payload = _normalize_habit_items([item.dict() for item in pulse.habits])
@@ -7748,7 +8746,9 @@ async def update_dashboard_pulse(
     pulse_id: int,
     pulse_update: DashboardPulseUpdate,
     db: databases.Database = Depends(get_database),
+    current_user: Dict[str, Any] = Depends(get_current_user),
 ):
+    require_same_user(user_id, current_user)
     existing: Any = None
     # Supabase-first lookup.
     if supabase:
@@ -7845,7 +8845,9 @@ async def delete_dashboard_pulse(
     user_id: int,
     pulse_id: int,
     db: databases.Database = Depends(get_database),
+    current_user: Dict[str, Any] = Depends(get_current_user),
 ):
+    require_same_user(user_id, current_user)
     # Supabase-first delete.
     if supabase:
         try:
@@ -7887,8 +8889,10 @@ async def delete_dashboard_pulse(
 @app.get("/users/{user_id}/dashboard/summary", response_model=DashboardSummary)
 async def get_dashboard_summary(
     user_id: int,
+    current_user: Dict[str, Any] = Depends(get_current_user),
     db: databases.Database = Depends(get_database),
 ):
+    require_same_user(user_id, current_user)
     pulse_records: List[Any] = []
     # Supabase-first for dashboard pulses.
     if supabase:
@@ -7985,8 +8989,13 @@ async def get_dashboard_summary(
 
 # Proactivity API endpoints
 @app.get("/users/{user_id}/proactivity", response_model=List[ProactivityLog])
-async def get_user_proactivity(user_id: int, db: databases.Database = Depends(get_database)):
+async def get_user_proactivity(
+    user_id: int,
+    db: databases.Database = Depends(get_database),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
     """Get user's proactivity logs"""
+    require_same_user(user_id, current_user)
     from datetime import datetime
 
     query = proactivity_logs.select().where(proactivity_logs.c.user_id == user_id).order_by(proactivity_logs.c.activity_date.desc())
@@ -8016,13 +9025,60 @@ class PushSubscriptionCreate(BaseModel):
     auth: str
 
 
+async def get_user_from_query_token(
+    token: Optional[str] = Query(None),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(HTTPBearer(auto_error=False)),
+) -> Optional[Dict[str, Any]]:
+    """
+    Get authenticated user from either query parameter token or Authorization header.
+    This is needed for SSE endpoints where EventSource doesn't support custom headers.
+    """
+    # Try query parameter first (for SSE)
+    if token:
+        try:
+            from backend.auth import verify_supabase_token
+        except ImportError:
+            from auth import verify_supabase_token
+        
+        try:
+            payload = await verify_supabase_token(token)
+            auth_user_id = payload.get("sub")
+            if not auth_user_id:
+                return None
+            
+            user = await database.fetch_one(users.select().where(users.c.auth_user_id == auth_user_id))
+            email = payload.get("email")
+            
+            if not user and email:
+                user = await database.fetch_one(users.select().where(users.c.email == email))
+            
+            return dict(user) if user else None
+        except Exception:
+            return None
+    
+    # Fallback to Authorization header
+    if credentials:
+        try:
+            return await get_current_user(credentials)
+        except HTTPException:
+            return None
+    
+    return None
+
+
 @app.post("/users/{user_id}/push/subscribe", status_code=status.HTTP_201_CREATED)
+@limiter.limit("30/minute")
 async def subscribe_push_notifications(
+    request: Request,
     user_id: int,
     subscription: PushSubscriptionCreate,
     db: databases.Database = Depends(get_database),
+    current_user: Optional[Dict[str, Any]] = Depends(get_user_from_query_token),
 ):
     """Register a Web Push subscription for the user."""
+    if not current_user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
+    require_same_user(user_id, current_user)
     # Check if subscription already exists
     existing = await db.fetch_one(
         proactivity_push_subscriptions.select().where(
@@ -8058,12 +9114,18 @@ async def subscribe_push_notifications(
 
 
 @app.get("/users/{user_id}/proactivity/stream")
-async def stream_user_proactivity(user_id: int):
+async def stream_user_proactivity(
+    user_id: int,
+    current_user: Optional[Dict[str, Any]] = Depends(get_user_from_query_token),
+):
     """
     SSE endpoint used by /g so active sessions can trigger evaluations and get notified.
     """
     global proactivity_engine, proactivity_realtime_broker
 
+    if not current_user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
+    require_same_user(user_id, current_user)
     if not proactivity_engine:
         raise HTTPException(status_code=503, detail="Proactivity engine not initialized")
 
@@ -8102,11 +9164,15 @@ async def stream_user_proactivity(user_id: int):
 
 
 @app.get("/users/{user_id}/proactivity/status")
-async def get_proactivity_status(user_id: int):
+async def get_proactivity_status(
+    user_id: int,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
     """
     Get the current configuration and status of proactivity for a user.
     """
     global proactivity_engine
+    require_same_user(user_id, current_user)
     if not proactivity_engine:
         raise HTTPException(status_code=503, detail="Proactivity engine not initialized")
     
@@ -8114,7 +9180,13 @@ async def get_proactivity_status(user_id: int):
 
 
 @app.post("/users/{user_id}/proactivity", response_model=ProactivityLog, status_code=status.HTTP_201_CREATED)
-async def create_proactivity_log(user_id: int, proactivity: ProactivityLogCreate, db: databases.Database = Depends(get_database)):
+async def create_proactivity_log(
+    user_id: int,
+    proactivity: ProactivityLogCreate,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db: databases.Database = Depends(get_database)
+):
+    require_same_user(user_id, current_user)
     """Create a new proactivity log entry"""
     # Calculate score based on tasks completed vs total tasks
     score = min(100, (proactivity.tasks_completed / max(proactivity.total_tasks, 1)) * 100) if proactivity.total_tasks > 0 else 0
@@ -8142,11 +9214,16 @@ async def create_proactivity_log(user_id: int, proactivity: ProactivityLogCreate
 
 
 @app.get("/users/{user_id}/proactivity/deliveries")
-async def list_proactivity_deliveries(user_id: int, db: databases.Database = Depends(get_database)):
+async def list_proactivity_deliveries(
+    user_id: int,
+    db: databases.Database = Depends(get_database),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
     """
     Return recent proactivity deliveries for a user so the client can hydrate
     which time slots have already fired.
     """
+    require_same_user(user_id, current_user)
     now = datetime.utcnow()
     since = now - timedelta(days=1)
 
@@ -8202,7 +9279,9 @@ async def upsert_proactivity_push_subscription(
     user_id: int,
     subscription: Dict[str, Any],
     db: databases.Database = Depends(get_database),
+    current_user: Dict[str, Any] = Depends(get_current_user),
 ):
+    require_same_user(user_id, current_user)
     endpoint = subscription.get("endpoint")
     keys = subscription.get("keys") or {}
     p256dh = keys.get("p256dh")
@@ -8241,9 +9320,11 @@ async def upsert_proactivity_push_subscription(
 async def daily_proactivity_checkin(
     user_id: int,
     checkin: DailyCheckIn,
-    db: databases.Database = Depends(get_database)
+    db: databases.Database = Depends(get_database),
+    current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     """Daily proactivity check-in - creates or updates today's proactivity log"""
+    require_same_user(user_id, current_user)
     from datetime import datetime, time
 
     today = datetime.utcnow().date()
@@ -8365,8 +9446,13 @@ async def daily_proactivity_checkin(
         }
 
 @app.get("/users/{user_id}/proactivity/streak", response_model=dict)
-async def get_proactivity_streak(user_id: int, db: databases.Database = Depends(get_database)):
+async def get_proactivity_streak(
+    user_id: int,
+    db: databases.Database = Depends(get_database),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
     """Get user's current proactivity streak"""
+    require_same_user(user_id, current_user)
     return await _compute_proactivity_streak(db, user_id)
 
 
@@ -8379,8 +9465,10 @@ async def get_proactivity_notifications(
     limit: Optional[int] = Query(None, ge=1),
     unread_only: bool = Query(False),
     db: databases.Database = Depends(get_database),
+    current_user: Dict[str, Any] = Depends(get_current_user),
 ) -> List[ProactivityNotification]:
     """Fetch proactivity notifications for a user."""
+    require_same_user(user_id, current_user)
     # Prefer Supabase when available.
     if supabase:
         try:
@@ -8433,8 +9521,10 @@ async def mark_proactivity_notification_read(
     user_id: int,
     notification_id: int,
     db: databases.Database = Depends(get_database),
+    current_user: Dict[str, Any] = Depends(get_current_user),
 ) -> ProactivityNotification:
     """Mark a notification as read and return the updated record."""
+    require_same_user(user_id, current_user)
     # Prefer Supabase when available.
     if supabase:
         try:
@@ -8495,14 +9585,20 @@ async def mark_proactivity_notification_read(
 async def get_proactivity_settings_route(
     user_id: int,
     db: databases.Database = Depends(get_database),
+    current_user: Dict[str, Any] = Depends(get_current_user),
 ):
+    require_same_user(user_id, current_user)
     supabase_settings = _fetch_supabase_proactivity_settings(user_id)
     if supabase_settings:
-        api_logger.debug(f"Retrieved proactivity settings from Supabase for user {user_id}", extra={
-            "event_type": "proactivity_settings_retrieved_supabase",
-            "user_id": user_id,
-            "settings": supabase_settings.model_dump(exclude_none=True)
-        })
+        settings_dump = supabase_settings.model_dump(exclude_none=True)
+        api_logger.debug(
+            f"Retrieved proactivity settings from Supabase for user {user_id}",
+            extra={
+                "event_type": "proactivity_settings_retrieved_supabase",
+                "user_id": user_id,
+                **_payload_log_summary(settings_dump)
+            }
+        )
         return supabase_settings
 
     record = await db.fetch_one(
@@ -8515,11 +9611,14 @@ async def get_proactivity_settings_route(
         })
         return None
     payload = _row_get(record, "payload")
-    api_logger.debug(f"Retrieved proactivity settings payload from database for user {user_id}", extra={
-        "event_type": "proactivity_settings_retrieved_db",
-        "user_id": user_id,
-        "payload": payload
-    })
+    api_logger.debug(
+        f"Retrieved proactivity settings payload from database for user {user_id}",
+        extra={
+            "event_type": "proactivity_settings_retrieved_db",
+            "user_id": user_id,
+            **_payload_log_summary(payload)
+        }
+    )
     settings = _deserialize_proactivity_settings_payload(payload)
     if settings:
         # Backfill Supabase when local sqlite contains the canonical value.
@@ -8533,18 +9632,24 @@ async def get_proactivity_settings_route(
     response_model=ProactivitySettings
 )
 async def update_proactivity_settings_route(
+    request: Request,
     user_id: int,
     settings: ProactivitySettings,
     db: databases.Database = Depends(get_database),
+    current_user: Dict[str, Any] = Depends(get_current_user),
 ):
+    require_same_user(user_id, current_user)
     payload = settings.model_dump(exclude_none=True)
     now = datetime.utcnow()
 
-    api_logger.debug(f"Saving proactivity settings for user {user_id}", extra={
-        "event_type": "proactivity_settings_save_start",
-        "user_id": user_id,
-        "payload": payload
-    })
+    api_logger.debug(
+        f"Saving proactivity settings for user {user_id}",
+        extra={
+            "event_type": "proactivity_settings_save_start",
+            "user_id": user_id,
+            **_payload_log_summary(payload)
+        }
+    )
 
     try:
         existing = await db.fetch_one(
@@ -8623,12 +9728,23 @@ async def create_workspace_background(background: WorkspaceBackground):
 
 @app.post("/api/workspace-backgrounds/assets")
 async def upload_workspace_background_asset(file: UploadFile = File(...)):
-    return {
-        "filename": file.filename,
-        "asset_path": f"/uploads/{file.filename}",
-        "content_type": file.content_type or "application/octet-stream",
-        "size": 0,
-    }
+  storage_path, mime_type, size, sanitized_name, storage_name = await _persist_upload_file(
+      file,
+      allowed_mime_types=BACKGROUND_UPLOAD_MIME_TYPES,
+      allowed_extensions=BACKGROUND_UPLOAD_EXTENSIONS,
+      max_size_bytes=MAX_BACKGROUND_UPLOAD_SIZE_BYTES,
+  )
+
+  asset_path = f"/uploads/{storage_name}"
+  if STORAGE_BASE_URL:
+    asset_path = f"{STORAGE_BASE_URL.rstrip('/')}/{storage_name}"
+
+  return {
+      "filename": sanitized_name,
+      "asset_path": asset_path,
+      "content_type": mime_type,
+      "size": size,
+  }
 
 # Google Calendar helpers
 
@@ -8661,13 +9777,14 @@ def map_google_credentials(record) -> GoogleCalendarCredentials:
 
     record_dict = dict(record)
     scopes = _hydrate_scopes(record_dict.get("scopes"))
+    refresh_token = decrypt_refresh_token(record_dict["refresh_token"]) if record_dict.get("refresh_token") else None
     return GoogleCalendarCredentials(
         user_id=record_dict["user_id"],
         access_token=record_dict["access_token"],
-        refresh_token=record_dict["refresh_token"],
+        refresh_token=refresh_token,
         token_uri=record_dict["token_uri"],
         client_id=record_dict["client_id"],
-        client_secret=record_dict["client_secret"],
+        client_secret=None,
         scopes=scopes,
         expires_at=record_dict.get("expires_at"),
         created_at=record_dict.get("created_at", datetime.utcnow()),
@@ -8675,14 +9792,78 @@ def map_google_credentials(record) -> GoogleCalendarCredentials:
     )
 
 
+async def persist_google_calendar_state(db: databases.Database, state_token: str, state_payload: dict) -> None:
+    """Persist OAuth state to enforce one-time use."""
+    expires_ts = state_payload.get("exp")
+    expires_at = datetime.utcfromtimestamp(expires_ts) if expires_ts else None
+
+    if not isinstance(state_payload.get("user_id"), int):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid OAuth state payload")
+    if not isinstance(state_payload.get("nonce"), str):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid OAuth state payload")
+    if not isinstance(state_payload.get("redirect_uri"), str):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid OAuth state payload")
+
+    await db.execute(
+        google_calendar_states.delete().where(google_calendar_states.c.state_token == state_token)
+    )
+
+    await db.execute(
+        google_calendar_states.insert().values(
+            state_token=state_token,
+            user_id=state_payload.get("user_id"),
+            nonce=state_payload.get("nonce"),
+            redirect_uri=state_payload.get("redirect_uri"),
+            expires_at=expires_at,
+            created_at=datetime.utcnow(),
+        )
+    )
+
+
+async def consume_google_calendar_state(
+    db: databases.Database, state_token: str, state_payload: dict
+) -> None:
+    """Validate and mark the OAuth state as consumed to prevent replay."""
+    record = await db.fetch_one(
+        google_calendar_states.select().where(google_calendar_states.c.state_token == state_token)
+    )
+
+    if not record:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="OAuth state is not recognized or has expired",
+        )
+
+    if record["consumed_at"]:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OAuth state already used")
+
+    expires_at = record.get("expires_at")
+    if expires_at and expires_at < datetime.utcnow():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OAuth state has expired")
+
+    if record.get("user_id") != state_payload.get("user_id") or record.get("nonce") != state_payload.get("nonce"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OAuth state mismatch")
+
+    redirect_from_state = (state_payload.get("redirect_uri") or "").strip()
+    if record.get("redirect_uri") != redirect_from_state:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OAuth state redirect mismatch")
+
+    await db.execute(
+        google_calendar_states
+        .update()
+        .where(google_calendar_states.c.id == record["id"])
+        .values(consumed_at=datetime.utcnow())
+    )
+
+
 async def upsert_google_calendar_credentials(db: databases.Database, creds: GoogleCalendarCredentials) -> None:
     payload = {
         "user_id": creds.user_id,
         "access_token": creds.access_token,
-        "refresh_token": creds.refresh_token,
+        "refresh_token": encrypt_refresh_token(creds.refresh_token) if creds.refresh_token else None,
         "token_uri": creds.token_uri,
         "client_id": creds.client_id,
-        "client_secret": creds.client_secret,
+        "client_secret": None,
         "scopes": _serialize_scopes(creds.scopes),
         "expires_at": creds.expires_at,
         "created_at": creds.created_at,
@@ -8706,29 +9887,56 @@ async def upsert_google_calendar_credentials(db: databases.Database, creds: Goog
 
 # Google Calendar endpoints
 @app.post("/users/{user_id}/google-calendar/auth", response_model=GoogleAuthResponse)
-async def google_calendar_auth(user_id: int, request: GoogleAuthRequest, db: databases.Database = Depends(get_database)):
-    """Generate Google Calendar authorization URL."""
-    if request.user_id and request.user_id != user_id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Mismatched user identifier for Google Calendar auth request")
-    return get_google_auth_url(user_id, request.redirect_uri)
+@limiter.limit("10/minute")
+async def google_calendar_auth(
+    request: Request,
+    user_id: int,
+    auth_request: GoogleAuthRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db: databases.Database = Depends(get_database)
+):
+    require_same_user(user_id, current_user)
+    try:
+        """Generate Google Calendar authorization URL."""
+        if auth_request.user_id and auth_request.user_id != user_id:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Mismatched user identifier for Google Calendar auth request")
+        auth = get_google_auth_url(user_id, auth_request.redirect_uri)
+        state_payload = decode_state_token(auth.state)
+        await persist_google_calendar_state(db, auth.state, state_payload)
+        return auth
+    except HTTPException as e:
+        raise e
 
-@app.post("/google-calendar/oauth/callback", response_model=GoogleCalendarCredentials)
-async def google_calendar_callback(request: GoogleAuthCallbackRequest, db: databases.Database = Depends(get_database)):
+@app.post("/google-calendar/oauth/callback", status_code=status.HTTP_204_NO_CONTENT)
+async def google_calendar_callback(
+    request: GoogleAuthCallbackRequest,
+    db: databases.Database = Depends(get_database),
+    current_user: Optional[Dict[str, Any]] = Depends(get_current_user_optional),
+):
     """Handle Google Calendar OAuth callback."""
     try:
+        state_payload = decode_state_token(request.state)
+        state_user_id = state_payload.get("user_id") if isinstance(state_payload, dict) else None
+        if current_user is not None and state_user_id is not None:
+            require_same_user(int(state_user_id), current_user)
+        await consume_google_calendar_state(db, request.state, state_payload)
         credentials = await exchange_code_for_tokens(request.code, request.state, request.redirect_uri)
         await upsert_google_calendar_credentials(db, credentials)
-        return credentials
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
     except HTTPException as e:
         raise e
 
 @app.get("/users/{user_id}/google-calendars", response_model=List[GoogleCalendarInfo])
-async def get_google_calendars(user_id: int, db: databases.Database = Depends(get_database)):
+async def get_google_calendars(
+    user_id: int,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db: databases.Database = Depends(get_database)
+):
+    require_same_user(user_id, current_user)
     """Get user's Google Calendars."""
     try:
         # Get user's Google Calendar credentials from database
         query = google_calendar_credentials.select().where(google_calendar_credentials.c.user_id == user_id)
-        stored_creds = await db.fetch_one(query)
 
         creds = map_google_credentials(stored_creds)
         service = await get_google_calendar_service(creds)
@@ -8738,7 +9946,15 @@ async def get_google_calendars(user_id: int, db: databases.Database = Depends(ge
         raise e
 
 @app.get("/users/{user_id}/google-calendars/{calendar_id}/events", response_model=List[GoogleCalendarEvent])
-async def get_google_calendar_events(user_id: int, calendar_id: str, time_min: Optional[datetime] = None, time_max: Optional[datetime] = None, db: databases.Database = Depends(get_database)):
+async def get_google_calendar_events(
+    user_id: int,
+    calendar_id: str,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    time_min: Optional[datetime] = None,
+    time_max: Optional[datetime] = None,
+    db: databases.Database = Depends(get_database)
+):
+    require_same_user(user_id, current_user)
     """Get events from a Google Calendar."""
     try:
         # Get user's Google Calendar credentials from database
@@ -8753,7 +9969,14 @@ async def get_google_calendar_events(user_id: int, calendar_id: str, time_min: O
         raise e
 
 @app.post("/users/{user_id}/google-calendars/{calendar_id}/events", response_model=GoogleCalendarEvent)
-async def create_google_calendar_event(user_id: int, calendar_id: str, event_data: dict, db: databases.Database = Depends(get_database)):
+async def create_google_calendar_event(
+    user_id: int,
+    calendar_id: str,
+    event_data: dict,
+    db: databases.Database = Depends(get_database),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    require_same_user(user_id, current_user)
     """Create a new event in Google Calendar."""
     try:
         # Get user's Google Calendar credentials from database
@@ -8770,13 +9993,18 @@ async def create_google_calendar_event(user_id: int, calendar_id: str, event_dat
 
 # Proactivity scheduler endpoints
 @app.post("/api/proactivity/evaluate")
-async def trigger_proactivity_evaluation():
+@limiter.limit("5/minute")
+async def trigger_proactivity_evaluation(
+    request: Request,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
     """
     Manually trigger proactivity evaluation for all users.
     Returns a summary of actions taken.
     """
     global proactivity_engine
 
+    require_admin(current_user)
     if not proactivity_engine:
         raise HTTPException(status_code=503, detail="Proactivity engine not initialized")
 
@@ -8796,12 +10024,18 @@ async def trigger_proactivity_evaluation():
 
 
 @app.post("/users/{user_id}/proactivity/evaluate")
-async def trigger_proactivity_for_user(user_id: int):
+@limiter.limit("5/minute")
+async def trigger_proactivity_for_user(
+    request: Request,
+    user_id: int,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
     """
     Manually trigger proactivity message generation for a specific user.
     """
     global proactivity_engine
 
+    require_admin(current_user)
     if not proactivity_engine:
         raise HTTPException(status_code=503, detail="Proactivity engine not initialized")
 
