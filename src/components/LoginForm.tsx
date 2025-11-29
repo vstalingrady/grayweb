@@ -1,8 +1,8 @@
 "use client";
 
 import Image from "next/image";
-import { usePathname, useRouter } from "next/navigation";
-import { FormEvent, useEffect, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { FormEvent, useEffect, useState, useRef } from "react";
 import { LoaderCircle } from "lucide-react";
 import { FaDiscord, FaGoogle } from "react-icons/fa6";
 import ShaderBackground from "@/components/shaders/ShaderBackground";
@@ -30,6 +30,8 @@ type AuthMode = "signin" | "signup";
 
 type LoginFormProps = {
   initialMode?: AuthMode;
+  deleted?: boolean;
+  reconfirmDelete?: boolean;
 };
 
 const providers = [
@@ -39,6 +41,7 @@ const providers = [
 
 const envRedirect = process.env.NEXT_PUBLIC_AUTH_REDIRECT?.trim();
 const envSiteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim();
 const CALLBACK_PATH = "/callback";
 const SUPABASE_STORAGE_KEYS = getSupabaseAuthStorageKeys();
 const MIN_PASSWORD_LENGTH = 8;
@@ -74,6 +77,11 @@ const resolveSiteOrigin = (): string => {
 
   // Server-side: check environment for proper fallback
   if (process.env.NODE_ENV === "development") {
+    // If we are on the server and in dev, we might be behind a proxy or in a container.
+    // Ideally we use the configured site URL.
+    if (envSiteUrl) {
+      return envSiteUrl;
+    }
     return "http://localhost:3000";
   }
 
@@ -92,6 +100,12 @@ const resolveHostContext = (): string | null => {
 const ensureAbsoluteUrl = (target: string): string => {
   if (target.startsWith("http://") || target.startsWith("https://")) {
     return target;
+  }
+
+  // If we are in the browser, use the current origin to ensure protocol and port match
+  if (typeof window !== "undefined") {
+    const origin = window.location.origin;
+    return new URL(target, origin).toString();
   }
 
   const origin = resolveSiteOrigin();
@@ -172,7 +186,7 @@ const resolveCallbackOrigin = (): string => {
     const { hostname, protocol, port } = window.location;
 
     if (isLoopbackHost(hostname)) {
-      return buildLoopbackOrigin(protocol, port);
+      return window.location.origin;
     }
 
     const workspaceOrigin = resolveWorkspaceOrigin(hostname, protocol, port);
@@ -206,31 +220,35 @@ const resolveCallbackOrigin = (): string => {
 
 const buildCallbackDestination = (): string => {
   const target = resolvePostAuthDestination();
-  const encoded = encodeURIComponent(target);
+  const absoluteTarget = ensureAbsoluteUrl(target);
+  const encoded = encodeURIComponent(absoluteTarget);
   const origin = resolveCallbackOrigin();
   return `${origin}${CALLBACK_PATH}?redirect=${encoded}`;
 };
 
-const overrideSupabaseRedirectUrl = (url: string): string => {
-  try {
-    const parsed = new URL(url);
-    parsed.searchParams.set("redirect_to", buildCallbackDestination());
-    return parsed.toString();
-  } catch {
-    return url;
-  }
-};
 
-export default function LoginForm({ initialMode = "signin" }: LoginFormProps) {
+
+export default function LoginForm({ initialMode = "signin", deleted, reconfirmDelete }: LoginFormProps) {
   const router = useRouter();
   const pathname = usePathname();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(true);
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState<MessageState>({ type: "idle" });
+  const [message, setMessage] = useState<MessageState>(
+    deleted
+      ? { type: "success", text: "Your account has been permanently deleted. We've cleared your data, but you're always welcome back." }
+      : reconfirmDelete
+        ? { type: "success", text: "Please re-login to confirm the permanent deletion of your account. This final step helps us ensure your data is securely erased." }
+        : { type: "idle" }
+  );
   const [authMode, setAuthMode] = useState<AuthMode>(initialMode);
   const [showPassword, setShowPassword] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState<string | undefined>();
+  const [turnstileLoaded, setTurnstileLoaded] = useState(false);
+  const turnstileRef = useRef<any>(null);
+
+  const searchParams = useSearchParams();
 
   useEffect(() => {
     setAuthMode(initialMode);
@@ -242,9 +260,48 @@ export default function LoginForm({ initialMode = "signin" }: LoginFormProps) {
       setPassword("");
     }
     setShowPassword(false);
+    setCaptchaToken(undefined);
+    setTurnstileLoaded(false);
   }, [authMode]);
 
+  // Check for OAuth callback errors
+  useEffect(() => {
+    // Check URL params first
+    const errorParam = searchParams?.get("error");
+    const reconfirmDeleteParam = searchParams?.get("reconfirm-delete");
+
+    if (errorParam) {
+      setMessage({ type: "error", text: decodeURIComponent(errorParam) });
+      const newUrl = new URL(window.location.href);
+      newUrl.searchParams.delete("error");
+      window.history.replaceState({}, "", newUrl.toString());
+      return;
+    }
+
+    if (reconfirmDeleteParam === "true") {
+      setMessage({
+        type: "success",
+        text: "Please re-login to confirm the permanent deletion of your account. This final step helps us ensure your data is securely erased.",
+      });
+      const newUrl = new URL(window.location.href);
+      newUrl.searchParams.delete("reconfirm-delete");
+      window.history.replaceState({}, "", newUrl.toString());
+      return;
+    }
+
+    try {
+      const callbackError = sessionStorage.getItem("auth-callback-error");
+      if (callbackError) {
+        setMessage({ type: "error", text: callbackError });
+        sessionStorage.removeItem("auth-callback-error");
+      }
+    } catch {
+      // Ignore storage access issues
+    }
+  }, [searchParams]);
+
   const handleOAuth = async (provider: "google" | "discord") => {
+    const perfStart = performance.now();
     const supabase = getSupabaseClient();
     if (!supabase) {
       setMessage({
@@ -267,7 +324,8 @@ export default function LoginForm({ initialMode = "signin" }: LoginFormProps) {
 
     try {
       const redirectTo = ensureAbsoluteUrl(buildCallbackDestination());
-      const { data, error } = await supabase.auth.signInWithOAuth({
+      console.log("[AUTH DEBUG] Generated OAuth redirectTo:", redirectTo);
+      const { error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
           redirectTo,
@@ -275,27 +333,18 @@ export default function LoginForm({ initialMode = "signin" }: LoginFormProps) {
             provider === "discord"
               ? "identify email guilds"
               : "email profile openid",
-          skipBrowserRedirect: true,
+          captchaToken,
         },
       });
       if (error) {
         throw error;
       }
 
-      const targetUrl = data?.url
-        ? overrideSupabaseRedirectUrl(data.url)
-        : null;
-
-      if (!targetUrl) {
-        throw new Error("Unable to initiate OAuth flow.");
-      }
-
-      window.location.assign(targetUrl);
+      console.log(`[AUTH PERF] OAuth ${provider} initiated in ${(performance.now() - perfStart).toFixed(2)}ms`);
     } catch (error) {
       const text =
         error instanceof Error ? error.message : "OAuth request failed.";
       setMessage({ type: "error", text });
-    } finally {
       setLoading(false);
     }
   };
@@ -305,35 +354,46 @@ export default function LoginForm({ initialMode = "signin" }: LoginFormProps) {
       return;
     }
 
+    if (reconfirmDelete) {
+      window.location.href = "/confirm-delete";
+      return;
+    }
+
+    // Optimize: Direct assignment for absolute URLs
     if (destination.startsWith("http://") || destination.startsWith("https://")) {
       window.location.href = destination;
       return;
     }
 
     const { hostname, protocol, port } = window.location;
-    const workspaceHost = resolveWorkspaceHost(hostname);
-    const workspaceOrigin = resolveWorkspaceOrigin(hostname, protocol, port);
-    const shouldUseFallback = !workspaceHost && isLocalHostname(hostname);
-    const fallbackWorkspaceHost = "gray.localhost";
-    const fallbackWorkspaceOrigin = `${protocol}//${fallbackWorkspaceHost}${port ? `:${port}` : ""}`;
-    const effectiveHost = workspaceHost ?? (shouldUseFallback ? fallbackWorkspaceHost : undefined);
-    const effectiveOrigin = workspaceOrigin ?? (shouldUseFallback ? fallbackWorkspaceOrigin : undefined);
 
-    if (effectiveHost && effectiveOrigin) {
-      const normalizedPath = normalizeWorkspaceRedirect(destination, effectiveHost);
-      const finalPath = normalizedPath.startsWith("/")
-        ? normalizedPath
-        : `/${normalizedPath}`;
-      window.location.href = `${effectiveOrigin}${finalPath}`;
+    // Optimize: Batch hostname checks
+    const isLocal = isLocalHostname(hostname);
+    const workspaceHost = resolveWorkspaceHost(hostname);
+
+    // Fast path for same-origin navigation
+    if (!workspaceHost && isLocal) {
+      const normalizedPath = destination.startsWith("/") ? destination : `/${destination}`;
+      window.location.href = normalizedPath;
       return;
     }
 
-    const absoluteDestination = ensureAbsoluteUrl(destination);
-    window.location.href = absoluteDestination;
+    // Workspace navigation
+    if (workspaceHost) {
+      const workspaceOrigin = resolveWorkspaceOrigin(hostname, protocol, port);
+      const normalizedPath = normalizeWorkspaceRedirect(destination, workspaceHost);
+      const finalPath = normalizedPath.startsWith("/") ? normalizedPath : `/${normalizedPath}`;
+      window.location.href = `${workspaceOrigin}${finalPath}`;
+      return;
+    }
+
+    // Fallback
+    window.location.href = ensureAbsoluteUrl(destination);
   };
 
   const handleEmailAuth = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    const perfStart = performance.now();
     setMessage({ type: "idle" });
     const supabase = getSupabaseClient();
 
@@ -371,44 +431,51 @@ export default function LoginForm({ initialMode = "signin" }: LoginFormProps) {
     try {
       const isSignIn = authMode === "signin";
       if (isSignIn) {
+        const authStart = performance.now();
         const { data, error } = await supabase.auth.signInWithPassword({
           email: trimmedEmail,
           password,
+          options: { captchaToken },
         });
+        console.log(`[AUTH PERF] Sign in request took ${(performance.now() - authStart).toFixed(2)}ms`);
 
         if (error) {
           throw error;
         }
 
-        if (!remember && typeof window !== "undefined") {
-          SUPABASE_STORAGE_KEYS.forEach((key) => {
-            window.localStorage.removeItem(key);
-          });
-          clearAuthCookies();
-        }
-
-        if (remember) {
-          persistAuthCookies(
-            data.session?.user?.email ?? data.user?.email ?? trimmedEmail
-          );
-        } else {
-          clearAuthCookies();
+        // Optimize: Batch storage operations
+        if (typeof window !== "undefined") {
+          if (!remember) {
+            SUPABASE_STORAGE_KEYS.forEach((key) => {
+              window.localStorage.removeItem(key);
+            });
+            clearAuthCookies();
+          } else {
+            await persistAuthCookies(
+              data.session?.user?.email ?? data.user?.email ?? trimmedEmail,
+              data.session?.access_token ?? null
+            );
+          }
         }
 
         const destination = resolvePostAuthDestination();
+        console.log(`[AUTH PERF] Total sign in flow took ${(performance.now() - perfStart).toFixed(2)}ms`);
         if (typeof window !== "undefined") {
           performPostAuthNavigation(destination);
         }
         return;
       }
 
+      const authStart = performance.now();
       const { data, error } = await supabase.auth.signUp({
         email: trimmedEmail,
         password,
         options: {
           emailRedirectTo: ensureAbsoluteUrl(buildCallbackDestination()),
+          captchaToken,
         },
       });
+      console.log(`[AUTH PERF] Sign up request took ${(performance.now() - authStart).toFixed(2)}ms`);
 
       if (error) {
         throw error;
@@ -418,18 +485,19 @@ export default function LoginForm({ initialMode = "signin" }: LoginFormProps) {
         data.session?.user?.email ?? data.user?.email ?? trimmedEmail ?? null;
 
       if (data.session) {
-        if (!remember && typeof window !== "undefined") {
-          SUPABASE_STORAGE_KEYS.forEach((key) => {
-            window.localStorage.removeItem(key);
-          });
-          clearAuthCookies();
-        }
-        if (remember) {
-          persistAuthCookies(sessionEmail);
-        } else {
-          clearAuthCookies();
+        // Optimize: Batch storage operations
+        if (typeof window !== "undefined") {
+          if (!remember) {
+            SUPABASE_STORAGE_KEYS.forEach((key) => {
+              window.localStorage.removeItem(key);
+            });
+            clearAuthCookies();
+          } else {
+            await persistAuthCookies(sessionEmail, data.session?.access_token ?? null);
+          }
         }
         const destination = resolvePostAuthDestination();
+        console.log(`[AUTH PERF] Total sign up flow took ${(performance.now() - perfStart).toFixed(2)}ms`);
         if (typeof window !== "undefined") {
           performPostAuthNavigation(destination);
         }
@@ -633,6 +701,10 @@ export default function LoginForm({ initialMode = "signin" }: LoginFormProps) {
                   Forgot password?
                 </a>
               </div>
+
+              {turnstileSiteKey && turnstileLoaded && (
+                <div style={{ marginBottom: "1rem" }} id="turnstile-container" />
+              )}
 
               {renderedMessage}
 
