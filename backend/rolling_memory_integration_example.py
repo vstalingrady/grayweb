@@ -97,7 +97,7 @@ async def chat_stream_rolling_memory_example(request: ChatRequest):
         
     else:
         # Fall back to old method for thread conversations
-        conversation_history = await _load_conversation_history(conversation_id)
+        conversation_history = await _load_conversation_history(conversation_id, user_id)
         enhanced_system_prompt = request.system_prompt or build_system_prompt(user_id)
     
     # ========================================================================
@@ -126,7 +126,7 @@ async def chat_stream_rolling_memory_example(request: ChatRequest):
 """
 BEFORE (around line 3899 in your main.py):
 ----------------------------------------
-conversation_history: List[Dict[str, Any]] = await _load_conversation_history(conversation_id)
+conversation_history: List[Dict[str, Any]] = await _load_conversation_history(conversation_id, user_id)
 
 
 AFTER:
@@ -145,7 +145,7 @@ if is_general_chat and rolling_memory_orchestrator:
     system_prompt = enhanced_system_prompt
 else:
     # Use original method
-    conversation_history: List[Dict[str, Any]] = await _load_conversation_history(conversation_id)
+    conversation_history: List[Dict[str, Any]] = await _load_conversation_history(conversation_id, user_id)
 """
 
 
