@@ -20,7 +20,8 @@ export const getSupabaseClient = (): SupabaseClient | null => {
         persistSession: true,
         autoRefreshToken: true,
         // Enable URL session detection for OAuth callback handling
-        detectSessionInUrl: true,
+        detectSessionInUrl: false,
+        flowType: "pkce",
       },
     });
   }
