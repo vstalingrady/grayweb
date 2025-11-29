@@ -6937,12 +6937,13 @@ async def get_conversation_usage(
 ):
     """Get conversation usage statistics"""
     try:
-            await _require_conversation_owner(conversation_id, current_user)
-            # Load the actual conversation history
-            history = await _load_conversation_history(conversation_id, current_user["id"])
-            
-            # Count messages
-            message_count = len(history)        
+        await _require_conversation_owner(conversation_id, current_user)
+        # Load the actual conversation history
+        history = await _load_conversation_history(conversation_id, current_user["id"])
+        
+        # Count messages
+        message_count = len(history)
+        
         # Better token estimation: use tiktoken if available, otherwise rough estimate
         try:
             import tiktoken
