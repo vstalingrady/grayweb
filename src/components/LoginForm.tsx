@@ -32,6 +32,10 @@ type LoginFormProps = {
   initialMode?: AuthMode;
   deleted?: boolean;
   reconfirmDelete?: boolean;
+  headerText?: string;
+  subtitleText?: string;
+  redirectTo?: string;
+  onSuccess?: () => void;
 };
 
 const providers = [
@@ -218,7 +222,13 @@ const resolveCallbackOrigin = (): string => {
   }
 };
 
-const buildCallbackDestination = (): string => {
+const buildCallbackDestination = (customRedirect?: string): string => {
+  if (customRedirect) {
+    const absoluteTarget = ensureAbsoluteUrl(customRedirect);
+    const encoded = encodeURIComponent(absoluteTarget);
+    const origin = resolveCallbackOrigin();
+    return `${origin}${CALLBACK_PATH}?redirect=${encoded}`;
+  }
   const target = resolvePostAuthDestination();
   const absoluteTarget = ensureAbsoluteUrl(target);
   const encoded = encodeURIComponent(absoluteTarget);
@@ -228,7 +238,15 @@ const buildCallbackDestination = (): string => {
 
 
 
-export default function LoginForm({ initialMode = "signin", deleted, reconfirmDelete }: LoginFormProps) {
+export default function LoginForm({
+  initialMode = "signin",
+  deleted,
+  reconfirmDelete,
+  headerText,
+  subtitleText,
+  redirectTo,
+  onSuccess,
+}: LoginFormProps) {
   const router = useRouter();
   const pathname = usePathname();
   const [email, setEmail] = useState("");
@@ -323,12 +341,12 @@ export default function LoginForm({ initialMode = "signin", deleted, reconfirmDe
     setMessage({ type: "idle" });
 
     try {
-      const redirectTo = ensureAbsoluteUrl(buildCallbackDestination());
-      console.log("[AUTH DEBUG] Generated OAuth redirectTo:", redirectTo);
+      const callbackUrl = ensureAbsoluteUrl(buildCallbackDestination(redirectTo));
+      console.log("[AUTH DEBUG] Generated OAuth redirectTo:", callbackUrl);
       const { error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
-          redirectTo,
+          redirectTo: callbackUrl,
           scopes:
             provider === "discord"
               ? "identify email guilds"
@@ -458,7 +476,12 @@ export default function LoginForm({ initialMode = "signin", deleted, reconfirmDe
           }
         }
 
-        const destination = resolvePostAuthDestination();
+        if (onSuccess) {
+          onSuccess();
+          return;
+        }
+
+        const destination = redirectTo ?? resolvePostAuthDestination();
         console.log(`[AUTH PERF] Total sign in flow took ${(performance.now() - perfStart).toFixed(2)}ms`);
         if (typeof window !== "undefined") {
           performPostAuthNavigation(destination);
@@ -471,7 +494,7 @@ export default function LoginForm({ initialMode = "signin", deleted, reconfirmDe
         email: trimmedEmail,
         password,
         options: {
-          emailRedirectTo: ensureAbsoluteUrl(buildCallbackDestination()),
+          emailRedirectTo: ensureAbsoluteUrl(buildCallbackDestination(redirectTo)),
           captchaToken,
         },
       });
@@ -523,10 +546,10 @@ export default function LoginForm({ initialMode = "signin", deleted, reconfirmDe
   };
 
   const isSignIn = authMode === "signin";
-  const heading = isSignIn ? "Welcome back" : "Welcome";
-  const subtitle = isSignIn
+  const heading = headerText ?? (isSignIn ? "Welcome back" : "Welcome");
+  const subtitle = subtitleText ?? (isSignIn
     ? "Accelerate your personal growth."
-    : "Create your account to start accelerating your personal growth.";
+    : "Create your account to start accelerating your personal growth.");
   const submitLabel = isSignIn ? "Sign In" : "Create Account";
   const footerPrompt = isSignIn
     ? "Don't have an account?"

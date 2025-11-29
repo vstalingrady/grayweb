@@ -1,21 +1,32 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { LoaderCircle } from "lucide-react";
 import { useUser } from "@/contexts/UserContext";
 import styles from "./page.module.css";
+import LoginForm from "@/components/LoginForm";
 
 export default function DeleteAccountPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, loading, deleteUserAccount } = useUser();
   const [status, setStatus] = useState<"idle" | "deleting" | "error" | "success">("idle");
   const [error, setError] = useState<string | null>(null);
   const [confirmationEmail, setConfirmationEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [authError, setAuthError] = useState<string | null>(null);
-  const [isAuthenticating, setIsAuthenticating] = useState(false);
+
+  // Check if we are returning from an OAuth flow that was initiated for verification
+  useEffect(() => {
+    const verifiedParam = searchParams?.get("verified");
+    if (verifiedParam === "true") {
+      setIsAuthenticated(true);
+      // Clean up URL
+      const newUrl = new URL(window.location.href);
+      newUrl.searchParams.delete("verified");
+      window.history.replaceState({}, "", newUrl.toString());
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     if (status === "deleting" || status === "success") {
@@ -26,46 +37,6 @@ export default function DeleteAccountPage() {
       router.replace(`/login?redirect=${redirect}`);
     }
   }, [loading, router, user, status]);
-
-  const handleReauthenticate = useCallback(async () => {
-    if (!user || isAuthenticating) {
-      return;
-    }
-
-    if (!password) {
-      setAuthError("Please enter your password.");
-      return;
-    }
-
-    setIsAuthenticating(true);
-    setAuthError(null);
-
-    try {
-      const { getSupabaseClient } = await import("@/lib/supabaseClient");
-      const supabase = getSupabaseClient();
-
-      if (!supabase) {
-        throw new Error("Authentication service unavailable");
-      }
-
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: user.email,
-        password: password,
-      });
-
-      if (signInError) {
-        throw signInError;
-      }
-
-      setIsAuthenticated(true);
-      setPassword(""); // Clear password from memory
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to verify password.";
-      setAuthError(message);
-    } finally {
-      setIsAuthenticating(false);
-    }
-  }, [user, password, isAuthenticating]);
 
   const handleDelete = useCallback(async () => {
     if (!user || status === "deleting") {
@@ -82,14 +53,14 @@ export default function DeleteAccountPage() {
     try {
       await deleteUserAccount();
       setStatus("success");
-      router.replace("/login?reconfirm-delete=true");
-      router.refresh();
+      // Use window.location to ensure full state reset
+      window.location.href = "/confirm-delete";
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to delete account.";
       setError(message);
       setStatus("error");
     }
-  }, [deleteUserAccount, router, status, user, confirmationEmail]);
+  }, [deleteUserAccount, status, user, confirmationEmail]);
 
   const renderBody = () => {
     if (loading || !user) {
@@ -101,53 +72,16 @@ export default function DeleteAccountPage() {
       );
     }
 
-
     if (!isAuthenticated) {
       return (
-        <div className={styles["delete-account__card"]}>
-          <h1>Delete Account</h1>
-          <p className={styles["delete-account__description"]}>
-            To confirm deletion, please re-enter your password for <strong>{user.email}</strong>.
-          </p>
-
-          <input
-            type="password"
-            className={styles["delete-account__input"]}
-            placeholder="Enter your password"
-            value={password}
-            onChange={(e) => {
-              setPassword(e.target.value);
-              if (authError) setAuthError(null);
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                handleReauthenticate();
-              }
-            }}
-            disabled={isAuthenticating}
-            autoFocus
+        <div style={{ width: "100%", height: "100%" }}>
+          <LoginForm
+            initialMode="signin"
+            headerText="Delete Account"
+            subtitleText="Please log in again to confirm your identity."
+            redirectTo="/delete-account?verified=true"
+            onSuccess={() => setIsAuthenticated(true)}
           />
-
-          {authError ? <p className={styles["delete-account__error"]}>{authError}</p> : null}
-
-          <div className={styles["delete-account__actions"]}>
-            <button
-              type="button"
-              className={styles["delete-account__cancel"]}
-              onClick={() => router.back()}
-              disabled={isAuthenticating}
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              className={styles["delete-account__button"]}
-              disabled={isAuthenticating || !password}
-              onClick={handleReauthenticate}
-            >
-              {isAuthenticating ? "Verifying..." : "Continue"}
-            </button>
-          </div>
         </div>
       );
     }
@@ -155,15 +89,15 @@ export default function DeleteAccountPage() {
     const description =
       status === "deleting"
         ? "Deleting your workspace data..."
-        : "You re-authenticated successfully. This action cannot be undone.";
+        : "Identity verified. This action cannot be undone.";
 
     const isMatch = confirmationEmail === user.email;
 
     return (
       <div className={styles["delete-account__card"]}>
-        <h1>Delete Account</h1>
+        <h1>Final Confirmation</h1>
         <p className={styles["delete-account__description"]}>
-          {description} To confirm, please type your email <strong>{user.email}</strong> below.
+          {description} To permanently delete your account, type your email <strong>{user.email}</strong> below.
         </p>
 
         <input
@@ -184,7 +118,7 @@ export default function DeleteAccountPage() {
           <button
             type="button"
             className={styles["delete-account__cancel"]}
-            onClick={() => router.back()}
+            onClick={() => setIsAuthenticated(false)}
             disabled={status === "deleting"}
           >
             Cancel
@@ -204,7 +138,18 @@ export default function DeleteAccountPage() {
 
   return (
     <main className={styles["delete-account"]}>
-      {renderBody()}
+      {isAuthenticated ? renderBody() : (
+        // When not authenticated, LoginForm handles its own layout, so we render it directly
+        // However, LoginForm's layout is full screen fixed. 
+        // We can wrap it or just let it take over since this page is a full screen flow.
+        <LoginForm
+          initialMode="signin"
+          headerText="Delete Account"
+          subtitleText="Please log in again to confirm your identity."
+          redirectTo="/delete-account?verified=true"
+          onSuccess={() => setIsAuthenticated(true)}
+        />
+      )}
     </main>
   );
 }
