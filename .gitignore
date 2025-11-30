@@ -43,3 +43,4 @@ plans-habits-server/node_modules
 .venv/
 .env
 .env.production
+backend/logs/
