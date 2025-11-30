@@ -5724,33 +5724,25 @@ async def stream_ai_response(
                 
                 # Execute tools and add results
                 for fc in tool_calls_in_this_turn:
+                    tool_result = {} # Initialize for each tool call
                     try:
-                        result = await _execute_function_call(fc, user_id, db)
-
+                        tool_result = await _execute_function_call(fc, user_id, db)
+                        
                         # Emit structured payloads (like reminders) directly to the client
                         # so the frontend can render them immediately.
-                        if isinstance(result, dict) and result.get("type") == "gray.reminder":
-                            payload_json = json.dumps(result)
-                            # Wrap in a code block so it's robustly detected but not rendered as prose.
-                            # The frontend extractGrayRemindersFromText will strip this block.
-                            injection = f"\n```json\n{payload_json}\n```\n"
-                            yield ("delta", injection)
-                        
-                        # Add the result to history
-                        intermediate_history.append(
-                            types.Content(
-                                role="user",
-                                parts=[types.Part.from_function_response(name=fc.name, response=result)]
-                            )
-                        )
+                        if isinstance(tool_result, dict) and tool_result.get("type") in {"gray.reminder", "gray.plan", "gray.habit"}:
+                            api_logger.info(f"Yielding tool_card event for {tool_result.get('type')}")
+                            yield ("tool_card", tool_result)
+                            
                     except Exception as e:
-                        api_logger.error(f"Tool execution failed: {e}")
-                        intermediate_history.append(
-                            types.Content(
-                                role="user",
-                                parts=[types.Part.from_function_response(name=fc.name, response={"error": str(e)})]
-                            )
-                        )
+                        tool_result = {"error": str(e)}
+                        api_logger.error(f"Tool execution failed for {fc.name}: {e}", exc_info=True)
+                        
+                    finally:
+                        # Append the tool's execution and its result to history
+                        intermediate_history.extend(_build_function_call_contents(fc, tool_result))
+                        # Yield a blank delta to ensure frontend gets a chance to process the card_event before more text.
+                        yield ("delta", "")
                 
                 # Loop continues to next turn, where intermediate_history will be included in extra_contents
                 

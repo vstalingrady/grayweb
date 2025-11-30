@@ -53,7 +53,10 @@ class DualDatabaseConfig:
         if self.remote_url:
             self.remote_db = databases.Database(self.remote_url, statement_cache_size=0)
         
-        self.local_db = databases.Database(self.local_url, statement_cache_size=0)
+        local_db_args = {}
+        if self.local_url and self.local_url.startswith("postgresql"):
+            local_db_args["statement_cache_size"] = 0
+        self.local_db = databases.Database(self.local_url, **local_db_args)
         
         # Create metadata for each database
         self.remote_metadata = sqlalchemy.MetaData()
