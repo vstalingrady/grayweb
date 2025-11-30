@@ -89,7 +89,7 @@ if __name__ == "__main__":
         "file_exists": (ROOT_DIR / ".env").exists()
     })
 
-    load_dotenv(ROOT_DIR / ".env", override=True)
+    load_dotenv(ROOT_DIR / ".env", override=False)
 
     # Log key environment variables (excluding sensitive ones)
     env_info = {
@@ -368,6 +368,48 @@ if __name__ == "__main__":
         sqlalchemy.Column("expires_at", sqlalchemy.DateTime, nullable=True),
         sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=sqlalchemy.func.now()),
         sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=sqlalchemy.func.now(), onupdate=sqlalchemy.func.now()),
+    )
+
+    google_calendar_states = sqlalchemy.Table(
+        "google_calendar_states",
+        metadata,
+        sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True, index=True),
+        sqlalchemy.Column("state_token", sqlalchemy.String, unique=True, nullable=False),
+        sqlalchemy.Column("user_id", sqlalchemy.ForeignKey("users.id")),
+        sqlalchemy.Column("nonce", sqlalchemy.String, nullable=False),
+        sqlalchemy.Column("redirect_uri", sqlalchemy.String, nullable=False),
+        sqlalchemy.Column("expires_at", sqlalchemy.DateTime, nullable=True),
+        sqlalchemy.Column("consumed_at", sqlalchemy.DateTime, nullable=True),
+        sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=sqlalchemy.func.now()),
+    )
+
+    # User data table for general chat and other personalization (local-only)
+    user_data = sqlalchemy.Table(
+        "user_data",
+        metadata,
+        sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True, index=True),
+        sqlalchemy.Column("user_identifier", sqlalchemy.Integer, unique=True, nullable=False), # References users.id
+        sqlalchemy.Column("nickname", sqlalchemy.String, nullable=True),
+        sqlalchemy.Column("occupation", sqlalchemy.String, nullable=True),
+        sqlalchemy.Column("about", sqlalchemy.String, nullable=True),
+        sqlalchemy.Column("custom_instructions", sqlalchemy.String, nullable=True),
+        sqlalchemy.Column("has_seen_general_chat", sqlalchemy.Boolean, default=False),
+        sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=sqlalchemy.func.now()),
+        sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=sqlalchemy.func.now(), onupdate=sqlalchemy.func.now()),
+    )
+
+    # General chat messages (local-only, for now)
+    general_chat_messages = sqlalchemy.Table(
+        "general_chat_messages",
+        metadata,
+        sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True, index=True),
+        sqlalchemy.Column("user_id", sqlalchemy.Integer, nullable=False),  # References users.id
+        sqlalchemy.Column("user_data_id", sqlalchemy.ForeignKey("user_data.id"), nullable=False),
+        sqlalchemy.Column("role", sqlalchemy.String, nullable=False),
+        sqlalchemy.Column("content", sqlalchemy.Text, nullable=False),
+        sqlalchemy.Column("grounding_metadata", sqlalchemy.JSON, nullable=True),
+        sqlalchemy.Column("attachments", sqlalchemy.JSON, nullable=True),
+        sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=sqlalchemy.func.now()),
     )
 
     table_creation_start = time.time()

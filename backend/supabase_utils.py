@@ -82,6 +82,58 @@ def resolve_supabase_credentials() -> Tuple[Optional[str], Optional[str], Option
     return url, key, key_source
 
 
+def _resolve_supabase_service_credentials() -> Tuple[Optional[str], Optional[str], Optional[str]]:
+    """
+    Resolve credentials for privileged operations (e.g., account deletion).
+
+    This intentionally prefers service-role style keys even when SUPABASE_KEY
+    is set to an anon key, so destructive actions don't silently fail.
+    """
+    def _normalize_url(value: str) -> str:
+        trimmed = value.strip()
+        if not trimmed:
+            return ""
+        if trimmed.startswith("http://") or trimmed.startswith("https://"):
+            return trimmed.rstrip("/")
+        return f"https://{trimmed.lstrip('/').rstrip('/')}"
+
+    url_candidates = [
+        "SUPABASE_URL",
+        "NEXT_PUBLIC_SUPABASE_URL",
+        "SUPABASE_PROJECT_URL",
+        "SUPABASE_HOST",
+    ]
+
+    url: Optional[str] = None
+    for env_name in url_candidates:
+        candidate = os.getenv(env_name, "").strip()
+        if candidate and "your_supabase_url" not in candidate.lower():
+            url = _normalize_url(candidate)
+            if env_name != "SUPABASE_URL":
+                os.environ["SUPABASE_URL"] = url
+            break
+
+    service_key_candidates = [
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "SUPABASE_SERVICE_KEY",
+        "SUPABASE_SECRET_KEY",
+        "SUPABASE_KEY",  # Some setups overload SUPABASE_KEY with the service role
+    ]
+
+    key: Optional[str] = None
+    key_source: Optional[str] = None
+    for name in service_key_candidates:
+        value = (os.getenv(name) or "").strip()
+        if value and "your_supabase_key_here" not in value.lower():
+            key = value
+            key_source = name
+            if name != "SUPABASE_KEY":
+                os.environ["SUPABASE_KEY"] = value
+            break
+
+    return url, key, key_source
+
+
 def create_supabase_client() -> Optional[Client]:
     """Create a Supabase client from environment variables, or return None if unavailable."""
     url, key, _ = resolve_supabase_credentials()
@@ -91,3 +143,18 @@ def create_supabase_client() -> Optional[Client]:
         return create_client(url, key)
     except Exception:
         return None
+
+
+def create_supabase_service_client() -> Tuple[Optional[Client], Optional[str]]:
+    """
+    Create a Supabase client using a service-role key when available.
+
+    Returns a tuple of (client, key_source) where key_source is the env var name used.
+    """
+    url, key, key_source = _resolve_supabase_service_credentials()
+    if not url or not key:
+        return None, None
+    try:
+        return create_client(url, key), key_source
+    except Exception:
+        return None, key_source

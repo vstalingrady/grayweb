@@ -21,8 +21,9 @@ const GrayChatComposerBase = ({
   const { reasoningMode, setReasoningMode } = useChatStore();
   const [searchEnabled, setSearchEnabled] = useState(true);
 
-  const planTier = (user?.plan_tier || "scout").toLowerCase();
-  const isReasoningLocked = planTier === "scout";
+  const planTier = (user?.plan_tier || "pioneer").toLowerCase();
+  const effectivePlanTier = planTier === "scout" ? "pioneer" : planTier;
+  const isReasoningLocked = effectivePlanTier === "scout";
 
   return (
     <div

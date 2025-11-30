@@ -33,7 +33,7 @@ export default function DeleteAccountPage() {
       return;
     }
     if (!loading && !user) {
-      const redirect = encodeURIComponent("/delete-account");
+      const redirect = encodeURIComponent("/delete-account?verified=true");
       router.replace(`/login?redirect=${redirect}`);
     }
   }, [loading, router, user, status]);
@@ -95,7 +95,7 @@ export default function DeleteAccountPage() {
 
     return (
       <div className={styles["delete-account__card"]}>
-        <h1>Final Confirmation</h1>
+        <h1>Final confirmation</h1>
         <p className={styles["delete-account__description"]}>
           {description} To permanently delete your account, type your email <strong>{user.email}</strong> below.
         </p>

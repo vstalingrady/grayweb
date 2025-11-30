@@ -588,11 +588,7 @@ export const shouldIncludeWorkspaceContext = (message: string, context: string |
 };
 
 const shouldAutoEnableMapsForMessage = (message: string) => {
-  const normalized = message.trim().toLowerCase();
-  if (!normalized) {
-    return false;
-  }
-  return MAP_TRIGGER_PATTERN.test(normalized) || MAP_TRIGGER_PHRASE.test(normalized);
+  return false;
 };
 
 export const normalizeAssistantContent = (candidate: string | null | undefined, prompt: string) => {
@@ -3702,6 +3698,20 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
     });
 
     if (!user.has_seen_general_chat && !onboardingSeenRef.current) {
+      const introCompletedFlag =
+        typeof window !== "undefined" &&
+        window.sessionStorage.getItem("grayIntroCompleted") === "1";
+
+      if (introCompletedFlag) {
+        // If splash already ran, skip showing the overlay again but still kick off onboarding chat.
+        if (!onboardingKickoffRef.current) {
+          onboardingKickoffRef.current = true;
+          void sendGeneralMessage("");
+        }
+        setShowIntro(false);
+        return;
+      }
+
       console.log('[ChatProvider] Triggering "First Contact" onboarding flow');
       setShowIntro(true);
     }

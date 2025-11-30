@@ -14,6 +14,9 @@ from dotenv import load_dotenv
 ROOT_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(ROOT_DIR / ".env")
 
+DEFAULT_POOLER_HOST = os.getenv("SUPABASE_POOLER_HOST", "aws-1-ap-south-1.pooler.supabase.com")
+DEFAULT_POOLER_PORT = os.getenv("SUPABASE_POOLER_PORT", "6543")
+
 
 def check_env_vars():
     """Check if required environment variables are set."""
@@ -103,7 +106,10 @@ def check_remote_connection():
         
         # Construct URL
         project_ref = supabase_url.replace("https://", "").replace(".supabase.co", "")
-        remote_url = f"postgresql://postgres.{project_ref}:{db_password}@aws-0-us-west-1.pooler.supabase.com:6543/postgres"
+        remote_url = (
+            f"postgresql://postgres.{project_ref}:{db_password}@"
+            f"{DEFAULT_POOLER_HOST}:{DEFAULT_POOLER_PORT}/postgres"
+        )
     
     # Try to connect
     try:

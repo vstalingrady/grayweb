@@ -264,6 +264,32 @@ PLAN_TOOL = types.Tool(
             ),
         ),
         types.FunctionDeclaration(
+            name="delete_latest_reminder",
+            description="Delete the most recent reminder, optionally matching a label substring or time window.",
+            parameters=types.Schema(
+                type="OBJECT",
+                properties={
+                    "label_substring": types.Schema(
+                        type="STRING",
+                        description="Optional label text to match (case-insensitive substring).",
+                    ),
+                    "remind_before": types.Schema(
+                        type="STRING",
+                        description="Optional ISO 8601 datetime; only delete reminders at or before this time.",
+                    ),
+                    "remind_after": types.Schema(
+                        type="STRING",
+                        description="Optional ISO 8601 datetime; only delete reminders at or after this time.",
+                    ),
+                    "status": types.Schema(
+                        type="STRING",
+                        description="Optional status filter (pending, delivered, completed, cancelled). Defaults to pending/delivered.",
+                    ),
+                },
+                required=[],
+            ),
+        ),
+        types.FunctionDeclaration(
             name="get_workspace_state",
             description="Fetch a lightweight snapshot of plans, habits, and reminders for the current user.",
             parameters=types.Schema(

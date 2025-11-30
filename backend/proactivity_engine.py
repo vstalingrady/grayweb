@@ -12,13 +12,16 @@ import re
 import requests
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone as dt_timezone
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, AsyncIterator, Dict, List, Optional
 from zoneinfo import ZoneInfo
 
 import databases
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
-from ai_message_generator import AIMessageGenerator
+try:
+    from backend.ai_message_generator import AIMessageGenerator
+except ImportError:
+    from ai_message_generator import AIMessageGenerator
 try:
     from pywebpush import webpush, WebPushException
 except ImportError:  # graceful fallback if pywebpush isn't available
@@ -459,49 +462,7 @@ class ProactivityEngine:
     ) -> Optional[str]:
         try:
             ai_message = await self._generate_ai_checkin_message(user_id, settings, timezone)
-            if ai_message:
-                return ai_message
-
-            activity = await self._get_user_recent_activity(user_id)
-            cadence = (settings.get("cadence") or "Frequent").lower()
-            label = settings.get("label") or "Check-ins"
-
-            local_tz = self._resolve_timezone(timezone)
-            hour = datetime.now(local_tz).hour
-
-            if hour < 12:
-                time_period = "morning"
-                emoji = "🌅"
-            elif hour < 17:
-                time_period = "afternoon"
-                emoji = "☀️"
-            else:
-                time_period = "evening"
-                emoji = "🌙"
-
-            if cadence == "frequent":
-                if time_period == "morning":
-                    return f"{emoji} Good morning! Quick check-in time. What's your top priority today? (First touchpoint)"
-                if time_period == "afternoon":
-                    return f"{emoji} Midday momentum check! How's progress? Any blockers? (Second touchpoint)"
-                return f"{emoji} Evening wrap-up! Reflect on today's wins and plan tomorrow. (Third touchpoint)"
-
-            if cadence == "daily":
-                if activity and activity.get("tasks_completed"):
-                    completed = activity.get("tasks_completed", 0)
-                    return f"{emoji} Good morning! Yesterday you completed {completed} tasks. Let's keep that momentum going today. What's on your plate?"
-                return f"{emoji} Good morning! Time for your daily check-in. How are your plans and habits coming along? Any updates on your goals?"
-
-            if cadence == "weekly":
-                if activity and activity.get("score"):
-                    score = activity.get("score", 0)
-                    return f"📅 Weekly Review Time! Last week you scored {score:.0f}% completion. Let's look at highlights, gaps, and what's next for this week."
-                return "📅 It's time for your weekly review! Let's recap what you accomplished this week and plan next week's priorities."
-
-            if cadence == "custom":
-                return f"👋 {label}! How are your plans and habits progressing? Let's check in on your goals."
-
-            return "👋 Time for a check-in! How are things going with your plans and habits?"
+            return ai_message.strip() if ai_message else None
         except Exception as exc:
             logger.error(f"Error generating check-in message for user {user_id}: {exc}", exc_info=True)
             return None
@@ -852,9 +813,14 @@ class ProactivityEngine:
             return None
 
         try:
+            now_iso = datetime.now(dt_timezone.utc).isoformat()
             created = (
                 self.supabase.table("user_data")
-                .insert({"user_identifier": user_identifier})
+                .insert({
+                    "user_identifier": user_identifier,
+                    "created_at": now_iso,
+                    "updated_at": now_iso
+                })
                 .execute()
             )
             rows = getattr(created, "data", None) or []

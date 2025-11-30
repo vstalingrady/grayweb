@@ -17,6 +17,9 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(ROOT_DIR / ".env")
 
+DEFAULT_POOLER_HOST = os.getenv("SUPABASE_POOLER_HOST", "aws-1-ap-south-1.pooler.supabase.com")
+DEFAULT_POOLER_PORT = os.getenv("SUPABASE_POOLER_PORT", "6543")
+
 DatabaseType = Literal["remote", "local"]
 
 
@@ -34,8 +37,11 @@ class DualDatabaseConfig:
                 project_ref = supabase_url.replace("https://", "").replace(".supabase.co", "")
                 db_password = os.getenv("SUPABASE_DB_PASSWORD", "")
                 if db_password:
-                    # Use direct connection (not pooler) for migrations
-                    self.remote_url = f"postgresql://postgres:{db_password}@db.{project_ref}.supabase.co:5432/postgres"
+                    username = f"postgres.{project_ref}"
+                    self.remote_url = (
+                        f"postgresql://{username}:{db_password}@"
+                        f"{DEFAULT_POOLER_HOST}:{DEFAULT_POOLER_PORT}/postgres"
+                    )
         
         # Local database for user data (SQLite)
         self.local_url = os.getenv("LOCAL_DATABASE_URL", "sqlite:///./backend/users.db")

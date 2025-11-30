@@ -263,6 +263,36 @@ function GrayPageClientInner({
   const ensureSessionRef = useRef(ensureSession);
   const { deliveredKeys: deliveredProactivityKeys } = useProactivityNotifications();
 
+  // Auto-send "Hey Gray..." for new users to trigger onboarding flow
+  const hasTriggeredOnboardingRef = useRef(false);
+  useEffect(() => {
+    console.log("[Onboarding] Checking trigger conditions", {
+      userLoading,
+      user: !!user,
+      hasSeen: user?.has_seen_general_chat,
+      triggered: hasTriggeredOnboardingRef.current
+    });
+
+    if (userLoading || !user) {
+      return;
+    }
+
+    if (!user.has_seen_general_chat && !hasTriggeredOnboardingRef.current) {
+      console.log("[Onboarding] Conditions met, scheduling auto-send...");
+      hasTriggeredOnboardingRef.current = true;
+      // Use a small delay to ensure the UI is ready and session is initialized
+      setTimeout(() => {
+        console.log("[Onboarding] Executing auto-send: 'Hey Gray, i'm ready to start...'");
+        sendGeneralMessage("Hey Gray, i'm ready to start...")
+          .catch((error) => {
+            console.error("[Onboarding] Failed to auto-send onboarding message:", error);
+            // Reset trigger ref on failure so we can try again if the user refreshes or something
+            hasTriggeredOnboardingRef.current = false;
+          });
+      }, 1000);
+    }
+  }, [user, userLoading, sendGeneralMessage]);
+
   const derivedPlans = user ? [...plans, ...reminderPlans] : [];
   const derivedHabits = user ? habits : [];
 
@@ -278,7 +308,7 @@ function GrayPageClientInner({
       return;
     }
     try {
-      const notification = new Notification(title, { body });
+      const notification = new Notification(title, { body, requireInteraction: true });
       notification.onclick = () => {
         window.focus();
         notification.close();
@@ -302,20 +332,15 @@ function GrayPageClientInner({
   const [habitEditorTarget, setHabitEditorTarget] = useState<HabitItem | null>(null);
   const [planTab, setPlanTab] = useState<"plans" | "habits">("plans");
   const chatSubmitInFlightRef = useRef(false);
-  const [hasSeenGeneralChat, setHasSeenGeneralChat] = useState(false);
-  const onboardingTriggeredRef = useRef(false);
-
-  useEffect(() => {
-    if (user?.has_seen_general_chat) {
-      setHasSeenGeneralChat(true);
-      onboardingTriggeredRef.current = true;
-    }
-  }, [user?.has_seen_general_chat]);
 
   const [isSidebarExpanded, setIsSidebarExpanded] = useState<boolean>(false);
   const [hasLoadedSidebarPref, setHasLoadedSidebarPref] = useState(false);
   const [isMobileViewport, setIsMobileViewport] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
+  const shouldHideDesktopWorkspaceChrome = !isMobileViewport
+    && ((pathname?.startsWith("/c/") ?? false)
+      || pathname === "/g"
+      || (pathname?.startsWith("/g/") ?? false));
 
   useEffect(() => {
     setIsMounted(true);
@@ -553,6 +578,15 @@ function GrayPageClientInner({
         ? "dashboard"
         : "general";
 
+  // Determine if upgrade button should be shown based on route
+  // Show on / (dashboard) route only
+  const shouldShowUpgradeButton = useMemo(() => {
+    if (!pathname) return false;
+    // Show on / route (dashboard view)
+    if (pathname === "/") return true;
+    return false;
+  }, [pathname]);
+
   const [manualViewMode, setManualViewMode] = useState<ViewMode | null>(() => {
     if (supportsInlineChat && (activeChatId ?? null)) {
       return "chat";
@@ -629,6 +663,8 @@ function GrayPageClientInner({
           onReminderMove={handleReminderMove}
           streakCount={streakCount}
           hideCalendar={isScout || !(user?.personalization_show_calendar ?? true)}
+          onUpgradeClick={handleUpgradePlan}
+          showUpgradeButton={shouldShowUpgradeButton}
         />
       );
     }
@@ -757,15 +793,17 @@ function GrayPageClientInner({
           data-view={viewMode}
           data-compact={isCompactLayout ? "true" : "false"}
         >
-          <GrayWorkspaceHeader
-            streakCount={streakCount}
-            planLabel={viewerPlanLabel}
-            onUpgradeClick={handleUpgradePlan}
-          >
-            <div className="hidden md:block">
+          {!shouldHideDesktopWorkspaceChrome ? (
+            <GrayWorkspaceHeader
+              streakCount={streakCount}
+              planLabel={viewerPlanLabel}
+              onUpgradeClick={handleUpgradePlan}
+              showUpgradeButton={shouldShowUpgradeButton}
+              hideDesktopMeta={shouldHideDesktopWorkspaceChrome}
+            >
               {renderWorkspaceGreeting()}
-            </div>
-          </GrayWorkspaceHeader>
+            </GrayWorkspaceHeader>
+          ) : null}
           {renderPrimaryView()}
         </div>
       );
@@ -777,15 +815,17 @@ function GrayPageClientInner({
           data-view={viewMode}
           data-compact={isCompactLayout ? "true" : "false"}
         >
-          <GrayWorkspaceHeader
-            streakCount={streakCount}
-            planLabel={viewerPlanLabel}
-            onUpgradeClick={handleUpgradePlan}
-          >
-            <div className="hidden md:block">
+          {!shouldHideDesktopWorkspaceChrome ? (
+            <GrayWorkspaceHeader
+              streakCount={streakCount}
+              planLabel={viewerPlanLabel}
+              onUpgradeClick={handleUpgradePlan}
+              showUpgradeButton={shouldShowUpgradeButton}
+              hideDesktopMeta={shouldHideDesktopWorkspaceChrome}
+            >
               {renderWorkspaceGreeting()}
-            </div>
-          </GrayWorkspaceHeader>
+            </GrayWorkspaceHeader>
+          ) : null}
           {renderPrimaryView()}
         </div>
       );
@@ -1121,7 +1161,9 @@ function GrayPageClientInner({
   };
 
   const handleOpenHelp = () => {
-    console.info("Help center is not implemented yet.");
+    if (typeof window !== "undefined") {
+      window.open("https://forms.gle/BMXcgqCjyMUooYmB6", "_blank", "noopener,noreferrer");
+    }
   };
 
   const handleUpgradePlan = useCallback(() => {
@@ -1204,144 +1246,10 @@ function GrayPageClientInner({
   const derivedCalendars = user ? calendarCalendars : [];
   const derivedEvents = user ? calendarEvents : [];
   const workspaceContextSummary = useMemo<string | null>(() => {
-    if (!user) {
-      return null;
-    }
-
-    const sections: string[] = [];
-    const currentCalendars = calendarCalendars;
-    const currentPlans = plans;
-    const currentHabits = habits;
-
-    if (currentCalendars.length > 0) {
-      sections.push(
-        "Calendars:",
-        currentCalendars
-          .map((calendar) => `- ${calendar.label} (${calendar.isVisible ? "visible" : "hidden"})`)
-          .join("\n")
-      );
-    }
-
-    if (currentPlans.length > 0) {
-      if (sections.length > 0) {
-        sections.push("");
-      }
-      sections.push(
-        "Plans:",
-        currentPlans.map((plan) => `- ${plan.completed ? "done" : "pending"}: ${plan.label}`).join("\n")
-      );
-    }
-
-    if (derivedEvents.length > 0) {
-      if (sections.length > 0) {
-        sections.push("");
-      }
-      const sortedEvents = [...derivedEvents].sort((a, b) => a.start.getTime() - b.start.getTime());
-      sections.push(
-        "Schedule:",
-        sortedEvents
-          .map((e) => {
-            const dateLabel = e.start.toLocaleDateString([], {
-              weekday: "short",
-              month: "short",
-              day: "numeric",
-            });
-            const startStr = e.start.toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-            });
-            const endStr = e.end.toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-            });
-            return `- ${dateLabel} [${startStr} - ${endStr}] ${e.title}${e.description ? ` (${e.description})` : ""
-              }`;
-          })
-          .join("\n")
-      );
-    }
-
-    if (currentHabits.length > 0) {
-      if (sections.length > 0) {
-        sections.push("");
-      }
-      sections.push(
-        "Habits:",
-        currentHabits
-          .map(
-            (habit) =>
-              `- ${habit.label} (streak: ${habit.streakLabel}${habit.previousLabel ? ` | previous: ${habit.previousLabel}` : ""
-              })`
-          )
-          .join("\n")
-      );
-    }
-
-    const hasWorkspaceDetails = sections.length > 0;
-    const shouldIncludeProactivity = hasWorkspaceDetails && proactivity !== null;
-
-    if (shouldIncludeProactivity && proactivity) {
-      sections.push(
-        "",
-        "Proactivity:",
-        `- ${proactivity.label}: ${proactivity.description} (Cadence: ${proactivity.cadence}, Times: ${(proactivity.times ?? [proactivity.time]).join(", ")})`
-      );
-    }
-
-    const visibleCalendarMap = new Map(currentCalendars.map((calendar) => [calendar.id, calendar.label]));
-    const nowTime = now.getTime();
-    const upcomingEvents = derivedEvents
-      .filter((event) => {
-        const startDate = event.start instanceof Date ? event.start : new Date(event.start);
-        return startDate.getTime() >= nowTime - 30 * 60 * 1000;
-      })
-      .sort((a, b) => {
-        const aTime = (a.start instanceof Date ? a.start : new Date(a.start)).getTime();
-        const bTime = (b.start instanceof Date ? b.start : new Date(b.start)).getTime();
-        return aTime - bTime;
-      })
-      .slice(0, 3);
-
-    if (upcomingEvents.length > 0) {
-      if (sections.length > 0) {
-        sections.push("");
-      }
-      sections.push(
-        "Upcoming events:",
-        upcomingEvents
-          .map((event) => {
-            const startDate = event.start instanceof Date ? event.start : new Date(event.start);
-            const dateLabel = startDate.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
-            const timeLabel = startDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-            const calendarLabel = visibleCalendarMap.get(event.calendarId) ?? "Calendar";
-            return `- ${dateLabel} ${timeLabel}: ${event.title} [${calendarLabel}]`;
-          })
-          .join("\n")
-      );
-    }
-
-    const todayKey = toDateKey(now);
-    const recentPulses = [...pulseEntries]
-      .filter(
-        (entry) =>
-          Number.isFinite(entry.timestamp) &&
-          entry.dateKey === todayKey &&
-          (entry.plans.length > 0 || entry.habits.length > 0)
-      )
-      .sort((a, b) => b.timestamp - a.timestamp)
-      .slice(0, 3);
-
-    if (recentPulses.length > 0) {
-      if (sections.length > 0) {
-        sections.push("");
-      }
-      // Pulse snapshots removed from context injection to reduce noise.
-      // The AI can fetch this state via get_workspace_state tool if needed.
-    }
-
-    const summary = sections.join("\n").trim();
-    return summary.length > 0 ? summary : null;
-  }, [calendarCalendars, calendarEvents, habits, plans, proactivity, pulseEntries, user, now, derivedEvents]);
+    // Pulse snapshots removed from context injection to reduce noise.
+    // The AI can fetch this state via get_workspace_state tool if needed.
+    return null;
+  }, []);
 
   useEffect(() => {
     setWorkspaceContext(workspaceContextSummary);
@@ -2478,7 +2386,7 @@ function GrayPageClientInner({
 
   const greeting = `Good ${greetingForDate(now)}, ${viewerName}`;
   const hideChatThinkingIndicator = false;
-  const shouldShowWorkspaceGreeting = variant !== "chat";
+  const shouldShowWorkspaceGreeting = variant !== "chat" && !shouldHideDesktopWorkspaceChrome;
 
   const renderWorkspaceGreeting = useCallback(
     () => {

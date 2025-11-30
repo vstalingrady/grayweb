@@ -1,16 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { readServerSession, type ServerSession } from "@/lib/auth/server";
 
 const DEFAULT_BACKEND_URL = "http://localhost:8000";
-const HOP_BY_HOP_HEADERS = new Set([
-  "connection",
-  "keep-alive",
-  "proxy-authenticate",
-  "proxy-authorization",
-  "te",
-  "trailer",
-  "transfer-encoding",
-  "upgrade",
-]);
 
 const stripTrailingSlashes = (value: string) => value.replace(/\/+$/, "");
 
@@ -43,26 +34,61 @@ const buildTargetUrl = (request: NextRequest, pathSegments: string[] = []) => {
   return target;
 };
 
-const toProxyHeaders = (requestHeaders: Headers) => {
-  const headers = new Headers(requestHeaders);
-  headers.delete("host");
-  headers.delete("content-length");
+const FORWARDED_HEADERS = new Set([
+  "accept",
+  "accept-encoding",
+  "accept-language",
+  "authorization",
+  "content-type",
+  "x-request-id",
+  "x-trace-id",
+  "x-client-trace-id",
+]);
 
-  for (const header of HOP_BY_HOP_HEADERS) {
-    headers.delete(header);
+const toProxyHeaders = (requestHeaders: Headers, session: ServerSession) => {
+  const headers = new Headers();
+
+  for (const header of FORWARDED_HEADERS) {
+    const value = requestHeaders.get(header);
+    if (value) {
+      headers.set(header, value);
+    }
   }
+
+  const authorization = requestHeaders.get("authorization");
+  if (authorization && authorization.toLowerCase().startsWith("bearer ")) {
+    headers.set("authorization", authorization);
+  }
+
+  headers.set("x-gray-user-email", session.email ?? "");
 
   return headers;
 };
 
+const unauthorizedResponse = () =>
+  NextResponse.json(
+    { detail: "Unauthorized" },
+    {
+      status: 401,
+      headers: {
+        "cache-control": "no-store",
+      },
+    },
+  );
+
 const proxyRequest = async (request: NextRequest, pathSegments: string[] = []) => {
+  const session = await readServerSession();
+  if (!session) {
+    return unauthorizedResponse();
+  }
+
   const targetUrl = buildTargetUrl(request, pathSegments);
   const method = request.method.toUpperCase();
   const hasBody = !["GET", "HEAD"].includes(method);
 
   const init: RequestInit = {
     method,
-    headers: toProxyHeaders(request.headers),
+    headers: toProxyHeaders(request.headers, session),
     redirect: "manual",
   };
 
@@ -78,6 +104,8 @@ const proxyRequest = async (request: NextRequest, pathSegments: string[] = []) =
     const responseHeaders = new Headers(response.headers);
     responseHeaders.delete("content-encoding");
     responseHeaders.delete("content-length");
+    responseHeaders.delete("set-cookie");
+    responseHeaders.set("cache-control", responseHeaders.get("cache-control") ?? "no-store");
 
     return new NextResponse(response.body, {
       status: response.status,
@@ -95,6 +123,9 @@ const proxyRequest = async (request: NextRequest, pathSegments: string[] = []) =
     );
   }
 };
+
+export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
 
 export const runtime = "nodejs";
 

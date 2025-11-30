@@ -1,11 +1,27 @@
-import type { Metadata } from "next";
+"use client";
 
-export const metadata: Metadata = {
-  title: "Account Deleted",
-  description: "Your account has been successfully deleted.",
-};
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { clearSupabaseAuthStorage } from "@/lib/supabaseStorage";
+import { clearAuthCookies } from "@/lib/auth/cookies";
 
 export default function ConfirmDeletePage() {
+  const router = useRouter();
+
+  useEffect(() => {
+    // Ensure all auth state is cleared immediately
+    clearSupabaseAuthStorage();
+    clearAuthCookies();
+
+    // Redirect to login after 2.5 seconds
+    const timeout = setTimeout(() => {
+      // Use window.location for a full page reload to prevent stale state
+      window.location.href = "/login";
+    }, 2500);
+
+    return () => clearTimeout(timeout);
+  }, [router]);
+
   return (
     <main
       style={{
@@ -28,7 +44,7 @@ export default function ConfirmDeletePage() {
           Your account and all associated data have been permanently deleted.
         </p>
         <p style={{ fontSize: "0.9rem", marginTop: "1rem", color: "#4a4a4a" }}>
-          You are always welcome to create a new account if you change your mind.
+          Redirecting to login page...
         </p>
       </div>
     </main>

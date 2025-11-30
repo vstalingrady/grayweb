@@ -35,7 +35,8 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const currentTier = (user?.plan_tier || "scout").toLowerCase();
+  const planTierRaw = (user?.plan_tier || "pioneer").toLowerCase();
+  const currentTier = planTierRaw === "scout" ? "pioneer" : planTierRaw;
   const currentLevel = TIER_LEVELS[currentTier] ?? 0;
 
   const activeOption = useMemo(() => {

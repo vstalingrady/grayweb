@@ -25,27 +25,25 @@ GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
 def get_default_redirect_uri() -> str:
     """Get the default redirect URI based on environment."""
     if os.getenv("ENVIRONMENT") == "development" or os.getenv("NODE_ENV") == "development":
-        return "http://localhost:8000/api/auth/google/callback"
-    return "https://gray.alignment.id/api/auth/google/callback"
+        return "http://localhost:8000/api/auth/google-calendar/callback"
+    return "https://gray.alignment.id/api/auth/google-calendar/callback"
 
 GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI") or get_default_redirect_uri()
 SCOPES = ["https://www.googleapis.com/auth/calendar.readonly", "https://www.googleapis.com/auth/calendar.events"]
 STATE_TOKEN_TTL_SECONDS = int(os.getenv("GOOGLE_STATE_TTL_SECONDS", "900"))
-STATE_SIGNING_SECRET = (
-    os.getenv("GOOGLE_STATE_SECRET")
-    or GOOGLE_CLIENT_SECRET
-    or os.getenv("GRAY_APP_SECRET")
-    or "gray-google-state"
-)
+LOCAL_REDIRECT_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0"}
+DEFAULT_ALLOWED_REDIRECT_PATHS = {"/api/auth/google-calendar/callback", "/api/auth/google/callback"}
+_TOKEN_CIPHER = None
+_TOKEN_INVALID_EXC = None
 
 class GoogleCalendarCredentials(BaseModel):
     """Google Calendar credentials stored in database."""
     user_id: int
     access_token: str
-    refresh_token: str
+    refresh_token: Optional[str]
     token_uri: str
     client_id: str
-    client_secret: str
+    client_secret: Optional[str]
     scopes: List[str]
     expires_at: Optional[datetime] = None
     created_at: datetime
@@ -93,6 +91,123 @@ class GoogleAuthResponse(BaseModel):
     authorization_url: str
     state: str
 
+def decode_state_token(token: str) -> dict:
+    return _decode_state(token)
+
+
+def _get_token_cipher():
+    """Lazily initialize a Fernet cipher for encrypting refresh tokens."""
+    global _TOKEN_CIPHER, _TOKEN_INVALID_EXC
+    if _TOKEN_CIPHER and _TOKEN_INVALID_EXC:
+        return _TOKEN_CIPHER, _TOKEN_INVALID_EXC
+
+    try:
+        from cryptography.fernet import Fernet, InvalidToken
+    except ImportError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="cryptography package is required for Google Calendar token encryption",
+        ) from exc
+
+    key = os.getenv("GOOGLE_TOKEN_ENCRYPTION_KEY")
+    if not key:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Google Calendar token encryption key is not configured",
+        )
+
+    try:
+        cipher = Fernet(key)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="GOOGLE_TOKEN_ENCRYPTION_KEY must be a valid 32-byte urlsafe base64-encoded key",
+        ) from exc
+
+    _TOKEN_CIPHER = cipher
+    _TOKEN_INVALID_EXC = InvalidToken
+    return cipher, InvalidToken
+
+
+def encrypt_refresh_token(token: Optional[str]) -> Optional[str]:
+    if not token:
+        return token
+    cipher, _ = _get_token_cipher()
+    return cipher.encrypt(token.encode()).decode()
+
+
+def decrypt_refresh_token(token: Optional[str]) -> Optional[str]:
+    if not token:
+        return token
+    cipher, InvalidToken = _get_token_cipher()
+    try:
+        return cipher.decrypt(token.encode()).decode()
+    except (InvalidToken, ValueError):
+        # Fallback for legacy plaintext entries; will be re-encrypted on next write.
+        return token
+
+def _get_state_secret() -> str:
+    secret = os.getenv("GOOGLE_STATE_SECRET")
+    if not secret:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Google Calendar state secret is not configured",
+        )
+    if len(secret) < 16:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Google Calendar state secret must be at least 16 characters",
+        )
+    return secret
+
+
+def _get_client_secret() -> str:
+    if not GOOGLE_CLIENT_SECRET:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Google Calendar client secret is not configured",
+        )
+    return GOOGLE_CLIENT_SECRET
+
+
+def _build_allowed_redirects():
+    allowed_hosts = set()
+    allowed_paths = set(DEFAULT_ALLOWED_REDIRECT_PATHS)
+
+    parsed_default = urlparse(GOOGLE_REDIRECT_URI)
+    if parsed_default.hostname:
+        allowed_hosts.add(parsed_default.hostname.lower())
+    if parsed_default.path:
+        allowed_paths.add(parsed_default.path)
+
+    extra_hosts = os.getenv("GOOGLE_REDIRECT_HOST_ALLOWLIST")
+    if extra_hosts:
+        for host in extra_hosts.split(","):
+            normalized = host.strip().lower()
+            if normalized:
+                allowed_hosts.add(normalized)
+
+    return allowed_hosts, allowed_paths
+
+
+ALLOWED_REDIRECT_HOSTS, ALLOWED_REDIRECT_PATHS = _build_allowed_redirects()
+
+
+def _is_allowed_redirect(parsed) -> bool:
+    host = (parsed.hostname or "").lower()
+    path = parsed.path or "/"
+
+    if host in LOCAL_REDIRECT_HOSTS:
+        return path in ALLOWED_REDIRECT_PATHS
+
+    if host in ALLOWED_REDIRECT_HOSTS:
+        if parsed.scheme != "https":
+            return False
+        return path in ALLOWED_REDIRECT_PATHS
+
+    return False
+
+
 def _normalize_redirect_uri(candidate: Optional[str]) -> str:
     value = (candidate or "").strip()
     if not value:
@@ -104,12 +219,29 @@ def _normalize_redirect_uri(candidate: Optional[str]) -> str:
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Google Calendar redirect URI must be an absolute HTTP(S) URL",
         )
-    return value
+
+    if parsed.scheme == "http" and (parsed.hostname or "").lower() not in LOCAL_REDIRECT_HOSTS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Google Calendar redirect URI must use HTTPS",
+        )
+
+    if not _is_allowed_redirect(parsed):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Redirect URI is not allowed",
+        )
+
+    normalized = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
+    if parsed.query:
+        normalized = f"{normalized}?{parsed.query}"
+    return normalized
 
 
 def _encode_state(payload: dict) -> str:
     data = json.dumps(payload, separators=(",", ":"))
-    signature = hmac.new(STATE_SIGNING_SECRET.encode(), data.encode(), hashlib.sha256).digest()
+    secret = _get_state_secret()
+    signature = hmac.new(secret.encode(), data.encode(), hashlib.sha256).digest()
     token = base64.urlsafe_b64encode(data.encode()).decode().rstrip("=")
     sig = base64.urlsafe_b64encode(signature).decode().rstrip("=")
     return f"{token}.{sig}"
@@ -126,7 +258,8 @@ def _decode_state(token: str) -> dict:
     payload = data_bytes.decode()
 
     padding_sig = "=" * (-len(sig_b64) % 4)
-    expected_sig = hmac.new(STATE_SIGNING_SECRET.encode(), payload.encode(), hashlib.sha256).digest()
+    secret = _get_state_secret()
+    expected_sig = hmac.new(secret.encode(), payload.encode(), hashlib.sha256).digest()
     provided_sig = base64.urlsafe_b64decode(sig_b64 + padding_sig)
 
     if not hmac.compare_digest(expected_sig, provided_sig):
@@ -192,12 +325,32 @@ async def exchange_code_for_tokens(code: str, state: str, redirect_override: Opt
         if not isinstance(user_id, int):
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid OAuth state payload")
 
-        redirect_uri = _normalize_redirect_uri(redirect_override or state_data.get("redirect_uri") or GOOGLE_REDIRECT_URI)
+        nonce = state_data.get("nonce")
+        if not isinstance(nonce, str) or not nonce:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid OAuth state payload")
+
+        redirect_from_state = _normalize_redirect_uri(state_data.get("redirect_uri") or GOOGLE_REDIRECT_URI)
+        if redirect_override:
+            override_normalized = _normalize_redirect_uri(redirect_override)
+            if override_normalized != redirect_from_state:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Redirect URI mismatch",
+                )
+        redirect_uri = redirect_from_state
+
+        if not GOOGLE_CLIENT_ID:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Google Calendar credentials not configured"
+            )
+
+        client_secret = _get_client_secret()
 
         client_config = {
             "web": {
                 "client_id": GOOGLE_CLIENT_ID,
-                "client_secret": GOOGLE_CLIENT_SECRET,
+                "client_secret": client_secret,
                 "redirect_uris": [redirect_uri],
                 "auth_uri": "https://accounts.google.com/o/oauth2/v2/auth",
                 "token_uri": "https://oauth2.googleapis.com/token",
@@ -219,7 +372,7 @@ async def exchange_code_for_tokens(code: str, state: str, redirect_override: Opt
             refresh_token=credentials.refresh_token,
             token_uri=credentials.token_uri,
             client_id=GOOGLE_CLIENT_ID,
-            client_secret=GOOGLE_CLIENT_SECRET,
+            client_secret=None,
             scopes=list(credentials.scopes or SCOPES),
             expires_at=expires_at,
             created_at=datetime.utcnow(),
@@ -248,8 +401,8 @@ async def get_google_calendar_service(credentials: GoogleCalendarCredentials) ->
             token=credentials.access_token,
             refresh_token=credentials.refresh_token,
             token_uri=credentials.token_uri,
-            client_id=credentials.client_id,
-            client_secret=credentials.client_secret,
+            client_id=GOOGLE_CLIENT_ID or credentials.client_id,
+            client_secret=_get_client_secret(),
             scopes=scopes or SCOPES,
         )
 

@@ -2,29 +2,43 @@
 AI Message Generator for Proactive Notifications
 
 This module is responsible for generating the *text* of proactive check-ins.
-It uses Gemini to improvise each message directly. If generation fails, the
+It uses Grok (via OpenRouter) to improvise each message directly. If generation fails, the
 error is logged and no message is sent.
 """
 
 import os
 import re
 from datetime import datetime, timezone, timedelta
-from typing import Dict, List, Optional, Any
+from typing import List, Dict, Any, Optional, AsyncGenerator
+import json
+import asyncio
+import logging
+from datetime import datetime
 import databases
 
-from gemini_client import GeminiService
-from usage_tracker import UsageTracker, UsageLimitExceeded
+try:
+    from backend.openrouter_client import OpenRouterService
+    from backend.gemini_client import GeminiService
+    from backend.usage_tracker import UsageTracker, UsageLimitExceeded
+except ImportError:
+    from openrouter_client import OpenRouterService
+    from gemini_client import GeminiService
+    from usage_tracker import UsageTracker, UsageLimitExceeded
 
 
 class AIMessageGenerator:
-    """Generates AI-based proactive messages via Gemini."""
+    """Generates AI-based proactive messages via Grok (OpenRouter)."""
 
     def __init__(self) -> None:
+        self.openrouter = OpenRouterService()
         self.gemini = GeminiService()
-        if self.gemini.available:
-            print("[AIMessageGenerator] Using Gemini for proactive messaging")
+        
+        if self.openrouter.available:
+            print("[AIMessageGenerator] Using Grok for proactive messaging")
+        elif self.gemini.available:
+            print("[AIMessageGenerator] Grok unavailable, using Gemini fallback")
         else:
-            print("[AIMessageGenerator] Gemini is not available; proactive messages will be skipped")
+            print("[AIMessageGenerator] No AI provider available; proactive messages will be skipped")
 
     async def generate_daily_briefing(
         self,
@@ -49,25 +63,11 @@ class AIMessageGenerator:
         habits = dashboard_pulse.get("habits", [])
         date_key = dashboard_pulse.get("date_key", "")
 
-        # Time-based greeting
-        try:
-            # Convert timezone_str to a time for greeting
-            # For simplicity, use UTC hours
-            hour = datetime.now(timezone.utc).hour
-            if 5 <= hour < 12:
-                greeting = "Good morning"
-            elif 12 <= hour < 17:
-                greeting = "Good afternoon"
-            else:
-                greeting = "Good evening"
-        except:
-            greeting = "Hello"
-
         # Build a tiny, high-level context string for the model.
         plans_count = len(plans)
         habits_count = len(habits)
         cadence = (proactivity.get("cadence") or "").strip().lower()
-        label = proactivity.get("label") or "Check-ins"
+        label = proactivity.get("label") or "Check-in"
 
         context_summary_parts: List[str] = []
         if plans_count:
@@ -105,8 +105,8 @@ class AIMessageGenerator:
             "- Avoid emojis and avoid lists unless absolutely necessary for clarity.\n"
         )
 
-        if not self.gemini or not self.gemini.available:
-            raise RuntimeError("Gemini client is not configured for proactive messaging")
+        if not self.openrouter or not self.openrouter.available:
+            raise RuntimeError("Grok client is not configured for proactive messaging")
 
         if db:
             tracker = UsageTracker(db)
@@ -117,16 +117,20 @@ class AIMessageGenerator:
                 raise RuntimeError(f"Usage limit exceeded: {e}")
 
         try:
-            response = await self.gemini.generate(
+            # Give the model temporal context for the check-in.
+            now_utc = datetime.now(timezone.utc)
+            time_context = f"Check-in requested at {now_utc.isoformat()} UTC for timezone {timezone_str} with cadence '{cadence or 'unspecified'}' and label '{label}'."
+
+            response = await self.openrouter.generate(
                 user_context,
                 conversation_history=None,
                 workspace_context=None,
                 system_prompt=system_prompt,
-                time_context=None,
-                model=None,
+                time_context=time_context,
+                model="grok",
             )
-            
-            if db and response.usage_metadata:
+
+            if db and hasattr(response, "usage_metadata"):
                 tracker = UsageTracker(db)
                 await tracker.track_usage(
                     user_id,
@@ -135,10 +139,36 @@ class AIMessageGenerator:
                 )
 
         except Exception as error:
-            # Let the caller see that generation failed instead of silently templating.
-            raise RuntimeError(f"Gemini proactive message generation failed: {error}") from error
+            print(f"[AIMessageGenerator] Grok generation failed: {error}. Attempting fallback to Gemini...")
+            
+            if not self.gemini or not self.gemini.available:
+                raise RuntimeError(f"Grok failed and Gemini fallback unavailable: {error}") from error
+                
+            try:
+                # Fallback to Gemini
+                # GeminiService.generate returns a GenerateContentResponse object
+                gemini_response = await self.gemini.generate(
+                    message=user_context,
+                    conversation_history=None,
+                    workspace_context=None,
+                    system_prompt=system_prompt,
+                    time_context=time_context,
+                    model="models/gemini-flash-latest"
+                )
+                
+                # Extract text from Gemini response
+                if gemini_response and gemini_response.candidates:
+                    response = gemini_response.text
+                else:
+                    raise RuntimeError("Empty response from Gemini fallback")
+                    
+            except Exception as fallback_error:
+                raise RuntimeError(f"Both Grok and Gemini fallback failed. Grok: {error}. Gemini: {fallback_error}") from fallback_error
 
-        text = getattr(response, "text", "") or ""
+        if isinstance(response, str):
+            text = response
+        else:
+            text = getattr(response, "text", "") or ""
         if not text and getattr(response, "candidates", None):
             candidate = response.candidates[0]
             content = getattr(candidate, "content", None)
@@ -152,7 +182,7 @@ class AIMessageGenerator:
 
         cleaned = (text or "").strip()
         if not cleaned:
-            raise RuntimeError("Gemini proactive message generation returned empty content")
+            raise RuntimeError("Grok proactive message generation returned empty content")
 
         # Post-process to avoid stale or hard-coded calendar dates like
         # "Tuesday, November 12th" that can confuse users when the actual date
@@ -173,7 +203,7 @@ class AIMessageGenerator:
 
         cleaned = _strip_explicit_dates(cleaned)
 
-        return "Daily Check-in", cleaned
+        return label, cleaned
 
     async def generate_weekly_review(
         self,

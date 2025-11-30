@@ -131,6 +131,19 @@ google_calendar_credentials = sqlalchemy.Table(
     Column("updated_at", sqlalchemy.DateTime, default=func.now(), onupdate=func.now()),
 )
 
+google_calendar_states = sqlalchemy.Table(
+    "google_calendar_states",
+    metadata,
+    Column("id", sqlalchemy.Integer, primary_key=True, index=True),
+    Column("state_token", sqlalchemy.String, unique=True, nullable=False),
+    Column("user_id", ForeignKey("users.id")),
+    Column("nonce", sqlalchemy.String, nullable=False),
+    Column("redirect_uri", sqlalchemy.String, nullable=False),
+    Column("expires_at", sqlalchemy.DateTime, nullable=True),
+    Column("consumed_at", sqlalchemy.DateTime, nullable=True),
+    Column("created_at", sqlalchemy.DateTime, default=func.now()),
+)
+
 # Create all tables if they don't exist
 metadata.create_all(engine)
 print("Database tables created successfully!")

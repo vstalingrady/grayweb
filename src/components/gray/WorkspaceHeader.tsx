@@ -7,6 +7,8 @@ type GrayWorkspaceHeaderProps = {
   planLabel: string;
   onUpgradeClick?: () => void;
   children?: ReactNode;
+  showUpgradeButton?: boolean;
+  hideDesktopMeta?: boolean;
 };
 
 function GrayWorkspaceHeader({
@@ -14,14 +16,17 @@ function GrayWorkspaceHeader({
   planLabel,
   onUpgradeClick,
   children,
+  showUpgradeButton = true,
+  hideDesktopMeta = false,
 }: GrayWorkspaceHeaderProps) {
-  const normalizedPlanLabel = planLabel.trim().length ? planLabel.trim() : "Scout";
+  const normalizedPlanLabel = planLabel.trim().length ? planLabel.trim() : "Pioneer";
   const normalizedPlanLower = normalizedPlanLabel.toLowerCase();
   const normalizedStreak = Number.isFinite(streakCount)
     ? Math.max(0, Math.trunc(streakCount))
     : 0;
   const isDepthMember = normalizedPlanLower === "depth";
-  const isUpgradeVisible = !isDepthMember
+  const isUpgradeVisible = showUpgradeButton
+    && !isDepthMember
     && normalizedPlanLower !== "voyager"
     && normalizedPlanLower !== "pioneer";
 
@@ -34,28 +39,16 @@ function GrayWorkspaceHeader({
   return (
     <header className={styles.header}>
       {children ? <div className={styles.headerLeft}>{children}</div> : null}
-      <div className={`${styles.headerRight} hidden md:flex`}>
-        {isUpgradeVisible ? (
-          <div className={styles.upgradeFloat}>
-            <button
-              type="button"
-              className={styles.planBadge}
-              data-state={isDepthMember ? "active" : "cta"}
-              aria-label={isDepthMember ? `${normalizedPlanLabel} plan` : "Upgrade"}
-              aria-disabled={isDepthMember ? "true" : "false"}
-              onClick={handlePlanBadgeClick}
-            >
-              <span className={styles.planBadgeLabel}>Upgrade</span>
-            </button>
-          </div>
-        ) : null}
-        {normalizedStreak > 0 ? (
-          <div className={styles.streakBadge} aria-label={`${normalizedStreak} day streak`}>
-            <Zap size={12} />
-            <span>{normalizedStreak}</span>
-          </div>
-        ) : null}
-      </div>
+      {!hideDesktopMeta ? (
+        <div className={`${styles.headerRight} hidden md:flex`}>
+          {normalizedStreak > 0 ? (
+            <div className={styles.streakBadge} aria-label={`${normalizedStreak} day streak`}>
+              <Zap size={12} />
+              <span>{normalizedStreak}</span>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
     </header>
   );
 }

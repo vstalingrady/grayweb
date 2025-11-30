@@ -133,11 +133,11 @@ export type PlanCarrierUser = User & { plan_tier?: string | null };
 
 export const derivePlanTierLabel = (candidate?: PlanCarrierUser | null): string => {
     if (!candidate) {
-        return "Scout";
+        return "Pioneer";
     }
     const rawTier = (candidate.plan_tier ?? candidate.role ?? "").trim();
     if (!rawTier) {
-        return "Scout";
+        return "Pioneer";
     }
     const normalized = rawTier.toLowerCase();
     if (normalized === "voyager") {
@@ -146,11 +146,14 @@ export const derivePlanTierLabel = (candidate?: PlanCarrierUser | null): string 
     if (normalized === "pioneer") {
         return "Pioneer";
     }
+    if (normalized === "scout") {
+        return "Pioneer";
+    }
     const premiumTokens = new Set(["depth", "pro", "premium", "operator", "admin"]);
     if (premiumTokens.has(normalized)) {
         return "Depth";
     }
-    return "Scout";
+    return "Pioneer";
 };
 
 export const getSessionSeedFingerprint = (session: ChatSession): string | null => {

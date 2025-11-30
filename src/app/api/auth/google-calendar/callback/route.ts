@@ -1,5 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 
+const escapeHtml = (value: string) =>
+  value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+
 const successHtml = `
 <!DOCTYPE html>
 <html lang="en">
@@ -43,7 +51,8 @@ const successHtml = `
     <script>
       setTimeout(() => {
         if (window.opener) {
-          window.opener.postMessage({ type: "google-calendar-connected" }, "*");
+          const targetOrigin = window.location?.origin || "*";
+          window.opener.postMessage({ type: "google-calendar-connected" }, targetOrigin);
         }
         window.close();
       }, 1500);
@@ -89,7 +98,7 @@ const buildErrorHtml = (message: string) => `
   <body>
     <div class="card">
       <h1>Unable to finish Google Calendar setup</h1>
-      <p>${message}</p>
+      <p>${escapeHtml(message)}</p>
     </div>
   </body>
 </html>`;
@@ -133,7 +142,7 @@ export async function GET(request: NextRequest) {
       let detail = "Unexpected response from the backend service.";
       try {
         const payload = await backendResponse.json();
-        detail = payload?.detail ?? detail;
+        detail = typeof payload?.detail === "string" ? payload.detail : detail;
       } catch {
         // plain text fallback
       }

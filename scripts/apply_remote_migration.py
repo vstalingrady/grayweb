@@ -14,6 +14,9 @@ from dotenv import load_dotenv
 ROOT_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(ROOT_DIR / ".env")
 
+DEFAULT_POOLER_HOST = os.getenv("SUPABASE_POOLER_HOST", "aws-1-ap-south-1.pooler.supabase.com")
+DEFAULT_POOLER_PORT = os.getenv("SUPABASE_POOLER_PORT", "6543")
+
 
 async def apply_remote_migration():
     """Apply the remote database migration to Supabase."""
@@ -42,7 +45,11 @@ async def apply_remote_migration():
         
         # Extract project ref
         project_ref = supabase_url.replace("https://", "").replace(".supabase.co", "")
-        remote_url = f"postgresql://postgres:{db_password}@db.{project_ref}.supabase.co:5432/postgres"
+        username = f"postgres.{project_ref}"
+        remote_url = (
+            f"postgresql://{username}:{db_password}@"
+            f"{DEFAULT_POOLER_HOST}:{DEFAULT_POOLER_PORT}/postgres"
+        )
     
     print(f"🔗 Connecting to remote database...")
     

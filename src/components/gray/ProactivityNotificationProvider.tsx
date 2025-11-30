@@ -116,14 +116,13 @@ export function ProactivityNotificationProvider({ children }: ProactivityNotific
         new Notification("Gray", {
           body: payload.message || "New message from Gray",
           icon: "/grayai.png",
+          requireInteraction: true,
+          tag: payload.delivery_key ? `gray-proactivity-${payload.delivery_key}` : undefined,
         });
       }
 
       // 3. Show in-app toast
       setToastMessage(payload.message || "New message");
-
-      // Auto-dismiss toast after 5 seconds
-      setTimeout(() => setToastMessage(null), 5000);
     },
     []
   );
@@ -131,133 +130,115 @@ export function ProactivityNotificationProvider({ children }: ProactivityNotific
   useEffect(() => {
     if (!userId) return;
 
-    // Register service worker for push notifications
-    if ("serviceWorker" in navigator && "PushManager" in window) {
-      navigator.serviceWorker
-        .register("/sw-proactivity.js")
-        .then(async (registration) => {
-          try {
-            const subscription = await registration.pushManager.subscribe({
-              userVisibleOnly: true,
-              applicationServerKey: urlBase64ToUint8Array(
-                process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "BNoW7-tQZ8XwYt7-tQZ8XwY" // Placeholder or env var
-              ),
-            });
-
-            // Send subscription to backend
-            const endpoint = subscription.endpoint;
-            const p256dh = subscription.getKey("p256dh");
-            const auth = subscription.getKey("auth");
-
-            if (p256dh && auth) {
-              const apiBase = resolveApiBaseUrl();
-              await fetch(`${apiBase}/users/${userId}/push/subscribe`, {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                  endpoint,
-                  p256dh: btoa(String.fromCharCode(...new Uint8Array(p256dh))),
-                  auth: btoa(String.fromCharCode(...new Uint8Array(auth))),
-                }),
-              });
-            }
-          } catch (err) {
-            console.error("Failed to subscribe to push:", err);
-          }
-        })
-        .catch((err) => console.error("Service Worker registration failed:", err));
-    }
-
-    const url = resolveApiBaseUrl();
-    const eventSource = new EventSource(`${url}/users/${userId}/proactivity/stream`);
-
-    eventSource.onopen = () => {
-      console.log("[Proactivity] SSE Connected");
+    // Get authentication token
+    const getAuthToken = async (): Promise<string | null> => {
+      const supabase = (await import('@/lib/supabaseClient')).getSupabaseClient();
+      if (!supabase) return null;
+      const { data } = await supabase.auth.getSession();
+      return data.session?.access_token ?? null;
     };
 
-    eventSource.addEventListener("ping", (event) => {
-      // Keep-alive, ignore
-    });
-
-    const handleEvent = (event: MessageEvent) => {
-      try {
-        const data = JSON.parse(event.data);
-        console.log("[Proactivity] Message received:", data);
-        handleProactivityMessage(data);
-
-        // Track delivery to avoid re-showing
-        const key = data.delivery_key;
-        if (key) {
-          setDeliveredKeys(prev => {
-            const next = new Set(prev);
-            next.add(key);
-            return next;
-          });
-        }
-      } catch (err) {
-        console.error("[Proactivity] Failed to parse message:", err);
+    const setupProactivity = async () => {
+      const token = await getAuthToken();
+      if (!token) {
+        console.warn('[Proactivity] No auth token available');
+        return;
       }
+
+      // Register service worker for push notifications
+      if ("serviceWorker" in navigator && "PushManager" in window) {
+        navigator.serviceWorker
+          .register("/sw-proactivity.js")
+          .then(async (registration) => {
+            try {
+              const subscription = await registration.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: urlBase64ToUint8Array(
+                  process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "BNoW7-tQZ8XwYt7-tQZ8XwY"
+                ) as any,
+              });
+
+              // Send subscription to backend
+              const endpoint = subscription.endpoint;
+              const p256dh = subscription.getKey("p256dh");
+              const auth = subscription.getKey("auth");
+
+              if (p256dh && auth) {
+                const apiBase = resolveApiBaseUrl();
+                await fetch(`${apiBase}/users/${userId}/push/subscribe?token=${encodeURIComponent(token)}`, {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${token}`,
+                  },
+                  body: JSON.stringify({
+                    endpoint,
+                    p256dh: btoa(String.fromCharCode(...new Uint8Array(p256dh))),
+                    auth: btoa(String.fromCharCode(...new Uint8Array(auth))),
+                  }),
+                });
+              }
+            } catch (err) {
+              console.error("Failed to subscribe to push:", err);
+            }
+          })
+          .catch((err) => console.error("Service Worker registration failed:", err));
+      }
+
+      const url = resolveApiBaseUrl();
+      // EventSource doesn't support custom headers, so we pass the token as a query parameter
+      const eventSource = new EventSource(`${url}/users/${userId}/proactivity/stream?token=${encodeURIComponent(token)}`);
+
+      eventSource.onopen = () => {
+        console.log("[Proactivity] SSE Connected");
+      };
+
+      eventSource.addEventListener("ping", (event) => {
+        // Keep-alive, ignore
+      });
+
+      const handleEvent = (event: MessageEvent) => {
+        try {
+          const data = JSON.parse(event.data);
+          console.log("[Proactivity] Message received:", data);
+          handleProactivityMessage(data);
+
+          // Track delivery to avoid re-showing
+          const key = data.delivery_key;
+          if (key) {
+            setDeliveredKeys(prev => {
+              const next = new Set(prev);
+              next.add(key);
+              return next;
+            });
+          }
+        } catch (err) {
+          console.error("[Proactivity] Failed to parse message:", err);
+        }
+      };
+
+      eventSource.addEventListener("message", handleEvent);
+      eventSource.addEventListener("proactivity_message", handleEvent);
+
+      eventSource.onerror = (err) => {
+        console.error("[Proactivity] SSE Error:", err);
+        eventSource.close();
+      };
+
+      return () => {
+        eventSource.close();
+      };
     };
 
-    eventSource.addEventListener("message", handleEvent);
-    eventSource.addEventListener("proactivity_message", handleEvent);
-
-    eventSource.onerror = (err) => {
-      console.error("[Proactivity] SSE Error:", err);
-      eventSource.close();
-    };
-
+    const cleanup = setupProactivity();
     return () => {
-      eventSource.close();
+      cleanup.then(fn => fn?.());
     };
   }, [userId, handleProactivityMessage]);
 
   return (
     <ProactivityNotificationContext.Provider value={{ deliveredKeys }}>
       {children}
-      {toastMessage && (
-        <div style={{
-          position: 'fixed',
-          bottom: '24px',
-          right: '24px',
-          backgroundColor: '#1a1a1a',
-          color: '#fff',
-          padding: '12px 20px',
-          borderRadius: '8px',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-          zIndex: 9999,
-          display: 'flex',
-          alignItems: 'center',
-          gap: '12px',
-          maxWidth: '320px',
-          border: '1px solid #333',
-          fontFamily: 'var(--font-sans)',
-          fontSize: '14px',
-          animation: 'slideIn 0.3s ease-out'
-        }}>
-          <div style={{ flex: 1 }}>{toastMessage}</div>
-          <button
-            onClick={() => setToastMessage(null)}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: '#888',
-              cursor: 'pointer',
-              padding: '4px'
-            }}
-          >
-            ✕
-          </button>
-        </div>
-      )}
-      <style jsx global>{`
-        @keyframes slideIn {
-          from { transform: translateY(100%); opacity: 0; }
-          to { transform: translateY(0); opacity: 1; }
-        }
-      `}</style>
     </ProactivityNotificationContext.Provider>
   );
 }

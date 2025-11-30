@@ -1,4 +1,4 @@
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import LoginForm from "@/components/LoginForm";
 import { readServerSession } from "@/lib/auth/server";
@@ -44,11 +44,13 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   if (session) {
     const requestHeaders = await headers();
     const host = hostFromHeaders(requestHeaders);
+    const cookieStore = await cookies();
+    const hasSeenIntro = Boolean(cookieStore.get("gray_intro_done")?.value);
     const workspaceHost = resolveWorkspaceHost(host) ?? host;
     const params = await searchParams;
     const redirectTarget =
       sanitizeRedirect(params?.redirect) ??
-      resolveDefaultWorkspacePath(workspaceHost);
+      (hasSeenIntro ? resolveDefaultWorkspacePath(workspaceHost) : "/intro");
     const destination = normalizeWorkspaceRedirect(
       redirectTarget,
       workspaceHost
@@ -66,5 +68,8 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
     redirect(destination);
   }
 
-  return <LoginForm initialMode="signin" />;
+  const params = await searchParams;
+  const deleted = params?.deleted === "true";
+
+  return <LoginForm initialMode="signin" deleted={deleted} />;
 }

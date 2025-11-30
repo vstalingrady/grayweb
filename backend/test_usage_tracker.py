@@ -33,9 +33,9 @@ def test_limit_calculations():
     
     scout_limits = get_limits_for_tier("scout")
     print(f"Scout limits: {scout_limits}")
-    assert scout_limits["monthly_cost"] == 0.1875, "Scout monthly should be $0.1875"
-    assert abs(scout_limits["six_hour_cost"] - 0.0015625) < 0.000001, "Scout 6-hour should be $0.0015625"
-    assert "weekly_cost" not in scout_limits, "Weekly limit should not exist"
+    assert scout_limits["is_unlimited"] is True, "Scout should be unlimited for now"
+    assert scout_limits["monthly_cost"] is None, "Scout monthly should be unlimited"
+    assert scout_limits["six_hour_cost"] is None, "Scout 6-hour should be unlimited"
     
     voyager_limits = get_limits_for_tier("voyager")
     print(f"Voyager limits: {voyager_limits}")
@@ -78,11 +78,12 @@ async def test_six_hour_limit_exceeded():
     print("\n=== Testing 6-Hour Limit Enforcement ===")
     
     db = MockDB()
+    db.user_data["plan_tier"] = "voyager"  # Use a finite tier for enforcement tests
     tracker = UsageTracker(db)
     
     # Set usage just under the limit
     scout_limits = get_limits_for_tier("scout")
-    db.user_data["six_hour_cost_usage"] = scout_limits["six_hour_cost"] - 0.0001
+    db.user_data["six_hour_cost_usage"] = get_limits_for_tier("voyager")["six_hour_cost"] - 0.0001
     db.user_data["monthly_cost_usage"] = 0.001
     db.user_data["last_six_hour_reset"] = datetime.datetime.utcnow().strftime("%Y-%m-%d") + "-" + str(datetime.datetime.utcnow().hour // 6)
     db.user_data["last_monthly_reset"] = datetime.datetime.utcnow().strftime("%Y-%m-%d")
@@ -96,7 +97,7 @@ async def test_six_hour_limit_exceeded():
         raise
     
     # Now exceed the 6-hour limit
-    db.user_data["six_hour_cost_usage"] = scout_limits["six_hour_cost"] + 0.0001
+    db.user_data["six_hour_cost_usage"] = get_limits_for_tier("voyager")["six_hour_cost"] + 0.0001
     
     try:
         await tracker.check_limits(1)
@@ -113,11 +114,12 @@ async def test_monthly_limit_exceeded():
     print("\n=== Testing Monthly Limit Enforcement ===")
     
     db = MockDB()
+    db.user_data["plan_tier"] = "voyager"  # Use a finite tier for enforcement tests
     tracker = UsageTracker(db)
     
     # Set usage just over monthly limit
-    scout_limits = get_limits_for_tier("scout")
-    db.user_data["monthly_cost_usage"] = scout_limits["monthly_cost"] + 0.0001
+    voyager_limits = get_limits_for_tier("voyager")
+    db.user_data["monthly_cost_usage"] = voyager_limits["monthly_cost"] + 0.0001
     db.user_data["six_hour_cost_usage"] = 0.0001
     db.user_data["last_six_hour_reset"] = datetime.datetime.utcnow().strftime("%Y-%m-%d") + "-" + str(datetime.datetime.utcnow().hour // 6)
     db.user_data["last_monthly_reset"] = datetime.datetime.utcnow().strftime("%Y-%m-%d")
@@ -146,7 +148,7 @@ async def test_usage_tracking():
     await tracker.track_usage(1, input_tokens, output_tokens)
     
     # Calculate expected cost
-    expected_cost = (1000 * 0.10 / 1_000_000) + (500 * 0.40 / 1_000_000)
+    expected_cost = (0 * 0.05 / 1_000_000) + (1000 * 0.20 / 1_000_000) + (500 * 0.50 / 1_000_000)
     print(f"Expected cost: ${expected_cost:.8f}")
     print(f"Updates: {db.updates}")
     

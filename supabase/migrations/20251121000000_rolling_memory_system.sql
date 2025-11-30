@@ -160,6 +160,7 @@ COMMENT ON FUNCTION public.cleanup_old_archived_messages IS
     'Cleanup archived messages older than specified days (default 90)';
 
 -- Step 9: Create a view for easy memory monitoring
+-- Keep security_invoker=true so RLS and caller perms apply (avoid SECURITY DEFINER).
 CREATE OR REPLACE VIEW public.rolling_memory_overview AS
 SELECT 
     ud.user_identifier AS user_id,

@@ -16,6 +16,8 @@ type CheckInCadence = "frequent" | "daily" | "weekly" | "custom";
 type Stage =
   | "intro"
   | "name"
+  | "occupation"
+  | "about"
   | "reason"
   | "obstacle"
   | "goal"
@@ -28,6 +30,8 @@ type Stage =
 
 export type FirstChatOnboardingResult = {
   preferredName: string;
+  occupation: string;
+  about: string;
   reason: string;
   obstacle: string;
   goal: string;
@@ -50,7 +54,7 @@ const createMessage = (role: TranscriptRole, text: string): TranscriptMessage =>
   text,
 });
 
-const CADENCE_OPTIONS: Array<{
+const CADENCE_OPTIONS: Array<{ 
   key: CheckInCadence;
   label: string;
   description: string;
@@ -108,31 +112,15 @@ const cadenceFollowupLabel = (key: CheckInCadence, customDetail?: string) => {
 };
 
 export function FirstChatOnboarding({ viewerName, onComplete, onSkip }: FirstChatOnboardingProps) {
-  const [transcript, setTranscript] = useState<TranscriptMessage[]>(() => [
-    createMessage(
-      "gray",
-      [
-        "👋 Hey, I'm Gray.",
-        "",
-        "I'm your AI accountability partner—think of me as the mentor/coach you wish you had, always in your pocket, always honest.",
-        "",
-        "**Here's what I do:**",
-        "• Check in with you regularly (you decide when)",
-        "• Remember everything about your goals, habits, and patterns",
-        "• Ask the hard questions you need to hear",
-        "• Call you out when you're bullshitting yourself",
-        "• Help you actually DO what you say you want to do",
-        "",
-        "This isn't another productivity app. It's having someone who genuinely cares about your growth and won't let you coast.",
-        "",
-        "Ready to get started?",
-      ].join("\n")
-    ),
-  ]);
+  const [transcript, setTranscript] = useState<TranscriptMessage[]>(() => []);
   const [stage, setStage] = useState<Stage>("intro");
   const [showIntroDetails, setShowIntroDetails] = useState(false);
   const [preferredName, setPreferredName] = useState<string>(viewerName?.trim() ?? "");
   const [nameDraft, setNameDraft] = useState<string>(viewerName?.trim() ?? "");
+  const [occupation, setOccupation] = useState("");
+  const [occupationDraft, setOccupationDraft] = useState("");
+  const [about, setAbout] = useState("");
+  const [aboutDraft, setAboutDraft] = useState("");
   const [reason, setReason] = useState("");
   const [reasonDraft, setReasonDraft] = useState("");
   const [obstacle, setObstacle] = useState("");
@@ -182,7 +170,7 @@ export function FirstChatOnboarding({ viewerName, onComplete, onSkip }: FirstCha
 
   const handleSkip = () => {
     appendMessage("user", "Not for me");
-    appendMessage("gray", "All good. Whenever you want to dive in, just drop a note below and I'll be right here.");
+    appendMessage("gray", "All good. Whenever you want to dive in, just drop a note below.");
     setStage("done");
     setCompleted(true);
     onSkip?.();
@@ -196,16 +184,42 @@ export function FirstChatOnboarding({ viewerName, onComplete, onSkip }: FirstCha
     }
     setPreferredName(trimmed);
     appendMessage("user", trimmed);
+    appendMessage("gray", `Got it, ${trimmed}. What do you do day to day? (role, field, or focus)`);
+    setStage("occupation");
+    setNameDraft("");
+  };
+
+  const handleSubmitOccupation = (event: FormEvent) => {
+    event.preventDefault();
+    const trimmed = occupationDraft.trim();
+    if (!trimmed) {
+      return;
+    }
+    setOccupation(trimmed);
+    appendMessage("user", trimmed);
+    appendMessage("gray", "Understood. Now give me a quick blurb about you—what you're working toward, interests, or how you like to work.");
+    setStage("about");
+    setOccupationDraft("");
+  };
+
+  const handleSubmitAbout = (event: FormEvent) => {
+    event.preventDefault();
+    const trimmed = aboutDraft.trim();
+    if (!trimmed) {
+      return;
+    }
+    setAbout(trimmed);
+    appendMessage("user", trimmed);
     appendMessage(
       "gray",
       [
-        `Nice to meet you, ${trimmed}.`,
+        "Thanks for sharing.",
         "So, what brings you here? What are you trying to do in your life right now?",
         "(Don't overthink it—just tell me what's on your mind.)",
       ].join("\n\n")
     );
     setStage("reason");
-    setNameDraft("");
+    setAboutDraft("");
   };
 
   const handleSubmitReason = (event: FormEvent) => {
@@ -399,6 +413,8 @@ export function FirstChatOnboarding({ viewerName, onComplete, onSkip }: FirstCha
     setCompleted(true);
     onComplete?.({
       preferredName: preferredName || viewerName || "",
+      occupation,
+      about,
       reason,
       obstacle,
       goal,
@@ -464,6 +480,52 @@ export function FirstChatOnboarding({ viewerName, onComplete, onSkip }: FirstCha
             autoFocus
             placeholder="e.g., Alex"
             onChange={(event) => setNameDraft(event.target.value)}
+          />
+          <div className={styles.buttonRow}>
+            <button type="submit" className={`${styles.button} ${styles.primary}`}>
+              Continue
+            </button>
+          </div>
+        </form>
+      );
+    }
+
+    if (stage === "occupation") {
+      return (
+        <form className={styles.fieldGroup} onSubmit={handleSubmitOccupation}>
+          <label htmlFor="onboarding-occupation" className={styles.promptLabel}>
+            What do you do day to day? (role, field, or focus)
+          </label>
+          <input
+            id="onboarding-occupation"
+            className={styles.input}
+            value={occupationDraft}
+            autoFocus
+            placeholder="e.g., Software Engineer, Student, Designer"
+            onChange={(event) => setOccupationDraft(event.target.value)}
+          />
+          <div className={styles.buttonRow}>
+            <button type="submit" className={`${styles.button} ${styles.primary}`}>
+              Continue
+            </button>
+          </div>
+        </form>
+      );
+    }
+
+    if (stage === "about") {
+      return (
+        <form className={styles.fieldGroup} onSubmit={handleSubmitAbout}>
+          <label htmlFor="onboarding-about" className={styles.promptLabel}>
+            Give me a quick blurb about you—what you're working toward, interests, or how you like to work.
+          </label>
+          <textarea
+            id="onboarding-about"
+            className={styles.textarea}
+            value={aboutDraft}
+            autoFocus
+            placeholder="e.g., I'm building a startup, focused on learning ML, love creative coding..."
+            onChange={(event) => setAboutDraft(event.target.value)}
           />
           <div className={styles.buttonRow}>
             <button type="submit" className={`${styles.button} ${styles.primary}`}>
@@ -681,24 +743,3 @@ export function FirstChatOnboarding({ viewerName, onComplete, onSkip }: FirstCha
 
     return null;
   };
-
-  return (
-    <div className={styles.onboarding}>
-      <div className={styles.card}>
-        <div className={styles.header}>
-          <p className={styles.headerTitle}>First chat onboarding</p>
-          <p className={styles.headerMeta}>2–3 minutes • sets the tone</p>
-        </div>
-        <div className={styles.feed}>
-          {transcript.map((message) => (
-            <div key={message.id} className={styles.message} data-role={message.role}>
-              <p className={styles.messageLabel}>{message.role === "gray" ? "Gray" : userLabel}</p>
-              <p className={styles.messageBody}>{message.text}</p>
-            </div>
-          ))}
-        </div>
-        <div className={styles.prompt}>{renderPrompt()}</div>
-      </div>
-    </div>
-  );
-}

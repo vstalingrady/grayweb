@@ -68,7 +68,7 @@ Add to your `.env` file:
 
 ```bash
 # Remote database (Supabase)
-REMOTE_DATABASE_URL=postgresql://postgres.xxxxx:password@aws-0-us-west-1.pooler.supabase.com:6543/postgres
+REMOTE_DATABASE_URL=postgresql://postgres.xxxxx:password@aws-1-ap-south-1.pooler.supabase.com:6543/postgres
 
 # Or auto-construct from Supabase credentials:
 SUPABASE_URL=https://xxxxx.supabase.co

@@ -150,7 +150,13 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
-limiter = Limiter(key_func=get_remote_address)
+DEFAULT_RATE_LIMIT = os.getenv("DEFAULT_RATE_LIMIT", "60/minute")
+
+# Apply a sane default to all routes so un-decorated endpoints still have protection
+limiter = Limiter(
+    key_func=get_remote_address,
+    default_limits=[DEFAULT_RATE_LIMIT],
+)
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(ROOT_DIR / ".env")
@@ -802,11 +808,22 @@ REMINDER_RESPONSE_FORMAT = {
                     "description": "List of reminder payloads to render and execute.",
                     "items": {
                         "type": "object",
-                        "additionalProperties": True,
+                        "properties": {
+                            "type": {"type": "string", "enum": ["gray.reminder"]},
+                            "source": {"type": "string", "enum": ["mcp/plans-habits-server"]},
+                            "status": {"type": "string", "enum": ["created", "updated", "completed", "deleted"]},
+                            "entity": {"type": "string", "enum": ["plan", "habit", "reminder"]},
+                            "data": {
+                                "type": "object",
+                                "additionalProperties": True,
+                            },
+                        },
+                        "required": ["type", "source", "status", "entity", "data"],
+                        "additionalProperties": False,
                     },
                 },
             },
-            "required": ["message"],
+            "required": ["message", "reminders"],
             "additionalProperties": False,
         },
     },
@@ -815,6 +832,9 @@ REMINDER_RESPONSE_FORMAT = {
 REMINDER_MODEL = os.getenv("REMINDER_MODEL", "models/gemini-flash-lite-latest")
 GROK_TOOL_MODEL = os.getenv("GROK_TOOL_MODEL", "x-ai/grok-4.1-fast:free")
 GROK_DEFAULT_MODEL = os.getenv("GROK_DEFAULT_MODEL", OPENROUTER_SERVICE.lite_model if OPENROUTER_SERVICE else "x-ai/grok-4.1-fast:free")
+GEMINI_DEFAULT_MODEL = os.getenv("GEMINI_DEFAULT_MODEL", "models/gemini-3-pro-preview")
+GEMINI_LIGHT_MODEL = os.getenv("GEMINI_LIGHT_MODEL", "models/gemini-flash-lite-latest")
+GEMINI_PRO_MODEL = os.getenv("GEMINI_PRO_MODEL", "models/gemini-1.5-pro-latest")
 REMINDER_FUNCTION_NAMES = (
     "create_reminder",
     "update_reminder",
@@ -845,6 +865,24 @@ def _split_env_list(value: Optional[str]) -> List[str]:
     if not value:
         return []
     return [item.strip() for item in value.split(",") if item.strip()]
+
+
+def _prefers_gemini_model(normalized_model: str) -> bool:
+    """
+    Determine if the requested model should route to Gemini.
+
+    The frontend passes tier labels like "lite" and "pro" that we map to concrete
+    Gemini models inside GeminiService. Treat those as Gemini hints so we don't
+    accidentally send them to OpenRouter.
+    """
+    if not normalized_model:
+        return False
+    if normalized_model.startswith("models/") or normalized_model.startswith("gemini"):
+        return True
+    return normalized_model in {
+        "pro",
+        "gray-pro",
+    }
 
 
 def _should_request_structured_reminders(message: str) -> bool:
@@ -900,28 +938,8 @@ def _origin_variants(origin: str) -> List[str]:
 
 
 def _local_network_origins(ports: Iterable[int]) -> Set[str]:
-    origins: Set[str] = set()
-    try:
-        hostname = socket.gethostname()
-        addresses: Set[str] = set()
-        try:
-            addresses.update(info[4][0] for info in socket.getaddrinfo(hostname, None))
-        except OSError:
-            pass
-        try:
-            addresses.update(socket.gethostbyname_ex(hostname)[2])
-        except OSError:
-            pass
-
-        for addr in addresses:
-            if not addr or addr.startswith("127.") or addr.startswith("169.254") or addr == "0.0.0.0" or ":" in addr:
-                continue
-            for protocol in ("http", "https"):
-                for port in ports:
-                    origins.add(f"{protocol}://{addr}:{port}")
-    except OSError:
-        pass
-    return origins
+    # Security: Do not automatically allow other devices on the local network
+    return set()
 
 
 def _build_allowed_origins() -> List[str]:
@@ -973,9 +991,8 @@ LOCAL_NETWORK_ORIGIN_PATTERN = (
 
 
 def _local_network_origin_regex() -> Optional[str]:
-    if IS_PRODUCTION:
-        return None
-    return LOCAL_NETWORK_ORIGIN_PATTERN
+    # Security: Do not allow wildcard local network matching
+    return None
 
 
 def _row_get(row: Any, key: str, default: Any = None) -> Any:
@@ -1859,6 +1876,7 @@ SUPABASE_CONVERSATIONS_ENABLED = supabase is not None
 GENERAL_CONVERSATION_PREFIX = "general:"
 _USER_DATA_CACHE: Dict[int, int] = {}
 _USER_TIMEZONE_CACHE: Dict[int, Optional[str]] = {}
+_SUPABASE_USER_DATA_CACHE: Dict[int, int] = {}
 
 
 def _conversation_store_available() -> bool:
@@ -2053,12 +2071,17 @@ async def _insert_general_conversation_message(
     attachments: Optional[Any] = None,
 ) -> None:
     supabase_success = False
-    user_data_id = _ensure_user_data_record(user_id)
+    user_data_id = await _ensure_user_data_record(user_id)
+    supabase_user_data_id: Optional[int] = None
+
     if _conversation_store_available():
-        if user_data_id is not None:
+        supabase_user_data_id = await _resolve_supabase_user_data_id(user_id)
+
+    if _conversation_store_available():
+        if supabase_user_data_id is not None:
             payload: Dict[str, Any] = {
                 "user_id": user_id,
-                "user_data_id": user_data_id,
+                "user_data_id": supabase_user_data_id,
                 "role": role,
                 "content": text,
             }
@@ -2078,6 +2101,7 @@ async def _insert_general_conversation_message(
     # Fallback to SQLite
     try:
         effective_user_data_id = user_data_id if user_data_id is not None else user_id
+        now = datetime.utcnow()
         query = """
             INSERT INTO general_chat_messages (user_id, user_data_id, role, content, grounding_metadata, created_at)
             VALUES (:user_id, :user_data_id, :role, :content, :grounding_metadata, :created_at)
@@ -2088,7 +2112,7 @@ async def _insert_general_conversation_message(
             "role": role,
             "content": text,
             "grounding_metadata": json.dumps(grounding_metadata) if grounding_metadata else None,
-            "created_at": datetime.utcnow(),
+            "created_at": now.isoformat(),
         }
         await database.execute(query, values)
     except Exception as error:
@@ -2101,30 +2125,38 @@ async def _insert_general_conversation_message(
 async def _replace_general_conversation_history(user_id: int, history: List[Dict[str, Any]]) -> None:
     app_logger.info(f"Replacing general history for user {user_id}", extra={"event_type": "general_history_replace_start", "history_length": len(history)})
     # 1. Delete from Supabase
-    user_data_id = _ensure_user_data_record(user_id)
+    user_data_id = await _ensure_user_data_record(user_id)
     if user_data_id is None:
         app_logger.warning(f"Could not resolve user_data_id for user {user_id}; skipping Supabase update", extra={"event_type": "general_history_replace_skip_supabase"})
 
+    supabase_user_data_id: Optional[int] = None
+    if _conversation_store_available():
+        supabase_user_data_id = await _resolve_supabase_user_data_id(user_id)
+        if supabase_user_data_id is None and history:
+            app_logger.warning(
+                f"Could not resolve Supabase user_data_id for user {user_id}; skipping Supabase history replace",
+                extra={"event_type": "general_history_replace_skip_supabase_user_data"},
+            )
+
     if _conversation_store_available():
         try:
-            # Always delete stale history first, even if we can't insert new history yet (e.g. missing user_data_id).
-            # This ensures we don't leave stale data that would shadow the correct local SQLite history.
-            supabase.table("general_chat_messages").delete().eq("user_id", user_id).execute()
-
-            if user_data_id is not None and history:
-                rows: List[Dict[str, Any]] = []
+            # Use RPC for atomic delete+insert to avoid race conditions
+            rpc_messages = []
+            if supabase_user_data_id is not None and history:
                 for entry in history:
-                    rows.append(
+                    rpc_messages.append(
                         {
-                            "user_id": user_id,
-                            "user_data_id": user_data_id,
+                            "user_data_id": supabase_user_data_id,
                             "role": entry.get("role"),
                             "content": entry.get("text") or "",
                             "grounding_metadata": entry.get("grounding_metadata"),
                         }
                     )
-                if rows:
-                    supabase.table("general_chat_messages").insert(rows).execute()
+            
+            supabase.rpc("replace_general_chat_history", {
+                "p_user_id": user_id,
+                "p_messages": rpc_messages
+            }).execute()
         except Exception as error:
             _handle_conversation_store_error("Error replacing general conversation history (Supabase)", error)
 
@@ -2250,56 +2282,91 @@ def _delete_supabase_user_records(user_id: int) -> None:
     api_logger.info(f"Completed Supabase data deletion for user {user_id}", extra={"user_id": user_id})
 
 
-def _ensure_user_data_record(user_identifier: int) -> Optional[int]:
+async def _ensure_user_data_record(user_identifier: int) -> Optional[int]:
     """Return the user_data.id for the provided identifier, creating it if needed."""
-    if user_identifier is None or not _conversation_store_available() or supabase is None:
+    if user_identifier is None:
         return None
+
+    # Import here to avoid circular dependency
+    try:
+        from backend.database import user_data, database
+    except ImportError:
+        from database import user_data, database
 
     cached = _USER_DATA_CACHE.get(user_identifier)
     if cached is not None:
         return cached
 
     try:
-        result = (
+        # Try to fetch existing record
+        query = user_data.select().where(user_data.c.user_identifier == user_identifier)
+        row = await database.fetch_one(query)
+        
+        if row:
+            user_data_id = row["id"]
+            _USER_DATA_CACHE[user_identifier] = user_data_id
+            return user_data_id
+            
+        # Create new record
+        insert_query = user_data.insert().values(
+            user_identifier=user_identifier,
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow()
+        )
+        user_data_id = await database.execute(insert_query)
+        
+        if user_data_id:
+            _USER_DATA_CACHE[user_identifier] = user_data_id
+            return user_data_id
+            
+    except Exception as error:
+        app_logger.error(f"Error ensuring user data record: {error}", extra={"event_type": "user_data_ensure_failed"})
+        return None
+    
+    return None
+    return None
+
+
+async def _resolve_supabase_user_data_id(user_id: int) -> Optional[int]:
+    """Return the Supabase user_data.id for the given user, creating it if missing."""
+    if not _conversation_store_available():
+        return None
+
+    cached_supabase_id = _SUPABASE_USER_DATA_CACHE.get(user_id)
+    if cached_supabase_id is not None:
+        return cached_supabase_id
+
+    supabase_user_data_id: Optional[int] = None
+    try:
+        supabase_lookup = (
             supabase.table("user_data")
             .select("id")
-            .eq("user_identifier", user_identifier)
+            .eq("user_identifier", user_id)
             .limit(1)
             .execute()
         )
-        rows = result.data or []
-        if rows:
-            row = rows[0]
-            user_data_id = _row_get(row, "id")
-            if isinstance(user_data_id, int):
-                _USER_DATA_CACHE[user_identifier] = user_data_id
-                return user_data_id
-    except Exception as error:
-        _handle_conversation_store_error("Error loading user data record", error)
-        return None
-
-    try:
-        created = supabase.table("user_data").insert({"user_identifier": user_identifier}).execute()
-        rows = created.data or []
-        if not rows:
-            lookup = (
+        supabase_match = getattr(supabase_lookup, "data", None) or []
+        if supabase_match and supabase_match[0].get("id") is not None:
+            supabase_user_data_id = supabase_match[0]["id"]
+        else:
+            supabase.table("user_data").upsert({"user_identifier": user_id}).execute()
+            fetch_after_upsert = (
                 supabase.table("user_data")
                 .select("id")
-                .eq("user_identifier", user_identifier)
+                .eq("user_identifier", user_id)
                 .limit(1)
                 .execute()
             )
-            rows = lookup.data or []
-        if rows:
-            user_data_id = _row_get(rows[0], "id")
-            if isinstance(user_data_id, int):
-                _USER_DATA_CACHE[user_identifier] = user_data_id
-                return user_data_id
+            supabase_data = getattr(fetch_after_upsert, "data", None) or []
+            if supabase_data and supabase_data[0].get("id") is not None:
+                supabase_user_data_id = supabase_data[0]["id"]
+
+        if supabase_user_data_id is not None:
+            _SUPABASE_USER_DATA_CACHE[user_id] = supabase_user_data_id
+        return supabase_user_data_id
     except Exception as error:
-        _handle_conversation_store_error("Error creating user data record", error)
-    
-    app_logger.error(f"Failed to ensure user_data record for {user_identifier}", extra={"event_type": "user_data_ensure_failed"})
-    return None
+        _handle_conversation_store_error("Error ensuring user_data in Supabase", error)
+        return None
 
 
 def _deserialize_proactivity_settings_payload(payload: Any) -> Optional[ProactivitySettings]:
@@ -3125,6 +3192,15 @@ def _candidate_grounding_payload(candidate: Any) -> Optional[Dict[str, Any]]:
     return grounding
 
 
+def _candidate_text(candidate: Any) -> str:
+    """Join all text parts from a Gemini candidate without touching function/tool parts."""
+    content = getattr(candidate, "content", None)
+    parts = getattr(content, "parts", None) if content else None
+    if not parts:
+        return ""
+    return "".join(getattr(part, "text", "") for part in parts if getattr(part, "text", None))
+
+
 def _build_maps_tool_and_config(
     maps_enabled: bool,
     maps_latitude: Optional[float],
@@ -3254,6 +3330,12 @@ async def _load_conversation_history(conversation_id: str, user_id: int) -> List
   CRITICAL: This function enforces data isolation by ensuring the conversation_id
   belongs to the provided user_id.
   """
+  # Import here to avoid circular dependency
+  try:
+      from backend.database import user_chat_messages, user_chat_threads, database
+  except ImportError:
+      from database import user_chat_messages, user_chat_threads, database
+
   general_user_id = _general_conversation_user_id(conversation_id)
   if general_user_id is not None:
     # Enforce ownership for general chat
@@ -3265,73 +3347,42 @@ async def _load_conversation_history(conversation_id: str, user_id: int) -> List
         return []
     return await _load_general_conversation_history(general_user_id)
 
-  if not _conversation_store_available():
-    return []
-
-  if not _is_valid_uuid(conversation_id) or supabase is None:
+  if not _is_valid_uuid(conversation_id):
     return []
 
   # Enforce ownership for regular threads
   try:
-      owner_check = (
-          supabase.table("user_chat_threads")
-          .select("user_identifier")
-          .eq("id", conversation_id)
-          .single()
-          .execute()
+      query = user_chat_threads.select().where(
+          (user_chat_threads.c.id == conversation_id) &
+          (user_chat_threads.c.user_identifier == user_id)
       )
-      if not owner_check.data:
-          return []
+      row = await database.fetch_one(query)
       
-      # Verify the owner matches the requester
-      # Supabase returns user_identifier as the stored type (int or string/uuid)
-      owner_id = owner_check.data.get("user_identifier")
-      if str(owner_id) != str(user_id):
-          app_logger.warning(
-            f"Access denied for thread: user {user_id} tried to access {conversation_id} (owned by {owner_id})",
-            extra={"event_type": "security_violation_thread"}
-          )
+      if not row:
+          # If check fails (e.g. not found or wrong owner), deny access safely
           return []
+          
   except Exception:
-      # If check fails (e.g. not found), deny access safely
       return []
 
   try:
-    result = (
-      supabase.table("user_chat_messages")
-      .select("role, text, grounding_metadata, attachments, created_at")
-      .eq("thread_id", conversation_id)
-      .order("created_at", desc=False)
-      .execute()
+    # Load messages
+    query = (
+        user_chat_messages.select()
+        .where(user_chat_messages.c.thread_id == conversation_id)
+        .order_by(user_chat_messages.c.created_at.asc())
     )
-    rows = result.data or []
-    history: List[Dict[str, Any]] = []
+    rows = await database.fetch_all(query)
+    
+    messages = []
     for row in rows:
-      role = row.get("role")
-      if not role:
-        continue
-      entry: Dict[str, Any] = {
-        "role": role,
-        "text": row.get("text") or "",
-      }
-      grounding_metadata = row.get("grounding_metadata")
-      if grounding_metadata is not None:
-        entry["grounding_metadata"] = grounding_metadata
-      attachments = row.get("attachments")
-      if attachments is not None:
-        entry["attachments"] = attachments
-      created_at = row.get("created_at")
-      if created_at is not None:
-        from dateutil import parser as dateutil_parser
-        try:
-          # Parse the ISO timestamp and convert to milliseconds since epoch
-          dt = dateutil_parser.isoparse(created_at)
-          timestamp_ms = int(dt.timestamp() * 1000)
-          entry["timestamp"] = timestamp_ms
-        except Exception:
-          pass
-      history.append(entry)
-    return history
+        messages.append({
+            "role": row["role"],
+            "text": row["text"],
+            "grounding_metadata": row["grounding_metadata"],
+            "attachments": row["attachments"],
+        })
+    return messages
   except Exception as error:
     _handle_conversation_store_error(
       "Warning: User chat messages table not found or inaccessible",
@@ -4020,6 +4071,14 @@ def _build_reminder_payload(reminder: Dict[str, Any], user_id: int, status: str,
         elif isinstance(remind_at, str):
             time_iso = remind_at
     
+    # Convert any remaining datetime objects in raw data to strings for JSON safety
+    safe_raw = {}
+    for k, v in reminder.items():
+        if isinstance(v, (datetime, date)):
+             safe_raw[k] = v.isoformat()
+        else:
+             safe_raw[k] = v
+
     return {
         "type": "gray.reminder",
         "source": "mcp/plans-habits-server",
@@ -4031,18 +4090,7 @@ def _build_reminder_payload(reminder: Dict[str, Any], user_id: int, status: str,
             "user_id": user_id,
             "label": label,
             "time_iso": time_iso,
-            "raw": reminder,
-            "delivery_mode": reminder.get("delivery_mode", entity),
-            "summary": description,
-            "reminder_id": reminder_id,
-            "reminder_status": reminder.get("status", "pending"),
-            "reminder": {
-                "id": reminder_id,
-                "remind_at": time_iso,
-                "status": reminder.get("status", "pending"),
-                "description": description,
-                "summary": description,
-            },
+            "raw": safe_raw,
         },
     }
 
@@ -4690,16 +4738,67 @@ async def _ensure_supabase_user_exists(user_id: int, db: databases.Database) -> 
             "updated_at": _iso(user_row["updated_at"]),
         }
 
-        supabase.table("users").upsert(payload).execute()
+        supabase.table("users").upsert(payload, on_conflict="id").execute()
         api_logger.info(
             "Backfilled Supabase users row for streak tracking",
             extra={"user_id": user_id},
         )
         return True
     except Exception as error:  # pragma: no cover - defensive
+        error_str = str(error)
+        
+        # Only return True if the user with this specific ID already exists (primary key duplicate)
+        if "duplicate key value violates unique constraint" in error_str and "users_pkey" in error_str:
+            api_logger.info(
+                "User already exists in Supabase (detected via primary key constraint)",
+                extra={"user_id": user_id},
+            )
+            return True
+        
+        # If it's a duplicate email error, find the existing user by email and update it
+        if "duplicate key value violates unique constraint" in error_str and "ix_users_email" in error_str:
+            try:
+                # Find the existing user by email
+                existing_by_email = (
+                    supabase.table("users").select("id").eq("email", user_row["email"]).limit(1).execute()
+                )
+                existing_email_rows = getattr(existing_by_email, "data", None) or []
+                
+                if existing_email_rows:
+                    old_user_id = existing_email_rows[0]["id"]
+                    api_logger.info(
+                        "Found existing Supabase user by email; updating to new user ID",
+                        extra={"old_user_id": old_user_id, "new_user_id": user_id, "email": user_row["email"]},
+                    )
+                    
+                    # Delete the old user record
+                    supabase.table("users").delete().eq("id", old_user_id).execute()
+                    
+                    # Insert the new user record with the correct ID
+                    supabase.table("users").insert(payload).execute()
+                    
+                    api_logger.info(
+                        "Successfully migrated Supabase user to new ID",
+                        extra={"user_id": user_id},
+                    )
+                    return True
+                else:
+                    api_logger.warning(
+                        "Email conflict but cannot find existing user by email",
+                        extra={"user_id": user_id, "error": error_str},
+                    )
+                    return False
+            except Exception as migration_error:
+                api_logger.error(
+                    "Failed to migrate Supabase user to new ID",
+                    extra={"user_id": user_id, "error": str(migration_error)},
+                )
+                return False
+        
+        # For other errors, log and return False
         api_logger.error(
             "Failed to ensure Supabase user exists for streaks",
-            extra={"user_id": user_id, "error": str(error)},
+            extra={"user_id": user_id, "error": error_str},
         )
         return False
 
@@ -4807,6 +4906,15 @@ async def update_user_streak(
 
     for _ in range(3):  # Retry loop for optimistic locking
         streak = await get_or_create_user_streak(user_id, db)
+        
+        # If we got a default streak (id=0), it means the Supabase user doesn't exist
+        # and we can't update the streak. Return the default streak gracefully.
+        if streak.id == 0:
+            api_logger.warning(
+                "Cannot update streak for user without Supabase record; returning default",
+                extra={"user_id": user_id},
+            )
+            return streak
 
         # Check if last activity was yesterday
         if streak.last_activity_date:
@@ -4911,61 +5019,48 @@ async def get_or_create_conversation(
   title: Optional[str] = None,
 ) -> str:
   """Get existing conversation or create a new one in Supabase."""
-  if not _conversation_store_available():
-    raise HTTPException(status_code=503, detail="Conversation storage is not available.")
+  # Import here to avoid circular dependency
+  try:
+      from backend.database import user_chat_threads, database
+  except ImportError:
+      from database import user_chat_threads, database
 
   valid_id = conversation_id if _is_valid_uuid(conversation_id) else None
   if valid_id:
     try:
       # Check if conversation exists and belongs to this user
-      result = (
-        supabase.table("user_chat_threads")
-        .select("id")
-        .eq("id", valid_id)
-        .eq("user_identifier", user_id)
-        .limit(1)
-        .execute()
+      query = user_chat_threads.select().where(
+          (user_chat_threads.c.id == valid_id) & 
+          (user_chat_threads.c.user_identifier == user_id)
       )
-      if result.data:
+      row = await database.fetch_one(query)
+      if row:
         return valid_id
     except Exception as error:
       _handle_conversation_store_error("Error checking conversation", error)
+      # Fallback or re-raise depending on strictness; here we re-raise to match original behavior
       raise HTTPException(status_code=503, detail="Conversation storage is not available.")
 
   user_data_id: Optional[int] = None
   try:
-    user_data_id = _ensure_user_data_record(user_id)
+    user_data_id = await _ensure_user_data_record(user_id)
     if user_data_id is None:
       raise HTTPException(status_code=503, detail="User metadata storage is not available.")
-    result = (
-      supabase.table("user_chat_threads")
-      .insert(
-        {
-          "title": title or "New Conversation",
-          "user_identifier": user_id,
-          "user_data_id": user_data_id,
-          "context_snapshot": [],
-          "metadata": {},
-        }
-      )
-      .execute()
+    
+    # Create new conversation
+    import uuid
+    new_id = str(uuid.uuid4())
+    insert_query = user_chat_threads.insert().values(
+        id=new_id,
+        title=title or "New Conversation",
+        user_identifier=user_id,
+        user_data_id=user_data_id,
+        context_snapshot=[],
+        metadata={},
     )
-    rows = result.data or []
-    if not rows:
-      fallback = (
-        supabase.table("user_chat_threads")
-        .select("id")
-        .eq("user_identifier", user_id)
-        .order("created_at", desc=True)
-        .limit(1)
-        .execute()
-      )
-      rows = fallback.data or []
-    if rows:
-      conversation_row = rows[0]
-      conversation_id = _row_get(conversation_row, "id")
-      if isinstance(conversation_id, str):
-        return conversation_id
+    await database.execute(insert_query)
+    return new_id
+
   except Exception as error:
     _handle_conversation_store_error("Error creating conversation", error)
     raise HTTPException(status_code=503, detail="Conversation storage is not available.")
@@ -4980,6 +5075,12 @@ async def save_conversation_message(
   user_id: Optional[int] = None,
 ) -> None:
   """Persist a single message for a conversation."""
+  # Import here to avoid circular dependency
+  try:
+      from backend.database import user_chat_messages, user_chat_threads, database
+  except ImportError:
+      from database import user_chat_messages, user_chat_threads, database
+
   # Normalize the payload we write to storage so that rows are tidy and
   # consistent.
   raw_role = message.get("role")
@@ -5002,36 +5103,30 @@ async def save_conversation_message(
       )
       return
 
-  if not _conversation_store_available() or not _is_valid_uuid(conversation_id):
-    # If the conversation store is unavailable or the identifier is not a real
-    # UUID, skip persistence rather than falling back to in-memory storage.
-    return
-
+  # Regular thread message
   try:
-    insert_payload: Dict[str, Any] = {
-      "thread_id": conversation_id,
-      "role": role,
-      "text": text,
-    }
-    if grounding_metadata is not None:
-      insert_payload["grounding_metadata"] = grounding_metadata
-    attachments = message.get("attachments")
-    if attachments is not None:
-      insert_payload["attachments"] = attachments
-
-    supabase.table("user_chat_messages").insert(insert_payload).execute()
-
-    # Keep the parent conversation's updated_at fresh so the list endpoint
-    # naturally sorts by most recent activity.
-    updated_at_iso = datetime.utcnow().isoformat() + "Z"
-    supabase.table("user_chat_threads").update(
-      {
-        "updated_at": updated_at_iso,
-        "last_message_at": updated_at_iso,
-      }
-    ).eq("id", conversation_id).execute()
+      # Insert message
+      insert_query = user_chat_messages.insert().values(
+          thread_id=conversation_id,
+          role=role,
+          text=text,
+          grounding_metadata=grounding_metadata,
+          attachments=message.get("attachments"),
+      )
+      await database.execute(insert_query)
+      
+      # Update thread timestamp
+      update_query = (
+          user_chat_threads.update()
+          .where(user_chat_threads.c.id == conversation_id)
+          .values(last_message_at=datetime.utcnow(), updated_at=datetime.utcnow())
+      )
+      await database.execute(update_query)
+      
   except Exception as error:
-    _handle_conversation_store_error("Error saving message", error)
+      _handle_conversation_store_error("Error saving message", error)
+      # Non-critical, log and continue
+      app_logger.error(f"Failed to save message to thread {conversation_id}: {error}")
 
 
 def _format_structured_ai_reply(user_message: str, thinking: str, ai_reply: str) -> str:
@@ -5113,11 +5208,72 @@ async def stream_ai_response(
     tools: Optional[List[types.Tool]] = None,
 ) -> AsyncGenerator[Tuple[str, Any], None]:
     """Yield token chunks using the configured AI provider."""
-    # Check usage limits
+
+
+    request_structured_reminders = _should_request_structured_reminders(message)
+    needs_structured_tools = request_structured_reminders or _needs_structured_tools(message)
+    if needs_structured_tools:
+        request_structured_reminders = True
+
+    explicit_model = (model or "").strip()
+    normalized_model = explicit_model.lower()
+    provider: Optional[str] = None
+
+    # Respect explicit tier aliases first
+    if normalized_model in {"lite", "gray-lite"}:
+        provider = "openrouter"
+        if not model:
+            model = GROK_DEFAULT_MODEL
+    elif normalized_model in {"pro", "gray-pro"}:
+        provider = "gemini"
+        if not model:
+            model = "models/gemini-3-pro-preview"
+    elif normalized_model.startswith("models/") or normalized_model.startswith("gemini"):
+        provider = "gemini"
+
+    prefers_gemini = (
+        AI_PROVIDER == "gemini"
+        or bool(tools)
+        or _prefers_gemini_model(normalized_model)
+    )
+
+    # Check for onboarding tools to force Gemini
+    is_onboarding_tool = False
+    if tools:
+        for t in tools:
+            if t.function_declarations:
+                for fd in t.function_declarations:
+                    if fd.name == "complete_onboarding":
+                        is_onboarding_tool = True
+                        break
+
+    provider = "gemini"
+    if needs_structured_tools:
+        provider = "gemini"
+        if not model:
+            model = REMINDER_MODEL
+    elif is_onboarding_tool:
+        # Force Gemini for onboarding tools
+        provider = "gemini"
+        if not model:
+            model = GEMINI_SERVICE.default_model
+    elif provider:
+        # provider was decided above based on explicit model hints
+        pass
+    elif normalized_model in {"grok", "grok-lite"} or normalized_model.startswith("openrouter"):
+        if OPENROUTER_SERVICE and OPENROUTER_SERVICE.available:
+            provider = "openrouter"
+            if not model:
+                model = GROK_DEFAULT_MODEL
+    else:
+        # Default to Gemini for fastest streaming rather than Grok free tier throttling.
+        provider = "gemini"
+
+    # Check usage limits (now that we know the effective model)
     if user_id is not None and db is not None:
         tracker = UsageTracker(db)
         try:
-            await tracker.check_limits(user_id)
+            await tracker.check_limits(user_id, model=model)
         except UsageLimitExceeded as e:
             reset_msg = ""
             if e.next_reset_time:
@@ -5132,24 +5288,6 @@ async def stream_ai_response(
             yield ("delta", limit_msg)
             yield ("final", {"text": limit_msg, "grounding_metadata": None})
             return
-
-    request_structured_reminders = _should_request_structured_reminders(message)
-    needs_structured_tools = request_structured_reminders or _needs_structured_tools(message)
-    if needs_structured_tools:
-        request_structured_reminders = True
-
-    explicit_model = (model or "").strip()
-    normalized_model = explicit_model.lower()
-    prefers_gemini = bool(tools) or normalized_model.startswith("models/") or normalized_model.startswith("gemini")
-
-    provider = "gemini"
-    if needs_structured_tools:
-        if not model:
-            model = REMINDER_MODEL
-    elif not prefers_gemini and OPENROUTER_SERVICE and OPENROUTER_SERVICE.available:
-        provider = "openrouter"
-        if not model:
-            model = GROK_DEFAULT_MODEL
 
     conversation_history = _normalize_conversation_history(conversation_history)
     cached_contents = None
@@ -5183,40 +5321,12 @@ async def stream_ai_response(
                     extra={"event_type": "ai_attachments_ignored", "provider": provider},
                 )
             
-            # WORKAROUND: OpenRouter client doesn't support tools yet.
-            # If we have tools (specifically onboarding), inject a system prompt to force JSON output,
-            # then intercept it here to execute the tool manually.
-            is_onboarding_tool = False
-            if tools:
-                # Check if it's the onboarding tool set
-                # We can check if 'complete_onboarding' is in the function declarations
-                for t in tools:
-                    if t.function_declarations:
-                        for fd in t.function_declarations:
-                            if fd.name == "complete_onboarding":
-                                is_onboarding_tool = True
-                                break
-            
-            if is_onboarding_tool:
-                json_instruction = (
-                    "\n\nIMPORTANT: When you have collected the user's nickname, occupation, and about blurb, "
-                    "you MUST output a JSON block to save it. Do not output normal text when saving.\n"
-                    "Output EXACTLY this format:\n"
-                    "```json\n"
-                    "{\n"
-                    '  "tool": "complete_onboarding",\n'
-                    '  "nickname": "...",\n'
-                    '  "occupation": "...",\n'
-                    '  "about": "...",\n'
-                    '  "core_blocker": "..."\n'
-                    "}\n"
-                    "```\n"
-                    "After outputting the JSON, stop generating."
-                )
-                effective_system_prompt = (effective_system_prompt or "") + json_instruction
+            # WORKAROUND REMOVED: We now force Gemini for onboarding tools.
+            pass
 
             accumulated = ""
             try:
+                t0_provider = time.perf_counter()
                 response_format = REMINDER_RESPONSE_FORMAT if request_structured_reminders else None
                 
                 # Buffer for detecting JSON tool calls
@@ -5321,51 +5431,202 @@ async def stream_ai_response(
                         "error": str(openrouter_error),
                     },
                 )
+                # Critical: Switch provider flag so the Gemini setup block below executes
+                provider = "gemini"
 
+    # Prepare tools regardless of provider (OpenRouter needs them too now)
     media_attachments = await _resolve_media_attachments(db, attachments, user_id)
-    tool_list: List[types.Tool] = []
-    effective_tool_config: Optional[types.ToolConfig] = None
-    if provider == "gemini":
-        maps_tools, maps_tool_config = _build_maps_tool_and_config(
-            maps_enabled,
-            maps_latitude,
-            maps_longitude,
-            maps_widget,
-        )
-        file_search_tools = []
-        if file_search_enabled:
-             file_search_tools = await _build_file_search_tools(db, user_id)
+    
+    maps_tools, maps_tool_config = _build_maps_tool_and_config(
+        maps_enabled,
+        maps_latitude,
+        maps_longitude,
+        maps_widget,
+    )
+    file_search_tools = []
+    if file_search_enabled:
+         file_search_tools = await _build_file_search_tools(db, user_id)
 
-        if tools is not None:
-            base_tools = tools
+    if tools is not None:
+        base_tools = tools
+    else:
+        base_tools = DEFAULT_CHAT_TOOLS
+        if not search_enabled:
+            base_tools = [t for t in base_tools if t != SEARCH_TOOL]
+    
+    # Common tool list
+    tool_list = [*base_tools, *maps_tools, *file_search_tools]
+    effective_tool_config = maps_tool_config
+
+    if provider in {"openrouter", "grok", "grok-lite"}:
+        if not OPENROUTER_SERVICE.available:
+            api_logger.warning(
+                "OpenRouter unavailable; falling back to Gemini",
+                extra={"event_type": "ai_provider_unavailable", "provider": provider},
+            )
         else:
-            base_tools = DEFAULT_CHAT_TOOLS
-            if not search_enabled:
-                base_tools = [t for t in base_tools if t != SEARCH_TOOL]
-        tool_list = [*base_tools, *maps_tools, *file_search_tools]
+            if attachments:
+                api_logger.info(
+                    "OpenRouter does not support attachments in this flow; ignoring attachments",
+                    extra={"event_type": "ai_attachments_ignored", "provider": provider},
+                )
+            
+            try:
+                t0_provider = time.perf_counter()
+                response_format = REMINDER_RESPONSE_FORMAT if request_structured_reminders else None
+                
+                # Multi-turn loop for tool handling
+                current_history = list(conversation_history) if conversation_history else []
+                # Helper to convert OpenRouter role to Gemini/internal role
+                def _map_role(r): return "model" if r == "assistant" else r
 
-        # Consolidate tools for Gemini to avoid issues with mixed tool types in the list
-        # The SDK/API can be sensitive to having multiple Tool objects, especially mixing
-        # Google Search and Function Declarations.
-        if provider == "gemini" and tool_list:
-            all_declarations = []
-            search_instance = None
-            
-            for t in tool_list:
-                if t.function_declarations:
-                    all_declarations.extend(t.function_declarations)
-                if t.google_search:
-                    search_instance = t.google_search
-            
-            # Rebuild a single tool if we have any components
-            if all_declarations or search_instance:
-                tool_list = [types.Tool(
-                    function_declarations=all_declarations if all_declarations else None,
-                    google_search=search_instance
-                )]
+                max_tool_turns = 5
+                for turn in range(max_tool_turns + 1):
+                    accumulated = ""
+                    tool_calls_buffer = []
+                    
+                    # Construct message for this turn
+                    # For turn 0, use original message. For subsequent turns, message is empty 
+                    # as context is carried in history (which we update).
+                    current_message = message if turn == 0 else ""
+                    
+                    # Stream from OpenRouter
+                    async for chunk in OPENROUTER_SERVICE.stream(
+                        current_message,
+                        current_history,
+                        workspace_with_cache,
+                        effective_system_prompt,
+                        time_context,
+                        model,
+                        include_usage=False,
+                        response_format=response_format,
+                        tools=tool_list if not response_format else None, # Don't mix JSON mode and tools usually
+                    ):
+                        if isinstance(chunk, dict):
+                            # Handle metadata or tool calls
+                            if "tool_calls" in chunk:
+                                # OpenRouter might yield partial or full tool calls. 
+                                # Our client yields full 'tool_calls' list in one go if possible, 
+                                # or we might need to accumulate.
+                                # The client implementation yields {"tool_calls": [...]}
+                                tool_calls_buffer = chunk["tool_calls"]
+                            continue
+                        
+                        # Text content
+                        accumulated += chunk
+                        if chunk:
+                            yield ("delta", chunk)
+                    
+                    # End of stream for this turn
+                    
+                    # 1. Handle Tool Calls
+                    if tool_calls_buffer:
+                        # Append the model's tool call message to history
+                        current_history.append({
+                            "role": "model",
+                            "text": accumulated, # Might be empty or thought process
+                            # We'd need to store the tool calls in a way our history builder understands
+                            # For OpenRouter recursion, we just need to mimic the conversation flow.
+                            # But our internal history format is a bit loose.
+                            # Let's just append the text. The tool calls themselves need to be "acted" upon.
+                        })
+                        
+                        # Prepare context for next turn
+                        # We need to execute tools and append results
+                        tool_outputs = []
+                        for tc in tool_calls_buffer:
+                            # Convert OpenAI tool call to Gemini types.FunctionCall for our executor
+                            func_name = tc.get("function", {}).get("name")
+                            func_args_str = tc.get("function", {}).get("arguments", "{}")
+                            call_id = tc.get("id")
+                            
+                            try:
+                                func_args = json.loads(func_args_str)
+                            except json.JSONDecodeError:
+                                func_args = {}
+                                
+                            # Create a mock object that looks like types.FunctionCall
+                            # types.FunctionCall(name=..., args=...)
+                            gemini_fc = types.FunctionCall(name=func_name, args=func_args)
+                            
+                            # Execute
+                            try:
+                                result = await _execute_function_call(gemini_fc, user_id, db)
+                            except Exception as e:
+                                result = {"error": str(e)}
+                                
+                            # Append result to history as a tool message
+                            # OpenRouter/OpenAI expects a message with role='tool', tool_call_id=..., content=...
+                            # Our internal format: {"role": "function", "name": ..., "content": ...} ??
+                            # Actually our internal format (check _load_conversation_history) is flexible.
+                            # But for OpenRouter client `_build_messages`, we need to adapt.
+                            # `_build_messages` currently ignores 'function' role. 
+                            # We might need to inject tool results into the history in a way OpenRouter client handles?
+                            # The current OpenRouter client only handles 'user' and 'model'.
+                            # To support tool loop, we MUST update OpenRouter client or hack it here.
+                            # Hack: Append tool results as a USER message saying "Tool output for [name]: [json]"
+                            # This is often enough for models like Grok.
+                            tool_outputs.append(f"Tool '{func_name}' output: {json.dumps(result)}")
+                            
+                        # Add tool outputs as user message for next turn
+                        if tool_outputs:
+                            next_user_msg = "\n\n".join(tool_outputs)
+                            # We treat this as a user message for the next iteration (common pattern for non-native tool support)
+                            # Or if we update OpenRouter client to support 'tool' role.
+                            # Given time constraints, the User Message hack is safer for "Grok" models.
+                            current_history.append({"role": "user", "text": next_user_msg})
+                            # Clear message for next turn so we rely on history
+                            message = "" 
+                            continue # Loop to next turn
+                        else:
+                            break # No outputs, done
+                            
+                    # 2. Handle Structured Reminders (JSON Mode)
+                    if response_format:
+                        text, structured_reminders = _materialize_structured_reminders(accumulated)
+                        accumulated = text
+                        yield ("final", {
+                            "text": accumulated,
+                            "grounding_metadata": None,
+                            "reminders": structured_reminders if structured_reminders else None
+                        })
+                    else:
+                        # Normal text finish
+                        if not tool_calls_buffer:
+                            yield ("final", {"text": accumulated, "grounding_metadata": None})
+                    
+                    # If we got here and didn't continue, we are done
+                    return
+
+            except Exception as openrouter_error:  # pragma: no cover - best effort logging
+                api_logger.error(
+                    "OpenRouter streaming failed; falling back to Gemini",
+                    extra={
+                        "event_type": "ai_provider_fallback",
+                        "provider": provider,
+                        "error": str(openrouter_error),
+                    },
+                )
+                # Critical: Switch provider flag so the Gemini setup block below executes
+                provider = "gemini"
+
+    # Gemini-specific tool list adjustment (consolidating)
+    if provider == "gemini" and tool_list:
+        all_declarations = []
+        search_instance = None
         
-        # Ensure we have an explicit tool_config when tools are present
-        effective_tool_config = maps_tool_config
+        for t in tool_list:
+            if t.function_declarations:
+                all_declarations.extend(t.function_declarations)
+            if t.google_search:
+                search_instance = t.google_search
+        
+        # Rebuild a single tool if we have any components
+        if all_declarations or search_instance:
+            tool_list = [types.Tool(
+                function_declarations=all_declarations if all_declarations else None,
+                google_search=search_instance
+            )]
 
     
     grounding_metadata: Optional[Dict[str, Any]] = None
@@ -5408,34 +5669,30 @@ async def stream_ai_response(
                     if chunk.usage_metadata:
                         final_usage = chunk.usage_metadata
 
-                    text_fragment = chunk.text or ""
-                    if chunk.candidates:
-                        candidate = chunk.candidates[0]
+                    candidate = chunk.candidates[0] if chunk.candidates else None
+                    parts = getattr(candidate, "content", None)
+                    parts_list = getattr(parts, "parts", None) if parts else None
+
+                    if candidate:
                         payload = _candidate_grounding_payload(candidate)
                         if payload:
                             grounding_metadata = payload
                     
                     suppress_text = False
-                    if chunk.candidates:
-                        candidate = chunk.candidates[0]
-                        if candidate.content and candidate.content.parts:
-                            for part in candidate.content.parts:
-                                if part.function_call:
-                                    suppress_text = True
-                                    break
+                    if parts_list:
+                        suppress_text = any(getattr(part, "function_call", None) for part in parts_list)
 
-                    if not suppress_text:
+                    if not suppress_text and candidate:
+                        text_fragment = _candidate_text(candidate)
                         accumulated += text_fragment
                         if text_fragment:
                             yield ("delta", text_fragment)
                     
                     # Collect function calls
-                    if chunk.candidates:
-                        candidate = chunk.candidates[0]
-                        if candidate.content and candidate.content.parts:
-                            for part in candidate.content.parts:
-                                if part.function_call:
-                                    tool_calls_in_this_turn.append(part.function_call)
+                    if parts_list:
+                        for part in parts_list:
+                            if getattr(part, "function_call", None):
+                                tool_calls_in_this_turn.append(part.function_call)
                 
                 # End of stream for this turn.
                 
@@ -5446,7 +5703,8 @@ async def stream_ai_response(
                         await tracker.track_usage(
                             user_id,
                             final_usage.prompt_token_count or 0,
-                            final_usage.candidates_token_count or 0
+                            final_usage.candidates_token_count or 0,
+                            model=model
                         )
 
                     final_payload = {"text": accumulated or "", "grounding_metadata": grounding_metadata}
@@ -5556,16 +5814,43 @@ async def generate_ai_response(
 
     explicit_model = (model or "").strip()
     normalized_model = explicit_model.lower()
-    prefers_gemini = bool(tools) or normalized_model.startswith("models/") or normalized_model.startswith("gemini")
 
-    provider = "gemini"
-    if needs_structured_tools:
+    # Determine initial provider preference based on AI_PROVIDER environment variable
+    initial_provider = AI_PROVIDER.lower()
+    provider: Optional[str] = None
+
+    if needs_structured_tools or tools:
+        # Tool-use always requires Gemini for now
+        provider = "gemini"
         if not model:
             model = REMINDER_MODEL
-    elif not prefers_gemini and OPENROUTER_SERVICE and OPENROUTER_SERVICE.available:
-        provider = "openrouter"
+    elif normalized_model in {"lite", "gray-lite"} or (normalized_model.startswith("openrouter") and initial_provider == "openrouter"):
+        # Explicitly requested Grok/OpenRouter model or lite tier with OpenRouter as AI_PROVIDER
+        if OPENROUTER_SERVICE and OPENROUTER_SERVICE.available:
+            provider = "openrouter"
+            if not model:
+                model = GROK_DEFAULT_MODEL
+        else:
+            # Fallback to Gemini if OpenRouter not available
+            provider = "gemini"
+            if not model:
+                model = GEMINI_LIGHT_MODEL
+    elif normalized_model in {"pro", "gray-pro"} or normalized_model.startswith("models/") or normalized_model.startswith("gemini") or initial_provider == "gemini":
+        # Explicitly requested Gemini model or default AI_PROVIDER is Gemini
+        provider = "gemini"
         if not model:
-            model = GROK_DEFAULT_MODEL
+            # Use appropriate Gemini model based on 'pro' alias or general default
+            if normalized_model in {"pro", "gray-pro"}:
+                model = GEMINI_PRO_MODEL
+            else:
+                model = GEMINI_DEFAULT_MODEL
+    else:
+        # Fallback to initial_provider if no other specific routing applies
+        provider = initial_provider
+
+    # Final check: if no provider was definitively set, default to Gemini
+    if not provider:
+        provider = "gemini"
 
     cached_contents = None
     cache_text_block: Optional[str] = None
@@ -5724,7 +6009,6 @@ async def generate_ai_response(
                 tool_result = await _execute_function_call(function_call, user_id, db)
                 tool_contents = _build_function_call_contents(function_call, tool_result)
                 extra_payloads = _merge_extra_contents(
-                    title_instruction_contents,
                     cached_contents,
                     tool_contents,
                 )
@@ -5759,7 +6043,7 @@ async def generate_ai_response(
                     if payload:
                         grounding_metadata = payload
                 attempts += 1
-            final_text = response.text or ""
+            final_text = _candidate_text(response.candidates[0]) if response.candidates else ""
             if final_text:
                 return final_text, grounding_metadata
             raise RuntimeError("AI response was empty")
@@ -6184,7 +6468,9 @@ async def chat_endpoint(
         plan_tier = user_record["plan_tier"] if user_record else None
         
         # Normalize tier to lowercase for comparison
-        normalized_tier = (plan_tier or "scout").lower()
+        normalized_tier = (plan_tier or "pioneer").lower()
+        if normalized_tier == "scout":
+            normalized_tier = "pioneer"
         
         # If user requested reasoning but is not eligible, disable it silently (or we could raise 403)
         effective_reasoning_mode = chat_request.reasoning_mode
@@ -6242,6 +6528,7 @@ async def chat_endpoint(
         )
 
     except Exception as e:
+        api_logger.error(f"CHAT_ERROR_DEBUG: Chat endpoint failed: {e}", exc_info=True, extra={"user_id": chat_request.user_id})
         raise HTTPException(status_code=500, detail=f"Chat error: {str(e)}")
 
 
@@ -6270,7 +6557,8 @@ ONBOARDING_SYSTEM_PROMPT = load_prompt_from_file(ONBOARDING_PROMPT_PATH, DEFAULT
 
 
 @app.post("/api/chat/stream")
-@limiter.limit("20/minute")
+# Increase the stream limit to avoid throttling active typing sessions.
+@limiter.limit("120/minute")
 async def chat_stream(
     request: Request,
     chat_request: ChatRequest,
@@ -6297,6 +6585,11 @@ async def chat_stream(
     try:
         # Fetch user record for logic
         user_record = await db.fetch_one(users.select().where(users.c.id == chat_request.user_id))
+        user_has_seen_general = bool(_row_get(user_record, "has_seen_general_chat"))
+        user_nickname = _row_get(user_record, "personalization_nickname")
+        user_occupation = _row_get(user_record, "personalization_occupation")
+        user_about = _row_get(user_record, "personalization_about")
+        user_plan_tier = _row_get(user_record, "plan_tier")
         
         # Handle Onboarding Logic
         effective_message = chat_request.message
@@ -6304,49 +6597,36 @@ async def chat_stream(
         effective_model = chat_request.model
         tool_list = None
 
-        if user_record and not user_record["has_seen_general_chat"]:
+        raw_message = (effective_message or "").strip()
+        wants_onboarding = "ready to start" in raw_message.lower() or "start onboarding" in raw_message.lower()
+        needs_personalization = bool(user_record and (not user_nickname or not user_occupation or not user_about))
+
+        if user_record and (
+            not user_has_seen_general  # first-time users
+            or (wants_onboarding and needs_personalization)  # explicit re-trigger when basics are missing
+        ):
             # Always use onboarding prompt for the first interaction
             effective_system_prompt = ONBOARDING_SYSTEM_PROMPT
             tool_list = list(ONBOARDING_TOOLS)
             
             # Force a capable model for onboarding tools
-            effective_model = "models/gemini-flash-latest"
+            # effective_model = "models/gemini-flash-latest"
             
             # If this is the very first interaction (triggered by frontend with empty message usually)
             if not effective_message or not effective_message.strip():
                 effective_message = ""
             
-            api_logger.info(f"User {chat_request.user_id} is in onboarding flow")
+            api_logger.info(
+                f"User {chat_request.user_id} is in onboarding flow",
+                extra={
+                    "event_type": "onboarding_flow",
+                    "requested": wants_onboarding,
+                    "needs_personalization": needs_personalization,
+                },
+            )
 
-        # Generate a title for the chat session (only if requested)
-        session_title = None
-        if chat_request.should_generate_title:
-            try:
-                title_request = ChatTitleRequest(message=effective_message)
-                # Add timeout to prevent title generation from blocking the stream
-                title_response = await wait_for(
-                    create_chat_title(title_request, current_user),
-                    timeout=3.0
-                )
-                session_title = title_response.title
-            except TimeoutError:
-                api_logger.warning("Title generation timeout, using fallback", extra={
-                    "event_type": "title_generation_timeout",
-                    "user_id": chat_request.user_id,
-                    "correlation_id": correlation_id
-                })
-                session_title = _fallback_title_from_message(effective_message)
-            except Exception as title_error:
-                api_logger.warning(f"Title generation failed: {title_error}", extra={
-                    "event_type": "title_generation_error",
-                    "user_id": chat_request.user_id,
-                    "error": str(title_error),
-                    "correlation_id": correlation_id
-                })
-                session_title = _fallback_title_from_message(effective_message)
-
-        if not session_title:
-            session_title = _fallback_title_from_message(effective_message)
+        # Generate a title for the chat session (fallback initially, refined later via extraction)
+        session_title = _fallback_title_from_message(effective_message)
 
         # Create chat session
         now = datetime.utcnow()
@@ -6372,7 +6652,10 @@ async def chat_stream(
 
         conversation_history: List[Dict[str, Any]] = []
         if conversation_id:
+            t0_hist = time.perf_counter()
             conversation_history = await _load_conversation_history(conversation_id, chat_request.user_id)
+            t1_hist = time.perf_counter()
+            api_logger.info(f"History load time: {(t1_hist - t0_hist)*1000:.2f}ms", extra={"user_id": chat_request.user_id, "conversation_id": conversation_id})
 
         # Avoid sending an empty payload to the AI provider (Gemini rejects requests with no contents).
         if not (effective_message or "").strip() and not conversation_history and not (chat_request.attachments or []):
@@ -6390,12 +6673,17 @@ async def chat_stream(
             and (last_history_entry.get("text") or "") == effective_message
         )
         if should_persist_user:
-            await save_conversation_message(conversation_id, user_message_payload, user_id=chat_request.user_id)
+            # Make persistence non-blocking to improve time-to-first-token
+            asyncio.create_task(
+                save_conversation_message(conversation_id, user_message_payload, user_id=chat_request.user_id)
+        )
 
         # Enforce tier restrictions for streaming
         # user_record was already fetched above
-        plan_tier = user_record["plan_tier"] if user_record else None
-        normalized_tier = (plan_tier or "scout").lower()
+        plan_tier = user_plan_tier
+        normalized_tier = (plan_tier or "pioneer").lower()
+        if normalized_tier == "scout":
+            normalized_tier = "pioneer"
         
         effective_reasoning_mode = chat_request.reasoning_mode
         if effective_reasoning_mode and normalized_tier not in ("voyager", "pioneer"):
@@ -6406,10 +6694,17 @@ async def chat_stream(
             nonlocal session_title
             start_time = time.perf_counter()
             first_token_time: Optional[float] = None
+
+            # Send an immediate keep-alive to nudge proxies to flush the stream sooner.
+            yield ":streaming-start\n\n"
             try:
                 accumulated_visible = ""
                 final_response: Optional[str] = None
                 grounding_metadata_payload: Optional[Dict[str, Any]] = None
+                
+                t0_stream = time.perf_counter()
+                api_logger.info(f"Starting stream_ai_response for {effective_model}", extra={"user_id": chat_request.user_id})
+                
                 async for kind, payload in stream_ai_response(
                     effective_message,
                     conversation_history,
@@ -6438,10 +6733,6 @@ async def chat_stream(
                             first_token_time = time.perf_counter()
                         accumulated_visible += payload
                         yield _sse_event("token", {"delta": payload})
-                        if STREAMING_TOKEN_DELAY:
-                            await sleep(STREAMING_TOKEN_DELAY)
-                        else:
-                            await sleep(0)
                     elif kind == "final":
                         reminders_payload = None
                         if isinstance(payload, dict):
@@ -6596,7 +6887,7 @@ async def create_conversation(
             }
 
         try:
-            user_data_id = _ensure_user_data_record(payload.user_id)
+            user_data_id = await _ensure_user_data_record(payload.user_id)
             if user_data_id is None:
                 raise HTTPException(status_code=503, detail="User metadata storage is not available.")
             result = (
@@ -6790,7 +7081,7 @@ async def _apply_conversation_update(
     user_data_id_for_update: Optional[int] = None
     if payload.user_id is not None:
         require_same_user(payload.user_id, current_user)
-        user_data_id_for_update = _ensure_user_data_record(payload.user_id)
+        user_data_id_for_update = await _ensure_user_data_record(payload.user_id)
 
     if storage_available and valid_conversation_id:
         update_values: Dict[str, Any] = {"updated_at": updated_at_iso}
@@ -6831,7 +7122,7 @@ async def _apply_conversation_update(
             if payload.user_id is not None:
                 seed_title = normalized_title or "New Conversation"
                 if user_data_id_for_update is None:
-                    user_data_id_for_update = _ensure_user_data_record(payload.user_id)
+                    user_data_id_for_update = await _ensure_user_data_record(payload.user_id)
                 if user_data_id_for_update is None:
                     raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="User metadata storage is not available.")
                 try:
@@ -7029,7 +7320,7 @@ async def get_conversation_usage(
             }
 
         # Extract user_id from conversation to lookup tier
-        user_tier = "scout"  # Default
+        user_tier = "pioneer"  # Default everyone to Pioneer privileges
         try:
             # Case 1: General conversation (format: "general:123")
             if conversation_id.startswith("general:"):
@@ -7062,13 +7353,16 @@ async def get_conversation_usage(
                     user_result = supabase.table("users").select("plan_tier").eq("id", user_id).single().execute()
                     
                     if user_result and user_result.data:
-                        user_tier = (user_result.data.get("plan_tier") or "scout").lower()
+                        user_tier = (user_result.data.get("plan_tier") or "pioneer").lower()
                 except Exception:
                     # User might not exist or query failed, use default tier
                     pass
                     
         except Exception as tier_error:
             app_logger.warning(f"Could not determine user tier for conversation {conversation_id}: {tier_error}")
+
+        if user_tier == "scout":
+            user_tier = "pioneer"
         
         # Set context limits by tier
         TIER_CONTEXT_LIMITS = {
@@ -7077,7 +7371,7 @@ async def get_conversation_usage(
             "pioneer": 1_048_576, # 1M tokens (full context)
         }
         
-        context_limit = TIER_CONTEXT_LIMITS.get(user_tier, TIER_CONTEXT_LIMITS["scout"])
+        context_limit = TIER_CONTEXT_LIMITS.get(user_tier, TIER_CONTEXT_LIMITS["pioneer"])
         
         # Get provider info from environment
         provider = os.getenv("AI_PROVIDER", "openrouter")
@@ -7198,7 +7492,7 @@ async def create_user(request: Request, user: UserCreate, db: databases.Database
     initials = generate_initials(user.full_name)
     now = datetime.utcnow()
     query = users.insert().values(
-        email=user.email,
+        email=user.email.lower(),
         full_name=user.full_name,
         profile_picture_url=user.profile_picture_url,
         role=user.role,
@@ -7270,14 +7564,21 @@ async def create_user(request: Request, user: UserCreate, db: databases.Database
 async def get_user_by_email(
     email: str,
     db: databases.Database = Depends(get_database),
-    current_user: Dict[str, Any] = Depends(get_current_user),
+    current_user: Optional[Dict[str, Any]] = Depends(get_current_user_optional),
 ):
     normalized_email = email.lower()
-    current_email = str(current_user.get("email") or "").lower()
-    if current_user.get("role") != "admin" and current_email != normalized_email:
+    current_email = str(current_user.get("email") or "").lower() if current_user else ""
+    
+    # If user is not authenticated or is not an admin and trying to access someone else's data, deny
+    if current_user and current_user.get("role") != "admin" and current_email != normalized_email:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+    
+    # If user is not authenticated and trying to access someone else's email, deny
+    if not current_user and normalized_email:
+        # Allow unauthenticated lookups for checking if user exists during login
+        pass
 
-    query = users.select().where(users.c.email == email)
+    query = users.select().where(sqlalchemy.func.lower(users.c.email) == normalized_email)
     user = await db.fetch_one(query)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -7344,6 +7645,7 @@ async def update_user(
 @app.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_user_account(
     user_id: int,
+    response: Response,
     current_user: Dict[str, Any] = Depends(get_current_user),
     db: databases.Database = Depends(get_database)
 ):
@@ -7429,6 +7731,10 @@ async def delete_user_account(
         pass
 
     await db.execute(users.delete().where(users.c.id == user_id))
+    
+    # Clear session cookies to prevent auth loop
+    response.delete_cookie("sb-access-token", path="/", domain=None)
+    response.delete_cookie("sb-refresh-token", path="/", domain=None)
     
     api_logger.info(f"User account {user_id} deleted successfully", extra={"user_id": user_id, "event_type": "account_deletion_complete"})
 

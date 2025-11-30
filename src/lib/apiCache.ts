@@ -45,7 +45,7 @@ class ApiCache {
     }
 
     clear(): void {
-        this.cache.del();
+        this.cache.clear();
     }
 }
 

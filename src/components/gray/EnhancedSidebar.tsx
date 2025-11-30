@@ -12,6 +12,7 @@ import {
   LogOut,
   Star,
 } from "lucide-react";
+import { SiDiscord } from "react-icons/si";
 import { useUser } from "@/contexts/UserContext";
 import styles from "@/app/gray/GrayPageClient.module.css";
 import { type SidebarHistorySection, type SidebarNavItem, type SidebarNavKey, type SidebarHistoryEntry } from "./types";
@@ -124,6 +125,11 @@ function GrayEnhancedSidebarComponent({
     onOpenHelp?.();
     setIsProfileMenuOpen(false);
   }, [onOpenHelp]);
+
+  const handleOpenCommunity = useCallback(() => {
+    window.open("https://discord.gg/8xvsF5J5fc", "_blank", "noopener,noreferrer");
+    setIsProfileMenuOpen(false);
+  }, []);
 
   const handleUpgradePlan = useCallback(() => {
     onUpgradePlan?.();
@@ -375,6 +381,19 @@ function GrayEnhancedSidebarComponent({
                           <LifeBuoy size={16} />
                         </span>
                         <span className={styles.profileMenuLabel}>Help</span>
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.profileMenuItem}
+                      onClick={handleOpenCommunity}
+                      role="menuitem"
+                    >
+                      <span className={styles.profileMenuItemContent}>
+                        <span className={styles.profileMenuIcon}>
+                          <SiDiscord size={16} />
+                        </span>
+                        <span className={styles.profileMenuLabel}>Community</span>
                       </span>
                     </button>
                     <span className={styles.profileMenuDivider} aria-hidden="true" />

@@ -5,9 +5,6 @@ import { useRouter } from "next/navigation";
 import { ChevronDown, X } from "lucide-react";
 import styles from "@/app/gray/GrayPageClient.module.css";
 import { useUser } from "@/contexts/UserContext";
-import { getSupabaseClient } from "@/lib/supabaseClient";
-import { clearSupabaseAuthStorage } from "@/lib/supabaseStorage";
-import { clearAuthCookies } from "@/lib/auth/cookies";
 
 type GeneralSetting = {
   label: string;
@@ -38,9 +35,6 @@ type SettingsModalProps = {
 export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const router = useRouter();
   const { user } = useUser();
-  const [confirmDelete, setConfirmDelete] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [mapsEnabled, setMapsEnabled] = useState(false);
 
   useEffect(() => {
@@ -51,8 +45,6 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 
   useEffect(() => {
     if (!isOpen) {
-      setConfirmDelete(false);
-      setDeleteError(null);
       return;
     }
 
@@ -70,40 +62,9 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     };
   }, [isOpen, onClose]);
 
-  useEffect(() => {
-    if (!confirmDelete) {
-      return;
-    }
-    const timeout = window.setTimeout(() => setConfirmDelete(false), 6000);
-    return () => window.clearTimeout(timeout);
-  }, [confirmDelete]);
-
-  const handleDeleteAccount = async () => {
-    if (!confirmDelete) {
-      setDeleteError(null);
-      setConfirmDelete(true);
-      return;
-    }
-    setIsDeleting(true);
-    setDeleteError(null);
-    try {
-      const supabase = getSupabaseClient();
-      if (supabase) {
-        await supabase.auth.signOut({ scope: "global" });
-      }
-      clearSupabaseAuthStorage();
-      clearAuthCookies();
-      const redirect = encodeURIComponent("/delete-account");
-      window.location.href = `/login?redirect=${redirect}`;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to start deletion flow";
-      setDeleteError(message);
-      setIsDeleting(false);
-      setConfirmDelete(false);
-      return;
-    } finally {
-      // Navigation will replace the page; no-op in finally block.
-    }
+  const handleDeleteAccount = () => {
+    onClose();
+    router.push("/delete-account");
   };
 
   if (!isOpen) {
@@ -174,17 +135,12 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 
         </div>
 
-        {deleteError ? (
-          <p className={styles.settingsDangerError}>{deleteError}</p>
-        ) : null}
-
         <button
           type="button"
           className={styles.settingsDeleteLink}
           onClick={handleDeleteAccount}
-          disabled={!user || isDeleting}
         >
-          {isDeleting ? "Deleting..." : confirmDelete ? "Click again to confirm delete" : "Delete Account"}
+          Delete Account
         </button>
       </div>
     </div>

@@ -328,6 +328,8 @@ type GrayDashboardViewProps = {
   onReminderMove?: (reminderId: number, range: { start: Date; end: Date }) => Promise<void> | void;
   streakCount?: number;
   hideCalendar?: boolean;
+  onUpgradeClick?: () => void;
+  showUpgradeButton?: boolean;
 };
 
 export function GrayDashboardView({
@@ -365,6 +367,8 @@ export function GrayDashboardView({
   onReminderMove,
   streakCount = 0,
   hideCalendar = false,
+  onUpgradeClick,
+  showUpgradeButton = false,
 }: GrayDashboardViewProps) {
   const hasPulseData = Boolean(currentPulse && pulseEntries.length > 0);
   const displayPlans = useMemo(() => {
@@ -535,7 +539,8 @@ export function GrayDashboardView({
   }, [isChatBarVisible, panelMaxHeightPx]);
 
   const { user } = useUser();
-  const planTier = (user?.plan_tier || "scout").toLowerCase();
+  const planTierRaw = (user?.plan_tier || "pioneer").toLowerCase();
+  const planTier = planTierRaw === "scout" ? "pioneer" : planTierRaw;
   const isScout = planTier === "scout";
 
   useLayoutEffect(() => {
@@ -1347,16 +1352,26 @@ export function GrayDashboardView({
               const tagLabel = isDerivedReminder ? "Reminder" : "Plan";
               return (
                 <li key={plan.id} className={styles.planListItem}>
-                  <button
-                    type="button"
+                  <div
                     className={styles.planItemButton}
                     data-completed={plan.completed ? "true" : "false"}
-                    onClick={() => handlePlanToggle(plan.id)}
-                    disabled={!isCurrentPulseEditable}
+                    role="group"
                   >
-                    <span className={styles.planCheckbox} aria-hidden="true">
-                      {plan.completed ? <Check size={14} /> : <Square size={14} />}
-                    </span>
+                    <button
+                      type="button"
+                      className={styles.planCheckboxButton}
+                      aria-label={plan.completed ? "Mark plan as incomplete" : "Mark plan as complete"}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        handlePlanToggle(plan.id);
+                      }}
+                      disabled={!isCurrentPulseEditable}
+                    >
+                      <span className={styles.planCheckbox} aria-hidden="true">
+                        {plan.completed ? <Check size={14} /> : <Square size={14} />}
+                      </span>
+                    </button>
                     <span className={styles.planLabelGroup}>
                       <span className={styles.planLabel}>{plan.label}</span>
                       {!isDerivedReminder && plan.details ? (
@@ -1369,7 +1384,7 @@ export function GrayDashboardView({
                       ) : null}
                       <span className={styles.planDerivedTag}>{tagLabel}</span>
                     </span>
-                  </button>
+                  </div>
                   {canManagePlans ? (
                     <span className={styles.listItemActions}>
                       {onSavePlan ? (
@@ -1436,23 +1451,33 @@ export function GrayDashboardView({
           {showHabitsList
             ? visibleHabits.map((habit) => (
               <li key={habit.id} className={styles.habitListItem}>
-                <button
-                  type="button"
+                <div
                   className={styles.planItemButton}
                   data-completed={habit.completed ? "true" : "false"}
-                  onClick={() => handleHabitToggle(habit.id)}
-                  disabled={!isCurrentPulseEditable || !onToggleHabit}
+                  role="group"
                 >
-                  <span className={styles.planCheckbox} aria-hidden="true">
-                    {habit.completed ? <Check size={14} /> : <Square size={14} />}
-                  </span>
+                  <button
+                    type="button"
+                    className={styles.planCheckboxButton}
+                    aria-label={habit.completed ? "Mark habit as incomplete" : "Mark habit as complete"}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      handleHabitToggle(habit.id);
+                    }}
+                    disabled={!isCurrentPulseEditable || !onToggleHabit}
+                  >
+                    <span className={styles.planCheckbox} aria-hidden="true">
+                      {habit.completed ? <Check size={14} /> : <Square size={14} />}
+                    </span>
+                  </button>
                   <span className={styles.habitContent}>
                     <span className={styles.habitLabel}>{habit.label}</span>
                     {habit.details ? (
                       <span className={styles.habitDetails}>{habit.details}</span>
                     ) : null}
                   </span>
-                </button>
+                </div>
                 <span className={styles.habitRightSection}>
                   {canManageHabits ? (
                     <span className={styles.listItemActions}>
@@ -1582,6 +1607,8 @@ export function GrayDashboardView({
         activeTab={activeTab}
         onSelectTab={onSelectTab}
         className={headerClassName}
+        onUpgradeClick={onUpgradeClick}
+        showUpgradeButton={showUpgradeButton}
         hideCalendar={hideCalendar}
       />
       <div
@@ -1623,6 +1650,8 @@ export function GrayDashboardView({
         activeTab={activeTab}
         onSelectTab={onSelectTab}
         className={headerClassName}
+        onUpgradeClick={onUpgradeClick}
+        showUpgradeButton={showUpgradeButton}
         hideCalendar={hideCalendar}
       />
       <div className={styles.dashboardCompact}>
@@ -1676,6 +1705,8 @@ export function GrayDashboardView({
           title={undefined}
           rangeLabel={undefined}
           className={headerClassName}
+        onUpgradeClick={onUpgradeClick}
+        showUpgradeButton={showUpgradeButton}
         />
       )}
       embedWithinParentSurface
@@ -1690,6 +1721,8 @@ export function GrayDashboardView({
         activeTab={activeTab}
         onSelectTab={onSelectTab}
         className={headerClassName}
+        onUpgradeClick={onUpgradeClick}
+        showUpgradeButton={showUpgradeButton}
       />
       <div className={styles.dashboardCompactNotice}>
         <h3>Calendar works best on a wider screen</h3>

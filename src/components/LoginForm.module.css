@@ -108,8 +108,9 @@
 .authShell {
   width: 100%;
   min-height: calc(100vh - (var(--auth-shell-padding) * 2));
+  max-width: 1240px;
   display: grid;
-  grid-template-columns: 7fr 3fr;
+  grid-template-columns: minmax(420px, 7fr) minmax(360px, 3fr);
   gap: 0;
   margin-inline: auto;
 }
@@ -234,6 +235,7 @@
   justify-content: center;
   padding: clamp(0.6rem, 2vw, 1.2rem);
   position: relative;
+  overflow: hidden;
 }
 
 .authAlignmentLogo {
@@ -691,6 +693,7 @@
   .authShell {
     grid-template-columns: 1fr;
     border-radius: 0;
+    max-width: 720px;
   }
 
   .authVisualPanel {

@@ -226,19 +226,29 @@ export function GrayGeneralView({
                   <ul className={styles.planList}>
                     {(plans || []).map((plan) => (
                       <li key={plan.id} className={styles.planListItem}>
-                        <button
+                        <div
                           className={styles.planItemButton}
-                          type="button"
                           data-completed={plan.completed ? "true" : "false"}
-                          onClick={() => onTogglePlan(plan.id)}
+                          role="group"
                         >
-                          <span className={styles.planCheckbox} aria-hidden="true">
-                            {plan.completed ? <CheckSquare size={16} /> : <Square size={16} />}
-                          </span>
+                          <button
+                            type="button"
+                            className={styles.planCheckboxButton}
+                            aria-label={plan.completed ? "Mark plan as incomplete" : "Mark plan as complete"}
+                            onClick={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              onTogglePlan(plan.id);
+                            }}
+                          >
+                            <span className={styles.planCheckbox} aria-hidden="true">
+                              {plan.completed ? <CheckSquare size={16} /> : <Square size={16} />}
+                            </span>
+                          </button>
                           <span className={styles.planLabelGroup}>
                             <span className={styles.planLabel}>{plan.label}</span>
                           </span>
-                        </button>
+                        </div>
                         <span className={styles.listItemActions}>
                           <button
                             type="button"
@@ -278,19 +288,29 @@ export function GrayGeneralView({
                   <ul className={styles.habitList}>
                     {habits.map((habit) => (
                       <li key={habit.id} className={styles.habitListItem}>
-                        <button
+                        <div
                           className={styles.planItemButton}
-                          type="button"
                           data-completed={habit.completed ? "true" : "false"}
-                          onClick={() => onToggleHabit(habit.id)}
+                          role="group"
                         >
-                          <span className={styles.planCheckbox} aria-hidden="true">
-                            {habit.completed ? <CheckSquare size={16} /> : <Square size={16} />}
-                          </span>
+                          <button
+                            type="button"
+                            className={styles.planCheckboxButton}
+                            aria-label={habit.completed ? "Mark habit as incomplete" : "Mark habit as complete"}
+                            onClick={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              onToggleHabit(habit.id);
+                            }}
+                          >
+                            <span className={styles.planCheckbox} aria-hidden="true">
+                              {habit.completed ? <CheckSquare size={16} /> : <Square size={16} />}
+                            </span>
+                          </button>
                           <span className={styles.habitContent}>
                             <span className={styles.habitLabel}>{habit.label}</span>
                           </span>
-                        </button>
+                        </div>
                         <span className={styles.habitRightSection}>
                           <span className={styles.listItemActions}>
                             <button

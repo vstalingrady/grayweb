@@ -57,7 +57,10 @@ class OpenRouterService:
         self._lite_model = os.getenv("OPENROUTER_LITE_MODEL", "x-ai/grok-4.1-fast:free")
         self._default_model = os.getenv("OPENROUTER_DEFAULT_MODEL", self.MODEL_MAPPINGS["default"])
         self._max_tokens = _int_env("OPENROUTER_MAX_TOKENS", 4096)
-        self._max_history = _int_env("OPENROUTER_MAX_HISTORY_MESSAGES", 18)
+        # Keep a small window for the free/lite path, but widen it for Pioneer-grade models
+        # so onboarding context is not dropped mid-flow.
+        self._max_history_lite = _int_env("OPENROUTER_MAX_HISTORY_MESSAGES", 10)
+        self._max_history_premium = _int_env("OPENROUTER_MAX_HISTORY_MESSAGES_PREMIUM", 40)
         self._temperature = _float_env("OPENROUTER_TEMPERATURE", 0.7)
         self._site_url = os.getenv("NEXT_PUBLIC_SITE_URL", "https://gray.alignment.id")
         self._site_name = os.getenv("OPENROUTER_SITE_NAME", "Gray")
@@ -93,14 +96,21 @@ class OpenRouterService:
         # Otherwise return as-is (assume it's already a full model ID)
         return model
 
+    def _history_window_for_model(self, resolved_model: str) -> int:
+        """Pick an appropriate history window based on the target model."""
+        if resolved_model == self._lite_model:
+            return self._max_history_lite
+        return self._max_history_premium or self._max_history_lite
+
     def _build_messages(
         self,
         conversation_history: Optional[List[Dict[str, Any]]],
         message: str,
+        history_limit: int,
     ) -> List[Dict[str, Any]]:
         """Build messages array from conversation history and current message."""
         history = conversation_history or []
-        recent_history = history[-self._max_history :] if self._max_history > 0 else history
+        recent_history = history[-history_limit:] if history_limit > 0 else history
         payload: List[Dict[str, Any]] = []
         
         for entry in recent_history:
@@ -156,6 +166,54 @@ class OpenRouterService:
         
         return headers
 
+    def _convert_tools_to_openai_format(self, tools: Optional[List[Any]]) -> Optional[List[Dict[str, Any]]]:
+        """Convert Google GenAI tool definitions to OpenAI format."""
+        if not tools:
+            return None
+        
+        openai_tools = []
+        for tool in tools:
+            # Handle google.genai.types.Tool objects
+            if hasattr(tool, "function_declarations"):
+                for func in tool.function_declarations:
+                    parameters = {}
+                    if hasattr(func, "parameters") and func.parameters:
+                        # Recursively convert schema
+                        parameters = self._convert_schema(func.parameters)
+                    
+                    openai_tools.append({
+                        "type": "function",
+                        "function": {
+                            "name": func.name,
+                            "description": func.description,
+                            "parameters": parameters
+                        }
+                    })
+        return openai_tools if openai_tools else None
+
+    def _convert_schema(self, schema: Any) -> Dict[str, Any]:
+        """Convert a Google GenAI Schema object to a JSON schema dict."""
+        json_schema = {"type": schema.type.lower() if hasattr(schema.type, "lower") else str(schema.type).lower()}
+        
+        if hasattr(schema, "description") and schema.description:
+            json_schema["description"] = schema.description
+            
+        if hasattr(schema, "properties") and schema.properties:
+            json_schema["properties"] = {
+                k: self._convert_schema(v) for k, v in schema.properties.items()
+            }
+            
+        if hasattr(schema, "required") and schema.required:
+            json_schema["required"] = schema.required
+            
+        if hasattr(schema, "items") and schema.items:
+            json_schema["items"] = self._convert_schema(schema.items)
+            
+        if hasattr(schema, "enum") and schema.enum:
+            json_schema["enum"] = schema.enum
+            
+        return json_schema
+
     async def generate(
         self,
         message: str,
@@ -166,13 +224,16 @@ class OpenRouterService:
         model: Optional[str] = None,
         include_usage: bool = False,
         response_format: Optional[Dict[str, Any]] = None,
+        tools: Optional[List[Any]] = None,
+        tool_choice: Optional[str] = "auto",
     ) -> str:
         """Generate a complete response from OpenRouter."""
         if not self.available:
             raise RuntimeError("OpenRouter client is not configured (missing API key)")
 
         resolved_model = self._resolve_model(model)
-        messages = self._build_messages(conversation_history, message)
+        history_limit = self._history_window_for_model(resolved_model)
+        messages = self._build_messages(conversation_history, message, history_limit)
         
         if not messages:
             messages = [{"role": "user", "content": message}]
@@ -189,6 +250,12 @@ class OpenRouterService:
             payload["include_usage"] = True
         if response_format:
             payload["response_format"] = response_format
+            
+        openai_tools = self._convert_tools_to_openai_format(tools)
+        if openai_tools:
+            payload["tools"] = openai_tools
+            if tool_choice:
+                payload["tool_choice"] = tool_choice
 
         # Add system prompt if provided
         system = self._build_system_prompt(system_prompt, workspace_context, time_context)
@@ -207,7 +274,19 @@ class OpenRouterService:
             
             # Extract content from response
             if "choices" in data and len(data["choices"]) > 0:
-                return data["choices"][0]["message"]["content"]
+                choice = data["choices"][0]
+                message_data = choice.get("message", {})
+                
+                # Check for tool calls
+                if message_data.get("tool_calls"):
+                    # For simple generate, we might just return the tool calls as a special response
+                    # or handle them. Since this function returns str, we might need to serialize
+                    # the tool calls or handle this differently in the caller.
+                    # For now, let's return a JSON string representation of tool calls if content is empty
+                    import json
+                    return json.dumps({"tool_calls": message_data["tool_calls"]})
+                
+                return message_data.get("content") or ""
             
             return ""
 
@@ -221,6 +300,8 @@ class OpenRouterService:
         model: Optional[str] = None,
         include_usage: bool = False,
         response_format: Optional[Dict[str, Any]] = None,
+        tools: Optional[List[Any]] = None,
+        tool_choice: Optional[str] = "auto",
     ) -> AsyncIterator[str | Dict[str, Any]]:
         """Stream response chunks from OpenRouter.
         
@@ -232,7 +313,8 @@ class OpenRouterService:
             raise RuntimeError("OpenRouter client is not configured (missing API key)")
 
         resolved_model = self._resolve_model(model)
-        messages = self._build_messages(conversation_history, message)
+        history_limit = self._history_window_for_model(resolved_model)
+        messages = self._build_messages(conversation_history, message, history_limit)
         
         if not messages:
             messages = [{"role": "user", "content": message}]
@@ -250,6 +332,12 @@ class OpenRouterService:
             payload["include_usage"] = True
         if response_format:
             payload["response_format"] = response_format
+
+        openai_tools = self._convert_tools_to_openai_format(tools)
+        if openai_tools:
+            payload["tools"] = openai_tools
+            if tool_choice:
+                payload["tool_choice"] = tool_choice
 
         # Add system prompt if provided
         system = self._build_system_prompt(system_prompt, workspace_context, time_context)
@@ -285,8 +373,25 @@ class OpenRouterService:
                             if "choices" in data and len(data["choices"]) > 0:
                                 delta = data["choices"][0].get("delta", {})
                                 content = delta.get("content")
+                                tool_calls = delta.get("tool_calls")
+
+                                if tool_calls:
+                                    # Yield tool calls as a structured dictionary to be handled by caller
+                                    yield {"tool_calls": tool_calls}
+
+                                # Some models stream reasoning text via reasoning_details.
+                                reasoning_pieces = []
+                                if not content:
+                                    details = delta.get("reasoning_details") or []
+                                    if isinstance(details, list):
+                                        for item in details:
+                                            text_part = item.get("text") if isinstance(item, dict) else None
+                                            if text_part:
+                                                reasoning_pieces.append(text_part)
                                 if content:
                                     yield content
+                                elif reasoning_pieces:
+                                    yield "".join(reasoning_pieces)
                                 
                                 # Check for usage stats in the final chunk or separate chunk
                                 if include_usage and "usage" in data:

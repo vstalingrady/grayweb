@@ -751,8 +751,13 @@ class ApiService {
     const supabase = getSupabaseClient();
     if (supabase) {
       const { data } = await supabase.auth.getSession();
-      if (data.session?.access_token) {
-        headers.set('Authorization', `Bearer ${data.session.access_token}`);
+      const token = data.session?.access_token;
+      // Ensure token is a valid JWT string (simple heuristic: non-empty, has 3 parts)
+      if (typeof token === 'string' && token.length > 20 && token.split('.').length === 3) {
+        headers.set('Authorization', `Bearer ${token}`);
+      } else if (token) {
+        console.warn('[ApiService] Invalid auth token detected. Clearing session.');
+        await supabase.auth.signOut().catch(() => { });
       }
     }
 
@@ -767,8 +772,16 @@ class ApiService {
       if (!response.ok) {
         // Handle Authentication Errors
         if (response.status === 401) {
-          if (typeof window !== 'undefined') {
-            window.location.href = '/login';
+          // Don't auto-redirect for user lookup endpoints - user might not exist yet
+          const isUserLookup = endpoint.includes('/users/email/') || endpoint.includes('/users/');
+          // Also avoid redirecting for background data fetches that might race with auth
+          const isBackgroundFetch = endpoint.includes('/api/conversation/') || endpoint.includes('/proactivity/');
+
+          if (typeof window !== 'undefined' && !isUserLookup && !isBackgroundFetch) {
+            // Only redirect if we're not already on the login page to avoid loops
+            if (!window.location.pathname.includes('/login')) {
+              window.location.href = '/login';
+            }
           }
           throw new ApiError(401, 'Unauthorized');
         }
@@ -1506,9 +1519,14 @@ class ApiService {
     const supabase = getSupabaseClient();
     if (supabase) {
       const { data } = await supabase.auth.getSession();
-      if (data.session?.access_token) {
-        // @ts-ignore - HeadersInit type is complex but this is valid
-        headers['Authorization'] = `Bearer ${data.session.access_token}`;
+      const token = data.session?.access_token;
+      // Ensure token is a valid JWT string (simple heuristic: non-empty, has 3 parts)
+      if (typeof token === 'string' && token.length > 20 && token.split('.').length === 3) {
+        // @ts-expect-error - HeadersInit type is complex but this is valid
+        headers['Authorization'] = `Bearer ${token}`;
+      } else if (token) {
+        console.warn('[ApiService.stream] Invalid auth token detected. Clearing session.');
+        await supabase.auth.signOut().catch(() => { });
       }
     }
 

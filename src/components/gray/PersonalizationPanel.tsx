@@ -180,7 +180,9 @@ export function PersonalizationPanel({
   const mapsEnabled = user?.maps_enabled ?? false;
   const showCalendar = user?.personalization_show_calendar ?? true;
 
-  const isScout = (viewerPlan || "").toLowerCase() === "scout";
+  const normalizedViewerPlan = (viewerPlan || "pioneer").toLowerCase();
+  const effectiveViewerPlan = normalizedViewerPlan === "scout" ? "pioneer" : normalizedViewerPlan;
+  const isScout = effectiveViewerPlan === "scout";
 
   const handleCalendarToggle = async () => {
     if (!user?.id) return;
@@ -862,15 +864,6 @@ export function PersonalizationPanel({
                   </div>
                 </dl>
                 <div className={styles.personalizationFormActions}>
-                  {aboutSaveMessage ? (
-                    <span
-                      className={styles.personalizationFormStatus}
-                      data-status={aboutSaveState}
-                      aria-live="polite"
-                    >
-                      {aboutSaveMessage}
-                    </span>
-                  ) : null}
                   <button
                     type="submit"
                     className={styles.personalizationFormButton}

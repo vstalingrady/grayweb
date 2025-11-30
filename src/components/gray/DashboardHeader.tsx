@@ -22,6 +22,8 @@ export type DashboardHeaderProps = {
   todayButtonLabel?: string;
   streakCount?: number;
   hideCalendar?: boolean;
+  onUpgradeClick?: () => void;
+  showUpgradeButton?: boolean;
 };
 
 const DEFAULT_VIEW_OPTIONS: Array<{ value: "week" | "day"; label: string }> = [
@@ -48,6 +50,8 @@ export function DashboardHeader({
   todayButtonLabel = "Today",
   streakCount = 0,
   hideCalendar = false,
+  onUpgradeClick,
+  showUpgradeButton = false,
 }: DashboardHeaderProps) {
   const headerClassName = [
     calendarStyles.calendarSurfaceHeader,
@@ -118,6 +122,19 @@ export function DashboardHeader({
         )}
       </div>
       <div className={calendarStyles.calendarSurfaceHeaderRight}>
+        {showUpgradeButton ? (
+          <div className={styles.upgradeFloat}>
+            <button
+              type="button"
+              className={styles.planBadge}
+              data-state="cta"
+              aria-label="Upgrade"
+              onClick={onUpgradeClick}
+            >
+              <span className={styles.planBadgeLabel}>Upgrade</span>
+            </button>
+          </div>
+        ) : null}
         {normalizedStreak > 0 ? (
           <div className={styles.streakBadge} aria-label={`${normalizedStreak} day streak`}>
             <Zap size={12} />

@@ -1,7 +1,6 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import GrayPageClient from "@/app/gray/GrayPageClient";
-import { readServerSession } from "@/lib/auth/server";
 import { hostFromHeaders, isGrayWorkspaceHost } from "@/lib/grayRouting";
 import { resolveTryGrayUrl } from "@/lib/grayCta";
 import MarketingLanding from "./components/MarketingLanding";
@@ -12,7 +11,7 @@ export default async function HomePage() {
   const tryGrayUrl = resolveTryGrayUrl(host);
 
   if (isGrayWorkspaceHost(host)) {
-    const session = await readServerSession();
+    const session = await (await import("@/lib/auth/server")).readServerSession();
     if (!session) {
       redirect(`/login?redirect=${encodeURIComponent("/")}`);
     }
@@ -30,4 +29,3 @@ export default async function HomePage() {
 
   return <MarketingLanding tryGrayUrl={tryGrayUrl} />;
 }
-

@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 from typing import Any, Dict, Optional
+from pathlib import Path
 
 from google import genai
 from google.genai import types
@@ -25,6 +26,13 @@ class FileSearchService:
         display_name: Optional[str] = None,
         chunking_config: Optional[Dict[str, Any]] = None,
     ) -> types.Operation:
+        path_obj = Path(file_path)
+        if not path_obj.exists() or not path_obj.is_file():
+            raise FileNotFoundError(f"File not found for File Search upload: {file_path}")
+        if path_obj.is_symlink():
+            raise ValueError("Refusing to upload symlinked files to File Search.")
+        resolved_path = path_obj.resolve()
+
         config: Dict[str, Any] = {}
         if display_name:
             config["display_name"] = display_name
@@ -32,7 +40,7 @@ class FileSearchService:
             config["chunking_config"] = chunking_config
 
         return self._client.file_search_stores.upload_to_file_search_store(
-            file=file_path,
+            file=str(resolved_path),
             file_search_store_name=store_name,
             config=config,
         )

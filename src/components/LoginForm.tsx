@@ -343,10 +343,11 @@ export default function LoginForm({
     try {
       const callbackUrl = ensureAbsoluteUrl(buildCallbackDestination(redirectTo));
       console.log("[AUTH DEBUG] Generated OAuth redirectTo:", callbackUrl);
-      const { error } = await supabase.auth.signInWithOAuth({
+      const { data, error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
           redirectTo: callbackUrl,
+          skipBrowserRedirect: true,
           scopes:
             provider === "discord"
               ? "identify email guilds"
@@ -357,6 +358,13 @@ export default function LoginForm({
       if (error) {
         throw error;
       }
+
+      if (data.url) {
+        console.log(`[AUTH PERF] OAuth ${provider} redirecting to:`, data.url);
+        window.location.replace(data.url);
+        return;
+      }
+
 
       console.log(`[AUTH PERF] OAuth ${provider} initiated in ${(performance.now() - perfStart).toFixed(2)}ms`);
     } catch (error) {

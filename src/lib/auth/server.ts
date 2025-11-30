@@ -1,32 +1,111 @@
 import { cookies } from "next/headers";
+import crypto from "node:crypto";
 
 export type ServerSession = {
   email?: string;
 };
 
+type SignedSession = {
+  email: string;
+  exp: number;
+};
+
+const SESSION_COOKIE_NAME = "gray-auth-session";
+const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30;
+
+const resolveSecret = () =>
+  process.env.AUTH_COOKIE_SECRET ??
+  process.env.COOKIE_SECRET ??
+  process.env.NEXTAUTH_SECRET ??
+  "development-gray-session-secret";
+
+const signPayload = (payload: SignedSession) => {
+  const secret = resolveSecret();
+  const body = Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
+  const signature = crypto.createHmac("sha256", secret).update(body).digest("base64url");
+  return `${body}.${signature}`;
+};
+
+const verifyPayload = (raw: string | undefined | null): SignedSession | null => {
+  if (!raw) {
+    return null;
+  }
+
+  const [body, signature] = raw.split(".");
+  if (!body || !signature) {
+    return null;
+  }
+
+  const secret = resolveSecret();
+  const expected = crypto.createHmac("sha256", secret).update(body).digest("base64url");
+
+  try {
+    const safeSignature = Buffer.from(signature, "base64url");
+    const safeExpected = Buffer.from(expected, "base64url");
+    if (safeSignature.length !== safeExpected.length) {
+      return null;
+    }
+    if (!crypto.timingSafeEqual(safeSignature, safeExpected)) {
+      return null;
+    }
+  } catch {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(Buffer.from(body, "base64url").toString("utf8")) as Partial<SignedSession>;
+    if (!parsed || typeof parsed.email !== "string" || parsed.email.trim().length === 0) {
+      return null;
+    }
+    if (typeof parsed.exp !== "number" || !Number.isFinite(parsed.exp)) {
+      return null;
+    }
+    if (parsed.exp * 1000 < Date.now()) {
+      return null;
+    }
+    return { email: parsed.email, exp: parsed.exp };
+  } catch {
+    return null;
+  }
+};
+
+export const buildSessionCookie = (email: string) => {
+  const exp = Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS;
+  const value = signPayload({ email, exp });
+  const isProd = process.env.NODE_ENV === "production";
+
+  return {
+    name: SESSION_COOKIE_NAME,
+    value,
+    httpOnly: true,
+    sameSite: "lax" as const,
+    secure: isProd,
+    path: "/",
+    maxAge: SESSION_TTL_SECONDS,
+  };
+};
+
+export const clearSessionCookie = () => {
+  const isProd = process.env.NODE_ENV === "production";
+  return {
+    name: SESSION_COOKIE_NAME,
+    value: "",
+    httpOnly: true,
+    sameSite: "lax" as const,
+    secure: isProd,
+    path: "/",
+    maxAge: 0,
+  };
+};
+
 export const readServerSession = async (): Promise<ServerSession | null> => {
   const cookieStore = await cookies();
-  const authCookie = cookieStore.get("gray-auth");
-  const emailCookie = cookieStore.get("gray-auth-email");
+  const sessionCookie = cookieStore.get(SESSION_COOKIE_NAME);
+  const payload = verifyPayload(sessionCookie?.value ?? null);
 
-
-
-  if (!authCookie || !emailCookie?.value) {
+  if (!payload) {
     return null;
   }
 
-  let email: string | undefined;
-  if (emailCookie.value) {
-    try {
-      email = decodeURIComponent(emailCookie.value);
-    } catch {
-      email = emailCookie.value;
-    }
-  }
-
-  if (!email || email.trim().length === 0) {
-    return null;
-  }
-
-  return { email };
+  return { email: payload.email };
 };

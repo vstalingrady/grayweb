@@ -65,6 +65,8 @@ const nextConfig: NextConfig = {
   },
 
   turbopack: {
+    // Explicitly set the project root to avoid lockfile ambiguity warnings.
+    root: __dirname,
     rules: {
       // Configure Turbopack rules if needed
     }

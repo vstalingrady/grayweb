@@ -31,7 +31,7 @@ const FREE_FEATURES: FeatureItem[] = [
     {
         label: "Gray Lite only",
         icon: Zap,
-        subtext: "Grok 4.1 Fast",
+        subtext: "x-ai/grok-4.1-fast:free",
     },
     { label: "Limited daily messages", icon: MessageSquare },
     { label: "14-day chat memory", icon: Pin },
@@ -75,7 +75,7 @@ const PIONEER_FEATURES: FeatureItem[] = [
     {
         label: "Model switcher",
         icon: Shuffle,
-        subtext: "Claude Sonnet 4.5, Gemini 3, GPT 5.1, DeepSeek V3.2, Kimi K2 Thinking",
+        subtext: "OpenRouter: Claude 4.5, Grok 4.1, GPT 5.1, DeepSeek V3.2, Kimi K2 Thinking",
     },
     { label: "Expanded reasoning budget", icon: InfinityIcon },
     {

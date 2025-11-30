@@ -290,10 +290,43 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
 
       console.log('loadUser: Starting to load user with email:', email);
 
+      // CRITICAL FIX: Explicitly check the session token.
+      // fetchSupabaseProfile uses getUser() which might return a user even if the session is stale/refreshing.
+      // We need to ensure we have a valid access token for API calls.
+      const supabase = getSupabaseClient(); // Ensure supabase client is available for getSession()
+      if (!supabase) {
+        console.warn('[v2] loadUser: Supabase client not available. Aborting.');
+        if (!isStale()) {
+          setUser(null);
+        }
+        return;
+      }
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      const session = sessionData.session;
+
+      if (!session || !session.access_token) {
+        console.warn('[v2] loadUser: No valid session token found. Aborting.');
+        if (!isStale()) {
+          setUser(null);
+          // Force a cleanup if we thought we were logged in
+          if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
+            // Optional: Redirect to login if needed, but for now just don't set the user
+          }
+        }
+        return;
+      }
+
       const supabaseProfile = await fetchSupabaseProfile();
       if (isStale()) {
         return;
       }
+
+      if (!supabaseProfile) {
+        // Should be covered by session check, but double check
+        return;
+      }
+
       const supabaseName = supabaseProfile?.fullName;
       const derivedName = deriveNameFromEmail(email);
       const preferredName = supabaseName ?? derivedName;

@@ -21,9 +21,37 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 from contextvars import ContextVar
 
+try:
+    from backend.security_utils import sanitize_for_logging
+except ImportError:
+    from security_utils import sanitize_for_logging
+
 # Context variables for request tracing
 request_id: ContextVar[Optional[str]] = ContextVar('request_id', default=None)
 user_id: ContextVar[Optional[str]] = ContextVar('user_id', default=None)
+
+_LOG_RECORD_RESERVED_FIELDS = {
+    'name', 'msg', 'args', 'levelname', 'levelno', 'pathname',
+    'filename', 'module', 'lineno', 'funcName', 'created',
+    'msecs', 'relativeCreated', 'thread', 'threadName',
+    'processName', 'process', 'getMessage', 'exc_info',
+    'exc_text', 'stack_info', 'message'
+}
+
+
+def _sanitize_record_extras(record: logging.LogRecord) -> Dict[str, Any]:
+    """Extract and sanitize non-standard log record fields."""
+    sanitized: Dict[str, Any] = {}
+    for key, value in record.__dict__.items():
+        if key in _LOG_RECORD_RESERVED_FIELDS:
+            continue
+        sanitized[key] = sanitize_for_logging(value)
+    return sanitized
+
+
+def _sanitize_extra_dict(extra: Dict[str, Any]) -> Dict[str, Any]:
+    """Sanitize a plain dictionary for logging."""
+    return {key: sanitize_for_logging(value) for key, value in extra.items()}
 
 
 class StructuredFormatter(logging.Formatter):
@@ -31,11 +59,12 @@ class StructuredFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         """Format log record as structured JSON."""
+        message = sanitize_for_logging(record.getMessage())
         log_data = {
             'timestamp': datetime.utcnow().isoformat() + 'Z',
             'level': record.levelname,
             'logger': record.name,
-            'message': record.getMessage(),
+            'message': message,
             'module': record.module,
             'function': record.funcName,
             'line': record.lineno,
@@ -49,17 +78,11 @@ class StructuredFormatter(logging.Formatter):
 
         # Add exception information if present
         if record.exc_info:
-            log_data['exception'] = self.formatException(record.exc_info)
+            log_data['exception'] = sanitize_for_logging(self.formatException(record.exc_info))
 
         # Add extra fields from the record
-        for key, value in record.__dict__.items():
-            if key not in {
-                'name', 'msg', 'args', 'levelname', 'levelno', 'pathname',
-                'filename', 'module', 'lineno', 'funcName', 'created',
-                'msecs', 'relativeCreated', 'thread', 'threadName',
-                'processName', 'process', 'getMessage', 'exc_info',
-                'exc_text', 'stack_info', 'message'
-            }:
+        for key, value in _sanitize_record_extras(record).items():
+            if key not in log_data:
                 log_data[key] = value
 
         return json.dumps(log_data, default=str)
@@ -92,17 +115,18 @@ class ColoredFormatter(logging.Formatter):
 
         # Format with detailed information
         timestamp = datetime.fromtimestamp(record.created).strftime('%H:%M:%S.%f')[:-3]
+        sanitized_message = sanitize_for_logging(record.getMessage())
 
         formatted = (
             f"{color}[{timestamp}] "
             f"[{record.levelname}] "
             f"{request_context}"
             f"[{record.name}:{record.funcName}:{record.lineno}] "
-            f"{record.getMessage()}{reset}"
+            f"{sanitized_message}{reset}"
         )
 
         if record.exc_info:
-            formatted += f"\n{self.formatException(record.exc_info)}"
+            formatted += f"\n{sanitize_for_logging(self.formatException(record.exc_info))}"
 
         return formatted
 
@@ -128,29 +152,30 @@ class RequestLoggingMiddleware:
         request_id.set(correlation_id)
 
         # Extract request information
-        method = scope.get("method", "UNKNOWN")
-        path = scope.get("path", "UNKNOWN")
-        query_string = scope.get("query_string", b"").decode()
-        client_host = scope.get("client", ["unknown", 0])[0] if scope.get("client") else "unknown"
-        user_agent = ""
+        method = sanitize_for_logging(scope.get("method", "UNKNOWN"))
+        path = sanitize_for_logging(scope.get("path", "UNKNOWN"))
+        query_string = sanitize_for_logging(scope.get("query_string", b"").decode())
+        client_host = sanitize_for_logging(scope.get("client", ["unknown", 0])[0] if scope.get("client") else "unknown")
+        user_agent = sanitize_for_logging("")
 
         # Try to get user from headers or session
         user_context = None
 
         # Log request start
         start_time = datetime.utcnow()
+        start_extra = _sanitize_extra_dict({
+            "event_type": "request_start",
+            "method": method,
+            "path": path,
+            "query_string": query_string,
+            "client_host": client_host,
+            "user_agent": user_agent,
+            "user_context": user_context,
+            "correlation_id": correlation_id
+        })
         self.logger.info(
             f"Request started: {method} {path}",
-            extra={
-                "event_type": "request_start",
-                "method": method,
-                "path": path,
-                "query_string": query_string,
-                "client_host": client_host,
-                "user_agent": user_agent,
-                "user_context": user_context,
-                "correlation_id": correlation_id
-            }
+            extra=start_extra
         )
 
         # Wrap send to log response
@@ -164,17 +189,18 @@ class RequestLoggingMiddleware:
                 duration = (datetime.utcnow() - start_time).total_seconds()
 
                 # Log response
+                response_extra = _sanitize_extra_dict({
+                    "event_type": "request_complete",
+                    "method": method,
+                    "path": path,
+                    "status_code": status_code,
+                    "content_type": content_type,
+                    "duration_ms": duration * 1000,
+                    "correlation_id": correlation_id
+                })
                 self.logger.info(
                     f"Request completed: {method} {path} -> {status_code}",
-                    extra={
-                        "event_type": "request_complete",
-                        "method": method,
-                        "path": path,
-                        "status_code": status_code,
-                        "content_type": content_type,
-                        "duration_ms": duration * 1000,
-                        "correlation_id": correlation_id
-                    }
+                    extra=response_extra
                 )
 
             await send(message)
@@ -184,17 +210,18 @@ class RequestLoggingMiddleware:
         except Exception as e:
             # Log request error
             duration = (datetime.utcnow() - start_time).total_seconds()
+            error_extra = _sanitize_extra_dict({
+                "event_type": "request_error",
+                "method": method,
+                "path": path,
+                "error": str(e),
+                "duration_ms": duration * 1000,
+                "correlation_id": correlation_id,
+                "exception_info": sys.exc_info()
+            })
             self.logger.error(
                 f"Request failed: {method} {path} -> {str(e)}",
-                extra={
-                    "event_type": "request_error",
-                    "method": method,
-                    "path": path,
-                    "error": str(e),
-                    "duration_ms": duration * 1000,
-                    "correlation_id": correlation_id,
-                    "exc_info": sys.exc_info()
-                }
+                extra=error_extra
             )
             raise
 
@@ -386,15 +413,18 @@ def log_database_query(
     error: Optional[str] = None
 ):
     """Log database query information."""
+    sanitized_query = str(sanitize_for_logging(query or ""))
+    query_preview = sanitized_query[:100] + ("..." if len(sanitized_query) > 100 else "")
+    sanitized_params = sanitize_for_logging(params) if params is not None else None
     logger.debug(
-        f"Database query executed: {query[:100]}...",
+        f"Database query executed: {query_preview}",
         extra={
             "event_type": "database_query",
-            "query": query,
-            "params": params,
+            "query": sanitized_query,
+            "params": sanitized_params,
             "duration_ms": duration_ms,
             "success": success,
-            "error": error
+            "error": sanitize_for_logging(error) if error else None
         }
     )
 
@@ -411,16 +441,17 @@ def log_api_call(
     error: Optional[str] = None
 ):
     """Log external API call information."""
+    sanitized_url = sanitize_for_logging(url)
     logger.info(
-        f"API call to {service}: {method} {url}",
+        f"API call to {service}: {method} {sanitized_url}",
         extra={
             "event_type": "api_call",
             "service": service,
             "method": method,
-            "url": url,
+            "url": sanitized_url,
             "status_code": status_code,
             "duration_ms": duration_ms,
             "success": success,
-            "error": error
+            "error": sanitize_for_logging(error) if error else None
         }
     )

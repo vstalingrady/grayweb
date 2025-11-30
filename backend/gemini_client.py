@@ -98,9 +98,8 @@ class GeminiService:
         """
         if override:
             tier = override.strip().lower()
-            if tier in {"lite", "gray-lite", "base", "gray-base"}:
+            if tier in {"lite", "gray-lite"}:
                 # Keep Lite mapped to the configured light model.
-                # "base" is deprecated and falls back to lite.
                 return self._light_model
             if tier in {"pro", "gray-pro"}:
                 # Hard-coded mapping for Gray Pro.

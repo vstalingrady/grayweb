@@ -47,7 +47,7 @@ export function ReferenceView() {
 
     try {
       // Upload the file
-      const result = await apiService.uploadMediaFile(user.id, file);
+      const result = await apiService.uploadMediaFile(file);
 
       // Update the document status
       setDocuments(prev => prev.map(doc =>
