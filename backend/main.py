@@ -6583,6 +6583,9 @@ async def chat_stream(
         user_about = _row_get(user_record, "personalization_about")
         user_plan_tier = _row_get(user_record, "plan_tier")
         
+        # Introduce a flag to strictly enforce onboarding until complete.
+        force_onboarding_mode = bool(user_record and not user_has_seen_general)
+
         # Handle Onboarding Logic
         effective_message = chat_request.message
         effective_system_prompt = chat_request.system_prompt
@@ -6593,15 +6596,13 @@ async def chat_stream(
         wants_onboarding = "ready to start" in raw_message.lower() or "start onboarding" in raw_message.lower()
         needs_personalization = bool(user_record and (not user_nickname or not user_occupation or not user_about))
 
-        if user_record and (
-            not user_has_seen_general  # first-time users
-            or (wants_onboarding and needs_personalization)  # explicit re-trigger when basics are missing
-        ):
-            # Always use onboarding prompt for the first interaction
+        # If force_onboarding_mode is active, or if explicitly requested and needed, enforce onboarding settings.
+        if force_onboarding_mode or (user_record and wants_onboarding and needs_personalization):
+            # Always use onboarding prompt and tools in onboarding mode
             effective_system_prompt = ONBOARDING_SYSTEM_PROMPT
             tool_list = list(ONBOARDING_TOOLS)
             
-            # Force a capable model for onboarding tools
+            # Force a capable model for onboarding tools (already handled by stream_ai_response based on tools)
             # effective_model = "models/gemini-flash-latest"
             
             # If this is the very first interaction (triggered by frontend with empty message usually)
@@ -6609,11 +6610,12 @@ async def chat_stream(
                 effective_message = ""
             
             api_logger.info(
-                f"User {chat_request.user_id} is in onboarding flow",
+                f"User {chat_request.user_id} is in onboarding flow (forced: {force_onboarding_mode})",
                 extra={
                     "event_type": "onboarding_flow",
                     "requested": wants_onboarding,
                     "needs_personalization": needs_personalization,
+                    "force_onboarding_mode": force_onboarding_mode
                 },
             )
 
