@@ -1,5 +1,12 @@
 from google.genai import types
 
+# Import core tools so users can act immediately (create plans/reminders/habits) even during onboarding
+try:
+    from backend.plan_tools import PLAN_TOOLS
+except ImportError:
+    # Fallback if circular import or path issue (though backend.plan_tools should be available)
+    from plan_tools import PLAN_TOOLS
+
 COMPLETE_ONBOARDING_TOOL = types.Tool(
     function_declarations=[
         types.FunctionDeclaration(
@@ -31,4 +38,4 @@ COMPLETE_ONBOARDING_TOOL = types.Tool(
     ]
 )
 
-ONBOARDING_TOOLS = [COMPLETE_ONBOARDING_TOOL]
+ONBOARDING_TOOLS = [COMPLETE_ONBOARDING_TOOL] + PLAN_TOOLS
