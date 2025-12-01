@@ -3,7 +3,7 @@ import math
 import socket
 import asyncio
 import sqlite3
-from fastapi import FastAPI, HTTPException, Depends, status, File, Form, Query, UploadFile, Response, Request
+from fastapi import FastAPI, HTTPException, Depends, status, File, Form, Query, UploadFile, Response, Request, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import StreamingResponse
@@ -83,6 +83,7 @@ try:
     from google.genai import types
     from backend.gemini_client import GeminiAttachment, GeminiService
     from backend.openrouter_client import OpenRouterService
+    from backend.groq_client import GroqService
     from backend.usage_tracker import UsageTracker, UsageLimitExceeded
 except ImportError:
     from google_calendar import (
@@ -105,6 +106,7 @@ except ImportError:
     from google.genai import types
     from gemini_client import GeminiAttachment, GeminiService
     from openrouter_client import OpenRouterService
+    from groq_client import GroqService
     from usage_tracker import UsageTracker, UsageLimitExceeded
 try:
     from backend.calendar_tools import CALENDAR_TOOLS
@@ -225,13 +227,12 @@ def load_prompt_from_file(path: Path, fallback: str) -> str:
 
 
 AI_PROVIDER = (os.getenv("AI_PROVIDER") or "openrouter").strip().lower()
-GUMROAD_WEBHOOK_SECRET = os.getenv("GUMROAD_WEBHOOK_SECRET") or None
-LEMONSQUEEZY_WEBHOOK_SECRET = os.getenv("LEMONSQUEEZY_WEBHOOK_SECRET") or None
-LEMONSQUEEZY_VOYAGER_VARIANT_ID = os.getenv("LEMONSQUEEZY_VOYAGER") or None
-LEMONSQUEEZY_PIONEER_VARIANT_ID = os.getenv("LEMONSQUEEZY_PIONEER") or None
+# Default lite tier to Groq (Kimi). Fallback handled below.
+LITE_TIER_PROVIDER = (os.getenv("LITE_TIER_PROVIDER") or "groq").strip().lower()
 
 GEMINI_SERVICE = GeminiService()
 OPENROUTER_SERVICE = OpenRouterService()
+GROQ_SERVICE = GroqService()
 VALIDATE_GEMINI_ON_STARTUP = os.getenv("VALIDATE_GEMINI_ON_STARTUP", "true").strip().lower() not in {
     "0",
     "false",
@@ -779,6 +780,32 @@ def _ensure_sqlite_general_chat_table():
             extra={"event_type": "sqlite_migration_error", "error": str(exc)},
         )
 
+def _ensure_sqlite_indices():
+    if not DATABASE_URL.startswith("sqlite"):
+        return
+    db_path = DATABASE_URL.replace("sqlite:///", "", 1)
+    if not db_path:
+        return
+    try:
+        conn = sqlite3.connect(db_path)
+        try:
+            # Check for thread_id index on user_chat_messages
+            cursor = conn.execute("PRAGMA index_list(user_chat_messages)")
+            indices = {row[1] for row in cursor.fetchall()}
+            # SQLAlchemy naming convention or manual name
+            index_name = "ix_user_chat_messages_thread_id"
+            if index_name not in indices:
+                app_logger.info("Creating missing index on user_chat_messages.thread_id")
+                conn.execute(f"CREATE INDEX {index_name} ON user_chat_messages (thread_id)")
+                conn.commit()
+        finally:
+            conn.close()
+    except sqlite3.Error as exc:
+        app_logger.error(
+            "Failed to ensure indices on sqlite",
+            extra={"event_type": "sqlite_migration_error", "error": str(exc)},
+        )
+
 _ensure_sqlite_users_auth_column()
 _ensure_sqlite_has_seen_chat_column()
 _ensure_sqlite_maps_enabled_column()
@@ -786,6 +813,7 @@ _ensure_sqlite_usage_columns()
 _ensure_sqlite_workspace_background_column()
 _ensure_sqlite_personalization_show_calendar_column()
 _ensure_sqlite_general_chat_table()
+_ensure_sqlite_indices()
 
 # database and metadata imported from backend.database
 
@@ -832,6 +860,7 @@ REMINDER_RESPONSE_FORMAT = {
 REMINDER_MODEL = os.getenv("REMINDER_MODEL", "models/gemini-flash-lite-latest")
 GROK_TOOL_MODEL = os.getenv("GROK_TOOL_MODEL", "x-ai/grok-4.1-fast:free")
 GROK_DEFAULT_MODEL = os.getenv("GROK_DEFAULT_MODEL", OPENROUTER_SERVICE.lite_model if OPENROUTER_SERVICE else "x-ai/grok-4.1-fast:free")
+GROQ_LITE_MODEL = os.getenv("GROQ_LITE_MODEL", GROQ_SERVICE.lite_model if GROQ_SERVICE else "moonshotai/kimi-k2-instruct-0905")
 GEMINI_DEFAULT_MODEL = os.getenv("GEMINI_DEFAULT_MODEL", "models/gemini-3-pro-preview")
 GEMINI_LIGHT_MODEL = os.getenv("GEMINI_LIGHT_MODEL", "models/gemini-flash-lite-latest")
 GEMINI_PRO_MODEL = os.getenv("GEMINI_PRO_MODEL", "models/gemini-1.5-pro-latest")
@@ -905,6 +934,7 @@ def _materialize_structured_reminders(raw_text: str) -> Tuple[str, Optional[List
     """
     Attempt to parse a structured reminder payload of the form:
     { "message": "...", "reminders": [ { ...gray.reminder... } ] }
+    OR a direct gray.reminder payload (single or list).
     Returns (text, reminders) where reminders is None on failure.
     """
     try:
@@ -912,8 +942,18 @@ def _materialize_structured_reminders(raw_text: str) -> Tuple[str, Optional[List
     except Exception:
         return raw_text, None
 
+    # Handle list of gray.reminders
+    if isinstance(payload, list):
+        if payload and isinstance(payload[0], dict) and payload[0].get("type") == "gray.reminder":
+            return "", payload
+        return raw_text, None
+
     if not isinstance(payload, dict):
         return raw_text, None
+
+    # Handle direct gray.reminder payload (single)
+    if payload.get("type") == "gray.reminder":
+        return "", [payload]
 
     message = payload.get("message")
     reminders = payload.get("reminders")
@@ -1934,9 +1974,46 @@ async def _require_conversation_owner(conversation_id: str, current_user: Dict[s
         require_same_user(general_user_id, current_user)
         return
 
-    if not _conversation_store_available() or not _is_valid_uuid(conversation_id):
-        # Without Supabase storage, fail closed to the authenticated user context.
+    cached_owner = CONVERSATION_OWNER_CACHE.get(conversation_id)
+    if cached_owner is not None:
+        if str(cached_owner) != str(current_user["id"]):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only access your own conversations",
+            )
+        return
+
+    # Prefer the local conversation store first; this matches how we persist threads.
+    try:
+        from backend.database import user_chat_threads, database
+    except ImportError:
+        from database import user_chat_threads, database
+
+    if _is_valid_uuid(conversation_id):
+        try:
+            local_row = await database.fetch_one(
+                user_chat_threads.select().where(user_chat_threads.c.id == conversation_id)
+            )
+            if local_row:
+                owner = _row_get(local_row, "user_identifier")
+                if owner is not None:
+                    CONVERSATION_OWNER_CACHE.set(conversation_id, int(owner))
+                    if str(owner) != str(current_user["id"]):
+                        raise HTTPException(
+                            status_code=status.HTTP_403_FORBIDDEN,
+                            detail="You can only access your own conversations",
+                        )
+                    return
+        except Exception:
+            # If local lookup fails, fall through to Supabase check / lenient path.
+            pass
+    else:
+        # Non-UUID IDs are treated as local-only; require the current user context.
         require_same_user(current_user["id"], current_user)
+        return
+
+    # Fallback: check Supabase ownership only if the conversation store is enabled.
+    if not _conversation_store_available():
         return
 
     try:
@@ -1944,7 +2021,7 @@ async def _require_conversation_owner(conversation_id: str, current_user: Dict[s
             supabase.table("user_chat_threads")
             .select("user_identifier")
             .eq("id", conversation_id)
-            .single()
+            .maybe_single()
             .execute()
         )
         owner_raw = _row_get(getattr(result, "data", None) or {}, "user_identifier")
@@ -1959,6 +2036,10 @@ async def _require_conversation_owner(conversation_id: str, current_user: Dict[s
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You can only access your own conversations",
             )
+        try:
+            CONVERSATION_OWNER_CACHE.set(conversation_id, int(owner_id))
+        except Exception:
+            pass
     except HTTPException:
         raise
     except Exception as error:
@@ -2295,7 +2376,11 @@ async def _ensure_user_data_record(user_identifier: int) -> Optional[int]:
 
     cached = _USER_DATA_CACHE.get(user_identifier)
     if cached is not None:
-        return cached
+        # Ensure the cached record still exists (e.g., after DB resets)
+        existing_cached = await database.fetch_one(user_data.select().where(user_data.c.id == cached))
+        if existing_cached:
+            return cached
+        _USER_DATA_CACHE.pop(user_identifier, None)
 
     try:
         # Try to fetch existing record
@@ -2332,10 +2417,6 @@ async def _resolve_supabase_user_data_id(user_id: int) -> Optional[int]:
     if not _conversation_store_available():
         return None
 
-    cached_supabase_id = _SUPABASE_USER_DATA_CACHE.get(user_id)
-    if cached_supabase_id is not None:
-        return cached_supabase_id
-
     supabase_user_data_id: Optional[int] = None
     try:
         supabase_lookup = (
@@ -2361,12 +2442,62 @@ async def _resolve_supabase_user_data_id(user_id: int) -> Optional[int]:
             if supabase_data and supabase_data[0].get("id") is not None:
                 supabase_user_data_id = supabase_data[0]["id"]
 
-        if supabase_user_data_id is not None:
-            _SUPABASE_USER_DATA_CACHE[user_id] = supabase_user_data_id
         return supabase_user_data_id
     except Exception as error:
         _handle_conversation_store_error("Error ensuring user_data in Supabase", error)
         return None
+
+
+async def _require_supabase_user_data_id(user_id: int) -> int:
+    """Resolve the Supabase user_data.id or raise if it's unavailable."""
+    supabase_user_data_id = await _resolve_supabase_user_data_id(user_id)
+    if supabase_user_data_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="User metadata storage is not available.",
+        )
+    return supabase_user_data_id
+
+
+async def _ensure_supabase_thread_exists(conversation_id: str, user_id: int, *, title: Optional[str] = None) -> bool:
+    """Ensure a Supabase conversation thread exists for the given ID."""
+    if not _conversation_store_available() or not _is_valid_uuid(conversation_id):
+        return False
+    try:
+        existing = (
+            supabase.table("user_chat_threads")
+            .select("id")
+            .eq("id", conversation_id)
+            .limit(1)
+            .execute()
+        )
+        rows = getattr(existing, "data", None) or []
+        if rows:
+            return True
+    except Exception as error:
+        _handle_conversation_store_error("Error checking Supabase conversation thread", error)
+        return False
+
+    try:
+        supabase_user_data_id = await _require_supabase_user_data_id(user_id)
+        now_iso = datetime.utcnow().isoformat() + "Z"
+        seed_title = title or "Recovered Conversation"
+        supabase.table("user_chat_threads").insert(
+            {
+                "id": conversation_id,
+                "user_identifier": user_id,
+                "user_data_id": supabase_user_data_id,
+                "title": seed_title,
+                "context_snapshot": [],
+                "metadata": {},
+                "created_at": now_iso,
+                "updated_at": now_iso,
+            }
+        ).execute()
+        return True
+    except Exception as error:
+        _handle_conversation_store_error("Error creating missing conversation thread", error)
+        return False
 
 
 def _deserialize_proactivity_settings_payload(payload: Any) -> Optional[ProactivitySettings]:
@@ -2547,14 +2678,36 @@ def _upsert_supabase_proactivity_settings(user_id: int, payload: Dict[str, Any])
         )
 
 
-def _is_valid_uuid(value: Optional[str]) -> bool:
-    if not value:
-        return False
+def _timezone_from_time_context(time_context: str) -> Tuple[Optional[str], Optional[timezone]]:
+    """
+    Extract timezone information from a time_context string.
+    Expected format: "... (timezone: Region/City, UTC+HH:MM) ..."
+    Returns (timezone_label, timezone_object) or (None, timezone.utc)
+    """
+    if not time_context:
+        return None, timezone.utc
+        
+    match = re.search(r"\(timezone:\s*([^,]+),", time_context)
+    if match:
+        tz_label = match.group(1).strip()
+        try:
+            # Try to load the timezone using zoneinfo
+            tz = ZoneInfo(tz_label)
+            return tz_label, tz
+        except Exception:
+            pass
+            
+    # Fallback/default
+    return None, timezone.utc
+
+
+def _is_valid_uuid(val):
     try:
-        UUID(value)
-        return True
-    except (ValueError, TypeError):
+        uuid_obj = UUID(val)
+        return str(uuid_obj) == val
+    except ValueError:
         return False
+
 
 
 # FastAPI app
@@ -2627,6 +2780,13 @@ async def _connect_database():
     """Connect to the database on startup."""
     try:
         await database.connect()
+        # Enable WAL mode for SQLite to improve concurrency
+        db_url_str = str(database.url)
+        db_logger.info(f"Checking database URL for SQLite: {db_url_str}")
+        if "sqlite" in db_url_str:
+            res = await database.fetch_val("PRAGMA journal_mode=WAL;")
+            db_logger.info(f"Enabled WAL mode. Result: {res}")
+            await database.execute("PRAGMA synchronous=NORMAL;")
         db_logger.info("Database connection established via startup event", extra={
             "event_type": "database_connected_startup"
         })
@@ -3050,6 +3210,62 @@ def _normalize_habit_items(raw: Any) -> List[Dict[str, Any]]:
     return normalized
 
 
+def _coerce_streak_label_value(*, streak_days: Any = None, streak_label: Any = None) -> str:
+    """Force streak labels to a numeric string (e.g., '3') to keep bot outputs consistent."""
+
+    def _parse_candidate(value: Any) -> Optional[int]:
+        if value is None:
+            return None
+        if isinstance(value, bool):
+            return None
+        if isinstance(value, (int, float)):
+            return int(value)
+        if isinstance(value, str):
+            trimmed = value.strip()
+            if not trimmed:
+                return None
+            match = re.search(r"-?\d+", trimmed)
+            if match:
+                try:
+                    return int(match.group(0))
+                except ValueError:
+                    return None
+        return None
+
+    for candidate in (streak_days, streak_label):
+        parsed = _parse_candidate(candidate)
+        if parsed is not None:
+            return str(max(parsed, 0))
+    return "0"
+
+
+def _serialize_habit_record(record: Any) -> Dict[str, Any]:
+    """Ensure habits always have string labels for response models."""
+    if record is None:
+        return {}
+    if not isinstance(record, dict):
+        try:
+            record = dict(record)
+        except Exception:
+            return {}
+
+    def _as_str(value: Any) -> str:
+        if value is None:
+            return ""
+        return str(value)
+
+    return {
+        "id": record.get("id"),
+        "user_id": record.get("user_id"),
+        "label": _as_str(record.get("label")),
+        "streak_label": _as_str(record.get("streak_label")),
+        "previous_label": _as_str(record.get("previous_label")),
+        "description": record.get("description"),
+        "created_at": record.get("created_at"),
+        "updated_at": record.get("updated_at"),
+    }
+
+
 def _normalize_proactivity(raw: Any) -> Dict[str, Any]:
     if not isinstance(raw, dict):
         raw = {}
@@ -3350,6 +3566,13 @@ async def _load_conversation_history(conversation_id: str, user_id: int) -> List
   if not _is_valid_uuid(conversation_id):
     return []
 
+  cached_owner = CONVERSATION_OWNER_CACHE.get(conversation_id)
+  if cached_owner == user_id:
+      cached_history = CONVERSATION_HISTORY_CACHE.get(conversation_id)
+      if cached_history is not None:
+          # Return a shallow copy to avoid accidental mutation
+          return [dict(message) for message in cached_history]
+
   # Enforce ownership for regular threads
   try:
       query = user_chat_threads.select().where(
@@ -3361,7 +3584,7 @@ async def _load_conversation_history(conversation_id: str, user_id: int) -> List
       if not row:
           # If check fails (e.g. not found or wrong owner), deny access safely
           return []
-          
+      CONVERSATION_OWNER_CACHE.set(conversation_id, user_id)
   except Exception:
       return []
 
@@ -3382,6 +3605,7 @@ async def _load_conversation_history(conversation_id: str, user_id: int) -> List
             "grounding_metadata": row["grounding_metadata"],
             "attachments": row["attachments"],
         })
+    _cache_conversation_history(conversation_id, user_id, messages)
     return messages
   except Exception as error:
     _handle_conversation_store_error(
@@ -3444,18 +3668,27 @@ async def _upload_file_search_document(
         detail="File no longer available for search indexing.",
     )
 
-  try:
-    operation = await FILE_SEARCH_SERVICE.upload_to_store(
-        file_path=str(safe_path),
-        store_name=store_name,
-        display_name=display_name,
-        chunking_config=FILE_SEARCH_CHUNKING_CONFIG,
-    )
-    await _wait_for_operation(operation)
-  except Exception as error:  # pragma: no cover - best effort logging
-    print(
-        f"[FileSearch] Failed to upload {safe_path.name} to {store_name}: {error}"
-    )
+  def _log_failure(suffix: str, error: Exception) -> None:
+    print(f"[FileSearch] Failed to upload {safe_path.name} to {store_name}{suffix}: {error}")
+
+  last_error: Optional[Exception] = None
+  for chunking_config in (FILE_SEARCH_CHUNKING_CONFIG, None):
+    try:
+      operation = await FILE_SEARCH_SERVICE.upload_to_store(
+          file_path=str(safe_path),
+          store_name=store_name,
+          display_name=display_name,
+          chunking_config=chunking_config,
+      )
+      await _wait_for_operation(operation)
+      return
+    except Exception as error:  # pragma: no cover - best effort logging
+      last_error = error
+      # Try fallback config; suppress noisy duplicate logs
+      continue
+
+  if last_error:
+    _log_failure(" (upload failed after retries)", last_error)
 
 
 async def _get_user_file_search_store_names(
@@ -3748,7 +3981,7 @@ async def _list_habits_tool(user_id: int, args: Dict[str, Any], db: databases.Da
                 query = query.limit(limit)
             result = query.execute()
             if result.data is not None:
-                return {"habits": result.data}
+                return {"habits": [_serialize_habit_record(row) for row in result.data]}
         except Exception as error:
             _handle_supabase_table_error("Warning: Habits table not found or inaccessible", error)
 
@@ -3756,7 +3989,7 @@ async def _list_habits_tool(user_id: int, args: Dict[str, Any], db: databases.Da
     if limit:
         query = query.limit(limit)
     rows = await db.fetch_all(query)
-    return {"habits": [dict(row) for row in rows]}
+    return {"habits": [_serialize_habit_record(row) for row in rows]}
 
 
 async def _create_habit_tool(user_id: int, args: Dict[str, Any], db: databases.Database) -> Dict[str, Any]:
@@ -3764,12 +3997,18 @@ async def _create_habit_tool(user_id: int, args: Dict[str, Any], db: databases.D
     if not label:
         return {"error": "label is required"}
     
+    streak_value = _coerce_streak_label_value(
+        streak_days=args.get("streak_days"),
+        streak_label=args.get("streak_label"),
+    )
+
     now = datetime.utcnow()
     base_values = {
         "user_id": user_id,
-        "label": label,
+        "label": str(label),
         "description": args.get("description"),
-        "streak_label": args.get("streak_label"),
+        "streak_label": streak_value,
+        "previous_label": args.get("previous_label") or "",
     }
     
     if supabase:
@@ -3808,8 +4047,11 @@ async def _update_habit_tool(user_id: int, args: Dict[str, Any], db: databases.D
         updates["label"] = args["label"]
     if "description" in args:
         updates["description"] = args["description"]
-    if "streak_label" in args:
-        updates["streak_label"] = args["streak_label"]
+    if "streak_days" in args or "streak_label" in args:
+        updates["streak_label"] = _coerce_streak_label_value(
+            streak_days=args.get("streak_days"),
+            streak_label=args.get("streak_label"),
+        )
         
     if not updates:
         return {"status": "no_change", "message": "No updates provided."}
@@ -4362,6 +4604,7 @@ async def _execute_function_call(
     function_call: types.FunctionCall,
     user_id: int,
     db: databases.Database,
+    user_timezone: Optional[str] = None,
 ) -> Dict[str, Any]:
     handler = {
         "fetch_proactivity_summary": lambda u, a, d: _fetch_proactivity_summary(u, a.get("info_type"), d),
@@ -5027,6 +5270,9 @@ async def get_or_create_conversation(
 
   valid_id = conversation_id if _is_valid_uuid(conversation_id) else None
   if valid_id:
+    cached_owner = CONVERSATION_OWNER_CACHE.get(valid_id)
+    if cached_owner == user_id:
+      return valid_id
     try:
       # Check if conversation exists and belongs to this user
       query = user_chat_threads.select().where(
@@ -5035,6 +5281,7 @@ async def get_or_create_conversation(
       )
       row = await database.fetch_one(query)
       if row:
+        CONVERSATION_OWNER_CACHE.set(valid_id, user_id)
         return valid_id
     except Exception as error:
       _handle_conversation_store_error("Error checking conversation", error)
@@ -5050,6 +5297,7 @@ async def get_or_create_conversation(
     # Create new conversation
     import uuid
     new_id = str(uuid.uuid4())
+    now = datetime.utcnow()
     insert_query = user_chat_threads.insert().values(
         id=new_id,
         title=title or "New Conversation",
@@ -5057,8 +5305,12 @@ async def get_or_create_conversation(
         user_data_id=user_data_id,
         context_snapshot=[],
         metadata={},
+        created_at=now,
+        updated_at=now,
+        last_message_at=now,
     )
     await database.execute(insert_query)
+    CONVERSATION_OWNER_CACHE.set(new_id, user_id)
     return new_id
 
   except Exception as error:
@@ -5112,6 +5364,7 @@ async def save_conversation_message(
           text=text,
           grounding_metadata=grounding_metadata,
           attachments=message.get("attachments"),
+          created_at=datetime.utcnow(),
       )
       await database.execute(insert_query)
       
@@ -5122,6 +5375,16 @@ async def save_conversation_message(
           .values(last_message_at=datetime.utcnow(), updated_at=datetime.utcnow())
       )
       await database.execute(update_query)
+      _append_to_conversation_cache(
+          conversation_id,
+          user_id,
+          {
+              "role": role,
+              "text": text,
+              "grounding_metadata": grounding_metadata,
+              "attachments": message.get("attachments"),
+          },
+      )
       
   except Exception as error:
       _handle_conversation_store_error("Error saving message", error)
@@ -5196,6 +5459,7 @@ async def stream_ai_response(
     *,
     user_id: int,
     db: databases.Database,
+    user_timezone: Optional[str] = None,
     context_cache_id: Optional[int] = None,
     maps_enabled: bool = False,
     maps_latitude: Optional[float] = None,
@@ -5221,19 +5485,29 @@ async def stream_ai_response(
 
     # Respect explicit tier aliases first
     if normalized_model in {"lite", "gray-lite"}:
-        provider = "openrouter"
-        if not model:
-            model = GROK_DEFAULT_MODEL
+        # Lite tier routing: prefer Groq Kimi; fallback to OpenRouter gpt-oss-120b; then Gemini.
+        if LITE_TIER_PROVIDER == "groq" and GROQ_SERVICE and GROQ_SERVICE.available:
+            provider = "groq"
+            model = GROQ_LITE_MODEL
+        elif OPENROUTER_SERVICE and OPENROUTER_SERVICE.available:
+            provider = "openrouter"
+            model = "openai/gpt-oss-120b"
+        else:
+            provider = "gemini"
+            model = GEMINI_LIGHT_MODEL
     elif normalized_model in {"pro", "gray-pro"}:
         provider = "gemini"
         if not model:
             model = "models/gemini-3-pro-preview"
     elif normalized_model.startswith("models/") or normalized_model.startswith("gemini"):
         provider = "gemini"
+    elif normalized_model.startswith("groq"):
+        provider = "groq"
+        if not model:
+            model = GROQ_LITE_MODEL
 
     prefers_gemini = (
         AI_PROVIDER == "gemini"
-        or bool(tools)
         or _prefers_gemini_model(normalized_model)
     )
 
@@ -5247,11 +5521,12 @@ async def stream_ai_response(
                         is_onboarding_tool = True
                         break
 
-    provider = "gemini"
     if needs_structured_tools:
-        provider = "gemini"
-        if not model:
-            model = REMINDER_MODEL
+        # Only force Gemini if provider wasn't explicitly set to OpenRouter/Grok
+        if not provider or provider == "gemini":
+            provider = "gemini"
+            if not model:
+                model = REMINDER_MODEL
     elif is_onboarding_tool:
         # Force Gemini for onboarding tools
         provider = "gemini"
@@ -5264,7 +5539,7 @@ async def stream_ai_response(
         if OPENROUTER_SERVICE and OPENROUTER_SERVICE.available:
             provider = "openrouter"
             if not model:
-                model = GROK_DEFAULT_MODEL
+                model = "openai/gpt-oss-120b"
     else:
         # Default to Gemini for fastest streaming rather than Grok free tier throttling.
         provider = "gemini"
@@ -5289,7 +5564,7 @@ async def stream_ai_response(
             yield ("final", {"text": limit_msg, "grounding_metadata": None})
             return
 
-    conversation_history = _normalize_conversation_history(conversation_history)
+    # Initialize cached contents
     cached_contents = None
     cache_text_block: Optional[str] = None
     if context_cache_id:
@@ -5302,11 +5577,89 @@ async def stream_ai_response(
     workspace_with_cache = workspace_context
     if cache_text_block:
         workspace_with_cache = "\n\n".join(filter(None, [workspace_context, cache_text_block]))
-    
+
     # Append title generation instruction to system prompt instead of as user message
     effective_system_prompt = system_prompt
     if should_generate_title:
         effective_system_prompt = f"{system_prompt or ''}\n\n{GRAY_TITLE_INSTRUCTION}"
+
+    # Prepare tools for all providers
+    media_attachments = await _resolve_media_attachments(db, attachments, user_id)
+    
+    maps_tools, maps_tool_config = _build_maps_tool_and_config(
+        maps_enabled,
+        maps_latitude,
+        maps_longitude,
+        maps_widget,
+    )
+    file_search_tools = []
+    if file_search_enabled:
+         file_search_tools = await _build_file_search_tools(db, user_id)
+
+    if tools is not None:
+        base_tools = tools
+    else:
+        base_tools = DEFAULT_CHAT_TOOLS
+        if not search_enabled:
+            base_tools = [t for t in base_tools if t != SEARCH_TOOL]
+    
+    # Common tool list
+    tool_list = [*base_tools, *maps_tools, *file_search_tools]
+    effective_tool_config = maps_tool_config
+
+    # Initialize response_format
+    # If tools are available (which they are), disable legacy JSON mode to prefer tool use.
+    # Exception: if we specifically need JSON mode for some reason, but for reminders/plans we now have tools.
+    response_format = None
+    
+    # DEBUG: Log the final provider selection
+    # If Groq is chosen but attachments are present, reroute to OSS (or Gemini) because Groq streaming drops attachments.
+    if provider == "groq" and attachments:
+        alt_provider = "openrouter" if OPENROUTER_SERVICE and OPENROUTER_SERVICE.available else "gemini"
+        provider = alt_provider
+        model = "openai/gpt-oss-120b" if alt_provider == "openrouter" else GEMINI_LIGHT_MODEL
+
+    api_logger.info(
+        f"Provider selected: {provider}, Model: {model}, LITE_TIER_PROVIDER: {LITE_TIER_PROVIDER}, GROQ available: {GROQ_SERVICE.available if GROQ_SERVICE else False}",
+        extra={"event_type": "ai_provider_selection", "provider": provider, "model": model}
+    )
+
+    if provider == "groq":
+        if not GROQ_SERVICE.available:
+            api_logger.warning(
+                "Groq unavailable; falling back to OpenRouter OSS, then Gemini",
+                extra={"event_type": "ai_provider_unavailable", "provider": provider},
+            )
+            provider = "openrouter" if OPENROUTER_SERVICE and OPENROUTER_SERVICE.available else "gemini"
+            model = "openai/gpt-oss-120b" if provider == "openrouter" else GEMINI_LIGHT_MODEL
+        else:
+            try:
+                accumulated = ""
+                async for chunk in GROQ_SERVICE.stream(
+                    message,
+                    conversation_history,
+                    workspace_with_cache,
+                    effective_system_prompt,
+                    time_context,
+                    model,
+                ):
+                    accumulated += chunk
+                    if chunk:
+                        yield ("delta", chunk)
+
+                yield ("final", {"text": accumulated, "grounding_metadata": None})
+                return
+            except Exception as groq_error:
+                api_logger.error(
+                    f"Groq streaming failed; falling back to OpenRouter OSS, then Gemini: {groq_error}",
+                    extra={
+                        "event_type": "ai_provider_fallback",
+                        "provider": provider,
+                        "error": str(groq_error),
+                    },
+                )
+                provider = "openrouter" if OPENROUTER_SERVICE and OPENROUTER_SERVICE.available else "gemini"
+                model = "openai/gpt-oss-120b" if provider == "openrouter" else GEMINI_LIGHT_MODEL
 
     if provider in {"openrouter", "grok", "grok-lite"}:
         if not OPENROUTER_SERVICE.available:
@@ -5327,7 +5680,7 @@ async def stream_ai_response(
             accumulated = ""
             try:
                 t0_provider = time.perf_counter()
-                response_format = REMINDER_RESPONSE_FORMAT if request_structured_reminders else None
+                # response_format initialized in outer scope
                 
                 # Buffer for detecting JSON tool calls
                 tool_buffer = ""
@@ -5434,30 +5787,6 @@ async def stream_ai_response(
                 # Critical: Switch provider flag so the Gemini setup block below executes
                 provider = "gemini"
 
-    # Prepare tools regardless of provider (OpenRouter needs them too now)
-    media_attachments = await _resolve_media_attachments(db, attachments, user_id)
-    
-    maps_tools, maps_tool_config = _build_maps_tool_and_config(
-        maps_enabled,
-        maps_latitude,
-        maps_longitude,
-        maps_widget,
-    )
-    file_search_tools = []
-    if file_search_enabled:
-         file_search_tools = await _build_file_search_tools(db, user_id)
-
-    if tools is not None:
-        base_tools = tools
-    else:
-        base_tools = DEFAULT_CHAT_TOOLS
-        if not search_enabled:
-            base_tools = [t for t in base_tools if t != SEARCH_TOOL]
-    
-    # Common tool list
-    tool_list = [*base_tools, *maps_tools, *file_search_tools]
-    effective_tool_config = maps_tool_config
-
     if provider in {"openrouter", "grok", "grok-lite"}:
         if not OPENROUTER_SERVICE.available:
             api_logger.warning(
@@ -5473,7 +5802,7 @@ async def stream_ai_response(
             
             try:
                 t0_provider = time.perf_counter()
-                response_format = REMINDER_RESPONSE_FORMAT if request_structured_reminders else None
+                # response_format initialized in outer scope
                 
                 # Multi-turn loop for tool handling
                 current_history = list(conversation_history) if conversation_history else []
@@ -5481,6 +5810,7 @@ async def stream_ai_response(
                 def _map_role(r): return "model" if r == "assistant" else r
 
                 max_tool_turns = 5
+                previous_turns_text = ""
                 for turn in range(max_tool_turns + 1):
                     accumulated = ""
                     tool_calls_buffer = []
@@ -5551,7 +5881,7 @@ async def stream_ai_response(
                             
                             # Execute
                             try:
-                                result = await _execute_function_call(gemini_fc, user_id, db)
+                                result = await _execute_function_call(gemini_fc, user_id, db, user_timezone=user_timezone)
                             except Exception as e:
                                 result = {"error": str(e)}
                                 
@@ -5575,6 +5905,14 @@ async def stream_ai_response(
                             # Or if we update OpenRouter client to support 'tool' role.
                             # Given time constraints, the User Message hack is safer for "Grok" models.
                             current_history.append({"role": "user", "text": next_user_msg})
+                            
+                            # Accumulate text for final response (cleaned if necessary)
+                            if response_format:
+                                text, _ = _materialize_structured_reminders(accumulated)
+                                previous_turns_text += text
+                            else:
+                                previous_turns_text += accumulated
+                                
                             # Clear message for next turn so we rely on history
                             message = "" 
                             continue # Loop to next turn
@@ -5584,16 +5922,17 @@ async def stream_ai_response(
                     # 2. Handle Structured Reminders (JSON Mode)
                     if response_format:
                         text, structured_reminders = _materialize_structured_reminders(accumulated)
+                        # Reminders sent separately via final event, not embedded in text
                         accumulated = text
                         yield ("final", {
-                            "text": accumulated,
+                            "text": previous_turns_text + accumulated,
                             "grounding_metadata": None,
                             "reminders": structured_reminders if structured_reminders else None
                         })
                     else:
                         # Normal text finish
                         if not tool_calls_buffer:
-                            yield ("final", {"text": accumulated, "grounding_metadata": None})
+                            yield ("final", {"text": previous_turns_text + accumulated, "grounding_metadata": None})
                     
                     # If we got here and didn't continue, we are done
                     return
@@ -5639,6 +5978,7 @@ async def stream_ai_response(
             # We'll allow up to 5 turns of tool use to prevent infinite loops
             max_tool_turns = 5
             
+            previous_turns_text = ""
             for turn in range(max_tool_turns + 1):
                 accumulated = ""
                 final_usage = None
@@ -5707,7 +6047,16 @@ async def stream_ai_response(
                             model=model
                         )
 
-                    final_payload = {"text": accumulated or "", "grounding_metadata": grounding_metadata}
+                    # Clean up structured reminders from text if needed
+                    final_reminders = None
+                    if response_format:
+                        accumulated, final_reminders = _materialize_structured_reminders(accumulated)
+
+                    final_payload = {
+                        "text": previous_turns_text + (accumulated or ""), 
+                        "grounding_metadata": grounding_metadata,
+                        "reminders": final_reminders
+                    }
                     yield ("final", final_payload)
                     return
 
@@ -5716,23 +6065,65 @@ async def stream_ai_response(
                 model_parts = []
                 if accumulated:
                     model_parts.append(types.Part.from_text(text=accumulated))
+                    
+                # Accumulate text for next turns
+                # If we are using structured output, we should probably strip the JSON before accumulating
+                # But typically tools and structured output don't mix in the same turn for Gemini unless we force it.
+                # Just in case, if response_format is set, clean it.
+                if response_format:
+                    text, _ = _materialize_structured_reminders(accumulated)
+                    previous_turns_text += text
+                else:
+                    previous_turns_text += accumulated
+
+                # Enforce single execution per mutating tool per turn to avoid double inserts (e.g., reminders)
+                SINGLE_CALL_PER_TURN = {
+                    "create_reminder",
+                    "update_reminder",
+                    "delete_reminder",
+                    "delete_latest_reminder",
+                    "create_plan",
+                    "update_plan",
+                    "delete_plan",
+                    "create_habit",
+                    "update_habit",
+                    "delete_habit",
+                }
+                deduped_tool_calls: List[types.FunctionCall] = []
+                seen_tool_keys: Set[str] = set()
+                seen_tool_names: Set[str] = set()
                 for fc in tool_calls_in_this_turn:
+                    if fc.name in SINGLE_CALL_PER_TURN and fc.name in seen_tool_names:
+                        api_logger.info(f"Skipping extra {fc.name} call in turn", extra={"user_id": user_id})
+                        continue
+                    try:
+                        key = f"{fc.name}:{json.dumps(fc.args or {}, sort_keys=True, default=str)}"
+                    except Exception:
+                        key = f"{fc.name}:{fc.args}"
+                    if key in seen_tool_keys:
+                        api_logger.info(f"Skipping duplicate tool call in turn: {fc.name}", extra={"user_id": user_id})
+                        continue
+                    seen_tool_keys.add(key)
+                    seen_tool_names.add(fc.name)
+                    deduped_tool_calls.append(fc)
+
+                for fc in deduped_tool_calls:
                     model_parts.append(types.Part.from_function_call(name=fc.name, args=fc.args or {}))
                 
                 # Add the model's turn (text + tool calls) to intermediate history
                 intermediate_history.append(types.Content(role="model", parts=model_parts))
                 
                 # Execute tools and add results
-                for fc in tool_calls_in_this_turn:
+                for fc in deduped_tool_calls:
                     tool_result = {} # Initialize for each tool call
                     try:
-                        tool_result = await _execute_function_call(fc, user_id, db)
+                        tool_result = await _execute_function_call(fc, user_id, db, user_timezone=user_timezone)
                         
                         # Emit structured payloads (like reminders) directly to the client
                         # so the frontend can render them immediately.
                         if isinstance(tool_result, dict) and tool_result.get("type") in {"gray.reminder", "gray.plan", "gray.habit"}:
-                            api_logger.info(f"Yielding tool_card event for {tool_result.get('type')}")
-                            yield ("tool_card", tool_result)
+                            api_logger.info(f"Yielding reminders event for {tool_result.get('type')}")
+                            yield ("reminders", [tool_result])
                             
                     except Exception as e:
                         tool_result = {"error": str(e)}
@@ -5753,6 +6144,9 @@ async def stream_ai_response(
     raise RuntimeError("AI service unavailable")
 
 
+
+
+
 async def generate_ai_response(
     message: str,
     conversation_history: List[Dict[str, Any]] = None,
@@ -5765,6 +6159,7 @@ async def generate_ai_response(
     db: Optional[databases.Database] = None,
     response_schema: Optional[Dict[str, Any]] = None,
     response_mime_type: Optional[str] = None,
+    user_timezone: Optional[str] = None,
     *,
     context_cache_id: Optional[int] = None,
     maps_enabled: bool = False,
@@ -5816,14 +6211,27 @@ async def generate_ai_response(
         provider = "gemini"
         if not model:
             model = REMINDER_MODEL
-    elif normalized_model in {"lite", "gray-lite"} or (normalized_model.startswith("openrouter") and initial_provider == "openrouter"):
-        # Explicitly requested Grok/OpenRouter model or lite tier with OpenRouter as AI_PROVIDER
+    elif normalized_model in {"lite", "gray-lite"}:
+        # Lite tier routing: prefer Groq Kimi; fallback to OpenRouter gpt-oss-120b; then Gemini.
+        if LITE_TIER_PROVIDER == "groq" and GROQ_SERVICE and GROQ_SERVICE.available:
+            provider = "groq"
+            if not model:
+                model = GROQ_LITE_MODEL
+        elif OPENROUTER_SERVICE and OPENROUTER_SERVICE.available:
+            provider = "openrouter"
+            if not model:
+                model = "openai/gpt-oss-120b"
+        else:
+            provider = "gemini"
+            if not model:
+                model = GEMINI_LIGHT_MODEL
+    elif normalized_model.startswith("openrouter") and initial_provider == "openrouter":
+        # Explicitly requested OpenRouter model
         if OPENROUTER_SERVICE and OPENROUTER_SERVICE.available:
             provider = "openrouter"
             if not model:
-                model = GROK_DEFAULT_MODEL
+                model = "openai/gpt-oss-120b"
         else:
-            # Fallback to Gemini if OpenRouter not available
             provider = "gemini"
             if not model:
                 model = GEMINI_LIGHT_MODEL
@@ -5836,6 +6244,10 @@ async def generate_ai_response(
                 model = GEMINI_PRO_MODEL
             else:
                 model = GEMINI_DEFAULT_MODEL
+    elif normalized_model.startswith("groq"):
+        provider = "groq"
+        if not model:
+            model = GROQ_LITE_MODEL
     else:
         # Fallback to initial_provider if no other specific routing applies
         provider = initial_provider
@@ -5864,6 +6276,40 @@ async def generate_ai_response(
     if should_generate_title:
         effective_system_prompt = f"{system_prompt or ''}\n\n{GRAY_TITLE_INSTRUCTION}"
 
+    # Prepare tools and attachments for all providers
+    attachment_payloads: List[GeminiAttachment] = []
+    if attachments:
+        if user_id is None or db is None:
+            raise HTTPException(status_code=400, detail="User information is required for attachments.")
+        attachment_payloads = await _resolve_media_attachments(db, attachments, user_id)
+
+    tool_list: List[types.Tool] = []
+    effective_tool_config: Optional[types.ToolConfig] = None
+    
+    maps_tools, maps_tool_config = _build_maps_tool_and_config(
+        maps_enabled,
+        maps_latitude,
+        maps_longitude,
+        maps_widget,
+    )
+    file_search_tools = []
+    if file_search_enabled:
+         file_search_tools = await _build_file_search_tools(db, user_id)
+
+    if tools is not None:
+        base_tools = tools
+    else:
+        base_tools = DEFAULT_CHAT_TOOLS
+        if not search_enabled:
+            base_tools = [t for t in base_tools if t != SEARCH_TOOL]
+    tool_list = [*base_tools, *maps_tools, *file_search_tools]
+    effective_tool_config = maps_tool_config
+
+    # Initialize response_format
+    # If tools are available (which they are), disable legacy JSON mode to prefer tool use.
+    # Exception: if we specifically want JSON mode for some reason, but for reminders/plans we now have tools.
+    response_format = None
+
     if provider in {"openrouter", "grok", "grok-lite"}:
         if not OPENROUTER_SERVICE.available:
             api_logger.warning(
@@ -5877,7 +6323,7 @@ async def generate_ai_response(
                     extra={"event_type": "ai_attachments_ignored", "provider": provider},
                 )
             try:
-                response_format = REMINDER_RESPONSE_FORMAT if request_structured_reminders else None
+                # response_format initialized in outer scope
                 response_text = await OPENROUTER_SERVICE.generate(
                     message,
                     conversation_history,
@@ -5909,42 +6355,67 @@ async def generate_ai_response(
                     },
                 )
 
-    attachment_payloads: List[GeminiAttachment] = []
-    if attachments:
-        if user_id is None or db is None:
-            raise HTTPException(status_code=400, detail="User information is required for attachments.")
-        attachment_payloads = await _resolve_media_attachments(db, attachments, user_id)
-
-    tool_list: List[types.Tool] = []
-    effective_tool_config: Optional[types.ToolConfig] = None
-    if provider == "gemini":
-        maps_tools, maps_tool_config = _build_maps_tool_and_config(
-            maps_enabled,
-            maps_latitude,
-            maps_longitude,
-            maps_widget,
-        )
-        file_search_tools = []
-        if file_search_enabled:
-             file_search_tools = await _build_file_search_tools(db, user_id)
-
-        if tools is not None:
-            base_tools = tools
-        else:
-            base_tools = DEFAULT_CHAT_TOOLS
-            if not search_enabled:
-                base_tools = [t for t in base_tools if t != SEARCH_TOOL]
-        tool_list = [*base_tools, *maps_tools, *file_search_tools]
-        
-        # Ensure we have an explicit tool_config when tools are present
-        # Keep function calling enabled so the model can return calls we execute manually
-        effective_tool_config = maps_tool_config
-        if tool_list and not effective_tool_config:
-            effective_tool_config = types.ToolConfig(
-                function_calling_config=types.FunctionCallingConfig(
-                    mode=types.FunctionCallingConfigMode.AUTO
-                )
+    if provider == "groq":
+        if not GROQ_SERVICE.available:
+            api_logger.warning(
+                "Groq unavailable; falling back to OpenRouter OSS, then Gemini",
+                extra={"event_type": "ai_provider_unavailable", "provider": provider},
             )
+            fallback_provider = "openrouter" if OPENROUTER_SERVICE and OPENROUTER_SERVICE.available else "gemini"
+            provider = fallback_provider
+            model = "openai/gpt-oss-120b" if fallback_provider == "openrouter" else GEMINI_LIGHT_MODEL
+        else:
+            try:
+                response_text = await GROQ_SERVICE.generate(
+                    message,
+                    conversation_history,
+                    workspace_with_cache,
+                    effective_system_prompt,
+                    time_context,
+                    model,
+                )
+                if not response_text:
+                    raise RuntimeError("AI response was empty")
+                return response_text, None
+            except Exception as groq_error:  # pragma: no cover - best effort logging
+                api_logger.error(
+                    f"Groq generation failed; falling back to OpenRouter OSS, then Gemini: {groq_error}",
+                    extra={
+                        "event_type": "ai_provider_fallback",
+                        "provider": provider,
+                        "error": str(groq_error),
+                    },
+                )
+                fallback_provider = "openrouter" if OPENROUTER_SERVICE and OPENROUTER_SERVICE.available else "gemini"
+                provider = fallback_provider
+                model = "openai/gpt-oss-120b" if fallback_provider == "openrouter" else GEMINI_LIGHT_MODEL
+
+    # Ensure we have an explicit tool_config when tools are present
+    # Keep function calling enabled so the model can return calls we execute manually
+    if tool_list and not effective_tool_config:
+        effective_tool_config = types.ToolConfig(
+            function_calling_config=types.FunctionCallingConfig(
+                mode=types.FunctionCallingConfigMode.AUTO
+            )
+        )
+
+    # Gemini-specific tool list adjustment (consolidating)
+    if provider == "gemini" and tool_list:
+        all_declarations = []
+        search_instance = None
+        
+        for t in tool_list:
+            if t.function_declarations:
+                all_declarations.extend(t.function_declarations)
+            if t.google_search:
+                search_instance = t.google_search
+        
+        # Rebuild a single tool if we have any components
+        if all_declarations or search_instance:
+            tool_list = [types.Tool(
+                function_declarations=all_declarations if all_declarations else None,
+                google_search=search_instance
+            )]
 
     
     grounding_metadata: Optional[Dict[str, Any]] = None
@@ -5980,7 +6451,7 @@ async def generate_ai_response(
                 for part in candidate.content.parts:
                     if part.function_call:
                         try:
-                            await _execute_function_call(part.function_call, user_id, db)
+                            await _execute_function_call(part.function_call, user_id, db, user_timezone=user_timezone)
                         except Exception as e:
                             api_logger.error(f"Tool execution failed: {e}")
 
@@ -5998,7 +6469,7 @@ async def generate_ai_response(
                         status_code=400,
                         detail="User context is required to execute function calls.",
                     )
-                tool_result = await _execute_function_call(function_call, user_id, db)
+                tool_result = await _execute_function_call(function_call, user_id, db, user_timezone=user_timezone)
                 tool_contents = _build_function_call_contents(function_call, tool_result)
                 extra_payloads = _merge_extra_contents(
                     cached_contents,
@@ -6380,6 +6851,9 @@ async def chat_endpoint(
         "correlation_id": correlation_id
     })
 
+    # Initialize tools (currently unused in non-streaming endpoint, but required by generate_ai_response)
+    tool_list = None
+
     try:
         # Generate a title for the chat session (only if requested)
         session_title = None
@@ -6492,6 +6966,8 @@ async def chat_endpoint(
             file_search_enabled=chat_request.file_search_enabled,
             should_generate_title=chat_request.should_generate_title,
             reasoning_mode=effective_reasoning_mode,
+            tools=tool_list,
+            user_timezone=chat_request.timezone,
         )
 
         # Save AI response (including grounding metadata for downstream UI)
@@ -6548,12 +7024,107 @@ Tone:
 ONBOARDING_SYSTEM_PROMPT = load_prompt_from_file(ONBOARDING_PROMPT_PATH, DEFAULT_ONBOARDING_SYSTEM_PROMPT)
 
 
+class AsyncTTLCache:
+    def __init__(self, ttl_seconds: int = 300):
+        self.ttl_seconds = ttl_seconds
+        self.cache = {}
+
+    async def get(self, key: str, fetch_func):
+        now = time.time()
+        if key in self.cache:
+            value, timestamp = self.cache[key]
+            if now - timestamp < self.ttl_seconds:
+                return value
+        
+        value = await fetch_func()
+        self.cache[key] = (value, now)
+        return value
+
+    def clear(self):
+        self.cache = {}
+
+USER_CACHE = AsyncTTLCache(ttl_seconds=300)
+
+
+class TTLCache:
+  def __init__(self, ttl_seconds: int = 600, max_size: int = 256):
+    self.ttl_seconds = ttl_seconds
+    self.max_size = max_size
+    self.cache: Dict[str, tuple[Any, float]] = {}
+
+  def get(self, key: str):
+    now = time.time()
+    entry = self.cache.get(key)
+    if not entry:
+      return None
+    value, ts = entry
+    if now - ts > self.ttl_seconds:
+      self.cache.pop(key, None)
+      return None
+    return value
+
+  def set(self, key: str, value: Any) -> None:
+    if len(self.cache) >= self.max_size:
+      # Evict the oldest entry to keep memory bounded
+      oldest = min(self.cache.items(), key=lambda item: item[1][1])[0]
+      self.cache.pop(oldest, None)
+    self.cache[key] = (value, time.time())
+
+  def invalidate(self, key: str) -> None:
+    self.cache.pop(key, None)
+
+  def clear(self) -> None:
+    self.cache.clear()
+
+
+CONVERSATION_OWNER_CACHE = TTLCache(ttl_seconds=900, max_size=512)
+CONVERSATION_HISTORY_CACHE = TTLCache(ttl_seconds=900, max_size=256)
+
+
+async def _get_cached_user(user_id: int, db: databases.Database):
+    async def fetch():
+        return await db.fetch_one(users.select().where(users.c.id == user_id))
+    
+    return await USER_CACHE.get(f"user_{user_id}", fetch)
+
+
+def _cache_conversation_history(conversation_id: str, user_id: Optional[int], history: List[Dict[str, Any]]) -> None:
+  if user_id is not None:
+    CONVERSATION_OWNER_CACHE.set(conversation_id, user_id)
+  CONVERSATION_HISTORY_CACHE.set(conversation_id, history)
+
+
+def _append_to_conversation_cache(conversation_id: str, user_id: Optional[int], message: Dict[str, Any]) -> None:
+  cached_history = CONVERSATION_HISTORY_CACHE.get(conversation_id)
+  if cached_history is None:
+    return
+  owner = CONVERSATION_OWNER_CACHE.get(conversation_id) or user_id
+  if user_id is not None and owner is not None and owner != user_id:
+    return
+  normalized = {
+    "role": message.get("role"),
+    "text": message.get("text") or "",
+    "grounding_metadata": message.get("grounding_metadata") or message.get("groundingMetadata"),
+    "attachments": message.get("attachments"),
+  }
+  new_history = cached_history + [normalized]
+  if owner is not None:
+    CONVERSATION_OWNER_CACHE.set(conversation_id, owner)
+  CONVERSATION_HISTORY_CACHE.set(conversation_id, new_history)
+
+
+def _invalidate_conversation_cache(conversation_id: str) -> None:
+  CONVERSATION_OWNER_CACHE.invalidate(conversation_id)
+  CONVERSATION_HISTORY_CACHE.invalidate(conversation_id)
+
+
 @app.post("/api/chat/stream")
 # Increase the stream limit to avoid throttling active typing sessions.
 @limiter.limit("120/minute")
 async def chat_stream(
     request: Request,
     chat_request: ChatRequest,
+    background_tasks: BackgroundTasks,
     current_user: Dict[str, Any] = Depends(get_current_user),
     db: databases.Database = Depends(get_database)
 ):
@@ -6575,26 +7146,84 @@ async def chat_stream(
     })
 
     try:
-        # Fetch user record for logic
-        user_record = await db.fetch_one(users.select().where(users.c.id == chat_request.user_id))
+        # 1. Start User Lookup (Async + Cached)
+        t0_user = time.perf_counter()
+        user_task = asyncio.create_task(_get_cached_user(chat_request.user_id, db))
+
+        # 2. Prepare Session Title (Sync, fast)
+        effective_message = chat_request.message
+        session_title = _fallback_title_from_message(effective_message)
+
+        # 3. Start Session Logging (Background Task)
+        # Move to background task to avoid blocking/contention on the main thread/connection
+        async def _log_session_background(uid: int, title: str, created_at: datetime):
+            try:
+                query = chat_sessions.insert().values(
+                    user_id=uid,
+                    title=title,
+                    scope="thread",
+                    created_at=created_at,
+                    updated_at=created_at
+                )
+                await db.execute(query)
+            except Exception as e:
+                api_logger.error(f"Failed to log chat session in background: {e}", extra={"user_id": uid})
+
+        now = datetime.utcnow()
+        background_tasks.add_task(_log_session_background, chat_request.user_id, session_title, now)
+
+        # 4. Start Conversation Setup (Async)
+        t0_conv = time.perf_counter()
+        requested_conversation_id = chat_request.conversation_id
+        valid_requested_conversation_id = _is_valid_uuid(requested_conversation_id)
+        
+        async def _setup_conversation():
+            if requested_conversation_id and not valid_requested_conversation_id:
+                return requested_conversation_id
+            else:
+                return await get_or_create_conversation(
+                    requested_conversation_id if valid_requested_conversation_id else None,
+                    chat_request.user_id,
+                    title=session_title,
+                )
+        
+        conv_task = asyncio.create_task(_setup_conversation())
+
+        # Await critical data
+        user_record = await user_task
+        t1_user = time.perf_counter()
+        api_logger.info(f"User lookup time: {(t1_user - t0_user)*1000:.2f}ms", extra={"user_id": chat_request.user_id})
+
         user_has_seen_general = bool(_row_get(user_record, "has_seen_general_chat"))
         user_nickname = _row_get(user_record, "personalization_nickname")
         user_occupation = _row_get(user_record, "personalization_occupation")
         user_about = _row_get(user_record, "personalization_about")
         user_plan_tier = _row_get(user_record, "plan_tier")
-        
-        # Introduce a flag to strictly enforce onboarding until complete.
+
+        def _has_personalization(value: Optional[str]) -> bool:
+            if value is None:
+                return False
+            return bool(str(value).strip())
+
+        needs_personalization = bool(
+            user_record
+            and (
+                not _has_personalization(user_nickname)
+                or not _has_personalization(user_occupation)
+                or not _has_personalization(user_about)
+            )
+        )
+
+        # Enforce onboarding for brand-new users; allow regular tools once they've completed it.
         force_onboarding_mode = bool(user_record and not user_has_seen_general)
 
         # Handle Onboarding Logic
-        effective_message = chat_request.message
         effective_system_prompt = chat_request.system_prompt
         effective_model = chat_request.model
         tool_list = None
 
         raw_message = (effective_message or "").strip()
         wants_onboarding = "ready to start" in raw_message.lower() or "start onboarding" in raw_message.lower()
-        needs_personalization = bool(user_record and (not user_nickname or not user_occupation or not user_about))
 
         # If force_onboarding_mode is active, or if explicitly requested and needed, enforce onboarding settings.
         if force_onboarding_mode or (user_record and wants_onboarding and needs_personalization):
@@ -6619,30 +7248,16 @@ async def chat_stream(
                 },
             )
 
-        # Generate a title for the chat session (fallback initially, refined later via extraction)
-        session_title = _fallback_title_from_message(effective_message)
+        # Infer timezone from time_context if not explicitly provided
+        if not chat_request.timezone and chat_request.time_context:
+            tz_label, _ = _timezone_from_time_context(chat_request.time_context)
+            if tz_label:
+                chat_request.timezone = tz_label
 
-        # Create chat session
-        now = datetime.utcnow()
-        chat_session_query = chat_sessions.insert().values(
-            user_id=chat_request.user_id,
-            title=session_title,
-            scope="thread",
-            created_at=now,
-            updated_at=now
-        )
-        session_id = await db.execute(chat_session_query)
-
-        requested_conversation_id = chat_request.conversation_id
-        valid_requested_conversation_id = _is_valid_uuid(requested_conversation_id)
-        if requested_conversation_id and not valid_requested_conversation_id:
-            conversation_id = requested_conversation_id
-        else:
-            conversation_id = await get_or_create_conversation(
-                requested_conversation_id if valid_requested_conversation_id else None,
-                chat_request.user_id,
-                title=session_title,
-            )
+        # Await conversation ID
+        conversation_id = await conv_task
+        t1_conv = time.perf_counter()
+        api_logger.info(f"Conversation setup time: {(t1_conv - t0_conv)*1000:.2f}ms", extra={"user_id": chat_request.user_id})
 
         conversation_history: List[Dict[str, Any]] = []
         if conversation_id:
@@ -6706,6 +7321,7 @@ async def chat_stream(
                     effective_system_prompt,
                     user_id=chat_request.user_id,
                     db=db,
+                    user_timezone=chat_request.timezone,
                     time_context=chat_request.time_context,
                     model=effective_model,
                     attachments=chat_request.attachments,
@@ -6727,6 +7343,10 @@ async def chat_stream(
                             first_token_time = time.perf_counter()
                         accumulated_visible += payload
                         yield _sse_event("token", {"delta": payload})
+                    elif kind == "tool_card":
+                        yield _sse_event("tool_card", payload)
+                    elif kind == "reminders":
+                        yield _sse_event("reminders", {"reminders": payload})
                     elif kind == "final":
                         reminders_payload = None
                         if isinstance(payload, dict):
@@ -6881,16 +7501,15 @@ async def create_conversation(
             }
 
         try:
-            user_data_id = await _ensure_user_data_record(payload.user_id)
-            if user_data_id is None:
-                raise HTTPException(status_code=503, detail="User metadata storage is not available.")
+            await _ensure_user_data_record(payload.user_id)
+            supabase_user_data_id = await _require_supabase_user_data_id(payload.user_id)
             result = (
                 supabase.table("user_chat_threads")
                 .insert(
                     {
                         "title": payload.title or "New Conversation",
                         "user_identifier": payload.user_id,
-                        "user_data_id": user_data_id,
+                        "user_data_id": supabase_user_data_id,
                         "context_snapshot": [],
                         "metadata": {},
                     }
@@ -6971,6 +7590,7 @@ async def delete_conversation(
         general_user_id = _general_conversation_user_id(conversation_id)
         if general_user_id is not None:
             await _delete_general_conversation_history(general_user_id)
+            _invalidate_conversation_cache(conversation_id)
             return
 
         if _conversation_store_available() and _is_valid_uuid(conversation_id):
@@ -6978,6 +7598,7 @@ async def delete_conversation(
                 supabase.table("user_chat_threads").delete().eq("id", conversation_id).execute()
             except Exception as error:
                 _handle_conversation_store_error("Error deleting conversation", error)
+        _invalidate_conversation_cache(conversation_id)
         # When storage is unavailable or the ID is not a UUID, there is nothing to delete.
     except Exception as error:
         raise HTTPException(status_code=500, detail=f"Error deleting conversation: {str(error)}")
@@ -6989,17 +7610,11 @@ class ConversationHistoryPayload(BaseModel):
 
 @app.put("/api/conversation/{conversation_id}/history")
 @limiter.limit("20/minute")
-async def overwrite_conversation_history(
-    request: Request,
+async def _overwrite_conversation_history_logic(
     conversation_id: str,
     payload: ConversationHistoryPayload,
-    current_user: Dict[str, Any] = Depends(get_current_user),
+    current_user: Dict[str, Any],
 ):
-    """Replace the full message history for a conversation.
-
-    The frontend uses this when the user deletes individual messages so that
-    server-side history matches the locally edited conversation.
-    """
     try:
         await _require_conversation_owner(conversation_id, current_user)
         app_logger.info(f"Overwriting history for conversation {conversation_id}", extra={"event_type": "history_overwrite_start", "message_count": len(payload.messages)})
@@ -7017,6 +7632,12 @@ async def overwrite_conversation_history(
         # Write to Supabase when available and the conversation_id is a real UUID.
         if _conversation_store_available() and _is_valid_uuid(conversation_id):
             try:
+                seed_title = None
+                if normalized_history:
+                    first_text = normalized_history[0].get("text") or ""
+                    if first_text:
+                        seed_title = first_text[:60]
+                await _ensure_supabase_thread_exists(conversation_id, current_user["id"], title=seed_title)
                 supabase.table("user_chat_messages").delete().eq("thread_id", conversation_id).execute()
                 if normalized_history:
                     rows: List[Dict[str, Any]] = []
@@ -7037,6 +7658,7 @@ async def overwrite_conversation_history(
             except Exception as error:
                 _handle_conversation_store_error("Error overwriting conversation history", error)
 
+        _cache_conversation_history(conversation_id, current_user["id"], normalized_history)
         return {
             "id": conversation_id,
             "message_count": len(normalized_history),
@@ -7048,6 +7670,22 @@ async def overwrite_conversation_history(
             status_code=500,
             detail=f"Error overwriting conversation history: {str(error)}",
         )
+
+
+@app.put("/api/conversation/{conversation_id}/history")
+@limiter.limit("20/minute")
+async def overwrite_conversation_history(
+    request: Request,
+    conversation_id: str,
+    payload: ConversationHistoryPayload,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    """Replace the full message history for a conversation.
+
+    The frontend uses this when the user deletes individual messages so that
+    server-side history matches the locally edited conversation.
+    """
+    return await _overwrite_conversation_history_logic(conversation_id, payload, current_user)
 
 def _normalize_conversation_title(payload: ConversationUpdateRequest) -> str | None:
     normalized_title: Optional[str] = None
@@ -7072,10 +7710,18 @@ async def _apply_conversation_update(
     storage_available = _conversation_store_available()
     valid_conversation_id = _is_valid_uuid(conversation_id)
 
-    user_data_id_for_update: Optional[int] = None
+    local_user_data_id: Optional[int] = None
+    supabase_user_data_id: Optional[int] = None
     if payload.user_id is not None:
         require_same_user(payload.user_id, current_user)
-        user_data_id_for_update = await _ensure_user_data_record(payload.user_id)
+        local_user_data_id = await _ensure_user_data_record(payload.user_id)
+        if storage_available:
+            supabase_user_data_id = await _resolve_supabase_user_data_id(payload.user_id)
+            if supabase_user_data_id is None:
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="User metadata storage is not available.",
+                )
 
     if storage_available and valid_conversation_id:
         update_values: Dict[str, Any] = {"updated_at": updated_at_iso}
@@ -7083,8 +7729,9 @@ async def _apply_conversation_update(
             update_values["title"] = normalized_title
         if payload.user_id is not None:
             update_values["user_identifier"] = payload.user_id
-            if user_data_id_for_update is not None:
-                update_values["user_data_id"] = user_data_id_for_update
+            if supabase_user_data_id is None:
+                supabase_user_data_id = await _require_supabase_user_data_id(payload.user_id)
+            update_values["user_data_id"] = supabase_user_data_id
 
         try:
             result = (
@@ -7115,10 +7762,8 @@ async def _apply_conversation_update(
 
             if payload.user_id is not None:
                 seed_title = normalized_title or "New Conversation"
-                if user_data_id_for_update is None:
-                    user_data_id_for_update = await _ensure_user_data_record(payload.user_id)
-                if user_data_id_for_update is None:
-                    raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="User metadata storage is not available.")
+                if supabase_user_data_id is None:
+                    supabase_user_data_id = await _require_supabase_user_data_id(payload.user_id)
                 try:
                     created = (
                         supabase.table("user_chat_threads")
@@ -7126,7 +7771,7 @@ async def _apply_conversation_update(
                             {
                                 "id": conversation_id,
                                 "user_identifier": payload.user_id,
-                                "user_data_id": user_data_id_for_update,
+                                "user_data_id": supabase_user_data_id,
                                 "title": seed_title,
                                 "context_snapshot": [],
                                 "metadata": {},
@@ -7230,6 +7875,7 @@ async def get_conversation_usage(
         message_count = len(history)
         
         # Better token estimation: use tiktoken if available, otherwise rough estimate
+        # We skip the external Gemini API call for speed, as it adds significant latency.
         try:
             import tiktoken
             encoding = tiktoken.get_encoding("cl100k_base")  # GPT-4/Gemini-compatible
@@ -7243,57 +7889,9 @@ async def get_conversation_usage(
             total_chars = sum(len(msg.get("text", "")) for msg in history)
             total_tokens = int(total_chars / 3.8)  # More accurate than /4
 
-        async def _count_tokens_with_gemini(messages: List[Dict[str, Any]]) -> Optional[int]:
-            """Use the official Gemini token counter when available."""
-            client = getattr(GEMINI_SERVICE, "_client", None)
-            if not GEMINI_SERVICE.available or client is None:
-                return None
-
-            model_for_count = (
-                os.getenv("GEMINI_TOKEN_COUNT_MODEL")
-                or os.getenv("GEMINI_DEFAULT_MODEL")
-                or getattr(GEMINI_SERVICE, "default_model", None)
-                or "models/gemini-3-pro"
-            )
-
-            contents: List[types.Content] = []
-            for message in messages:
-                text = message.get("text")
-                if not text:
-                    continue
-                role = "user" if message.get("role") == "user" else "model"
-                contents.append(types.Content(role=role, parts=[types.Part(text=text)]))
-
-            if not contents:
-                return 0
-
-            try:
-                response = await client.aio.models.count_tokens(
-                    model=model_for_count,
-                    contents=contents,
-                )
-                token_total = None
-                if isinstance(response, dict):
-                    token_total = response.get("total_tokens") or response.get("total_token_count")
-                elif isinstance(response, (int, float)):
-                    token_total = int(response)
-                else:
-                    token_total = getattr(response, "total_tokens", None) or getattr(
-                        response, "total_token_count", None
-                    )
-                if token_total is None:
-                    return None
-                return int(token_total)
-            except Exception as token_error:
-                app_logger.warning(
-                    "Gemini token counting failed",
-                    extra={"error": str(token_error), "model": model_for_count},
-                )
-                return None
-
-        gemini_tokens = await _count_tokens_with_gemini(history)
-        if gemini_tokens is not None:
-            total_tokens = gemini_tokens
+        # gemini_tokens = await _count_tokens_with_gemini(history)
+        # if gemini_tokens is not None:
+        #     total_tokens = gemini_tokens
         
         # Determine context limit based on user tier
         # Extract user_id from conversation to lookup tier
@@ -7314,6 +7912,7 @@ async def get_conversation_usage(
             }
 
         # Extract user_id from conversation to lookup tier
+        user_id = None  # Initialize to avoid UnboundLocalError
         user_tier = "pioneer"  # Default everyone to Pioneer privileges
         try:
             # Case 1: General conversation (format: "general:123")
@@ -7370,13 +7969,6 @@ async def get_conversation_usage(
         # Get provider info from environment
         provider = os.getenv("AI_PROVIDER", "openrouter")
         model_name = os.getenv("AI_MODEL_NAME", None)
-        if gemini_tokens is not None and not model_name:
-            model_name = (
-                os.getenv("GEMINI_TOKEN_COUNT_MODEL")
-                or os.getenv("GEMINI_DEFAULT_MODEL")
-                or getattr(GEMINI_SERVICE, "default_model", None)
-                or "models/gemini-3-pro"
-            )
         
         return {
             "conversation_id": conversation_id,
@@ -7461,9 +8053,10 @@ Summary:"""
         ]
         
         # Save the compressed history
-        await overwrite_conversation_history(
+        await _overwrite_conversation_history_logic(
             conversation_id,
-            ConversationHistoryPayload(messages=compressed_history)
+            ConversationHistoryPayload(messages=compressed_history),
+            current_user
         )
         
         # Calculate new token count
@@ -8028,13 +8621,14 @@ async def get_habits(
                 query = query.limit(limit)
             result = query.execute()
             if result.data is not None:
-                return result.data
+                return [_serialize_habit_record(row) for row in result.data]
         except Exception as error:
             _handle_supabase_table_error("Warning: Habits table not found or inaccessible", error)
     query = habits.select().where(habits.c.user_id == user_id).order_by(habits.c.created_at)
     if limit:
         query = query.limit(limit)
-    return await db.fetch_all(query)
+    rows = await db.fetch_all(query)
+    return [_serialize_habit_record(row) for row in rows]
 
 @app.post("/users/{user_id}/habits", response_model=Habit, status_code=status.HTTP_201_CREATED)
 async def create_habit(
@@ -8367,60 +8961,69 @@ async def list_user_reminders(
         except Exception as error:
             _handle_supabase_table_error("Warning: Reminders table not found or inaccessible", error)
 
-    query = reminders.select().where(reminders.c.user_id == user_id)
+        except Exception as error:
+            _handle_supabase_table_error("Warning: Reminders table not found or inaccessible", error)
 
-    if status_filter:
-        query = query.where(reminders.c.status == status_filter)
-    elif not include_archived:
-        query = query.where(reminders.c.status.in_(["pending", "delivered"]))
+    try:
+        query = reminders.select().where(reminders.c.user_id == user_id)
 
-    if delivery_mode:
-        query = query.where(reminders.c.delivery_mode == delivery_mode)
+        if status_filter:
+            query = query.where(reminders.c.status == status_filter)
+        elif not include_archived:
+            query = query.where(reminders.c.status.in_(["pending", "delivered"]))
 
-    if entity_type:
-        query = query.where(reminders.c.entity_type == entity_type)
+        if delivery_mode:
+            query = query.where(reminders.c.delivery_mode == delivery_mode)
 
-    query = query.order_by(reminders.c.remind_at.asc())
+        if entity_type:
+            query = query.where(reminders.c.entity_type == entity_type)
 
-    if limit is not None:
-        query = query.limit(limit)
+        query = query.order_by(reminders.c.remind_at.asc())
 
-    rows = await db.fetch_all(query)
-    
-    # Self-healing for SQLite: Auto-DELETE stale pending reminders
-    if status_filter == "pending" and rows:
-        now = datetime.utcnow()
-        stale_threshold = now - timedelta(minutes=15)
-        stale_ids = []
-        filtered_rows = []
-        for row in rows:
-            try:
-                remind_at = row["remind_at"]
-                if isinstance(remind_at, str):
-                    remind_at = datetime.fromisoformat(remind_at.replace("Z", "+00:00")).replace(tzinfo=None)
-                
-                # Check if it's stale and hasn't been delivered
-                # Note: SQLite rows might not have 'delivered_at' populated if schema migration failed or old data
-                is_stale = remind_at < stale_threshold
-                if is_stale:
-                    stale_ids.append(row["id"])
-                else:
-                    filtered_rows.append(row)
-            except (ValueError, TypeError):
-                filtered_rows.append(row)
+        if limit is not None:
+            query = query.limit(limit)
+
+        rows = await db.fetch_all(query)
         
-        if stale_ids:
-            try:
-                api_logger.info(f"Auto-deleting {len(stale_ids)} stale reminders (SQLite)", extra={"user_id": user_id, "reminder_ids": stale_ids})
-                # SQLite doesn't support .in_ with list directly in databases/sqlalchemy usually requires logic, 
-                # but delete().where(col.in_(...)) works.
-                delete_query = reminders.delete().where(reminders.c.id.in_(stale_ids))
-                await db.execute(delete_query)
+        # Self-healing for SQLite: Auto-DELETE stale pending reminders
+        if status_filter == "pending" and rows:
+            now = datetime.utcnow()
+            stale_threshold = now - timedelta(minutes=15)
+            stale_ids = []
+            filtered_rows = []
+            for row in rows:
+                try:
+                    remind_at = row["remind_at"]
+                    if isinstance(remind_at, str):
+                        remind_at = datetime.fromisoformat(remind_at.replace("Z", "+00:00")).replace(tzinfo=None)
+                    
+                    # Check if it's stale and hasn't been delivered
+                    # Note: SQLite rows might not have 'delivered_at' populated if schema migration failed or old data
+                    is_stale = remind_at < stale_threshold
+                    if is_stale:
+                        stale_ids.append(row["id"])
+                    else:
+                        filtered_rows.append(row)
+                except (ValueError, TypeError) as e:
+                    api_logger.warning(f"Skipping reminder due to date parsing error (SQLite self-healing): {e}", extra={"reminder_id": row.get("id")})
+                    filtered_rows.append(row) # Keep row if parsing fails but it's not stale
+            
+            if stale_ids:
+                try:
+                    api_logger.info(f"Auto-deleting {len(stale_ids)} stale reminders (SQLite)", extra={"user_id": user_id, "reminder_ids": stale_ids})
+                    delete_query = reminders.delete().where(reminders.c.id.in_(stale_ids))
+                    await db.execute(delete_query)
+                    rows = filtered_rows
+                except Exception as e:
+                    api_logger.error(f"Failed to auto-delete stale reminders (SQLite): {e}", exc_info=True)
+                    rows = filtered_rows # Ensure we still return non-deleted rows
+            else:
                 rows = filtered_rows
-            except Exception as e:
-                api_logger.error(f"Failed to auto-delete stale reminders (SQLite): {e}")
 
-    return [_serialize_reminder_row(row) for row in rows]
+        return [_serialize_reminder_row(row) for row in rows]
+    except Exception as e:
+        api_logger.error(f"Failed to fetch reminders from local database: {e}", exc_info=True, extra={"user_id": user_id})
+        raise HTTPException(status_code=500, detail="Failed to fetch reminders from local database.")
 
 
 @app.post(
@@ -10011,6 +10614,17 @@ async def update_proactivity_settings_route(
                 "user_id": user_id,
                 "error": str(scheduler_error)
             })
+
+    # Trigger immediate evaluation (force to ensure a fresh check-in after settings changes)
+    if proactivity_engine:
+        # Fire-and-forget to keep the API response snappy
+        asyncio.create_task(
+            proactivity_engine.dispatch_user_if_due(
+                user_id,
+                source="settings_update",
+                force=True,
+            )
+        )
 
     return ProactivitySettings.model_validate(payload)
 
