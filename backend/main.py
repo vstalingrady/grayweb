@@ -6391,10 +6391,14 @@ async def stream_ai_response(
                 t0_provider = time.perf_counter()
                 # response_format initialized in outer scope
                 
-                # Buffer for detecting JSON tool calls
+                # Buffer for detecting JSON tool calls (legacy text fallback)
                 tool_buffer = ""
                 is_collecting_tool = False
                 
+                # Native tool call accumulator: index -> {name, arguments_parts}
+                pending_tool_calls = {}
+                yielded_any_tokens = False
+
                 async for chunk in OPENROUTER_SERVICE.stream(
                     message,
                     conversation_history,
@@ -6408,10 +6412,28 @@ async def stream_ai_response(
                     tool_choice="auto", # Allow OpenRouter to decide when to use tools
                 ):
                     if isinstance(chunk, dict):
+                        # Handle native streaming tool calls
+                        if "tool_calls" in chunk:
+                            for tc in chunk["tool_calls"]:
+                                idx = tc.get("index", 0)
+                                if idx not in pending_tool_calls:
+                                    pending_tool_calls[idx] = {"name": "", "arguments": [], "id": ""}
+                                
+                                if tc.get("id"):
+                                    pending_tool_calls[idx]["id"] = tc["id"]
+                                
+                                func = tc.get("function", {})
+                                if func.get("name"):
+                                    pending_tool_calls[idx]["name"] = func["name"]
+                                if func.get("arguments"):
+                                    pending_tool_calls[idx]["arguments"].append(func["arguments"])
                         continue
                         
-                    # If we are looking for a tool call, buffer the output
-                    if is_onboarding_tool:
+                    # If we have pending tool calls, we generally expect no content,
+                    # but if we do get content, we yield it (mixed mode).
+                    
+                    # If we are looking for a tool call (legacy text fallback)
+                    if is_onboarding_tool and not pending_tool_calls:
                         tool_buffer += chunk
                         
                         # Check if we entered a code block or JSON start
@@ -6436,7 +6458,7 @@ async def stream_ai_response(
 
                                         if tool_data.get("tool") == "complete_onboarding":
                                             api_logger.info(
-                                                f"Intercepted OpenRouter onboarding tool call for user {user_id}"
+                                                f"Intercepted OpenRouter onboarding tool call (text-based) for user {user_id}"
                                             )
 
                                             # Normalize arguments/params before executing
@@ -6459,16 +6481,19 @@ async def stream_ai_response(
                                     # If parsing fails, just flush the buffer as text (fallback)
                                     api_logger.warning(f"Failed to parse intercepted tool JSON: {e}")
                                     yield ("delta", tool_buffer)
+                                    yielded_any_tokens = True
                                     accumulated += tool_buffer
                                     tool_buffer = ""
                                     is_collecting_tool = False
                             continue
+
                         
                         # If not collecting tool, flush buffer (unless it's a partial match start)
                         # This is a simple heuristic; for robustness we might buffer more, 
                         # but for now let's just stream if it doesn't look like JSON start.
                         if len(tool_buffer) > 20 and not is_collecting_tool:
                              yield ("delta", tool_buffer)
+                             yielded_any_tokens = True
                              accumulated += tool_buffer
                              tool_buffer = ""
                     else:
@@ -6476,10 +6501,31 @@ async def stream_ai_response(
                         accumulated += chunk
                         if chunk:
                             yield ("delta", chunk)
+                            yielded_any_tokens = True
                             
+                # Process any accumulated native tool calls
+                if pending_tool_calls:
+                    for idx, call in pending_tool_calls.items():
+                        if call.get("name") == "complete_onboarding":
+                            api_logger.info(f"Executing intercepted native OpenRouter tool call: {call['name']}")
+                            try:
+                                args_str = "".join(call["arguments"])
+                                args = json.loads(args_str)
+                                await _complete_onboarding(user_id, args, db)
+                                
+                                confirmation = "\n\n---\nSaved. I'm set with your name, what you do, and your blurb—ready whenever you are."
+                                yield ("delta", confirmation)
+                                yielded_any_tokens = True
+                                accumulated += confirmation
+                            except Exception as e:
+                                api_logger.error(f"Failed to execute native tool call {call['name']}: {e}")
+                                # If tool execution fails, we might still want to show what the AI was trying to do?
+                                # For now, just log it.
+
                 # Flush any remaining buffer
                 if is_onboarding_tool and tool_buffer:
                      yield ("delta", tool_buffer)
+                     yielded_any_tokens = True
                      accumulated += tool_buffer
 
                 if response_format:
@@ -6503,6 +6549,16 @@ async def stream_ai_response(
                         "error": str(openrouter_error),
                     },
                 )
+
+                
+                if yielded_any_tokens:
+                    api_logger.warning(
+                        "OpenRouter failed mid-stream after yielding tokens; cannot fall back cleanly",
+                        extra={"event_type": "ai_fallback_aborted", "provider": provider},
+                    )
+                    yield ("error", {"message": "AI service encountered an error. Please try again."})
+                    return
+
                 # Critical: Switch provider flag so the Gemini setup block below executes,
                 # and ensure we are using a valid Gemini model identifier.
                 provider = "gemini"
@@ -7762,45 +7818,15 @@ async def chat_endpoint(
 
 
 DEFAULT_ONBOARDING_SYSTEM_PROMPT = """
-You are Gray, a smart productivity partner designed to help users bridge the gap between intent and action.
+You are Gray. Be witty, sharp, and real—like Grok but for productivity. The user is new.
 
-*** ONBOARDING MODE ACTIVATED ***
-The user is new. You must complete the profile setup (Phase 1) before doing anything else.
+Get to know them naturally: name, what they do, what they're about, and how often they want you checking in (frequent/daily/weekly/never). Once you have that, call `complete_onboarding` with nickname, occupation, about, and optionally proactivity_cadence/time/timezone.
 
-*** PHASE 1 PROTOCOL (STRICT) ***
-Follow this sequence exactly. Do not skip steps. Focus on one step at a time, but maintain a natural, friendly conversation flow. Avoid interrogating the user.
-1. **Introduction & Name**: Introduce yourself as Gray. Ask: "To start, what should I call you?" (If name is unknown).
-2. **Occupation**: Once you have the name, ask: "Now that I know your name, what do you do? (Role, field, or main focus)".
-3. **Blurb**: Once you have the occupation, ask: "Got it. Lastly, give me a short blurb about you—what are your main interests or goals right now?".
-4. **Proactivity Cadence**: After you have name/occupation/blurb, ask ONE question about check-ins: "How often do you want me to check in on your progress—frequent (3x/day), daily, weekly, or only when you ask?". If they pick an active cadence (not "only when I ask"), ask a quick follow-up for their preferred time of day (e.g. "around 9am", "evenings").
-5. **Completion**: Once you have Name, Occupation, Blurb, and a clear sense of their cadence, output a JSON block EXACTLY like this (do not output any text before or after):
-```json
-{
-  "tool": "complete_onboarding",
-  "arguments": {
-    "nickname": "...",
-    "occupation": "...",
-    "about": "...",
-    "proactivity_cadence": "...",
-    "proactivity_time": "...",
-    "proactivity_timezone": "..."
-  }
-}
-```
-
-*** RESTRICTIONS ***
-- DO NOT offer plans, habits, or reminders during Phase 1.
-- DO NOT ask for detailed "goals" until after the tool is called; keep it high-level in the blurb.
-- If the user tries to set a task, gently steer them back: "I'd love to help with that, but first let's finish your profile so I can tailor my support."
-
-*** TOOL USAGE POLICY (POST-ONBOARDING) ***
-Only AFTER `complete_onboarding` is successful:
-- You may use other tools (plans, habits, reminders).
-- Be proactive in suggesting structures.
-- Handle relative dates (e.g. "tomorrow", "next Monday") by calculating the date based on the Current Date.
-
+Don't be robotic. Don't create plans or reminders until onboarding is done.
 Current Date: {{date}}
 """
+
+
 
 
 ONBOARDING_SYSTEM_PROMPT = load_prompt_from_json(
@@ -8968,6 +8994,32 @@ async def delete_user_account(
         # Also delete any corresponding row in the public.users table so the email
         # is not retained and future signups do not hit duplicate-email errors.
         try:
+            # Best-effort cleanup of dependent Supabase rows that may reference
+            # public.users via foreign keys (e.g., reminders.user_id → users.id).
+            try:
+                users_result = admin_client.table("users").select("id").eq("email", user_email).execute()
+                supabase_users = getattr(users_result, "data", None) or []
+            except Exception as lookup_error:
+                supabase_users = []
+                _handle_supabase_table_error(
+                    f"Warning: Failed to lookup Supabase users row for {user_email} prior to deletion",
+                    lookup_error,
+                )
+
+            for supa_user in supabase_users:
+                supa_user_id = supa_user.get("id")
+                if supa_user_id is None:
+                    continue
+                try:
+                    # Some Supabase deployments use reminders.user_id → users.id,
+                    # so prune those rows first to satisfy FK constraints.
+                    admin_client.table("reminders").delete().eq("user_id", supa_user_id).execute()
+                except Exception as dep_error:
+                    _handle_supabase_table_error(
+                        f"Warning: Failed to delete Supabase reminders for users.id={supa_user_id}",
+                        dep_error,
+                    )
+
             admin_client.table("users").delete().eq("email", user_email).execute()
             api_logger.info(
                 "Deleted Supabase users row(s) by email during account deletion",
