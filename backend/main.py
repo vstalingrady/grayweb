@@ -157,7 +157,6 @@ try:
     from google.genai import types
     from backend.gemini_client import GeminiAttachment, GeminiService
     from backend.openrouter_client import OpenRouterService
-    from backend.groq_client import GroqService
     from backend.usage_tracker import UsageTracker, UsageLimitExceeded
 except ImportError:
     from google_calendar import (
@@ -180,7 +179,6 @@ except ImportError:
     from google.genai import types
     from gemini_client import GeminiAttachment, GeminiService
     from openrouter_client import OpenRouterService
-    from groq_client import GroqService
     from usage_tracker import UsageTracker, UsageLimitExceeded
 try:
     from backend.calendar_tools import CALENDAR_TOOLS
@@ -3857,14 +3855,12 @@ def _candidate_text(candidate: Any) -> str:
     return "".join(getattr(part, "text", "") for part in parts if getattr(part, "text", None))
 
 
-async def _groq_should_use_web_search(message: str, model: Optional[str]) -> bool:
+async def _should_use_web_search(message: str, model: Optional[str]) -> bool:
     """
     Use lightweight local heuristics to decide whether this message likely
     needs up-to-date information from the public web.
 
-    This replaces the previous Groq-based classifier so that Lite requests
-    which *don't* need search go straight to generation without an extra
-    network round trip.
+    Uses local keyword matching for fast classification without network calls.
     """
     trimmed = (message or "").strip()
     if not trimmed:
@@ -6298,20 +6294,6 @@ async def stream_ai_response(
         or _prefers_gemini_model(normalized_model)
     )
 
-    # Safety: if provider is Groq but the selected model clearly refers to a
-    # Gemini model (e.g. `models/gemini-*`), route through Gemini instead of
-    # sending an invalid model ID to Groq.
-    if provider == "groq":
-        model_str = str(model or "").strip().lower()
-        if model_str.startswith("models/gemini") or model_str.startswith("gemini"):
-            api_logger.info(
-                "Detected Gemini model configured while provider=groq (stream); routing through Gemini instead",
-                extra={"event_type": "ai_provider_model_mismatch_stream", "model": model},
-            )
-            provider = "gemini"
-            if not model:
-                model = GEMINI_DEFAULT_MODEL
-
     # Check usage limits (now that we know the effective model)
     if user_id is not None and db is not None:
         tracker = UsageTracker(db)
@@ -7131,18 +7113,6 @@ async def generate_ai_response(
     # Final check: if no provider was definitively set, default to Gemini
     if not provider:
         provider = "gemini"
-
-    # Safety: if provider is Groq but the selected model clearly refers to a
-    # Gemini model (e.g. `models/gemini-*`), route through Gemini instead of
-    # sending an invalid model ID to Groq.
-    if provider == "groq":
-        model_str = str(model or "").strip().lower()
-        if model_str.startswith("models/gemini") or model_str.startswith("gemini"):
-            api_logger.info(
-                "Detected Gemini model configured while provider=groq; routing through Gemini instead",
-                extra={"event_type": "ai_provider_model_mismatch", "model": model},
-            )
-            provider = "gemini"
 
     cached_contents = None
     cache_text_block: Optional[str] = None
