@@ -102,7 +102,89 @@ except ImportError:
     from supabase_utils import create_supabase_client
 
 
-SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET")
+# =============================================================================
+# JWT VERIFICATION USING JWKS (Public Key Verification)
+# =============================================================================
+# This is the recommended approach per Supabase docs:
+# https://supabase.com/docs/guides/auth/jwts
+# 
+# Benefits over shared secret:
+# - No secret to leak
+# - Faster (local verification)
+# - Supports key rotation
+# =============================================================================
+
+SUPABASE_URL = os.getenv("SUPABASE_URL") or os.getenv("NEXT_PUBLIC_SUPABASE_URL")
+SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET")  # Legacy, optional
+
+# JWKS cache (public keys from Supabase)
+_jwks_cache: Optional[Dict[str, Any]] = None
+_jwks_cache_time: float = 0
+_JWKS_CACHE_TTL = 3600.0  # 1 hour - public keys change rarely
+
+def _get_jwks_url() -> Optional[str]:
+    """Get the JWKS URL for the Supabase project."""
+    if not SUPABASE_URL:
+        return None
+    # https://project-id.supabase.co/auth/v1/.well-known/jwks.json
+    base = SUPABASE_URL.rstrip("/")
+    return f"{base}/auth/v1/.well-known/jwks.json"
+
+def _fetch_jwks() -> Optional[Dict[str, Any]]:
+    """Fetch JWKS from Supabase (cached for 1 hour)."""
+    global _jwks_cache, _jwks_cache_time
+    
+    now = time.time()
+    if _jwks_cache and (now - _jwks_cache_time) < _JWKS_CACHE_TTL:
+        return _jwks_cache
+    
+    jwks_url = _get_jwks_url()
+    if not jwks_url:
+        return None
+    
+    try:
+        import urllib.request
+        with urllib.request.urlopen(jwks_url, timeout=5) as response:
+            import json
+            _jwks_cache = json.loads(response.read().decode())
+            _jwks_cache_time = now
+            logger.info("Fetched JWKS from Supabase", extra={"url": jwks_url})
+            return _jwks_cache
+    except Exception as e:
+        logger.warning(f"Failed to fetch JWKS: {e}")
+        return _jwks_cache  # Return stale cache if available
+
+def _verify_with_jwks(token: str) -> Optional[Dict[str, Any]]:
+    """Verify JWT using Supabase's public keys (JWKS)."""
+    if not jwt:
+        return None
+    
+    jwks = _fetch_jwks()
+    if not jwks or "keys" not in jwks or not jwks["keys"]:
+        return None
+    
+    try:
+        # PyJWT can use JWKS directly
+        from jwt import PyJWKClient
+        
+        jwks_url = _get_jwks_url()
+        if not jwks_url:
+            return None
+        
+        # PyJWKClient caches keys internally
+        jwk_client = PyJWKClient(jwks_url)
+        signing_key = jwk_client.get_signing_key_from_jwt(token)
+        
+        payload = jwt.decode(
+            token,
+            signing_key.key,
+            algorithms=["ES256", "RS256", "EdDSA"],
+            options={"verify_exp": True}
+        )
+        return payload
+    except Exception as e:
+        logger.debug(f"JWKS verification failed: {e}")
+        return None
 
 # Token cache to avoid hitting Supabase Auth on every request
 _token_cache: Dict[str, tuple[Dict[str, Any], float]] = {}
@@ -130,8 +212,10 @@ async def verify_supabase_token(token: str) -> Dict[str, Any]:
     """
     Verify Supabase JWT token and return user payload.
     
-    Uses Supabase client to verify the token with Supabase Auth.
-    If SUPABASE_JWT_SECRET is set, performs local signature verification first.
+    Verification order (fastest to slowest):
+    1. JWKS (public key verification) - recommended
+    2. Legacy JWT secret (HS256) - if configured
+    3. Supabase Auth API call - fallback
     
     Args:
         token: JWT token from Authorization header
@@ -149,47 +233,42 @@ async def verify_supabase_token(token: str) -> Dict[str, Any]:
 
     decoded_payload: Optional[Dict[str, Any]] = None
 
-    # Fast path: validate exp to fail closed before hitting Supabase
-    if jwt:
+    # PRIORITY 1: Try JWKS verification (modern, recommended)
+    jwks_payload = _verify_with_jwks(token)
+    if jwks_payload:
+        payload = {
+            "sub": jwks_payload.get("sub"),
+            "email": jwks_payload.get("email"),
+            "user_metadata": jwks_payload.get("user_metadata") or {}
+        }
+        _cache_token_payload(token, payload)
+        logger.debug("Token verified via JWKS")
+        return payload
+
+    # PRIORITY 2: Try legacy JWT secret (if configured)
+    if jwt and SUPABASE_JWT_SECRET:
         try:
-            options = {"verify_exp": True}
-            # If we have the secret, verify the signature locally
-            if SUPABASE_JWT_SECRET:
-                options["verify_signature"] = True
-                decoded_payload = jwt.decode(token, SUPABASE_JWT_SECRET, algorithms=["HS256"], options=options)
-                
-                # OPTIMIZATION: If we verified the signature locally, we can trust the token
-                # and skip the expensive network call to Supabase Auth.
-                if decoded_payload:
-                    return {
-                        "sub": decoded_payload.get("sub"),
-                        "email": decoded_payload.get("email"),
-                        "user_metadata": decoded_payload.get("user_metadata") or {}
-                    }
-            else:
-                # Without secret, we can only check expiration (signature check disabled)
-                # We rely on the subsequent supabase.auth.get_user call for full verification
-                options["verify_signature"] = False
-                decoded_payload = jwt.decode(token, options=options)
-
-            exp = decoded_payload.get("exp") if decoded_payload else None
-            if exp is not None:
-                expires_at = datetime.fromtimestamp(exp, tz=timezone.utc)
-                if expires_at <= datetime.now(timezone.utc):
-                    raise HTTPException(
-                        status_code=status.HTTP_401_UNAUTHORIZED,
-                        detail="Token expired",
-                    )
+            decoded_payload = jwt.decode(
+                token, 
+                SUPABASE_JWT_SECRET, 
+                algorithms=["HS256"], 
+                options={"verify_exp": True}
+            )
+            if decoded_payload:
+                payload = {
+                    "sub": decoded_payload.get("sub"),
+                    "email": decoded_payload.get("email"),
+                    "user_metadata": decoded_payload.get("user_metadata") or {}
+                }
+                _cache_token_payload(token, payload)
+                logger.debug("Token verified via legacy JWT secret")
+                return payload
         except InvalidTokenError as e:
-            logger.warning(f"Local JWT verification failed: {e}. Falling back to Supabase Auth.")
-            # Fall through to Supabase validation
-            pass
-        except HTTPException:
-            raise
+            logger.warning(f"Legacy JWT verification failed: {e}")
         except Exception:
-            # If decoding fails unexpectedly, fall through to Supabase validation
             pass
 
+    # PRIORITY 3: Fall back to Supabase Auth API call
     try:
         supabase = create_supabase_client()
         supabase_error: Optional[str] = None
