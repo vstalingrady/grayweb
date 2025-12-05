@@ -2126,6 +2126,16 @@ configure_conversation_store(
     supabase_key_source=SUPABASE_KEY_SOURCE,
 )
 
+# =============================================================================
+# SECURITY OVERHAUL (2025-12-06): Supabase is now auth-only.
+# All data operations go through local SQLite. Supabase is only used for
+# OAuth flows on the frontend via @supabase/ssr.
+# =============================================================================
+# Disable Supabase data clients in backend - all data goes to local DB
+supabase = None
+supabase_admin = None
+print("INFO: Supabase data operations disabled. Using local SQLite for all data storage.")
+
 # Data storage configuration: Supabase is used for auth only.
 # Plans, habits, reminders, and other user data are stored locally (SQLite/Postgres).
 # To re-enable Supabase data storage, set supabase_data = supabase

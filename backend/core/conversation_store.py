@@ -58,7 +58,9 @@ _SUPABASE_USER_DATA_CACHE: Dict[int, int] = {}
 
 
 def _conversation_store_available() -> bool:
-    return supabase is not None and SUPABASE_CONVERSATIONS_ENABLED
+    # SECURITY OVERHAUL (2025-12-06): Supabase is now auth-only.
+    # All data operations go through local SQLite.
+    return False
 
 
 def _disable_conversation_store(reason: str) -> None:
