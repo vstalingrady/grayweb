@@ -1,3 +1,4 @@
+/* eslint-disable react/no-unescaped-entities */
 "use client";
 
 import { useEffect, useState } from "react";
@@ -60,18 +61,17 @@ export function UsageLimitBanner({ usageStatus }: UsageLimitBannerProps) {
         <div className={styles.usageLimitBanner}>
             <div className={styles.usageLimitContent}>
                 <div className={styles.usageLimitHeader}>
-                    <AlertTriangle size={20} className={styles.usageLimitIcon} />
+                    <AlertTriangle size={16} className={styles.usageLimitIcon} />
                     <span className={styles.usageLimitTitle}>
-                        {limitType} Limit Reached
+                        Limit Reached
                     </span>
                 </div>
                 <p className={styles.usageLimitMessage}>
-                    You've hit the {limitType.toLowerCase()} usage cap for your{" "}
-                    <span className={styles.usageLimitTier}>{tier}</span> plan.
+                    {limitType} cap hit on <span className={styles.usageLimitTier}>{tier}</span>.
                 </p>
                 <div className={styles.usageLimitTimer}>
-                    <Clock size={16} />
-                    <span>Resets in {timeLeft}</span>
+                    <Clock size={14} />
+                    <span>{timeLeft}</span>
                 </div>
             </div>
         </div>

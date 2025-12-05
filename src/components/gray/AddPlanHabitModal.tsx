@@ -203,7 +203,7 @@ export function AddPlanHabitModal({
           console.log('[AddPlanHabitModal] Creating new habit');
           const result = await apiService.createHabit(user.id, {
             label: trimmed,
-            streak_label: "0 days",
+            streak_label: "0",
             previous_label: "No history yet",
             description: details.length > 0 ? details : null,
           });

@@ -466,8 +466,6 @@ export function GrayDashboardCalendar({
 
     // Otherwise scroll to first event or top
     if (!dayLayouts.length) {
-      container.scrollTop = 0;
-      hasInitialDayScrollRef.current = true;
       return;
     }
 

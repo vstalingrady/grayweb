@@ -54,7 +54,7 @@ const createMessage = (role: TranscriptRole, text: string): TranscriptMessage =>
   text,
 });
 
-const CADENCE_OPTIONS: Array<{ 
+const CADENCE_OPTIONS: Array<{
   key: CheckInCadence;
   label: string;
   description: string;
@@ -743,3 +743,5 @@ export function FirstChatOnboarding({ viewerName, onComplete, onSkip }: FirstCha
 
     return null;
   };
+  return renderPrompt();
+}

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import { useEffect, useRef } from "react";
@@ -9,11 +10,11 @@ const HeroTesseract = () => {
   useEffect(() => {
     if (!canvasRef.current) return;
 
-    let scene: THREE.Scene;
-    let camera: THREE.PerspectiveCamera;
-    let renderer: THREE.WebGLRenderer;
-    let container: THREE.Group;
-    let lines: THREE.LineSegments;
+    let scene!: THREE.Scene;
+    let camera!: THREE.PerspectiveCamera;
+    let renderer!: THREE.WebGLRenderer;
+    let container!: THREE.Group;
+    let lines!: THREE.LineSegments;
     let angle4D = 0;
     const speed4D = 0.005;
     const speed3Dx = 0.005;
@@ -26,19 +27,22 @@ const HeroTesseract = () => {
 
     // Initialize
     const canvas = canvasRef.current;
-    renderer = new THREE.WebGLRenderer({
+    const rendererInstance = new THREE.WebGLRenderer({
       canvas,
       antialias: true,
       alpha: true,
       powerPreference: 'high-performance' // Optimize for performance
     });
+    renderer = rendererInstance;
     renderer.setSize(canvas.clientWidth, canvas.clientHeight);
     renderer.setClearColor(0x000000, 1);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
-    scene = new THREE.Scene();
+    const sceneInstance = new THREE.Scene();
+    scene = sceneInstance;
     const aspect = canvas.clientWidth / canvas.clientHeight;
-    camera = new THREE.PerspectiveCamera(75, aspect, 0.1, 1000);
+    const cameraInstance = new THREE.PerspectiveCamera(75, aspect, 0.1, 1000);
+    camera = cameraInstance;
 
     // Dynamic camera positioning based on aspect ratio
     const updateCameraPosition = () => {
@@ -50,7 +54,8 @@ const HeroTesseract = () => {
 
     updateCameraPosition();
 
-    container = new THREE.Group();
+    const containerInstance = new THREE.Group();
+    container = containerInstance;
     container.scale.set(1.0, 1.0, 1.0); // Optimized scale
     scene.add(container);
 
@@ -82,56 +87,16 @@ const HeroTesseract = () => {
     geom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
     // Thicker lines for better glow
-    lines = new THREE.LineSegments(geom, new THREE.LineBasicMaterial({
+    const linesInstance = new THREE.LineSegments(geom, new THREE.LineBasicMaterial({
       vertexColors: true,
       transparent: true,
       opacity: 1.0,
       linewidth: 2
     }));
+    lines = linesInstance;
     container.add(lines);
 
-    // Tech Logos Sprites
-    const techLogos = [
-      '/images/react.png',
-      '/images/python.png',
-      '/images/js.png',
-      '/images/html.png', // Corrected extension
-      '/images/css.png',
-      '/images/type.png',
-      '/images/sharp.png',
-      '/images/threee.png'
-    ];
-
-    const radius = 2.6; // Optimized orbit radius
-    const textureLoader = new THREE.TextureLoader();
-
-    techLogos.forEach((src, i) => {
-      textureLoader.load(src, (tex) => {
-        tex.minFilter = THREE.LinearFilter;
-        tex.generateMipmaps = false;
-
-        const spriteMat = new THREE.SpriteMaterial({
-          map: tex,
-          transparent: true,
-          opacity: 0.85,
-          alphaTest: 0.05
-        });
-
-        const sprite = new THREE.Sprite(spriteMat);
-        const angle = (i / techLogos.length) * Math.PI * 2;
-
-        sprite.position.set(
-          Math.cos(angle) * radius,
-          Math.sin(angle) * radius,
-          0.1
-        );
-
-        sprite.scale.set(0.4, 0.4, 0.4); // Optimized sprite size
-
-        scene.add(sprite);
-        sprites.push({ sprite, angle });
-      });
-    });
+    // Tech logo sprites disabled for a cleaner, non-spinning appearance
 
     // Setup selective bloom effect (only bright objects glow)
     async function setupBloom() {
@@ -212,17 +177,6 @@ const HeroTesseract = () => {
 
       container.rotation.x += speed3Dx;
       container.rotation.y += speed3Dy;
-
-      // Update sprites
-      const orbitSpeedBase = 0.0015;
-      const orbitSpeed = Math.max(0.0005, orbitSpeedBase * scrollFactor);
-
-      sprites.forEach((item) => {
-        item.angle += orbitSpeed;
-        const x = Math.cos(item.angle) * radius;
-        const y = Math.sin(item.angle) * radius;
-        item.sprite.position.set(x, y, item.sprite.position.z);
-      });
 
       if (composer) {
         composer.render();

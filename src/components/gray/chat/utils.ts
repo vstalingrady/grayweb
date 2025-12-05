@@ -62,8 +62,11 @@ export const buildAssistantErrorReply = (cause: unknown) => {
     return `${base} Check that the API is reachable and try again.`;
 };
 
+const MCP_TOOL_BLOCK_REGEX = /<use_mcp_tool[\s\S]*?<\/use_mcp_tool>/gi;
+
 export const normalizeAssistantContent = (candidate: string | null | undefined, prompt: string) => {
-    const trimmed = (candidate ?? "").trim();
+    const raw = (candidate ?? "").replace(MCP_TOOL_BLOCK_REGEX, "");
+    const trimmed = raw.trim();
     return trimmed.length > 0 ? trimmed : buildAssistantReply(prompt);
 };
 

@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { ChevronsRight, ChevronsUp, UserRound } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 import { useUser } from "@/contexts/UserContext";
 import styles from "@/app/gray/GrayPageClient.module.css";
 import {
@@ -41,7 +42,24 @@ export function GraySidebar({
   activeChatId = null,
 }: GraySidebarProps) {
   const { user } = useUser();
-  const sidebarAvatarUrl = viewerAvatarUrl ?? user?.profile_picture_url ?? null;
+  const baseAvatarUrl = viewerAvatarUrl ?? user?.profile_picture_url ?? null;
+  const [resolvedAvatarUrl, setResolvedAvatarUrl] = useState<string | null>(baseAvatarUrl);
+
+  useEffect(() => {
+    setResolvedAvatarUrl(baseAvatarUrl);
+  }, [baseAvatarUrl]);
+
+  const handleAvatarError = useCallback(() => {
+    if (!resolvedAvatarUrl) {
+      return;
+    }
+    // If the avatar fails to load, fall back to the default
+    // inline avatar (initials) instead of a placeholder image.
+    setResolvedAvatarUrl(null);
+  }, [resolvedAvatarUrl]);
+
+  const hasImage = Boolean(resolvedAvatarUrl);
+
   return (
     <aside className={styles.sidebar} data-expanded={isExpanded ? "true" : "false"}>
       <div className={styles.sidebarRail}>
@@ -85,12 +103,17 @@ export function GraySidebar({
           >
             <span
               className={styles.sidebarRailAvatarImage}
-              data-has-image={sidebarAvatarUrl ? "true" : "false"}
+              data-has-image={hasImage ? "true" : "false"}
             >
-              {sidebarAvatarUrl ? (
+              {hasImage ? (
                 <>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={sidebarAvatarUrl} alt={viewerName} />
+                  <img
+                    src={resolvedAvatarUrl!}
+                    alt={viewerName}
+                    referrerPolicy="no-referrer"
+                    onError={handleAvatarError}
+                  />
                 </>
               ) : (
                 viewerInitials
@@ -171,12 +194,17 @@ export function GraySidebar({
                   <span
                     className={styles.profileAvatar}
                     aria-hidden="true"
-                    data-has-image={sidebarAvatarUrl ? "true" : "false"}
+                    data-has-image={hasImage ? "true" : "false"}
                   >
-                    {sidebarAvatarUrl ? (
+                    {hasImage ? (
                       <>
                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={sidebarAvatarUrl} alt={viewerName} />
+                        <img
+                          src={resolvedAvatarUrl!}
+                          alt={viewerName}
+                          referrerPolicy="no-referrer"
+                          onError={handleAvatarError}
+                        />
                       </>
                     ) : (
                       <UserRound size={22} />

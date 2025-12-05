@@ -8,7 +8,7 @@ import { type HabitItem, type PlanItem, type PlanUpdates } from "./types";
 import { mapPlansToCalendarEvents, PLAN_EVENT_ID_PREFIX } from "./planCalendarUtils";
 
 const PANEL_HEIGHT =
-  "clamp(360px, calc(100vh - (320px + var(--gray-chat-bar-clearance, 112px))), 660px)";
+  "clamp(360px, calc(100vh - (320px + var(--gray-chat-bar-clearance, 112px))), 820px)";
 const COMPACT_CALENDAR_HOUR_HEIGHT = 56;
 
 type PlanTab = "plans" | "habits";
@@ -162,7 +162,6 @@ export function GrayGeneralView({
       {showGreeting ? (
         <div className={styles.greetingStack}>
           <h1 className={styles.greeting}>{greeting}</h1>
-          <p className={styles.greetingDate}>{dateLabel}</p>
         </div>
       ) : null}
 

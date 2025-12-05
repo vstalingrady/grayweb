@@ -86,9 +86,9 @@ export const MAP_TRIGGER_PHRASE =
 
 // Reminder-related patterns
 export const EMPTY_CODE_FENCE_REGEX = /```(?:[a-zA-Z0-9_-]+)?\s*```/g;
-export const REMINDER_PRE_BLOCK_REGEX = /(?:```[a-z0-9_-]*[^\S\r\n]*\n\s*)?gray[._]reminder\s*$/i;
-export const REMINDER_CODE_BLOCK_REGEX = /```[a-z0-9_-]*[^\S\r\n]*\n[\s\S]*?gray[._]reminder[\s\S]*?```/gi;
-export const REMINDER_GENERIC_FENCE_REGEX = /```[a-z0-9_-]*[\s\S]*?(gray[\s\S]{0,120}?reminder)[\s\S]*?```/gi;
+export const REMINDER_PRE_BLOCK_REGEX = /(?:```[a-z0-9_-]*[^\S\r\n]*\n\s*)?gray[._](?:reminder|plan|habit)\s*$/i;
+export const REMINDER_CODE_BLOCK_REGEX = /```[a-z0-9_-]*[^\S\r\n]*\n[\s\S]*?gray[._](?:reminder|plan|habit)[\s\S]*?```/gi;
+export const REMINDER_GENERIC_FENCE_REGEX = /```[a-z0-9_-]*[\s\S]*?(gray[\s\S]{0,120}?(?:reminder|plan|habit))[\s\S]*?```/gi;
 
 // Title markers
 export const GRAY_TITLE_HTML_CAPTURE_REGEX = /<graytitle\b[^>]*>([\s\S]*?)<\/graytitle>/i;

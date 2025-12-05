@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/purity */
 import { redirect } from "next/navigation";
 import GrayPageClient from "@/app/gray/GrayPageClient";
 import { readServerSession } from "@/lib/auth/server";

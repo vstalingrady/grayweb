@@ -1,9 +1,193 @@
+"""
+Usage Tracker with Dynamic Model Pricing
+=========================================
+
+Fetches model pricing from OpenRouter API and tracks usage costs per user.
+Supports tier-based limits (Scout/Voyager/Pioneer) with monthly and 6-hour windows.
+"""
+
 import datetime
-from typing import Optional, Tuple
 import logging
+import os
+from typing import Any, Dict, Optional
+
+import httpx
 
 logger = logging.getLogger(__name__)
 
+# ---------------------------------------------------------------------------
+# Pricing Cache
+# ---------------------------------------------------------------------------
+
+_PRICING_CACHE: Dict[str, Dict[str, float]] = {}
+_PRICING_CACHE_EXPIRY: Optional[datetime.datetime] = None
+_PRICING_CACHE_TTL = datetime.timedelta(hours=6)
+
+# Fallback pricing per token (USD) if API fetch fails
+# Fetched from OpenRouter API on Dec 2024
+# Only includes models from ModelSelector.tsx + internal Gemini models
+FALLBACK_PRICING: Dict[str, Dict[str, float]] = {
+    # xAI Grok (Gray Lite default)
+    "x-ai/grok-4.1-fast": {"prompt": 2e-07, "completion": 5e-07, "cached": 2e-08},
+    
+    # Anthropic Claude (Pioneer models)
+    "anthropic/claude-sonnet-4.5": {"prompt": 3e-06, "completion": 1.5e-05, "cached": 3e-07},
+    "anthropic/claude-opus-4.5": {"prompt": 5e-06, "completion": 2.5e-05, "cached": 5e-07},
+    
+    # Google Gemini (Gray Pro + Pioneer)
+    "google/gemini-3-pro-preview": {"prompt": 2e-06, "completion": 1.2e-05, "cached": 2e-07},
+    "google/gemini-2.5-flash": {"prompt": 3e-07, "completion": 2.5e-06, "cached": 3e-08},
+    # Direct Gemini API model names (internal use)
+    "models/gemini-3-pro-preview": {"prompt": 2e-06, "completion": 1.2e-05, "cached": 2e-07},
+    "models/gemini-2.5-flash-lite": {"prompt": 1e-07, "completion": 4e-07, "cached": 1e-08},
+    "models/gemini-flash-lite-latest": {"prompt": 1e-07, "completion": 4e-07, "cached": 1e-08},
+    
+    # OpenAI GPT (Pioneer)
+    "openai/gpt-5.1-chat": {"prompt": 1.25e-06, "completion": 1e-05, "cached": 1.25e-07},
+    
+    # DeepSeek (Pioneer)
+    "deepseek/deepseek-v3.2": {"prompt": 2.7e-07, "completion": 4e-07, "cached": 2.7e-08},
+    "deepseek/deepseek-v3.2-speciale": {"prompt": 2.7e-07, "completion": 4.1e-07, "cached": 2.7e-08},
+    
+    # Moonshot Kimi (Pioneer)
+    "moonshotai/kimi-k2-thinking": {"prompt": 4.5e-07, "completion": 2.35e-06, "cached": 4.5e-08},
+}
+
+# Default pricing for unknown models
+DEFAULT_PRICING = {"prompt": 1.00e-6, "completion": 5.00e-6, "cached": 0.10e-6}
+
+
+async def _fetch_openrouter_pricing() -> Dict[str, Dict[str, float]]:
+    """Fetch current model pricing from OpenRouter API."""
+    global _PRICING_CACHE, _PRICING_CACHE_EXPIRY
+    
+    now = datetime.datetime.now(datetime.timezone.utc)
+    
+    # Return cached if still valid
+    if _PRICING_CACHE and _PRICING_CACHE_EXPIRY and now < _PRICING_CACHE_EXPIRY:
+        return _PRICING_CACHE
+    
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get("https://openrouter.ai/api/v1/models")
+            response.raise_for_status()
+            data = response.json()
+        
+        pricing = {}
+        for model in data.get("data", []):
+            model_id = model.get("id", "")
+            model_pricing = model.get("pricing", {})
+            
+            # OpenRouter returns per-token prices as strings
+            try:
+                prompt_price = float(model_pricing.get("prompt", 0))
+                completion_price = float(model_pricing.get("completion", 0))
+                # Cached pricing if available, otherwise estimate as 10% of prompt
+                cached_price = prompt_price * 0.1
+                
+                # Skip models with -1 (variable pricing)
+                if prompt_price < 0 or completion_price < 0:
+                    continue
+                    
+                pricing[model_id] = {
+                    "prompt": prompt_price,
+                    "completion": completion_price,
+                    "cached": cached_price,
+                }
+            except (ValueError, TypeError):
+                continue
+        
+        if pricing:
+            _PRICING_CACHE = pricing
+            _PRICING_CACHE_EXPIRY = now + _PRICING_CACHE_TTL
+            logger.info(f"Fetched pricing for {len(pricing)} models from OpenRouter")
+            return pricing
+            
+    except Exception as e:
+        logger.warning(f"Failed to fetch OpenRouter pricing: {e}")
+    
+    return {}
+
+
+def _get_model_pricing(model_id: str) -> Dict[str, float]:
+    """Get pricing for a specific model, checking cache and fallbacks."""
+    # Check dynamic cache first
+    if model_id in _PRICING_CACHE:
+        return _PRICING_CACHE[model_id]
+    
+    # Check fallback pricing
+    if model_id in FALLBACK_PRICING:
+        return FALLBACK_PRICING[model_id]
+    
+    # Try to find by partial match (e.g., "grok-4.1-fast" matches "x-ai/grok-4.1-fast")
+    model_lower = model_id.lower()
+    for key, value in FALLBACK_PRICING.items():
+        if model_lower in key.lower() or key.lower() in model_lower:
+            return value
+    
+    # Return default pricing
+    logger.warning(f"No pricing found for model {model_id}, using defaults")
+    return DEFAULT_PRICING
+
+
+def calculate_cost(
+    model_id: str,
+    input_tokens: int,
+    output_tokens: int,
+    cached_tokens: int = 0,
+) -> float:
+    """Calculate the cost for a request based on token counts and model pricing."""
+    pricing = _get_model_pricing(model_id)
+    
+    cost = (
+        (cached_tokens * pricing["cached"])
+        + (input_tokens * pricing["prompt"])
+        + (output_tokens * pricing["completion"])
+    )
+    
+    return cost
+
+
+# ---------------------------------------------------------------------------
+# Tier Limits
+# ---------------------------------------------------------------------------
+
+# All limits are in USD
+LIMITS = {
+    # Scout: free tier - generous for personal use
+    # ~100 messages per 6-hour window, ~4,400 per month (at Grok lite pricing)
+    "scout": {
+        "monthly_cost": 2.00,
+        "six_hour_cost": 0.045,
+    },
+    # Voyager: $17/month global, Rp77k Indonesia
+    # ~500 messages per 6-hour, ~22,000 per month
+    "voyager": {
+        "monthly_cost": 10.00,
+        "six_hour_cost": 0.225,
+    },
+    # Pioneer: $37/month global, Rp377k Indonesia
+    # ~2,500 messages per 6-hour, ~111,000 per month (generous limits)
+    "pioneer": {
+        "monthly_cost": 50.00,
+        "six_hour_cost": 1.125,
+    },
+}
+
+
+def get_limits_for_tier(tier: str) -> Dict[str, Any]:
+    """Get usage limits for a specific tier."""
+    base = LIMITS.get(tier.lower(), LIMITS["pioneer"])
+    return {
+        "monthly_cost": base["monthly_cost"],
+        "six_hour_cost": base["six_hour_cost"],
+        "is_unlimited": False,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Helper Functions
+# ---------------------------------------------------------------------------
 
 def _coerce_datetime(value: object) -> Optional[datetime.datetime]:
     """Normalize persisted reset timestamps to timezone-aware datetimes."""
@@ -12,33 +196,17 @@ def _coerce_datetime(value: object) -> Optional[datetime.datetime]:
     if isinstance(value, datetime.date):
         return datetime.datetime.combine(value, datetime.time.min, tzinfo=datetime.timezone.utc)
     if isinstance(value, str):
-        # Try standard ISO format first (handles microseconds and offsets)
         try:
             parsed = datetime.datetime.fromisoformat(value)
             return parsed if parsed.tzinfo else parsed.replace(tzinfo=datetime.timezone.utc)
         except Exception:
             pass
-
-        # Try specific formats for backward compatibility
         for fmt in ("%Y-%m-%dT%H:%M:%S%z", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d"):
             try:
                 parsed = datetime.datetime.strptime(value, fmt)
                 return parsed if parsed.tzinfo else parsed.replace(tzinfo=datetime.timezone.utc)
             except Exception:
                 continue
-        # Fallback for legacy six-hour block IDs like "2025-11-29-3"
-        try:
-            date_part, block_part = value.rsplit("-", 1)
-            base_date = datetime.date.fromisoformat(date_part)
-            block_index = max(0, min(3, int(block_part)))
-            start_hour = block_index * 6
-            return datetime.datetime.combine(
-                base_date,
-                datetime.time(start_hour, 0, 0),
-                tzinfo=datetime.timezone.utc,
-            )
-        except Exception:
-            return None
     return None
 
 
@@ -46,71 +214,48 @@ def _coerce_date(value: object) -> Optional[datetime.date]:
     dt_value = _coerce_datetime(value)
     return dt_value.date() if dt_value else None
 
-# Grok pricing (per million tokens)
-# Cached: $0.05, Input: $0.20, Output: $0.50
-PRICE_CACHED_PER_MILLION = 0.05
-PRICE_INPUT_PER_MILLION = 0.20
-PRICE_OUTPUT_PER_MILLION = 0.50
 
-LIMITS = {
-    # Scout: temporarily unlimited usage (legacy; we default users to Pioneer)
-    "scout": {
-        "monthly_cost": None,
-        "is_unlimited": True,
-    },
-    "voyager": {
-        "monthly_cost": 6.00,
-    },
-    "pioneer": {
-        "monthly_cost": 24.00,
-        "daily_gemini_pro_messages": 50,
-    }
-}
-
-# Add default sub-limits logic
-def get_limits_for_tier(tier: str):
-    base = LIMITS.get(tier, LIMITS["pioneer"])
-    monthly = base.get("monthly_cost")
-    is_unlimited = bool(base.get("is_unlimited", False))
-
-    if monthly is None:
-        return {
-            "monthly_cost": None,
-            "six_hour_cost": None,
-            "is_unlimited": True,
-        }
-
-    # Default policies:
-    # 6-Hour = Monthly / 120 (30 days × 4 six-hour blocks per day)
-    # This gives each 6-hour window an equal portion of the monthly budget
-    return {
-        "monthly_cost": monthly,
-        "six_hour_cost": monthly / 120.0,
-        "is_unlimited": is_unlimited,
-        "daily_gemini_pro_messages": base.get("daily_gemini_pro_messages"),
-    }
+# ---------------------------------------------------------------------------
+# Exceptions
+# ---------------------------------------------------------------------------
 
 class UsageLimitExceeded(Exception):
-    def __init__(self, message: str, tier: str, next_reset_time: Optional[datetime.datetime] = None):
+    """Raised when a user exceeds their usage limits."""
+    
+    def __init__(
+        self,
+        message: str,
+        tier: str,
+        next_reset_time: Optional[datetime.datetime] = None,
+    ):
         self.message = message
         self.tier = tier
         self.next_reset_time = next_reset_time
         super().__init__(message)
 
+
+# ---------------------------------------------------------------------------
+# Usage Tracker
+# ---------------------------------------------------------------------------
+
 class UsageTracker:
+    """Tracks and enforces user usage limits based on cost."""
+    
     def __init__(self, db):
         self.db = db
 
     async def _get_user_usage(self, user_id: int):
+        """Fetch current usage data for a user."""
         query = """
-            SELECT plan_tier, daily_token_usage, monthly_cost_usage, last_daily_reset, last_monthly_reset,
-                   six_hour_cost_usage, last_six_hour_reset, daily_gemini_pro_usage, last_daily_gemini_pro_reset
+            SELECT plan_tier, daily_token_usage, monthly_cost_usage, 
+                   last_daily_reset, last_monthly_reset,
+                   six_hour_cost_usage, last_six_hour_reset
             FROM users WHERE id = :id
         """
         return await self.db.fetch_one(query=query, values={"id": user_id})
 
-    async def _reset_counters_if_needed(self, user_id: int, usage_data):
-        # Normalize to a mutable dict; databases.Record lacks .get().
+    async def _reset_counters_if_needed(self, user_id: int, usage_data) -> Dict[str, Any]:
+        """Reset usage counters if their time windows have expired."""
         if not isinstance(usage_data, dict):
             usage_data = dict(usage_data)
 
@@ -118,19 +263,19 @@ class UsageTracker:
         today = now.date()
         updates = {}
 
-        # 1. Daily Reset (legacy token counter)
+        # Daily Reset (legacy token counter)
         last_daily_date = _coerce_date(usage_data.get("last_daily_reset"))
         if last_daily_date != today:
             updates["daily_token_usage"] = 0
             updates["last_daily_reset"] = now.isoformat()
 
-        # 2. Monthly Reset
+        # Monthly Reset
         last_monthly_date = _coerce_date(usage_data.get("last_monthly_reset"))
         if not last_monthly_date or (last_monthly_date.year, last_monthly_date.month) != (today.year, today.month):
             updates["monthly_cost_usage"] = 0.0
             updates["last_monthly_reset"] = now.isoformat()
 
-        # 3. 6-Hour Reset
+        # 6-Hour Reset
         last_six_hour_dt = _coerce_datetime(usage_data.get("last_six_hour_reset"))
         current_block_index = now.hour // 6
         current_block_start = now.replace(hour=current_block_index * 6, minute=0, second=0, microsecond=0)
@@ -146,12 +291,6 @@ class UsageTracker:
             updates["six_hour_cost_usage"] = 0.0
             updates["last_six_hour_reset"] = current_block_start.isoformat()
 
-        # 4. Daily Gemini Pro Reset
-        last_daily_pro_date = _coerce_date(usage_data.get("last_daily_gemini_pro_reset"))
-        if last_daily_pro_date != today:
-            updates["daily_gemini_pro_usage"] = 0
-            updates["last_daily_gemini_pro_reset"] = now
-
         if updates:
             set_clauses = ", ".join([f"{k} = :{k}" for k in updates.keys()])
             query = f"UPDATE users SET {set_clauses} WHERE id = :id"
@@ -165,29 +304,29 @@ class UsageTracker:
         return usage_data
 
     async def check_limits(self, user_id: int, model: Optional[str] = None):
+        """Check if user has exceeded their usage limits."""
         usage_data = await self._get_user_usage(user_id)
         if not usage_data:
-            return 
-            
+            return
+
         usage_data = await self._reset_counters_if_needed(user_id, usage_data)
-        
-        tier = (usage_data["plan_tier"] or "pioneer").lower()
-        if tier == "scout":
-            tier = "pioneer"
+
+        tier = (usage_data["plan_tier"] or "scout").lower()
         limits = get_limits_for_tier(tier)
+        
         if limits.get("is_unlimited"):
             return
+
         now = datetime.datetime.now(datetime.timezone.utc)
-        
-        # Check Monthly
+
+        # Check Monthly Limit
         current_monthly = usage_data["monthly_cost_usage"] or 0.0
         if current_monthly >= limits["monthly_cost"]:
             if now.month == 12:
                 next_reset = datetime.datetime(now.year + 1, 1, 1, tzinfo=datetime.timezone.utc)
             else:
                 next_reset = datetime.datetime(now.year, now.month + 1, 1, tzinfo=datetime.timezone.utc)
-            
-            # Defensive check: Ensure reset is in the future
+
             if next_reset <= now:
                 next_reset = now + datetime.timedelta(minutes=1)
 
@@ -198,26 +337,27 @@ class UsageTracker:
                     "tier": tier,
                     "usage": float(current_monthly),
                     "limit": float(limits["monthly_cost"]),
-                    "next_reset": next_reset.isoformat() if next_reset else None,
-                    "last_monthly_reset": usage_data.get("last_monthly_reset"),
                 },
             )
-            raise UsageLimitExceeded(f"Monthly limit reached.", tier, next_reset)
+            raise UsageLimitExceeded("Monthly limit reached.", tier, next_reset)
 
-        # Check 6-Hour
+        # Check 6-Hour Limit
         current_six_hour = usage_data["six_hour_cost_usage"] or 0.0
         if current_six_hour >= limits["six_hour_cost"]:
             current_block = now.hour // 6
             next_block_hour = (current_block + 1) * 6
-            
-            next_reset_day = now.date()
-            if next_block_hour >= 24: # If next block is past midnight
-                next_reset_day += datetime.timedelta(days=1)
-                next_block_hour = 0 # Reset to 00:00 for the next day
 
-            next_reset = datetime.datetime.combine(next_reset_day, datetime.time(next_block_hour, 0, 0), tzinfo=datetime.timezone.utc)
-            
-            # Defensive check: Ensure reset is in the future
+            next_reset_day = now.date()
+            if next_block_hour >= 24:
+                next_reset_day += datetime.timedelta(days=1)
+                next_block_hour = 0
+
+            next_reset = datetime.datetime.combine(
+                next_reset_day,
+                datetime.time(next_block_hour, 0, 0),
+                tzinfo=datetime.timezone.utc,
+            )
+
             if next_reset <= now:
                 next_reset = now + datetime.timedelta(minutes=1)
 
@@ -228,86 +368,60 @@ class UsageTracker:
                     "tier": tier,
                     "usage": float(current_six_hour),
                     "limit": float(limits["six_hour_cost"]),
-                    "next_reset": next_reset.isoformat() if next_reset else None,
-                    "last_six_hour_reset": usage_data.get("last_six_hour_reset"),
                 },
             )
-            raise UsageLimitExceeded(f"6-hour burst limit reached.", tier, next_reset)
+            raise UsageLimitExceeded("6-hour burst limit reached.", tier, next_reset)
 
-        # Check Gemini Pro Daily Limit
-        if model and "gemini-3-pro" in model and limits.get("daily_gemini_pro_messages"):
-            current_pro_usage = usage_data.get("daily_gemini_pro_usage") or 0
-            pro_limit = limits["daily_gemini_pro_messages"]
-            
-            if current_pro_usage >= pro_limit:
-                next_reset = datetime.datetime.combine(
-                    now.date() + datetime.timedelta(days=1),
-                    datetime.time.min,
-                    tzinfo=datetime.timezone.utc
-                )
-                
-                logger.warning(
-                    "Gemini Pro daily limit exceeded",
-                    extra={
-                        "user_id": user_id,
-                        "tier": tier,
-                        "usage": current_pro_usage,
-                        "limit": pro_limit,
-                        "next_reset": next_reset.isoformat(),
-                    },
-                )
-                raise UsageLimitExceeded(f"Daily Gemini Pro limit reached ({pro_limit} messages).", tier, next_reset)
-
-    async def get_usage_status(self, user_id: int) -> dict:
+    async def get_usage_status(self, user_id: int) -> Optional[Dict[str, Any]]:
+        """Get current usage status for a user."""
         usage_data = await self._get_user_usage(user_id)
         if not usage_data:
             return None
-            
+
         usage_data = await self._reset_counters_if_needed(user_id, usage_data)
-        
-        tier = (usage_data["plan_tier"] or "pioneer").lower()
-        if tier == "scout":
-            tier = "pioneer"
+
+        tier = (usage_data["plan_tier"] or "scout").lower()
         limits = get_limits_for_tier(tier)
+        
         if limits.get("is_unlimited"):
             return {
                 "tier": tier,
                 "monthly_usage": float(usage_data["monthly_cost_usage"] or 0.0),
                 "monthly_limit": None,
                 "is_monthly_limit_reached": False,
-                "next_monthly_reset": None,
                 "six_hour_usage": float(usage_data["six_hour_cost_usage"] or 0.0),
                 "six_hour_limit": None,
                 "is_six_hour_limit_reached": False,
-                "next_six_hour_reset": None,
                 "is_unlimited": True,
             }
+
         now = datetime.datetime.utcnow()
-        
-        # Calculate Monthly Status
+
         current_monthly = usage_data["monthly_cost_usage"] or 0.0
         monthly_limit = limits["monthly_cost"]
         is_monthly_limit_reached = current_monthly >= monthly_limit
-        
+
         if now.month == 12:
             next_monthly_reset = datetime.datetime(now.year + 1, 1, 1, tzinfo=datetime.timezone.utc)
         else:
             next_monthly_reset = datetime.datetime(now.year, now.month + 1, 1, tzinfo=datetime.timezone.utc)
 
-        # Calculate 6-Hour Status
         current_six_hour = usage_data["six_hour_cost_usage"] or 0.0
         six_hour_limit = limits["six_hour_cost"]
         is_six_hour_limit_reached = current_six_hour >= six_hour_limit
-        
+
         current_block = now.hour // 6
         next_block_hour = (current_block + 1) * 6
-        
         next_reset_day = now.date()
-        if next_block_hour >= 24: # If next block is past midnight
+        if next_block_hour >= 24:
             next_reset_day += datetime.timedelta(days=1)
-            next_block_hour = 0 # Reset to 00:00 for the next day
+            next_block_hour = 0
 
-        next_six_hour_reset = datetime.datetime.combine(next_reset_day, datetime.time(next_block_hour, 0, 0), tzinfo=datetime.timezone.utc)
+        next_six_hour_reset = datetime.datetime.combine(
+            next_reset_day,
+            datetime.time(next_block_hour, 0, 0),
+            tzinfo=datetime.timezone.utc,
+        )
 
         return {
             "tier": tier,
@@ -329,14 +443,13 @@ class UsageTracker:
         cached_tokens: int = 0,
         model: Optional[str] = None,
     ):
-        cost = (
-            (cached_tokens * PRICE_CACHED_PER_MILLION / 1_000_000)
-            + (input_tokens * PRICE_INPUT_PER_MILLION / 1_000_000)
-            + (output_tokens * PRICE_OUTPUT_PER_MILLION / 1_000_000)
-        )
+        """Track token usage and update cost counters."""
+        # Calculate cost based on model-specific pricing
+        model_id = model or "x-ai/grok-4.1-fast"  # Default to Grok lite
+        cost = calculate_cost(model_id, input_tokens, output_tokens, cached_tokens)
 
         total_tokens = input_tokens + output_tokens + cached_tokens
-        
+
         query = """
             UPDATE users 
             SET daily_token_usage = COALESCE(daily_token_usage, 0) + :tokens,
@@ -344,16 +457,27 @@ class UsageTracker:
                 six_hour_cost_usage = COALESCE(six_hour_cost_usage, 0) + :cost
             WHERE id = :id
         """
-        await self.db.execute(query=query, values= {
-            "id": user_id,
-            "tokens": total_tokens,
-            "cost": cost
-        })
+        await self.db.execute(
+            query=query,
+            values={"id": user_id, "tokens": total_tokens, "cost": cost},
+        )
 
-        if model and "gemini-3-pro" in model:
-            query_pro = """
-                UPDATE users
-                SET daily_gemini_pro_usage = COALESCE(daily_gemini_pro_usage, 0) + 1
-                WHERE id = :id
-            """
-            await self.db.execute(query=query_pro, values={"id": user_id})
+        logger.debug(
+            f"Tracked usage for user {user_id}: {total_tokens} tokens, ${cost:.6f} cost",
+            extra={
+                "user_id": user_id,
+                "model": model_id,
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
+                "cached_tokens": cached_tokens,
+                "cost": cost,
+            },
+        )
+
+
+async def refresh_pricing_cache():
+    """Manually refresh the pricing cache from OpenRouter."""
+    global _PRICING_CACHE, _PRICING_CACHE_EXPIRY
+    _PRICING_CACHE = {}
+    _PRICING_CACHE_EXPIRY = None
+    return await _fetch_openrouter_pricing()

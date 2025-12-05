@@ -23,6 +23,13 @@ security = HTTPBearer()
 _user_cache: Dict[str, tuple[Dict[str, Any], float]] = {}
 _USER_CACHE_TTL = 10.0  # 10 seconds
 
+# Optional, explicitly gated insecure fallback for local development.
+# When enabled, the backend may accept JWTs that were NOT validated
+# against Supabase or a shared secret, based only on their payload.
+_ALLOW_INSECURE_JWT_FALLBACK = (
+    os.getenv("ALLOW_INSECURE_JWT_FALLBACK", "").strip().lower() in ("1", "true", "yes")
+)
+
 def _get_cached_user(auth_user_id: str) -> Optional[Dict[str, Any]]:
     """Get user from cache if valid"""
     if auth_user_id in _user_cache:
@@ -44,6 +51,12 @@ def _cache_user(auth_user_id: str, user_data: Dict[str, Any]):
             del _user_cache[key]
     
     _user_cache[auth_user_id] = (user_data, time.time())
+
+
+def invalidate_user_cache(auth_user_id: str):
+    """Manually invalidate user cache (e.g. after profile updates)"""
+    if auth_user_id in _user_cache:
+        del _user_cache[auth_user_id]
 
 
 def _decode_token_without_signature(token: str) -> Optional[Dict[str, Any]]:
@@ -91,6 +104,28 @@ except ImportError:
 
 SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET")
 
+# Token cache to avoid hitting Supabase Auth on every request
+_token_cache: Dict[str, tuple[Dict[str, Any], float]] = {}
+_TOKEN_CACHE_TTL = 60.0  # 60 seconds
+
+def _get_cached_token_payload(token: str) -> Optional[Dict[str, Any]]:
+    if token in _token_cache:
+        payload, timestamp = _token_cache[token]
+        if time.time() - timestamp < _TOKEN_CACHE_TTL:
+            return payload
+        else:
+            del _token_cache[token]
+    return None
+
+def _cache_token_payload(token: str, payload: Dict[str, Any]):
+    # Prune old entries if cache gets too big
+    if len(_token_cache) > 1000:
+        # Remove oldest 20%
+        sorted_items = sorted(_token_cache.items(), key=lambda x: x[1][1])
+        for key, _ in sorted_items[:200]:
+            del _token_cache[key]
+    _token_cache[token] = (payload, time.time())
+
 async def verify_supabase_token(token: str) -> Dict[str, Any]:
     """
     Verify Supabase JWT token and return user payload.
@@ -107,6 +142,11 @@ async def verify_supabase_token(token: str) -> Dict[str, Any]:
     Raises:
         HTTPException: If token is invalid or expired
     """
+    # Check cache first
+    cached_payload = _get_cached_token_payload(token)
+    if cached_payload:
+        return cached_payload
+
     decoded_payload: Optional[Dict[str, Any]] = None
 
     # Fast path: validate exp to fail closed before hitting Supabase
@@ -169,11 +209,13 @@ async def verify_supabase_token(token: str) -> Dict[str, Any]:
             response = None
 
         if response and response.user:
-            return {
+            payload = {
                 "sub": response.user.id,
                 "email": response.user.email,
                 "user_metadata": response.user.user_metadata or {}
             }
+            _cache_token_payload(token, payload)
+            return payload
         
         # Fallback: if we already validated the signature locally, trust the decoded payload
         if decoded_payload and SUPABASE_JWT_SECRET:
@@ -184,25 +226,31 @@ async def verify_supabase_token(token: str) -> Dict[str, Any]:
                     detail="Invalid authentication token"
                 )
             logger.warning("Supabase validation failed; falling back to local JWT verification")
-            return {
+            payload = {
                 "sub": sub,
                 "email": decoded_payload.get("email"),
                 "user_metadata": decoded_payload.get("user_metadata") or {}
             }
+            _cache_token_payload(token, payload)
+            return payload
 
-        # Fallback #2: recover payload without signature if Supabase session lookup failed
-        # DISABLED: This is insecure as it allows any JWT with a sub to pass if Supabase fails.
-        # decoded_fallback = decoded_payload or _decode_token_without_signature(token)
-        # if decoded_fallback and decoded_fallback.get("sub"):
-        #     logger.warning(
-        #         "Supabase validation failed; using decoded JWT payload (session missing)",
-        #         extra={"error": supabase_error},
-        #     )
-        #     return {
-        #         "sub": decoded_fallback.get("sub"),
-        #         "email": decoded_fallback.get("email"),
-        #         "user_metadata": decoded_fallback.get("user_metadata") or {},
-        #     }
+        # Fallback #2 (opt‑in, insecure): recover payload without signature if Supabase session lookup failed.
+        # This is intentionally gated behind an env flag for local development only.
+        if _ALLOW_INSECURE_JWT_FALLBACK:
+            decoded_fallback = decoded_payload or _decode_token_without_signature(token)
+            if decoded_fallback and decoded_fallback.get("sub"):
+                logger.warning(
+                    "Supabase validation failed; using decoded JWT payload via insecure fallback "
+                    "(ALLOW_INSECURE_JWT_FALLBACK enabled). Do NOT use this mode in production.",
+                    extra={"error": supabase_error},
+                )
+                payload = {
+                    "sub": decoded_fallback.get("sub"),
+                    "email": decoded_fallback.get("email"),
+                    "user_metadata": decoded_fallback.get("user_metadata") or {},
+                }
+                _cache_token_payload(token, payload)
+                return payload
 
         logger.warning("Invalid token: user not found")
         raise HTTPException(

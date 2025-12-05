@@ -56,6 +56,12 @@ export type ChatMessage = {
   reminders?: GrayReminderCreatedPayload[];
   groundingMetadata?: GroundingMetadata;
   backendTimings?: ChatStreamTiming;
+  /**
+   * History of assistant responses for this message.
+   * Index 0 is the original, subsequent entries are regenerations.
+   */
+  variants?: string[];
+  activeVariantIndex?: number;
 };
 
 type ConversationHistoryEntryPayload = {
@@ -133,6 +139,7 @@ type ChatContextValue = {
   hasAutoStreamTriggered: (sessionId: string, messageId?: string | null) => boolean;
   markAutoStreamTriggered: (sessionId: string, messageId?: string | null) => void;
   resetAutoStreamState: (sessionId?: string | null) => void;
+  markHasSeenGeneralChat: () => Promise<void>;
   personalizedSystemPrompt: string;
   attachments: MediaUpload[];
   isAttachmentUploading: boolean;
@@ -187,8 +194,10 @@ type ChatContextValue = {
   loadConversationMessages: (sessionId: string) => Promise<void>;
   reasoningMode: boolean;
   setReasoningMode: (value: boolean) => void;
-  modelTier: "lite" | "pro";
-  setModelTier: (value: "lite" | "pro") => void;
+  modelTier: "lite" | "pro" | "pioneer";
+  setModelTier: (value: "lite" | "pro" | "pioneer") => void;
+  selectedModelId: string | null;
+  setSelectedModelId: (value: string | null) => void;
   questionnaireSession: QuestionnaireSession | null;
   startQuestionnaire: (mode: "quick" | "deep") => void;
   cancelQuestionnaire: () => void;
@@ -265,9 +274,12 @@ export const buildPersonalizedSystemPrompt = (
 ) => {
   const sections: string[] = [];
 
-  const trimmedBasePrompt = basePrompt?.trim();
-  if (trimmedBasePrompt) {
-    sections.push(trimmedBasePrompt);
+  // Use override if available, otherwise fallback to base prompt
+  const effectiveBasePrompt =
+    user?.personalization_system_prompt_override?.trim() || basePrompt?.trim();
+
+  if (effectiveBasePrompt) {
+    sections.push(effectiveBasePrompt);
   }
 
   if (user && includeProfile) {
@@ -591,8 +603,11 @@ const shouldAutoEnableMapsForMessage = (message: string) => {
   return false;
 };
 
+const MCP_TOOL_BLOCK_REGEX = /<use_mcp_tool[\s\S]*?<\/use_mcp_tool>/gi;
+
 export const normalizeAssistantContent = (candidate: string | null | undefined, prompt: string) => {
-  const trimmed = (candidate ?? "").trim();
+  const raw = (candidate ?? "").replace(MCP_TOOL_BLOCK_REGEX, "");
+  const trimmed = raw.trim();
   return trimmed.length > 0 ? trimmed : buildAssistantReply(prompt);
 };
 
@@ -600,12 +615,15 @@ export const normalizeAssistantContent = (candidate: string | null | undefined, 
  * Parsed representation of a Gray reminder confirmation block embedded
  * in assistant output. This is UI-facing, authoritative metadata.
  */
-export type GrayReminderEntityType = "plan" | "habit";
+export type GrayReminderEntityType = "plan" | "habit" | "reminder";
+export type GrayReminderPayloadType = "gray.reminder" | "gray.plan" | "gray.habit";
+export type GrayReminderStatus = "created" | "updated" | "completed" | "deleted";
+export type GrayReminderSource = "mcp/plans-habits-server" | "mcp";
 
 export interface GrayReminderCreatedPayload {
-  type: "gray.reminder";
-  source: "mcp/plans-habits-server";
-  status: "created" | "updated" | "completed" | "deleted";
+  type: GrayReminderPayloadType;
+  source: GrayReminderSource;
+  status: GrayReminderStatus;
   entity: GrayReminderEntityType;
   delivery_mode?: string | null;
   data: {
@@ -630,9 +648,9 @@ export interface GrayReminderCreatedPayload {
  *   a dedicated “real reminder created” chip instead of leaking raw JSON.
  */
 const EMPTY_CODE_FENCE_REGEX = /```(?:[a-zA-Z0-9_-]+)?\s*```/g;
-const REMINDER_PRE_BLOCK_REGEX = /(?:```[a-z0-9_-]*[^\S\r\n]*\n\s*)?gray[._]reminder\s*$/i;
-const REMINDER_CODE_BLOCK_REGEX = /```[a-z0-9_-]*[^\S\r\n]*\n[\s\S]*?gray[._]reminder[\s\S]*?```/gi;
-const REMINDER_GENERIC_FENCE_REGEX = /```[a-z0-9_-]*[\s\S]*?(gray[\s\S]{0,120}?reminder)[\s\S]*?```/gi;
+const REMINDER_PRE_BLOCK_REGEX = /(?:```[a-z0-9_-]*[^\S\r\n]*\n\s*)?gray[._](?:reminder|plan|habit)\s*$/i;
+const REMINDER_CODE_BLOCK_REGEX = /```[a-z0-9_-]*[^\S\r\n]*\n[\s\S]*?gray[._](?:reminder|plan|habit)[\s\S]*?```/gi;
+const REMINDER_GENERIC_FENCE_REGEX = /```[a-z0-9_-]*[\s\S]*?(gray[\s\S]{0,120}?(?:reminder|plan|habit))[\s\S]*?```/gi;
 
 type GrayReminderWrapper = {
   message: string;
@@ -646,20 +664,73 @@ type ParsedReminderBlock = {
   wrapper?: GrayReminderWrapper;
 };
 
+const REMINDER_STATUS_VALUES: GrayReminderStatus[] = ["created", "updated", "completed", "deleted"];
+const REMINDER_TYPE_VALUES: GrayReminderPayloadType[] = ["gray.reminder", "gray.plan", "gray.habit"];
+const REMINDER_SOURCE_VALUES: GrayReminderSource[] = ["mcp/plans-habits-server", "mcp"];
+
+const normalizeReminderType = (value: unknown): GrayReminderPayloadType | null => {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const normalized = value.trim().toLowerCase();
+  return REMINDER_TYPE_VALUES.find((type) => type === normalized) ?? null;
+};
+
+const normalizeReminderSource = (value: unknown): GrayReminderSource | null => {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const normalized = value.trim().toLowerCase();
+  return REMINDER_SOURCE_VALUES.find((source) => source === normalized) ?? null;
+};
+
+const normalizeReminderStatus = (value: unknown): GrayReminderStatus | null => {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const normalized = value.trim().toLowerCase();
+  return REMINDER_STATUS_VALUES.find((status) => status === normalized) ?? null;
+};
+
+const normalizeReminderEntity = (
+  value: unknown,
+  fallbackType?: GrayReminderPayloadType | null
+): GrayReminderEntityType => {
+  const normalized = typeof value === "string" ? value.trim().toLowerCase() : "";
+  if (normalized.startsWith("habit")) {
+    return "habit";
+  }
+  if (normalized.startsWith("plan")) {
+    return "plan";
+  }
+  if (normalized.startsWith("reminder")) {
+    return "reminder";
+  }
+  if (fallbackType === "gray.habit") {
+    return "habit";
+  }
+  if (fallbackType === "gray.plan") {
+    return "plan";
+  }
+  return "reminder";
+};
+
 const isFullReminderPayload = (candidate: Partial<GrayReminderCreatedPayload>): candidate is GrayReminderCreatedPayload => {
+  const type = normalizeReminderType(candidate?.type);
+  const status = normalizeReminderStatus(candidate?.status);
+  const source = normalizeReminderSource(candidate?.source);
+  if (!candidate || !type || !status || !source) {
+    return false;
+  }
+  if (!(candidate.entity === "plan" || candidate.entity === "habit" || candidate.entity === "reminder")) {
+    return false;
+  }
+  const data = candidate.data;
   return (
-    candidate != null &&
-    candidate.type === "gray.reminder" &&
-    candidate.source === "mcp/plans-habits-server" &&
-    (candidate.status === "created" ||
-      candidate.status === "updated" ||
-      candidate.status === "completed" ||
-      candidate.status === "deleted") &&
-    (candidate.entity === "plan" || candidate.entity === "habit") &&
-    candidate.data != null &&
-    typeof candidate.data.id !== "undefined" &&
-    typeof candidate.data.user_id === "number" &&
-    typeof candidate.data.label === "string"
+    data != null &&
+    typeof data.id !== "undefined" &&
+    typeof data.user_id === "number" &&
+    typeof data.label === "string"
   );
 };
 
@@ -727,10 +798,11 @@ const coerceLegacyReminderPayload = (candidate: Record<string, unknown>): GrayRe
   if (!label && !triggerTime) {
     return null;
   }
-  const legacyType = typeof candidate.type === "string" ? candidate.type.toLowerCase() : "plan";
-  const entity: GrayReminderEntityType = legacyType === "habit" ? "habit" : "plan";
-  const deliveryMode = entity;
-  const reminderStatus = typeof candidate.status === "string" ? candidate.status : null;
+  const normalizedType = normalizeReminderType(candidate.type) ?? "gray.reminder";
+  const entity = normalizeReminderEntity(candidate.entity ?? candidate.type, normalizedType);
+  const deliveryMode =
+    typeof candidate.delivery_mode === "string" ? candidate.delivery_mode : entity;
+  const reminderStatus = normalizeReminderStatus(candidate.status);
   const summary =
     typeof candidate.summary === "string"
       ? candidate.summary
@@ -756,9 +828,9 @@ const coerceLegacyReminderPayload = (candidate: Record<string, unknown>): GrayRe
   }
 
   return {
-    type: "gray.reminder",
-    source: "mcp/plans-habits-server",
-    status: "created",
+    type: normalizedType,
+    source: normalizeReminderSource(candidate.source) ?? "mcp/plans-habits-server",
+    status: reminderStatus ?? "created",
     entity,
     delivery_mode: deliveryMode,
     data: {
@@ -770,17 +842,88 @@ const coerceLegacyReminderPayload = (candidate: Record<string, unknown>): GrayRe
       delivery_mode: deliveryMode,
       summary,
       reminder_id: legacyId ?? null,
-      reminder_status: reminderStatus,
+      reminder_status: reminderStatus ?? undefined,
       reminder: Object.keys(reminderRecord).length ? reminderRecord : null,
     },
   };
 };
 
-const coerceReminderPayload = (candidate: unknown): GrayReminderCreatedPayload | null => {
+const coerceStructuredReminderPayload = (candidate: Record<string, unknown>): GrayReminderCreatedPayload | null => {
   if (isFullReminderPayload(candidate as Partial<GrayReminderCreatedPayload>)) {
     return candidate as GrayReminderCreatedPayload;
   }
+
+  const type = normalizeReminderType(candidate.type);
+  const status = normalizeReminderStatus((candidate as Record<string, unknown>).status) ?? "created";
+  const data = (candidate as Record<string, unknown>).data;
+  if (!type || !data || typeof data !== "object" || Array.isArray(data)) {
+    return null;
+  }
+
+  const label = typeof (data as Record<string, unknown>).label === "string"
+    ? (data as Record<string, unknown>).label
+    : null;
+  const reminderId =
+    (data as Record<string, unknown>).id ?? (data as Record<string, unknown>).reminder_id;
+  const userId = toNumber((data as Record<string, unknown>).user_id);
+  if (!label || typeof reminderId === "undefined" || typeof userId !== "number") {
+    return null;
+  }
+
+  const entity = normalizeReminderEntity(
+    (candidate as Record<string, unknown>).entity ??
+    (data as Record<string, unknown>).entity ??
+    (data as Record<string, unknown>).entity_type,
+    type
+  );
+  const deliveryMode =
+    typeof (candidate as Record<string, unknown>).delivery_mode === "string"
+      ? (candidate as Record<string, unknown>).delivery_mode
+      : typeof (data as Record<string, unknown>).delivery_mode === "string"
+        ? (data as Record<string, unknown>).delivery_mode as string
+        : entity;
+  const reminderStatus =
+    typeof (data as Record<string, unknown>).reminder_status === "string"
+      ? (data as Record<string, unknown>).reminder_status
+      : status;
+  const reminderRecord =
+    typeof (data as Record<string, unknown>).reminder === "object" &&
+      (data as Record<string, unknown>).reminder !== null
+      ? (data as Record<string, unknown>).reminder as Record<string, unknown>
+      : null;
+  const timeIso =
+    typeof (data as Record<string, unknown>).time_iso === "string"
+      ? (data as Record<string, unknown>).time_iso
+      : typeof (data as Record<string, unknown>).remind_at === "string"
+        ? (data as Record<string, unknown>).remind_at
+        : null;
+
+  return {
+    type,
+    source: normalizeReminderSource((candidate as Record<string, unknown>).source) ?? "mcp/plans-habits-server",
+    status,
+    entity,
+    delivery_mode: deliveryMode,
+    data: {
+      ...(data as Record<string, unknown>),
+      id: reminderId as string | number,
+      user_id: userId,
+      label,
+      time_iso: timeIso,
+      delivery_mode: deliveryMode,
+      reminder_id: (data as Record<string, unknown>).reminder_id ?? reminderId,
+      reminder_status: reminderStatus,
+      reminder: reminderRecord,
+    },
+  };
+};
+
+const coerceReminderPayload = (candidate: unknown): GrayReminderCreatedPayload | null => {
   if (candidate && typeof candidate === "object" && !Array.isArray(candidate)) {
+    const structured = coerceStructuredReminderPayload(candidate as Record<string, unknown>);
+    if (structured) {
+      return structured;
+    }
     return coerceLegacyReminderPayload(candidate as Record<string, unknown>);
   }
   return null;
@@ -847,7 +990,7 @@ const stripReminderPreamble = (segment: string): string => {
   }
   let updated = segment.replace(REMINDER_PRE_BLOCK_REGEX, "");
   if (updated === segment) {
-    updated = updated.replace(/gray[._]reminder\s*$/i, "");
+    updated = updated.replace(/gray[._](?:reminder|plan|habit)\s*$/i, "");
   }
   updated = updated.replace(/```[a-z0-9_-]*[^\S\r\n]*$/i, "");
   return updated;
@@ -878,7 +1021,7 @@ const unwrapToolCallCodeFences = (segment: string): string => {
     if (!inner) {
       return "";
     }
-    if (/gray[._]reminder/i.test(inner)) {
+    if (/gray[._](?:reminder|plan|habit)/i.test(inner)) {
       return "";
     }
     const lines = inner
@@ -903,6 +1046,15 @@ const stripIncompleteReminderArtifacts = (segment: string): string => {
 
   // Remove old, generic reminder code block regex which might remove valid JSON
   updated = updated.replace(REMINDER_GENERIC_FENCE_REGEX, "");
+
+  // Drop any direct JSON blobs that clearly reference reminder/plan/habit payloads
+  const typedJsonPattern = /\{[^{}]*gray[._](?:reminder|plan|habit)[^{}]*\}/gi;
+  updated = updated.replace(typedJsonPattern, "");
+
+  // Remove text tool-call fences for reminder tools that sometimes leak through
+  const toolJsonPattern =
+    /```(?:json)?\s*\{[\s\S]*?"tool"\s*:\s*"(?:create|update|delete)_(?:reminder|plan|habit)[\s\S]*?```/gi;
+  updated = updated.replace(toolJsonPattern, "");
 
   // Remove any raw JSON-like structure that contains reminder keywords but isn't in a code block
   // This is a backup for when the model forgets the code fences.
@@ -1027,10 +1179,8 @@ export const extractGrayRemindersFromText = (
       }
     }
   }
-  const hasModernReminder = reminders.some((reminder) => reminder.source === "mcp/plans-habits-server");
-  const filteredReminders = hasModernReminder
-    ? reminders.filter((reminder) => reminder.source === "mcp/plans-habits-server")
-    : reminders;
+  // Keep all reminders (deduped above). We no longer drop non-MCP sources to avoid losing cards.
+  const filteredReminders = reminders;
 
   // Reconstruct cleanText by omitting the raw blocks that were successfully parsed
   let cleanTextParts: string[] = [];
@@ -1442,7 +1592,7 @@ type ChatProviderProps = {
 };
 
 export function ChatProvider({ children, workspaceContext }: ChatProviderProps) {
-  const { user, waitForUser, updateUser } = useUser();
+  const { user, waitForUser, updateUser, refreshUser } = useUser();
   const [defaultSystemPrompt, setDefaultSystemPrompt] = useState<string | null>(null);
   const [showIntro, setShowIntro] = useState(false);
   const onboardingSeenRef = useRef(false);
@@ -1450,19 +1600,25 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
 
   useEffect(() => {
     let isMounted = true;
-    const controller = new AbortController();
+    let controller = new AbortController();
 
-    (async () => {
+    const loadSystemPrompt = async () => {
       try {
-        const response = await fetch("/system-prompt.txt", { signal: controller.signal });
+        controller.abort();
+        controller = new AbortController();
+        const response = await fetch("/system-prompts.json", {
+          signal: controller.signal,
+          cache: "no-store",
+        });
         if (!response.ok) {
           return;
         }
-        const text = await response.text();
+        const data = (await response.json()) as { chat?: string | null } | null;
         if (!isMounted) {
           return;
         }
-        const trimmed = text.trim();
+        const raw = typeof data?.chat === "string" ? data.chat : "";
+        const trimmed = raw.trim();
         setDefaultSystemPrompt(trimmed.length > 0 ? trimmed : null);
       } catch (error) {
         if (error instanceof DOMException && error.name === "AbortError") {
@@ -1470,7 +1626,24 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
         }
         console.error("Failed to load system prompt:", error);
       }
-    })();
+    };
+
+    void loadSystemPrompt();
+
+    if (typeof window !== "undefined" && typeof document !== "undefined") {
+      const handleVisibilityChange = () => {
+        if (document.visibilityState === "visible") {
+          void loadSystemPrompt();
+        }
+      };
+      window.addEventListener("visibilitychange", handleVisibilityChange);
+
+      return () => {
+        isMounted = false;
+        controller.abort();
+        window.removeEventListener("visibilitychange", handleVisibilityChange);
+      };
+    }
 
     return () => {
       isMounted = false;
@@ -1482,7 +1655,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
     () => buildPersonalizedSystemPrompt(user, defaultSystemPrompt),
     [user, defaultSystemPrompt]
   );
-  
+
   // Persist "has seen" state from user profile to local ref to prevent re-showing
   useEffect(() => {
     if (user?.has_seen_general_chat) {
@@ -1494,7 +1667,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       // Only allow reset if user is loaded and explicitly has it false
       // This prevents flashing if user is momentarily null/loading
       if (user && !user.has_seen_general_chat) {
-         onboardingKickoffRef.current = false;
+        onboardingKickoffRef.current = false;
       }
     }
   }, [user?.has_seen_general_chat, user?.id, user]);
@@ -1703,7 +1876,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
   const [selectedContextCacheId, setSelectedContextCacheId] = useState<number | null>(null);
   const [contextCacheMessage, setContextCacheMessage] = useState<string | null>(null);
   const [isContextCacheSaving, setIsContextCacheSaving] = useState(false);
-  const [webSearchEnabled, setWebSearchEnabled] = useState(true);
+  const [webSearchEnabled, setWebSearchEnabled] = useState(false);
   const [fileSearchStores, setFileSearchStores] = useState<{ name: string; display_name?: string }[]>([]);
   const [fileSearchDisplayName, setFileSearchDisplayName] = useState("");
   const [fileSearchStatus, setFileSearchStatus] = useState<string | null>(null);
@@ -1719,7 +1892,8 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
   const [fileSearchImportStatus, setFileSearchImportStatus] = useState<string | null>(null);
   const [fileSearchUploadInputRef] = useState<RefObject<HTMLInputElement | null>>({ current: null });
   const [reasoningMode, setReasoningMode] = useState(false);
-  const [modelTier, setModelTier] = useState<"lite" | "pro">("lite");
+  const [modelTier, setModelTier] = useState<"lite" | "pro" | "pioneer">("lite");
+  const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
   const lastAutoCachedWorkspaceRef = useRef<string | null>(null);
   const autoCacheInFlightRef = useRef(false);
 
@@ -2033,6 +2207,10 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
         // Skip syncing empty shells (e.g. shared links before hydration) so we don't wipe remote history.
         return;
       }
+      if (session.isResponding || session.pendingAutoStream) {
+        // Avoid racing with active streams; we'll sync once the session settles.
+        return;
+      }
       const payload = buildConversationHistoryPayload(session.messages);
       enqueueHistorySync(normalizedConversationId, payload);
       seen.add(normalizedConversationId);
@@ -2313,13 +2491,18 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
                 ...partial,
                 content: normalized.content,
               };
-              // Only overwrite reminders if new ones are found; otherwise preserve existing ones.
-              // This prevents flickering/disappearing cards during streaming updates where
-              // a chunk might trigger a state update that lacks the reminder payload.
-              if (normalized.reminders && normalized.reminders.length > 0) {
-                nextPartial.reminders = normalized.reminders;
-              } else if (message.reminders && message.reminders.length > 0) {
-                nextPartial.reminders = message.reminders;
+              // Prefer explicit reminder payloads passed in the update, then any parsed from the content,
+              // then fall back to previously stored reminders to avoid losing the card mid-stream.
+              const incomingReminders =
+                Array.isArray(partial.reminders) && partial.reminders.length > 0
+                  ? partial.reminders
+                  : undefined;
+              const parsedReminders =
+                normalized.reminders && normalized.reminders.length > 0 ? normalized.reminders : undefined;
+              const existingReminders =
+                message.reminders && message.reminders.length > 0 ? message.reminders : undefined;
+              if (incomingReminders || parsedReminders || existingReminders) {
+                nextPartial.reminders = incomingReminders ?? parsedReminders ?? existingReminders;
               }
 
               if (parsedContent.title) {
@@ -2815,6 +2998,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       // a new thread session. Reuse the General session instead so that messages
       // sent from "General" always belong to the General conversation.
       if (options?.fromGeneral) {
+        console.log("[ChatProvider] createThreadSession: fromGeneral=true, returning general session");
         const general = ensureGeneralSession();
         // If there's an initial message, send it via the general path so it
         // streams correctly and binds to the existing conversation_id.
@@ -2856,6 +3040,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
         }
       }
       if (duplicateCandidate) {
+        console.log("[ChatProvider] createThreadSession: Found duplicate candidate", duplicateCandidate.id);
         if (normalizedInitial) {
           pendingThreadSeedsRef.current.set(normalizedInitial, {
             sessionId: duplicateCandidate.id,
@@ -2882,11 +3067,15 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
         createdAt: now,
         updatedAt: now,
         messages: [],
-        isResponding: willAutoStream,
+        // Let ChatView handle turning on isResponding when it actually
+        // starts the stream, so we don't double-stream the first reply.
+        isResponding: false,
         scope: "thread",
         conversationId: sessionId,
         pendingAutoStream: willAutoStream,
       };
+
+      console.log("[ChatProvider] createThreadSession: Created new session", { sessionId, willAutoStream });
 
       if (normalizedInitial) {
         pendingThreadSeedsRef.current.set(normalizedInitial, { sessionId, createdAt: now });
@@ -2895,8 +3084,6 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
 
       if (trimmedInitial) {
         const userMessage = makeMessage("user", trimmedInitial);
-        // Mark this message as already triggered for auto-streaming
-        markAutoStreamTriggered(sessionId, userMessage.id);
         baseSession.messages = [userMessage];
         baseSession.updatedAt = userMessage.createdAt;
       }
@@ -2911,193 +3098,6 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       });
 
       queueConversationTitleSync(sessionId, fallbackTitle);
-
-      if (!trimmedInitial) {
-        return baseSession;
-      }
-
-      if (!shouldAutoStream) {
-        return baseSession;
-      }
-
-      const resolvedUserPromise = resolveChatUser();
-
-      const includeWorkspaceContext = shouldAttachWorkspaceContextForSession(
-        sessionId,
-        trimmedInitial
-      );
-      const contextPayload = includeWorkspaceContext ? workspaceContextValue ?? undefined : undefined;
-
-      const streamThreadResponse = () => {
-        (async () => {
-          let assistantMessageId: string | null = null;
-          try {
-            const resolvedUser = await resolvedUserPromise;
-
-            if (!resolvedUser) {
-              if (trimmedInitial && typeof window !== "undefined") {
-                window.setTimeout(() => {
-                  appendMessage(sessionId, "assistant", buildAssistantReply(trimmedInitial));
-                  updateSession(sessionId, { isResponding: false, pendingAutoStream: false });
-                }, FALLBACK_ASSISTANT_DELAY_MS);
-              }
-              return;
-            }
-
-            const initialAssistant = appendMessage(sessionId, "assistant", "");
-            assistantMessageId = (initialAssistant as ChatMessage | null)?.id ?? null;
-            if (assistantMessageId) {
-              updateSession(sessionId, { isResponding: true, pendingAutoStream: false });
-            }
-            const streamingUserId = resolvedUser.id;
-
-            let streamedConversationId = normalizeConversationIdValue(baseSession.conversationId) ?? sessionId;
-            let accumulated = "";
-            let capturedReminders: unknown[] = [];
-            const timeContext = buildLocalTimeContext();
-            const attachmentPayloads = attachmentsRef.current.map((attachment) => ({
-              id: attachment.id,
-            }));
-            const autoMapPayload = buildAutoMapPayload(trimmedInitial);
-
-            // Only include full profile on first message of the conversation
-            const isFirstMessage = baseSession.messages.length <= 1;
-            const systemPromptForRequest = isFirstMessage
-              ? personalizedSystemPrompt
-              : buildPersonalizedSystemPrompt(resolvedUser, defaultSystemPrompt, false);
-
-            for await (const event of apiService.sendMessageStream({
-              message: trimmedInitial,
-              system_prompt: systemPromptForRequest,
-              user_id: streamingUserId,
-              context: contextPayload,
-              conversation_id: streamedConversationId ?? sessionId,
-              time_context: timeContext,
-              timezone: resolveClientTimezone(),
-              attachments: attachmentPayloads,
-              context_cache_id: selectedContextCacheId ?? undefined,
-              should_generate_title: shouldRequestAutoTitleForSession(baseSession),
-              ...autoMapPayload,
-              web_search_enabled: webSearchEnabled,
-              model: modelTier,
-            })) {
-              if (event.type === "token") {
-                const delta = event.delta;
-                accumulated = accumulated && delta.startsWith(accumulated)
-                  ? delta
-                  : accumulated + delta;
-                const content = accumulated;
-                if (assistantMessageId) {
-                  updateMessageThrottled(sessionId, assistantMessageId, { content }, 30);
-                }
-                continue;
-              }
-
-              if (event.type === "reminders") {
-                // Capture structured reminders sent via SSE
-                if (Array.isArray(event.reminders) && event.reminders.length > 0) {
-                  capturedReminders = event.reminders;
-                }
-                continue;
-              }
-
-              if (event.type === "end") {
-                streamedConversationId =
-                  normalizeConversationIdValue(event.conversationId) ?? streamedConversationId;
-                const finalResponse = normalizeAssistantContent(
-                  event.response ?? accumulated,
-                  trimmedInitial
-                );
-                const content = finalResponse;
-                if (event.title) {
-                  applyAutoTitle(sessionId, event.title);
-                }
-                const metadata = event.groundingMetadata ?? undefined;
-                const timingUpdate = event.timing ? { backendTimings: event.timing } : undefined;
-
-                // Process reminders: prefer SSE-sent reminders, fallback to text extraction
-                let finalReminders: GrayReminderCreatedPayload[] | undefined;
-                if (capturedReminders.length > 0) {
-                  // Use structured reminders sent via SSE
-                  finalReminders = capturedReminders
-                    .map((r) => {
-                      try {
-                        // Validate it's a proper reminder payload
-                        if (r && typeof r === 'object' && 'type' in r && r.type === 'gray.reminder') {
-                          return r as GrayReminderCreatedPayload;
-                        }
-                      } catch {
-                        return null;
-                      }
-                      return null;
-                    })
-                    .filter((r): r is GrayReminderCreatedPayload => r !== null);
-                } else {
-                  // Fallback: extract reminders from text (backward compatibility)
-                  const extracted = extractGrayRemindersFromText(content);
-                  if (extracted.reminders.length > 0) {
-                    finalReminders = extracted.reminders;
-                  }
-                }
-
-                // If we have reminders but no text, generate a friendly confirmation message
-                let finalContent = content;
-                if (finalReminders && finalReminders.length > 0 && !content.trim()) {
-                  const confirmationText = buildReminderConfirmationText(finalReminders);
-                  if (confirmationText) {
-                    finalContent = confirmationText;
-                  }
-                }
-
-                if (assistantMessageId) {
-                  updateMessage(sessionId, assistantMessageId, {
-                    content: finalContent,
-                    groundingMetadata: metadata,
-                    reminders: finalReminders,
-                    ...(timingUpdate ?? {}),
-                  });
-                }
-                updateSession(sessionId, {
-                  conversationId: streamedConversationId ?? sessionId,
-                  isResponding: false,
-                  pendingAutoStream: false,
-                });
-                return;
-              }
-
-              if (event.type === "error") {
-                throw new Error(event.message);
-              }
-            }
-
-            const finalFallback = normalizeAssistantContent(accumulated, trimmedInitial);
-            if (assistantMessageId) {
-              updateMessage(sessionId, assistantMessageId, { content: finalFallback });
-            }
-            updateSession(sessionId, {
-              conversationId: streamedConversationId ?? sessionId,
-              isResponding: false,
-              pendingAutoStream: false,
-            });
-          } catch (error) {
-            console.error("Failed to create AI chat session:", error);
-            const fallback = buildAssistantErrorReply(error);
-            if (assistantMessageId) {
-              updateMessage(sessionId, assistantMessageId, { content: fallback });
-            } else {
-              appendMessage(sessionId, "assistant", fallback);
-            }
-            updateSession(sessionId, { isResponding: false, pendingAutoStream: false });
-            clearAttachments();
-          }
-        })().finally(() => {
-          endSearchTracking();
-        });
-      };
-
-      if (!promptForLocationConsent(trimmedInitial, streamThreadResponse)) {
-        return baseSession;
-      }
 
       return baseSession;
     },
@@ -3213,6 +3213,10 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
 
       const trimmed = content.trim();
       const generalSession = ensureGeneralSession();
+      // Prevent overlapping general streams (e.g., onboarding auto-trigger + manual submit).
+      if (!trimmed && generalSession.isResponding) {
+        return generalSession.id;
+      }
       if (!trimmed) {
         // Avoid triggering the onboarding kick-off twice while the intro overlay is finishing
         if (onboardingKickoffRef.current) {
@@ -3282,6 +3286,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
         trimmed
       );
       const contextPayload = includeWorkspaceContext ? workspaceContextValue ?? undefined : undefined;
+      const shouldUseWebSearch = webSearchEnabled;
 
       const streamGeneralResponse = () => {
         (async () => {
@@ -3309,7 +3314,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
               attachments: attachmentPayloads,
               context_cache_id: selectedContextCacheId ?? undefined,
               should_generate_title: shouldRequestAutoTitleForSession(generalSession),
-              web_search_enabled: modelTier === "lite" ? false : webSearchEnabled,
+              web_search_enabled: shouldUseWebSearch,
               ...(modelTier === "lite" ? { maps_enabled: false, maps_widget: false } : autoMapPayload),
               model: modelTier,
             })) {
@@ -3345,19 +3350,10 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
                 // Process reminders: prefer SSE-sent reminders, fallback to text extraction
                 let finalReminders: GrayReminderCreatedPayload[] | undefined;
                 if (capturedReminders.length > 0) {
-                  // Use structured reminders sent via SSE
+                  // Use structured reminders sent via SSE; coerce legacy shapes too.
                   finalReminders = capturedReminders
-                    .map((r) => {
-                      try {
-                        if (r && typeof r === 'object' && 'type' in r && r.type === 'gray.reminder') {
-                          return r as GrayReminderCreatedPayload;
-                        }
-                      } catch {
-                        return null;
-                      }
-                      return null;
-                    })
-                    .filter((r): r is GrayReminderCreatedPayload => r !== null);
+                    .map((r) => coerceReminderPayload(r))
+                    .filter((r): r is GrayReminderCreatedPayload => Boolean(r));
                 } else {
                   // Fallback: extract reminders from text (backward compatibility)
                   const extracted = extractGrayRemindersFromText(content);
@@ -3443,6 +3439,9 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
           } finally {
             endSearchTracking();
             void markHasSeenGeneralChat();
+            // Keep the local user profile in sync with any onboarding/profile tools
+            // that may have run during this message (e.g., complete_onboarding).
+            void refreshUser();
           }
           clearAttachments();
         })();
@@ -3471,6 +3470,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       shouldAttachWorkspaceContextForSession,
       webSearchEnabled,
       markHasSeenGeneralChat,
+      refreshUser,
     ]
   );
 
@@ -3673,69 +3673,51 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
   useEffect(() => {
     const general = sessionsRef.current.find((session) => session.scope === "general");
     const generalHasMessages = Boolean(general?.messages && general.messages.length > 0);
+    if (!general || !user?.id || pathname !== "/g") {
+      return;
+    }
+
+    // Only show the intro overlay when the user clearly needs onboarding:
+    // missing any personalization fields and has not completed general chat.
+    const needsOnboarding =
+      !user.personalization_nickname ||
+      !user.personalization_occupation ||
+      !user.personalization_about;
+
     if (
-      !general ||
-      generalHasMessages ||
       generalGreetingRef.current ||
-      !user?.id ||
-      pathname !== "/g" ||
-      !remoteConversationsLoaded
+      generalHasMessages ||
+      !needsOnboarding ||
+      user.has_seen_general_chat
     ) {
       return;
     }
+
     generalGreetingRef.current = true;
-
-    // Trigger AI-driven onboarding instead of hard-coded questionnaire
-    // The AI will use the onboarding prompt from backend/prompts/onboarding.txt
-    const isNotPersonalized = !user.personalization_nickname;
-    const isChatEmpty = !generalHasMessages;
-
-    console.log('[ChatProvider] Checking AI onboarding trigger:', {
-      hasSeen: user.has_seen_general_chat,
-      nickname: user.personalization_nickname,
-      isChatEmpty,
-      generalGreeting: generalGreetingRef.current
-    });
-
-    if (!user.has_seen_general_chat && !onboardingSeenRef.current) {
-      const introCompletedFlag =
-        typeof window !== "undefined" &&
-        window.sessionStorage.getItem("grayIntroCompleted") === "1";
-
-      if (introCompletedFlag) {
-        // If splash already ran, skip showing the overlay again but still kick off onboarding chat.
-        if (!onboardingKickoffRef.current) {
-          onboardingKickoffRef.current = true;
-          void sendGeneralMessage("");
-        }
-        setShowIntro(false);
-        return;
-      }
-
-      console.log('[ChatProvider] Triggering "First Contact" onboarding flow');
-      setShowIntro(true);
-    }
-
-    return;
-  }, [pathname, remoteConversationsLoaded, user?.has_seen_general_chat, user?.id, user?.personalization_nickname]);
+    setShowIntro(true);
+  }, [
+    pathname,
+    user?.id,
+    user?.has_seen_general_chat,
+    user?.personalization_nickname,
+    user?.personalization_occupation,
+    user?.personalization_about,
+  ]);
 
   const handleIntroComplete = useCallback(async () => {
-    if (!user?.id) return;
-    if (onboardingKickoffRef.current) {
+    if (!user?.id) {
       setShowIntro(false);
-      return;
-    }
-    onboardingKickoffRef.current = true;
-    setShowIntro(false);
+    } else {
+      setShowIntro(false);
 
-    // Trigger AI onboarding
-    // We send an empty message to kick off the "First Contact" flow
-    // The backend will see has_seen_general_chat=False and use the onboarding prompt
-    try {
-      await sendGeneralMessage("");
-    } catch (error) {
-      onboardingKickoffRef.current = false;
-      console.error("Failed to trigger onboarding chat:", error);
+      // Kick off the AI onboarding flow by sending an empty message.
+      // The backend will detect the incomplete personalization profile
+      // and apply the onboarding prompt + tools.
+      try {
+        await sendGeneralMessage("");
+      } catch (error) {
+        console.error("Failed to trigger onboarding chat:", error);
+      }
     }
   }, [user?.id, sendGeneralMessage]);
 
@@ -3858,6 +3840,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       hasAutoStreamTriggered,
       markAutoStreamTriggered,
       resetAutoStreamState,
+      markHasSeenGeneralChat,
       personalizedSystemPrompt,
       attachments: selectedAttachments,
       isAttachmentUploading,
@@ -3914,6 +3897,8 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       setReasoningMode,
       modelTier,
       setModelTier,
+      selectedModelId,
+      setSelectedModelId,
       questionnaireSession,
       startQuestionnaire,
       cancelQuestionnaire,
@@ -3936,6 +3921,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       hasAutoStreamTriggered,
       markAutoStreamTriggered,
       resetAutoStreamState,
+      markHasSeenGeneralChat,
       personalizedSystemPrompt,
       selectedAttachments,
       isAttachmentUploading,
@@ -3993,6 +3979,8 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       setReasoningMode,
       modelTier,
       setModelTier,
+      selectedModelId,
+      setSelectedModelId,
     ]
   );
 

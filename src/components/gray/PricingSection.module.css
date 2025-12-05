@@ -9,7 +9,7 @@
     --accent-white: #FFFFFF;
     --signal-red: #FF3333;
     --signal-green: #00FF94;
-    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
     --font-mono: 'JetBrains Mono', 'SF Mono', monospace;
 }
 

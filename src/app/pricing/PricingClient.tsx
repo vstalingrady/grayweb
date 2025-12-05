@@ -1,4 +1,5 @@
-// @ts-nocheck
+/* eslint-disable react-hooks/purity */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import React, { useCallback, useMemo, useRef } from "react";
@@ -47,7 +48,7 @@ function DepthParticles() {
   });
 
   return (
-    // @ts-ignore
+    // @ts-expect-error Three.js types are complex and this ref works at runtime
     <points ref={pointsRef as any}>
       <bufferGeometry>
         <bufferAttribute

@@ -249,6 +249,7 @@ function GrayPageClientInner({
     getSession,
     ensureSession,
     appendMessage,
+    markHasSeenGeneralChat,
     uploadAttachments,
     attachments,
     isAttachmentUploading,
@@ -262,36 +263,6 @@ function GrayPageClientInner({
   const [isCompactLayout, setIsCompactLayout] = useState(false);
   const ensureSessionRef = useRef(ensureSession);
   const { deliveredKeys: deliveredProactivityKeys } = useProactivityNotifications();
-
-  // Auto-send "Hey Gray..." for new users to trigger onboarding flow
-  const hasTriggeredOnboardingRef = useRef(false);
-  useEffect(() => {
-    console.log("[Onboarding] Checking trigger conditions", {
-      userLoading,
-      user: !!user,
-      hasSeen: user?.has_seen_general_chat,
-      triggered: hasTriggeredOnboardingRef.current
-    });
-
-    if (userLoading || !user) {
-      return;
-    }
-
-    if (!user.has_seen_general_chat && !hasTriggeredOnboardingRef.current) {
-      console.log("[Onboarding] Conditions met, scheduling auto-send...");
-      hasTriggeredOnboardingRef.current = true;
-      // Use a small delay to ensure the UI is ready and session is initialized
-      setTimeout(() => {
-        console.log("[Onboarding] Executing auto-send: 'Hey Gray, i'm ready to start...'");
-        sendGeneralMessage("Hey Gray, i'm ready to start...")
-          .catch((error) => {
-            console.error("[Onboarding] Failed to auto-send onboarding message:", error);
-            // Reset trigger ref on failure so we can try again if the user refreshes or something
-            hasTriggeredOnboardingRef.current = false;
-          });
-      }, 1000);
-    }
-  }, [user, userLoading, sendGeneralMessage]);
 
   const derivedPlans = user ? [...plans, ...reminderPlans] : [];
   const derivedHabits = user ? habits : [];
@@ -873,13 +844,17 @@ function GrayPageClientInner({
     if (userLoading) {
       return "Loading...";
     }
+    const nickname = user?.personalization_nickname?.trim();
+    if (nickname && nickname.length > 0) {
+      return nickname;
+    }
     return formatDisplayName(user?.full_name, user?.email);
-  }, [userLoading, user?.email, user?.full_name]);
+  }, [userLoading, user?.email, user?.full_name, user?.personalization_nickname]);
 
   const viewerAvatarUrl =
     user?.profile_picture_url && user.profile_picture_url.trim().length > 0
       ? user.profile_picture_url
-      : "/astronauttest.jpg";
+      : null;
 
   const viewerPlanLabel = useMemo(() => {
     const planCarrier = (user ?? null) as PlanCarrierUser | null;
@@ -1042,11 +1017,25 @@ function GrayPageClientInner({
 
     return Array.from(groups.values())
       .sort((a, b) => b.sortKey - a.sortKey)
-      .map((group) => ({
-        id: group.id,
-        label: group.label,
-        entries: group.entries.sort((a, b) => b.createdAt - a.createdAt),
-      }));
+      .map((group) => {
+        const sorted = group.entries.sort((a, b) => b.createdAt - a.createdAt);
+        const seen = new Set<string>();
+        const deduped: typeof sorted = [];
+        sorted.forEach((entry) => {
+          const day = new Date(entry.createdAt).toDateString();
+          const key = `${entry.title.toLowerCase()}::${day}`;
+          if (seen.has(key)) {
+            return;
+          }
+          seen.add(key);
+          deduped.push(entry);
+        });
+        return {
+          id: group.id,
+          label: group.label,
+          entries: deduped,
+        };
+      });
   }, [sessions]);
   const workspaceDateLabel = useMemo(
     () =>
@@ -2277,42 +2266,56 @@ function GrayPageClientInner({
       const shouldStartStandaloneThread =
         !isGeneralSurface && (!currentChatId || isGeneralChatActive);
 
-      // When starting a standalone thread from non-general surfaces
-      // (e.g. the dashboard quick compose),
-      // immediately navigate to the thread route (no deferred redirect),
-      // so the main chat view renders and begins streaming without extra delay.
+      console.log("[GrayPageClient] handleChatSubmit", {
+        isGeneralSurface,
+        currentChatId,
+        isGeneralChatActive,
+        shouldStartStandaloneThread,
+        draft: normalizedDraft.slice(0, 20)
+      });
+
       if (shouldStartStandaloneThread) {
+        console.log("[GrayPageClient] Creating standalone thread...");
         const session = await createThreadSession(normalizedDraft);
-        setHasSeenGeneralChat(true);
+        console.log("[GrayPageClient] Thread created, sessionId:", session.id);
+
+        void markHasSeenGeneralChat();
         setCurrentChatId(session.id);
+
         if (supportsInlineChat) {
           setManualViewMode("chat");
           if (typeof window !== "undefined") {
+            console.log("[GrayPageClient] Pushing state to history:", `/c/${session.id}`);
             window.history.pushState(null, "", `/c/${session.id}`);
           }
         } else {
+          console.log("[GrayPageClient] Routing to new thread:", session.id);
           router.push(`/c/${session.id}`);
         }
         return;
       }
 
+      // If not starting a standalone thread, we are sending to the general chat
+      // (or the current chat if it happens to be general? logic implies general here)
+      console.log("[GrayPageClient] Sending general message...");
       const sessionId = await sendGeneralMessage(normalizedDraft);
-      setHasSeenGeneralChat(true);
+      void markHasSeenGeneralChat();
       setCurrentChatId(sessionId);
 
       const generalId = generalSessionId ?? GENERAL_CHAT_SESSION_ID;
       const isGeneralSession = sessionId === generalId;
 
       if (supportsInlineChat) {
-        // Switch layout immediately to chat mode so the user sees the reply begin
-        // without waiting for an asynchronous redirect effect chain.
         setManualViewMode("chat");
         if (!isGeneralSession && typeof window !== "undefined") {
+          console.log("[GrayPageClient] Pushing state to history:", `/c/${sessionId}`);
           window.history.pushState(null, "", `/c/${sessionId}`);
         }
       } else if (isGeneralSession) {
+        console.log("[GrayPageClient] Routing to general chat");
         router.push("/g");
       } else if (activeChatId !== sessionId) {
+        console.log("[GrayPageClient] Routing to existing chat:", sessionId);
         router.push(`/c/${sessionId}`);
       }
     } catch (error) {
@@ -2333,12 +2336,19 @@ function GrayPageClientInner({
     if (manualViewMode !== "chat" || !currentChatId) {
       return;
     }
+
+    // The General workspace should never be addressed via /c/general-session.
+    const canonicalGeneralId = generalSessionId ?? GENERAL_CHAT_SESSION_ID;
+    if (currentChatId === canonicalGeneralId) {
+      return;
+    }
+
     const pathname = window.location.pathname;
     const targetPath = `/c/${currentChatId}`;
     if (pathname !== targetPath) {
       window.history.replaceState(null, "", targetPath);
     }
-  }, [currentChatId, manualViewMode, supportsInlineChat]);
+  }, [currentChatId, generalSessionId, manualViewMode, supportsInlineChat]);
 
   const handleOpenHistoryEntry = (entry: SidebarHistoryEntry) => {
     if (!entry.href || entry.href === "#") {
@@ -2421,7 +2431,7 @@ function GrayPageClientInner({
     )
     : null;
   const effectiveIsMobileViewport = isMounted ? isMobileViewport : false;
-  const effectiveIsSidebarExpanded = isMounted ? isSidebarExpanded : false;
+  const effectiveIsSidebarExpanded = isMounted ? isSidebarExpanded : true;
 
   return (
     <>
@@ -2527,7 +2537,7 @@ function GrayPageClientInner({
                   aria-hidden="true"
                 />
               )}
-              {/* Centered Transparent Logo */}
+              {/* Centered Transparent Logo (desktop only; hidden on mobile via CSS) */}
               {viewMode === "general" && !activeChatId && (
                 <div className={styles.centerLogo}>
                   <img src="/grayaiwhitenotspinning.svg" alt="" />

@@ -93,6 +93,8 @@
   align-items: center;
   padding: var(--auth-shell-padding);
   box-sizing: border-box;
+  font-family: var(--font-sans, "Plus Jakarta Sans", system-ui, -apple-system, BlinkMacSystemFont, sans-serif);
+  overflow-y: auto;
 }
 
 @supports (height: 100dvh) {
@@ -107,18 +109,11 @@
 
 .authShell {
   width: 100%;
-  min-height: calc(100vh - (var(--auth-shell-padding) * 2));
   max-width: 1240px;
   display: grid;
   grid-template-columns: minmax(420px, 7fr) minmax(360px, 3fr);
   gap: 0;
   margin-inline: auto;
-}
-
-@supports (height: 100dvh) {
-  .authShell {
-    min-height: calc(100dvh - (var(--auth-shell-padding) * 2));
-  }
 }
 
 .authVisualPanel {
@@ -221,6 +216,7 @@
   filter: blur(30px);
   animation: authFloat 14s ease-in-out infinite;
   opacity: 0.6;
+  border-radius: inherit;
 }
 
 .authVisual {
@@ -327,7 +323,7 @@
   color: rgba(255, 255, 255, 0.92);
   font-size: 0.95rem;
   width: 100%;
-  font-family: var(--font-sans, "Plus Jakarta Sans", "Inter", sans-serif);
+  font-family: var(--font-sans, "Plus Jakarta Sans", sans-serif);
   letter-spacing: 0.08em;
   cursor: pointer;
 }
@@ -600,6 +596,27 @@
   background: rgba(20, 20, 20, 0.9);
 }
 
+.authResendVerification {
+  margin-top: 0.6rem;
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: rgba(255, 255, 255, 0.88);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.authResendVerification:hover:not(:disabled) {
+  color: rgba(255, 255, 255, 1);
+}
+
+.authResendVerification:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .authSubmit {
   display: inline-flex;
   align-items: center;
@@ -690,6 +707,10 @@
 }
 
 @media (max-width: 960px) {
+  .authPage {
+    align-items: flex-start;
+  }
+
   .authShell {
     grid-template-columns: 1fr;
     border-radius: 0;
@@ -701,6 +722,7 @@
     border-bottom: 1px solid rgba(255, 255, 255, 0.06);
     border-right: 0;
     border-radius: 0;
+    overflow: hidden;
   }
 
   .authContent {
@@ -710,5 +732,42 @@
   .authOrb {
     inline-size: clamp(160px, 48vw, 200px);
     block-size: clamp(160px, 48vw, 200px);
+  }
+}
+
+/* Desktop layout: keep orb contained and make auth panel scrollable if needed */
+@media (min-width: 961px) {
+  .authPage {
+    max-height: 100vh;
+    align-items: stretch;
+    overflow: hidden;
+  }
+
+  @supports (height: 100dvh) {
+    .authPage {
+      max-height: 100dvh;
+    }
+  }
+
+  .authShell {
+    height: calc(100vh - (var(--auth-shell-padding) * 2));
+    max-height: calc(100vh - (var(--auth-shell-padding) * 2));
+  }
+
+  @supports (height: 100dvh) {
+    .authShell {
+      height: calc(100dvh - (var(--auth-shell-padding) * 2));
+      max-height: calc(100dvh - (var(--auth-shell-padding) * 2));
+    }
+  }
+
+  .authVisualPanel,
+  .authContent {
+    height: 100%;
+  }
+
+  .authContent {
+    align-items: flex-start;
+    overflow-y: auto;
   }
 }

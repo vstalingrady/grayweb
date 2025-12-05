@@ -1,5 +1,6 @@
 "use strict";
 
+/* eslint-disable @typescript-eslint/no-require-imports */
 const path = require("path");
 const { spawn, execSync } = require("child_process");
 
@@ -122,8 +123,7 @@ function startService(service) {
     }
 
     console.log(
-      `[orchestrator] ${service.name} exited with ${
-        code !== null ? `code ${code}` : `signal ${signal}`
+      `[orchestrator] ${service.name} exited with ${code !== null ? `code ${code}` : `signal ${signal}`
       }`
     );
 

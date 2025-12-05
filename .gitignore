@@ -41,6 +41,9 @@ yarn-error.log*
 next-env.d.ts
 plans-habits-server/node_modules
 .venv/
+venv/
 .env
 .env.production
 backend/logs/
+# Local API client caches
+discovery_cache/

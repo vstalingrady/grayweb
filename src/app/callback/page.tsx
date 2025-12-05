@@ -1,5 +1,6 @@
 "use client";
 
+import { Session, User } from "@supabase/supabase-js";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabaseClient";
@@ -182,7 +183,7 @@ export default function CallbackPage() {
         const codeVerifier = findCodeVerifier();
         console.log("[AUTH DEBUG] Pre-extracted code verifier:", codeVerifier ? "Found" : "Not found");
 
-        let data: { session?: any; user?: any } | null = null;
+        let data: { session?: Session | null; user?: User | null } | null = null;
 
         try {
           const { data: primaryData, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);

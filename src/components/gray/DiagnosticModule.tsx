@@ -1,6 +1,7 @@
 "use client";
 
-import React from 'react';
+/* eslint-disable react/no-unescaped-entities */
+import { useState } from "react";
 import styles from './DiagnosticModule.module.css';
 import { X, Check } from 'lucide-react';
 

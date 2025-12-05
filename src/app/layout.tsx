@@ -5,6 +5,7 @@ import ApiNetworkErrorHandler from "@/components/ApiNetworkErrorHandler";
 import { readServerSession } from "@/lib/auth/server";
 import { GrayProviders } from "@/components/GrayProviders";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
+import { Plus_Jakarta_Sans, IBM_Plex_Mono } from "next/font/google";
 
 const resolveMetadataBase = (): URL | undefined => {
   const candidate =
@@ -70,6 +71,19 @@ export const viewport = {
   userScalable: false,
   viewportFit: 'cover',
 };
+
+const plusJakartaSans = Plus_Jakarta_Sans({
+  subsets: ["latin"],
+  variable: "--font-sans",
+  display: "swap",
+});
+
+const ibmPlexMono = IBM_Plex_Mono({
+  subsets: ["latin"],
+  weight: ["100", "200", "300", "400", "500", "600", "700"],
+  variable: "--font-mono",
+  display: "swap",
+});
 
 export default async function RootLayout({
   children,
@@ -151,7 +165,7 @@ export default async function RootLayout({
     })();
   `;
   return (
-    <html lang="en">
+    <html lang="en" className={`${plusJakartaSans.variable} ${ibmPlexMono.variable}`}>
       <head>
         <script dangerouslySetInnerHTML={{ __html: reactDevtoolsHotfix }} suppressHydrationWarning />
 
@@ -170,13 +184,6 @@ export default async function RootLayout({
 
         {/* Apple Touch Icons */}
         <link rel="apple-touch-icon" href="/grayai.png" />
-
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&family=IBM+Plex+Mono:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;1,100;1,200;1,300;1,400;1,500;1,600;1,700&display=swap"
-          rel="stylesheet"
-        />
       </head>
       <body>
         <GrayProviders viewerEmail={session?.email ?? null}>

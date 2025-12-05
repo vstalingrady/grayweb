@@ -66,6 +66,7 @@ function GrayEnhancedSidebarComponent({
 }: GrayEnhancedSidebarProps) {
   const { user } = useUser();
   const sidebarAvatarUrl = viewerAvatarUrl ?? user?.profile_picture_url ?? null;
+  const [resolvedAvatarUrl, setResolvedAvatarUrl] = useState<string | null>(sidebarAvatarUrl);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const profileControlsRef = useRef<HTMLDivElement | null>(null);
   const profileMenuRef = useRef<HTMLDivElement | null>(null);
@@ -73,6 +74,19 @@ function GrayEnhancedSidebarComponent({
   const isDepthMember = normalizedPlan.trim().toLowerCase() === "depth";
 
   const historyNavItem = useMemo(() => navItems.find((item) => item.id === "history"), [navItems]);
+
+  useEffect(() => {
+    setResolvedAvatarUrl(sidebarAvatarUrl);
+  }, [sidebarAvatarUrl]);
+
+  const handleAvatarError = useCallback(() => {
+    if (!resolvedAvatarUrl) {
+      return;
+    }
+    // If the avatar fails to load, fall back to the default
+    // inline avatar (initials / icon) instead of a placeholder image.
+    setResolvedAvatarUrl(null);
+  }, [resolvedAvatarUrl]);
 
   useEffect(() => {
     if (!isProfileMenuOpen) {
@@ -141,6 +155,8 @@ function GrayEnhancedSidebarComponent({
     setIsProfileMenuOpen(false);
   }, [onLogOut]);
 
+  const showImage = Boolean(resolvedAvatarUrl);
+
   return (
     <aside className={styles.sidebar} data-expanded={isExpanded ? "true" : "false"}>
       <div className={styles.sidebarRail}>
@@ -188,12 +204,17 @@ function GrayEnhancedSidebarComponent({
           >
             <span
               className={styles.sidebarRailAvatarImage}
-              data-has-image={sidebarAvatarUrl ? "true" : "false"}
+              data-has-image={showImage ? "true" : "false"}
             >
-              {sidebarAvatarUrl ? (
+              {showImage ? (
                 <>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={sidebarAvatarUrl} alt={viewerName} />
+                  <img
+                    src={resolvedAvatarUrl!}
+                    alt={viewerName}
+                    referrerPolicy="no-referrer"
+                    onError={handleAvatarError}
+                  />
                 </>
               ) : (
                 viewerInitials
@@ -307,12 +328,17 @@ function GrayEnhancedSidebarComponent({
                     <span
                       className={styles.profileAvatar}
                       aria-hidden="true"
-                      data-has-image={sidebarAvatarUrl ? "true" : "false"}
+                      data-has-image={showImage ? "true" : "false"}
                     >
-                      {sidebarAvatarUrl ? (
+                      {showImage ? (
                         <>
                           {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={sidebarAvatarUrl} alt={viewerName} />
+                          <img
+                            src={resolvedAvatarUrl!}
+                            alt={viewerName}
+                            referrerPolicy="no-referrer"
+                            onError={handleAvatarError}
+                          />
                         </>
                       ) : (
                         <UserRound size={22} />

@@ -3,9 +3,9 @@ import type { ReactNode } from "react";
 import Image from "next/image";
 import { headers } from "next/headers";
 import ImageLightbox from "../components/ImageLightbox";
-import FooterBackground from "../components/FooterBackground";
 import Navigation from "../components/Navigation";
 import FadeInSection from "../components/FadeInSection";
+import MarketingStyles from "../components/MarketingStyles";
 import { hostFromHeaders } from "@/lib/grayRouting";
 import { resolveTryGrayUrl } from "@/lib/grayCta";
 
@@ -437,6 +437,7 @@ export default async function GroveApplication() {
 
   return (
     <div className="relative flex min-h-screen flex-col bg-[#000000] text-[#f5f5f6]">
+      <MarketingStyles />
       <div className="pointer-events-none absolute inset-0 -z-10" aria-hidden />
       <Navigation />
 
@@ -651,7 +652,6 @@ export default async function GroveApplication() {
       </main>
 
       <footer id="contact" className="site-footer">
-        <FooterBackground />
         <div className="site-footer__overlay">
           <p className="site-footer__title">Alignment</p>
           <p className="site-footer__tagline">We defend focus, sovereignty, and compassion.</p>

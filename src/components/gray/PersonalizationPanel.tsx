@@ -26,6 +26,7 @@ type PersonalizationPanelProps = {
   profileOccupation?: string | null;
   profileAbout?: string | null;
   profileCustomInstructions?: string | null;
+  profileSystemPromptOverride?: string | null;
   backgroundOptions: WorkspaceBackgroundOption[];
   selectedBackgroundId: string;
   onSelectBackground: (backgroundId: string) => void;
@@ -127,6 +128,7 @@ export function PersonalizationPanel({
   profileOccupation,
   profileAbout,
   profileCustomInstructions,
+  profileSystemPromptOverride,
   backgroundOptions,
   selectedBackgroundId,
   onSelectBackground,
@@ -214,6 +216,9 @@ export function PersonalizationPanel({
   const [customInstructions, setCustomInstructions] = useState(
     () => profileCustomInstructions ?? ""
   );
+  const [systemPromptOverride, setSystemPromptOverride] = useState(
+    () => profileSystemPromptOverride ?? ""
+  );
   const [customInstructionsFileName, setCustomInstructionsFileName] = useState<string | null>(null);
   const [customInstructionsFileError, setCustomInstructionsFileError] = useState<string | null>(null);
   const [aboutSaveState, setAboutSaveState] = useState<"idle" | "saving" | "success" | "error">(
@@ -224,6 +229,8 @@ export function PersonalizationPanel({
     "idle"
   );
   const [customSaveMessage, setCustomSaveMessage] = useState<string | null>(null);
+  const [overrideSaveState, setOverrideSaveState] = useState<"idle" | "saving" | "success" | "error">("idle");
+  const [overrideSaveMessage, setOverrideSaveMessage] = useState<string | null>(null);
   const [newBackgroundFile, setNewBackgroundFile] = useState<File | null>(null);
   const [newBackgroundFileName, setNewBackgroundFileName] = useState<string | null>(null);
   const [newBackgroundFileError, setNewBackgroundFileError] = useState<string | null>(null);
@@ -273,6 +280,10 @@ export function PersonalizationPanel({
   }, [profileCustomInstructions]);
 
   useEffect(() => {
+    setSystemPromptOverride(profileSystemPromptOverride ?? "");
+  }, [profileSystemPromptOverride]);
+
+  useEffect(() => {
     if (aboutSaveState !== "success") {
       return;
     }
@@ -299,6 +310,19 @@ export function PersonalizationPanel({
   }, [customSaveState]);
 
   useEffect(() => {
+    if (overrideSaveState !== "success") {
+      return;
+    }
+    const timeout = window.setTimeout(() => {
+      setOverrideSaveState("idle");
+      setOverrideSaveMessage(null);
+    }, 2400);
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [overrideSaveState]);
+
+  useEffect(() => {
     if (backgroundSaveState.tone !== "success") {
       return;
     }
@@ -314,10 +338,12 @@ export function PersonalizationPanel({
   const baselineOccupation = (profileOccupation ?? "").trim();
   const baselineAbout = (profileAbout ?? "").trim();
   const baselineCustomInstructions = (profileCustomInstructions ?? "").trim();
+  const baselineSystemPromptOverride = (profileSystemPromptOverride ?? "").trim();
   const normalizedNickname = nickname.trim();
   const normalizedOccupation = occupation.trim();
   const normalizedAbout = moreAboutYou.trim();
   const normalizedCustomInstructions = customInstructions.trim();
+  const normalizedSystemPromptOverride = systemPromptOverride.trim();
   const hasUploadedBackground = Boolean(newBackgroundFile);
   const aboutHasChanges =
     normalizedNickname !== baselineNickname ||
@@ -330,6 +356,11 @@ export function PersonalizationPanel({
     Boolean(userId) &&
     (customInstructionsChanged || customSaveState === "error") &&
     customSaveState !== "saving";
+  const systemPromptOverrideChanged = normalizedSystemPromptOverride !== baselineSystemPromptOverride;
+  const canSubmitSystemPromptOverride =
+    Boolean(userId) &&
+    (systemPromptOverrideChanged || overrideSaveState === "error") &&
+    overrideSaveState !== "saving";
   const canSubmitNewBackground =
     Boolean(onCreateBackground) &&
     hasUploadedBackground &&
@@ -348,6 +379,13 @@ export function PersonalizationPanel({
       setCustomSaveState("idle");
       setCustomSaveMessage(null);
       setCustomInstructionsFileError(null);
+    }
+  };
+
+  const resetOverrideStatus = () => {
+    if (overrideSaveState !== "idle") {
+      setOverrideSaveState("idle");
+      setOverrideSaveMessage(null);
     }
   };
 
@@ -378,6 +416,11 @@ export function PersonalizationPanel({
   const handleCustomInstructionsChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
     resetCustomInstructionsStatus();
     setCustomInstructions(event.target.value);
+  };
+
+  const handleSystemPromptOverrideChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
+    resetOverrideStatus();
+    setSystemPromptOverride(event.target.value);
   };
 
   const handleCustomInstructionsFileChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -486,6 +529,25 @@ export function PersonalizationPanel({
     } catch (error) {
       setCustomSaveState("error");
       setCustomSaveMessage(error instanceof Error ? error.message : "Failed to save");
+    }
+  };
+
+  const handleSystemPromptOverrideSubmit = async (event?: FormEvent<HTMLFormElement>) => {
+    event?.preventDefault();
+    if (!userId) {
+      return;
+    }
+    setOverrideSaveState("saving");
+    setOverrideSaveMessage("Saving...");
+    try {
+      await updateUserProfile({
+        personalization_system_prompt_override: normalizedSystemPromptOverride || null,
+      });
+      setOverrideSaveState("success");
+      setOverrideSaveMessage("Saved");
+    } catch (error) {
+      setOverrideSaveState("error");
+      setOverrideSaveMessage(error instanceof Error ? error.message : "Failed to save");
     }
   };
 
@@ -659,21 +721,7 @@ export function PersonalizationPanel({
                   </span>
                 </button>
 
-                <button
-                  type="button"
-                  className={styles.personalizationToggle}
-                  data-active={mapsEnabled ? "true" : "false"}
-                  aria-pressed={mapsEnabled}
-                  onClick={handleMapsToggle}
-                >
-                  <span>
-                    <span>Maps</span>
-                    <span className={styles.personalizationToggleHint}>Enable location-based features.</span>
-                  </span>
-                  <span className={styles.personalizationSwitch} data-active={mapsEnabled ? "true" : "false"}>
-                    <span className={styles.personalizationSlider} />
-                  </span>
-                </button>
+                {/* Maps toggle temporarily hidden; feature remains wired but dormant in the UI. */}
 
                 {!isScout && (
                   <button
@@ -808,6 +856,41 @@ export function PersonalizationPanel({
                     disabled={!canSubmitCustomInstructions}
                   >
                     {customSaveState === "saving" ? "Saving..." : "Save"}
+                  </button>
+                </div>
+              </form>
+            </section>
+
+            <section className={styles.personalizationCard}>
+              <div className={styles.personalizationCardHeader}>
+                <div>
+                  <h3>System Prompt Override</h3>
+                  <p>Completely replace the default system prompt for General Chat.</p>
+                </div>
+              </div>
+              <form className={styles.personalizationForm} onSubmit={handleSystemPromptOverrideSubmit}>
+                <textarea
+                  className={styles.personalizationTextarea}
+                  value={systemPromptOverride}
+                  onChange={handleSystemPromptOverrideChange}
+                  placeholder="Enter a custom system prompt to override the default..."
+                />
+                <div className={styles.personalizationFormActions}>
+                  {overrideSaveMessage ? (
+                    <span
+                      className={styles.personalizationFormStatus}
+                      data-status={overrideSaveState}
+                      aria-live="polite"
+                    >
+                      {overrideSaveMessage}
+                    </span>
+                  ) : null}
+                  <button
+                    type="submit"
+                    className={styles.personalizationFormButton}
+                    disabled={!canSubmitSystemPromptOverride}
+                  >
+                    {overrideSaveState === "saving" ? "Saving..." : "Save"}
                   </button>
                 </div>
               </form>

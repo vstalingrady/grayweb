@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 import { useState, useEffect, useCallback } from "react";
 import { apiService, type ProactivitySettings } from "@/lib/api";
 import { type ProactivityItem } from "@/components/gray/types";

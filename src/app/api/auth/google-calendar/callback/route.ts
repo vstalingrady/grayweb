@@ -16,7 +16,7 @@ const successHtml = `
     <title>Google Calendar Connected</title>
     <style>
       body {
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
         background: #0f0f0f;
         color: #f5f5f5;
         min-height: 100vh;
@@ -68,7 +68,7 @@ const buildErrorHtml = (message: string) => `
     <title>Google Calendar Error</title>
     <style>
       body {
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
         background: #1b0000;
         color: #fff;
         min-height: 100vh;

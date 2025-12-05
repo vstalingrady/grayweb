@@ -253,6 +253,7 @@ export interface User {
   personalization_occupation?: string | null;
   personalization_about?: string | null;
   personalization_custom_instructions?: string | null;
+  personalization_system_prompt_override?: string | null;
   personalization_show_calendar?: boolean;
   created_at: string;
   updated_at: string;
@@ -548,6 +549,7 @@ export interface ChatResponse {
   conversation_id: string;
   groundingMetadata?: GroundingMetadata;
   title?: string | null;
+  message_id?: number;
 }
 
 export interface ChatStarterRequest {
@@ -1229,7 +1231,7 @@ class ApiService {
   ): Promise<Habit> {
     const payload = {
       label: habitData.label,
-      streak_label: habitData.streak_label ?? "0 days",
+      streak_label: habitData.streak_label ?? "0",
       previous_label: habitData.previous_label ?? "No history yet",
       description: habitData.description ?? null,
     };
@@ -1522,7 +1524,6 @@ class ApiService {
       const token = data.session?.access_token;
       // Ensure token is a valid JWT string (simple heuristic: non-empty, has 3 parts)
       if (typeof token === 'string' && token.length > 20 && token.split('.').length === 3) {
-        // @ts-expect-error - HeadersInit type is complex but this is valid
         headers['Authorization'] = `Bearer ${token}`;
       } else if (token) {
         console.warn('[ApiService.stream] Invalid auth token detected. Clearing session.');

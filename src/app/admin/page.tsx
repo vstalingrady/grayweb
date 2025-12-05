@@ -67,6 +67,38 @@ async function loadMetrics(): Promise<AdminMetrics | null> {
   }
 }
 
+async function checkAdminAccess(): Promise<boolean> {
+  try {
+    const { readServerSession } = await import("@/lib/auth/server");
+    const { cookies } = await import("next/headers");
+
+    const session = await readServerSession();
+    if (!session?.email) {
+      return false;
+    }
+
+    // Check if user has admin role by fetching from API
+    const cookieStore = await cookies();
+    const authToken = cookieStore.get("gray-auth-token")?.value;
+
+    if (!authToken) {
+      return false;
+    }
+
+    const baseUrl = resolveApiBaseUrl();
+    const response = await fetch(`${baseUrl}/admin/metrics`, {
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+      },
+      cache: "no-store",
+    });
+
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
 type MetricCardProps = {
   title: string;
   value: string;
@@ -94,6 +126,15 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function AdminPage() {
+  // Import notFound here to avoid issues with metadata export
+  const { notFound } = await import("next/navigation");
+
+  // Check admin access first - return 404 for unauthorized users
+  const hasAccess = await checkAdminAccess();
+  if (!hasAccess) {
+    notFound();
+  }
+
   const metrics = await loadMetrics();
   const backendHealthy = Boolean(metrics);
 
@@ -114,9 +155,8 @@ export default async function AdminPage() {
             </p>
           </div>
           <div
-            className={`rounded-full px-4 py-2 text-xs font-medium ${
-              backendHealthy ? "bg-emerald-500/10 text-emerald-200" : "bg-amber-500/10 text-amber-200"
-            }`}
+            className={`rounded-full px-4 py-2 text-xs font-medium ${backendHealthy ? "bg-emerald-500/10 text-emerald-200" : "bg-amber-500/10 text-amber-200"
+              }`}
           >
             {backendHealthy ? "Backend reachable" : "Backend offline"}
           </div>

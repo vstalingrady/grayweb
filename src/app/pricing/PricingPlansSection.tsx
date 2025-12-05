@@ -1,7 +1,8 @@
+/* eslint-disable react/no-unescaped-entities */
 "use client";
 
 import React, { useState } from "react";
-import Script from "next/script";
+import { useRouter } from "next/navigation";
 import {
     Brain,
     CalendarClock,
@@ -31,7 +32,7 @@ const FREE_FEATURES: FeatureItem[] = [
     {
         label: "Gray Lite only",
         icon: Zap,
-        subtext: "x-ai/grok-4.1-fast:free",
+        subtext: "Grok 4.1 Fast",
     },
     { label: "Limited daily messages", icon: MessageSquare },
     { label: "14-day chat memory", icon: Pin },
@@ -40,11 +41,11 @@ const FREE_FEATURES: FeatureItem[] = [
     { label: "Discord community support", icon: Users },
 ];
 
-const VOYAGER_FEATURES: FeatureItem[] = [
+export const VOYAGER_FEATURES: FeatureItem[] = [
     {
         label: "Unlimited Gray Lite + limited Gray Pro",
         icon: Zap,
-        subtext: "Grok 4.1 Fast + Gemini 3 Pro",
+        subtext: "Unlimited Grok 4.1 Fast + Gemini 3 Pro",
     },
     {
         label: "32x more message credits",
@@ -67,7 +68,7 @@ const VOYAGER_FEATURES: FeatureItem[] = [
     { label: "Everything in Scout", icon: Plus, variant: "inherit" },
 ];
 
-const PIONEER_FEATURES: FeatureItem[] = [
+export const PIONEER_FEATURES: FeatureItem[] = [
     {
         label: "Expanded Gray Pro",
         icon: Zap,
@@ -75,7 +76,7 @@ const PIONEER_FEATURES: FeatureItem[] = [
     {
         label: "Model switcher",
         icon: Shuffle,
-        subtext: "OpenRouter: Claude 4.5, Grok 4.1, GPT 5.1, DeepSeek V3.2, Kimi K2 Thinking",
+        subtext: "Claude 4.5, Grok 4.1, GPT 5.1, DeepSeek V3.2, Kimi K2 Thinking",
     },
     { label: "Expanded reasoning budget", icon: InfinityIcon },
     {
@@ -104,39 +105,20 @@ const PIONEER_PRICING = {
     annual: { price: "Rp 3.777.000,-", cadence: "year" },
 } as const;
 
-interface PricingPlansSectionProps {
-    storeId?: string;
-    voyagerVariantId?: string;
-    pioneerVariantId?: string;
-    userId?: number;
-}
-
-export function PricingPlansSection({ storeId, voyagerVariantId, pioneerVariantId, userId }: PricingPlansSectionProps) {
+export function PricingPlansSection() {
+    const router = useRouter();
     const [billingCycle, setBillingCycle] = useState<"monthly" | "annual">("monthly");
     const { price: voyagerPrice, cadence: voyagerCadence } = VOYAGER_PRICING[billingCycle];
     const { price: pioneerPrice, cadence: pioneerCadence } = PIONEER_PRICING[billingCycle];
     const voyagerSavingsLabel = billingCycle === "annual" ? "Save Rp 147.000,-" : undefined;
     const pioneerSavingsLabel = billingCycle === "annual" ? "Save Rp 747.000,-" : undefined;
 
-    const voyagerCheckoutHref = (storeId && voyagerVariantId)
-        ? `https://${storeId}/buy/${voyagerVariantId}?embed=1&media=0&checkout[custom][billing_cycle]=${billingCycle}${userId ? `&checkout[custom][user_id]=${userId}` : ''}`
-        : undefined;
-
-    const pioneerCheckoutHref = (storeId && pioneerVariantId)
-        ? `https://${storeId}/buy/${pioneerVariantId}?embed=1&media=0&checkout[custom][billing_cycle]=${billingCycle}${userId ? `&checkout[custom][user_id]=${userId}` : ''}`
-        : undefined;
+    const handleUpgrade = (plan: "voyager" | "pioneer") => {
+        router.push(`/payment?plan=${plan}&cycle=${billingCycle}`);
+    };
 
     return (
         <>
-            <Script
-                src="https://assets.lemonsqueezy.com/lemon.js"
-                strategy="afterInteractive"
-                onLoad={() => {
-                    if (typeof window !== "undefined" && (window as any).createLemonSqueezy) {
-                        (window as any).createLemonSqueezy();
-                    }
-                }}
-            />
             <header className={styles.hero}>
                 <h1 className={styles.heroTitle}>Maximize your potential</h1>
                 <p className={styles.heroSubhead}>
@@ -161,7 +143,7 @@ export function PricingPlansSection({ storeId, voyagerVariantId, pioneerVariantI
             </div>
 
             <section className={styles.planGrid}>
-                <article className={styles.planCard} data-variant="muted">
+                <article className={styles.planCard} data-variant="highlighted">
                     <div className={styles.cardBody}>
                         <div className={styles.cardIntro}>
                             <header className={styles.cardHeader}>
@@ -192,7 +174,7 @@ export function PricingPlansSection({ storeId, voyagerVariantId, pioneerVariantI
                     </div>
                 </article>
 
-                <article className={styles.planCard} data-variant="muted">
+                <article className={styles.planCard} data-variant="primary">
                     <div className={styles.cardBody}>
                         <div className={styles.cardIntro}>
                             <header className={styles.cardHeader}>
@@ -226,13 +208,17 @@ export function PricingPlansSection({ storeId, voyagerVariantId, pioneerVariantI
                         </ul>
                     </div>
                     <div className={styles.cardFooter}>
-                        <div className={`${styles.planButton} ${styles.planButtonOutline}`} aria-disabled="true">
-                            Coming Soon
-                        </div>
+                        <button
+                            type="button"
+                            className={`${styles.planButton} ${styles.planButtonPrimary}`}
+                            onClick={() => handleUpgrade("voyager")}
+                        >
+                            Upgrade
+                        </button>
                     </div>
                 </article>
 
-                <article className={styles.planCard} data-variant="primary">
+                <article className={styles.planCard} data-variant="muted">
                     <div className={styles.cardBody}>
                         <div className={styles.cardIntro}>
                             <header className={styles.cardHeader}>
@@ -266,9 +252,13 @@ export function PricingPlansSection({ storeId, voyagerVariantId, pioneerVariantI
                         </ul>
                     </div>
                     <div className={styles.cardFooter}>
-                        <div className={`${styles.planButton} ${styles.planButtonPrimary}`} aria-disabled="true">
-                            Coming Soon
-                        </div>
+                        <button
+                            type="button"
+                            className={`${styles.planButton} ${styles.planButtonOutline}`}
+                            onClick={() => handleUpgrade("pioneer")}
+                        >
+                            Upgrade
+                        </button>
                     </div>
                 </article>
             </section>

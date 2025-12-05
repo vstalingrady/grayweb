@@ -9,10 +9,43 @@ from datetime import datetime
 ROOT_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(ROOT_DIR / ".env")
 
-DATABASE_URL = os.getenv("DATABASE_URL")
-if not DATABASE_URL:
-    # Fallback for development if not set
-    DATABASE_URL = "sqlite:///./gray.db"
+
+def _normalize_sqlite_url(url: str) -> str:
+    """Return an absolute sqlite URL so relative paths work from any cwd."""
+    if not url.startswith("sqlite:///"):
+        return url
+    path = url.replace("sqlite:///", "", 1)
+    path_obj = Path(path)
+    if not path_obj.is_absolute():
+        path_obj = (ROOT_DIR / path_obj).resolve()
+    return f"sqlite:///{path_obj}"
+
+
+def _select_database_url() -> str:
+    """
+    Choose the fastest available database for app data.
+
+    Priority (unless DB_MODE overrides):
+    1) DATABASE_URL (env override / CLI)
+    2) LOCAL_DATABASE_URL (fast local)
+    3) Fallback to local users.db
+    """
+    db_mode = (os.getenv("DB_MODE") or "").lower()
+    primary_url = os.getenv("DATABASE_URL")
+    local_url = os.getenv("LOCAL_DATABASE_URL")
+
+    chosen: str
+    if db_mode == "remote":
+        chosen = primary_url or local_url or "sqlite:///./backend/users.db"
+    elif db_mode == "local":
+        chosen = local_url or primary_url or "sqlite:///./backend/users.db"
+    else:
+        chosen = primary_url or local_url or "sqlite:///./backend/users.db"
+
+    return _normalize_sqlite_url(chosen)
+
+
+DATABASE_URL = _select_database_url()
 
 # Create database instance
 # Create database instance
@@ -41,16 +74,36 @@ users = sqlalchemy.Table(
     sqlalchemy.Column("personalization_about", sqlalchemy.String, nullable=True),
     sqlalchemy.Column("personalization_custom_instructions", sqlalchemy.String, nullable=True),
     sqlalchemy.Column("personalization_show_calendar", sqlalchemy.Boolean, default=True),
+    sqlalchemy.Column("personalization_system_prompt_override", sqlalchemy.String, nullable=True),
     sqlalchemy.Column("plan_tier", sqlalchemy.String, nullable=True),
     sqlalchemy.Column("has_seen_general_chat", sqlalchemy.Boolean, default=False),
     sqlalchemy.Column("daily_token_usage", sqlalchemy.Integer, default=0),
     sqlalchemy.Column("monthly_cost_usage", sqlalchemy.Float, default=0.0),
     sqlalchemy.Column("weekly_cost_usage", sqlalchemy.Float, default=0.0),
     sqlalchemy.Column("six_hour_cost_usage", sqlalchemy.Float, default=0.0),
+    # Per-user Gemini Pro usage tracking
+    sqlalchemy.Column("daily_gemini_pro_usage", sqlalchemy.Integer, default=0),
     sqlalchemy.Column("last_daily_reset", sqlalchemy.String, nullable=True),
     sqlalchemy.Column("last_monthly_reset", sqlalchemy.String, nullable=True),
     sqlalchemy.Column("last_weekly_reset", sqlalchemy.String, nullable=True),
     sqlalchemy.Column("last_six_hour_reset", sqlalchemy.String, nullable=True),
+    sqlalchemy.Column("last_daily_gemini_pro_reset", sqlalchemy.String, nullable=True),
+    sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
+    sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
+)
+
+transactions = sqlalchemy.Table(
+    "transactions",
+    metadata,
+    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True, index=True),
+    sqlalchemy.Column("user_id", sqlalchemy.ForeignKey("users.id"), nullable=False),
+    sqlalchemy.Column("order_id", sqlalchemy.String, unique=True, index=True, nullable=False),
+    sqlalchemy.Column("amount", sqlalchemy.Integer, nullable=False),
+    sqlalchemy.Column("status", sqlalchemy.String, default="pending"),  # pending, settlement, cancel, expire, failure
+    sqlalchemy.Column("payment_type", sqlalchemy.String, nullable=True),
+    sqlalchemy.Column("plan_tier", sqlalchemy.String, nullable=False),  # voyager, pioneer
+    sqlalchemy.Column("snap_token", sqlalchemy.String, nullable=True),
+    sqlalchemy.Column("snap_redirect_url", sqlalchemy.String, nullable=True),
     sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
     sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
 )
@@ -88,7 +141,7 @@ user_chat_messages = sqlalchemy.Table(
     "user_chat_messages",
     metadata,
     sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
-    sqlalchemy.Column("thread_id", sqlalchemy.String, sqlalchemy.ForeignKey("user_chat_threads.id"), nullable=False),
+    sqlalchemy.Column("thread_id", sqlalchemy.String, sqlalchemy.ForeignKey("user_chat_threads.id"), nullable=False, index=True),
     sqlalchemy.Column("role", sqlalchemy.String, nullable=False),
     sqlalchemy.Column("text", sqlalchemy.String, nullable=False),
     sqlalchemy.Column("grounding_metadata", sqlalchemy.JSON, nullable=True),

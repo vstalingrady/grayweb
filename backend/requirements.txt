@@ -18,3 +18,6 @@ tiktoken
 anthropic
 pywebpush
 asyncpg
+midtransclient
+slowapi
+python-dateutil

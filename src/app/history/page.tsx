@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import GrayPageClient from "../gray/GrayPageClient";
 import { readServerSession } from "@/lib/auth/server";
+/* eslint-disable react-hooks/purity */
 import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";

@@ -100,7 +100,28 @@ if __name__ == "__main__":
         "validate_gemini": os.getenv("VALIDATE_GEMINI_ON_STARTUP", "true")
     }
 
-    DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./users.db")
+    def _normalize_sqlite_url(url: str) -> str:
+        if not url.startswith("sqlite:///"):
+            return url
+        path = url.replace("sqlite:///", "", 1)
+        path_obj = Path(path)
+        if not path_obj.is_absolute():
+            path_obj = (ROOT_DIR / path_obj).resolve()
+        return f"sqlite:///{path_obj}"
+
+    def _select_database_url() -> str:
+        db_mode = (os.getenv("DB_MODE") or "").lower()
+        primary_url = os.getenv("DATABASE_URL")
+        local_url = os.getenv("LOCAL_DATABASE_URL")
+        if db_mode == "remote":
+            chosen = primary_url or local_url or "sqlite:///./users.db"
+        elif db_mode == "local":
+            chosen = local_url or primary_url or "sqlite:///./users.db"
+        else:
+            chosen = primary_url or local_url or "sqlite:///./users.db"
+        return _normalize_sqlite_url(chosen)
+
+    DATABASE_URL = _select_database_url()
     env_info["database_type"] = "sqlite" if "sqlite" in DATABASE_URL else "postgresql"
     env_info["database_url_safe"] = DATABASE_URL.split('?')[0] if DATABASE_URL else None
 
@@ -130,6 +151,21 @@ if __name__ == "__main__":
         sqlalchemy.Column("personalization_occupation", sqlalchemy.String, nullable=True),
         sqlalchemy.Column("personalization_about", sqlalchemy.String, nullable=True),
         sqlalchemy.Column("personalization_custom_instructions", sqlalchemy.String, nullable=True),
+        sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=sqlalchemy.func.now()),
+        sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=sqlalchemy.func.now(), onupdate=sqlalchemy.func.now()),
+    )
+    transactions = sqlalchemy.Table(
+        "transactions",
+        metadata,
+        sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True, index=True),
+        sqlalchemy.Column("user_id", sqlalchemy.ForeignKey("users.id"), nullable=False),
+        sqlalchemy.Column("order_id", sqlalchemy.String, unique=True, index=True, nullable=False),
+        sqlalchemy.Column("amount", sqlalchemy.Integer, nullable=False),
+        sqlalchemy.Column("status", sqlalchemy.String, default="pending"),  # pending, settlement, cancel, expire, failure
+        sqlalchemy.Column("payment_type", sqlalchemy.String, nullable=True),
+        sqlalchemy.Column("plan_tier", sqlalchemy.String, nullable=False),  # voyager, pioneer
+        sqlalchemy.Column("snap_token", sqlalchemy.String, nullable=True),
+        sqlalchemy.Column("snap_redirect_url", sqlalchemy.String, nullable=True),
         sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=sqlalchemy.func.now()),
         sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=sqlalchemy.func.now(), onupdate=sqlalchemy.func.now()),
     )
@@ -388,7 +424,13 @@ if __name__ == "__main__":
         "user_data",
         metadata,
         sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True, index=True),
-        sqlalchemy.Column("user_identifier", sqlalchemy.Integer, unique=True, nullable=False), # References users.id
+        sqlalchemy.Column("user_identifier", sqlalchemy.Integer, unique=True, nullable=False),  # References users.id
+        # JSON profile fields expected by the runtime database models
+        sqlalchemy.Column("profile", sqlalchemy.JSON, nullable=True),
+        sqlalchemy.Column("context", sqlalchemy.JSON, nullable=True),
+        sqlalchemy.Column("metadata", sqlalchemy.JSON, nullable=True),
+        sqlalchemy.Column("workspace_context", sqlalchemy.String, nullable=True),
+        # Additional local-only personalization helpers
         sqlalchemy.Column("nickname", sqlalchemy.String, nullable=True),
         sqlalchemy.Column("occupation", sqlalchemy.String, nullable=True),
         sqlalchemy.Column("about", sqlalchemy.String, nullable=True),

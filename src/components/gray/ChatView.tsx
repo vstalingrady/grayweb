@@ -16,7 +16,22 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
-import { LoaderCircle, RefreshCw, Copy, CheckCircle2, Trash2, SignalHigh, CalendarClock, Globe } from "lucide-react";
+import {
+  LoaderCircle,
+  RefreshCw,
+  Copy,
+  CheckCircle2,
+  Trash2,
+  SignalHigh,
+  CalendarClock,
+  Globe,
+  ChevronLeft,
+  ChevronRight,
+  ChevronDown,
+  Pencil,
+  X,
+  Check,
+} from "lucide-react";
 import ReactMarkdown, { type Components } from "react-markdown";
 // Type definition for code component
 type CodeComponent = any;
@@ -44,10 +59,12 @@ import {
   type GrayReminderEntityType,
   GENERAL_CHAT_SESSION_ID,
 } from "./ChatProvider";
+import { buildReminderConfirmationText, coerceReminderPayload } from "./chat/reminderUtils";
 import { formatReminderDisplayLabels } from "./reminderTimeUtils";
 import AttachmentTray from "./AttachmentTray";
 
-const LEGACY_REMINDER_SNIPPET_REGEX = /```[a-z0-9_-]*[\s\S]*?(gray[\s\S]{0,120}?reminder)[\s\S]*?```/gi;
+const LEGACY_REMINDER_SNIPPET_REGEX =
+  /```[a-z0-9_-]*[\s\S]*?(gray[\s\S]{0,120}?(?:reminder|plan|habit))[\s\S]*?```/gi;
 
 const MARKDOWN_PLUGINS: any = [
   // Rely on explicit math markers and convert them into KaTeX-friendly
@@ -918,6 +935,8 @@ const tokenizeCode = (code: string, language: string): CodeLine[] => {
 };
 
 const SINGLE_TOKEN_CODE_PATTERN = /^[\w.$-]+$/;
+const CODE_LIKE_PATTERN =
+  /[{}()[\];<>]|=>|:=|const\s+|let\s+|var\s+|function\s+|class\s+|return\s+|if\s+|else\s+|for\s+|while\s+|async\s+|await\s+|def\s+|import\s+|from\s+|try\s+|catch\s+|#include|<\?php/;
 const LATEX_MATH_BLOCK_PATTERN = /^\s*(\$\$[\s\S]*\$\$|\\\[[\s\S]*\\\])\s*$/;
 
 const MarkdownCodeBlock: CodeComponent = ({ inline, className, children, ...props }: any) => {
@@ -979,6 +998,22 @@ const MarkdownCodeBlock: CodeComponent = ({ inline, className, children, ...prop
   const totalLength = trimmedRaw.length;
   const isCompactBlock = codeLines.length === 1 && totalLength <= 18;
   const isMiniBlock = totalLength <= 20;
+
+  // Heuristic: if this "code block" doesn't actually look like code and is short,
+  // render it as plain text instead of a framed code block. This avoids noisy
+  // code styling for things like `[COMMITMENT]` or simple labels.
+  const looksLikeRealCode = CODE_LIKE_PATTERN.test(trimmedRaw);
+  if (!looksLikeRealCode) {
+    const lines = trimmedRaw.split(/\r?\n/).filter((line) => line.trim().length > 0);
+    const maxLineLength = lines.reduce((max, line) => Math.max(max, line.length), 0);
+    if (lines.length > 0 && lines.length <= 3 && maxLineLength <= 80) {
+      return (
+        <span className={styles.chatPlainCodeFallback} {...props}>
+          {trimmedRaw}
+        </span>
+      );
+    }
+  }
 
   const handleCopy = () => {
     if (!trimmedRaw) {
@@ -1142,9 +1177,52 @@ type ChatMessagesListProps = {
   handleRegenerate: (messageId: string) => void;
   handleRetryUserMessage: (messageId: string) => void;
   handleDeleteMessage: (messageId: string) => void;
+  handleCycleAssistantVariant: (messageId: string, direction: "prev" | "next") => void;
+  handleEditMessage: (messageId: string, newContent: string) => void;
   shouldShowPendingStreamIndicator: boolean;
   showFirstMessageSpinner: boolean;
   scrollAnchorRef: RefObject<HTMLDivElement | null>;
+};
+
+const ThinkingBlock = ({
+  content,
+  markdownComponents,
+}: {
+  content: string;
+  markdownComponents: Components;
+}) => {
+  const [isExpanded, setIsExpanded] = useState(true);
+
+  return (
+    <div className={styles.chatThinkingBlock}>
+      <div
+        className={styles.chatThinkingHeader}
+        onClick={() => setIsExpanded(!isExpanded)}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            setIsExpanded(!isExpanded);
+          }
+        }}
+      >
+        {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        <span>Thinking Process</span>
+      </div>
+      {isExpanded && (
+        <div className={styles.chatThinkingBody}>
+          <ReactMarkdown
+            components={markdownComponents}
+            remarkPlugins={MARKDOWN_PLUGINS}
+            rehypePlugins={[[rehypeKatex, { strict: false }]]}
+          >
+            {content}
+          </ReactMarkdown>
+        </div>
+      )}
+    </div>
+  );
 };
 
 const ChatMessagesList = memo(
@@ -1160,10 +1238,33 @@ const ChatMessagesList = memo(
     handleRegenerate,
     handleRetryUserMessage,
     handleDeleteMessage,
+    handleCycleAssistantVariant,
+    handleEditMessage,
     shouldShowPendingStreamIndicator,
     showFirstMessageSpinner,
     scrollAnchorRef,
   }: ChatMessagesListProps) => {
+    const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+    const [editContent, setEditContent] = useState("");
+
+    const startEditing = useCallback((messageId: string, currentContent: string) => {
+      setEditingMessageId(messageId);
+      setEditContent(currentContent);
+    }, []);
+
+    const cancelEditing = useCallback(() => {
+      setEditingMessageId(null);
+      setEditContent("");
+    }, []);
+
+    const saveEditing = useCallback((messageId: string) => {
+      if (editContent.trim()) {
+        handleEditMessage(messageId, editContent);
+      }
+      setEditingMessageId(null);
+      setEditContent("");
+    }, [editContent, handleEditMessage]);
+
     return (
       <div
         className={styles.chatMessages}
@@ -1221,9 +1322,7 @@ const ChatMessagesList = memo(
           const hasTokenEstimate = typeof tokenCount === "number" && Number.isFinite(tokenCount) && tokenCount > 0;
           const metadataTokenLabel = hasTokenEstimate ? `${tokenCount.toLocaleString()} tokens` : "—";
           const metadataRows: { label: string; value: string }[] = [];
-          if (hasTokenEstimate) {
-            metadataRows.push({ label: "Tokens", value: metadataTokenLabel });
-          }
+          metadataRows.push({ label: "Tokens", value: metadataTokenLabel });
           if (responseDurationLabel) {
             metadataRows.push({ label: "Duration", value: responseDurationLabel });
           }
@@ -1246,244 +1345,287 @@ const ChatMessagesList = memo(
               data-streaming={isStreamingMessage ? "true" : undefined}
             >
               <div className={messageBodyClassName}>
-                {assistantReminders.length > 0 ? (
-                  <div className={styles.reminderCardList}>
-                    {assistantReminders.map((reminder, reminderIndex) => (
-                      <ReminderCard
-                        key={`${message.id}-reminder-${reminderIndex}-${reminder.data.reminder_id ?? reminder.data.id}`}
-                        reminder={reminder}
-                      />
-                    ))}
-                  </div>
-                ) : null}
-                {isAssistant && hasThinkingContent && (
-                  <div className={styles.chatThinkingBlock}>
-                    <div className={styles.chatThinkingLabel}>Chain of Thought</div>
-                    <div className={styles.chatThinkingBody}>
-                      <ReactMarkdown
-                        components={markdownComponents}
-                        remarkPlugins={MARKDOWN_PLUGINS}
-                        rehypePlugins={[[rehypeKatex, { strict: false }]]}
+                {editingMessageId === message.id ? (
+                  <div className={styles.chatEditContainer}>
+                    <textarea
+                      className={styles.chatEditInput}
+                      value={editContent}
+                      onChange={(e) => setEditContent(e.target.value)}
+                      rows={3}
+                    />
+                    <div className={styles.chatEditActions}>
+                      <button
+                        onClick={() => saveEditing(message.id)}
+                        className={styles.chatEditSaveButton}
                       >
-                        {normalizedThinkingText ?? ""}
-                      </ReactMarkdown>
+                        <Check size={14} /> Save
+                      </button>
+                      <button
+                        onClick={cancelEditing}
+                        className={styles.chatEditCancelButton}
+                      >
+                        <X size={14} /> Cancel
+                      </button>
                     </div>
                   </div>
-                )}
-                {hasTextContent && (
-                  <div className={styles.chatMarkdown}>
-                    <ReactMarkdown
-                      components={markdownComponents}
-                      remarkPlugins={MARKDOWN_PLUGINS}
-                      rehypePlugins={[[rehypeKatex, { strict: false }]]}
-                    >
-                      {visibleAssistantText}
-                    </ReactMarkdown>
-                  </div>
-                )}
-                {isAssistant && message.groundingMetadata ? (
-                  (() => {
-                    const metadata = message.groundingMetadata;
-                    const searchQueries =
-                      metadata?.web_search_queries ??
-                      (metadata as { webSearchQueries?: string[] })?.webSearchQueries ??
-                      [];
-                    const searchEntryPoint =
-                      metadata?.search_entry_point ??
-                      (metadata as { searchEntryPoint?: { rendered_content?: string; renderedContent?: string } })
-                        ?.searchEntryPoint ??
-                      null;
-                    const renderedSearchEntry =
-                      typeof searchEntryPoint?.rendered_content === "string"
-                        ? searchEntryPoint?.rendered_content
-                        : typeof (searchEntryPoint as any)?.renderedContent === "string"
-                          ? (searchEntryPoint as any).renderedContent
-                          : null;
-                    const chunks =
-                      metadata?.grounding_chunks ??
-                      (metadata as { groundingChunks?: GroundingMetadata["grounding_chunks"] })?.groundingChunks ??
-                      [];
-                    const mapSources = chunks
-                      .map((chunk) => chunk?.maps)
-                      .filter((maps): maps is NonNullable<(typeof chunks)[number]["maps"]> => Boolean(maps));
-                    const hasWidget = Boolean(
-                      metadata?.google_maps_widget_context_token ??
-                      (metadata as { googleMapsWidgetContextToken?: string })?.googleMapsWidgetContextToken
-                    );
-                    const previousUserMessage = (() => {
-                      for (let index = messageIndex - 1; index >= 0; index -= 1) {
-                        const prior = messages[index];
-                        if (prior && prior.role === "user" && typeof prior.content === "string") {
-                          return prior.content.trim().toLowerCase();
+                ) : (
+                  <>
+                    {assistantReminders.length > 0 ? (
+                      <div className={styles.reminderCardList}>
+                        {assistantReminders.map((reminder, reminderIndex) => (
+                          <ReminderCard
+                            key={`${message.id}-reminder-${reminderIndex}-${reminder.data.reminder_id ?? reminder.data.id}`}
+                            reminder={reminder}
+                          />
+                        ))}
+                      </div>
+                    ) : null}
+                    {isAssistant && hasThinkingContent && (
+                      <ThinkingBlock
+                        content={normalizedThinkingText ?? ""}
+                        markdownComponents={markdownComponents}
+                      />
+                    )}
+                    {hasTextContent && (
+                      <div className={styles.chatMarkdown}>
+                        <ReactMarkdown
+                          components={markdownComponents}
+                          remarkPlugins={MARKDOWN_PLUGINS}
+                          rehypePlugins={[[rehypeKatex, { strict: false }]]}
+                        >
+                          {visibleAssistantText}
+                        </ReactMarkdown>
+                      </div>
+                    )}
+                    {isAssistant && message.groundingMetadata ? (
+                      (() => {
+                        const metadata = message.groundingMetadata;
+                        const searchQueries =
+                          metadata?.web_search_queries ??
+                          (metadata as { webSearchQueries?: string[] })?.webSearchQueries ??
+                          [];
+                        const searchEntryPoint =
+                          metadata?.search_entry_point ??
+                          (metadata as { searchEntryPoint?: { rendered_content?: string; renderedContent?: string } })
+                            ?.searchEntryPoint ??
+                          null;
+                        const renderedSearchEntry =
+                          typeof searchEntryPoint?.rendered_content === "string"
+                            ? searchEntryPoint?.rendered_content
+                            : typeof (searchEntryPoint as any)?.renderedContent === "string"
+                              ? (searchEntryPoint as any).renderedContent
+                              : null;
+                        const chunks =
+                          metadata?.grounding_chunks ??
+                          (metadata as { groundingChunks?: GroundingMetadata["grounding_chunks"] })?.groundingChunks ??
+                          [];
+                        const mapSources = chunks
+                          .map((chunk) => chunk?.maps)
+                          .filter((maps): maps is NonNullable<(typeof chunks)[number]["maps"]> => Boolean(maps));
+                        const hasWidget = Boolean(
+                          metadata?.google_maps_widget_context_token ??
+                          (metadata as { googleMapsWidgetContextToken?: string })?.googleMapsWidgetContextToken
+                        );
+                        const previousUserMessage = (() => {
+                          for (let index = messageIndex - 1; index >= 0; index -= 1) {
+                            const prior = messages[index];
+                            if (prior && prior.role === "user" && typeof prior.content === "string") {
+                              return prior.content.trim().toLowerCase();
+                            }
+                          }
+                          return null;
+                        })();
+                        const filteredQueries =
+                          searchQueries.filter((query) => {
+                            const trimmed = query.trim();
+                            if (!trimmed) {
+                              return false;
+                            }
+                            if (previousUserMessage && trimmed.toLowerCase() === previousUserMessage) {
+                              return false;
+                            }
+                            return true;
+                          }) ?? [];
+                        if (
+                          sourceCards.length === 0 &&
+                          mapSources.length === 0 &&
+                          filteredQueries.length === 0 &&
+                          !hasWidget &&
+                          !renderedSearchEntry
+                        ) {
+                          return null;
                         }
-                      }
-                      return null;
-                    })();
-                    const filteredQueries =
-                      searchQueries.filter((query) => {
-                        const trimmed = query.trim();
-                        if (!trimmed) {
-                          return false;
-                        }
-                        if (previousUserMessage && trimmed.toLowerCase() === previousUserMessage) {
-                          return false;
-                        }
-                        return true;
-                      }) ?? [];
-                    if (
-                      sourceCards.length === 0 &&
-                      mapSources.length === 0 &&
-                      filteredQueries.length === 0 &&
-                      !hasWidget &&
-                      !renderedSearchEntry
-                    ) {
-                      return null;
-                    }
-                    return (
-                      <div className={styles.chatGroundingPanel}>
-                        {filteredQueries.length > 0 ? (
-                          <div className={styles.chatGroundingQueries}>
-                            {filteredQueries.map((query) => (
-                              <span key={query} className={styles.chatGroundingQueryChip}>
-                                {query}
-                              </span>
-                            ))}
-                          </div>
-                        ) : null}
-                        {sourceCards.length > 0 ? (
-                          <div className={styles.chatGroundingSourceDeck}>
-                            <div className={styles.chatGroundingSourceCards}>
-                              {sourceCards.map((source) => {
-                                const initials = buildGroundingSourceInitials(source.siteLabel ?? source.title);
-                                const faviconUrl = buildGroundingSourceFaviconUrl(source);
+                        return (
+                          <div className={styles.chatGroundingPanel}>
+                            {filteredQueries.length > 0 ? (
+                              <div className={styles.chatGroundingQueries}>
+                                {filteredQueries.map((query) => (
+                                  <span key={query} className={styles.chatGroundingQueryChip}>
+                                    {query}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : null}
+                            {sourceCards.length > 0 ? (
+                              <div className={styles.chatGroundingSourceDeck}>
+                                <div className={styles.chatGroundingSourceCards}>
+                                  {sourceCards.map((source) => {
+                                    const initials = buildGroundingSourceInitials(source.siteLabel ?? source.title);
+                                    const faviconUrl = buildGroundingSourceFaviconUrl(source);
 
-                                const cardContent = (
-                                  <>
-                                    <div className={styles.chatGroundingSourceCardAvatar}>
-                                      {faviconUrl ? (
-                                        <div style={{ position: "relative", width: "16px", height: "16px" }}>
-                                          {/* Show initials by default as fallback */}
-                                          <span
-                                            style={{
-                                              position: "absolute",
-                                              top: 0,
-                                              left: 0,
-                                              width: "16px",
-                                              height: "16px",
-                                              display: "flex",
-                                              alignItems: "center",
-                                              justifyContent: "center",
-                                              fontSize: "10px",
-                                            }}
-                                          >
-                                            {initials}
-                                          </span>
-                                          {/* Favicon overlays on top when it loads */}
-                                          <img
-                                            src={faviconUrl}
-                                            alt=""
-                                            referrerPolicy="no-referrer"
-                                            style={{
-                                              position: "absolute",
-                                              top: 0,
-                                              left: 0,
-                                              width: "16px",
-                                              height: "16px",
-                                              objectFit: "contain",
-                                              backgroundColor: "white",
-                                              borderRadius: "2px",
-                                            }}
-                                            onError={(e) => {
-                                              // Hide the image if it fails to load,
-                                              // letting the initials show through
-                                              e.currentTarget.style.display = "none";
-                                            }}
-                                          />
+                                    const cardContent = (
+                                      <>
+                                        <div className={styles.chatGroundingSourceCardAvatar}>
+                                          {faviconUrl ? (
+                                            <div style={{ position: "relative", width: "16px", height: "16px" }}>
+                                              {/* Show initials by default as fallback */}
+                                              <span
+                                                style={{
+                                                  position: "absolute",
+                                                  top: 0,
+                                                  left: 0,
+                                                  width: "16px",
+                                                  height: "16px",
+                                                  display: "flex",
+                                                  alignItems: "center",
+                                                  justifyContent: "center",
+                                                  fontSize: "10px",
+                                                }}
+                                              >
+                                                {initials}
+                                              </span>
+                                              {/* Favicon overlays on top when it loads */}
+                                              <img
+                                                src={faviconUrl}
+                                                alt=""
+                                                referrerPolicy="no-referrer"
+                                                style={{
+                                                  position: "absolute",
+                                                  top: 0,
+                                                  left: 0,
+                                                  width: "16px",
+                                                  height: "16px",
+                                                  objectFit: "contain",
+                                                  backgroundColor: "white",
+                                                  borderRadius: "2px",
+                                                }}
+                                                onError={(e) => {
+                                                  // Hide the image if it fails to load,
+                                                  // letting the initials show through
+                                                  e.currentTarget.style.display = "none";
+                                                }}
+                                              />
+                                            </div>
+                                          ) : (
+                                            initials
+                                          )}
                                         </div>
+                                        <div className={styles.chatGroundingSourceCardContent}>
+                                          <div className={styles.chatGroundingSourceCardTitle}>
+                                            {source.title ?? "Referenced source"}
+                                          </div>
+                                          {source.siteLabel ? (
+                                            <div className={styles.chatGroundingSourceCardSite}>
+                                              {source.siteLabel}
+                                            </div>
+                                          ) : null}
+                                        </div>
+                                      </>
+                                    );
+                                    if (source.href) {
+                                      return (
+                                        <a
+                                          key={source.id}
+                                          href={source.href}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          className={styles.chatGroundingSourceCard}
+                                        >
+                                          {cardContent}
+                                        </a>
+                                      );
+                                    }
+                                    return (
+                                      <div
+                                        key={source.id}
+                                        className={styles.chatGroundingSourceCard}
+                                        data-clickable="false"
+                                      >
+                                        {cardContent}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            ) : null}
+                            {mapSources.length > 0 ? (
+                              <div className={styles.chatGroundingSources}>
+                                {mapSources.map((maps, index) => {
+                                  const label = maps.title ?? maps.placeId ?? "Maps source";
+                                  const href = maps.uri ?? maps.googleMapsUri ?? undefined;
+                                  return (
+                                    <div key={`${message.id}-maps-source-${index}`} className={styles.chatGroundingSource}>
+                                      {href ? (
+                                        <a
+                                          href={href}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          className={styles.chatGroundingLink}
+                                        >
+                                          <span translate="no">Google Maps</span> · {label}
+                                        </a>
                                       ) : (
-                                        initials
+                                        <span className={styles.chatGroundingPlain}>
+                                          <span translate="no">Google Maps</span> · {label}
+                                        </span>
                                       )}
                                     </div>
-                                    <div className={styles.chatGroundingSourceCardContent}>
-                                      <div className={styles.chatGroundingSourceCardTitle}>
-                                        {source.title ?? "Referenced source"}
-                                      </div>
-                                      {source.siteLabel ? (
-                                        <div className={styles.chatGroundingSourceCardSite}>
-                                          {source.siteLabel}
-                                        </div>
-                                      ) : null}
-                                    </div>
-                                  </>
-                                );
-                                if (source.href) {
-                                  return (
-                                    <a
-                                      key={source.id}
-                                      href={source.href}
-                                      target="_blank"
-                                      rel="noreferrer"
-                                      className={styles.chatGroundingSourceCard}
-                                    >
-                                      {cardContent}
-                                    </a>
                                   );
-                                }
-                                return (
-                                  <div
-                                    key={source.id}
-                                    className={styles.chatGroundingSourceCard}
-                                    data-clickable="false"
-                                  >
-                                    {cardContent}
-                                  </div>
-                                );
-                              })}
-                            </div>
+                                })}
+                              </div>
+                            ) : null}
+                            {metadata?.google_maps_widget_context_token ? (
+                              <div className={styles.chatGroundingWidget}>
+                                <span>Widget token:</span>
+                                <code>{metadata?.google_maps_widget_context_token}</code>
+                              </div>
+                            ) : null}
                           </div>
-                        ) : null}
-                        {mapSources.length > 0 ? (
-                          <div className={styles.chatGroundingSources}>
-                            {mapSources.map((maps, index) => {
-                              const label = maps.title ?? maps.placeId ?? "Maps source";
-                              const href = maps.uri ?? maps.googleMapsUri ?? undefined;
-                              return (
-                                <div key={`${message.id}-maps-source-${index}`} className={styles.chatGroundingSource}>
-                                  {href ? (
-                                    <a
-                                      href={href}
-                                      target="_blank"
-                                      rel="noreferrer"
-                                      className={styles.chatGroundingLink}
-                                    >
-                                      <span translate="no">Google Maps</span> · {label}
-                                    </a>
-                                  ) : (
-                                    <span className={styles.chatGroundingPlain}>
-                                      <span translate="no">Google Maps</span> · {label}
-                                    </span>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        ) : null}
-                        {metadata?.google_maps_widget_context_token ? (
-                          <div className={styles.chatGroundingWidget}>
-                            <span>Widget token:</span>
-                            <code>{metadata?.google_maps_widget_context_token}</code>
-                          </div>
-                        ) : null}
-                      </div>
-                    );
-                  })()
-                ) : null}
+                        );
+                      })()
+                    ) : null}
+                  </>
+                )}
               </div>
-              {!showStreamingIndicator && (
+              {!showStreamingIndicator && editingMessageId !== message.id && (
                 <div className={styles.chatMessageFooter}>
-                  <time className={styles.chatMessageTimestamp} dateTime={messageTimestampIso}>
-                    {timestampLabel}
-                  </time>
+                  <div className={styles.chatMessageFooterLeft}>
+                    <time className={styles.chatMessageTimestamp} dateTime={messageTimestampIso}>
+                      {timestampLabel}
+                    </time>
+                    {isAssistant && Array.isArray(message.variants) && message.variants.length > 1 ? (
+                      <div className={styles.chatMessageVariantControls}>
+                        <button
+                          type="button"
+                          aria-label="Previous response"
+                          onClick={() => handleCycleAssistantVariant(message.id, "prev")}
+                        >
+                          <ChevronLeft size={14} />
+                        </button>
+                        <span className={styles.chatMessageVariantLabel}>
+                          {(message.activeVariantIndex ?? message.variants.length - 1) + 1} /{" "}
+                          {message.variants.length}
+                        </span>
+                        <button
+                          type="button"
+                          aria-label="Next response"
+                          onClick={() => handleCycleAssistantVariant(message.id, "next")}
+                        >
+                          <ChevronRight size={14} />
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
                   <div className={styles.chatMessageFooterRight}>
                     <div className={styles.chatActionIconRow}>
                       {isMetadataAvailable ? (
@@ -1509,18 +1651,35 @@ const ChatMessagesList = memo(
                       >
                         {copiedMessageId === message.id ? <CheckCircle2 size={15} /> : <Copy size={15} />}
                       </button>
-                      <button
-                        type="button"
-                        aria-label="Retry message"
-                        onClick={() =>
-                          isAssistant ? handleRegenerate(message.id) : handleRetryUserMessage(message.id)
-                        }
-                        disabled={
-                          isAssistant ? !isLatestAssistantMessage || isRegenerating : !rawContent.trim()
-                        }
-                      >
-                        {isAssistant && isRegenerating ? <LoaderCircle size={15} /> : <RefreshCw size={15} />}
-                      </button>
+                      {isAssistant && (
+                        <button
+                          type="button"
+                          aria-label="Regenerate response"
+                          onClick={() => handleRegenerate(message.id)}
+                          disabled={isRegenerating}
+                        >
+                          <RefreshCw size={15} className={isRegenerating ? styles.spin : undefined} />
+                        </button>
+                      )}
+                      {!isAssistant && (
+                        <button
+                          type="button"
+                          aria-label="Edit message"
+                          onClick={() => startEditing(message.id, rawContent)}
+                        >
+                          <Pencil size={15} />
+                        </button>
+                      )}
+                      {!isAssistant && (
+                        <button
+                          type="button"
+                          aria-label="Retry message"
+                          onClick={() => handleRetryUserMessage(message.id)}
+                          disabled={!rawContent.trim()}
+                        >
+                          <RefreshCw size={15} />
+                        </button>
+                      )}
                       <button
                         type="button"
                         aria-label="Delete message"
@@ -1552,7 +1711,7 @@ const ChatMessagesList = memo(
             </div>
           </div>
         )}
-        <div className={styles.chatComposerSpacer} aria-hidden="true" />
+
         <div ref={scrollAnchorRef} />
       </div>
     );
@@ -1567,7 +1726,8 @@ const formatDurationLabel = (durationMs?: number): string | null => {
   }
   const seconds = durationMs / 1000;
   if (seconds < 0.1) {
-    return "<0.1s";
+    const ms = Math.max(1, Math.round(durationMs));
+    return `${ms}ms`;
   }
   if (seconds >= 10) {
     return `${Math.round(seconds)}s`;
@@ -1584,10 +1744,6 @@ const formatBackendTimingLabel = (
   const totalLabel = formatDurationLabel(timing.totalMs);
   if (!totalLabel) {
     return null;
-  }
-  const firstTokenLabel = formatDurationLabel(timing.firstTokenMs);
-  if (firstTokenLabel) {
-    return `${totalLabel} (first token ${firstTokenLabel})`;
   }
   return totalLabel;
 };
@@ -1630,6 +1786,18 @@ type AssistantSections = {
 const parseCache = new Map<string, AssistantSections>();
 const PARSE_CACHE_SIZE = 1000;
 
+const stripToolUseBlocks = (text: string): string => {
+  if (!text) {
+    return "";
+  }
+  let result = text;
+  // Strip generic <tool_use>...</tool_use> style blocks that some providers emit.
+  result = result.replace(/<tool_use[\s\S]*?<\/tool_use>/gi, "");
+  // Strip any residual <tool_result> blocks if present.
+  result = result.replace(/<tool_result[\s\S]*?<\/tool_result>/gi, "");
+  return result;
+};
+
 const parseStructuredAssistantMessage = (content?: string | null): AssistantSections => {
   const cacheKey = content ?? "";
   const cached = parseCache.get(cacheKey);
@@ -1637,7 +1805,7 @@ const parseStructuredAssistantMessage = (content?: string | null): AssistantSect
     return cached;
   }
 
-  const normalized = (content ?? "").replace(/\r\n/g, "\n");
+  const normalized = stripToolUseBlocks((content ?? "")).replace(/\r\n/g, "\n");
   const trimmed = normalized.trim();
   const base: AssistantSections = {
     user: null,
@@ -1822,6 +1990,7 @@ export function GrayChatView({
     loadConversationMessages,
     sendGeneralMessage,
     modelTier,
+    selectedModelId,
   } = useChatStore();
   const session = sessionId ? getSession(sessionId) : undefined;
   const sessionExists = Boolean(session);
@@ -1847,6 +2016,7 @@ export function GrayChatView({
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [conversationUsage, setConversationUsage] = useState<ConversationUsage | null>(null);
   const isSubmittingRef = useRef(false);
+  const streamAbortControllerRef = useRef<AbortController | null>(null);
 
   const composerDockRef = useRef<HTMLDivElement | null>(null);
   const [composerHeight, setComposerHeight] = useState(0);
@@ -2152,7 +2322,14 @@ export function GrayChatView({
             return true;
           }
           const prev = arr[index - 1];
-          return !(prev.role === message.role && (prev.text ?? "") === (message.text ?? ""));
+          // Check for exact duplicate content/role
+          if (prev.role === message.role && (prev.text ?? "") === (message.text ?? "")) {
+            return false;
+          }
+          // Also filter out "User" messages that are identical to the *optimistic* message
+          // we might currently be holding, IF we are merging? 
+          // Actually, this logic just filters the backend array itself.
+          return true;
         });
 
         const mappedHistory: ChatSessionMessage[] = dedupedHistory.map((message, index) => {
@@ -2229,14 +2406,52 @@ export function GrayChatView({
       const contextPayload = useWorkspaceContext ? workspaceContext ?? undefined : undefined;
       let assistantMessageId: string | null = existingAssistantId ?? null;
       let streamingMessageId: string | null = assistantMessageId ?? null;
+      let previousVariants: string[] = [];
+      let isRegeneration = false;
+      if (existingAssistantId && session && session.id === targetSessionId) {
+        const existingAssistant = session.messages.find(
+          (message) => message.id === existingAssistantId && message.role === "assistant"
+        );
+        if (existingAssistant) {
+          const hasContent = Boolean(existingAssistant.content && existingAssistant.content.trim());
+          if (hasContent) {
+            isRegeneration = true;
+          }
+          if (Array.isArray(existingAssistant.variants) && existingAssistant.variants.length > 0) {
+            previousVariants = [...existingAssistant.variants];
+          } else if (hasContent) {
+            previousVariants = [existingAssistant.content as string];
+          }
+        }
+      }
       let accumulated = "";
+      let capturedReminders: unknown[] = [];
       const isGeneralSession = session?.scope === "general";
       let streamedConversationId: string | null = isGeneralSession
         ? null
         : normalizeConversationIdValue(conversationId) ?? null;
+      if (!isGeneralSession && !streamedConversationId) {
+        const normalizedFromSessionId = normalizeConversationIdValue(targetSessionId);
+        if (normalizedFromSessionId) {
+          streamedConversationId = normalizedFromSessionId;
+        }
+      }
       let didReceiveToken = false;
       const streamingUserId = resolvedUser.id;
       const requestTitleHint = shouldRequestAutoTitleForSession(session);
+      const abortController = new AbortController();
+      streamAbortControllerRef.current = abortController;
+      const shouldUseWebSearch = webSearchEnabled;
+      const shouldAttachToConversation = !isRegeneration;
+      // If we are regenerating an existing assistant message (not just filling a
+      // blank placeholder), clear its content immediately so the previous text
+      // disappears while the new reply streams.
+      if (isRegeneration && existingAssistantId) {
+        updateMessage(targetSessionId, existingAssistantId, {
+          content: "",
+          groundingMetadata: undefined,
+        });
+      }
       if (!assistantMessageId) {
         const placeholderAssistant = appendMessage(targetSessionId, "assistant", "");
         assistantMessageId = (placeholderAssistant as ChatSessionMessage | null)?.id ?? null;
@@ -2247,20 +2462,26 @@ export function GrayChatView({
       }
       try {
         const timeContext = buildLocalTimeContext();
-        for await (const event of apiService.sendMessageStream({
-          message: prompt,
-          conversation_id: isGeneralSession
-            ? buildGeneralConversationId(streamingUserId)
-            : streamedConversationId ?? undefined,
-          system_prompt: personalizedSystemPrompt,
-          user_id: streamingUserId,
-          context: contextPayload,
-          time_context: timeContext,
-          attachments: buildAttachmentPayloads(),
-          should_generate_title: requestTitleHint,
-          web_search_enabled: modelTier === "lite" ? false : webSearchEnabled,
-          ...(modelTier === "lite" ? { maps_enabled: false, maps_widget: false } : mapPayload),
-        })) {
+        for await (const event of apiService.sendMessageStream(
+          {
+            message: prompt,
+            conversation_id: shouldAttachToConversation
+              ? isGeneralSession
+                ? buildGeneralConversationId(streamingUserId)
+                : streamedConversationId ?? undefined
+              : undefined,
+            system_prompt: personalizedSystemPrompt,
+            user_id: streamingUserId,
+            context: contextPayload,
+            time_context: timeContext,
+            attachments: buildAttachmentPayloads(),
+            should_generate_title: requestTitleHint,
+            web_search_enabled: shouldUseWebSearch,
+            model: selectedModelId ?? modelTier, // Pass the selected model ID or tier
+            ...(modelTier === "lite" ? { maps_enabled: false, maps_widget: false } : mapPayload),
+          },
+          { signal: abortController.signal }
+        )) {
           if (event.type === "token") {
             didReceiveToken = true;
             const delta = event.delta;
@@ -2281,6 +2502,13 @@ export function GrayChatView({
             continue;
           }
 
+          if (event.type === "reminders") {
+            if (Array.isArray(event.reminders) && event.reminders.length > 0) {
+              capturedReminders = event.reminders;
+            }
+            continue;
+          }
+
           if (event.type === "end") {
             // For general sessions we keep using the synthetic general conversation
             // identifier instead of adopting any backend UUID so that /g remains
@@ -2289,38 +2517,74 @@ export function GrayChatView({
               streamedConversationId =
                 normalizeConversationIdValue(event.conversationId) ?? streamedConversationId;
             }
-            const finalResponse = normalizeAssistantContent(event.response ?? accumulated, prompt);
-            accumulated = finalResponse;
+            const normalizedResponse = normalizeAssistantContent(event.response ?? accumulated, prompt);
+            accumulated = normalizedResponse;
             if (event.title) {
               applyAutoTitle(targetSessionId, event.title);
             }
             const metadata = event.groundingMetadata ?? undefined;
+            const baseVariants = previousVariants.length > 0 ? previousVariants : [];
+            // Process reminders: prefer structured SSE payloads, fallback to text extraction.
+            let finalReminders: GrayReminderCreatedPayload[] | undefined;
+            if (capturedReminders.length > 0) {
+              finalReminders = capturedReminders
+                .map((candidate) => coerceReminderPayload(candidate))
+                .filter((r): r is GrayReminderCreatedPayload => Boolean(r));
+            } else {
+              const extracted = extractGrayRemindersFromText(normalizedResponse);
+              if (extracted.reminders.length > 0) {
+                finalReminders = extracted.reminders;
+              }
+            }
+
+            let finalContent = normalizedResponse;
+            if (finalReminders && finalReminders.length > 0 && !finalContent.trim()) {
+              const confirmation = buildReminderConfirmationText(finalReminders);
+              if (confirmation) {
+                finalContent = confirmation;
+              }
+            }
+
+            const nextVariants = finalContent ? [...baseVariants, finalContent] : baseVariants;
+            const nextActiveIndex = nextVariants.length > 0 ? nextVariants.length - 1 : undefined;
             if (!assistantMessageId) {
               const assistantMessage = appendMessage(
                 targetSessionId,
                 "assistant",
-                finalResponse,
+                finalContent,
                 undefined,
                 metadata
               );
-              assistantMessageId = (assistantMessage as { id: string } | null)?.id ?? null;
+              assistantMessageId = (assistantMessage as ChatSessionMessage | null)?.id ?? null;
               streamingMessageId = assistantMessageId;
+              if (assistantMessageId) {
+                updateMessage(targetSessionId, assistantMessageId, {
+                  reminders: finalReminders,
+                  variants: nextVariants,
+                  activeVariantIndex: nextActiveIndex,
+                });
+              }
               if (streamingMessageId) {
                 setActiveStreamingMessageId(streamingMessageId);
               }
             } else if (assistantMessageId) {
               updateMessage(targetSessionId, assistantMessageId, {
-                content: finalResponse,
+                content: finalContent,
                 groundingMetadata: metadata,
+                reminders: finalReminders,
+                variants: nextVariants,
+                activeVariantIndex: nextActiveIndex,
               });
             }
             updateSession(targetSessionId, {
-              conversationId: streamedConversationId ?? undefined,
+              conversationId: shouldAttachToConversation
+                ? streamedConversationId ?? undefined
+                : session?.conversationId ?? undefined,
               isResponding: false,
               pendingAutoStream: false,
             });
             clearAttachments();
-            return finalResponse;
+            return finalContent;
           }
 
           if (event.type === "error") {
@@ -2333,13 +2597,24 @@ export function GrayChatView({
           const assistantMessage = appendMessage(targetSessionId, "assistant", normalized);
           assistantMessageId = (assistantMessage as { id: string } | null)?.id ?? null;
           accumulated = normalized;
+          const baseVariants = previousVariants.length > 0 ? previousVariants : [];
+          const nextVariants = normalized ? [...baseVariants, normalized] : baseVariants;
+          const nextActiveIndex = nextVariants.length > 0 ? nextVariants.length - 1 : undefined;
+          if (assistantMessageId) {
+            updateMessage(targetSessionId, assistantMessageId, {
+              variants: nextVariants,
+              activeVariantIndex: nextActiveIndex,
+            });
+          }
           if (!didReceiveToken && assistantMessageId && !streamingMessageId) {
             streamingMessageId = assistantMessageId;
             setActiveStreamingMessageId(assistantMessageId);
           }
         }
         updateSession(targetSessionId, {
-          conversationId: streamedConversationId ?? undefined,
+          conversationId: shouldAttachToConversation
+            ? streamedConversationId ?? undefined
+            : session?.conversationId ?? undefined,
           isResponding: false,
           pendingAutoStream: false,
         });
@@ -2350,9 +2625,11 @@ export function GrayChatView({
         try {
           const fallbackResponse = await apiService.sendMessage({
             message: prompt,
-            conversation_id: isGeneralSession
-              ? buildGeneralConversationId(streamingUserId)
-              : streamedConversationId ?? undefined,
+            conversation_id: shouldAttachToConversation
+              ? isGeneralSession
+                ? buildGeneralConversationId(streamingUserId)
+                : streamedConversationId ?? undefined
+              : undefined,
             system_prompt: personalizedSystemPrompt,
             user_id: streamingUserId,
             context: contextPayload,
@@ -2360,8 +2637,9 @@ export function GrayChatView({
             timezone: resolveClientTimezone(),
             attachments: buildAttachmentPayloads(),
             context_cache_id: selectedContextCacheId ?? undefined,
-            web_search_enabled: modelTier === "lite" ? false : webSearchEnabled,
+            web_search_enabled: shouldUseWebSearch,
             should_generate_title: requestTitleHint,
+            model: selectedModelId ?? modelTier, // Pass the selected model ID or tier
             ...(modelTier === "lite" ? { maps_enabled: false, maps_widget: false } : mapPayload),
           });
           streamedConversationId =
@@ -2371,10 +2649,16 @@ export function GrayChatView({
           if (fallbackResponse.title) {
             applyAutoTitle(targetSessionId, fallbackResponse.title);
           }
+          const baseVariants = previousVariants.length > 0 ? previousVariants : [];
+          const nextVariants = finalResponse ? [...baseVariants, finalResponse] : baseVariants;
+          const nextActiveIndex = nextVariants.length > 0 ? nextVariants.length - 1 : undefined;
           if (assistantMessageId) {
             updateMessage(targetSessionId, assistantMessageId, {
               content: finalResponse,
               groundingMetadata: fallbackMetadata,
+              variants: nextVariants,
+              activeVariantIndex: nextActiveIndex,
+              id: fallbackResponse.message_id ? String(fallbackResponse.message_id) : undefined,
             });
           } else {
             const assistantMessage = appendMessage(
@@ -2383,13 +2667,21 @@ export function GrayChatView({
               finalResponse
             );
             assistantMessageId = assistantMessage?.id ?? null;
+            if (assistantMessageId) {
+              updateMessage(targetSessionId, assistantMessageId, {
+                variants: nextVariants,
+                activeVariantIndex: nextActiveIndex,
+              });
+            }
             if (!didReceiveToken && assistantMessageId && !streamingMessageId) {
               streamingMessageId = assistantMessageId;
               setActiveStreamingMessageId(assistantMessageId);
             }
           }
           updateSession(targetSessionId, {
-            conversationId: streamedConversationId ?? undefined,
+            conversationId: shouldAttachToConversation
+              ? streamedConversationId ?? undefined
+              : session?.conversationId ?? undefined,
             isResponding: false,
             pendingAutoStream: false,
           });
@@ -2398,11 +2690,24 @@ export function GrayChatView({
         } catch (fallbackError) {
           console.warn("Fallback chat request failed:", fallbackError);
           const fallback = buildAssistantReply(prompt);
+          const baseVariants = previousVariants.length > 0 ? previousVariants : [];
+          const nextVariants = fallback ? [...baseVariants, fallback] : baseVariants;
+          const nextActiveIndex = nextVariants.length > 0 ? nextVariants.length - 1 : undefined;
           if (assistantMessageId) {
-            updateMessage(targetSessionId, assistantMessageId, { content: fallback });
+            updateMessage(targetSessionId, assistantMessageId, {
+              content: fallback,
+              variants: nextVariants,
+              activeVariantIndex: nextActiveIndex,
+            });
           } else {
             const assistantMessage = appendMessage(targetSessionId, "assistant", fallback);
             assistantMessageId = assistantMessage?.id ?? null;
+            if (assistantMessageId) {
+              updateMessage(targetSessionId, assistantMessageId, {
+                variants: nextVariants,
+                activeVariantIndex: nextActiveIndex,
+              });
+            }
             if (!didReceiveToken && assistantMessageId && !streamingMessageId) {
               streamingMessageId = assistantMessageId;
               setActiveStreamingMessageId(assistantMessageId);
@@ -2413,6 +2718,9 @@ export function GrayChatView({
           return fallback;
         }
       } finally {
+        if (streamAbortControllerRef.current === abortController) {
+          streamAbortControllerRef.current = null;
+        }
         if (streamingMessageId) {
           setActiveStreamingMessageId((previous) =>
             previous === streamingMessageId ? null : previous
@@ -2440,6 +2748,13 @@ export function GrayChatView({
       return;
     }
 
+    // If we are currently submitting a message (optimistic update), ignore auto-stream
+    // to prevent race conditions where the effect sees the new message before
+    // the submit handler has marked the session as responding.
+    if (isSubmittingRef.current) {
+      return;
+    }
+
     if (!sessionAutoStreamId) {
       return;
     }
@@ -2448,6 +2763,11 @@ export function GrayChatView({
     // no local messages yet, skip auto-streaming. History hydration (below) will
     // populate messages if the backend knows this conversation.
     if (sessionConversationId && messages.length === 0) {
+      return;
+    }
+
+    // If this session is already streaming a reply, do not trigger another.
+    if (session?.isResponding) {
       return;
     }
 
@@ -2478,12 +2798,10 @@ export function GrayChatView({
     const hasAlreadyTriggeredForLastUser =
       lastUserMessage != null && hasAutoStreamTriggered(sessionAutoStreamId, lastUserMessage.id);
 
-    // Do not rely on session.isResponding here—some surfaces (like createThreadSession)
-    // mark sessions as responding while their own stream is active, and we do not want
-    // to launch a duplicate assistant request in those cases.
-    const shouldRespond =
-      !hasAlreadyTriggeredForLastUser &&
-      (hasPendingAutoStream || isAwaitingAssistant);
+    // Only auto-respond when the session explicitly flagged a pending auto-stream.
+    // This prevents re-sending old prompts on reload just because the last message
+    // happens to be from the user.
+    const shouldRespond = !hasAlreadyTriggeredForLastUser && hasPendingAutoStream;
 
     if (!shouldRespond) {
       return;
@@ -2528,6 +2846,20 @@ export function GrayChatView({
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    // If a stream is in progress, treat submit as "cancel".
+    if (session?.isResponding || activeStreamingMessageId) {
+      const controller = streamAbortControllerRef.current;
+      if (controller) {
+        controller.abort();
+        streamAbortControllerRef.current = null;
+      }
+      if (session) {
+        updateSession(session.id, { isResponding: false, pendingAutoStream: false });
+      }
+      setActiveStreamingMessageId((previous) => (previous ? null : previous));
+      isSubmittingRef.current = false;
+      return;
+    }
     if (isSubmittingRef.current) {
       return;
     }
@@ -2536,6 +2868,7 @@ export function GrayChatView({
     let targetSession = session;
     if (!targetSession && sessionId) {
       const nowTs = Date.now();
+      const normalizedSessionConversationId = normalizeConversationIdValue(sessionId);
       targetSession = ensureSession(sessionId, () => ({
         id: sessionId,
         title: "New Chat",
@@ -2545,7 +2878,7 @@ export function GrayChatView({
         messages: [],
         isResponding: false,
         scope: "thread",
-        conversationId: undefined,
+        conversationId: normalizedSessionConversationId ?? undefined,
         pendingAutoStream: false,
       }));
     }
@@ -2707,38 +3040,48 @@ export function GrayChatView({
     ]
   );
 
+  const handleEditMessage = useCallback(
+    (messageId: string, newContent: string) => {
+      if (!session) {
+        return;
+      }
+      updateMessage(session.id, messageId, { content: newContent });
+    },
+    [session, updateMessage]
+  );
+
   const handleRetryUserMessage = useCallback(
     (messageId: string) => {
       if (!session) {
         return;
       }
-      const target = messages.find((message) => message.id === messageId);
-      if (!target || target.role !== "user") {
+      const messageIndex = messages.findIndex((message) => message.id === messageId);
+      if (messageIndex === -1) {
         return;
       }
-      const content = target.content;
-
-      // Generate a temp ID and mark it as already triggered BEFORE appending
-      const tempMessageId = typeof crypto !== "undefined" && "randomUUID" in crypto
-        ? crypto.randomUUID()
-        : Math.random().toString(36).slice(2);
-      markAutoStreamTriggered(session.id, tempMessageId);
-
-      const retriedUser = appendMessage(session.id, "user", content, tempMessageId);
-
-      if (replyTimeout.current !== null) {
-        window.clearTimeout(replyTimeout.current);
-        replyTimeout.current = null;
+      const target = messages[messageIndex];
+      if (target.role !== "user") {
+        return;
       }
-
-      if (retriedUser) {
-        void streamAssistantReply(session.id, content, session.conversationId ?? null);
+      const content = target.content ?? "";
+      if (!content.trim()) {
         return;
       }
 
-      appendMessage(session.id, "assistant", buildAssistantReply(content));
+      // If there is an assistant response immediately following this message,
+      // regenerate it. Otherwise, generate a new response.
+      const nextMessage = messages[messageIndex + 1];
+      const existingAssistantId =
+        nextMessage?.role === "assistant" ? nextMessage.id : undefined;
+
+      void streamAssistantReply(
+        session.id,
+        content,
+        session.conversationId ?? null,
+        existingAssistantId
+      );
     },
-    [appendMessage, markAutoStreamTriggered, messages, session, streamAssistantReply]
+    [messages, session, streamAssistantReply]
   );
 
   const handleRegenerate = useCallback(
@@ -2757,11 +3100,7 @@ export function GrayChatView({
         return;
       }
 
-      if (assistantMessage.id !== latestAssistantMessageId) {
-        console.warn("Regeneration is only supported for the latest assistant response.");
-        return;
-      }
-
+      // Allow regenerating any assistant message, not just the latest
       let userIndex = assistantIndex - 1;
       while (userIndex >= 0 && messages[userIndex].role !== "user") {
         userIndex -= 1;
@@ -2772,38 +3111,15 @@ export function GrayChatView({
       }
 
       const userMessage = messages[userIndex];
-      const preservedMessages = messages.slice(0, userIndex);
 
       setRegeneratingMessageId(assistantMessage.id);
-      if (activeStreamingMessageId === assistantMessage.id) {
-        setActiveStreamingMessageId(null);
-      }
-      updateSession(session.id, {
-        messages: preservedMessages,
-        isResponding: true,
-        pendingAutoStream: false,
-      });
-
-      // Generate a temp ID and mark it as already triggered BEFORE appending
-      const tempMessageId = typeof crypto !== "undefined" && "randomUUID" in crypto
-        ? crypto.randomUUID()
-        : Math.random().toString(36).slice(2);
-      markAutoStreamTriggered(session.id, tempMessageId);
-
-      const retriedUser = appendMessage(session.id, "user", userMessage.content, tempMessageId);
-
-      if (!retriedUser) {
-        appendMessage(session.id, "assistant", buildAssistantReply(userMessage.content));
-        setRegeneratingMessageId(null);
-        return;
-      }
-
       void (async () => {
         try {
           await streamAssistantReply(
             session.id,
             userMessage.content,
-            session.conversationId ?? null
+            session.conversationId ?? null,
+            assistantMessage.id
           );
         } finally {
           setRegeneratingMessageId(null);
@@ -2811,15 +3127,42 @@ export function GrayChatView({
       })();
     },
     [
-      appendMessage,
-      activeStreamingMessageId,
-      latestAssistantMessageId,
-      markAutoStreamTriggered,
       messages,
       session,
-      updateSession,
       streamAssistantReply,
     ]
+  );
+
+  const handleCycleAssistantVariant = useCallback(
+    (messageId: string, direction: "prev" | "next") => {
+      if (!session) {
+        return;
+      }
+      const target = session.messages.find(
+        (message) => message.id === messageId && message.role === "assistant"
+      );
+      if (!target || !Array.isArray(target.variants) || target.variants.length <= 1) {
+        return;
+      }
+      const total = target.variants.length;
+      const currentIndex =
+        typeof target.activeVariantIndex === "number" && target.activeVariantIndex >= 0
+          ? target.activeVariantIndex
+          : total - 1;
+      const delta = direction === "prev" ? -1 : 1;
+      let nextIndex = currentIndex + delta;
+      if (nextIndex < 0) {
+        nextIndex = total - 1;
+      } else if (nextIndex >= total) {
+        nextIndex = 0;
+      }
+      const nextContent = target.variants[nextIndex] ?? target.content;
+      updateMessage(session.id, messageId, {
+        content: nextContent,
+        activeVariantIndex: nextIndex,
+      });
+    },
+    [session, updateMessage]
   );
 
   // Respect the backend as the single source of truth for context limits.
@@ -2980,7 +3323,10 @@ export function GrayChatView({
 
   const trimmedDraft = draft.trim();
   const composerHasContent = Boolean(trimmedDraft);
-  const isSendDisabled = isResponding || !composerHasContent;
+  // Allow sending again while streaming so the second press can cancel the stream.
+  const isStreaming = isResponding || Boolean(activeStreamingMessageId);
+  const isSendDisabled = !composerHasContent && !isStreaming;
+
   const shouldShowPendingStreamIndicator =
     !hideThinkingIndicator && (isResponding || sessionPendingAutoStream);
 
@@ -3016,6 +3362,8 @@ export function GrayChatView({
             handleRegenerate={handleRegenerate}
             handleRetryUserMessage={handleRetryUserMessage}
             handleDeleteMessage={handleDeleteMessage}
+            handleCycleAssistantVariant={handleCycleAssistantVariant}
+            handleEditMessage={handleEditMessage}
             shouldShowPendingStreamIndicator={shouldShowPendingStreamIndicator}
             showFirstMessageSpinner={showFirstMessageSpinner}
             scrollAnchorRef={scrollAnchorRef}

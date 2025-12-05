@@ -375,10 +375,12 @@ server.tool("create_habit", {
         .string()
         .min(1)
         .describe("Name/label of the habit."),
-    streak_label: z
-        .string()
+    streak_days: z
+        .number()
+        .int()
+        .min(0)
         .optional()
-        .describe('Optional initial streak label, e.g. "0 days". Defaults based on backend.'),
+        .describe("Optional initial streak count in consecutive days (integer only)."),
     previous_label: z
         .string()
         .optional()
@@ -388,12 +390,12 @@ server.tool("create_habit", {
         .nullable()
         .optional()
         .describe("Optional description/notes for the habit."),
-}, async ({ user_id, label, streak_label, previous_label, description = null, }) => {
+}, async ({ user_id, label, streak_days, previous_label, description = null, }) => {
     const payload = {
         label,
     };
-    if (typeof streak_label === "string") {
-        payload.streak_label = streak_label;
+    if (typeof streak_days === "number") {
+        payload.streak_label = String(Math.max(0, Math.trunc(streak_days)));
     }
     if (typeof previous_label === "string") {
         payload.previous_label = previous_label;
@@ -428,11 +430,13 @@ server.tool("update_habit", {
         .string()
         .optional()
         .describe("New label (omit to keep existing)."),
-    streak_label: z
-        .string()
+    streak_days: z
+        .number()
+        .int()
+        .min(0)
         .nullable()
         .optional()
-        .describe('New streak label string or null to clear (omit to keep existing).'),
+        .describe("New streak count (integer). Use null to clear or omit to keep existing."),
     previous_label: z
         .string()
         .nullable()
@@ -444,12 +448,15 @@ server.tool("update_habit", {
         .optional()
         .describe("New description or null to clear (omit to keep existing)."),
 }, async (args) => {
-    const { user_id, habit_id, label, streak_label, previous_label, description, } = args;
+    const { user_id, habit_id, label, streak_days, previous_label, description, } = args;
     const payload = {};
     if (typeof label === "string")
         payload.label = label;
-    if (Object.prototype.hasOwnProperty.call(args, "streak_label")) {
-        payload.streak_label = streak_label;
+    if (Object.prototype.hasOwnProperty.call(args, "streak_days")) {
+        payload.streak_label =
+            typeof streak_days === "number"
+                ? String(Math.max(0, Math.trunc(streak_days)))
+                : null;
     }
     if (Object.prototype.hasOwnProperty.call(args, "previous_label")) {
         payload.previous_label = previous_label;

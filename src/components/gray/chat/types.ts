@@ -130,12 +130,15 @@ export type ChatContextValue = {
     cancelQuestionnaire: () => void;
 };
 
-export type GrayReminderEntityType = "plan" | "habit";
+export type GrayReminderEntityType = "plan" | "habit" | "reminder";
+export type GrayReminderPayloadType = "gray.reminder" | "gray.plan" | "gray.habit";
+export type GrayReminderStatus = "created" | "updated" | "completed" | "deleted";
+export type GrayReminderSource = "mcp/plans-habits-server" | "mcp";
 
 export interface GrayReminderCreatedPayload {
-    type: "gray.reminder";
-    source: "mcp/plans-habits-server";
-    status: "created" | "updated" | "completed" | "deleted";
+    type: GrayReminderPayloadType;
+    source: GrayReminderSource;
+    status: GrayReminderStatus;
     entity: GrayReminderEntityType;
     delivery_mode?: string | null;
     data: {

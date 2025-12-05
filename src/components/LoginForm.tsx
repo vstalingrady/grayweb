@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, useEffect, useState, useRef } from "react";
 import { LoaderCircle } from "lucide-react";
 import { FaDiscord, FaGoogle } from "react-icons/fa6";
+import { Turnstile, type TurnstileInstance } from "@marsidev/react-turnstile";
 import ShaderBackground from "@/components/shaders/ShaderBackground";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { getSupabaseAuthStorageKeys } from "@/lib/supabaseStorage";
@@ -45,7 +46,12 @@ const providers = [
 
 const envRedirect = process.env.NEXT_PUBLIC_AUTH_REDIRECT?.trim();
 const envSiteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim();
-const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim();
+const FALLBACK_TURNSTILE_SITE_KEY = "0x4AAAAAACDfOE8EWig4fsrM";
+const envTurnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim();
+const turnstileSiteKey =
+  envTurnstileSiteKey && envTurnstileSiteKey.length > 0
+    ? envTurnstileSiteKey
+    : FALLBACK_TURNSTILE_SITE_KEY;
 const CALLBACK_PATH = "/callback";
 const SUPABASE_STORAGE_KEYS = getSupabaseAuthStorageKeys();
 const MIN_PASSWORD_LENGTH = 8;
@@ -263,8 +269,8 @@ export default function LoginForm({
   const [authMode, setAuthMode] = useState<AuthMode>(initialMode);
   const [showPassword, setShowPassword] = useState(false);
   const [captchaToken, setCaptchaToken] = useState<string | undefined>();
-  const [turnstileLoaded, setTurnstileLoaded] = useState(false);
-  const turnstileRef = useRef<any>(null);
+  const [pendingEmailConfirmation, setPendingEmailConfirmation] = useState(false);
+  const turnstileRef = useRef<TurnstileInstance | undefined>(undefined);
 
   const searchParams = useSearchParams();
 
@@ -279,8 +285,36 @@ export default function LoginForm({
     }
     setShowPassword(false);
     setCaptchaToken(undefined);
-    setTurnstileLoaded(false);
+    setPendingEmailConfirmation(false);
   }, [authMode]);
+
+  const handleCaptchaErrorReset = (error: unknown) => {
+    const raw =
+      error instanceof Error
+        ? error.message
+        : typeof error === "string"
+          ? error
+          : "";
+    const normalized = raw.toLowerCase();
+    const isVerificationFailed = normalized.includes("captcha verification process failed");
+    const isTimeoutOrDuplicate =
+      normalized.includes("captcha protection: request disallowed (timeout-or-duplicate)") ||
+      normalized.includes("timeout-or-duplicate");
+
+    if (isVerificationFailed || isTimeoutOrDuplicate) {
+      setCaptchaToken(undefined);
+      try {
+        turnstileRef.current?.reset();
+      } catch {
+        // Best-effort reset; ignore failures.
+      }
+      if (isTimeoutOrDuplicate) {
+        return "Captcha verification expired or was already used. Please complete the verification again to continue.";
+      }
+      return "Turnstile verification failed. Please complete the captcha check again to continue.";
+    }
+    return raw;
+  };
 
   // Check for OAuth callback errors
   useEffect(() => {
@@ -329,6 +363,15 @@ export default function LoginForm({
       return;
     }
 
+    // Require captcha completion when Turnstile is enabled
+    if (turnstileSiteKey && !captchaToken) {
+      setMessage({
+        type: "error",
+        text: "Please complete the verification step before continuing.",
+      });
+      return;
+    }
+
     if (typeof window !== "undefined") {
       try {
         window.sessionStorage.removeItem("auth-callback-processed");
@@ -368,8 +411,7 @@ export default function LoginForm({
 
       console.log(`[AUTH PERF] OAuth ${provider} initiated in ${(performance.now() - perfStart).toFixed(2)}ms`);
     } catch (error) {
-      const text =
-        error instanceof Error ? error.message : "OAuth request failed.";
+      const text = handleCaptchaErrorReset(error) || "OAuth request failed.";
       setMessage({ type: "error", text });
       setLoading(false);
     }
@@ -421,6 +463,7 @@ export default function LoginForm({
     event.preventDefault();
     const perfStart = performance.now();
     setMessage({ type: "idle" });
+    setPendingEmailConfirmation(false);
     const supabase = getSupabaseClient();
 
     const trimmedEmail = email.trim();
@@ -429,6 +472,15 @@ export default function LoginForm({
       setMessage({
         type: "error",
         text: "Please enter both email and password to continue.",
+      });
+      return;
+    }
+
+    // Enforce captcha when Turnstile is configured
+    if (turnstileSiteKey && !captchaToken) {
+      setMessage({
+        type: "error",
+        text: "Please complete the verification step before continuing.",
       });
       return;
     }
@@ -540,19 +592,129 @@ export default function LoginForm({
         type: "success",
         text: "Check your email to confirm your account. Once verified, return here to sign in.",
       });
+      setPendingEmailConfirmation(true);
     } catch (error) {
-      const text =
-        error instanceof Error
-          ? error.message
-          : authMode === "signin"
-            ? "Unable to sign in."
-            : "Unable to sign up.";
+      const baseText =
+        authMode === "signin" ? "Unable to sign in." : "Unable to sign up.";
+      const detail = handleCaptchaErrorReset(error);
+      const text = detail || baseText;
       setMessage({ type: "error", text });
     } finally {
       setLoading(false);
     }
   };
 
+  const handleResendVerification = async () => {
+    const supabase = getSupabaseClient();
+    const trimmedEmail = email.trim();
+
+    if (!trimmedEmail) {
+      setMessage({
+        type: "error",
+        text: "Enter your account email above, then click “Resend verification email” again.",
+      });
+      return;
+    }
+
+    if (!supabase) {
+      setMessage({
+        type: "error",
+        text: "Supabase client is not configured. Check environment variables.",
+      });
+      return;
+    }
+
+    if (turnstileSiteKey && !captchaToken) {
+      setMessage({
+        type: "error",
+        text: "Please complete the verification step before continuing.",
+      });
+      return;
+    }
+
+    setLoading(true);
+    setMessage({ type: "idle" });
+
+    try {
+      const { error } = await supabase.auth.resend({
+        type: "signup",
+        email: trimmedEmail,
+        options: {
+          emailRedirectTo: ensureAbsoluteUrl(buildCallbackDestination(redirectTo)),
+          captchaToken,
+        },
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      setMessage({
+        type: "success",
+        text: "We’ve sent another confirmation email. It may take a minute to arrive; please also check your spam or promotions folder.",
+      });
+      setPendingEmailConfirmation(true);
+    } catch (error) {
+      const detail = handleCaptchaErrorReset(error);
+      const baseText = "Unable to resend verification email.";
+      setMessage({
+        type: "error",
+        text: detail || baseText,
+      });
+      setPendingEmailConfirmation(false);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    const supabase = getSupabaseClient();
+    const trimmedEmail = email.trim();
+
+    if (!trimmedEmail) {
+      setMessage({
+        type: "error",
+        text: "Enter your account email above, then click “Forgot password?” again.",
+      });
+      return;
+    }
+
+    if (!supabase) {
+      setMessage({
+        type: "error",
+        text: "Supabase client is not configured. Check environment variables.",
+      });
+      return;
+    }
+
+    setLoading(true);
+    setMessage({ type: "idle" });
+
+    try {
+      const redirectTo = ensureAbsoluteUrl("/reset-password");
+      const { error } = await supabase.auth.resetPasswordForEmail(
+        trimmedEmail,
+        { redirectTo }
+      );
+
+      if (error) {
+        throw error;
+      }
+
+      setMessage({
+        type: "success",
+        text: "Check your email for a password reset link.",
+      });
+    } catch (error) {
+      const text =
+        error instanceof Error
+          ? error.message
+          : "Unable to send password reset email.";
+      setMessage({ type: "error", text });
+    } finally {
+      setLoading(false);
+    }
+  };
   const isSignIn = authMode === "signin";
   const heading = headerText ?? (isSignIn ? "Welcome back" : "Welcome");
   const subtitle = subtitleText ?? (isSignIn
@@ -723,21 +885,41 @@ export default function LoginForm({
                   </span>
                   <span className={styles.authRememberLabel}>Remember me</span>
                 </label>
-                <a
+                <button
+                  type="button"
                   className={styles.authForgot}
-                  href="https://app.supabase.com/"
-                  target="_blank"
-                  rel="noreferrer"
+                  onClick={handleForgotPassword}
+                  disabled={loading}
                 >
                   Forgot password?
-                </a>
+                </button>
               </div>
 
-              {turnstileSiteKey && turnstileLoaded && (
-                <div style={{ marginBottom: "1rem" }} id="turnstile-container" />
+              {turnstileSiteKey && (
+                <div style={{ marginBottom: "1rem" }}>
+                  <Turnstile
+                    ref={turnstileRef}
+                    siteKey={turnstileSiteKey}
+                    onSuccess={(token) => setCaptchaToken(token)}
+                    onExpire={() => setCaptchaToken(undefined)}
+                    onError={() => setCaptchaToken(undefined)}
+                    options={{ theme: "auto", appearance: "always" }}
+                  />
+                </div>
               )}
 
               {renderedMessage}
+
+              {pendingEmailConfirmation && message.type === "success" && (
+                <button
+                  type="button"
+                  className={styles.authResendVerification}
+                  onClick={handleResendVerification}
+                  disabled={loading}
+                >
+                  Resend verification email
+                </button>
+              )}
 
               <button
                 type="submit"

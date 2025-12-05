@@ -122,3 +122,4 @@ async def test_repeat_request_reschedules_existing_reminder(connected_db):
     plan_rows = await db.fetch_all(main.plans.select())
     assert len(plan_rows) == 1
     assert plan_rows[0]["deadline"] == second_action["time_iso"]
+

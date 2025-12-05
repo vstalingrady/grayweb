@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useMemo, type HTMLAttributes, type MutableRefObject } from "react";
 
 import styles from "./GrayDashboardCalendar.module.css";

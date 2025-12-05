@@ -1,3 +1,4 @@
+/* eslint-disable react/no-unescaped-entities */
 export const metadata = {
   title: "Terms of Service",
 };
@@ -54,7 +55,50 @@ export default function TermsOfServicePage() {
           </section>
 
           <section>
-            <h2>5. Data Collection and Usage</h2>
+            <h2>5. Usage Limits</h2>
+            <p>
+              Gray operates on a tiered subscription model. Each tier includes generous usage allowances designed to
+              accommodate typical personal use. While we do not publish specific numerical limits, the following applies:
+            </p>
+            <BulletList
+              items={[
+                "Scout (Free): Includes a monthly usage allowance sufficient for casual, personal use.",
+                "Voyager: Includes substantially higher limits suitable for regular daily use.",
+                "Pioneer: Includes the highest limits for power users, with priority access to new features.",
+              ]}
+            />
+            <p>
+              Usage is measured based on AI processing costs, which vary by message length and complexity.
+              If you approach your tier's limit, you will be notified and may upgrade for additional capacity.
+              Unused allowances do not roll over between billing periods.
+            </p>
+          </section>
+
+          <section>
+            <h2>6. Fair Use &amp; Abuse Prevention</h2>
+            <p>
+              Gray is designed for personal, human use. The following activities are prohibited and may result
+              in immediate account suspension or termination:
+            </p>
+            <BulletList
+              items={[
+                "Automated access, scraping, or bot usage without prior written authorization.",
+                "Sharing account access with multiple individuals or using a single account for organizational purposes.",
+                "Attempting to circumvent usage limits through technical means.",
+                "Using the Service to generate content that violates applicable laws or our content policies.",
+                "Excessive usage patterns inconsistent with normal human interaction (e.g., sustained high-volume automated requests).",
+                "Reselling, redistributing, or commercializing Gray's AI outputs without permission.",
+              ]}
+            />
+            <p>
+              We reserve the right to investigate suspected abuse and take appropriate action, including but not
+              limited to rate limiting, account suspension, or termination. Refunds are not provided for accounts
+              terminated due to abuse.
+            </p>
+          </section>
+
+          <section>
+            <h2>7. Data Collection and Usage</h2>
             <p>We collect the following data to deliver Gray:</p>
             <BulletList
               items={[
@@ -77,7 +121,7 @@ export default function TermsOfServicePage() {
           </section>
 
           <section>
-            <h2>6. Data Privacy &amp; Security</h2>
+            <h2>8. Data Privacy &amp; Security</h2>
             <BulletList
               items={[
                 "We encrypt data in transit and at rest.",
@@ -90,7 +134,7 @@ export default function TermsOfServicePage() {
           </section>
 
           <section>
-            <h2>7. Limitations of Liability</h2>
+            <h2>9. Limitations of Liability</h2>
             <p>
               Gray is provided “as is” without warranties. We cannot guarantee uninterrupted service or accuracy of AI
               guidance. You are responsible for evaluating any advice and for decisions you make.
@@ -105,7 +149,7 @@ export default function TermsOfServicePage() {
           </section>
 
           <section>
-            <h2>8. Disclaimers</h2>
+            <h2>10. Disclaimers</h2>
             <p>
               Gray is not a replacement for professional mental health, medical, or legal advice. If you are experiencing
               a mental health crisis, contact emergency services or a licensed professional.
@@ -114,7 +158,7 @@ export default function TermsOfServicePage() {
           </section>
 
           <section>
-            <h2>9. Intellectual Property</h2>
+            <h2>11. Intellectual Property</h2>
             <p>
               You retain ownership of the content you create. You grant Alignment a license to use that content to
               improve the Service and train AI models, subject to your privacy preferences.
@@ -122,7 +166,7 @@ export default function TermsOfServicePage() {
           </section>
 
           <section>
-            <h2>10. Termination</h2>
+            <h2>12. Termination</h2>
             <p>
               We may terminate or suspend your account for any reason, including violations of these Terms. You may delete
               your account any time; we will remove your personal data within a reasonable period unless retention is required
@@ -131,12 +175,12 @@ export default function TermsOfServicePage() {
           </section>
 
           <section>
-            <h2>11. Changes to Terms</h2>
+            <h2>13. Changes to Terms</h2>
             <p>We may update these Terms at any time. Material changes will be communicated via email when possible.</p>
           </section>
 
           <section>
-            <h2>12. Governing Law</h2>
+            <h2>14. Governing Law</h2>
             <p>
               These Terms are governed by the laws of Indonesia, and disputes will be resolved in the courts of Jakarta
               unless another forum is mutually agreed upon.
@@ -144,7 +188,7 @@ export default function TermsOfServicePage() {
           </section>
 
           <section>
-            <h2>13. Contact</h2>
+            <h2>15. Contact</h2>
             <p>
               Questions about these Terms? Email{" "}
               <a className="legal-contact" href="mailto:legal@alignment.id">

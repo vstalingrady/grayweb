@@ -128,7 +128,7 @@ export function ProactivityNotificationProvider({ children }: ProactivityNotific
   );
 
   useEffect(() => {
-    if (!userId) return;
+    if (!userId || typeof window === "undefined" || typeof EventSource === "undefined") return;
 
     // Get authentication token
     const getAuthToken = async (): Promise<string | null> => {
@@ -187,7 +187,13 @@ export function ProactivityNotificationProvider({ children }: ProactivityNotific
 
       const url = resolveApiBaseUrl();
       // EventSource doesn't support custom headers, so we pass the token as a query parameter
-      const eventSource = new EventSource(`${url}/users/${userId}/proactivity/stream?token=${encodeURIComponent(token)}`);
+      let eventSource: EventSource | null = null;
+      try {
+        eventSource = new EventSource(`${url}/users/${userId}/proactivity/stream?token=${encodeURIComponent(token)}`);
+      } catch (err) {
+        console.warn("[Proactivity] SSE init failed:", err);
+        return;
+      }
 
       eventSource.onopen = () => {
         console.log("[Proactivity] SSE Connected");
@@ -221,12 +227,13 @@ export function ProactivityNotificationProvider({ children }: ProactivityNotific
       eventSource.addEventListener("proactivity_message", handleEvent);
 
       eventSource.onerror = (err) => {
-        console.error("[Proactivity] SSE Error:", err);
-        eventSource.close();
+        // Avoid noisy empty error objects; log once and close.
+        console.warn("[Proactivity] SSE disconnected; will close the stream.", err);
+        eventSource?.close();
       };
 
       return () => {
-        eventSource.close();
+        eventSource?.close();
       };
     };
 

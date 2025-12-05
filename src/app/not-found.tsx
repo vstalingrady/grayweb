@@ -1,3 +1,5 @@
+/* eslint-disable react/no-unescaped-entities */
+import Link from "next/link";
 export default function NotFound() {
     return (
         <div style={{
@@ -12,9 +14,9 @@ export default function NotFound() {
         }}>
             <h1 style={{ fontSize: '4rem', margin: 0 }}>404</h1>
             <p style={{ fontSize: '1.5rem', opacity: 0.7 }}>Page not found</p>
-            <a href="/" style={{ marginTop: '2rem', color: '#fff', textDecoration: 'underline' }}>
+            <Link href="/" style={{ marginTop: '2rem', color: '#fff', textDecoration: 'underline' }}>
                 Go home
-            </a>
+            </Link>
         </div>
     );
 }

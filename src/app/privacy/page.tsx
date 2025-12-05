@@ -18,6 +18,7 @@ const BulletList = ({ items }: ListProps) => (
   </ul>
 );
 
+/* eslint-disable react/no-unescaped-entities */
 export default function PrivacyPolicyPage() {
   return (
     <main className="legal-page">

@@ -161,7 +161,15 @@ class RequestLoggingMiddleware:
         # Try to get user from headers or session
         user_context = None
 
-        # Log request start
+        # Skip noisy polling endpoints (keep errors)
+        is_reminders_poll = (
+            method == "GET"
+            and path.endswith("/reminders")
+            and "/users/" in path
+        )
+        skip_info_logging = is_reminders_poll
+
+        # Log request start (unless skipped)
         start_time = datetime.utcnow()
         start_extra = _sanitize_extra_dict({
             "event_type": "request_start",
@@ -173,10 +181,11 @@ class RequestLoggingMiddleware:
             "user_context": user_context,
             "correlation_id": correlation_id
         })
-        self.logger.info(
-            f"Request started: {method} {path}",
-            extra=start_extra
-        )
+        if not skip_info_logging:
+            self.logger.info(
+                f"Request started: {method} {path}",
+                extra=start_extra
+            )
 
         # Wrap send to log response
         async def wrapped_send(message):
@@ -198,10 +207,17 @@ class RequestLoggingMiddleware:
                     "duration_ms": duration * 1000,
                     "correlation_id": correlation_id
                 })
-                self.logger.info(
-                    f"Request completed: {method} {path} -> {status_code}",
-                    extra=response_extra
-                )
+                if status_code >= 500:
+                    log_fn = self.logger.error
+                elif status_code >= 400:
+                    log_fn = self.logger.warning
+                else:
+                    log_fn = None if skip_info_logging else self.logger.info
+                if log_fn:
+                    log_fn(
+                        f"Request completed: {method} {path} -> {status_code}",
+                        extra=response_extra
+                    )
 
             await send(message)
 

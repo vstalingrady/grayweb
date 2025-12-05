@@ -42,6 +42,7 @@ const formatReminderDate = (value?: string | null) => {
   })} • ${relative}`;
 };
 
+/* eslint-disable react/no-unescaped-entities */
 const CHAT_HANDLE = "Vstalin";
 
 const pickFromList = <T,>(items: T[], seed: number): T => {

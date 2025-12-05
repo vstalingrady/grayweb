@@ -1,87 +1,90 @@
 .container {
   position: relative;
   display: inline-block;
+  font-family: var(--font-sans);
 }
 
 .trigger {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 0;
+  gap: 6px;
+  padding: 8px 10px;
+  /* Reduced padding */
   background: transparent;
+  /* No bg */
   border: none;
-  color: rgba(255, 255, 255, 0.9);
-  font-size: 0.85rem;
-  font-weight: 600;
+  /* No border */
+  border-radius: 6px;
+  color: #ffffff;
   cursor: pointer;
   transition: all 0.2s ease;
-  line-height: 1;
+  min-width: 0;
+  /* Auto width */
 }
 
 .trigger:hover {
-  color: rgba(255, 255, 255, 1);
+  background: rgba(255, 255, 255, 0.05);
+  /* Subtle hover */
 }
 
-.triggerIcon {
-  opacity: 0.8;
+.triggerContent {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.triggerLabel {
-  margin-right: 2px;
-  font-weight: 600;
-  line-height: 1;
+.triggerIconWrapper {
   display: flex;
   align-items: center;
 }
 
-.hideOnMobile {
-  display: inline;
+.triggerLabel {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: #fff;
 }
 
-@media (max-width: 768px) {
-  .hideOnMobile {
-    display: none;
-  }
-
-  .trigger {
-    background: transparent !important;
-    border: none !important;
-    padding: 0 !important;
-  }
+.triggerSubLabel {
+  display: none;
+  /* Hidden */
 }
+
 
 .chevron {
-  opacity: 0.9;
+  opacity: 0.5;
   transform-origin: center;
-  transition: transform 0.18s ease;
+  transition: transform 0.2s ease;
   display: flex;
   flex-shrink: 0;
 }
 
 .chevronOpen {
   transform: rotate(180deg);
+  opacity: 0.8;
 }
 
 .menu {
   position: absolute;
   bottom: calc(100% + 8px);
-  right: 0;
-  /* Align to right edge of trigger */
   left: auto;
-  width: min(280px, 92vw);
-  background: #1a1a1a;
-  /* Fallback */
-  background: var(--color-background-elevated, #1a1a1a);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  right: 0;
+  /* Slight offset */
+  width: 300px;
+  /* Wider menu */
+  background: #18181b;
+  /* Darker zinc background */
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 16px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-  padding: 8px;
+  /* Larger radius matching inspo */
+  box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.5);
+  padding: 6px;
   z-index: 1000;
   opacity: 0;
   visibility: hidden;
-  transform: translateY(10px) scale(0.98);
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  transform-origin: bottom right;
+  transform: translateY(8px) scale(0.98);
+  transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s;
+  transform-origin: bottom left;
+  overflow: hidden;
 }
 
 .menuOpen {
@@ -90,15 +93,21 @@
   transform: translateY(0) scale(1);
 }
 
+.menuScrollWrapper {
+  max-height: 500px;
+  overflow-y: auto;
+}
+
 .menuContent {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
 }
 
 .menuItem {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
+  /* Center vertically specifically for inspo look */
   gap: 12px;
   padding: 10px 12px;
   width: 100%;
@@ -107,27 +116,34 @@
   border: none;
   border-radius: 10px;
   cursor: pointer;
-  transition: background 0.15s ease;
-  color: inherit;
+  color: #ffffff;
   position: relative;
+  text-decoration: none;
+  transition: all 0.15s ease;
 }
 
 .menuItem:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .menuItemActive {
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.menuItemLocked {
-  opacity: 0.5;
-  cursor: not-allowed;
+  /* No distinct background for active in inspo, just the checkmark.
+       But we add subtle bg for clarity */
+  /* background: rgba(255, 255, 255, 0.03); */
 }
 
 .itemIconWrapper {
-  margin-top: 2px;
-  color: rgba(255, 255, 255, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.6);
+  width: 20px;
+}
+
+.glowIcon {
+  color: #a855f7;
+  /* Purple glow for reasoning logic/brain */
+  filter: drop-shadow(0 0 4px rgba(168, 85, 247, 0.5));
 }
 
 .itemInfo {
@@ -138,121 +154,256 @@
 }
 
 .itemLabel {
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.95);
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: #ffffff;
 }
 
 .itemDescription {
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   color: rgba(255, 255, 255, 0.5);
-  line-height: 1.3;
 }
 
-.betaTag {
-  font-size: 0.65rem;
-  padding: 1px 5px;
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.15);
-  color: rgba(255, 255, 255, 0.8);
-  font-weight: 500;
-  text-transform: uppercase;
-}
-
-.upgradeSection {
-  margin-top: 8px;
-  padding: 4px;
-  background: linear-gradient(to right, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.01));
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 12px;
-}
-
-.upgradeContent {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px;
-}
-
-.upgradeIconWrapper {
-  color: #a1a1aa;
-}
-
-.upgradeInfo {
-  flex: 1;
-}
-
-.upgradeLabel {
-  font-size: 0.85rem;
-  font-weight: 600;
+.checkIcon {
   color: #fff;
-}
-
-.upgradeDescription {
-  font-size: 0.7rem;
-  color: rgba(255, 255, 255, 0.5);
-}
-
-.upgradeButton {
-  padding: 6px 12px;
-  background: #fff;
-  color: #000;
-  font-size: 0.75rem;
-  font-weight: 600;
-  border-radius: 99px;
-  text-decoration: none;
-  transition: transform 0.1s ease;
-}
-
-.upgradeButton:hover {
-  transform: scale(1.05);
+  margin-left: auto;
 }
 
 .divider {
   height: 1px;
-  background: rgba(255, 255, 255, 0.08);
-  margin: 4px 0;
-  width: 100%;
+  background: rgba(255, 255, 255, 0.06);
+  margin: 6px 12px;
+  /* Indented divider */
 }
 
-.actionItem {
+/* Toggle Switch */
+.toggle {
+  width: 36px;
+  height: 20px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 99px;
+  position: relative;
+  transition: background 0.2s ease;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.toggleOn {
+  background: #fff;
+  /* White bg for ON state like iOS/modern toggles, or accent */
+}
+
+.toggleKnob {
+  width: 16px;
+  height: 16px;
+  background: #666;
+  /* Dark knob on off */
+  border-radius: 50%;
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  transition: transform 0.2s ease, background-color 0.2s;
+}
+
+.toggleOn .toggleKnob {
+  background: #000;
+  /* Dark knob on white bg */
+  transform: translateX(16px);
+}
+
+/* Comfy Upgrade Card */
+.comfyUpgradeCard {
+  margin: 4px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03));
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.upgradeHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.upgradeTitle {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
+  gap: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #fff;
+}
+
+.upgradeIcon {
+  color: #eab308;
+  /* Yellow/Gold for premium */
+}
+
+.upgradePill {
+  font-size: 0.75rem;
+  background: #fff;
+  color: #000;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 99px;
+  text-decoration: none;
+  transition: transform 0.1s;
+}
+
+.upgradePill:hover {
+  transform: scale(1.05);
+}
+
+.upgradeBody {
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.6);
+  line-height: 1.4;
+}
+
+/* Custom Instructions Button */
+.customInstButton {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   width: 100%;
+  padding: 10px 12px;
   background: transparent;
   border: none;
   border-radius: 10px;
-  color: rgba(255, 255, 255, 0.8);
-  font-size: 0.85rem;
   cursor: pointer;
-  transition: background 0.15s ease;
+  margin-top: 2px;
+  transition: background 0.15s;
+}
+
+.customInstButton:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.customInstLeft {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.customInstText {
   text-align: left;
 }
 
-.actionItem:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.06);
+.customInstLabel {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #fff;
 }
 
-.actionItem:disabled {
-  opacity: 0.6;
-  cursor: default;
+.customInstSub {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.5);
 }
 
-.actionBadge {
-  margin-left: auto;
-  font-size: 0.7rem;
-  padding: 2px 8px;
+.customInstAction {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.8);
+  background: rgba(255, 255, 255, 0.1);
+  padding: 4px 10px;
   border-radius: 99px;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  color: rgba(255, 255, 255, 0.6);
+  transition: background 0.15s;
+}
+
+.customInstButton:hover .customInstAction {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Bottom Action Items (All Models) */
+.actionItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  color: #ffffff;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: all 0.15s ease;
+}
+
+.actionItem:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.actionArrow {
+  margin-left: auto;
+  opacity: 0.4;
+  color: #fff;
 }
 
 .actionLock {
   margin-left: auto;
-  opacity: 0.4;
+  opacity: 0.3;
+}
+
+/* Pioneer List Grouping */
+.pioneerList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.groupContainer {
+  margin-bottom: 2px;
+}
+
+.backButton {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  width: 100%;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: #ffffff;
+  font-size: 0.9rem;
+  font-weight: 500;
+  margin-bottom: 4px;
+  border-radius: 10px;
+  transition: background 0.15s;
+}
+
+.backButton:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.groupModels {
+  padding-left: 10px;
+  /* Slight indent */
+  margin-top: 2px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.subMenuItem {
+  padding-left: 36px;
+  /* Align text with group title text */
+  font-size: 0.9rem;
+}
+
+/* Mobile hiding */
+.hideOnMobile {
+  display: inline;
+}
+
+@media (max-width: 768px) {
+  .hideOnMobile {
+    display: none;
+  }
 }

@@ -1,4 +1,10 @@
-import type { GrayReminderCreatedPayload } from "./types";
+import type {
+    GrayReminderCreatedPayload,
+    GrayReminderPayloadType,
+    GrayReminderEntityType,
+    GrayReminderStatus,
+    GrayReminderSource,
+} from "./types";
 import {
     REMINDER_PRE_BLOCK_REGEX,
     EMPTY_CODE_FENCE_REGEX,
@@ -6,26 +12,80 @@ import {
 } from "./constants";
 import { formatReminderDateLabel, formatReminderSlotLabel } from "../reminderTimeUtils";
 
-type ParsedReminderBlock = {
+/* eslint-disable @typescript-eslint/no-explicit-any */
+export type ReminderConfig = {
     start: number;
     end: number;
     reminder: GrayReminderCreatedPayload;
 };
 
+const REMINDER_STATUS_VALUES: GrayReminderStatus[] = ["created", "updated", "completed", "deleted"];
+const REMINDER_TYPE_VALUES: GrayReminderPayloadType[] = ["gray.reminder", "gray.plan", "gray.habit"];
+const REMINDER_SOURCE_VALUES: GrayReminderSource[] = ["mcp/plans-habits-server", "mcp"];
+
+const normalizeReminderType = (value: unknown): GrayReminderPayloadType | null => {
+    if (typeof value !== "string") {
+        return null;
+    }
+    const normalized = value.trim().toLowerCase();
+    return REMINDER_TYPE_VALUES.find((type) => type === normalized) ?? null;
+};
+
+const normalizeReminderSource = (value: unknown): GrayReminderSource | null => {
+    if (typeof value !== "string") {
+        return null;
+    }
+    const normalized = value.trim().toLowerCase();
+    return REMINDER_SOURCE_VALUES.find((source) => source === normalized) ?? null;
+};
+
+const normalizeReminderStatus = (value: unknown): GrayReminderStatus | null => {
+    if (typeof value !== "string") {
+        return null;
+    }
+    const normalized = value.trim().toLowerCase();
+    return REMINDER_STATUS_VALUES.find((status) => status === normalized) ?? null;
+};
+
+const normalizeReminderEntity = (
+    value: unknown,
+    fallbackType?: GrayReminderPayloadType | null
+): GrayReminderEntityType => {
+    const normalized = typeof value === "string" ? value.trim().toLowerCase() : "";
+    if (normalized.startsWith("habit")) {
+        return "habit";
+    }
+    if (normalized.startsWith("plan")) {
+        return "plan";
+    }
+    if (normalized.startsWith("reminder")) {
+        return "reminder";
+    }
+    if (fallbackType === "gray.habit") {
+        return "habit";
+    }
+    if (fallbackType === "gray.plan") {
+        return "plan";
+    }
+    return "reminder";
+};
+
 const isFullReminderPayload = (candidate: Partial<GrayReminderCreatedPayload>): candidate is GrayReminderCreatedPayload => {
+    const type = normalizeReminderType(candidate?.type);
+    const status = normalizeReminderStatus(candidate?.status);
+    const source = normalizeReminderSource(candidate?.source);
+    if (!candidate || !type || !status || !source) {
+        return false;
+    }
+    if (!(candidate.entity === "plan" || candidate.entity === "habit" || candidate.entity === "reminder")) {
+        return false;
+    }
+    const data = candidate.data;
     return (
-        candidate != null &&
-        candidate.type === "gray.reminder" &&
-        candidate.source === "mcp/plans-habits-server" &&
-        (candidate.status === "created" ||
-            candidate.status === "updated" ||
-            candidate.status === "completed" ||
-            candidate.status === "deleted") &&
-        (candidate.entity === "plan" || candidate.entity === "habit") &&
-        candidate.data != null &&
-        typeof candidate.data.id !== "undefined" &&
-        typeof candidate.data.user_id === "number" &&
-        typeof candidate.data.label === "string"
+        data != null &&
+        typeof data.id !== "undefined" &&
+        typeof data.user_id === "number" &&
+        typeof data.label === "string"
     );
 };
 
@@ -52,10 +112,11 @@ const coerceLegacyReminderPayload = (candidate: Record<string, unknown>): GrayRe
     if (!label && !triggerTime) {
         return null;
     }
-    const legacyType = typeof candidate.type === "string" ? candidate.type.toLowerCase() : "plan";
-    const entity: "plan" | "habit" = legacyType === "habit" ? "habit" : "plan";
-    const deliveryMode = entity;
-    const reminderStatus = typeof candidate.status === "string" ? candidate.status : null;
+    const normalizedType = normalizeReminderType(candidate.type) ?? "gray.reminder";
+    const entity = normalizeReminderEntity(candidate.entity ?? candidate.type, normalizedType);
+    const deliveryMode =
+        typeof candidate.delivery_mode === "string" ? candidate.delivery_mode : entity;
+    const reminderStatus = normalizeReminderStatus(candidate.status);
     const summary =
         typeof candidate.summary === "string"
             ? candidate.summary
@@ -81,9 +142,9 @@ const coerceLegacyReminderPayload = (candidate: Record<string, unknown>): GrayRe
     }
 
     return {
-        type: "gray.reminder",
-        source: "mcp/plans-habits-server",
-        status: "created",
+        type: normalizedType,
+        source: normalizeReminderSource(candidate.source) ?? "mcp/plans-habits-server",
+        status: reminderStatus ?? "created",
         entity,
         delivery_mode: deliveryMode,
         data: {
@@ -95,17 +156,86 @@ const coerceLegacyReminderPayload = (candidate: Record<string, unknown>): GrayRe
             delivery_mode: deliveryMode,
             summary,
             reminder_id: legacyId ?? null,
-            reminder_status: reminderStatus,
+            reminder_status: reminderStatus ?? undefined,
             reminder: Object.keys(reminderRecord).length ? reminderRecord : null,
         },
     };
 };
 
-export const coerceReminderPayload = (candidate: unknown): GrayReminderCreatedPayload | null => {
+const coerceStructuredReminderPayload = (candidate: Record<string, unknown>): GrayReminderCreatedPayload | null => {
     if (isFullReminderPayload(candidate as Partial<GrayReminderCreatedPayload>)) {
         return candidate as GrayReminderCreatedPayload;
     }
+
+    const type = normalizeReminderType(candidate.type);
+    const status = normalizeReminderStatus(candidate.status) ?? "created";
+    const data = candidate.data;
+    if (!type || !data || typeof data !== "object" || Array.isArray(data)) {
+        return null;
+    }
+
+    const label = typeof (data as Record<string, unknown>).label === "string"
+        ? (data as Record<string, unknown>).label
+        : null;
+    const reminderId =
+        (data as Record<string, unknown>).id ?? (data as Record<string, unknown>).reminder_id;
+    const userId = toNumber((data as Record<string, unknown>).user_id);
+    if (!label || typeof reminderId === "undefined" || typeof userId !== "number") {
+        return null;
+    }
+
+    const entity = normalizeReminderEntity(
+        candidate.entity ?? (data as Record<string, unknown>).entity ?? (data as Record<string, unknown>).entity_type,
+        type
+    );
+    const deliveryMode =
+        typeof candidate.delivery_mode === "string"
+            ? candidate.delivery_mode
+            : typeof (data as Record<string, unknown>).delivery_mode === "string"
+                ? (data as Record<string, unknown>).delivery_mode as string
+                : entity;
+    const reminderStatus =
+        typeof (data as Record<string, unknown>).reminder_status === "string"
+            ? (data as Record<string, unknown>).reminder_status
+            : status;
+    const reminderRecord =
+        typeof (data as Record<string, unknown>).reminder === "object" &&
+            (data as Record<string, unknown>).reminder !== null
+            ? (data as Record<string, unknown>).reminder as Record<string, unknown>
+            : null;
+    const timeIso =
+        typeof (data as Record<string, unknown>).time_iso === "string"
+            ? (data as Record<string, unknown>).time_iso
+            : typeof (data as Record<string, unknown>).remind_at === "string"
+                ? (data as Record<string, unknown>).remind_at
+                : null;
+
+    return {
+        type,
+        source: normalizeReminderSource(candidate.source) ?? "mcp/plans-habits-server",
+        status,
+        entity,
+        delivery_mode: deliveryMode,
+        data: {
+            ...(data as Record<string, unknown>),
+            id: reminderId as string | number,
+            user_id: userId,
+            label,
+            time_iso: timeIso,
+            delivery_mode: deliveryMode,
+            reminder_id: (data as Record<string, unknown>).reminder_id ?? reminderId,
+            reminder_status: reminderStatus,
+            reminder: reminderRecord,
+        },
+    };
+};
+
+export const coerceReminderPayload = (candidate: unknown): GrayReminderCreatedPayload | null => {
     if (candidate && typeof candidate === "object" && !Array.isArray(candidate)) {
+        const structured = coerceStructuredReminderPayload(candidate as Record<string, unknown>);
+        if (structured) {
+            return structured;
+        }
         return coerceLegacyReminderPayload(candidate as Record<string, unknown>);
     }
     return null;
@@ -172,7 +302,7 @@ const stripReminderPreamble = (segment: string): string => {
     }
     let updated = segment.replace(REMINDER_PRE_BLOCK_REGEX, "");
     if (updated === segment) {
-        updated = updated.replace(/gray[._]reminder\s*$/i, "");
+        updated = updated.replace(/gray[._](?:reminder|plan|habit)\s*$/i, "");
     }
     updated = updated.replace(/```[a-z0-9_-]*[^\S\r\n]*$/i, "");
     return updated;
@@ -196,7 +326,7 @@ const unwrapToolCallCodeFences = (segment: string): string => {
         if (!inner) {
             return "";
         }
-        if (/gray[._]reminder/i.test(inner)) {
+        if (/gray[._](?:reminder|plan|habit)/i.test(inner)) {
             return "";
         }
         const lines = inner
@@ -219,8 +349,8 @@ const stripIncompleteReminderArtifacts = (segment: string): string => {
     }
     let updated = segment;
 
-    // 1. Aggressively remove any code block that contains "gray.reminder"
-    const fencePattern = /```(?:json)?\s*[\s\S]*?gray[._]reminder[\s\S]*?```/gi;
+    // 1. Aggressively remove any code block that contains gray reminder payload markers
+    const fencePattern = /```(?:json)?\s*[\s\S]*?gray[._](?:reminder|plan|habit)[\s\S]*?```/gi;
     updated = updated.replace(fencePattern, "");
 
     // 2. Remove any JSON code block that contains reminder-like fields
@@ -232,11 +362,16 @@ const stripIncompleteReminderArtifacts = (segment: string): string => {
         return match;
     });
 
-    // 3. Remove any raw JSON structure containing "gray.reminder"
-    const rawJsonPattern = /\{[^{}]*gray[._]reminder[^{}]*\}/gi;
+    // 3. Remove any raw JSON structure containing gray reminder tool payloads
+    const rawJsonPattern = /\{[^{}]*gray[._](?:reminder|plan|habit)[^{}]*\}/gi;
     updated = updated.replace(rawJsonPattern, "");
 
-    // 4. Clean up extra blank lines
+    // 4. Remove leaked text tool-call blocks for reminder/plan/habit tools
+    const toolJsonPattern =
+        /```(?:json)?\s*\{[\s\S]*?"tool"\s*:\s*"(?:create|update|delete)_(?:reminder|plan|habit)[\s\S]*?```/gi;
+    updated = updated.replace(toolJsonPattern, "");
+
+    // 5. Clean up extra blank lines
     updated = updated.replace(/\n{3,}/g, "\n\n");
 
     return updated.trim();

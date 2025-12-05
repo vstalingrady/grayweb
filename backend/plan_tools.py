@@ -119,9 +119,9 @@ PLAN_TOOL = types.Tool(
                         type="STRING",
                         description="Optional description of the habit.",
                     ),
-                    "streak_label": types.Schema(
-                        type="STRING",
-                        description="Optional label for the streak (e.g. '5 days').",
+                    "streak_days": types.Schema(
+                        type="INTEGER",
+                        description="Optional streak count in consecutive days (integer only).",
                     ),
                 },
                 required=["label"],
@@ -145,9 +145,9 @@ PLAN_TOOL = types.Tool(
                         type="STRING",
                         description="New description.",
                     ),
-                    "streak_label": types.Schema(
-                        type="STRING",
-                        description="New streak label.",
+                    "streak_days": types.Schema(
+                        type="INTEGER",
+                        description="New streak count in consecutive days (integer).",
                     ),
                 },
                 required=["habit_id"],
@@ -265,7 +265,7 @@ PLAN_TOOL = types.Tool(
         ),
         types.FunctionDeclaration(
             name="delete_latest_reminder",
-            description="Delete the most recent reminder, optionally matching a label substring or time window.",
+            description="Delete the most recent reminder(s), optionally matching a label substring or time window. Can delete all matching reminders at once.",
             parameters=types.Schema(
                 type="OBJECT",
                 properties={
@@ -284,6 +284,10 @@ PLAN_TOOL = types.Tool(
                     "status": types.Schema(
                         type="STRING",
                         description="Optional status filter (pending, delivered, completed, cancelled). Defaults to pending/delivered.",
+                    ),
+                    "delete_all": types.Schema(
+                        type="BOOLEAN",
+                        description="If true, delete ALL matching reminders instead of just the most recent one. Useful for bulk cleanup.",
                     ),
                 },
                 required=[],

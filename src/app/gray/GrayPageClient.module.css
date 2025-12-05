@@ -8,14 +8,7 @@
   flex: 1 1 auto;
   background: var(--background, #050505);
   color: var(--foreground, #f5f5f5);
-  font-family: var(--font-sans,
-      "Plus Jakarta Sans",
-      "Plus Jakarta Sans",
-      system-ui,
-      -apple-system,
-      BlinkMacSystemFont,
-      "Segoe UI",
-      sans-serif);
+  font-family: var(--font-sans, "Plus Jakarta Sans", system-ui, -apple-system, BlinkMacSystemFont, sans-serif);
   display: flex;
   justify-content: flex-start;
   padding: 0;
@@ -236,8 +229,8 @@
   flex-direction: column;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 0 12px;
-  width: 52px;
+  padding: 16px 0 16px;
+  width: 80px;
   border-radius: 0;
   background: #0f0f11;
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -343,12 +336,10 @@
 }
 
 .sidebarRailAvatarImage {
-  width: 44px;
-  height: 44px;
+  width: 48px;
+  height: 48px;
   border-radius: 999px;
-  background: linear-gradient(135deg,
-      rgba(96, 96, 102, 0.85),
-      rgba(32, 32, 36, 0.9));
+  background: #151517;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1045,6 +1036,7 @@
 }
 
 .centerLogo {
+  display: none;
   position: absolute;
   top: 50%;
   left: 50%;
@@ -1060,6 +1052,12 @@
   width: 100%;
   height: 100%;
   object-fit: contain;
+}
+
+@media (max-width: 768px) {
+  .centerLogo {
+    display: block;
+  }
 }
 
 .mobileSegmentedControl {
@@ -1133,8 +1131,6 @@
   line-height: 1.2;
 }
 
-
-
 .mobileChatInputContainer {
   padding: 0;
   position: fixed;
@@ -1147,6 +1143,10 @@
   border-radius: 24px;
   display: flex;
   justify-content: center;
+}
+
+.spin {
+  animation: authSpinnerSpin 1s linear infinite;
 }
 
 .mobileChatInput {
@@ -1942,8 +1942,7 @@
   color: rgba(240, 240, 240, 0.9);
   font-size: 0.75rem;
   letter-spacing: 0.04em;
-  font-family: "Plus Jakarta Sans", var(--font-sans), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-    sans-serif;
+  font-family: "Plus Jakarta Sans", var(--font-sans), system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   font-weight: 500;
   cursor: pointer;
   transition: color 0.18s ease, background 0.18s ease;
@@ -1975,7 +1974,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 15px;
+  width: 18px;
   color: inherit;
 }
 
@@ -1994,7 +1993,7 @@
 .sidebarHistorySection {
   /* Dimensions derived from Grok's layout */
   --history-line-width: 2px;
-  --history-line-offset: 18px;
+  --history-line-offset: 16px;
   --history-content-padding: 37px;
 
   --history-line-color: rgba(255, 255, 255, 0.08);
@@ -2010,8 +2009,8 @@
   gap: 0;
   /* Removed padding-left: 8px based on user feedback */
   padding-left: 0;
-  padding-top: 12px;
-  padding-bottom: 12px;
+  padding-top: 0;
+  padding-bottom: 0;
   position: relative;
 }
 
@@ -2068,8 +2067,7 @@
   padding: 3px 6px;
   border-radius: 6px;
   font-size: 0.85rem;
-  font-family: "Plus Jakarta Sans", var(--font-sans), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-    sans-serif;
+  font-family: "Plus Jakarta Sans", var(--font-sans), system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   font-weight: 500;
   color: rgba(235, 235, 235, 0.84);
   text-decoration: none;
@@ -2954,23 +2952,19 @@
   display: none;
 }
 
-.chatComposerSpacer {
-  width: 100%;
-  height: var(--chat-composer-height, 120px);
-  flex-shrink: 0;
-  pointer-events: none;
-}
+
 
 
 .chatMessages {
   flex: 1;
   display: flex;
   flex-direction: column;
-  justify-content: flex-start;
-  gap: clamp(8px, 1.5vh, 14px);
+  justify-content: flex-end;
+  gap: clamp(4px, 1vh, 10px);
   min-height: 0;
-  padding: clamp(8px, 2vh, 18px) 0 20px 0;
+  padding: clamp(4px, 1vh, 10px) 0 calc(var(--chat-composer-height, 80px) + 4px) 0;
   overflow-y: auto;
+  overflow-x: hidden;
   scroll-behavior: smooth;
   width: 100%;
   max-width: var(--chat-column-max-width, 680px);
@@ -3047,6 +3041,8 @@
   .chatMessages {
     padding-left: max(14px, env(safe-area-inset-left, 0px));
     padding-right: max(14px, env(safe-area-inset-right, 0px));
+    padding-bottom: calc(var(--chat-composer-height, 80px) + clamp(28px, 7vh, 64px));
+    scroll-padding-bottom: clamp(24px, 6vh, 48px);
   }
 
   .chatIntro {
@@ -3115,6 +3111,7 @@
   padding: 0;
   background: transparent;
   color: rgba(244, 244, 244, 0.96);
+  min-width: 0;
 }
 
 .chatAssistantBlock :global(p) {
@@ -3386,6 +3383,7 @@
   overflow-x: auto;
   scrollbar-gutter: stable both-edges;
   -webkit-overflow-scrolling: touch;
+  min-width: 0;
 }
 
 .chatTableWrapper table {
@@ -3546,14 +3544,12 @@
 .chatMetadataControl>button[data-active="true"] {
   color: #fff;
   border-color: rgba(255, 255, 255, 0.18);
-  background: rgba(255, 255, 255, 0.05);
+  background: transparent;
 }
 
 .chatMetadataPopover {
   position: absolute;
   bottom: calc(100% + 8px);
-  left: auto;
-  right: 0;
   display: flex;
   gap: 14px;
   padding: 10px 14px;
@@ -3561,14 +3557,30 @@
   background: #000000;
   border: 1px solid rgba(255, 255, 255, 0.12);
   box-shadow: 0 18px 36px rgba(0, 0, 0, 0.8);
-  min-width: 190px;
+  min-width: 220px;
+  max-width: min(260px, calc(100vw - 32px));
   z-index: 100;
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
   transform: translateY(6px) scale(0.98);
-  transform-origin: bottom right;
+  transform-origin: bottom center;
   transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s ease;
+}
+
+/* Align stats popover based on who spoke:
+   - Assistant (AI) stats align to the right.
+   - User stats align to the left. */
+.chatMessage[data-role="assistant"] .chatMetadataPopover {
+  right: 0;
+  left: auto;
+  transform-origin: bottom right;
+}
+
+.chatMessage[data-role="user"] .chatMetadataPopover {
+  left: 0;
+  right: auto;
+  transform-origin: bottom left;
 }
 
 .chatMetadataControl:hover .chatMetadataPopover,
@@ -3596,6 +3608,7 @@
   font-size: 0.95rem;
   color: #fff;
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .chatMarkdown,
@@ -3604,24 +3617,42 @@
   flex-direction: column;
   gap: 12px;
   font-size: inherit;
+  min-width: 0;
 }
 
 .chatThinkingBlock {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 10px 12px;
-  border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.03);
+  gap: 8px;
+  margin: 4px 0 12px;
 }
 
-.chatThinkingLabel {
-  font-size: 0.72rem;
-  font-weight: 600;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.65);
+.chatThinkingHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  user-select: none;
+  transition: color 0.15s ease;
+  width: fit-content;
+}
+
+.chatThinkingHeader:hover {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.chatThinkingBody {
+  position: relative;
+  padding-left: 12px;
+  margin-left: 3px;
+  border-left: 2px solid rgba(255, 255, 255, 0.12);
+  font-size: 0.88rem;
+  color: rgba(255, 255, 255, 0.75);
+  /* Ensure markdown content doesn't overflow */
+  overflow-x: auto;
 }
 
 .chatThinkingBody {
@@ -3652,9 +3683,16 @@
 .chatMarkdown :global(h6) {
   margin: 0;
   font-weight: 600;
-  font-family: var(--font-sans), "Plus Jakarta Sans", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
-    sans-serif;
+  font-family: var(--font-sans, "Plus Jakarta Sans", system-ui, -apple-system, BlinkMacSystemFont, sans-serif);
   letter-spacing: 0.04em;
+}
+
+.chatPlainCodeFallback {
+  margin: 0;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  white-space: pre-wrap;
 }
 
 .chatMarkdown :global(h1) {
@@ -3948,6 +3986,12 @@
   gap: 8px;
 }
 
+.chatMessageFooterLeft {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .chatMessageFooterRight {
   display: inline-flex;
   align-items: center;
@@ -3966,6 +4010,40 @@
 .chatMessage:hover .chatMessageTimestamp,
 .chatMessage:focus-within .chatMessageTimestamp {
   opacity: 1;
+}
+
+.chatMessageVariantControls {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.72rem;
+  color: rgba(185, 188, 198, 0.9);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+
+.chatMessageVariantControls button {
+  border: none;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: inherit;
+}
+
+.chatMessageVariantLabel {
+  min-width: 40px;
+  text-align: center;
+}
+
+.chatMessage[data-role="assistant"]:hover .chatMessageFooter .chatMessageVariantControls,
+.chatMessage[data-role="assistant"]:focus-within .chatMessageFooter .chatMessageVariantControls {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .chatSourcesFooter {
@@ -5142,10 +5220,14 @@ h1.greeting {
 
 .dashboardSectionCard {
   width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .dashboardSectionCard>* {
   width: 100%;
+  flex: 1;
 }
 
 .dashboardSectionCompact {
@@ -5258,7 +5340,7 @@ h1.greeting {
   flex-direction: column;
   gap: clamp(20px, 3vw, 32px);
   min-height: 0;
-  overflow-y: auto;
+  overflow-y: hidden;
   padding-right: clamp(16px, 2.5vw, 24px);
   flex: 1 1 auto;
 }
@@ -5279,7 +5361,6 @@ h1.greeting {
   min-height: 0;
   align-self: stretch;
   width: 100%;
-  padding-left: clamp(16px, 2.5vw, 24px);
 }
 
 .calendarSidebarColumn>* {
@@ -5791,6 +5872,8 @@ h1.greeting {
   flex-direction: column;
   gap: 20px;
   min-height: clamp(220px, 32vh, 300px);
+  height: 100%;
+  overflow: hidden;
 }
 
 .dashboardSignalCard {
@@ -5869,8 +5952,9 @@ h1.greeting {
   flex-direction: column;
   gap: 18px;
   flex: 1;
-  justify-content: space-between;
+  justify-content: flex-start;
   min-height: 0;
+  overflow: hidden;
 }
 
 .dashboardHabitList {
@@ -6343,12 +6427,12 @@ h1.greeting {
   min-height: 0;
   display: grid;
   /* Centered two-column band; both panels equal height and visually matched */
-  grid-template-columns: minmax(280px, 1fr) minmax(280px, 1fr);
+  grid-template-columns: 1fr 1fr;
   grid-template-areas: "secondary primary";
   gap: clamp(16px, 2vw, 24px);
   align-items: stretch;
   width: 100%;
-  max-width: var(--chat-column-max-width, 680px);
+  max-width: 1400px;
   box-sizing: border-box;
   margin: 0 auto;
 }
@@ -6390,7 +6474,7 @@ h1.greeting {
 
 .primaryColumnSlim {
   /* Calendar column (primary) on the right: match alignmentid calendar width */
-  max-width: clamp(270px, 38%, 380px);
+  max-width: none;
   width: 100%;
   margin: 0;
   justify-self: stretch;
@@ -6398,7 +6482,7 @@ h1.greeting {
 
 .secondaryColumnSlim {
   /* Plans/pulse stack (secondary) on the left */
-  max-width: clamp(350px, 50vw, 550px);
+  max-width: none;
   width: 100%;
   margin: 0;
   justify-self: stretch;
@@ -6658,7 +6742,7 @@ h1.greeting {
 .dashboardCalendarSurface .calendarSidebarPanel {
   align-self: stretch;
   height: 100%;
-  overflow-y: auto;
+  overflow: hidden;
 }
 
 .dashboardCalendarInnerSurface {
@@ -7835,11 +7919,13 @@ h1.greeting {
   flex-direction: column;
   gap: 12px;
   overflow-y: auto;
+  overflow-x: hidden;
   padding-right: 4px;
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
-  max-height: clamp(220px, 35vh, 320px);
+  max-height: 100%;
   width: 100%;
+  box-sizing: border-box;
 }
 
 .planList::-webkit-scrollbar,
@@ -7864,6 +7950,8 @@ h1.greeting {
   background: rgba(12, 12, 14, 0.82);
   transition: background 0.2s ease;
   width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .proactivityCard {
@@ -8156,7 +8244,7 @@ h1.greeting {
 }
 
 .planLabel {
-  font-family: "Plus Jakarta Sans", var(--font-sans), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: "Plus Jakarta Sans", var(--font-sans), system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   font-size: 0.9rem;
   font-weight: 400;
   line-height: 1.4;
@@ -8403,10 +8491,8 @@ h1.greeting {
 
 .chatBarRounded {
   width: 100%;
-  max-width: min(
-    calc(1.1 * var(--chat-bubble-max-width, var(--chat-column-max-width, 780px))),
-    100%
-  );
+  max-width: min(calc(1.1 * var(--chat-bubble-max-width, var(--chat-column-max-width, 780px))),
+      100%);
   display: flex;
   flex-wrap: nowrap;
   align-items: center;
@@ -8603,6 +8689,14 @@ h1.greeting {
   display: block;
 }
 
+.chatStopIcon {
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  background: currentColor;
+  display: block;
+}
+
 .chatIconButton[disabled],
 .chatActionButton[disabled] {
   cursor: not-allowed;
@@ -8650,13 +8744,7 @@ h1.greeting {
   border: none;
   background: transparent;
   color: rgba(245, 245, 245, 0.92);
-  font-family: var(--font-sans,
-      "Plus Jakarta Sans",
-      "Inter",
-      -apple-system,
-      BlinkMacSystemFont,
-      "Segoe UI",
-      sans-serif);
+  font-family: var(--font-sans, "Plus Jakarta Sans", system-ui, -apple-system, BlinkMacSystemFont, sans-serif);
   font-size: 0.95rem;
   padding: 0 80px 0 6px;
   outline: none;
@@ -9345,58 +9433,131 @@ h1.greeting {
 }
 
 /* Usage Limit Banner */
+/* Usage Limit Banner */
 .usageLimitBanner {
-  margin: 0 auto 1rem auto;
+  margin: 0 auto 8px auto;
   width: 100%;
   max-width: var(--chat-column-max-width);
-  padding: 0 1rem;
+  padding: 0 4px;
 }
 
 .usageLimitContent {
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.2);
-  border-radius: 12px;
-  padding: 1rem;
+  background: #09090b;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  padding: 12px 16px;
   display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
 .usageLimitHeader {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 8px;
   color: #ef4444;
 }
 
 .usageLimitTitle {
   font-weight: 600;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
 }
 
 .usageLimitMessage {
-  font-size: 0.875rem;
-  color: var(--foreground-secondary, #a1a1aa);
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.7);
   margin: 0;
-  line-height: 1.4;
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .usageLimitTier {
   font-weight: 600;
-  color: var(--foreground, #ffffff);
+  color: #fff;
   text-transform: capitalize;
 }
 
 .usageLimitTimer {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 6px;
   font-size: 0.8rem;
-  color: #ef4444;
+  color: rgba(255, 255, 255, 0.5);
   font-family: monospace;
-  margin-top: 0.25rem;
-  background: rgba(239, 68, 68, 0.1);
-  padding: 0.25rem 0.5rem;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 4px 8px;
   border-radius: 6px;
-  width: fit-content;
+  white-space: nowrap;
+}
+
+.chatEditContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.chatEditInput {
+  width: 100%;
+  min-height: 80px;
+  background: rgba(20, 20, 20, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  padding: 10px;
+  color: #f5f5f5;
+  font-family: inherit;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.chatEditInput:focus {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.chatEditActions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.chatEditSaveButton,
+.chatEditCancelButton {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.2s ease;
+}
+
+.chatEditSaveButton {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.chatEditSaveButton:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.chatEditCancelButton {
+  background: transparent;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.chatEditCancelButton:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
 }

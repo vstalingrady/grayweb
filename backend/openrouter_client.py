@@ -54,7 +54,13 @@ class OpenRouterService:
 
     def __init__(self) -> None:
         self._api_key = _trim(os.getenv("OPENROUTER_API_KEY"))
-        self._lite_model = os.getenv("OPENROUTER_LITE_MODEL", "x-ai/grok-4.1-fast:free")
+        self._enabled = (os.getenv("OPENROUTER_ENABLED") or "true").strip().lower() not in {
+            "0",
+            "false",
+            "no",
+            "off",
+        }
+        self._lite_model = os.getenv("OPENROUTER_LITE_MODEL", "x-ai/grok-4.1-fast")
         self._default_model = os.getenv("OPENROUTER_DEFAULT_MODEL", self.MODEL_MAPPINGS["default"])
         self._max_tokens = _int_env("OPENROUTER_MAX_TOKENS", 4096)
         # Keep a small window for the free/lite path, but widen it for Pioneer-grade models
@@ -67,7 +73,7 @@ class OpenRouterService:
 
     @property
     def available(self) -> bool:
-        return self._api_key is not None and len(self._api_key) > 0
+        return self._enabled and self._api_key is not None and len(self._api_key) > 0
 
     @property
     def lite_model(self) -> str:

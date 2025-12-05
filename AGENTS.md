@@ -1,25 +1,38 @@
 # Repository Guidelines
 
+This document is for contributors (including AI agents) working in this repository. Follow these guidelines to keep the codebase consistent and easy to maintain.
+
 ## Project Structure & Module Organization
-The Next.js 16 app lives in `src/app`; shared UI and hooks stay in `src/components` and `src/lib`, and workspace routes such as `src/app/gray` own Gray-specific logic. FastAPI code, reminder schedulers, and Supabase adapters live in `backend/`, with async fixtures in `backend/tests`. Assets live in `public/`, docs in `docs/`, the MCP worker in `plans-habits-server/`, migrations in `supabase/migrations/`, and helper scripts like `scripts/dev-full.js` coordinate multi-service workflows.
+
+- Backend services live under `backend/` (FastAPI app, auth, database, Supabase utilities, tests).
+- Frontend (Next.js/React) lives under `src/` and `public/` (components, pages, styles, assets).
+- End-to-end and integration tests live under `tests/` and `backend/tests/`.
+- Static assets (images, SVGs, logos) live under `public/` and `public/logos/`.
 
 ## Build, Test, and Development Commands
-- `npm run dev` – run the Next.js dev server with hot reload.
-- `npm run backend` – start FastAPI through `backend/start.py` using the default SQLite DSN.
-- `npm run backend:with-mcp` – run the API plus the MCP worker for plan testing.
-- `npm run dev:full` – orchestrate frontend + backend concurrently for end-to-end smoke tests.
-- `npm run build && npm run start` – create and serve a production bundle.
-- `cd backend && pytest` – execute the async reminder suite inside `backend/tests/test_reminders.py`.
-- `python test_google_calendar.py` – manually confirm Google Calendar OAuth configuration.
+
+- `npm install` – Install frontend dependencies.
+- `npm run dev` – Run the Next.js dev server.
+- `npm run build` – Build the frontend for production.
+- `npm test` – Run frontend tests (if present).
+- `python -m backend.start` or equivalent script – Run the backend API (see `backend/README` or `backend/start.py`).
 
 ## Coding Style & Naming Conventions
-Use 2-space indentation. Components stay `PascalCase` (`GrayPageClient.tsx`), hooks/utilities `camelCase`, and CSS Modules or Tailwind classes sit beside their components. Favor async server components for data fetches and gate browser-only logic with `"use client"`. Backend modules remain `snake_case`, typed, and broken into helpers (e.g., `reminder_time_parser.py`). Run `npm run lint` before pushing and match the Python formatting you see nearby.
+
+- Use TypeScript for frontend (`.tsx`, `.ts`) and Python 3 for backend.
+- Prefer descriptive names over abbreviations; avoid single-letter variables.
+- Follow existing patterns in each directory; keep functions small and focused.
+- Use the configured ESLint/Tailwind/Prettier settings for frontend and Black/ruff-like conventions for Python when applicable.
 
 ## Testing Guidelines
-Backend changes ship with pytest coverage like `backend/tests/test_reminders.py`, using per-test SQLite DBs and `pytest_asyncio` fixtures. Frontend work must pass `npm run lint` and `npm run build`; outline manual steps or add a `src/app/workshop` demo when automation is impractical. Integration helpers should echo required env vars, mirroring `test_google_calendar.py`, so teammates can replay the flow.
+
+- Mirror existing test structure (e.g., `backend/tests/test_*.py`, `*.test.tsx`).
+- Add tests for new features and bug fixes where practical.
+- Ensure tests are deterministic and avoid network access when possible.
 
 ## Commit & Pull Request Guidelines
-Keep commits short and imperative, optionally scoped (`chore(pricing): track pricing page`). PRs should state intent, highlight user-visible changes, attach screenshots or logs when relevant, and mention migrations or new env vars so reviewers can reproduce the setup.
 
-## Security & Configuration Tips
-All services pull from the repo-root `.env`; never commit keys or personal SQLite files (`users.db`, `backend/tests/reminders_test.db`). Keep Supabase DDL in `supabase/migrations/` and stash temporary uploads inside ignored folders such as `backend/media_uploads/`. Prompt or safety edits in `public/system-prompt.txt` or `docs/gemini-*.md` should include a brief note on how they preserve Alignment Labs’ culturally adaptive mission.
+- Write clear, imperative commit messages (e.g., `Fix reminder auth fallback`).
+- For PRs, include: summary, motivation, key changes, and any breaking behavior.
+- Link related issues and add screenshots or logs for user-facing or UI changes.
+

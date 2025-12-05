@@ -19,7 +19,7 @@ export default function ShaderBackground({ children, className, fullHeight = tru
 
   const sharedShaderProps = {
     minPixelRatio: 1,
-    maxPixelCount: 1_800_000,
+    maxPixelCount: 128_000,
   }
 
   return (
@@ -55,16 +55,9 @@ export default function ShaderBackground({ children, className, fullHeight = tru
       {/* Background Shaders */}
       <MeshGradient
         className={styles.layer}
-        colors={["#020202", "#101010", "#242424", "#3a3a3a", "#5c5c5c"]}
+        colors={["#000000", "#0a0a0a", "#1d1d1d", "#333333", "#555555"]}
         speed={1}
         style={{ backgroundColor: "#010101" }}
-        {...sharedShaderProps}
-      />
-      <MeshGradient
-        className={styles.wireframeLayer}
-        colors={["#000000", "#1a1a1a", "#2f2f2f", "#5a5a5a"]}
-        speed={1}
-        style={{ backgroundColor: "transparent" }}
         {...sharedShaderProps}
       />
 

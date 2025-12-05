@@ -9,27 +9,29 @@ interface FadeInSectionProps {
 }
 
 const FadeInSection: React.FC<FadeInSectionProps> = ({ children, threshold = 0.12, durationMs = 900 }) => {
-  const [isVisible, setIsVisible] = useState(false);
+  // Default to visible so content always renders, even if
+  // IntersectionObserver is unavailable or misbehaves.
+  const [isVisible, setIsVisible] = useState(true);
   const sectionRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const element = sectionRef.current;
+    // If we're already visible (e.g., initial render), no need to observe.
+    if (!element || isVisible) {
+      return;
+    }
     const observer = new IntersectionObserver(([entry]) => {
       if (entry.isIntersecting) {
         setIsVisible(true);
       }
     }, { threshold });
 
-    if (element) {
-      observer.observe(element);
-    }
+    observer.observe(element);
 
     return () => {
-      if (element) {
-        observer.unobserve(element);
-      }
+      observer.unobserve(element);
     };
-  }, [threshold]);
+  }, [threshold, isVisible]);
 
   useEffect(() => {
     const handleResize = () => {

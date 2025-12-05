@@ -2881,13 +2881,14 @@ a:hover {
 @media (max-width: 640px) {
   .hero-tesseract {
     width: 100%;
-    max-width: 420px;
+    max-width: min(420px, 100%);
     aspect-ratio: 4 / 3;
     height: auto;
     min-height: 0;
     margin-left: auto;
     margin-right: auto;
     border-radius: clamp(1.4rem, 4vw, 2rem);
+    overflow: hidden;
   }
 
   .hero-split__visual {
@@ -2984,6 +2985,12 @@ a:hover {
 @media (max-width: 900px) {
   .hero-section--split {
     padding-top: calc(var(--nav-safe-space) + clamp(1rem, 4vw, 1.75rem));
+  }
+
+  /* Ensure hero visuals are centered on mobile (e.g., alignment.id landing) */
+  .hero-visual {
+    justify-content: center;
+    align-items: center;
   }
 
   .hero-section--split .hero-split__visual.hero-visual {

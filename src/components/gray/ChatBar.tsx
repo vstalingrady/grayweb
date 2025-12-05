@@ -1,7 +1,7 @@
 "use client";
 
 import styles from "@/app/gray/GrayPageClient.module.css";
-import { LoaderCircle, Paperclip, Lightbulb, Search, ArrowUpRight } from "lucide-react";
+import { Paperclip, ArrowUpRight } from "lucide-react";
 import {
   type ClipboardEvent as ReactClipboardEvent,
   type FormEvent,
@@ -126,6 +126,9 @@ export function GrayChatBar({
     [onPasteFiles]
   );
 
+  const isStreaming = isSubmitting;
+  const actionLabel = isStreaming ? "Stop response" : "Send message";
+
   return (
     <form className={styles.chatBarRounded} onSubmit={onSubmit}>
       {onAddAttachment ? (
@@ -158,13 +161,13 @@ export function GrayChatBar({
       </div>
       <button
         type="submit"
-        aria-label="Send message"
-        title="Send message"
+        aria-label={actionLabel}
+        title={actionLabel}
         className={styles.chatActionButton}
         disabled={computedDisabled}
       >
-        {isSubmitting ? (
-          <LoaderCircle size={18} className={styles.chatSpinner} />
+        {isStreaming ? (
+          <span className={styles.chatStopIcon} aria-hidden="true" />
         ) : (
           <ArrowUpRight size={18} />
         )}

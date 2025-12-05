@@ -13,7 +13,7 @@ from typing import List, Dict, Any, Optional, AsyncGenerator
 import json
 import asyncio
 import logging
-from datetime import datetime
+from pathlib import Path
 import databases
 
 try:
@@ -27,11 +27,27 @@ except ImportError:
 
 
 class AIMessageGenerator:
-    """Generates AI-based proactive messages via Grok (OpenRouter)."""
+    """Generates AI-based proactive messages for Gray."""
 
     def __init__(self) -> None:
         self.openrouter = OpenRouterService()
         self.gemini = GeminiService()
+        # Load the shared Gray persona prompt once so proactivity matches
+        # the main chat experience. Falls back to a local default if the
+        # config file is missing.
+        try:
+            root_dir = Path(__file__).resolve().parent.parent
+            prompts_path = root_dir / "public" / "system-prompts.json"
+            raw = prompts_path.read_text(encoding="utf-8")
+            data = json.loads(raw)
+            persona_text = str(data.get("chat") or "").strip()
+            self.persona_prompt = persona_text or (
+                "You are Gray, an unfiltered, no-BS AI assistant focused on amplifying the user's momentum while staying helpful, honest, and non-criminal."
+            )
+        except Exception:
+            self.persona_prompt = (
+                "You are Gray, an unfiltered, no-BS AI assistant focused on amplifying the user's momentum while staying helpful, honest, and non-criminal."
+            )
         
         if self.openrouter.available:
             print("[AIMessageGenerator] Using Grok for proactive messaging")
@@ -39,6 +55,53 @@ class AIMessageGenerator:
             print("[AIMessageGenerator] Grok unavailable, using Gemini fallback")
         else:
             print("[AIMessageGenerator] No AI provider available; proactive messages will be skipped")
+
+    async def generate_conversation_summary(
+        self,
+        messages: List[Dict[str, Any]],
+        max_length: int = 500
+    ) -> Optional[str]:
+        """
+        Compress a list of conversation messages into a dense summary.
+        Returns: The summary string, or None if generation failed.
+        """
+        if not messages:
+            return None
+            
+        # Format conversation for the model
+        transcript_parts = []
+        for msg in messages:
+            role = str(msg.get("role", "unknown")).upper()
+            content = str(msg.get("content") or msg.get("text") or "").strip()
+            if content:
+                transcript_parts.append(f"{role}: {content}")
+        
+        transcript = "\n".join(transcript_parts)
+        
+        system_prompt = (
+            f"{self.persona_prompt}\n\n"
+            "You are acting as an expert archivist. Your goal is to compress the following conversation into a concise, "
+            "dense summary that preserves key facts, decisions, and context for future reference.\n"
+            "Ignore pleasantries and filler. Focus on the core information.\n"
+            f"Keep the summary under {max_length} words."
+        )
+
+        try:
+            if self.gemini and self.gemini.available:
+                response = await self.gemini.generate(
+                    message=f"Here is the conversation to summarize:\n\n{transcript}",
+                    system_prompt=system_prompt,
+                    model="models/gemini-flash-latest",
+                    conversation_history=None,
+                    workspace_context=None,
+                    time_context=None
+                )
+                return response.text if response else None
+        except Exception as e:
+            print(f"[AIMessageGenerator] Summary generation failed: {e}")
+            return None
+            
+        return None
 
     async def generate_daily_briefing(
         self,
@@ -96,17 +159,14 @@ class AIMessageGenerator:
         user_context = "\n\n".join(part for part in context_chunks if part.strip())
 
         system_prompt = (
-            "You are Gray, a proactive AI mentor and accountability partner.\n"
-            "Write a concise proactive check-in message for the user in first person as Gray.\n"
+            f"{self.persona_prompt}\n\n"
+            "Right now you are acting as a proactive AI mentor and accountability partner.\n"
+            "Write a ONE-PARAGRAPH, CONCISE proactive check-in message for the user in first person as Gray. Do NOT use bullet points or lists.\n"
             "- Tone: warm, honest, encouraging; a mix of friend and coach.\n"
-            "- Length: Keep it short and punchy (2-3 sentences or 1-2 short paragraphs).\n"
-            "- Use the context string the user sends as background only; do NOT invent specific project names or fake details.\n"
-            "- Help them notice how they're doing and choose one meaningful next step.\n"
-            "- Avoid emojis and avoid lists unless absolutely necessary for clarity.\n"
         )
 
-        if not self.openrouter or not self.openrouter.available:
-            raise RuntimeError("Grok client is not configured for proactive messaging")
+        if not self.gemini or not self.gemini.available:
+            raise RuntimeError("Gemini is not configured for proactive messaging")
 
         if db:
             tracker = UsageTracker(db)
@@ -121,49 +181,31 @@ class AIMessageGenerator:
             now_utc = datetime.now(timezone.utc)
             time_context = f"Check-in requested at {now_utc.isoformat()} UTC for timezone {timezone_str} with cadence '{cadence or 'unspecified'}' and label '{label}'."
 
-            response = await self.openrouter.generate(
-                user_context,
+            gemini_response = await self.gemini.generate(
+                message=user_context,
                 conversation_history=None,
                 workspace_context=None,
                 system_prompt=system_prompt,
                 time_context=time_context,
-                model="grok",
+                model="models/gemini-flash-latest"
             )
+            
+            # Extract text from Gemini response
+            if gemini_response and gemini_response.candidates:
+                response = gemini_response.text
+            else:
+                raise RuntimeError("Empty response from Gemini")
 
-            if db and hasattr(response, "usage_metadata"):
+            if db and hasattr(gemini_response, "usage_metadata"):
                 tracker = UsageTracker(db)
                 await tracker.track_usage(
                     user_id,
-                    response.usage_metadata.prompt_token_count or 0,
-                    response.usage_metadata.candidates_token_count or 0
+                    gemini_response.usage_metadata.prompt_token_count or 0,
+                    gemini_response.usage_metadata.candidates_token_count or 0
                 )
 
         except Exception as error:
-            print(f"[AIMessageGenerator] Grok generation failed: {error}. Attempting fallback to Gemini...")
-            
-            if not self.gemini or not self.gemini.available:
-                raise RuntimeError(f"Grok failed and Gemini fallback unavailable: {error}") from error
-                
-            try:
-                # Fallback to Gemini
-                # GeminiService.generate returns a GenerateContentResponse object
-                gemini_response = await self.gemini.generate(
-                    message=user_context,
-                    conversation_history=None,
-                    workspace_context=None,
-                    system_prompt=system_prompt,
-                    time_context=time_context,
-                    model="models/gemini-flash-latest"
-                )
-                
-                # Extract text from Gemini response
-                if gemini_response and gemini_response.candidates:
-                    response = gemini_response.text
-                else:
-                    raise RuntimeError("Empty response from Gemini fallback")
-                    
-            except Exception as fallback_error:
-                raise RuntimeError(f"Both Grok and Gemini fallback failed. Grok: {error}. Gemini: {fallback_error}") from fallback_error
+            raise RuntimeError(f"Gemini proactive message generation failed: {error}") from error
 
         if isinstance(response, str):
             text = response
@@ -240,25 +282,40 @@ class AIMessageGenerator:
                 if habit.get("status") == "checked":
                     habit_checkins += 1
 
-        # Template to summarize recent activity
-        message = f"""
-# Weekly Review
+        # Template to summarize recent activity (loaded from system-prompts.json when available)
+        try:
+            root_dir = Path(__file__).resolve().parent.parent
+            prompts_path = root_dir / "public" / "system-prompts.json"
+            raw = prompts_path.read_text(encoding="utf-8")
+            data = json.loads(raw)
+            template = str(data.get("weekly_review_template") or "").strip()
+        except Exception:
+            template = ""
 
-This week you checked in {len(recent_pulses)} times, with {total_plans} plan entries and {habit_checkins} habit check-ins.
+        if not template:
+            template = (
+                "# Weekly Review\n\n"
+                "This week you checked in {checkins} times, with {total_plans} plan entries and {habit_checkins} habit check-ins.\n\n"
+                "## Highlights\n"
+                "- {completed_plans} plans completed\n"
+                "- {active_plans} active plans\n"
+                "- {active_habits} active habits\n\n"
+                "## Focus for Next Week\n"
+                "- Carry forward what worked well\n"
+                "- Adjust any plans that need attention\n"
+                "- Build momentum on your habits\n\n"
+                "## Insight\n"
+                "Consistency is your strength - keep building on it!"
+            )
 
-## Highlights
-- {completed_plans} plans completed
-- {len(plan_names)} active plans
-- {len(habit_names)} active habits
-
-## Focus for Next Week
-- Carry forward what worked well
-- Adjust any plans that need attention
-- Build momentum on your habits
-
-## Insight
-Consistency is your strength - keep building on it!
-        """.strip()
+        message = template.format(
+            checkins=len(recent_pulses),
+            total_plans=total_plans,
+            habit_checkins=habit_checkins,
+            completed_plans=completed_plans,
+            active_plans=len(plan_names),
+            active_habits=len(habit_names),
+        ).strip()
 
         return "Weekly Review", message
 
@@ -272,8 +329,23 @@ Consistency is your strength - keep building on it!
         Generate a habit nudge message
         Returns: (title, message)
         """
-        # Template-based message
-        message = f"I noticed **{habit_name}** hasn't been checked in {days_since} days. Want to break it into a quick micro-task or schedule a focus block for it?"
+        # Template-based message loaded from system-prompts.json when available
+        try:
+            root_dir = Path(__file__).resolve().parent.parent
+            prompts_path = root_dir / "public" / "system-prompts.json"
+            raw = prompts_path.read_text(encoding="utf-8")
+            data = json.loads(raw)
+            template = str(data.get("habit_nudge_template") or "").strip()
+        except Exception:
+            template = ""
+
+        if not template:
+            template = (
+                "I noticed **{habit_name}** hasn't been checked in {days_since} days. "
+                "Want to break it into a quick micro-task or schedule a focus block for it?"
+            )
+
+        message = template.format(habit_name=habit_name, days_since=days_since)
         return "Habit Check-in", message
 
     async def should_send_weekly_review(

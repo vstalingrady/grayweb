@@ -1,4 +1,3 @@
-import { User } from "@/lib/api";
 import quickQuestionsConfig from "@/config/quick-questions.json";
 
 export const DEFAULT_LANGUAGE = "en";
@@ -210,8 +209,8 @@ export type QuestionnaireSession = {
     step: number;
     foundationAnswers: Record<string, string>;
     personalizedQuestions: string[];
-    personalizedMetadata: Record<string, any>;
-    personalizedAnswers: any[];
+    personalizedMetadata: Record<string, unknown>;
+    personalizedAnswers: unknown[];
     awaitingPersonalizedDecision: boolean;
     oceanIndex: number;
     oceanAnswers: Record<string, number[]>;

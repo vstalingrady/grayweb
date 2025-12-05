@@ -1580,6 +1580,7 @@ class UserBase(BaseModel):
     personalization_occupation: Optional[str] = None
     personalization_about: Optional[str] = None
     personalization_custom_instructions: Optional[str] = None
+    personalization_system_prompt_override: Optional[str] = None
     personalization_show_calendar: Optional[bool] = True
     auth_user_id: Optional[str] = None  # Link to Supabase Auth UUID
     daily_token_usage: Optional[int] = 0
@@ -1602,6 +1603,7 @@ class UserUpdate(BaseModel):
     personalization_occupation: Optional[str] = None
     personalization_about: Optional[str] = None
     personalization_custom_instructions: Optional[str] = None
+    personalization_system_prompt_override: Optional[str] = None
     personalization_show_calendar: Optional[bool] = None
 
 class UsageStatus(BaseModel):
@@ -2352,7 +2354,7 @@ async def _insert_general_conversation_message(
     text: str,
     grounding_metadata: Optional[Any] = None,
     attachments: Optional[Any] = None,
-) -> None:
+) -> Optional[int]:
     supabase_success = False
     user_data_id = await _ensure_user_data_record(user_id)
     supabase_user_data_id: Optional[int] = None
@@ -2373,13 +2375,15 @@ async def _insert_general_conversation_message(
             if attachments is not None:
                 payload["attachments"] = attachments
             try:
-                supabase.table("general_chat_messages").insert(payload).execute()
+                response = supabase.table("general_chat_messages").insert(payload).execute()
                 supabase_success = True
             except Exception as error:
                 _handle_conversation_store_error("Error saving general conversation message (Supabase)", error)
 
-    if supabase_success:
-        return
+            if supabase_success:
+                if response.data and len(response.data) > 0:
+                     return response.data[0].get('id')
+                return None
 
     # Fallback to SQLite
     try:
@@ -2397,7 +2401,7 @@ async def _insert_general_conversation_message(
             "grounding_metadata": json.dumps(grounding_metadata) if grounding_metadata else None,
             "created_at": now.isoformat(),
         }
-        await database.execute(query, values)
+        return await database.execute(query, values)
     except Exception as error:
         app_logger.error(
             "Error saving general conversation message (SQLite)",
@@ -6067,7 +6071,7 @@ async def save_conversation_message(
   message: Dict[str, Any],
   *,
   user_id: Optional[int] = None,
-) -> None:
+) -> Optional[int]:
   """Persist a single message for a conversation."""
   # Import here to avoid circular dependency
   try:
@@ -6088,14 +6092,13 @@ async def save_conversation_message(
 
   general_user_id = _general_conversation_user_id(conversation_id)
   if general_user_id is not None:
-      await _insert_general_conversation_message(
+      return await _insert_general_conversation_message(
           user_id=general_user_id,
           role=role,
           text=text,
           grounding_metadata=grounding_metadata,
           attachments=message.get("attachments"),
       )
-      return
 
   # Regular thread message
   try:
@@ -6108,7 +6111,7 @@ async def save_conversation_message(
           attachments=message.get("attachments"),
           created_at=datetime.utcnow(),
       )
-      await database.execute(insert_query)
+      message_id = await database.execute(insert_query)
       
       # Update thread timestamp
       update_query = (
@@ -6127,6 +6130,7 @@ async def save_conversation_message(
               "attachments": message.get("attachments"),
           },
       )
+      return message_id
       
   except Exception as error:
       _handle_conversation_store_error("Error saving message", error)
@@ -7794,7 +7798,7 @@ async def chat_endpoint(
         }
         if grounding_metadata:
             assistant_message_payload["grounding_metadata"] = grounding_metadata
-        await save_conversation_message(conversation_id, assistant_message_payload, user_id=chat_request.user_id)
+        assistant_message_id = await save_conversation_message(conversation_id, assistant_message_payload, user_id=chat_request.user_id)
 
         # Trigger async title generation if requested
         if chat_request.should_generate_title:
@@ -7810,6 +7814,7 @@ async def chat_endpoint(
             conversation_id=conversation_id,
             grounding_metadata=grounding_metadata,
             title=session_title,
+            message_id=assistant_message_id,
         )
 
     except Exception as e:

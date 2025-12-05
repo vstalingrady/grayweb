@@ -519,14 +519,20 @@ class ProactivityEngine:
                     subscription_info,
                     data=payload,
                     vapid_private_key=vapid_private,
-                    vapid_claims={"sub": "mailto:notifications@gray.local"},
+                    vapid_claims={"sub": "mailto:admin@gray.app"},
                 )
             except WebPushException as exc:
-                logger.error(f"Web push failed for user {user_id}: {exc}", exc_info=True)
+                response_text = getattr(exc.response, "text", "") if hasattr(exc, "response") else ""
+                logger.error(
+                    f"Web push failed for user {user_id}: {exc}",
+                    exc_info=True,
+                    extra={"response_body": response_text}
+                )
                 response = getattr(exc, "response", None)
                 status_code = getattr(response, "status_code", None)
                 # Clean up clearly invalid subscriptions so we don't keep retrying them forever.
-                if status_code in (404, 410):
+                # 400/404/410 indicate a bad or gone subscription; delete it so we stop retrying.
+                if status_code in (400, 404, 410):
                     try:
                         await self.db.execute(
                             f"DELETE FROM {PROACTIVITY_PUSH_TABLE} WHERE id = :id",
@@ -598,7 +604,7 @@ class ProactivityEngine:
             elif cadence == "daily":
                 reason = "progress_review"
             elif cadence == "custom":
-                reason = "long_absence"
+                reason = "custom_checkin"
 
             _, message = await self.ai_generator.generate_daily_briefing(
                 user_id,

@@ -31,6 +31,7 @@ interface UserContextType {
     personalization_occupation?: string | null;
     personalization_about?: string | null;
     personalization_custom_instructions?: string | null;
+    personalization_system_prompt_override?: string | null;
     personalization_show_calendar?: boolean;
     maps_enabled?: boolean;
     has_seen_general_chat?: boolean;
@@ -141,6 +142,11 @@ const sanitizeCachedUser = (value: unknown): { user: User; timestamp: number } |
       typeof raw.personalization_custom_instructions === 'string' &&
         raw.personalization_custom_instructions.length > 0
         ? raw.personalization_custom_instructions
+        : null,
+    personalization_system_prompt_override:
+      typeof raw.personalization_system_prompt_override === 'string' &&
+        raw.personalization_system_prompt_override.length > 0
+        ? raw.personalization_system_prompt_override
         : null,
     personalization_show_calendar:
       typeof raw.personalization_show_calendar === 'boolean' ? raw.personalization_show_calendar : true,
@@ -254,6 +260,31 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
         metadata.image,
       ].find((value) => typeof value === 'string' && value.trim().length > 0) as string | undefined;
 
+      // Normalize Supabase/Discord avatar URLs so they are absolute and usable by the browser.
+      let normalizedAvatarUrl: string | null = avatarUrlCandidate ?? null;
+      if (normalizedAvatarUrl) {
+        try {
+          const lower = normalizedAvatarUrl.toLowerCase();
+          const looksAbsolute = lower.startsWith('http://') || lower.startsWith('https://');
+          const isDataUrl = lower.startsWith('data:');
+          if (!looksAbsolute && !isDataUrl) {
+            // Some providers (or custom extensions) may store a relative Supabase
+            // storage path (e.g. `/storage/v1/object/public/avatars/...`). Prefer
+            // resolving those against the Supabase base URL so avatar URLs point
+            // at the actual storage bucket instead of the app origin.
+            const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+            if (supabaseUrl && normalizedAvatarUrl.startsWith('/')) {
+              normalizedAvatarUrl = new URL(normalizedAvatarUrl, supabaseUrl).toString();
+            } else if (typeof window !== 'undefined') {
+              normalizedAvatarUrl = new URL(normalizedAvatarUrl, window.location.origin).toString();
+            }
+          }
+        } catch {
+          // If normalization fails, fall back to the raw value.
+          normalizedAvatarUrl = avatarUrlCandidate ?? null;
+        }
+      }
+
       const planTierRaw = (metadata.plan_tier ?? metadata.planTier) as unknown;
       const planTier =
         typeof planTierRaw === 'string' && planTierRaw.trim().length > 0
@@ -262,7 +293,7 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
 
       return {
         fullName: fullName ?? null,
-        avatarUrl: avatarUrlCandidate ?? null,
+        avatarUrl: normalizedAvatarUrl,
         planTier,
       };
     } catch (supabaseError) {
@@ -298,6 +329,12 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
         console.warn('[v2] loadUser: Supabase client not available. Aborting.');
         if (!isStale()) {
           setUser(null);
+          // Ensure any stale auth state is cleared so server and client stay in sync.
+          clearSupabaseAuthStorage();
+          clearAuthCookies();
+          if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
+            window.location.href = '/login';
+          }
         }
         return;
       }
@@ -306,12 +343,15 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
       const session = sessionData.session;
 
       if (!session || !session.access_token) {
-        console.warn('[v2] loadUser: No valid session token found. Aborting.');
+        console.warn('[v2] loadUser: No valid session token found. Aborting and clearing auth.');
         if (!isStale()) {
           setUser(null);
-          // Force a cleanup if we thought we were logged in
+          // Keep Supabase + Gray session cookies aligned: if the token is gone, treat the
+          // user as logged out everywhere so they aren't stuck in a half-logged-in state.
+          clearSupabaseAuthStorage();
+          clearAuthCookies();
           if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
-            // Optional: Redirect to login if needed, but for now just don't set the user
+            window.location.href = '/login';
           }
         }
         return;
@@ -371,22 +411,34 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
             if (isStale()) {
               return;
             }
-            setUser(updatedUser);
-            persistCachedUser(updatedUser.email, updatedUser);
-            touchDailyStreakOnce(updatedUser.id);
+            const hydratedUser = {
+              ...updatedUser,
+              profile_picture_url: preferredAvatar ?? updatedUser.profile_picture_url ?? null,
+            };
+            setUser(hydratedUser);
+            persistCachedUser(hydratedUser.email, hydratedUser);
+            touchDailyStreakOnce(hydratedUser.id);
           } catch (updateError) {
             console.debug('[v2] Error updating user profile:', updateError);
             if (!isStale()) {
-              setUser(userData);
-              persistCachedUser(userData.email, userData);
-              touchDailyStreakOnce(userData.id);
+              const hydratedUserFallback = {
+                ...userData,
+                profile_picture_url: preferredAvatar ?? userData.profile_picture_url ?? null,
+              };
+              setUser(hydratedUserFallback);
+              persistCachedUser(hydratedUserFallback.email, hydratedUserFallback);
+              touchDailyStreakOnce(hydratedUserFallback.id);
             }
           }
         } else {
           if (!isStale()) {
-            setUser(userData);
-            persistCachedUser(userData.email, userData);
-            touchDailyStreakOnce(userData.id);
+            const hydratedUser = {
+              ...userData,
+              profile_picture_url: preferredAvatar ?? userData.profile_picture_url ?? null,
+            };
+            setUser(hydratedUser);
+            persistCachedUser(hydratedUser.email, hydratedUser);
+            touchDailyStreakOnce(hydratedUser.id);
           }
         }
       } catch (userError) {
@@ -404,9 +456,13 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
           const newUser = await apiService.createUser(defaultUserData);
           console.log('[v2] loadUser: New user created:', newUser);
           if (!isStale()) {
-            setUser(newUser);
-            persistCachedUser(newUser.email, newUser);
-            touchDailyStreakOnce(newUser.id);
+            const hydratedUser = {
+              ...newUser,
+              profile_picture_url: preferredAvatar ?? newUser.profile_picture_url ?? null,
+            };
+            setUser(hydratedUser);
+            persistCachedUser(hydratedUser.email, hydratedUser);
+            touchDailyStreakOnce(hydratedUser.id);
           }
         } else {
           console.debug('[v2] loadUser: Unexpected error getting user:', userError);
@@ -452,6 +508,7 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
     personalization_occupation?: string | null;
     personalization_about?: string | null;
     personalization_custom_instructions?: string | null;
+    personalization_system_prompt_override?: string | null;
     personalization_show_calendar?: boolean;
     maps_enabled?: boolean;
     has_seen_general_chat?: boolean;
@@ -468,6 +525,7 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
       personalization_occupation?: string | null;
       personalization_about?: string | null;
       personalization_custom_instructions?: string | null;
+      personalization_system_prompt_override?: string | null;
       personalization_show_calendar?: boolean;
       maps_enabled?: boolean;
       has_seen_general_chat?: boolean;
@@ -497,6 +555,10 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
     if (Object.prototype.hasOwnProperty.call(userData, 'personalization_custom_instructions')) {
       payload.personalization_custom_instructions =
         userData.personalization_custom_instructions ?? null;
+    }
+    if (Object.prototype.hasOwnProperty.call(userData, 'personalization_system_prompt_override')) {
+      payload.personalization_system_prompt_override =
+        userData.personalization_system_prompt_override ?? null;
     }
     if (typeof userData.maps_enabled === 'boolean') {
       payload.maps_enabled = userData.maps_enabled;

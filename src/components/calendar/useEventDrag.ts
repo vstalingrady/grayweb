@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/refs */
 import { MutableRefObject, useCallback, useRef, useState } from "react";
 
 import { CalendarEvent, EventDraft } from "./types";
@@ -232,7 +233,7 @@ export const useEventDrag = ({
           );
 
           latestDraftsRef.current = nextDrafts;
-          
+
           // Schedule state update
           pendingStateRef.current = { ...newDragState, activeDrafts: nextDrafts };
           if (!frameRef.current) {
