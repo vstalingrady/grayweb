@@ -8870,25 +8870,21 @@ async def create_user(request: Request, user: UserCreate, db: databases.Database
 async def get_user_by_email(
     email: str,
     db: databases.Database = Depends(get_database),
-    current_user: Optional[Dict[str, Any]] = Depends(get_current_user_optional),
+    current_user: Dict[str, Any] = Depends(get_current_user),  # SECURITY: Now required
 ):
     normalized_email = email.lower()
-    current_email = str(current_user.get("email") or "").lower() if current_user else ""
+    current_email = str(current_user.get("email") or "").lower()
     
-    # If user is not authenticated or is not an admin and trying to access someone else's data, deny
-    if current_user and current_user.get("role") != "admin" and current_email != normalized_email:
+    # Users can only access their own data by email (admins can access any)
+    if current_user.get("role") != "admin" and current_email != normalized_email:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
-    
-    # If user is not authenticated and trying to access someone else's email, deny
-    if not current_user and normalized_email:
-        # Allow unauthenticated lookups for checking if user exists during login
-        pass
 
     query = users.select().where(sqlalchemy.func.lower(users.c.email) == normalized_email)
     user = await db.fetch_one(query)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     return _serialize_user_row(user)
+
 
 @app.get("/users/{user_id}", response_model=User)
 async def get_user(
