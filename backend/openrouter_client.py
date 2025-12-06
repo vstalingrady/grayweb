@@ -40,16 +40,26 @@ class OpenRouterService:
     # OpenRouter API endpoint
     BASE_URL = "https://openrouter.ai/api/v1"
 
-    # Model mappings for Pioneer tier models
+    # Model mappings for Pioneer tier models (using real OpenRouter model IDs)
     MODEL_MAPPINGS = {
-        "claude-4.5": "anthropic/claude-sonnet-4.5",
-        "claude-sonnet-4.5": "anthropic/claude-sonnet-4.5",
-        "gpt-5.1": "openai/gpt-5.1",
-        "deepseek-v3.2": "deepseek/deepseek-v3.2-exp",
-        "kimi-k2": "moonshotai/kimi-k2-thinking",
-        # Note: Gemini 3 (models/gemini-3-pro-preview) is handled directly via Gemini API, not OpenRouter
+        # Anthropic models
+        "claude-4": "anthropic/claude-sonnet-4",
+        "claude-sonnet-4": "anthropic/claude-sonnet-4",
+        "claude-3.5": "anthropic/claude-3.5-sonnet",
+        "claude-3.5-sonnet": "anthropic/claude-3.5-sonnet",
+        # OpenAI models
+        "gpt-4o": "openai/gpt-4o",
+        "gpt-4-turbo": "openai/gpt-4-turbo",
+        "gpt-4o-mini": "openai/gpt-4o-mini",
+        # DeepSeek models
+        "deepseek-v3": "deepseek/deepseek-chat",
+        "deepseek-r1": "deepseek/deepseek-r1",
+        # xAI Grok models
+        "grok-3": "x-ai/grok-3",
+        "grok-2": "x-ai/grok-2-1212",
+        # Note: Gemini is handled directly via Gemini API, not OpenRouter
         # Default fallback
-        "default": "anthropic/claude-sonnet-4.5",
+        "default": "anthropic/claude-3.5-sonnet",
     }
 
     def __init__(self) -> None:
@@ -70,6 +80,20 @@ class OpenRouterService:
         self._temperature = _float_env("OPENROUTER_TEMPERATURE", 0.7)
         self._site_url = os.getenv("NEXT_PUBLIC_SITE_URL", "https://gray.alignment.id")
         self._site_name = os.getenv("OPENROUTER_SITE_NAME", "Gray")
+        # Shared HTTP client for connection pooling
+        self._client: Optional[httpx.AsyncClient] = None
+
+    async def _get_client(self) -> httpx.AsyncClient:
+        """Get or create shared HTTP client with connection pooling."""
+        if self._client is None or self._client.is_closed:
+            self._client = httpx.AsyncClient(timeout=120.0)
+        return self._client
+
+    async def close(self) -> None:
+        """Close the shared HTTP client."""
+        if self._client is not None and not self._client.is_closed:
+            await self._client.aclose()
+            self._client = None
 
     @property
     def available(self) -> bool:
@@ -121,6 +145,29 @@ class OpenRouterService:
         
         for entry in recent_history:
             role = entry.get("role")
+            
+            # Handle tool results (OpenRouter format: role='tool', tool_call_id, content)
+            if role == "tool":
+                tool_msg: Dict[str, Any] = {
+                    "role": "tool",
+                    "content": str(entry.get("content") or entry.get("text") or ""),
+                    "tool_call_id": entry.get("tool_call_id", ""),
+                }
+                if entry.get("name"):
+                    tool_msg["name"] = entry["name"]
+                payload.append(tool_msg)
+                continue
+            
+            # Handle assistant messages with tool_calls
+            if role == "model" and entry.get("tool_calls"):
+                assistant_msg: Dict[str, Any] = {
+                    "role": "assistant",
+                    "content": _trim(str(entry.get("text") or "")) or None,
+                    "tool_calls": entry["tool_calls"],
+                }
+                payload.append(assistant_msg)
+                continue
+                
             text = _trim(str(entry.get("text") or ""))
             if not text or role not in {"user", "model"}:
                 continue
@@ -261,9 +308,9 @@ class OpenRouterService:
             "transforms": ["middle-out"],
         }
 
-        # Request usage stats (includes cache_discount for prompt caching)
+        # Request usage stats (OpenRouter uses stream_options for this)
         if include_usage:
-            payload["usage"] = {"include": True}
+            payload["stream_options"] = {"include_usage": True}
         if response_format:
             payload["response_format"] = response_format
             
@@ -283,32 +330,32 @@ class OpenRouterService:
             # Insert system message at the beginning
             payload["messages"].insert(0, {"role": "system", "content": system})
 
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            response = await client.post(
-                f"{self.BASE_URL}/chat/completions",
-                headers=self._build_headers(),
-                json=payload,
-            )
-            response.raise_for_status()
-            data = response.json()
+        client = await self._get_client()
+        response = await client.post(
+            f"{self.BASE_URL}/chat/completions",
+            headers=self._build_headers(),
+            json=payload,
+        )
+        response.raise_for_status()
+        data = response.json()
+        
+        # Extract content from response
+        if "choices" in data and len(data["choices"]) > 0:
+            choice = data["choices"][0]
+            message_data = choice.get("message", {})
             
-            # Extract content from response
-            if "choices" in data and len(data["choices"]) > 0:
-                choice = data["choices"][0]
-                message_data = choice.get("message", {})
-                
-                # Check for tool calls
-                if message_data.get("tool_calls"):
-                    # For simple generate, we might just return the tool calls as a special response
-                    # or handle them. Since this function returns str, we might need to serialize
-                    # the tool calls or handle this differently in the caller.
-                    # For now, let's return a JSON string representation of tool calls if content is empty
-                    import json
-                    return json.dumps({"tool_calls": message_data["tool_calls"]})
-                
-                return message_data.get("content") or ""
+            # Check for tool calls
+            if message_data.get("tool_calls"):
+                # For simple generate, we might just return the tool calls as a special response
+                # or handle them. Since this function returns str, we might need to serialize
+                # the tool calls or handle this differently in the caller.
+                # For now, let's return a JSON string representation of tool calls if content is empty
+                import json
+                return json.dumps({"tool_calls": message_data["tool_calls"]})
             
-            return ""
+            return message_data.get("content") or ""
+        
+        return ""
 
     async def stream(
         self,
@@ -357,9 +404,9 @@ class OpenRouterService:
             "transforms": ["middle-out"],
         }
 
-        # Request usage stats (includes cache_discount for prompt caching)
+        # Request usage stats (OpenRouter uses stream_options for this)
         if include_usage:
-            payload["usage"] = {"include": True}
+            payload["stream_options"] = {"include_usage": True}
         if response_format:
             payload["response_format"] = response_format
 
@@ -378,63 +425,80 @@ class OpenRouterService:
         if system:
             payload["messages"].insert(0, {"role": "system", "content": system})
 
-        async with httpx.AsyncClient(timeout=120.0) as client:
-            async with client.stream(
-                "POST",
-                f"{self.BASE_URL}/chat/completions",
-                headers=self._build_headers(),
-                json=payload,
-            ) as response:
-                response.raise_for_status()
-                
-                buffer = ""
-                async for chunk in response.aiter_text():
-                    buffer += chunk
+        client = await self._get_client()
+        async with client.stream(
+            "POST",
+            f"{self.BASE_URL}/chat/completions",
+            headers=self._build_headers(),
+            json=payload,
+        ) as response:
+            response.raise_for_status()
+            
+            buffer = ""
+            async for chunk in response.aiter_text():
+                buffer += chunk
 
-                    while "\n" in buffer:
-                        line, buffer = buffer.split("\n", 1)
-                        line = line.strip()
-                        if not line:
-                            continue
-                        
-                        if line.startswith("data: "):
-                            data_str = line[6:]
-                            try:
-                                if data_str == "[DONE]":
-                                    return
+                while "\n" in buffer:
+                    line, buffer = buffer.split("\n", 1)
+                    line = line.strip()
+                    if not line:
+                        continue
+                    
+                    if line.startswith("data: "):
+                        data_str = line[6:]
+                        try:
+                            if data_str == "[DONE]":
+                                return
 
-                                import json
-                                data = json.loads(data_str)
+                            import json
+                            data = json.loads(data_str)
+                            
+                            # Check for mid-stream errors (per OpenRouter docs)
+                            if "error" in data:
+                                yield {"error": data["error"]}
+                                return
+                            
+                            if "choices" in data and len(data["choices"]) > 0:
+                                choice = data["choices"][0]
+                                finish_reason = choice.get("finish_reason")
                                 
-                                if "choices" in data and len(data["choices"]) > 0:
-                                    delta = data["choices"][0].get("delta", {})
-                                    content = delta.get("content")
-                                    tool_calls = delta.get("tool_calls")
-                                    
-                                    if tool_calls:
-                                        yield {"tool_calls": tool_calls}
-                                    
-                                    reasoning = delta.get("reasoning") or delta.get("reasoning_content")
-                                    if reasoning:
-                                        yield {"type": "reasoning", "content": reasoning}
-                                    
-                                    reasoning_pieces = []
-                                    if not content and not reasoning:
-                                        details = delta.get("reasoning_details") or []
-                                        if isinstance(details, list):
-                                            for item in details:
-                                                if isinstance(item, dict):
-                                                    txt = item.get("text")
-                                                    if txt:
-                                                        reasoning_pieces.append(txt)
-                                    
-                                    if content:
-                                        yield content
-                                    elif reasoning_pieces:
-                                        # Legacy reasoning_details support
-                                        yield {"type": "reasoning", "content": "".join(reasoning_pieces)}
+                                # Handle error finish reason
+                                if finish_reason == "error":
+                                    error_msg = choice.get("delta", {}).get("content") or "Stream error"
+                                    yield {"error": {"message": error_msg}}
+                                    return
+                                
+                                delta = choice.get("delta", {})
+                                content = delta.get("content")
+                                tool_calls = delta.get("tool_calls")
+                                
+                                if tool_calls:
+                                    yield {"tool_calls": tool_calls}
+                                
+                                reasoning = delta.get("reasoning") or delta.get("reasoning_content")
+                                if reasoning:
+                                    yield {"type": "reasoning", "content": reasoning}
+                                
+                                reasoning_pieces = []
+                                if not content and not reasoning:
+                                    details = delta.get("reasoning_details") or []
+                                    if isinstance(details, list):
+                                        for item in details:
+                                            if isinstance(item, dict):
+                                                txt = item.get("text")
+                                                if txt:
+                                                    reasoning_pieces.append(txt)
+                                
+                                if content:
+                                    yield content
+                                elif reasoning_pieces:
+                                    # Legacy reasoning_details support
+                                    yield {"type": "reasoning", "content": "".join(reasoning_pieces)}
 
-                                    if include_usage and "usage" in data:
-                                        yield {"usage": data["usage"]}
-                            except Exception:
-                                continue
+                                if include_usage and "usage" in data:
+                                    yield {"usage": data["usage"]}
+                        except json.JSONDecodeError:
+                            continue
+                        except Exception as e:
+                            yield {"error": {"message": str(e)}}
+                            return
