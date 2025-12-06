@@ -11143,7 +11143,7 @@ async def list_proactivity_deliveries(
     if supabase:
         try:
             result = (
-                supabase.table("proactive_notifications")
+                supabase.table("proactive_state")
                 .select("sent_at")
                 .eq("user_id", user_id)
                 .eq("type", "check_in")
@@ -11385,7 +11385,7 @@ async def get_proactivity_notifications(
     if supabase:
         try:
             query = (
-                supabase.table("proactive_notifications")
+                supabase.table("proactive_state")
                 .select("*")
                 .eq("user_id", user_id)
             )
@@ -11442,7 +11442,7 @@ async def mark_proactivity_notification_read(
         try:
             # Verify the notification belongs to the user.
             existing = (
-                supabase.table("proactive_notifications")
+                supabase.table("proactive_state")
                 .select("*")
                 .eq("id", notification_id)
                 .eq("user_id", user_id)
@@ -11454,7 +11454,7 @@ async def mark_proactivity_notification_read(
                 raise HTTPException(status_code=404, detail="Notification not found.")
 
             updated = (
-                supabase.table("proactive_notifications")
+                supabase.table("proactive_state")
                 .update({"read_at": datetime.utcnow().isoformat()})
                 .eq("id", notification_id)
                 .eq("user_id", user_id)
