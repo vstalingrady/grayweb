@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 import databases
 import sqlalchemy
 from fastapi import HTTPException, status
+
+logger = logging.getLogger("backend.chat_history")
 
 try:
     from backend.database import database, user_chat_messages, user_chat_threads
@@ -110,7 +113,8 @@ async def load_thread_history(conversation_id: str, user_id: int) -> List[Dict[s
         if not row:
             return []
         CONVERSATION_OWNER_CACHE.set(conversation_id, user_id)
-    except Exception:
+    except Exception as error:
+        logger.warning("Failed to verify thread ownership: %s", error)
         return []
 
     try:

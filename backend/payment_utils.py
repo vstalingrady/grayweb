@@ -1,8 +1,11 @@
 import os
+import logging
 import hashlib
 import midtransclient
 from datetime import datetime
 from dotenv import load_dotenv
+
+logger = logging.getLogger("backend.payment_utils")
 
 load_dotenv()
 
@@ -64,7 +67,7 @@ def create_core_api_transaction(
         response = core_api.charge(payload)
         return response
     except Exception as e:
-        print(f"Midtrans Core API Error: {str(e)}")
+        logger.error("Midtrans Core API Error: %s", e)
         raise e
 
 def verify_notification_signature(order_id: str, status_code: str, gross_amount: str, signature_key: str) -> bool:

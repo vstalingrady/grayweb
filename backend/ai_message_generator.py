@@ -14,6 +14,8 @@ import json
 import asyncio
 import logging
 from pathlib import Path
+
+logger = logging.getLogger("backend.ai_message_generator")
 import databases
 
 try:
@@ -97,7 +99,7 @@ class AIMessageGenerator:
                 )
                 return response.text if response else None
         except Exception as e:
-            print(f"[AIMessageGenerator] Summary generation failed: {e}")
+            logger.warning("Summary generation failed: %s", e)
             return None
             
         return None
@@ -172,7 +174,7 @@ class AIMessageGenerator:
             try:
                 await tracker.check_limits(user_id)
             except UsageLimitExceeded as e:
-                print(f"[AIMessageGenerator] Usage limit exceeded for user {user_id}: {e}")
+                logger.warning("Usage limit exceeded for user %d: %s", user_id, e)
                 raise RuntimeError(f"Usage limit exceeded: {e}")
 
         try:
@@ -376,7 +378,7 @@ class AIMessageGenerator:
             )
             return existing is None
         except Exception as e:
-            print(f"[AIMessageGenerator] Error checking weekly review: {e}")
+            logger.warning("Error checking weekly review: %s", e)
             return False
 
     async def should_send_habit_nudge(
@@ -434,7 +436,7 @@ class AIMessageGenerator:
                         }
 
         except Exception as e:
-            print(f"[AIMessageGenerator] Error checking habit nudge: {e}")
+            logger.warning("Error checking habit nudge: %s", e)
 
         return None
 
