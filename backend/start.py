@@ -37,12 +37,7 @@ def _configure_logging() -> logging.Logger:
       # Create a specific startup logger
       startup_logger = create_logger("backend.startup")
 
-      # Log startup initialization
-      startup_logger.info("Enhanced startup logging initialized", extra={
-          "event_type": "startup_logging_initialized",
-          "log_level": "INFO",
-          "structured_format": False
-      })
+      startup_logger.debug("Startup logging initialized")
 
       return startup_logger
 
@@ -76,29 +71,13 @@ if __name__ == "__main__":
 
     startup_start_time = time.time()
 
-    LOG.info("Backend startup process initiated", extra={
-        "event_type": "startup_initiated",
-        "root_dir": str(ROOT_DIR),
-        "python_version": sys.version,
-        "pid": os.getpid()
-    })
+    LOG.info("Backend startup initiated")
 
-    LOG.info("Loading environment from %s", ROOT_DIR / ".env", extra={
-        "event_type": "environment_loading_start",
-        "env_file": str(ROOT_DIR / ".env"),
-        "file_exists": (ROOT_DIR / ".env").exists()
-    })
+    LOG.debug(f"Loading environment from {ROOT_DIR / '.env'}")
 
     load_dotenv(ROOT_DIR / ".env", override=False)
 
-    # Log key environment variables (excluding sensitive ones)
-    env_info = {
-        "event_type": "environment_loaded",
-        "environment": os.getenv("ENVIRONMENT", "development"),
-        "ai_provider": os.getenv("AI_PROVIDER", "openrouter"),
-        "file_search_enabled": os.getenv("ENABLE_FILE_SEARCH", "false"),
-        "validate_gemini": os.getenv("VALIDATE_GEMINI_ON_STARTUP", "true")
-    }
+
 
     def _normalize_sqlite_url(url: str) -> str:
         if not url.startswith("sqlite:///"):
@@ -122,17 +101,10 @@ if __name__ == "__main__":
         return _normalize_sqlite_url(chosen)
 
     DATABASE_URL = _select_database_url()
-    env_info["database_type"] = "sqlite" if "sqlite" in DATABASE_URL else "postgresql"
-    env_info["database_url_safe"] = DATABASE_URL.split('?')[0] if DATABASE_URL else None
+    db_type = "sqlite" if "sqlite" in DATABASE_URL else "postgresql"
+    LOG.info(f"Using {db_type} database")
 
-    LOG.info("Environment configuration loaded", extra=env_info)
-    LOG.info("Using DATABASE_URL=%s", DATABASE_URL)
-
-    # Create database tables if they don't exist
-    LOG.info("Connecting to database and ensuring tables exist...", extra={
-        "event_type": "database_setup_start",
-        "database_url_safe": DATABASE_URL.split('?')[0] if DATABASE_URL else None
-    })
+    LOG.debug("Creating database tables...")
     engine = sqlalchemy.create_engine(DATABASE_URL.replace("sqlite:///", "sqlite:///"), echo=False)
     metadata = sqlalchemy.MetaData()
 
@@ -455,60 +427,20 @@ if __name__ == "__main__":
     )
 
     table_creation_start = time.time()
-    LOG.info("Creating database tables...", extra={
-        "event_type": "table_creation_start",
-        "table_count": len(metadata.tables)
-    })
+    LOG.debug(f"Creating {len(metadata.tables)} database tables...")
 
     metadata.create_all(engine)
 
     table_creation_time = (time.time() - table_creation_start) * 1000
-    LOG.info("Database tables created successfully", extra={
-        "event_type": "table_creation_complete",
-        "table_count": len(metadata.tables),
-        "creation_time_ms": table_creation_time,
-        "tables": list(metadata.tables.keys())
-    })
-
-    # Seed workspace backgrounds
-    LOG.info("Seeding workspace backgrounds...", extra={
-        "event_type": "workspace_backgrounds_seeding_start"
-    })
-
-    with engine.begin() as connection:
-        existing_slugs = {
-            row[0]
-            for row in connection.execute(sqlalchemy.select(workspace_backgrounds.c.slug))
-        }
-
-        backgrounds_added = 0
-        for background in DEFAULT_WORKSPACE_BACKGROUNDS:
-            if background["slug"] in existing_slugs:
-                continue
-            connection.execute(
-                workspace_backgrounds.insert().values(
-                    slug=background["slug"],
-                    label=background["label"],
-                    description=background.get("description"),
-                    preview_css=background["preview_css"],
-                    backdrop_css=background["backdrop_css"],
-                )
-            )
-            backgrounds_added += 1
-
-    LOG.info("Workspace backgrounds seeding completed", extra={
-        "event_type": "workspace_backgrounds_seeding_complete",
-        "total_backgrounds": len(DEFAULT_WORKSPACE_BACKGROUNDS),
-        "existing_slugs": len(existing_slugs),
-        "backgrounds_added": backgrounds_added
-    })
+    LOG.debug(f"Tables created ({table_creation_time:.0f}ms)")
 
     def _table_columns(table_name: str) -> set[str]:
         inspector = sqlalchemy.inspect(engine)
         return {column["name"] for column in inspector.get_columns(table_name)}
 
-    # Enhanced migration logging
+    # Migration tracking
     migrations_performed = []
+    migration_start = time.time()
 
     def rename_column_if_needed(table_name: str, old_name: str, new_name: str) -> None:
         columns = _table_columns(table_name)
@@ -521,12 +453,7 @@ if __name__ == "__main__":
                 )
             )
             migrations_performed.append(f"rename_{table_name}_{old_name}_to_{new_name}")
-            LOG.info(f"Renamed column in {table_name}: {old_name} -> {new_name}", extra={
-                "event_type": "column_renamed",
-                "table": table_name,
-                "old_name": old_name,
-                "new_name": new_name
-            })
+            LOG.debug(f"Renamed column {table_name}.{old_name} -> {new_name}")
 
     def ensure_column(table_name: str, column_name: str, column_type: str) -> None:
         if column_name in _table_columns(table_name):
@@ -538,18 +465,9 @@ if __name__ == "__main__":
                 )
             )
             migrations_performed.append(f"add_{table_name}_{column_name}_{column_type}")
-            LOG.info(f"Added column to {table_name}: {column_name} ({column_type})", extra={
-                "event_type": "column_added",
-                "table": table_name,
-                "column_name": column_name,
-                "column_type": column_type
-            })
+            LOG.debug(f"Added column {table_name}.{column_name}")
 
-    migration_start = time.time()
-    LOG.info("Running database migrations...", extra={
-        "event_type": "migrations_start"
-    })
-
+    # Run migrations
     rename_column_if_needed("plans", "VARCHAR", "description")
     rename_column_if_needed("habits", "VARCHAR", "description")
     ensure_column("plans", "deadline", "VARCHAR")
@@ -559,54 +477,22 @@ if __name__ == "__main__":
     ensure_column("chat_sessions", "scope", "VARCHAR DEFAULT 'thread'")
 
     migration_time = (time.time() - migration_start) * 1000
-    LOG.info("Database migrations completed", extra={
-        "event_type": "migrations_complete",
-        "migration_time_ms": migration_time,
-        "migrations_performed": len(migrations_performed),
-        "migration_list": migrations_performed
-    })
+    if migrations_performed:
+        LOG.info(f"Ran {len(migrations_performed)} migrations ({migration_time:.0f}ms)")
 
     total_startup_time = (time.time() - startup_start_time) * 1000
-    LOG.info("Database setup completed successfully", extra={
-        "event_type": "database_setup_complete",
-        "total_startup_time_ms": total_startup_time,
-        "migration_time_ms": migration_time,
-        "table_creation_time_ms": table_creation_time,
-        "migrations_performed": len(migrations_performed)
-    })
+    LOG.info(f"🚀 Server starting on http://localhost:8000 (startup: {total_startup_time:.0f}ms)")
 
     # Start the FastAPI server
-    # Use the effective level so uvicorn gets a valid string (named loggers default to NOTSET)
     uvicorn_log_level = logging.getLevelName(LOG.getEffectiveLevel()).lower()
-    server_start_info = {
-        "host": "0.0.0.0",
-        "port": 8000,
-        "reload": True,
-        "log_level": uvicorn_log_level,
-        "access_log": False,
-        "total_startup_time_ms": (time.time() - startup_start_time) * 1000
-    }
-
-    LOG.info("Starting FastAPI server", extra={
-        "event_type": "server_startup_initiated",
-        **server_start_info
-    })
-
-    LOG.info("🚀 Backend startup completed successfully!", extra={
-        "event_type": "startup_complete",
-        "server_url": "http://localhost:8000",
-        "host": server_start_info["host"],
-        "port": server_start_info["port"],
-        "reload": server_start_info["reload"],
-        "total_startup_time_ms": server_start_info["total_startup_time_ms"]
-    })
 
     uvicorn.run(
         "backend.main:app",
-        host=server_start_info["host"],
-        port=server_start_info["port"],
-        reload=server_start_info["reload"],
+        host="0.0.0.0",
+        port=8000,
+        reload=True,
         reload_excludes=["*.db", "*.sqlite", "*.sqlite3", "*.log"],
-        log_level=server_start_info["log_level"],
-        access_log=server_start_info["access_log"]
+        log_level=uvicorn_log_level,
+        access_log=False
     )
+

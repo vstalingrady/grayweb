@@ -102,28 +102,16 @@ class ColoredFormatter(logging.Formatter):
     }
 
     def format(self, record: logging.LogRecord) -> str:
-        """Format log record with colors."""
+        """Format log record with colors - simplified for readability."""
         color = self.COLORS.get(record.levelname, self.COLORS['RESET'])
         reset = self.COLORS['RESET']
 
-        # Format with context
-        request_context = ""
-        if request_id.get():
-            request_context = f"[{request_id.get()[:8]}] "
-        if user_id.get():
-            request_context += f"[User:{user_id.get()[:8]}] "
-
-        # Format with detailed information
-        timestamp = datetime.fromtimestamp(record.created).strftime('%H:%M:%S.%f')[:-3]
+        # Simplified timestamp
+        timestamp = datetime.fromtimestamp(record.created).strftime('%H:%M:%S')
         sanitized_message = sanitize_for_logging(record.getMessage())
 
-        formatted = (
-            f"{color}[{timestamp}] "
-            f"[{record.levelname}] "
-            f"{request_context}"
-            f"[{record.name}:{record.funcName}:{record.lineno}] "
-            f"{sanitized_message}{reset}"
-        )
+        # Simple format: [time] LEVEL: message
+        formatted = f"{color}[{timestamp}] {record.levelname}: {sanitized_message}{reset}"
 
         if record.exc_info:
             formatted += f"\n{sanitize_for_logging(self.formatException(record.exc_info))}"
@@ -146,106 +134,60 @@ class RequestLoggingMiddleware:
             await self.app(scope, receive, send)
 
     async def _log_http_request(self, scope, receive, send):
-        """Log HTTP requests and responses."""
+        """Log HTTP requests and responses - simplified."""
         # Generate correlation ID
         correlation_id = str(uuid.uuid4())
         request_id.set(correlation_id)
 
         # Extract request information
-        method = sanitize_for_logging(scope.get("method", "UNKNOWN"))
-        path = sanitize_for_logging(scope.get("path", "UNKNOWN"))
-        query_string = sanitize_for_logging(scope.get("query_string", b"").decode())
-        client_host = sanitize_for_logging(scope.get("client", ["unknown", 0])[0] if scope.get("client") else "unknown")
-        user_agent = sanitize_for_logging("")
+        method = scope.get("method", "UNKNOWN")
+        path = scope.get("path", "UNKNOWN")
 
-        # Try to get user from headers or session
-        user_context = None
-
-        # Skip noisy polling endpoints (keep errors)
-        is_reminders_poll = (
-            method == "GET"
-            and path.endswith("/reminders")
-            and "/users/" in path
+        # Skip noisy polling/health endpoints entirely
+        skip_logging = (
+            path in ("/health", "/health/ready", "/health/live", "/favicon.ico")
+            or (method == "GET" and path.endswith("/reminders") and "/users/" in path)
+            or path.startswith("/static/")
         )
-        skip_info_logging = is_reminders_poll
 
-        # Log request start (unless skipped)
         start_time = datetime.utcnow()
-        start_extra = _sanitize_extra_dict({
-            "event_type": "request_start",
-            "method": method,
-            "path": path,
-            "query_string": query_string,
-            "client_host": client_host,
-            "user_agent": user_agent,
-            "user_context": user_context,
-            "correlation_id": correlation_id
-        })
-        if not skip_info_logging:
-            self.logger.info(
-                f"Request started: {method} {path}",
-                extra=start_extra
-            )
 
-        # Wrap send to log response
+        # Track response status
+        response_status = [0]  # Use list for closure modification
+
         async def wrapped_send(message):
             if message["type"] == "http.response.start":
-                status_code = message.get("status", 0)
-                headers = dict(message.get("headers", []))
-                content_type = headers.get(b"content-type", b"").decode()
-
-                # Calculate duration
-                duration = (datetime.utcnow() - start_time).total_seconds()
-
-                # Log response
-                response_extra = _sanitize_extra_dict({
-                    "event_type": "request_complete",
-                    "method": method,
-                    "path": path,
-                    "status_code": status_code,
-                    "content_type": content_type,
-                    "duration_ms": duration * 1000,
-                    "correlation_id": correlation_id
-                })
-                if status_code >= 500:
-                    log_fn = self.logger.error
-                elif status_code >= 400:
-                    log_fn = self.logger.warning
-                else:
-                    log_fn = None if skip_info_logging else self.logger.info
-                if log_fn:
-                    log_fn(
-                        f"Request completed: {method} {path} -> {status_code}",
-                        extra=response_extra
-                    )
-
+                response_status[0] = message.get("status", 0)
             await send(message)
 
         try:
             await self.app(scope, receive, wrapped_send)
         except Exception as e:
-            # Log request error
             duration = (datetime.utcnow() - start_time).total_seconds()
-            error_extra = _sanitize_extra_dict({
-                "event_type": "request_error",
-                "method": method,
-                "path": path,
-                "error": str(e),
-                "duration_ms": duration * 1000,
-                "correlation_id": correlation_id,
-                "exception_info": sys.exc_info()
-            })
-            self.logger.error(
-                f"Request failed: {method} {path} -> {str(e)}",
-                extra=error_extra
-            )
+            self.logger.error(f"{method} {path} -> ERROR ({duration*1000:.0f}ms): {str(e)}")
             raise
+        finally:
+            if not skip_logging:
+                duration = (datetime.utcnow() - start_time).total_seconds()
+                status = response_status[0]
+                duration_str = f"{duration*1000:.0f}ms"
+                
+                # Only log non-success statuses or slow requests (>500ms)
+                if status >= 400:
+                    if status >= 500:
+                        self.logger.error(f"{method} {path} -> {status} ({duration_str})")
+                    else:
+                        self.logger.warning(f"{method} {path} -> {status} ({duration_str})")
+                elif duration > 0.5:
+                    # Log slow requests
+                    self.logger.info(f"{method} {path} -> {status} ({duration_str}) [slow]")
+
 
 
 def get_log_level() -> int:
     """Get appropriate log level based on environment."""
-    env_log_level = os.getenv("LOG_LEVEL", "WARNING").upper()
-    return getattr(logging, env_log_level, logging.WARNING)
+    env_log_level = os.getenv("LOG_LEVEL", "INFO").upper()
+    return getattr(logging, env_log_level, logging.INFO)
 
 
 def setup_logging(
@@ -326,21 +268,7 @@ def setup_logging(
     # Configure specific loggers
     _configure_specific_loggers()
 
-    # Log initialization
-    logger = logging.getLogger(__name__)
-    logger.info(
-        "Logging system initialized",
-        extra={
-            "event_type": "logging_initialized",
-            "log_level": logging.getLevelName(log_level),
-            "console_enabled": enable_console,
-            "file_enabled": enable_file,
-            "structured_format": structured_format,
-            "log_file": str(log_file) if log_file else None
-        }
-    )
-
-    return logger
+    return logging.getLogger(__name__)
 
 
 def _configure_specific_loggers():
@@ -356,7 +284,8 @@ def _configure_specific_loggers():
     logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
     logging.getLogger("databases").setLevel(logging.WARNING)
     logging.getLogger("watchfiles").setLevel(logging.WARNING)
-    logging.getLogger("apscheduler").setLevel(logging.INFO)
+    logging.getLogger("apscheduler").setLevel(logging.WARNING)
+    logging.getLogger("apscheduler.scheduler").setLevel(logging.WARNING)
     logging.getLogger("google_genai").setLevel(logging.WARNING)
 
     # Enable detailed logging for our application

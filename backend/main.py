@@ -307,12 +307,7 @@ file_logger = create_logger("backend.files")
 # Suppress uvicorn access logs (we handle this ourselves with our middleware)
 logging.getLogger("uvicorn.access").disabled = True
 
-app_logger.info("Backend application starting up", extra={
-    "event_type": "application_startup",
-    "environment": os.getenv("ENVIRONMENT", "development"),
-    "ai_provider": os.getenv("AI_PROVIDER", "openrouter"),
-    "file_search_enabled": os.getenv("ENABLE_FILE_SEARCH", "false").lower() == "true"
-})
+app_logger.info(f"Backend starting (env={os.getenv('ENVIRONMENT', 'development')}, provider={os.getenv('AI_PROVIDER', 'openrouter')})")
 
 
 def _float_env(var_name: str, default: float) -> float:
@@ -3194,7 +3189,6 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 try:
     from error_handlers import register_error_handlers
     register_error_handlers(app)
-    app_logger.info("Structured error handlers registered", extra={"event_type": "error_handlers_registered"})
 except ImportError:
     pass  # Optional module
 
@@ -3207,15 +3201,10 @@ try:
     @app.middleware("http")
     async def add_caching_headers(request, call_next):
         return await caching_middleware(request, call_next)
-    app_logger.info("Caching headers middleware added", extra={"event_type": "caching_middleware_added"})
 except ImportError:
     pass  # Optional module
 
-app_logger.info("FastAPI application created with enhanced logging middleware", extra={
-    "event_type": "fastapi_created",
-    "title": "User Profile API with AI Chat",
-    "version": "1.0.0"
-})
+
 
 # Mount API routers
 try:
@@ -3245,6 +3234,7 @@ proactivity_scheduler: Optional[ProactivitySchedulerManager] = None
 proactivity_realtime_broker = ProactivityRealtimeBroker()
 
 
+
 @app.on_event("startup")
 async def _connect_database():
     """Connect to the database on startup."""
@@ -3252,27 +3242,15 @@ async def _connect_database():
         await database.connect()
         # Enable WAL mode for SQLite to improve concurrency
         db_url_str = str(database.url)
-        db_logger.info(f"Checking database URL for SQLite: {db_url_str}")
         if "sqlite" in db_url_str:
-            res = await database.fetch_val("PRAGMA journal_mode=WAL;")
-            db_logger.info(f"Enabled WAL mode. Result: {res}")
+            await database.fetch_val("PRAGMA journal_mode=WAL;")
             await database.execute("PRAGMA synchronous=NORMAL;")
-        db_logger.info("Database connection established via startup event", extra={
-            "event_type": "database_connected_startup"
-        })
         # Initialize audit logger with database
         init_audit_logger(database)
-        db_logger.info("Audit logger initialized", extra={"event_type": "audit_logger_initialized"})
     except Exception as e:
-        db_logger.error(
-            f"Database connection failed on startup: {e}",
-            exc_info=True,
-            extra={
-                "event_type": "database_connection_failed_startup",
-                "error": str(e),
-            },
-        )
+        db_logger.error(f"Database connection failed: {e}", exc_info=True)
         raise
+
 
 
 @app.on_event("shutdown")
@@ -3317,10 +3295,6 @@ async def _initialize_proactivity_engine():
     global proactivity_engine, proactivity_scheduler
 
     try:
-        app_logger.info("Initializing proactivity engine", extra={
-            "event_type": "proactivity_engine_init_start"
-        })
-
         proactivity_engine = ProactivityEngine(
             database,
             supabase,
@@ -3329,10 +3303,6 @@ async def _initialize_proactivity_engine():
         )
         proactivity_scheduler = ProactivitySchedulerManager(proactivity_engine)
         await proactivity_scheduler.start()
-
-        app_logger.info("Proactivity engine initialized successfully", extra={
-            "event_type": "proactivity_engine_init_success"
-        })
     except Exception as e:
         app_logger.error(
             f"Failed to initialize proactivity engine: {e}",
@@ -3365,17 +3335,8 @@ async def _shutdown_proactivity_engine():
 
 @app.on_event("startup")
 async def _validate_gemini_api_key_on_startup():
-    app_logger.info("Starting application startup validation", extra={
-        "event_type": "startup_validation_start",
-        "ai_provider": AI_PROVIDER,
-        "validation_enabled": VALIDATE_GEMINI_ON_STARTUP
-    })
-
+    # Skip validation if not using Gemini or validation disabled
     if AI_PROVIDER != "gemini" or not VALIDATE_GEMINI_ON_STARTUP:
-        app_logger.info("Gemini validation skipped", extra={
-            "event_type": "gemini_validation_skipped",
-            "reason": "not_gemini_provider_or_validation_disabled"
-        })
         return
 
     if not GEMINI_SERVICE.available:
@@ -3385,15 +3346,10 @@ async def _validate_gemini_api_key_on_startup():
         })
         return
 
-    app_logger.info("Starting Gemini API key validation", extra={
-        "event_type": "gemini_validation_start"
-    })
+    app_logger.debug("Validating Gemini API key...")
 
     try:
         await GEMINI_SERVICE.validate_connection()
-        app_logger.info("Gemini API validation succeeded", extra={
-            "event_type": "gemini_validation_success"
-        })
     except Exception as exc:  # pragma: no cover - best effort logging
         app_logger.error(
             f"Gemini API validation failed: {exc}",
@@ -3414,11 +3370,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app_logger.info("CORS middleware configured", extra={
-    "event_type": "cors_configured",
-    "allowed_origins": ALLOWED_ORIGINS[:3] if len(ALLOWED_ORIGINS) > 3 else ALLOWED_ORIGINS,  # Limit logging
-    "origin_regex_enabled": bool(ALLOWED_ORIGIN_REGEX)
-})
+
 
 # Security
 security = HTTPBearer()
