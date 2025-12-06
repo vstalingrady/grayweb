@@ -275,7 +275,7 @@ class ProactivityEngine:
         # Fallback to local SQLite if Supabase is unavailable.
         await self._ensure_connection()
         query = """
-            SELECT sent_at FROM proactive_state
+            SELECT sent_at FROM proactive_notifications
             WHERE user_id = :user_id AND type = :type
             ORDER BY sent_at DESC
             LIMIT 1
@@ -813,7 +813,7 @@ class ProactivityEngine:
             # Fallback to local database
             await self._ensure_connection()
             query = """
-                INSERT INTO proactive_state
+                INSERT INTO proactive_notifications
                 (user_id, type, title, message, due_at, sent_at, created_at)
                 VALUES (:user_id, :type, :title, :message, :due_at, :sent_at, :created_at)
             """
