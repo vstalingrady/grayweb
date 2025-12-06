@@ -6310,270 +6310,26 @@ async def stream_ai_response(
                     extra={"event_type": "ai_attachments_ignored", "provider": provider},
                 )
             
-            # WORKAROUND REMOVED: We now force Gemini for onboarding tools.
-            pass
-
-            accumulated = ""
             try:
                 t0_provider = time.perf_counter()
-                # response_format initialized in outer scope
-                
-                # Buffer for detecting JSON tool calls (legacy text fallback)
-                tool_buffer = ""
-                is_collecting_tool = False
-                
-                # Native tool call accumulator: index -> {name, arguments_parts}
-                pending_tool_calls = {}
-                yielded_any_tokens = False
-
-                async for chunk in OPENROUTER_SERVICE.stream(
-                    message,
-                    conversation_history,
-                    workspace_with_cache,
-                    effective_system_prompt,
-                    time_context,
-                    model,
-                    include_usage=False,
-                    response_format=response_format,
-                    tools=tool_list,
-                    tool_choice="auto",  # Allow OpenRouter to decide when to use tools
-                    plugins=[{"id": "web", "max_results": 5}] if search_enabled else None,
-                ):
-                    if isinstance(chunk, dict):
-                        # Handle native streaming tool calls
-                        if "tool_calls" in chunk:
-                            for tc in chunk["tool_calls"]:
-                                idx = tc.get("index", 0)
-                                if idx not in pending_tool_calls:
-                                    pending_tool_calls[idx] = {"name": "", "arguments": [], "id": ""}
-                                
-                                if tc.get("id"):
-                                    pending_tool_calls[idx]["id"] = tc["id"]
-                                
-                                func = tc.get("function", {})
-                                if func.get("name"):
-                                    pending_tool_calls[idx]["name"] = func["name"]
-                                if func.get("arguments"):
-                                    pending_tool_calls[idx]["arguments"].append(func["arguments"])
-                        continue
-                        
-                    # If we have pending tool calls, we generally expect no content,
-                    # but if we do get content, we yield it (mixed mode).
-                    
-                    # If we are looking for a tool call (legacy text fallback)
-                    if is_onboarding_tool and not pending_tool_calls:
-                        tool_buffer += chunk
-                        
-                        # Check if we entered a code block or JSON start
-                        if "```json" in tool_buffer or (tool_buffer.strip().startswith("{") and "tool" in tool_buffer):
-                            is_collecting_tool = True
-                        
-                        # If we are collecting a potential tool call, don't yield to user yet
-                        if is_collecting_tool:
-                            # Check if we have a complete JSON block
-                            if "```" in tool_buffer.split("```json")[-1] or "}" in tool_buffer:
-                                # Try to extract and parse
-                                try:
-                                    # Regex to find the JSON block
-                                    json_match = re.search(r"```json\s*({.*?})\s*```", tool_buffer, re.DOTALL)
-                                    if not json_match:
-                                        # Maybe raw JSON without blocks?
-                                        json_match = re.search(r"({.*\"tool\":\s*\"complete_onboarding\".*})", tool_buffer, re.DOTALL)
-                                    
-                                    if json_match:
-                                        json_str = json_match.group(1)
-                                        tool_data = json.loads(json_str)
-
-                                        if tool_data.get("tool") == "complete_onboarding":
-                                            api_logger.info(
-                                                f"Intercepted OpenRouter onboarding tool call (text-based) for user {user_id}"
-                                            )
-
-                                            # Normalize arguments/params before executing
-                                            tool_args = (
-                                                tool_data.get("params")
-                                                or tool_data.get("arguments")
-                                                or tool_data
-                                            )
-
-                                            await _complete_onboarding(user_id, tool_args, db)
-                                            
-                                            # Yield a confirmation message instead of the JSON
-                                            confirmation = "\n\n---\nSaved. I'm set with your name, what you do, and your blurb—ready whenever you are."
-                                            yield ("delta", confirmation)
-                                            accumulated += confirmation
-                                            
-                                            # Stop processing stream
-                                            return
-                                except Exception as e:
-                                    # If parsing fails, just flush the buffer as text (fallback)
-                                    api_logger.warning(f"Failed to parse intercepted tool JSON: {e}")
-                                    yield ("delta", tool_buffer)
-                                    yielded_any_tokens = True
-                                    accumulated += tool_buffer
-                                    tool_buffer = ""
-                                    is_collecting_tool = False
-                            continue
-
-                        
-                        # If not collecting tool, flush buffer (unless it's a partial match start)
-                        # This is a simple heuristic; for robustness we might buffer more, 
-                        # but for now let's just stream if it doesn't look like JSON start.
-                        if len(tool_buffer) > 20 and not is_collecting_tool:
-                             yield ("delta", tool_buffer)
-                             yielded_any_tokens = True
-                             accumulated += tool_buffer
-                             tool_buffer = ""
-                    else:
-                        # Normal streaming
-                        accumulated += chunk
-                        if chunk:
-                            yield ("delta", chunk)
-                            yielded_any_tokens = True
-                            
-                # Process any accumulated native tool calls
-                if pending_tool_calls:
-                    # Handler map for OpenRouter tool calls (same as _execute_function_call)
-                    tool_handlers = {
-                        "fetch_proactivity_summary": lambda u, a, d: _fetch_proactivity_summary(u, a.get("info_type"), d),
-                        "list_calendar_events": lambda u, a, d: _list_calendar_events(u, a, d),
-                        "create_calendar_event": lambda u, a, d: _create_calendar_event(u, a, d),
-                        "update_calendar_event": lambda u, a, d: _update_calendar_event(u, a, d),
-                        "delete_calendar_event": lambda u, a, d: _delete_calendar_event(u, a, d),
-                        "complete_onboarding": lambda u, a, d: _complete_onboarding(u, a, d, user_timezone=user_timezone),
-                        "list_plans": lambda u, a, d: _list_plans_tool(u, a, d),
-                        "create_plan": lambda u, a, d: _create_plan_tool(u, a, d),
-                        "update_plan": lambda u, a, d: _update_plan_tool(u, a, d),
-                        "delete_plan": lambda u, a, d: _delete_plan_tool(u, a, d),
-                        "list_habits": lambda u, a, d: _list_habits_tool(u, a, d),
-                        "create_habit": lambda u, a, d: _create_habit_tool(u, a, d),
-                        "update_habit": lambda u, a, d: _update_habit_tool(u, a, d),
-                        "delete_habit": lambda u, a, d: _delete_habit_tool(u, a, d),
-                        "list_reminders": lambda u, a, d: _list_reminders_tool(u, a, d),
-                        "create_reminder": lambda u, a, d: _create_reminder_tool(u, a, d),
-                        "update_reminder": lambda u, a, d: _update_reminder_tool(u, a, d),
-                        "delete_reminder": lambda u, a, d: _delete_reminder_tool(u, a, d),
-                        "delete_latest_reminder": lambda u, a, d: _delete_latest_reminder_tool(u, a, d),
-                        "get_workspace_state": lambda u, a, d: _get_workspace_state_tool(u, a, d),
-                    }
-                    
-                    for idx, call in pending_tool_calls.items():
-                        tool_name = call.get("name")
-                        handler = tool_handlers.get(tool_name)
-                        
-                        if not handler:
-                            api_logger.warning(f"Unknown tool call from OpenRouter: {tool_name}")
-                            continue
-                        
-                        api_logger.info(f"Executing OpenRouter tool call: {tool_name}")
-                        try:
-                            args_str = "".join(call["arguments"])
-                            args = json.loads(args_str) if args_str.strip() else {}
-                            tool_result = await handler(user_id, args, db)
-                            
-                            # Check if this is a reminder/plan/habit tool that returns a gray.* payload
-                            # Yield exactly like Gemini does at line 6792: ("reminders", [tool_result])
-                            if isinstance(tool_result, dict) and tool_result.get("type") in {"gray.reminder", "gray.plan", "gray.habit"}:
-                                yield ("reminders", [tool_result])
-                                yielded_any_tokens = True
-                            elif tool_name == "complete_onboarding":
-                                confirmation = "\n\n---\nSaved. I'm set with your name, what you do, and your blurb—ready whenever you are."
-                                yield ("delta", confirmation)
-                                yielded_any_tokens = True
-                                accumulated += confirmation
-                            else:
-                                # For other tools (list/delete), just log success
-                                api_logger.info(f"Tool {tool_name} executed successfully: {tool_result}")
-                                
-                        except Exception as e:
-                            api_logger.error(f"Failed to execute OpenRouter tool call {tool_name}: {e}", exc_info=True)
-
-                # Flush any remaining buffer
-                if is_onboarding_tool and tool_buffer:
-                     yield ("delta", tool_buffer)
-                     yielded_any_tokens = True
-                     accumulated += tool_buffer
-
-                if response_format:
-                    text, structured_reminders = _materialize_structured_reminders(accumulated)
-                    # Reminders sent separately via final event, not embedded in text
-                    accumulated = text
-                    yield ("final", {
-                        "text": accumulated,
-                        "grounding_metadata": None,
-                        "reminders": structured_reminders if structured_reminders else None
-                    })
-                else:
-                    # If we yielded tool results but no text, the LLM returned only tool calls
-                    # Provide minimal confirmation to avoid frontend "unexpected issue" error
-                    if yielded_any_tokens and not accumulated.strip():
-                        accumulated = "Done."
-                        yield ("delta", accumulated)
-                    yield ("final", {"text": accumulated, "grounding_metadata": None})
-                return
-            except Exception as openrouter_error:  # pragma: no cover - best effort logging
-                api_logger.error(
-                    "OpenRouter streaming failed; falling back to Gemini",
-                    extra={
-                        "event_type": "ai_provider_fallback",
-                        "provider": provider,
-                        "error": str(openrouter_error),
-                    },
-                )
-
-                
-                if yielded_any_tokens:
-                    api_logger.warning(
-                        "OpenRouter failed mid-stream after yielding tokens; cannot fall back cleanly",
-                        extra={"event_type": "ai_fallback_aborted", "provider": provider},
-                    )
-                    yield ("error", {"message": "AI service encountered an error. Please try again."})
-                    return
-
-                # Critical: Switch provider flag so the Gemini setup block below executes,
-                # and ensure we are using a valid Gemini model identifier.
-                provider = "gemini"
-                if not model or not str(model).startswith("models/"):
-                    model = GEMINI_LIGHT_MODEL
-
-    if provider == "openrouter":
-        if not OPENROUTER_SERVICE.available:
-            api_logger.warning(
-                "OpenRouter unavailable; falling back to Gemini",
-                extra={"event_type": "ai_provider_unavailable", "provider": provider},
-            )
-        else:
-            if attachments:
-                api_logger.info(
-                    "OpenRouter does not support attachments in this flow; ignoring attachments",
-                    extra={"event_type": "ai_attachments_ignored", "provider": provider},
-                )
-            
-            try:
-                t0_provider = time.perf_counter()
-                # response_format initialized in outer scope
                 
                 # Multi-turn loop for tool handling
                 current_history = list(conversation_history) if conversation_history else []
-                # Helper to convert OpenRouter role to Gemini/internal role
-                def _map_role(r): return "model" if r == "assistant" else r
-
                 max_tool_turns = 5
-                previous_turns_text = ""
-                yielded_any_tokens = False  # Track if we've sent any tokens to client
+                yielded_any_tokens = False
+                total_accumulated = ""
+                current_message = message
+                
                 for turn in range(max_tool_turns + 1):
                     accumulated = ""
-                    tool_calls_buffer = []
                     
-                    # Construct message for this turn
-                    # For turn 0, use original message. For subsequent turns, message is empty 
-                    # as context is carried in history (which we update).
-                    current_message = message if turn == 0 else ""
+                    # Buffer for detecting JSON tool calls (legacy text fallback for onboarding)
+                    tool_buffer = ""
+                    is_collecting_tool = False
                     
-                    # Stream from OpenRouter
-                    stream_buffer = ""
-                    is_buffering = False
-                    
+                    # Native tool call accumulator: index -> {name, arguments_parts, id}
+                    pending_tool_calls = {}
+
                     async for chunk in OPENROUTER_SERVICE.stream(
                         current_message,
                         current_history,
@@ -6581,149 +6337,197 @@ async def stream_ai_response(
                         effective_system_prompt,
                         time_context,
                         model,
-                        include_usage=reasoning_mode,
+                        include_usage=False,
                         response_format=response_format,
-                        tools=tool_list if not response_format else None, # Don't mix JSON mode and tools usually
-                        tool_choice="auto", # Allow OpenRouter to decide when to use tools
+                        tools=tool_list,
+                        tool_choice="auto",
+                        plugins=[{"id": "web", "max_results": 5}] if search_enabled else None,
                     ):
                         if isinstance(chunk, dict):
-                                                    # Handle metadata or tool calls
-                                                    if "tool_calls" in chunk:
-                                                        tool_calls_buffer = chunk["tool_calls"]
-                                                        continue
+                            # Handle native streaming tool calls
+                            if "tool_calls" in chunk:
+                                for tc in chunk["tool_calls"]:
+                                    idx = tc.get("index", 0)
+                                    if idx not in pending_tool_calls:
+                                        pending_tool_calls[idx] = {"name": "", "arguments": [], "id": ""}
+                                    
+                                    if tc.get("id"):
+                                        pending_tool_calls[idx]["id"] = tc["id"]
+                                    
+                                    func = tc.get("function", {})
+                                    if func.get("name"):
+                                        pending_tool_calls[idx]["name"] = func["name"]
+                                    if func.get("arguments"):
+                                        pending_tool_calls[idx]["arguments"].append(func["arguments"])
+                            
+                            # Handle reasoning chunks
+                            if chunk.get("type") == "reasoning":
+                                r_text = chunk.get("content", "")
+                                thinking_text = f"<thinking>{r_text}</thinking>"
+                                accumulated += thinking_text
+                                yield ("delta", thinking_text)
+                                yielded_any_tokens = True
+                            continue
+                            
+                        # Legacy text-based tool call detection for onboarding
+                        if is_onboarding_tool and not pending_tool_calls:
+                            tool_buffer += chunk
+                            
+                            if "```json" in tool_buffer or (tool_buffer.strip().startswith("{") and "tool" in tool_buffer):
+                                is_collecting_tool = True
+                            
+                            if is_collecting_tool:
+                                if "```" in tool_buffer.split("```json")[-1] or "}" in tool_buffer:
+                                    try:
+                                        json_match = re.search(r"```json\s*({.*?})\s*```", tool_buffer, re.DOTALL)
+                                        if not json_match:
+                                            json_match = re.search(r"({.*\"tool\":\s*\"complete_onboarding\".*})", tool_buffer, re.DOTALL)
+                                        
+                                        if json_match:
+                                            json_str = json_match.group(1)
+                                            tool_data = json.loads(json_str)
 
-                                                    if "type" in chunk and chunk["type"] == "reasoning":
-                                                        # OpenRouter visible reasoning
-                                                        r_text = chunk["content"]
-                                                        accumulated += f"<thinking>{r_text}</thinking>"
-                                                        yield ("delta", f"<thinking>{r_text}</thinking>")
-                                                        yielded_any_tokens = True
-                                                        continue
-                                                    
-                                                    if "usage" in chunk and reasoning_mode:
-                                                        # Handle reasoning usage stats if visible text wasn't provided
-                                                        # This is a fallback if the model doesn't stream text but gives usage
-                                                        # We can't retrospectively insert thinking tags easily if we already streamed content.
-                                                        # But usually usage comes at the end.
-                                                        # If we haven't seen any visible reasoning, maybe show a summary?
-                                                        pass
-                                                    
-                                                    continue                    
-                    # Flush any remaining buffer at end of stream
-                    if stream_buffer:
-                        accumulated += stream_buffer
-                        yield ("delta", stream_buffer)
+                                            if tool_data.get("tool") == "complete_onboarding":
+                                                api_logger.info(f"Intercepted OpenRouter onboarding tool call (text-based) for user {user_id}")
+                                                tool_args = tool_data.get("params") or tool_data.get("arguments") or tool_data
+                                                await _complete_onboarding(user_id, tool_args, db)
+                                                confirmation = "\n\n---\nSaved. I'm set with your name, what you do, and your blurb—ready whenever you are."
+                                                yield ("delta", confirmation)
+                                                yield ("final", {"text": confirmation, "grounding_metadata": None})
+                                                return
+                                    except Exception as e:
+                                        api_logger.warning(f"Failed to parse intercepted tool JSON: {e}")
+                                        yield ("delta", tool_buffer)
+                                        yielded_any_tokens = True
+                                        accumulated += tool_buffer
+                                        tool_buffer = ""
+                                        is_collecting_tool = False
+                                continue
+
+                            if len(tool_buffer) > 20 and not is_collecting_tool:
+                                yield ("delta", tool_buffer)
+                                yielded_any_tokens = True
+                                accumulated += tool_buffer
+                                tool_buffer = ""
+                        else:
+                            # Normal streaming
+                            accumulated += chunk
+                            if chunk:
+                                yield ("delta", chunk)
+                                yielded_any_tokens = True
+                    
+                    # Flush remaining buffer
+                    if tool_buffer:
+                        yield ("delta", tool_buffer)
                         yielded_any_tokens = True
-                    
-                    # End of stream for this turn
-                    
-                    # 1. Handle Tool Calls
-                    if tool_calls_buffer:
-                        # Append the model's tool call message to history
+                        accumulated += tool_buffer
+                                
+                    # Process any accumulated native tool calls
+                    if pending_tool_calls:
+                        tool_handlers = {
+                            "fetch_proactivity_summary": lambda u, a, d: _fetch_proactivity_summary(u, a.get("info_type"), d),
+                            "list_calendar_events": lambda u, a, d: _list_calendar_events(u, a, d),
+                            "create_calendar_event": lambda u, a, d: _create_calendar_event(u, a, d),
+                            "update_calendar_event": lambda u, a, d: _update_calendar_event(u, a, d),
+                            "delete_calendar_event": lambda u, a, d: _delete_calendar_event(u, a, d),
+                            "complete_onboarding": lambda u, a, d: _complete_onboarding(u, a, d, user_timezone=user_timezone),
+                            "list_plans": lambda u, a, d: _list_plans_tool(u, a, d),
+                            "create_plan": lambda u, a, d: _create_plan_tool(u, a, d),
+                            "update_plan": lambda u, a, d: _update_plan_tool(u, a, d),
+                            "delete_plan": lambda u, a, d: _delete_plan_tool(u, a, d),
+                            "list_habits": lambda u, a, d: _list_habits_tool(u, a, d),
+                            "create_habit": lambda u, a, d: _create_habit_tool(u, a, d),
+                            "update_habit": lambda u, a, d: _update_habit_tool(u, a, d),
+                            "delete_habit": lambda u, a, d: _delete_habit_tool(u, a, d),
+                            "list_reminders": lambda u, a, d: _list_reminders_tool(u, a, d),
+                            "create_reminder": lambda u, a, d: _create_reminder_tool(u, a, d),
+                            "update_reminder": lambda u, a, d: _update_reminder_tool(u, a, d),
+                            "delete_reminder": lambda u, a, d: _delete_reminder_tool(u, a, d),
+                            "delete_latest_reminder": lambda u, a, d: _delete_latest_reminder_tool(u, a, d),
+                            "get_workspace_state": lambda u, a, d: _get_workspace_state_tool(u, a, d),
+                        }
+                        
+                        tool_results = []
+                        for idx, call in pending_tool_calls.items():
+                            tool_name = call.get("name")
+                            handler = tool_handlers.get(tool_name)
+                            
+                            if not handler:
+                                api_logger.warning(f"Unknown tool call from OpenRouter: {tool_name}")
+                                tool_results.append({"tool": tool_name, "error": f"Unknown tool: {tool_name}", "call_id": call.get("id", "")})
+                                continue
+                            
+                            api_logger.info(f"Executing OpenRouter tool call: {tool_name}")
+                            try:
+                                args_str = "".join(call["arguments"])
+                                args = json.loads(args_str) if args_str.strip() else {}
+                                tool_result = await handler(user_id, args, db)
+                                tool_results.append({"tool": tool_name, "result": tool_result, "call_id": call.get("id", "")})
+                                
+                                # Yield reminder/plan/habit cards to frontend
+                                if isinstance(tool_result, dict) and tool_result.get("type") in {"gray.reminder", "gray.plan", "gray.habit"}:
+                                    yield ("reminders", [tool_result])
+                                    yielded_any_tokens = True
+                                elif tool_name == "complete_onboarding":
+                                    confirmation = "\n\n---\nSaved. I'm set with your name, what you do, and your blurb—ready whenever you are."
+                                    yield ("delta", confirmation)
+                                    yield ("final", {"text": confirmation, "grounding_metadata": None})
+                                    return
+                                    
+                            except Exception as e:
+                                api_logger.error(f"Failed to execute OpenRouter tool call {tool_name}: {e}", exc_info=True)
+                                tool_results.append({"tool": tool_name, "error": str(e), "call_id": call.get("id", "")})
+                        
+                        # Update history with tool call and results for next turn
                         current_history.append({
                             "role": "model",
-                            "text": accumulated, # Might be empty or thought process
-                            # We'd need to store the tool calls in a way our history builder understands
-                            # For OpenRouter recursion, we just need to mimic the conversation flow.
-                            # But our internal history format is a bit loose.
-                            # Let's just append the text. The tool calls themselves need to be "acted" upon.
+                            "text": accumulated or "",
+                            "tool_calls": [
+                                {
+                                    "id": call.get("id", f"call_{idx}"),
+                                    "type": "function",
+                                    "function": {
+                                        "name": call.get("name"),
+                                        "arguments": "".join(call.get("arguments", []))
+                                    }
+                                }
+                                for idx, call in pending_tool_calls.items()
+                            ]
                         })
                         
-                        # Prepare context for next turn
-                        # We need to execute tools and append results
-                        tool_outputs = []
-                        for tc in tool_calls_buffer:
-                            # Convert OpenAI tool call to Gemini types.FunctionCall for our executor
-                            func_name = tc.get("function", {}).get("name")
-                            func_args_str = tc.get("function", {}).get("arguments", "{}")
-                            call_id = tc.get("id")
-                            
-                            try:
-                                func_args = json.loads(func_args_str)
-                            except json.JSONDecodeError:
-                                func_args = {}
-                                
-                            # Create a mock object that looks like types.FunctionCall
-                            # types.FunctionCall(name=..., args=...)
-                            gemini_fc = types.FunctionCall(name=func_name, args=func_args)
-                            
-                            # Execute
-                            try:
-                                result = await _execute_function_call(gemini_fc, user_id, db, user_timezone=user_timezone)
-                            except Exception as e:
-                                result = {"error": str(e)}
-                                
-                            # Append result to history as a tool message
-                            # OpenRouter/OpenAI expects a message with role='tool', tool_call_id=..., content=...
-                            # Our internal format: {"role": "function", "name": ..., "content": ...} ??
-                            # Actually our internal format (check _load_conversation_history) is flexible.
-                            # But for OpenRouter client `_build_messages`, we need to adapt.
-                            # `_build_messages` currently ignores 'function' role. 
-                            # We might need to inject tool results into the history in a way OpenRouter client handles?
-                            # The current OpenRouter client only handles 'user' and 'model'.
-                            # To support tool loop, we MUST update OpenRouter client or hack it here.
-                            # Hack: Append tool results as a USER message saying "Tool output for [name]: [json]"
-                            # This is often enough for models like Grok.
-                            tool_outputs.append(f"Tool '{func_name}' output: {json.dumps(result)}")
-                            
-                            # Notify frontend of tool execution
-                            yield ("tool_logs", f"Executed {func_name}")
-                            
-                        # Add tool outputs as user message for next turn
-                        if tool_outputs:
-                            next_user_msg = "\n\n".join(tool_outputs)
-                            # We treat this as a user message for the next iteration (common pattern for non-native tool support)
-                            # Or if we update OpenRouter client to support 'tool' role.
-                            # Given time constraints, the User Message hack is safer for "Grok" models.
-                            current_history.append({"role": "user", "text": next_user_msg})
-                            
-                            # Accumulate text for final response (cleaned if necessary)
-                            if response_format:
-                                text, _ = _materialize_structured_reminders(accumulated)
-                                previous_turns_text += text
-                            else:
-                                previous_turns_text += accumulated
-                                
-                            # Clear message for next turn so we rely on history
-                            message = "" 
-                            
-                            # Update yielded_any_tokens to prevent "unexpected issue" if we only yielded tool logs
-                            yielded_any_tokens = True 
-                            continue # Loop to next turn
-                        else:
-                            break # No outputs, done
-                            
-                    # 2. Handle Structured Reminders (JSON Mode)
-                    if response_format:
-                        text, structured_reminders = _materialize_structured_reminders(accumulated)
-                        # Reminders sent separately via final event, not embedded in text
-                        accumulated = text
-                        yield ("final", {
-                            "text": previous_turns_text + accumulated,
-                            "grounding_metadata": None,
-                            "reminders": structured_reminders if structured_reminders else None
-                        })
-                    else:
-                        # Normal text finish
-                        if not tool_calls_buffer:
-                            yield ("final", {"text": previous_turns_text + accumulated, "grounding_metadata": None})
+                        for tr in tool_results:
+                            result_content = json.dumps(tr.get("result", tr.get("error", {})))
+                            current_history.append({
+                                "role": "tool",
+                                "name": tr.get("tool"),
+                                "tool_call_id": tr.get("call_id", ""),
+                                "content": result_content
+                            })
+                        
+                        total_accumulated += accumulated
+                        current_message = ""  # Empty message, rely on history
+                        continue  # Loop back for model's response after tool execution
                     
-                    # If we got here and didn't continue, we are done
-                    
-                    # Ensure we don't send empty response
-                    final_text = (previous_turns_text + accumulated).strip()
-                    if not final_text and yielded_any_tokens:
-                        # If we did tools but got no text, say Done
-                        final_text = "Done."
-                    
-                    if not final_text:
-                         # Still empty? Force something
-                         final_text = "..."
-                         
-                    yield ("final", {"text": final_text, "grounding_metadata": None})
-                    return
-
-            except Exception as openrouter_error:  # pragma: no cover - best effort logging
+                    # No tool calls - we're done with this turn
+                    total_accumulated += accumulated
+                    break
+                
+                # Final response
+                if response_format:
+                    text, structured_reminders = _materialize_structured_reminders(total_accumulated)
+                    yield ("final", {
+                        "text": text,
+                        "grounding_metadata": None,
+                        "reminders": structured_reminders if structured_reminders else None
+                    })
+                else:
+                    if yielded_any_tokens and not total_accumulated.strip():
+                        total_accumulated = "Done."
+                        yield ("delta", total_accumulated)
+                    yield ("final", {"text": total_accumulated, "grounding_metadata": None})
+                return
+                
+            except Exception as openrouter_error:
                 api_logger.error(
                     "OpenRouter streaming failed; falling back to Gemini",
                     extra={
@@ -6732,8 +6536,7 @@ async def stream_ai_response(
                         "error": str(openrouter_error),
                     },
                 )
-                # Critical: If we already yielded tokens, we cannot fall back to Gemini
-                # because that would cause a duplicate response (2 variants)
+                
                 if yielded_any_tokens:
                     api_logger.warning(
                         "OpenRouter failed mid-stream after yielding tokens; cannot fall back cleanly",
@@ -6741,8 +6544,10 @@ async def stream_ai_response(
                     )
                     yield ("error", {"message": "AI service encountered an error. Please try again."})
                     return
-                # If no tokens were yielded yet, we can safely fall back to Gemini
+
                 provider = "gemini"
+                if not model or not str(model).startswith("models/"):
+                    model = GEMINI_LIGHT_MODEL
 
     # Gemini-specific tool list adjustment (consolidating)
     if provider == "gemini" and tool_list:
