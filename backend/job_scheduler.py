@@ -183,14 +183,6 @@ async def startup(ctx: Dict[str, Any]) -> None:
         from proactivity_engine import ProactivityEngine, ProactivityRealtimeBroker
         from ai_message_generator import AIMessageGenerator
         
-        # Try to get Supabase client if available
-        supabase_client = None
-        try:
-            from supabase_utils import create_supabase_client
-            supabase_client = create_supabase_client()
-        except Exception:
-            pass
-        
         # Create realtime broker and AI generator
         broker = ProactivityRealtimeBroker()
         ai_generator = AIMessageGenerator()
@@ -198,7 +190,6 @@ async def startup(ctx: Dict[str, Any]) -> None:
         # Create engine
         engine = ProactivityEngine(
             database,
-            supabase_client,
             broker,
             ai_generator,
         )
