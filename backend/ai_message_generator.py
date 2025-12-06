@@ -34,6 +34,7 @@ class AIMessageGenerator:
     def __init__(self) -> None:
         self.openrouter = OpenRouterService()
         self.gemini = GeminiService()
+        self.prompts = {}
         # Load the shared Gray persona prompt once so proactivity matches
         # the main chat experience. Falls back to a local default if the
         # config file is missing.
@@ -41,15 +42,11 @@ class AIMessageGenerator:
             root_dir = Path(__file__).resolve().parent.parent
             prompts_path = root_dir / "public" / "system-prompts.json"
             raw = prompts_path.read_text(encoding="utf-8")
-            data = json.loads(raw)
-            persona_text = str(data.get("chat") or "").strip()
-            self.persona_prompt = persona_text or (
-                "You are Gray, an unfiltered, no-BS AI assistant focused on amplifying the user's momentum while staying helpful, honest, and non-criminal."
-            )
+            self.prompts = json.loads(raw)
         except Exception:
-            self.persona_prompt = (
-                "You are Gray, an unfiltered, no-BS AI assistant focused on amplifying the user's momentum while staying helpful, honest, and non-criminal."
-            )
+            logger.warning("Failed to load system-prompts.json, using minimal fallbacks.")
+        
+        self.persona_prompt = self.prompts.get("chat", "You are Gray.")
         
         if self.openrouter.available:
             pass  # Using Grok for proactive messaging
@@ -79,11 +76,14 @@ class AIMessageGenerator:
         
         transcript = "\n".join(transcript_parts)
         
+        base_prompt = self.prompts.get(
+            "proactivity_summary",
+            "Summarize the conversation concisely."
+        )
+        
         system_prompt = (
             f"{self.persona_prompt}\n\n"
-            "You are acting as an expert archivist. Your goal is to compress the following conversation into a concise, "
-            "dense summary that preserves key facts, decisions, and context for future reference.\n"
-            "Ignore pleasantries and filler. Focus on the core information.\n"
+            f"{base_prompt}\n"
             f"Keep the summary under {max_length} words."
         )
 
@@ -159,11 +159,14 @@ class AIMessageGenerator:
 
         user_context = "\n\n".join(part for part in context_chunks if part.strip())
 
+        base_prompt = self.prompts.get(
+            "proactivity_daily", 
+            "Write a concise check-in message."
+        )
+
         system_prompt = (
             f"{self.persona_prompt}\n\n"
-            "Right now you are acting as a proactive AI mentor and accountability partner.\n"
-            "Write a ONE-PARAGRAPH, CONCISE proactive check-in message for the user in first person as Gray. Do NOT use bullet points or lists.\n"
-            "- Tone: warm, honest, encouraging; a mix of friend and coach.\n"
+            f"{base_prompt}"
         )
 
         if not self.gemini or not self.gemini.available:
@@ -248,78 +251,6 @@ class AIMessageGenerator:
 
         return label, cleaned
 
-    async def generate_weekly_review(
-        self,
-        user_id: int,
-        recent_pulses: List[Dict[str, Any]],
-        proactivity: Dict[str, Any]
-    ) -> tuple[str, str]:
-        """
-        Generate a weekly review message
-        Returns: (title, message)
-        """
-        # Analyze the week
-        total_plans = 0
-        completed_plans = 0
-        total_habits = 0
-        habit_checkins = 0
-
-        plan_names = set()
-        habit_names = set()
-
-        for pulse in recent_pulses:
-            plans = pulse.get("plans", [])
-            habits = pulse.get("habits", [])
-
-            for plan in plans:
-                total_plans += 1
-                plan_names.add(plan.get("name", ""))
-                if plan.get("status") == "completed":
-                    completed_plans += 1
-
-            for habit in habits:
-                total_habits += 1
-                habit_names.add(habit.get("name", ""))
-                if habit.get("status") == "checked":
-                    habit_checkins += 1
-
-        # Template to summarize recent activity (loaded from system-prompts.json when available)
-        try:
-            root_dir = Path(__file__).resolve().parent.parent
-            prompts_path = root_dir / "public" / "system-prompts.json"
-            raw = prompts_path.read_text(encoding="utf-8")
-            data = json.loads(raw)
-            template = str(data.get("weekly_review_template") or "").strip()
-        except Exception:
-            template = ""
-
-        if not template:
-            template = (
-                "# Weekly Review\n\n"
-                "This week you checked in {checkins} times, with {total_plans} plan entries and {habit_checkins} habit check-ins.\n\n"
-                "## Highlights\n"
-                "- {completed_plans} plans completed\n"
-                "- {active_plans} active plans\n"
-                "- {active_habits} active habits\n\n"
-                "## Focus for Next Week\n"
-                "- Carry forward what worked well\n"
-                "- Adjust any plans that need attention\n"
-                "- Build momentum on your habits\n\n"
-                "## Insight\n"
-                "Consistency is your strength - keep building on it!"
-            )
-
-        message = template.format(
-            checkins=len(recent_pulses),
-            total_plans=total_plans,
-            habit_checkins=habit_checkins,
-            completed_plans=completed_plans,
-            active_plans=len(plan_names),
-            active_habits=len(habit_names),
-        ).strip()
-
-        return "Weekly Review", message
-
     async def generate_habit_nudge(
         self,
         user_id: int,
@@ -349,118 +280,3 @@ class AIMessageGenerator:
         message = template.format(habit_name=habit_name, days_since=days_since)
         return "Habit Check-in", message
 
-    async def should_send_weekly_review(
-        self,
-        proactive_notifications: Any,
-        user_id: int,
-        db: Any
-    ) -> bool:
-        """Check if we should send a weekly review (Sunday, not sent this week)"""
-        now = datetime.utcnow()
-
-        # Only on Sundays
-        if now.weekday() != 6:
-            return False
-
-        # Check if we already sent one this week
-        week_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-        if now.weekday() == 6 and now.hour < 20:
-            # Before 8pm Sunday, check if sent earlier this week
-            week_start = week_start - timedelta(days=7)
-
-        try:
-            existing = await db.fetch_one(
-                proactive_notifications.select().where(
-                    (proactive_notifications.c.user_id == user_id) &
-                    (proactive_notifications.c.type == "weekly_review") &
-                    (proactive_notifications.c.sent_at >= week_start)
-                )
-            )
-            return existing is None
-        except Exception as e:
-            logger.warning("Error checking weekly review: %s", e)
-            return False
-
-    async def should_send_habit_nudge(
-        self,
-        dashboard_pulses: Any,
-        proactive_notifications: Any,
-        user_id: int,
-        db: Any,
-        days_threshold: int = 3
-    ) -> Optional[Dict[str, Any]]:
-        """Check if we should send a habit nudge (3+ days since last check-in)"""
-        try:
-            # Get recent dashboard pulses
-            three_days_ago = datetime.utcnow() - timedelta(days=days_threshold)
-            recent_pulse = await db.fetch_one(
-                dashboard_pulses.select().where(
-                    (dashboard_pulses.c.user_id == user_id) &
-                    (dashboard_pulses.c.timestamp >= three_days_ago)
-                ).order_by(dashboard_pulses.c.timestamp.desc())
-            )
-
-            if not recent_pulse:
-                return None
-
-            # Get habits from most recent pulse
-            habits = recent_pulse["habits"] or []
-            if not habits:
-                return None
-
-            # Check each habit
-            for habit in habits:
-                if not isinstance(habit, dict):
-                    continue
-
-                name = habit.get("name", "")
-                last_status = habit.get("status", "")
-
-                # If habit is unchecked, it's a candidate
-                if name and last_status not in ["checked", "completed"]:
-                    # Check if we already sent a nudge recently
-                    two_days_ago = datetime.utcnow() - timedelta(days=2)
-                    existing = await db.fetch_one(
-                        proactive_notifications.select().where(
-                            (proactive_notifications.c.user_id == user_id) &
-                            (proactive_notifications.c.type == "habit_nudge") &
-                            (proactive_notifications.c.metadata["habit_name"] == name) &
-                            (proactive_notifications.c.sent_at >= two_days_ago)
-                        )
-                    )
-
-                    if not existing:
-                        return {
-                            "habit_name": name,
-                            "days_since": days_threshold
-                        }
-
-        except Exception as e:
-            logger.warning("Error checking habit nudge: %s", e)
-
-        return None
-
-
-# Convenience function
-async def generate_proactive_message(
-    message_type: str,
-    user_id: int,
-    dashboard_pulse: Optional[Dict[str, Any]] = None,
-    recent_pulses: Optional[List[Dict[str, Any]]] = None,
-    proactivity: Optional[Dict[str, Any]] = None,
-    days_since: int = 0
-) -> tuple[str, str]:
-    """Convenience function to generate proactive messages"""
-    generator = AIMessageGenerator()
-
-    if message_type == "daily_briefing":
-        return await generator.generate_daily_briefing(user_id, dashboard_pulse or {}, proactivity or {})
-
-    elif message_type == "weekly_review":
-        return await generator.generate_weekly_review(user_id, recent_pulses or [], proactivity or {})
-
-    elif message_type == "habit_nudge":
-        return await generator.generate_habit_nudge(user_id, dashboard_pulse.get("name", "your habit"), days_since)
-
-    else:
-        return f"{message_type.title()}", "Hello! This is a test notification."

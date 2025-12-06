@@ -1632,6 +1632,14 @@ class ProactivitySettings(BaseModel):
     channels: Optional[List[str]] = None
     timezone: Optional[str] = None
 
+
+class ProactivitySettingsUpdate(BaseModel):
+    cadence: Optional[str] = None
+    time: Optional[str] = None
+    times: Optional[List[str]] = None
+    channels: Optional[List[str]] = None
+    timezone: Optional[str] = None
+
 class PlanBase(BaseModel):
     label: str
     completed: bool = False
@@ -2765,14 +2773,10 @@ async def _should_enable_reminder_tools_semantic(message: str) -> bool:
     if not trimmed:
         return False
 
-    system_prompt = (
-        "You are a classifier deciding whether the user's message is asking you to create, "
-        "update, or delete a reminder, timer, alarm, plan, habit, or scheduled task that should "
-        "fire at a specific time or cadence.\n\n"
-        "Reply with exactly one word:\n"
-        "- REMINDERS if the message clearly implies any concrete reminder/plan/habit/timer/alarm to store.\n"
-        "- NONE if it is just talking about these concepts, asking general questions, or does not require scheduling.\n\n"
-        "Be conservative and prefer NONE when unsure. Do not include explanations or any other text."
+    system_prompt = load_prompt_from_json(
+        GLOBAL_SYSTEM_PROMPTS_PATH,
+        "intent_classification",
+        "Reply with exactly one word: REMINDERS or NONE."
     )
 
     text = ""
@@ -3872,13 +3876,10 @@ async def _gemini_web_search_summary(
     if not GEMINI_SERVICE or not GEMINI_SERVICE.available:
         return "", None
 
-    summary_system_prompt = (
-        "You are Gray's web search specialist.\n"
-        "Using the Google Search tool when helpful, gather up-to-date factual information that "
-        "answers the user's question.\n\n"
-        "Then return a concise, neutral summary of the key facts in plain text. "
-        "Do not include chit-chat, formatting, or instructions—only the factual summary that another "
-        "model will use as context."
+    summary_system_prompt = load_prompt_from_json(
+        GLOBAL_SYSTEM_PROMPTS_PATH,
+        "web_search_summary",
+        "Summarize the key facts from the search results."
     )
 
     try:
@@ -3998,9 +3999,13 @@ async def _generate_chat_title_async(
         response = await GEMINI_SERVICE.generate(
             message=f"{prompt_template}\n\n{transcript}",
             conversation_history=None,
-            workspace_context=None,
-            system_prompt="You are a title generator.",
-            time_context=None,
+            workspace_context=workspace_context,
+            system_prompt=load_prompt_from_json(
+                GLOBAL_SYSTEM_PROMPTS_PATH,
+                "title_generation",
+                "Generate a concise title.",
+            ),
+            time_context=time_context,
             model=GEMINI_LIGHT_MODEL,
         )
         
@@ -7250,14 +7255,7 @@ def _build_starter_prompt(payload: ChatStarterRequest, profile_context: str) -> 
     base_prompt = load_prompt_from_json(
         GLOBAL_SYSTEM_PROMPTS_PATH,
         "starter",
-        (
-            "You are Gray, a smart productivity partner here to help users gain clarity and momentum.\n"
-            "Write a warm, brief greeting (2-3 sentences) to kick off a chat with a new user.\n"
-            "Introduce yourself simply as Gray.\n"
-            "Ask them one specific question to get started, like 'What's the main thing you're focused on right now?'\n"
-            "Keep the tone casual, friendly, and encouraging. Avoid corporate speak or being overly formal.\n"
-            "Reference the person’s preferred name if provided."
-        ),
+        "You are Gray. Write a brief greeting.",
     )
     prompt_parts = [base_prompt]
     if profile_context:
@@ -7694,41 +7692,18 @@ async def chat_endpoint(
         raise HTTPException(status_code=500, detail=f"Chat error: {str(e)}")
 
 
-DEFAULT_ONBOARDING_SYSTEM_PROMPT = """
-You are Gray. Be witty, sharp, and real—like Grok but for productivity. The user is new.
-
-Get to know them naturally: name, what they do, what they're about, and how often they want you checking in (frequent/daily/weekly/never). Once you have that, call `complete_onboarding` with nickname, occupation, about, and optionally proactivity_cadence/time/timezone.
-
-Don't be robotic. Don't create plans or reminders until onboarding is done.
-Current Date: {{date}}
-"""
-
-
-
-
 ONBOARDING_SYSTEM_PROMPT = load_prompt_from_json(
     GLOBAL_SYSTEM_PROMPTS_PATH,
     "onboarding",
-    DEFAULT_ONBOARDING_SYSTEM_PROMPT,
+    "You are Gray.",
 )
 
 DEFAULT_SYSTEM_PROMPT_PATH = GLOBAL_SYSTEM_PROMPTS_PATH
 
-DEFAULT_SYSTEM_PROMPT_CONTENT = """You are Gray, a highly capable and friendly AI assistant. Your primary goal is to provide comprehensive, clear, and engaging responses to assist the user effectively.
-
-Always strive to be helpful, harmless, and honest in your interactions.
-When answering questions, provide detailed explanations and relevant context to ensure the user fully understands. Think step-by-step and articulate your reasoning clearly.
-When performing tasks, offer clear and actionable advice or directly execute the task where appropriate. If a task is complex, break it down into manageable steps and guide the user through the process.
-Maintain a warm, approachable, and encouraging tone throughout the conversation.
-If a request is ambiguous or requires more information, proactively ask clarifying questions to better understand the user's intent, offering helpful suggestions or examples where possible.
-Feel free to use natural conversational language and formatting (like lists or bold text) to enhance readability and engagement, as long as it contributes to clarity and helpfulness.
-Avoid simply stating that you are an AI or reiterating your limitations unless directly relevant to the user's query.
-Focus on delivering value and a positive user experience."""
-
 DEFAULT_SYSTEM_PROMPT = load_prompt_from_json(
     DEFAULT_SYSTEM_PROMPT_PATH,
     "chat",
-    DEFAULT_SYSTEM_PROMPT_CONTENT,
+    "You are Gray.",
 )
 
 
@@ -10993,6 +10968,127 @@ async def get_proactivity_status(
         raise HTTPException(status_code=503, detail="Proactivity engine not initialized")
     
     return await proactivity_engine.get_user_status(user_id)
+
+
+@app.put("/users/{user_id}/proactivity/settings", response_model=ProactivitySettings)
+async def update_proactivity_settings(
+    user_id: int,
+    settings_update: ProactivitySettingsUpdate,
+    db: databases.Database = Depends(get_database),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    """
+    Update a user's proactivity settings.
+    """
+    global proactivity_engine, proactivity_scheduler
+    require_same_user(user_id, current_user)
+
+    if not proactivity_engine:
+        raise HTTPException(status_code=503, detail="Proactivity engine not initialized")
+    if not proactivity_scheduler:
+        raise HTTPException(status_code=503, detail="Proactivity scheduler not initialized")
+
+    # Fetch existing settings or initialize a new payload
+    existing_record = await db.fetch_one(
+        proactivity_settings.select().where(proactivity_settings.c.user_id == user_id)
+    )
+    current_payload = proactivity_engine._deserialize_payload(existing_record.payload) if existing_record else {}
+
+    # Apply updates from the request model
+    updated_payload = current_payload.copy()
+    if settings_update.cadence is not None:
+        updated_payload["cadence"] = settings_update.cadence
+    if settings_update.time is not None:
+        updated_payload["time"] = settings_update.time
+    if settings_update.times is not None:
+        updated_payload["times"] = settings_update.times
+    if settings_update.channels is not None:
+        updated_payload["channels"] = settings_update.channels
+    if settings_update.timezone is not None:
+        updated_payload["timezone"] = settings_update.timezone
+
+    # Ensure consistent data types for 'times' if both 'time' and 'times' are present
+    if updated_payload.get("cadence", "").lower() == "daily" and updated_payload.get("time") and not updated_payload.get("times"):
+        updated_payload["times"] = [updated_payload["time"]]
+    elif updated_payload.get("cadence", "").lower() == "frequent" and updated_payload.get("times"):
+        # Ensure 'time' is consistent with the first 'times' entry for old clients
+        updated_payload["time"] = updated_payload["times"][0] if updated_payload["times"] else None
+    
+    now = datetime.utcnow()
+    try:
+        if existing_record:
+            update_query = (
+                proactivity_settings.update()
+                .where(proactivity_settings.c.user_id == user_id)
+                .values(payload=updated_payload, updated_at=now)
+            )
+            await db.execute(update_query)
+        else:
+            insert_query = proactivity_settings.insert().values(
+                user_id=user_id,
+                payload=updated_payload,
+                created_at=now,
+                updated_at=now,
+            )
+            await db.execute(insert_query)
+    except Exception as db_error:
+        api_logger.error(
+            f"Database error saving proactivity settings for user {user_id}: {db_error}",
+            exc_info=True,
+            extra={
+                "event_type": "proactivity_settings_db_error",
+                "user_id": user_id,
+                "error": str(db_error),
+                **_payload_log_summary(updated_payload),
+            },
+        )
+        raise HTTPException(status_code=500, detail="Failed to save proactivity settings")
+
+    # Sync to Supabase if enabled
+    try:
+        _upsert_supabase_proactivity_settings(user_id, updated_payload)
+    except Exception as supabase_error:
+        api_logger.warning(
+            f"Failed to sync proactivity settings to Supabase for user {user_id}: {supabase_error}",
+            extra={
+                "event_type": "proactivity_settings_supabase_error",
+                "user_id": user_id,
+                "error": str(supabase_error),
+                **_payload_log_summary(updated_payload),
+            },
+        )
+
+    # Refresh scheduler jobs
+    try:
+        await proactivity_scheduler.refresh_jobs(user_id)
+    except Exception as scheduler_error:
+        api_logger.warning(
+            f"Failed to refresh proactivity scheduler jobs for user {user_id}: {scheduler_error}",
+            extra={
+                "event_type": "proactivity_scheduler_refresh_error",
+                "user_id": user_id,
+                "error": str(scheduler_error),
+            },
+        )
+    
+    # Return the newly saved settings, including the ID from the DB
+    saved_settings = await db.fetch_one(
+        proactivity_settings.select().where(proactivity_settings.c.user_id == user_id)
+    )
+    if not saved_settings:
+        raise HTTPException(status_code=500, detail="Failed to retrieve saved proactivity settings")
+
+    # Ensure the returned payload matches ProactivitySettings model
+    return ProactivitySettings(
+        id=str(saved_settings.id),
+        label=updated_payload.get("label"),
+        description=updated_payload.get("description"),
+        cadence=updated_payload.get("cadence"),
+        time=updated_payload.get("time"),
+        times=updated_payload.get("times"),
+        channels=updated_payload.get("channels"),
+        timezone=updated_payload.get("timezone"),
+    )
 
 
 @app.post("/users/{user_id}/proactivity", response_model=ProactivityLog, status_code=status.HTTP_201_CREATED)
