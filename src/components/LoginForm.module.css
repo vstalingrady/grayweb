@@ -94,7 +94,7 @@
   padding: var(--auth-shell-padding);
   box-sizing: border-box;
   font-family: var(--font-sans, "Plus Jakarta Sans", system-ui, -apple-system, BlinkMacSystemFont, sans-serif);
-  overflow-y: auto;
+  /* overflow-y: auto; Remove to prevent double scrollbars, inner content should manage scroll */
 }
 
 @supports (height: 100dvh) {
