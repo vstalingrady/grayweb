@@ -102,8 +102,8 @@ class GeminiService:
                 # Keep Lite mapped to the configured light model.
                 return self._light_model
             if tier in {"pro", "gray-pro"}:
-                # Hard-coded mapping for Gray Pro.
-                return "models/gemini-3-pro-preview"
+                # Hard-coded mapping for Gray Pro (Gemini 2.0 Flash Exp).
+                return "models/gemini-exp-1206"
             # If the override already looks like a full model ID, use it verbatim.
             return override
         # Default when no override is provided: use the configured default.
