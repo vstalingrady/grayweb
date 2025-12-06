@@ -3744,6 +3744,24 @@ def _candidate_text(candidate: Any) -> str:
     return "".join(getattr(part, "text", "") for part in parts if getattr(part, "text", None))
 
 
+def _candidate_thought(candidate: Any) -> Optional[str]:
+    """Extract thinking/thought content from a Gemini candidate when reasoning mode is used.
+    
+    Gemini's ThinkingConfig returns thinking in parts with a 'thought' attribute.
+    """
+    content = getattr(candidate, "content", None)
+    parts = getattr(content, "parts", None) if content else None
+    if not parts:
+        return None
+    thoughts = []
+    for part in parts:
+        # Check for 'thought' attribute (Gemini thinking mode)
+        thought = getattr(part, "thought", None)
+        if thought:
+            thoughts.append(str(thought))
+    return "\n".join(thoughts) if thoughts else None
+
+
 async def _should_use_web_search(message: str, model: Optional[str]) -> bool:
     """
     Use lightweight local heuristics to decide whether this message likely
@@ -6749,6 +6767,15 @@ async def stream_ai_response(
                         payload = _candidate_grounding_payload(candidate)
                         if payload:
                             grounding_metadata = payload
+                        
+                        # Extract thinking content if reasoning_mode is enabled
+                        if reasoning_mode:
+                            thought_content = _candidate_thought(candidate)
+                            if thought_content and not accumulated.startswith("<thinking>"):
+                                # Stream thinking content wrapped in <thinking> tags on first occurrence
+                                thinking_wrapper = f"<thinking>{thought_content}</thinking>\n"
+                                accumulated = thinking_wrapper + accumulated
+                                yield ("delta", thinking_wrapper)
                     
                     suppress_text = False
                     if parts_list:
