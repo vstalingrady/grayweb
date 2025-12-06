@@ -7581,6 +7581,26 @@ async def chat_endpoint(
         # Get conversation history for context
         conversation_history: List[Dict[str, Any]] = await _load_conversation_history(conversation_id, chat_request.user_id)
 
+        # For thread conversations, inject General chat context as background memory.
+        is_general_conversation = _general_conversation_user_id(conversation_id) is not None
+        if not is_general_conversation:
+            try:
+                general_history = await _load_general_conversation_history(chat_request.user_id)
+                if general_history:
+                    recent_general = general_history[-10:]
+                    if recent_general:
+                        general_context_marker = {
+                            "role": "user",
+                            "text": "[CONTEXT FROM GENERAL CHAT - This is background context from the user's main conversation area. Use this to maintain continuity and remember what the user has discussed previously.]"
+                        }
+                        general_context_end = {
+                            "role": "model",
+                            "text": "[I understand and will remember this context while responding in this thread.]"
+                        }
+                        conversation_history = [general_context_marker] + recent_general + [general_context_end] + conversation_history
+            except Exception:
+                pass  # Non-critical: continue without General context
+
         # Save user message to local conversation store (after capturing prior history),
         # but avoid writing an identical message twice in a row (e.g., when a fallback
         # request replays the same prompt after a streaming failure).
@@ -7978,6 +7998,40 @@ async def chat_stream(
             conversation_history = await _load_conversation_history(conversation_id, chat_request.user_id)
             t1_hist = time.perf_counter()
             api_logger.info(f"History load time: {(t1_hist - t0_hist)*1000:.2f}ms", extra={"user_id": chat_request.user_id, "conversation_id": conversation_id})
+
+            # For thread conversations, inject General chat context as background memory.
+            # This allows threads to "remember" what the user discussed in /g.
+            is_general_conversation = _general_conversation_user_id(conversation_id) is not None
+            if not is_general_conversation:
+                try:
+                    general_history = await _load_general_conversation_history(chat_request.user_id)
+                    if general_history:
+                        # Take the last 10 messages from General for context (not the full history)
+                        # to avoid context window bloat while providing enough background.
+                        recent_general = general_history[-10:]
+                        if recent_general:
+                            # Prepend General context with a system marker so the AI knows
+                            # this is background context, not this thread's direct history.
+                            general_context_marker = {
+                                "role": "user",
+                                "text": "[CONTEXT FROM GENERAL CHAT - This is background context from the user's main conversation area. Use this to maintain continuity and remember what the user has discussed previously.]"
+                            }
+                            general_context_end = {
+                                "role": "model",
+                                "text": "[I understand and will remember this context while responding in this thread.]"
+                            }
+                            # Insert General context at the beginning of history
+                            conversation_history = [general_context_marker] + recent_general + [general_context_end] + conversation_history
+                            api_logger.info(
+                                f"Injected {len(recent_general)} General chat messages as context for thread",
+                                extra={"user_id": chat_request.user_id, "conversation_id": conversation_id}
+                            )
+                except Exception as ctx_error:
+                    # Non-critical: log and continue without General context
+                    api_logger.warning(
+                        f"Failed to load General chat context for thread: {ctx_error}",
+                        extra={"user_id": chat_request.user_id, "conversation_id": conversation_id}
+                    )
 
         # Avoid sending an empty payload to the AI provider (Gemini rejects requests with no contents).
         if not (effective_message or "").strip() and not conversation_history and not (chat_request.attachments or []):
