@@ -200,10 +200,9 @@ def _fetch_jwks() -> Optional[Dict[str, Any]]:
             import json
             _jwks_cache = json.loads(response.read().decode())
             _jwks_cache_time = now
-            logger.info("Fetched JWKS from Supabase", extra={"url": jwks_url})
             return _jwks_cache
     except Exception as e:
-        logger.warning(f"Failed to fetch JWKS: {e}")
+        logger.debug(f"Failed to fetch JWKS: {e}")
         return _jwks_cache  # Return stale cache if available
 
 def _verify_with_jwks(token: str) -> Optional[Dict[str, Any]]:
@@ -332,10 +331,7 @@ async def verify_supabase_token(token: str) -> Dict[str, Any]:
             except Exception as supabase_exc:
                 supabase_error = str(supabase_exc)
                 response = None
-                logger.warning(
-                    "Supabase token validation failed; attempting local decode fallback",
-                    extra={"error": supabase_error},
-                )
+                logger.debug(f"Supabase token validation failed: {supabase_error}")
         else:
             response = None
 
@@ -383,15 +379,14 @@ async def verify_supabase_token(token: str) -> Dict[str, Any]:
                 _cache_token_payload(token, payload)
                 return payload
 
-        logger.warning("Invalid token: user not found")
+        logger.debug("Invalid token: user not found")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid authentication token"
         )
         
     except Exception as e:
-        token_preview = token[:10] + "..." if token and len(token) > 10 else token
-        logger.error(f"Token verification failed: {str(e)}. Token preview: '{token_preview}'")
+        logger.debug(f"Token verification failed: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired token"

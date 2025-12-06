@@ -281,18 +281,13 @@ class ProactivityEngine:
                     .execute()
                 )
                 rows = getattr(result, "data", None) or []
-                if not rows:
-                    return None
-                return self._normalize_timestamp(rows[0].get("sent_at"))
-            except Exception as exc:
-                logger.error(
-                    f"Failed to check recent proactive notification in Supabase: {exc}",
-                    exc_info=True,
-                    extra={
-                        "event_type": "proactivity_recent_supabase_error",
-                        "user_id": user_id,
-                    },
-                )
+                if rows:
+                    return self._normalize_timestamp(rows[0].get("sent_at"))
+                # If no rows, fall through to SQLite
+            except Exception:
+                # Table might not exist in Supabase - silently fall back to SQLite
+                pass
+
 
         # Fallback to local SQLite if Supabase is unavailable.
         await self._ensure_connection()

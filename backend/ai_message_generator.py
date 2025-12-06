@@ -50,11 +50,10 @@ class AIMessageGenerator:
             )
         
         if self.openrouter.available:
-            print("[AIMessageGenerator] Using Grok for proactive messaging")
+            pass  # Using Grok for proactive messaging
         elif self.gemini.available:
-            print("[AIMessageGenerator] Grok unavailable, using Gemini fallback")
-        else:
-            print("[AIMessageGenerator] No AI provider available; proactive messages will be skipped")
+            pass  # Using Gemini fallback
+        # else: No AI provider available; proactive messages will be skipped
 
     async def generate_conversation_summary(
         self,

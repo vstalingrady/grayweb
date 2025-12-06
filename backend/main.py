@@ -2092,27 +2092,8 @@ supabase_admin: Optional[Client] = None
 SUPABASE_ADMIN_KEY_SOURCE: Optional[str] = None
 if SUPABASE_URL and SUPABASE_KEY and SUPABASE_URL != "your_supabase_url_here":
     supabase = create_supabase_client()
-    if supabase is not None:
-        source_label = SUPABASE_KEY_SOURCE or "SUPABASE_KEY"
-        print(f"Supabase client initialized successfully (source: {source_label}).")
-        if SUPABASE_KEY_SOURCE in {"SUPABASE_ANON_KEY", "NEXT_PUBLIC_SUPABASE_ANON_KEY"}:
-            print("Warning: Using SUPABASE_ANON_KEY may limit write operations; configure a service-role key for full functionality.")
-    else:
-        print("Warning: Failed to initialize Supabase client via helper; conversation history disabled.")
-
     supabase_admin, SUPABASE_ADMIN_KEY_SOURCE = create_supabase_service_client()
-    if supabase_admin:
-        admin_label = SUPABASE_ADMIN_KEY_SOURCE or "SUPABASE_SERVICE_ROLE_KEY"
-        print(f"Supabase admin client initialized for privileged operations (source: {admin_label}).")
-    else:
-        if SUPABASE_ADMIN_KEY_SOURCE:
-            print(f"Warning: Supabase admin client failed to initialize with {SUPABASE_ADMIN_KEY_SOURCE}. Account deletions may leave Supabase data behind.")
-        else:
-            print("Warning: Supabase admin client not configured; set SUPABASE_SERVICE_ROLE_KEY for full account deletion.")
-else:
-    print("Warning: Supabase credentials not configured. Conversation history will not be persisted.")
-    # Even when Supabase is partially configured, wire the clients into the
-    # conversation store so it can make best-effort decisions.
+
 configure_conversation_store(
     supabase_client=supabase,
     supabase_admin_client=supabase_admin,
@@ -2127,7 +2108,7 @@ configure_conversation_store(
 # Disable Supabase data clients in backend - all data goes to local DB
 supabase = None
 supabase_admin = None
-print("INFO: Supabase data operations disabled. Using local SQLite for all data storage.")
+
 
 # Data storage configuration: Supabase is used for auth only.
 # Plans, habits, reminders, and other user data are stored locally (SQLite/Postgres).

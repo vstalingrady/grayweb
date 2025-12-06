@@ -227,17 +227,11 @@ def setup_logging(
     # Clear existing handlers
     root_logger.handlers.clear()
 
-    # Console handler
+    # Console handler - always use human-readable colored format
     if enable_console:
         console_handler = logging.StreamHandler(sys.stdout)
         console_handler.setLevel(log_level)
-
-        if structured_format or os.getenv("ENVIRONMENT") == "production":
-            console_formatter = StructuredFormatter()
-        else:
-            console_formatter = ColoredFormatter()
-
-        console_handler.setFormatter(console_formatter)
+        console_handler.setFormatter(ColoredFormatter())
         root_logger.addHandler(console_handler)
 
     # File handler with rotation
