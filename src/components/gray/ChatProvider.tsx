@@ -1897,6 +1897,37 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
   const lastAutoCachedWorkspaceRef = useRef<string | null>(null);
   const autoCacheInFlightRef = useRef(false);
 
+  // Restore model selection from local storage
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const storedTier = localStorage.getItem("gray_model_tier");
+      if (storedTier && ["lite", "pro", "pioneer"].includes(storedTier)) {
+        setModelTier(storedTier as any);
+      }
+      const storedModelId = localStorage.getItem("gray_selected_model_id");
+      if (storedModelId) {
+        setSelectedModelId(storedModelId);
+      }
+    }
+  }, []);
+
+  // Persist model selection changes
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("gray_model_tier", modelTier);
+    }
+  }, [modelTier]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      if (selectedModelId) {
+        localStorage.setItem("gray_selected_model_id", selectedModelId);
+      } else {
+        localStorage.removeItem("gray_selected_model_id");
+      }
+    }
+  }, [selectedModelId]);
+
   const [questionnaireSession, setQuestionnaireSession] = useState<QuestionnaireSession | null>(null);
 
   // Web search preference is now kept in memory for the current session only.
