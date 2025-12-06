@@ -777,7 +777,7 @@
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: rgba(255, 255, 255, 0.45);
+  background: rgba(100, 100, 100, 0.45);
 }
 
 .personalizationFieldGroup {
@@ -891,7 +891,7 @@
 
 .personalizationToggle[data-active="true"] {
   background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.32);
+  border-color: rgba(100, 100, 100, 0.32);
 }
 
 .personalizationToggleHint {
@@ -1316,8 +1316,8 @@
 }
 
 .personalizationPersonaChip[data-active="true"] {
-  background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.4);
+  background: rgba(100, 100, 100, 0.12);
+  border-color: rgba(100, 100, 100, 0.4);
   color: rgba(255, 255, 255, 0.9);
 }
 
@@ -1464,9 +1464,9 @@
 }
 
 .personalizationBackgroundCard[data-active="true"] {
-  border-color: rgba(118, 134, 255, 0.8);
-  background: rgba(118, 134, 255, 0.1);
-  box-shadow: 0 0 0 2px rgba(118, 134, 255, 0.35), 0 25px 45px rgba(0, 0, 0, 0.55);
+  border-color: rgba(100, 100, 100, 0.8);
+  background: rgba(100, 100, 100, 0.1);
+  box-shadow: 0 0 0 2px rgba(100, 100, 100, 0.35), 0 25px 45px rgba(0, 0, 0, 0.55);
 }
 
 .personalizationBackgroundThumb {
