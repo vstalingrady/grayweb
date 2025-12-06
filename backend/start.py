@@ -480,6 +480,57 @@ if __name__ == "__main__":
     if migrations_performed:
         LOG.info(f"Ran {len(migrations_performed)} migrations ({migration_time:.0f}ms)")
 
+    # Seed workspace backgrounds
+    try:
+        with engine.begin() as conn:
+            # Check if we need to seed
+            count = conn.execute(sqlalchemy.text("SELECT count(*) FROM workspace_backgrounds")).scalar()
+            if count == 0:
+                seed_start = time.time()
+                LOG.debug("Seeding default workspace backgrounds...")
+                DEFAULT_BACKGROUNDS = [
+                    {
+                        "slug": "aurora",
+                        "label": "Aurora",
+                        "description": "Northern lights gradient",
+                        "preview_css": "background: linear-gradient(135deg, #00C6FF 0%, #0072FF 100%)",
+                        "backdrop_css": "background: linear-gradient(135deg, rgba(0,198,255,0.1) 0%, rgba(0,114,255,0.1) 100%)"
+                    },
+                    {
+                        "slug": "midnight",
+                        "label": "Midnight",
+                        "description": "Dark calm vibes",
+                        "preview_css": "background: linear-gradient(135deg, #232526 0%, #414345 100%)",
+                        "backdrop_css": "background: linear-gradient(135deg, rgba(35,37,38,0.5) 0%, rgba(65,67,69,0.5) 100%)"
+                    },
+                    {
+                        "slug": "sunset",
+                        "label": "Sunset",
+                        "description": "Warm evening tones",
+                        "preview_css": "background: linear-gradient(135deg, #FF512F 0%, #DD2476 100%)",
+                        "backdrop_css": "background: linear-gradient(135deg, rgba(255,81,47,0.1) 0%, rgba(221,36,118,0.1) 100%)"
+                    },
+                    {
+                        "slug": "ocean",
+                        "label": "Ocean",
+                        "description": "Deep blue sea",
+                        "preview_css": "background: linear-gradient(135deg, #2193b0 0%, #6dd5ed 100%)",
+                        "backdrop_css": "background: linear-gradient(135deg, rgba(33,147,176,0.1) 0%, rgba(109,213,237,0.1) 100%)"
+                    }
+                ]
+                
+                for bg in DEFAULT_BACKGROUNDS:
+                    conn.execute(
+                        sqlalchemy.text("""
+                            INSERT INTO workspace_backgrounds (slug, label, description, preview_css, backdrop_css, created_at, updated_at)
+                            VALUES (:slug, :label, :description, :preview_css, :backdrop_css, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                        """),
+                        bg
+                    )
+                LOG.debug(f"Seeded {len(DEFAULT_BACKGROUNDS)} backgrounds in {(time.time() - seed_start)*1000:.0f}ms")
+    except Exception as e:
+        LOG.warning(f"Failed to seed workspace backgrounds: {e}")
+
     total_startup_time = (time.time() - startup_start_time) * 1000
     LOG.info(f"🚀 Server starting on http://localhost:8000 (startup: {total_startup_time:.0f}ms)")
 

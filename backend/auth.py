@@ -208,10 +208,12 @@ def _fetch_jwks() -> Optional[Dict[str, Any]]:
 def _verify_with_jwks(token: str) -> Optional[Dict[str, Any]]:
     """Verify JWT using Supabase's public keys (JWKS)."""
     if not jwt:
+        logger.debug("JWKS: jwt library not available")
         return None
     
     jwks = _fetch_jwks()
     if not jwks or "keys" not in jwks or not jwks["keys"]:
+        logger.debug("JWKS: No keys available")
         return None
     
     try:
@@ -220,6 +222,7 @@ def _verify_with_jwks(token: str) -> Optional[Dict[str, Any]]:
         
         jwks_url = _get_jwks_url()
         if not jwks_url:
+            logger.debug("JWKS: No JWKS URL configured")
             return None
         
         # PyJWKClient caches keys internally
@@ -232,10 +235,12 @@ def _verify_with_jwks(token: str) -> Optional[Dict[str, Any]]:
             algorithms=["ES256", "RS256", "EdDSA"],
             options={"verify_exp": True}
         )
+        logger.debug(f"JWKS verification succeeded for sub={payload.get('sub')}")
         return payload
     except Exception as e:
-        logger.debug(f"JWKS verification failed: {e}")
+        logger.warning(f"JWKS verification failed: {e}")
         return None
+
 
 # Token cache to avoid hitting Supabase Auth on every request
 _token_cache: Dict[str, tuple[Dict[str, Any], float]] = {}
@@ -296,28 +301,33 @@ async def verify_supabase_token(token: str) -> Dict[str, Any]:
         logger.debug("Token verified via JWKS")
         return payload
 
+    decoded_payload = None
+
     # PRIORITY 2: Try legacy JWT secret (if configured)
-    if jwt and SUPABASE_JWT_SECRET:
-        try:
-            decoded_payload = jwt.decode(
-                token, 
-                SUPABASE_JWT_SECRET, 
-                algorithms=["HS256"], 
-                options={"verify_exp": True}
-            )
-            if decoded_payload:
-                payload = {
-                    "sub": decoded_payload.get("sub"),
-                    "email": decoded_payload.get("email"),
-                    "user_metadata": decoded_payload.get("user_metadata") or {}
-                }
-                _cache_token_payload(token, payload)
-                logger.debug("Token verified via legacy JWT secret")
-                return payload
-        except InvalidTokenError as e:
-            logger.warning(f"Legacy JWT verification failed: {e}")
-        except Exception:
-            pass
+    if hasattr(jwt, "decode"):
+        if SUPABASE_JWT_SECRET:
+            try:
+                decoded_payload = jwt.decode(
+                    token, 
+                    SUPABASE_JWT_SECRET, 
+                    algorithms=["HS256"], 
+                    options={"verify_exp": True}
+                )
+                if decoded_payload:
+                    payload = {
+                        "sub": decoded_payload.get("sub"),
+                        "email": decoded_payload.get("email"),
+                        "user_metadata": decoded_payload.get("user_metadata") or {}
+                    }
+                    _cache_token_payload(token, payload)
+                    logger.debug("Token verified via legacy JWT secret")
+                    return payload
+            except InvalidTokenError as e:
+                logger.warning(f"Legacy JWT verification failed: {e}")
+            except Exception:
+                pass
+        else:
+            logger.debug("Skipping legacy JWT verification: SUPABASE_JWT_SECRET not configured")
 
     # PRIORITY 3: Fall back to Supabase Auth API call
     try:
@@ -332,8 +342,11 @@ async def verify_supabase_token(token: str) -> Dict[str, Any]:
                 supabase_error = str(supabase_exc)
                 response = None
                 logger.debug(f"Supabase token validation failed: {supabase_error}")
+                if "Invalid API key" in supabase_error:
+                    logger.error("CRITICAL: Supabase API rejected the configured SUPABASE_KEY. Please check your .env file.")
         else:
             response = None
+            logger.warning("Supabase client not initialized (missing credentials?), cannot verify token via API")
 
         if response and response.user:
             payload = {
