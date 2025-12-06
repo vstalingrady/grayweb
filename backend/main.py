@@ -6478,6 +6478,21 @@ async def stream_ai_response(
                                 api_logger.error(f"Failed to execute OpenRouter tool call {tool_name}: {e}", exc_info=True)
                                 tool_results.append({"tool": tool_name, "error": str(e), "call_id": call.get("id", "")})
                         
+                        # Skip follow-up call for read-only list tools (optimization)
+                        # These just return data - no need for LLM to summarize
+                        read_only_tools = {"list_calendar_events", "list_plans", "list_habits", "list_reminders", "get_workspace_state", "fetch_proactivity_summary"}
+                        all_read_only = all(tr.get("tool") in read_only_tools for tr in tool_results)
+                        
+                        if all_read_only:
+                            # Just finish - the tool results were already yielded as cards/data
+                            api_logger.info("Skipping follow-up call for read-only tools")
+                            total_accumulated += accumulated
+                            # If we have any text, yield it
+                            if accumulated.strip():
+                                yield ("delta", accumulated)
+                                yielded_any_tokens = True
+                            break  # Exit loop, go to final response
+                        
                         # Update history with tool call and results for next turn
                         current_history.append({
                             "role": "model",
