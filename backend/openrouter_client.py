@@ -227,7 +227,7 @@ class OpenRouterService:
         openai_tools = []
         for tool in tools:
             # Handle google.genai.types.Tool objects
-            if hasattr(tool, "function_declarations"):
+            if hasattr(tool, "function_declarations") and tool.function_declarations:
                 for func in tool.function_declarations:
                     parameters = {}
                     if hasattr(func, "parameters") and func.parameters:
