@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useCallback, useMemo, useState, useRef, useEffect } from "react";
-import { Zap, Sparkles, Lock, ChevronUp, Rocket, Grid, ChevronRight, Check, Brain, Settings, ArrowRight, Cube } from "lucide-react"; // Added Cube
+import { Zap, Sparkles, Lock, ChevronUp, Rocket, Grid, ChevronRight, Check, Brain, Settings, ArrowRight, Box } from "lucide-react"; // Replaced Cube with Box
 import Image from "next/image";
 import { useChatStore } from "@/components/gray/ChatProvider";
 import { useUser } from "@/contexts/UserContext";
@@ -360,7 +360,7 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
                 onClick={toggleAllModels}
                 disabled={currentLevel < TIER_LEVELS["pioneer"]}
               >
-                <Cube size={16} />
+                <Box size={16} />
                 <span>All Models</span>
                 {currentLevel < TIER_LEVELS["pioneer"] ? (
                   <Lock size={14} className={styles.actionLock} />
