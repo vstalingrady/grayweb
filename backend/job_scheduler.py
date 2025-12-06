@@ -170,22 +170,85 @@ async def send_proactive_checkin(ctx: Dict[str, Any], user_id: int) -> None:
 async def startup(ctx: Dict[str, Any]) -> None:
     """Worker startup: initialize database and engine connections."""
     logger.info("arq worker starting up...")
-    # These will be initialized by the worker process
-    # For now, we just log that we're starting
+    
+    try:
+        # Import and connect database
+        from database import database
+        if not database.is_connected:
+            await database.connect()
+            logger.info("arq worker: Database connected")
+        ctx["database"] = database
+        
+        # Initialize proactivity engine
+        from proactivity_engine import ProactivityEngine, ProactivityRealtimeBroker
+        from ai_message_generator import AIMessageGenerator
+        
+        # Try to get Supabase client if available
+        supabase_client = None
+        try:
+            from supabase_utils import create_supabase_client
+            supabase_client = create_supabase_client()
+        except Exception:
+            pass
+        
+        # Create realtime broker and AI generator
+        broker = ProactivityRealtimeBroker()
+        ai_generator = AIMessageGenerator()
+        
+        # Create engine
+        engine = ProactivityEngine(
+            database,
+            supabase_client,
+            broker,
+            ai_generator,
+        )
+        ctx["proactivity_engine"] = engine
+        logger.info("arq worker: ProactivityEngine initialized")
+        
+    except Exception as e:
+        logger.error("arq worker startup failed: %s", e, exc_info=True)
+        raise
 
 
 async def shutdown(ctx: Dict[str, Any]) -> None:
     """Worker shutdown: cleanup connections."""
     logger.info("arq worker shutting down...")
+    
+    try:
+        database = ctx.get("database")
+        if database and database.is_connected:
+            await database.disconnect()
+            logger.info("arq worker: Database disconnected")
+    except Exception as e:
+        logger.error("arq worker shutdown error: %s", e)
+
+
+# Cron job for periodic proactivity dispatch
+async def dispatch_all_proactivity(ctx: Dict[str, Any]) -> None:
+    """Cron job to dispatch all due proactive check-ins."""
+    logger.info("Running scheduled proactivity dispatch...")
+    try:
+        engine = ctx.get("proactivity_engine")
+        if engine:
+            results = await engine.dispatch_all_due(source="arq_cron")
+            logger.info("Proactivity dispatch complete: %d users processed", len(results) if results else 0)
+    except Exception as e:
+        logger.error("Proactivity dispatch failed: %s", e, exc_info=True)
 
 
 # Worker settings for running with: arq backend.job_scheduler.WorkerSettings
 if ARQ_AVAILABLE:
     class WorkerSettings:
         """arq worker configuration."""
-        functions = [send_reminder, send_proactive_checkin]
+        functions = [send_reminder, send_proactive_checkin, dispatch_all_proactivity]
+        cron_jobs = [
+            # Run proactivity dispatch every 5 minutes
+            cron(dispatch_all_proactivity, minute={0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55}),
+        ]
         on_startup = startup
         on_shutdown = shutdown
         redis_settings = RedisSettings.from_dsn(os.getenv("REDIS_URL", "redis://localhost:6379/0"))
         max_jobs = 10
         job_timeout = 300  # 5 minutes max per job
+        keep_result = 3600  # Keep results for 1 hour
+
