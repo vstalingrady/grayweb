@@ -1,0 +1,20 @@
+Requirement already satisfied: pip in ./.venv/lib/python3.12/site-packages (24.0)
+Collecting pip
+  Downloading pip-25.3-py3-none-any.whl.metadata (4.7 kB)
+Requirement already satisfied: urllib3 in ./.venv/lib/python3.12/site-packages (2.5.0)
+Collecting urllib3
+  Downloading urllib3-2.6.0-py3-none-any.whl.metadata (6.6 kB)
+Downloading pip-25.3-py3-none-any.whl (1.8 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.8/1.8 MB 20.1 MB/s eta 0:00:00
+Downloading urllib3-2.6.0-py3-none-any.whl (131 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 131.1/131.1 kB 20.4 MB/s eta 0:00:00
+Installing collected packages: urllib3, pip
+  Attempting uninstall: urllib3
+    Found existing installation: urllib3 2.5.0
+    Uninstalling urllib3-2.5.0:
+      Successfully uninstalled urllib3-2.5.0
+  Attempting uninstall: pip
+    Found existing installation: pip 24.0
+    Uninstalling pip-24.0:
+      Successfully uninstalled pip-24.0
+Successfully installed pip-25.3 urllib3-2.6.0
