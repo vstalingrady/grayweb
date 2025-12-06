@@ -2162,8 +2162,19 @@ export function GrayChatView({
     if (!streamingContentSignature || !scrollAnchorRef.current) {
       return;
     }
-    scrollAnchorRef.current.scrollIntoView({ behavior: "smooth", block: "end" });
+    scrollAnchorRef.current.scrollIntoView({ behavior: "smooth" });
   }, [streamingContentSignature]);
+
+  // Auto-scroll during active streaming
+  useEffect(() => {
+    if (!isResponding || !scrollAnchorRef.current) {
+      return;
+    }
+    const lastMessage = messages[messages.length - 1];
+    if (lastMessage?.role === "assistant") {
+      scrollAnchorRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages, isResponding]);
 
   useLayoutEffect(() => {
     const node = composerDockRef.current;
