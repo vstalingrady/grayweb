@@ -250,10 +250,19 @@ class OpenRouterService:
             "messages": messages,
             "max_tokens": self._max_tokens,
             "temperature": self._temperature,
+            # OpenRouter optimizations: https://openrouter.ai/docs/provider-routing
+            "provider": {
+                "sort": "price",  # Prioritize cheapest provider
+                "allow_fallbacks": True,
+            },
+            # Compress long contexts automatically (middle-out)
+            # https://openrouter.ai/docs/transforms
+            "transforms": ["middle-out"],
         }
 
+        # Request usage stats (includes cache_discount for prompt caching)
         if include_usage:
-            payload["include_usage"] = True
+            payload["usage"] = {"include": True}
         if response_format:
             payload["response_format"] = response_format
             
@@ -332,10 +341,19 @@ class OpenRouterService:
             "max_tokens": self._max_tokens,
             "temperature": self._temperature,
             "stream": True,  # Enable streaming
+            # OpenRouter optimizations: https://openrouter.ai/docs/provider-routing
+            "provider": {
+                "sort": "price",  # Prioritize cheapest provider
+                "allow_fallbacks": True,
+            },
+            # Compress long contexts automatically (middle-out)
+            # https://openrouter.ai/docs/transforms
+            "transforms": ["middle-out"],
         }
 
+        # Request usage stats (includes cache_discount for prompt caching)
         if include_usage:
-            payload["include_usage"] = True
+            payload["usage"] = {"include": True}
         if response_format:
             payload["response_format"] = response_format
 

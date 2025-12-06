@@ -383,16 +383,28 @@
 }
 
 .groupModels {
-  padding-left: 10px;
-  /* Slight indent */
+  margin-left: 21px;
+  /* Align with center of icon (12px padding + 9px center of 18px icon) */
   margin-top: 2px;
   display: flex;
   flex-direction: column;
   gap: 1px;
+  position: relative;
+}
+
+.groupModels::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 2px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
 }
 
 .subMenuItem {
-  padding-left: 36px;
+  padding-left: 24px;
   /* Align text with group title text */
   font-size: 0.9rem;
 }
