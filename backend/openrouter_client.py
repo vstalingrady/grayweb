@@ -388,6 +388,19 @@ class OpenRouterService:
         if not messages:
             messages = [{"role": "user", "content": message}]
 
+        # Build provider preferences with routing logic
+        provider_preferences = {
+            "sort": "price",
+            "allow_fallbacks": True,
+        }
+        
+        # Apply provider routing overrides
+        resolved_lower = resolved_model.lower()
+        if "deepseek" in resolved_lower:
+            provider_preferences["order"] = ["DeepSeek"]
+        elif "moonshot" in resolved_lower or "kimi" in resolved_lower:
+            provider_preferences["order"] = ["Fireworks"]
+
         # Build request payload
         payload: Dict[str, Any] = {
             "model": resolved_model,
@@ -396,10 +409,7 @@ class OpenRouterService:
             "temperature": self._temperature,
             "stream": True,  # Enable streaming
             # OpenRouter optimizations: https://openrouter.ai/docs/provider-routing
-            "provider": {
-                "sort": "price",  # Prioritize cheapest provider
-                "allow_fallbacks": True,
-            },
+            "provider": provider_preferences,
             # Compress long contexts automatically (middle-out)
             # https://openrouter.ai/docs/transforms
             "transforms": ["middle-out"],
