@@ -3755,9 +3755,23 @@ def _candidate_thought(candidate: Any) -> Optional[str]:
     thoughts = []
     for part in parts:
         # Check for 'thought' attribute (Gemini thinking mode)
+        # Debug logging to see what attributes exist
+        try:
+             logger.info(f"DEBUG: Part attributes: {dir(part)}")
+        except:
+            pass
+            
         thought = getattr(part, "thought", None)
         if thought:
             thoughts.append(str(thought))
+        
+    if not thoughts and parts: # Only log if we have parts but no thoughts
+        # Debug: print candidate content to see if thought is hidden elsewhere
+        try:
+             logger.info(f"DEBUG: No thought attribute. Parts content: {[p.__dict__ for p in parts if hasattr(p, '__dict__')]}") 
+        except:
+             logger.info(f"DEBUG: No thought attribute. Parts: {parts}")
+        
     return "\n".join(thoughts) if thoughts else None
 
 
