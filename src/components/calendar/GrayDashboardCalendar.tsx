@@ -506,8 +506,10 @@ export function GrayDashboardCalendar({
 
   const openComposerAt = useCallback(
     (startDate: Date, anchorRect?: ComposerAnchorRect | null) => {
+      // startDate is already snapped from handleColumnClick, just copy it
       const alignedStart = new Date(startDate);
-      alignedStart.setMinutes(Math.floor(alignedStart.getMinutes() / SNAP_MINUTES) * SNAP_MINUTES, 0, 0);
+      // Ensure seconds/ms are cleared (they should be, but be defensive)
+      alignedStart.setSeconds(0, 0);
       const alignedEnd = new Date(alignedStart.getTime() + 30 * 60000);
       setComposerRange({ start: alignedStart, end: alignedEnd });
       setEditingEvent(null);
@@ -615,9 +617,11 @@ export function GrayDashboardCalendar({
 
     const bounds = target.getBoundingClientRect();
     const offsetY = event.clientY - bounds.top;
-    const minutes = Math.max(0, Math.min(24 * 60 - 1, Math.round((offsetY / hourHeight) * 60 / SNAP_MINUTES) * SNAP_MINUTES));
+    const totalMinutes = Math.max(0, Math.min(24 * 60 - 1, Math.round((offsetY / hourHeight) * 60 / SNAP_MINUTES) * SNAP_MINUTES));
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
     const start = new Date(day);
-    start.setHours(0, minutes, 0, 0);
+    start.setHours(hours, minutes, 0, 0);
     const anchorRect: ComposerAnchorRect = {
       left: bounds.right,
       width: 16,

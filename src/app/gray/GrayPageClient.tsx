@@ -2052,6 +2052,7 @@ function GrayPageClientInner({
     }
 
     // Create new events
+    console.log("[CALENDAR] Creating new events:", newEvents.map(e => ({ id: e.id, title: e.title, calendarId: e.calendarId, entryType: e.entryType })));
     for (const event of newEvents) {
       if (event.entryType === "reminder") {
         try {
@@ -2122,6 +2123,7 @@ function GrayPageClientInner({
     }
 
     // Update existing events
+    console.log("[CALENDAR] Updating events:", updatedEvents.map(e => ({ id: e.id, title: e.title })));
     for (const event of updatedEvents) {
       if (event.entryType === "reminder" || event.id.startsWith("reminder-")) {
         const reminderId = event.reminderId ?? Number(event.id.replace("reminder-", ""));

@@ -118,7 +118,7 @@ const PROACTIVITY_PRESETS: ProactivityPreset[] = [
     summary: "Three structured touchpoints each day with action follow-ups.",
     recommendedFor: "Teams sprinting toward a release window or coordinating across time zones.",
     defaultTime: "09:00",
-    defaultTimes: ["09:00", "12:00", "18:00"],
+    defaultTimes: ["09:00", "14:00", "18:00"],
   },
   {
     id: "proactivity-daily",
@@ -129,16 +129,6 @@ const PROACTIVITY_PRESETS: ProactivityPreset[] = [
     summary: "Daily rhythm that keeps work moving without overwhelming signal.",
     recommendedFor: "Founders or leads who want a steady async cadence.",
     defaultTime: "09:00",
-  },
-  {
-    id: "proactivity-weekly",
-    title: "Light Touch",
-    label: "Check-ins",
-    cadence: "Weekly",
-    description: "End-of-week recap with highlights, gaps, and next-step prompts.",
-    summary: "Weekly sweep so nothing slips through the cracks.",
-    recommendedFor: "Calmer seasons or teams that already sync live each day.",
-    defaultTime: "16:30",
   },
   {
     id: "proactivity-manual",

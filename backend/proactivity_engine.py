@@ -942,6 +942,7 @@ class ProactivitySchedulerManager:
                 id=job_id,
                 kwargs={"user_id": user_settings.user_id},
                 replace_existing=True,
+                misfire_grace_time=3600,
             )
 
     async def _run_job(self, user_id: int) -> None:
