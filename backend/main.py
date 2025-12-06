@@ -6581,7 +6581,7 @@ async def stream_ai_response(
                         effective_system_prompt,
                         time_context,
                         model,
-                        include_usage=False,
+                        include_usage=reasoning_mode,
                         response_format=response_format,
                         tools=tool_list if not response_format else None, # Don't mix JSON mode and tools usually
                         tool_choice="auto", # Allow OpenRouter to decide when to use tools
@@ -6590,6 +6590,24 @@ async def stream_ai_response(
                                                     # Handle metadata or tool calls
                                                     if "tool_calls" in chunk:
                                                         tool_calls_buffer = chunk["tool_calls"]
+                                                        continue
+
+                                                    if "type" in chunk and chunk["type"] == "reasoning":
+                                                        # OpenRouter visible reasoning
+                                                        r_text = chunk["content"]
+                                                        accumulated += f"<thinking>{r_text}</thinking>"
+                                                        yield ("delta", f"<thinking>{r_text}</thinking>")
+                                                        yielded_any_tokens = True
+                                                        continue
+                                                    
+                                                    if "usage" in chunk and reasoning_mode:
+                                                        # Handle reasoning usage stats if visible text wasn't provided
+                                                        # This is a fallback if the model doesn't stream text but gives usage
+                                                        # We can't retrospectively insert thinking tags easily if we already streamed content.
+                                                        # But usually usage comes at the end.
+                                                        # If we haven't seen any visible reasoning, maybe show a summary?
+                                                        pass
+                                                    
                                                     continue                    
                     # Flush any remaining buffer at end of stream
                     if stream_buffer:

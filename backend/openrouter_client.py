@@ -414,8 +414,12 @@ class OpenRouterService:
                                     if tool_calls:
                                         yield {"tool_calls": tool_calls}
                                     
+                                    reasoning = delta.get("reasoning") or delta.get("reasoning_content")
+                                    if reasoning:
+                                        yield {"type": "reasoning", "content": reasoning}
+                                    
                                     reasoning_pieces = []
-                                    if not content:
+                                    if not content and not reasoning:
                                         details = delta.get("reasoning_details") or []
                                         if isinstance(details, list):
                                             for item in details:
@@ -427,7 +431,8 @@ class OpenRouterService:
                                     if content:
                                         yield content
                                     elif reasoning_pieces:
-                                        yield "".join(reasoning_pieces)
+                                        # Legacy reasoning_details support
+                                        yield {"type": "reasoning", "content": "".join(reasoning_pieces)}
 
                                     if include_usage and "usage" in data:
                                         yield {"usage": data["usage"]}
