@@ -6571,12 +6571,13 @@ async def stream_ai_response(
                 
             except Exception as openrouter_error:
                 api_logger.error(
-                    "OpenRouter streaming failed; falling back to Gemini",
+                    f"OpenRouter streaming failed ({type(openrouter_error).__name__}: {openrouter_error}); falling back to Gemini",
                     extra={
                         "event_type": "ai_provider_fallback",
                         "provider": provider,
                         "error": str(openrouter_error),
                     },
+                    exc_info=True,
                 )
                 
                 if yielded_any_tokens:
