@@ -413,10 +413,10 @@
 }
 
 .authFieldInput:focus-visible {
-  border-color: rgba(255, 255, 255, 0.4);
+  border-color: rgba(255, 255, 255, 0.08);
   outline: none;
-  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.18);
-  transform: translateY(-1px);
+  box-shadow: none;
+  transform: none;
 }
 
 .authFieldInput:disabled {
@@ -434,9 +434,9 @@
 }
 
 .authFieldInputWrapper:focus-within {
-  border-color: rgba(255, 255, 255, 0.25);
-  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.12);
-  transform: translateY(-1px);
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: none;
+  transform: none;
 }
 
 .authFieldInputWrapper .authFieldInput {
