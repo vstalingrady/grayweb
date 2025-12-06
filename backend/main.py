@@ -5153,10 +5153,9 @@ async def _complete_onboarding(
             return None
         if "frequent" in text or "3x" in text or "3 times" in text:
             return "frequent"
-        if "daily" in text or "every day" in text:
+        if "daily" in text or "every day" in text or "weekly" in text or "once a week" in text:
+            # Weekly is mapped to daily (weekly cadence removed)
             return "daily"
-        if "weekly" in text or "once a week" in text:
-            return "weekly"
         if "manual" in text or "off" in text or "never" in text:
             return "manual"
         return "custom"
@@ -5182,16 +5181,15 @@ async def _complete_onboarding(
             "cadence": cadence,
         }
         
-        # For "frequent" cadence, set multiple check-in times throughout the day
+        # Set check-in times based on cadence
         if cadence == "frequent":
-            # Use provided time as first time, then add more throughout the day
-            base_times = ["09:00", "12:00", "15:00", "18:00"]
-            if time_value and time_value not in base_times:
-                # User provided a specific time, include it
-                settings_payload["times"] = sorted(set([time_value] + base_times))
-            else:
-                settings_payload["times"] = base_times
+            # Frequent: 9am, 3pm, 6pm
+            settings_payload["times"] = ["09:00", "15:00", "18:00"]
+        elif cadence == "daily":
+            # Daily: 9am (or user-specified time)
+            settings_payload["time"] = time_value or "09:00"
         elif time_value:
+            # Custom or other cadences: use provided time
             settings_payload["time"] = time_value
             
         if timezone:
