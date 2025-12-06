@@ -6648,6 +6648,9 @@ async def stream_ai_response(
                             # This is often enough for models like Grok.
                             tool_outputs.append(f"Tool '{func_name}' output: {json.dumps(result)}")
                             
+                            # Notify frontend of tool execution
+                            yield ("tool_logs", f"Executed {func_name}")
+                            
                         # Add tool outputs as user message for next turn
                         if tool_outputs:
                             next_user_msg = "\n\n".join(tool_outputs)
@@ -6665,6 +6668,9 @@ async def stream_ai_response(
                                 
                             # Clear message for next turn so we rely on history
                             message = "" 
+                            
+                            # Update yielded_any_tokens to prevent "unexpected issue" if we only yielded tool logs
+                            yielded_any_tokens = True 
                             continue # Loop to next turn
                         else:
                             break # No outputs, done
@@ -6685,6 +6691,18 @@ async def stream_ai_response(
                             yield ("final", {"text": previous_turns_text + accumulated, "grounding_metadata": None})
                     
                     # If we got here and didn't continue, we are done
+                    
+                    # Ensure we don't send empty response
+                    final_text = (previous_turns_text + accumulated).strip()
+                    if not final_text and yielded_any_tokens:
+                        # If we did tools but got no text, say Done
+                        final_text = "Done."
+                    
+                    if not final_text:
+                         # Still empty? Force something
+                         final_text = "..."
+                         
+                    yield ("final", {"text": final_text, "grounding_metadata": None})
                     return
 
             except Exception as openrouter_error:  # pragma: no cover - best effort logging
