@@ -222,7 +222,23 @@ except ImportError:
 
 # Database module
 try:
-    from backend.database import database, metadata, users, DATABASE_URL
+    from backend.database import (
+        database,
+        metadata,
+        users,
+        DATABASE_URL,
+        calendars,
+        calendar_events,
+        dashboard_pulses,
+        proactivity_settings,
+        proactivity_push_subscriptions,
+        proactivity_logs,
+        file_search_stores,
+        media_uploads,
+        context_cache,
+        proactive_notifications,
+        google_calendar_credentials,
+    )
 except ImportError:
     from database import database, metadata, users, DATABASE_URL
 
@@ -1108,6 +1124,31 @@ def _needs_structured_tools(message: str) -> bool:
         "due",
         "task",
         "todo",
+        "meeting",
+        "appointment",
+        "call",
+        "checkin",
+        "check-in",
+        "check in",
+        "sync",
+        "standup",
+        "doctor",
+        "dentist",
+        "gym",
+        "workout",
+        "deadline",
+        "project",
+        "habit",
+        "routine",
+    "at", # aggressive, but "at 5pm" is a strong signal
+    "tomorrow",
+    "monday",
+    "tuesday",
+    "wednesday",
+    "thursday",
+    "friday",
+    "saturday",
+    "sunday",
     ]
     return any(token in normalized for token in tool_keywords)
 
@@ -1330,30 +1371,9 @@ chat_sessions = sqlalchemy.Table(
     sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
 )
 
-calendars = sqlalchemy.Table(
-    "calendars",
-    metadata,
-    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True, index=True),
-    sqlalchemy.Column("user_id", sqlalchemy.ForeignKey("users.id")),
-    sqlalchemy.Column("label", sqlalchemy.String),
-    sqlalchemy.Column("color", sqlalchemy.String),
-    sqlalchemy.Column("is_visible", sqlalchemy.Boolean, default=True),
-    sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
-    sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
-)
 
-calendar_events = sqlalchemy.Table(
-    "calendar_events",
-    metadata,
-    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True, index=True),
-    sqlalchemy.Column("user_id", sqlalchemy.ForeignKey("users.id")),
-    sqlalchemy.Column("calendar_id", sqlalchemy.ForeignKey("calendars.id"), nullable=True),
-    sqlalchemy.Column("title", sqlalchemy.String),
-    sqlalchemy.Column("description", sqlalchemy.String, nullable=True),
-    sqlalchemy.Column("start_time", sqlalchemy.DateTime),
-    sqlalchemy.Column("end_time", sqlalchemy.DateTime),
-    sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
-)
+
+
 
 plans = sqlalchemy.Table(
     "plans",
@@ -1401,41 +1421,10 @@ reminders = sqlalchemy.Table(
     sqlalchemy.Column("delivered_at", sqlalchemy.DateTime, nullable=True),
 )
 
-dashboard_pulses = sqlalchemy.Table(
-    "dashboard_pulses",
-    metadata,
-    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True, index=True),
-    sqlalchemy.Column("user_id", sqlalchemy.ForeignKey("users.id"), nullable=False),
-    sqlalchemy.Column("date_key", sqlalchemy.String, nullable=False),
-    sqlalchemy.Column("timestamp", sqlalchemy.DateTime, nullable=False),
-    sqlalchemy.Column("plans", sqlalchemy.JSON, nullable=False, default=list),
-    sqlalchemy.Column("habits", sqlalchemy.JSON, nullable=False, default=list),
-    sqlalchemy.Column("proactivity", sqlalchemy.JSON, nullable=False, default=dict),
-    sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
-    sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
-    sqlalchemy.UniqueConstraint("user_id", "date_key", name="uq_dashboard_pulses_user_date"),
-)
 
-proactivity_settings = sqlalchemy.Table(
-    "proactivity_settings",
-    metadata,
-    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True, index=True),
-    sqlalchemy.Column("user_id", sqlalchemy.ForeignKey("users.id"), unique=True),
-    sqlalchemy.Column("payload", sqlalchemy.JSON, nullable=False, default=dict),
-    sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
-    sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
-)
-proactivity_push_subscriptions = sqlalchemy.Table(
-    "proactivity_push_subscriptions",
-    metadata,
-    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True, index=True),
-    sqlalchemy.Column("user_id", sqlalchemy.ForeignKey("users.id"), nullable=False),
-    sqlalchemy.Column("endpoint", sqlalchemy.String, nullable=False, unique=True),
-    sqlalchemy.Column("p256dh", sqlalchemy.String, nullable=False),
-    sqlalchemy.Column("auth", sqlalchemy.String, nullable=False),
-    sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
-    sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
-)
+
+
+
 
 general_chat_messages = sqlalchemy.Table(
     "general_chat_messages",
@@ -1461,90 +1450,22 @@ user_streaks = sqlalchemy.Table(
 )
 
 # Proactivity tracking
-proactivity_logs = sqlalchemy.Table(
-    "proactivity_logs",
-    metadata,
-    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True, index=True),
-    sqlalchemy.Column("user_id", sqlalchemy.ForeignKey("users.id")),
-    sqlalchemy.Column("activity_date", sqlalchemy.DateTime, default=datetime.utcnow),
-    sqlalchemy.Column("tasks_completed", sqlalchemy.Integer, default=0),
-    sqlalchemy.Column("total_tasks", sqlalchemy.Integer, default=0),
-    sqlalchemy.Column("score", sqlalchemy.Integer, default=0),
-    sqlalchemy.Column("notes", sqlalchemy.String, nullable=True),
-    sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
-    sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
-)
 
 
-file_search_stores = sqlalchemy.Table(
-    "file_search_stores",
-    metadata,
-    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True, index=True),
-    sqlalchemy.Column("user_id", sqlalchemy.ForeignKey("users.id"), unique=True),
-    sqlalchemy.Column("store_name", sqlalchemy.String, unique=True),
-    sqlalchemy.Column("display_name", sqlalchemy.String, nullable=True),
-    sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
-    sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
-)
 
-media_uploads = sqlalchemy.Table(
-    "media_uploads",
-    metadata,
-    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True, index=True),
-    sqlalchemy.Column("user_id", sqlalchemy.ForeignKey("users.id")),
-    sqlalchemy.Column("filename", sqlalchemy.String),
-    sqlalchemy.Column("mime_type", sqlalchemy.String),
-    sqlalchemy.Column("size", sqlalchemy.Integer),
-    sqlalchemy.Column("storage_path", sqlalchemy.String),
-    sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
-)
+
+
+
 
 # Context caching for long context reuse
-context_cache = sqlalchemy.Table(
-    "context_cache",
-    metadata,
-    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True, index=True),
-    sqlalchemy.Column("user_id", sqlalchemy.ForeignKey("users.id")),
-    sqlalchemy.Column("conversation_id", sqlalchemy.String, nullable=True),
-    sqlalchemy.Column("label", sqlalchemy.String, nullable=True),
-    sqlalchemy.Column("content", sqlalchemy.Text, nullable=False),
-    sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
-)
+
 
 DEFAULT_WORKSPACE_BACKGROUNDS: List[Dict[str, Any]] = []
 
 # Proactive notifications
-proactive_notifications = sqlalchemy.Table(
-    "proactive_notifications",
-    metadata,
-    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True, index=True),
-    sqlalchemy.Column("user_id", sqlalchemy.ForeignKey("users.id")),
-    sqlalchemy.Column("type", sqlalchemy.String),
-    sqlalchemy.Column("title", sqlalchemy.String),
-    sqlalchemy.Column("message", sqlalchemy.String),
-    sqlalchemy.Column("metadata", sqlalchemy.JSON, nullable=True),
-    sqlalchemy.Column("due_at", sqlalchemy.DateTime, nullable=True),
-    sqlalchemy.Column("sent_at", sqlalchemy.DateTime, default=datetime.utcnow),
-    sqlalchemy.Column("read_at", sqlalchemy.DateTime, nullable=True),
-    sqlalchemy.Column("completed_at", sqlalchemy.DateTime, nullable=True),
-    sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
-)
 
-google_calendar_credentials = sqlalchemy.Table(
-    "google_calendar_credentials",
-    metadata,
-    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True, index=True),
-    sqlalchemy.Column("user_id", sqlalchemy.ForeignKey("users.id"), unique=True),
-    sqlalchemy.Column("access_token", sqlalchemy.String),
-    sqlalchemy.Column("refresh_token", sqlalchemy.String),
-    sqlalchemy.Column("token_uri", sqlalchemy.String),
-    sqlalchemy.Column("client_id", sqlalchemy.String),
-    sqlalchemy.Column("client_secret", sqlalchemy.String),
-    sqlalchemy.Column("scopes", sqlalchemy.String),
-    sqlalchemy.Column("expires_at", sqlalchemy.DateTime, nullable=True),
-    sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
-    sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
-)
+
+
 
 google_calendar_states = sqlalchemy.Table(
     "google_calendar_states",
@@ -6185,17 +6106,18 @@ async def stream_ai_response(
 
     # Semantic fallback: if the simple keyword heuristics do not trigger,
     # ask Gemini to classify whether this message is actually a reminder/plan/timer request.
-    if not needs_structured_tools:
-        try:
-            if await _should_enable_reminder_tools_semantic(message):
-                needs_structured_tools = True
-                request_structured_reminders = True
-        except Exception as error:  # pragma: no cover - best effort logging
-            api_logger.warning(
-                "Semantic reminder routing failed; continuing with keyword heuristics",
-                extra={"event_type": "reminder_semantic_routing_error", "error": str(error)},
-            )
-    elif needs_structured_tools:
+    # DISABLED for performance: This adds ~2s latency. Relying on keyword heuristics only.
+    # if not needs_structured_tools:
+    #     try:
+    #         if await _should_enable_reminder_tools_semantic(message):
+    #             needs_structured_tools = True
+    #             request_structured_reminders = True
+    #     except Exception as error:  # pragma: no cover - best effort logging
+    #         api_logger.warning(
+    #             "Semantic reminder routing failed; continuing with keyword heuristics",
+    #             extra={"event_type": "reminder_semantic_routing_error", "error": str(error)},
+    #         )
+    if needs_structured_tools:
         request_structured_reminders = True
 
     explicit_model = (model or "").strip()
@@ -6215,8 +6137,18 @@ async def stream_ai_response(
             model = GEMINI_LIGHT_MODEL
     elif normalized_model in {"pro", "gray-pro"}:
         provider = "gemini"
-        if not model:
-            model = "models/gemini-3-pro-preview"
+        model = GEMINI_PRO_MODEL  # Always set the actual model path for tier alias
+    elif normalized_model == "pioneer":
+        # Pioneer tier is a direct OpenRouter passthrough - model ID should be already set
+        # If only "pioneer" was passed without a specific model, default to a premium model
+        if OPENROUTER_SERVICE and OPENROUTER_SERVICE.available:
+            provider = "openrouter"
+            # Keep the model as-is if it contains a slash (specific model ID), otherwise use default
+            if "/" not in explicit_model:
+                model = "anthropic/claude-sonnet-4.5"  # Default pioneer model
+        else:
+            provider = "gemini"
+            model = GEMINI_PRO_MODEL
     elif normalized_model.startswith("models/") or normalized_model.startswith("gemini"):
         provider = "gemini"
     elif normalized_model.startswith("openrouter") or "/" in normalized_model:
@@ -6373,7 +6305,8 @@ async def stream_ai_response(
                     include_usage=False,
                     response_format=response_format,
                     tools=tool_list,
-                    tool_choice="auto", # Allow OpenRouter to decide when to use tools
+                    tool_choice="auto",  # Allow OpenRouter to decide when to use tools
+                    plugins=[{"id": "web", "max_results": 5}] if search_enabled else None,
                 ):
                     if isinstance(chunk, dict):
                         # Handle native streaming tool calls
@@ -6469,22 +6402,60 @@ async def stream_ai_response(
                             
                 # Process any accumulated native tool calls
                 if pending_tool_calls:
+                    # Handler map for OpenRouter tool calls (same as _execute_function_call)
+                    tool_handlers = {
+                        "fetch_proactivity_summary": lambda u, a, d: _fetch_proactivity_summary(u, a.get("info_type"), d),
+                        "list_calendar_events": lambda u, a, d: _list_calendar_events(u, a, d),
+                        "create_calendar_event": lambda u, a, d: _create_calendar_event(u, a, d),
+                        "update_calendar_event": lambda u, a, d: _update_calendar_event(u, a, d),
+                        "delete_calendar_event": lambda u, a, d: _delete_calendar_event(u, a, d),
+                        "complete_onboarding": lambda u, a, d: _complete_onboarding(u, a, d, user_timezone=user_timezone),
+                        "list_plans": lambda u, a, d: _list_plans_tool(u, a, d),
+                        "create_plan": lambda u, a, d: _create_plan_tool(u, a, d),
+                        "update_plan": lambda u, a, d: _update_plan_tool(u, a, d),
+                        "delete_plan": lambda u, a, d: _delete_plan_tool(u, a, d),
+                        "list_habits": lambda u, a, d: _list_habits_tool(u, a, d),
+                        "create_habit": lambda u, a, d: _create_habit_tool(u, a, d),
+                        "update_habit": lambda u, a, d: _update_habit_tool(u, a, d),
+                        "delete_habit": lambda u, a, d: _delete_habit_tool(u, a, d),
+                        "list_reminders": lambda u, a, d: _list_reminders_tool(u, a, d),
+                        "create_reminder": lambda u, a, d: _create_reminder_tool(u, a, d),
+                        "update_reminder": lambda u, a, d: _update_reminder_tool(u, a, d),
+                        "delete_reminder": lambda u, a, d: _delete_reminder_tool(u, a, d),
+                        "delete_latest_reminder": lambda u, a, d: _delete_latest_reminder_tool(u, a, d),
+                        "get_workspace_state": lambda u, a, d: _get_workspace_state_tool(u, a, d),
+                    }
+                    
                     for idx, call in pending_tool_calls.items():
-                        if call.get("name") == "complete_onboarding":
-                            api_logger.info(f"Executing intercepted native OpenRouter tool call: {call['name']}")
-                            try:
-                                args_str = "".join(call["arguments"])
-                                args = json.loads(args_str)
-                                await _complete_onboarding(user_id, args, db)
-                                
+                        tool_name = call.get("name")
+                        handler = tool_handlers.get(tool_name)
+                        
+                        if not handler:
+                            api_logger.warning(f"Unknown tool call from OpenRouter: {tool_name}")
+                            continue
+                        
+                        api_logger.info(f"Executing OpenRouter tool call: {tool_name}")
+                        try:
+                            args_str = "".join(call["arguments"])
+                            args = json.loads(args_str) if args_str.strip() else {}
+                            tool_result = await handler(user_id, args, db)
+                            
+                            # Check if this is a reminder/plan/habit tool that returns a gray.* payload
+                            # Yield exactly like Gemini does at line 6792: ("reminders", [tool_result])
+                            if isinstance(tool_result, dict) and tool_result.get("type") in {"gray.reminder", "gray.plan", "gray.habit"}:
+                                yield ("reminders", [tool_result])
+                                yielded_any_tokens = True
+                            elif tool_name == "complete_onboarding":
                                 confirmation = "\n\n---\nSaved. I'm set with your name, what you do, and your blurb—ready whenever you are."
                                 yield ("delta", confirmation)
                                 yielded_any_tokens = True
                                 accumulated += confirmation
-                            except Exception as e:
-                                api_logger.error(f"Failed to execute native tool call {call['name']}: {e}")
-                                # If tool execution fails, we might still want to show what the AI was trying to do?
-                                # For now, just log it.
+                            else:
+                                # For other tools (list/delete), just log success
+                                api_logger.info(f"Tool {tool_name} executed successfully: {tool_result}")
+                                
+                        except Exception as e:
+                            api_logger.error(f"Failed to execute OpenRouter tool call {tool_name}: {e}", exc_info=True)
 
                 # Flush any remaining buffer
                 if is_onboarding_tool and tool_buffer:
@@ -6502,6 +6473,11 @@ async def stream_ai_response(
                         "reminders": structured_reminders if structured_reminders else None
                     })
                 else:
+                    # If we yielded tool results but no text, the LLM returned only tool calls
+                    # Provide minimal confirmation to avoid frontend "unexpected issue" error
+                    if yielded_any_tokens and not accumulated.strip():
+                        accumulated = "Done."
+                        yield ("delta", accumulated)
                     yield ("final", {"text": accumulated, "grounding_metadata": None})
                 return
             except Exception as openrouter_error:  # pragma: no cover - best effort logging
@@ -7065,15 +7041,25 @@ async def generate_ai_response(
             provider = "gemini"
             if not model:
                 model = GEMINI_LIGHT_MODEL
-    elif normalized_model in {"pro", "gray-pro"} or normalized_model.startswith("models/") or normalized_model.startswith("gemini") or initial_provider == "gemini":
+    elif normalized_model in {"pro", "gray-pro"}:
+        # Pro tier routes to Gemini with pro model
+        provider = "gemini"
+        model = GEMINI_PRO_MODEL  # Always set the actual model path for tier alias
+    elif normalized_model == "pioneer":
+        # Pioneer tier is a direct OpenRouter passthrough
+        if OPENROUTER_SERVICE and OPENROUTER_SERVICE.available:
+            provider = "openrouter"
+            # Keep the model as-is if it contains a slash (specific model ID), otherwise use default
+            if "/" not in explicit_model:
+                model = "anthropic/claude-sonnet-4.5"  # Default pioneer model
+        else:
+            provider = "gemini"
+            model = GEMINI_PRO_MODEL
+    elif normalized_model.startswith("models/") or normalized_model.startswith("gemini") or initial_provider == "gemini":
         # Explicitly requested Gemini model or default AI_PROVIDER is Gemini
         provider = "gemini"
         if not model:
-            # Use appropriate Gemini model based on 'pro' alias or general default
-            if normalized_model in {"pro", "gray-pro"}:
-                model = GEMINI_PRO_MODEL
-            else:
-                model = GEMINI_DEFAULT_MODEL
+            model = GEMINI_DEFAULT_MODEL
     else:
         # Fallback to initial_provider if no other specific routing applies
         provider = initial_provider
@@ -7797,7 +7783,7 @@ When answering questions, provide detailed explanations and relevant context to 
 When performing tasks, offer clear and actionable advice or directly execute the task where appropriate. If a task is complex, break it down into manageable steps and guide the user through the process.
 Maintain a warm, approachable, and encouraging tone throughout the conversation.
 If a request is ambiguous or requires more information, proactively ask clarifying questions to better understand the user's intent, offering helpful suggestions or examples where possible.
-Feel free to use natural conversational language, emojis (sparingly, if appropriate for tone), and formatting (like lists or bold text) to enhance readability and engagement, as long as it contributes to clarity and helpfulness.
+Feel free to use natural conversational language and formatting (like lists or bold text) to enhance readability and engagement, as long as it contributes to clarity and helpfulness.
 Avoid simply stating that you are an AI or reiterating your limitations unless directly relevant to the user's query.
 Focus on delivering value and a positive user experience."""
 
@@ -8238,7 +8224,8 @@ async def chat_stream(
                     timing_payload["first_token_ms"] = int(max(0.0, (first_token_time - start_time) * 1000))
                 end_payload["timing"] = timing_payload
                 yield _sse_event("end", end_payload)
-            except Exception as stream_error:  # pragma: no cover - best effort logging
+            except Exception as stream_error:
+                api_logger.error(f"Stream loop error: {stream_error}", exc_info=True)
                 yield _sse_event("error", {"message": str(stream_error)})
 
         headers = {
