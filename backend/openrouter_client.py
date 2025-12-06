@@ -303,9 +303,6 @@ class OpenRouterService:
                 "sort": "price",  # Prioritize cheapest provider
                 "allow_fallbacks": True,
             },
-            # Compress long contexts automatically (middle-out)
-            # https://openrouter.ai/docs/transforms
-            "transforms": ["middle-out"],
         }
 
         # Request usage stats (OpenRouter uses stream_options for this)
@@ -378,6 +375,21 @@ class OpenRouterService:
             str: Content chunks
             dict: Usage statistics (if include_usage=True and available)
         """
+        # DEBUG: Log key parameters to diagnose short response issue
+        import logging
+        _logger = logging.getLogger("openrouter_client")
+        _logger.info(
+            f"[OpenRouter.stream] model={model}, "
+            f"system_prompt_len={len(system_prompt or '')}, "
+            f"history_len={len(conversation_history or [])}, "
+            f"message_len={len(message or '')}, "
+            f"workspace_ctx_len={len(workspace_context or '')}, "
+            f"time_ctx_len={len(time_context or '')}"
+        )
+        if system_prompt:
+            # Log first 200 chars of system prompt to see what's being used
+            _logger.info(f"[OpenRouter.stream] system_prompt_preview: {(system_prompt or '')[:200]}...")
+        
         if not self.available:
             raise RuntimeError("OpenRouter client is not configured (missing API key)")
 

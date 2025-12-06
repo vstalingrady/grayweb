@@ -485,10 +485,17 @@ async def get_current_user(
         full_name = _derive_full_name(email, payload.get("user_metadata") or {})
         try:
             now = datetime.utcnow()
+            
+            # Enforce plan tier logic
+            assigned_plan_tier = "scout"
+            if email and email.lower().strip() == "vstalingrady@gmail.com":
+                assigned_plan_tier = "pioneer"
+                
             insert_values = {
                 "email": email or f"missing-email-{auth_user_id}@example.com",
                 "full_name": full_name,
                 "role": "user",
+                "plan_tier": assigned_plan_tier,
                 "initials": _initials_from_name(full_name),
                 "auth_user_id": auth_user_id,
                 "created_at": now,
@@ -498,7 +505,7 @@ async def get_current_user(
             user = await database.fetch_one(users.select().where(users.c.id == new_id))
             logger.info(
                 "Auto-provisioned user for auth_user_id",
-                extra={"auth_user_id": auth_user_id, "email": email},
+                extra={"auth_user_id": auth_user_id, "email": email, "plan_tier": assigned_plan_tier},
             )
         except Exception as creation_error:
             logger.error(

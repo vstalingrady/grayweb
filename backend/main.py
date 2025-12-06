@@ -3999,13 +3999,13 @@ async def _generate_chat_title_async(
         response = await GEMINI_SERVICE.generate(
             message=f"{prompt_template}\n\n{transcript}",
             conversation_history=None,
-            workspace_context=workspace_context,
+            workspace_context=None,
             system_prompt=load_prompt_from_json(
                 GLOBAL_SYSTEM_PROMPTS_PATH,
                 "title_generation",
                 "Generate a concise title.",
             ),
-            time_context=time_context,
+            time_context=None,
             model=GEMINI_LIGHT_MODEL,
         )
         
@@ -7917,7 +7917,18 @@ async def chat_stream(
             # before switching to the regular chat persona.
             effective_system_prompt = ONBOARDING_SYSTEM_PROMPT
         elif chat_request.system_prompt:
-            effective_system_prompt = chat_request.system_prompt
+            # IMPORTANT: Always include the base expansive Gray persona.
+            # The client may send personalization (user profile, nickname, custom instructions)
+            # but the core "be thoughtful, detailed, engaging" persona should always be present.
+            # Check if the client prompt already contains the base (to avoid duplication).
+            client_prompt = chat_request.system_prompt.strip()
+            base_signature = "You are Gray"  # Unique prefix from DEFAULT_SYSTEM_PROMPT
+            if client_prompt.startswith(base_signature):
+                # Client already sent the full prompt, use as-is
+                effective_system_prompt = client_prompt
+            else:
+                # Client sent personalization only; prepend the base persona
+                effective_system_prompt = f"{DEFAULT_SYSTEM_PROMPT}\n\n{client_prompt}"
         else:
             effective_system_prompt = DEFAULT_SYSTEM_PROMPT
 
@@ -8702,12 +8713,19 @@ Summary:"""
 async def create_user(request: Request, user: UserCreate, db: databases.Database = Depends(get_database)):
     initials = generate_initials(user.full_name)
     now = datetime.utcnow()
+    
+    # Enforce plan tier logic: default to "scout", hardcode "pioneer" for specific user.
+    # We ignore the incoming user.plan_tier to prevent clients from setting it.
+    assigned_plan_tier = "scout"
+    if user.email.lower().strip() == "vstalingrady@gmail.com":
+        assigned_plan_tier = "pioneer"
+
     query = users.insert().values(
         email=user.email.lower(),
         full_name=user.full_name,
         profile_picture_url=user.profile_picture_url,
         role=user.role,
-        plan_tier=user.plan_tier,
+        plan_tier=assigned_plan_tier,
         initials=initials,
         workspace_background_id=user.workspace_background_id,
         auth_user_id=user.auth_user_id,
