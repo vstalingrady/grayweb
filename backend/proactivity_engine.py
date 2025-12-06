@@ -92,12 +92,10 @@ class ProactivityEngine:
     def __init__(
         self,
         db: databases.Database,
-        supabase_client: Any = None,
         realtime_broker: Optional[ProactivityRealtimeBroker] = None,
         ai_generator: Optional[AIMessageGenerator] = None,
     ) -> None:
         self.db = db
-        self.supabase = supabase_client
         self.realtime_broker = realtime_broker
         self.ai_generator = ai_generator
         self._user_data_cache: Dict[int, int] = {}
@@ -735,8 +733,7 @@ class ProactivityEngine:
             "notes": record[3],
         }
 
-    def _conversation_store_available(self) -> bool:
-        return self.supabase is not None
+
 
     def _ensure_user_data_record(self, user_identifier: int) -> Optional[int]:
         """

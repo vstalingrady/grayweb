@@ -3199,7 +3199,6 @@ async def _initialize_proactivity_engine():
     try:
         proactivity_engine = ProactivityEngine(
             database,
-            supabase,
             proactivity_realtime_broker,
             AI_MESSAGE_GENERATOR,
         )
