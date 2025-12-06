@@ -329,6 +329,7 @@
   font-family: var(--font-sans, "Plus Jakarta Sans", sans-serif);
   letter-spacing: 0.08em;
   cursor: pointer;
+  white-space: nowrap;
 }
 
 .authOauthButton:disabled {
