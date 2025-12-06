@@ -3190,8 +3190,26 @@ async def add_security_headers(request: Request, call_next):
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+# Structured error handlers
+try:
+    from error_handlers import register_error_handlers
+    register_error_handlers(app)
+    app_logger.info("Structured error handlers registered", extra={"event_type": "error_handlers_registered"})
+except ImportError:
+    pass  # Optional module
+
 # Middleware
 app.add_middleware(RequestLoggingMiddleware, logger=api_logger)
+
+# Caching headers middleware
+try:
+    from caching_headers import caching_middleware
+    @app.middleware("http")
+    async def add_caching_headers(request, call_next):
+        return await caching_middleware(request, call_next)
+    app_logger.info("Caching headers middleware added", extra={"event_type": "caching_middleware_added"})
+except ImportError:
+    pass  # Optional module
 
 app_logger.info("FastAPI application created with enhanced logging middleware", extra={
     "event_type": "fastapi_created",
@@ -8346,6 +8364,14 @@ async def create_conversation_message(
             "text": payload.text
         }
         await save_conversation_message(conversation_id, payload_dict, user_id=payload.user_id)
+        
+        # Invalidate cache since conversation changed
+        try:
+            from chat_cache import invalidate_conversation_cache
+            await invalidate_conversation_cache(conversation_id)
+        except Exception:
+            pass  # Best effort cache invalidation
+        
         return {"status": "success"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error saving message: {str(e)}")
@@ -8355,10 +8381,31 @@ async def get_conversation(
     conversation_id: str,
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
-  """Get conversation history."""
+  """Get conversation history with Redis caching."""
   try:
     await _require_conversation_owner(conversation_id, current_user)
+    
+    # Try Redis cache first
+    try:
+        from chat_cache import get_cached_messages, cache_messages
+        cached = await get_cached_messages(conversation_id)
+        if cached is not None:
+            return cached
+    except ImportError:
+        pass  # Cache module not available
+    
+    # Fetch from database
     history = await _load_conversation_history(conversation_id, current_user["id"])
+    
+    # Cache the result
+    try:
+        from chat_cache import cache_messages
+        if history and isinstance(history, (list, dict)):
+            messages = history.get("messages", history) if isinstance(history, dict) else history
+            await cache_messages(conversation_id, messages if isinstance(messages, list) else [])
+    except Exception:
+        pass  # Best effort caching
+    
     return history
   except Exception as e:
     raise HTTPException(status_code=500, detail=f"Error fetching conversation: {str(e)}")
