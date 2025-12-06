@@ -10756,6 +10756,13 @@ async def handle_payment_notification(notification: MidtransNotification):
     """
     Handle Midtrans HTTP Notification (Webhook).
     """
+    # Get audit logger
+    try:
+        from audit_logger import get_audit_logger, AuditAction
+        audit = get_audit_logger()
+    except ImportError:
+        audit = None
+    
     # 1. Verify Signature
     is_valid = verify_notification_signature(
         order_id=notification.order_id,
@@ -10766,6 +10773,12 @@ async def handle_payment_notification(notification: MidtransNotification):
 
     if not is_valid:
         app_logger.warning(f"Invalid payment signature for order {notification.order_id}")
+        if audit:
+            await audit.log(
+                AuditAction.SUSPICIOUS_ACTIVITY,
+                details={"order_id": notification.order_id, "reason": "invalid_signature"},
+                severity="warning"
+            )
         raise HTTPException(status_code=400, detail="Invalid signature")
 
     # 2. Update Transaction Status
@@ -10812,6 +10825,34 @@ async def handle_payment_notification(notification: MidtransNotification):
                 await database.execute(user_update)
                 
                 app_logger.info(f" upgraded user {user_id} to {plan_tier} via order {notification.order_id}")
+                
+                # Audit log successful payment
+                if audit:
+                    await audit.log(
+                        AuditAction.PAYMENT_SUCCESS,
+                        user_id=user_id,
+                        details={
+                            "order_id": notification.order_id,
+                            "plan_tier": plan_tier,
+                            "gross_amount": notification.gross_amount
+                        },
+                        severity="info"
+                    )
+        elif new_status in ("failed", "deny", "expired", "cancelled"):
+            # Audit log failed payment
+            if audit:
+                trans_query = transactions.select().where(transactions.c.order_id == notification.order_id)
+                transaction = await database.fetch_one(trans_query)
+                await audit.log(
+                    AuditAction.PAYMENT_FAILED,
+                    user_id=transaction["user_id"] if transaction else None,
+                    details={
+                        "order_id": notification.order_id,
+                        "status": new_status,
+                        "transaction_status": notification.transaction_status
+                    },
+                    severity="warning"
+                )
         
     except Exception as e:
         app_logger.error(f"Error processing payment notification: {e}")
