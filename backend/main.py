@@ -6304,13 +6304,7 @@ async def stream_ai_response(
             yield ("final", {"text": error_msg, "grounding_metadata": None})
             return
         else:
-            # Switch to reasoning model if reasoning_mode is enabled
-            # Grok doesn't output thinking tokens, but DeepSeek R1 does
-            if reasoning_mode:
-                reasoning_model = os.getenv("OPENROUTER_REASONING_MODEL", "deepseek/deepseek-r1")
-                api_logger.info(f"Reasoning mode enabled, switching from {model} to {reasoning_model}")
-                model = reasoning_model
-            
+
             if attachments:
                 api_logger.info(
                     "OpenRouter does not support attachments in this flow; ignoring attachments",
@@ -6349,6 +6343,7 @@ async def stream_ai_response(
                         tools=tool_list,
                         tool_choice="auto",
                         plugins=[{"id": "web", "max_results": 5}] if search_enabled else None,
+                        reasoning_mode=reasoning_mode,
                     ):
                         if isinstance(chunk, dict):
                             # Handle native streaming tool calls

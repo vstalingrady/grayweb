@@ -370,6 +370,7 @@ class OpenRouterService:
         tools: Optional[List[Any]] = None,
         tool_choice: Optional[str] = "auto",
         plugins: Optional[List[Dict[str, Any]]] = None,
+        reasoning_mode: bool = False,
     ) -> AsyncIterator[str | Dict[str, Any]]:
         """Stream response chunks from OpenRouter.
         
@@ -419,6 +420,11 @@ class OpenRouterService:
         # Add plugins for web search, etc.
         if plugins:
             payload["plugins"] = plugins
+
+        # Add reasoning mode if enabled
+        # OpenRouter supports reasoning parameter with effort levels
+        if reasoning_mode:
+            payload["reasoning"] = {"effort": "high"}
 
         # Add system prompt if provided
         system = self._build_system_prompt(system_prompt, workspace_context, time_context)
