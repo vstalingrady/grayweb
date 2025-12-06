@@ -231,7 +231,15 @@ async def overwrite_thread_history(
                 "Error overwriting conversation history in local SQLite", error
             )
 
-    # 3. Update cache
+    # 3. Invalidate Redis cache so deleted messages don't reappear
+    try:
+        from chat_cache import invalidate_conversation_cache
+        import asyncio
+        asyncio.create_task(invalidate_conversation_cache(conversation_id))
+    except ImportError:
+        pass  # Redis cache module not available
+
+    # 4. Update in-memory cache
     cache_conversation_history(conversation_id, user_id, normalized_history)
     return {"id": conversation_id, "message_count": len(normalized_history)}
 

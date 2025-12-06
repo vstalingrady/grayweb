@@ -2390,6 +2390,15 @@ async def _replace_general_conversation_history(user_id: int, history: List[Dict
             },
         )
 
+    # 3. Invalidate Redis cache for General conversation
+    try:
+        from chat_cache import invalidate_conversation_cache
+        import asyncio
+        general_conv_id = f"general:{user_id}"
+        asyncio.create_task(invalidate_conversation_cache(general_conv_id))
+    except ImportError:
+        pass  # Redis cache module not available
+
 
 def _delete_general_conversation_history(user_id: int) -> None:
     if not _conversation_store_available():
@@ -8436,15 +8445,18 @@ async def _overwrite_conversation_history_logic(
             await _replace_general_conversation_history(
                 general_user_id, normalized_history
             )
+            _invalidate_conversation_cache(conversation_id)
             return {
                 "id": conversation_id,
                 "message_count": len(normalized_history),
             }
 
         # Thread conversations delegate to the shared chat_history helper.
-        return await overwrite_thread_history(
+        result = await overwrite_thread_history(
             conversation_id, normalized_history, current_user["id"]
         )
+        _invalidate_conversation_cache(conversation_id)
+        return result
     except HTTPException:
         raise
     except Exception as error:
