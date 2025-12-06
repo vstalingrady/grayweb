@@ -5181,8 +5181,19 @@ async def _complete_onboarding(
             "description": "Onboarding check-ins",
             "cadence": cadence,
         }
-        if time_value:
+        
+        # For "frequent" cadence, set multiple check-in times throughout the day
+        if cadence == "frequent":
+            # Use provided time as first time, then add more throughout the day
+            base_times = ["09:00", "12:00", "15:00", "18:00"]
+            if time_value and time_value not in base_times:
+                # User provided a specific time, include it
+                settings_payload["times"] = sorted(set([time_value] + base_times))
+            else:
+                settings_payload["times"] = base_times
+        elif time_value:
             settings_payload["time"] = time_value
+            
         if timezone:
             settings_payload["timezone"] = timezone
 
