@@ -147,11 +147,12 @@ async def overwrite_thread_history(
 ) -> Dict[str, Any]:
     """
     Overwrite the history for a single thread conversation (non-general).
-    Supabase is used when available; otherwise this becomes a cache-only
-    operation so that callers always receive a best-effort acknowledgement.
+    Updates both Supabase (when available) and local SQLite storage to ensure
+    message deletions persist across cache expiry and page reloads.
     """
     updated_at_iso = datetime.utcnow().isoformat() + "Z"
 
+    # 1. Update Supabase if available
     if _conversation_store_available() and _is_valid_uuid(conversation_id):
         try:
             seed_title = None
@@ -189,6 +190,48 @@ async def overwrite_thread_history(
                 "Error overwriting conversation history", error
             )
 
+    # 2. Update local SQLite database
+    if _is_valid_uuid(conversation_id):
+        try:
+            # Delete existing messages for this thread
+            delete_query = user_chat_messages.delete().where(
+                user_chat_messages.c.thread_id == conversation_id
+            )
+            await database.execute(delete_query)
+
+            # Insert the new history
+            if normalized_history:
+                now = datetime.utcnow()
+                values_list = []
+                for entry in normalized_history:
+                    values_list.append({
+                        "thread_id": conversation_id,
+                        "role": entry.get("role"),
+                        "text": entry.get("text") or "",
+                        "grounding_metadata": entry.get("grounding_metadata"),
+                        "attachments": entry.get("attachments"),
+                        "created_at": now,
+                    })
+
+                if values_list:
+                    # SQLite has a 999-parameter limit; chunk to avoid overflow
+                    insert_query = user_chat_messages.insert()
+                    chunk_size = 150  # 150 * 6 columns = 900 params (< 999)
+                    for i in range(0, len(values_list), chunk_size):
+                        chunk = values_list[i:i + chunk_size]
+                        await database.execute_many(insert_query, chunk)
+
+            # Update thread timestamps
+            update_query = user_chat_threads.update().where(
+                user_chat_threads.c.id == conversation_id
+            ).values(updated_at=datetime.utcnow(), last_message_at=datetime.utcnow())
+            await database.execute(update_query)
+        except Exception as error:
+            _handle_conversation_store_error(
+                "Error overwriting conversation history in local SQLite", error
+            )
+
+    # 3. Update cache
     cache_conversation_history(conversation_id, user_id, normalized_history)
     return {"id": conversation_id, "message_count": len(normalized_history)}
 
