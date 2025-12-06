@@ -23,6 +23,13 @@ security = HTTPBearer()
 _user_cache: Dict[str, tuple[Dict[str, Any], float]] = {}
 _USER_CACHE_TTL = 10.0  # 10 seconds
 
+# Redis cache (L2 - longer TTL, shared across processes)
+try:
+    from redis_client import get_redis_client
+    _redis_client = get_redis_client()
+except ImportError:
+    _redis_client = None
+
 # Optional, explicitly gated insecure fallback for local development.
 # When enabled, the backend may accept JWTs that were NOT validated
 # against Supabase or a shared secret, based only on their payload.
@@ -31,7 +38,7 @@ _ALLOW_INSECURE_JWT_FALLBACK = (
 )
 
 def _get_cached_user(auth_user_id: str) -> Optional[Dict[str, Any]]:
-    """Get user from cache if valid"""
+    """Get user from L1 (in-memory) cache if valid"""
     if auth_user_id in _user_cache:
         user_data, timestamp = _user_cache[auth_user_id]
         if time.time() - timestamp < _USER_CACHE_TTL:
@@ -41,8 +48,27 @@ def _get_cached_user(auth_user_id: str) -> Optional[Dict[str, Any]]:
             del _user_cache[auth_user_id]
     return None
 
+
+async def _get_cached_user_redis(auth_user_id: str) -> Optional[Dict[str, Any]]:
+    """Get user from Redis (L2 cache) - 5 minute TTL"""
+    if not _redis_client or not _redis_client.available:
+        return None
+    try:
+        import asyncio
+        # Connect if not already connected
+        if not _redis_client._client:
+            await _redis_client.connect()
+        data = await _redis_client.get_session(f"user:{auth_user_id}")
+        if data:
+            logger.debug(f"[REDIS] Cache hit for user {auth_user_id}")
+            return data
+    except Exception as e:
+        logger.debug(f"[REDIS] Cache miss or error for user {auth_user_id}: {e}")
+    return None
+
+
 def _cache_user(auth_user_id: str, user_data: Dict[str, Any]):
-    """Cache user data with current timestamp"""
+    """Cache user data in L1 (in-memory)"""
     # Keep cache size reasonable (max 1000 entries)
     if len(_user_cache) > 1000:
         # Remove oldest 20% of entries
@@ -53,10 +79,36 @@ def _cache_user(auth_user_id: str, user_data: Dict[str, Any]):
     _user_cache[auth_user_id] = (user_data, time.time())
 
 
+async def _cache_user_redis(auth_user_id: str, user_data: Dict[str, Any]):
+    """Cache user data in Redis (L2) with 5 minute TTL"""
+    if not _redis_client or not _redis_client.available:
+        return
+    try:
+        if not _redis_client._client:
+            await _redis_client.connect()
+        await _redis_client.set_session(f"user:{auth_user_id}", user_data, ttl=300)
+        logger.debug(f"[REDIS] Cached user {auth_user_id}")
+    except Exception as e:
+        logger.debug(f"[REDIS] Failed to cache user {auth_user_id}: {e}")
+
+
 def invalidate_user_cache(auth_user_id: str):
     """Manually invalidate user cache (e.g. after profile updates)"""
     if auth_user_id in _user_cache:
         del _user_cache[auth_user_id]
+
+
+async def invalidate_user_cache_redis(auth_user_id: str):
+    """Invalidate user cache in Redis"""
+    if not _redis_client or not _redis_client.available:
+        return
+    try:
+        if not _redis_client._client:
+            await _redis_client.connect()
+        await _redis_client.delete_session(f"user:{auth_user_id}")
+        logger.debug(f"[REDIS] Invalidated cache for user {auth_user_id}")
+    except Exception:
+        pass
 
 
 def _decode_token_without_signature(token: str) -> Optional[Dict[str, Any]]:
@@ -381,11 +433,19 @@ async def get_current_user(
             detail="Invalid token payload"
         )
     
-    # Check cache first
+    # Check L1 (in-memory) cache first
     cached_user = _get_cached_user(auth_user_id)
     if cached_user:
-        logger.debug(f"[AUTH PERF] Cache hit for user {auth_user_id}, took {(time.time() - perf_start) * 1000:.2f}ms")
+        logger.debug(f"[AUTH PERF] L1 cache hit for user {auth_user_id}, took {(time.time() - perf_start) * 1000:.2f}ms")
         return cached_user
+    
+    # Check L2 (Redis) cache
+    redis_cached_user = await _get_cached_user_redis(auth_user_id)
+    if redis_cached_user:
+        # Promote to L1 cache
+        _cache_user(auth_user_id, redis_cached_user)
+        logger.debug(f"[AUTH PERF] L2 (Redis) cache hit for user {auth_user_id}, took {(time.time() - perf_start) * 1000:.2f}ms")
+        return redis_cached_user
     
     # Fetch user from database by auth_user_id
     user = await database.fetch_one(users.select().where(users.c.auth_user_id == auth_user_id))
@@ -440,11 +500,12 @@ async def get_current_user(
 
     user_dict = dict(user)
     
-    # Cache the user for future requests
+    # Cache the user in L1 (in-memory) and L2 (Redis)
     _cache_user(auth_user_id, user_dict)
+    await _cache_user_redis(auth_user_id, user_dict)
     
     perf_duration = (time.time() - perf_start) * 1000
-    logger.debug(f"[AUTH PERF] get_current_user took {perf_duration:.2f}ms")
+    logger.debug(f"[AUTH PERF] get_current_user took {perf_duration:.2f}ms (DB fetch)")
 
     return user_dict
 
