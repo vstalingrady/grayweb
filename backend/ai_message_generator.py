@@ -49,11 +49,7 @@ class AIMessageGenerator:
                 "You are Gray, an unfiltered, no-BS AI assistant focused on amplifying the user's momentum while staying helpful, honest, and non-criminal."
             )
         
-        if self.openrouter.available:
-            pass  # Using Grok for proactive messaging
-        elif self.gemini.available:
-            pass  # Using Gemini fallback
-        # else: No AI provider available; proactive messages will be skipped
+        # Provider availability is checked at runtime per request
 
     async def generate_conversation_summary(
         self,
@@ -86,11 +82,25 @@ class AIMessageGenerator:
         )
 
         try:
+            # 1. Try OpenRouter (Grok) first
+            if self.openrouter.available:
+                try:
+                    summary = await self.openrouter.generate(
+                        message=f"Here is the conversation to summarize:\n\n{transcript}",
+                        system_prompt=system_prompt,
+                        model=self.openrouter.lite_model,
+                    )
+                    if summary:
+                        return summary
+                except Exception as e:
+                    print(f"[AIMessageGenerator] OpenRouter (Grok) summary generation failed: {e}")
+
+            # 2. Fallback to Gemini
             if self.gemini and self.gemini.available:
                 response = await self.gemini.generate(
                     message=f"Here is the conversation to summarize:\n\n{transcript}",
                     system_prompt=system_prompt,
-                    model="models/gemini-flash-latest",
+                    model=self.gemini.light_model,
                     conversation_history=None,
                     workspace_context=None,
                     time_context=None
@@ -164,87 +174,76 @@ class AIMessageGenerator:
             "- Tone: warm, honest, encouraging; a mix of friend and coach.\n"
         )
 
-        if not self.gemini or not self.gemini.available:
-            raise RuntimeError("Gemini is not configured for proactive messaging")
-
-        if db:
-            tracker = UsageTracker(db)
+        # Prepare temporal context
+        now_utc = datetime.now(timezone.utc)
+        time_context = f"Check-in requested at {now_utc.isoformat()} UTC for timezone {timezone_str} with cadence '{cadence or 'unspecified'}' and label '{label}'."
+        
+        response_text: Optional[str] = None
+        
+        # 1. Try OpenRouter (Grok) first
+        if self.openrouter.available:
             try:
-                await tracker.check_limits(user_id)
-            except UsageLimitExceeded as e:
-                print(f"[AIMessageGenerator] Usage limit exceeded for user {user_id}: {e}")
-                raise RuntimeError(f"Usage limit exceeded: {e}")
-
-        try:
-            # Give the model temporal context for the check-in.
-            now_utc = datetime.now(timezone.utc)
-            time_context = f"Check-in requested at {now_utc.isoformat()} UTC for timezone {timezone_str} with cadence '{cadence or 'unspecified'}' and label '{label}'."
-
-            gemini_response = await self.gemini.generate(
-                message=user_context,
-                conversation_history=None,
-                workspace_context=None,
-                system_prompt=system_prompt,
-                time_context=time_context,
-                model="models/gemini-flash-latest"
-            )
-            
-            # Extract text from Gemini response
-            if gemini_response and gemini_response.candidates:
-                response = gemini_response.text
-            else:
-                raise RuntimeError("Empty response from Gemini")
-
-            if db and hasattr(gemini_response, "usage_metadata"):
-                tracker = UsageTracker(db)
-                await tracker.track_usage(
-                    user_id,
-                    gemini_response.usage_metadata.prompt_token_count or 0,
-                    gemini_response.usage_metadata.candidates_token_count or 0
+                response_text = await self.openrouter.generate(
+                    message=user_context,
+                    system_prompt=system_prompt,
+                    time_context=time_context,
+                    model=self.openrouter.lite_model,  # Use consistent lite model (Grok 4.1 Fast)
                 )
+            except Exception as e:
+                print(f"[AIMessageGenerator] OpenRouter (Grok) generation failed: {e}")
+                # Fallback to Gemini
+        
+        # 2. Fallback to Gemini if OpenRouter failed or is unavailable
+        if not response_text and self.gemini.available:
+            try:
+                gemini_response = await self.gemini.generate(
+                    message=user_context,
+                    conversation_history=None,
+                    workspace_context=None,
+                    system_prompt=system_prompt,
+                    time_context=time_context,
+                    model=self.gemini.light_model
+                )
+                
+                # Extract text
+                if gemini_response and gemini_response.candidates:
+                    response_text = gemini_response.text
+                    
+                    # Track usage for Gemini
+                    if db and hasattr(gemini_response, "usage_metadata"):
+                        tracker = UsageTracker(db)
+                        await tracker.track_usage(
+                            user_id,
+                            gemini_response.usage_metadata.prompt_token_count or 0,
+                            gemini_response.usage_metadata.candidates_token_count or 0
+                        )
+            except Exception as error:
+                print(f"[AIMessageGenerator] Gemini generation failed: {error}")
 
-        except Exception as error:
-            raise RuntimeError(f"Gemini proactive message generation failed: {error}") from error
-
-        if isinstance(response, str):
-            text = response
-        else:
-            text = getattr(response, "text", "") or ""
-        if not text and getattr(response, "candidates", None):
-            candidate = response.candidates[0]
-            content = getattr(candidate, "content", None)
-            if content:
-                parts_list = getattr(content, "parts", None)
-                if parts_list:
-                    for part in parts_list:
-                        value = getattr(part, "text", None)
-                        if value:
-                            text += value
-
-        cleaned = (text or "").strip()
+        # Validate response
+        cleaned = (response_text or "").strip()
         if not cleaned:
-            raise RuntimeError("Grok proactive message generation returned empty content")
+            raise RuntimeError("Proactive message generation failed (both Grok and Gemini)")
 
-        # Post-process to avoid stale or hard-coded calendar dates like
-        # "Tuesday, November 12th" that can confuse users when the actual date
-        # is different. We normalize these into a simple "today" phrasing.
-        def _strip_explicit_dates(value: str) -> str:
-            patterns = [
-                # "today, November 12th", "today, November 12th, 2025"
-                r"\btoday,\s+(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}(?:st|nd|rd|th)?(?:,\s*\d{4})?",
-                # "today, mid-November", "today, early November"
-                r"\btoday,\s+(?:early|mid|late)[-\s]?(?:January|February|March|April|May|June|July|August|September|October|November|December)",
-                # "on this Tuesday, November 12th", "this Tuesday, November 12th"
-                r"\b(?:on\s+)?this\s+(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),?\s+(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}(?:st|nd|rd|th)?(?:,\s*\d{4})?",
-            ]
-            result = value
-            for pattern in patterns:
-                result = re.sub(pattern, "today", result, flags=re.IGNORECASE)
-            return result
-
-        cleaned = _strip_explicit_dates(cleaned)
+        # Post-process to avoid stale or hard-coded calendar dates
+        cleaned = self._strip_dates(cleaned)
 
         return label, cleaned
+
+    def _strip_dates(self, value: str) -> str:
+        """Normalize explicit date mentions to 'today'."""
+        patterns = [
+            # "today, November 12th", "today, November 12th, 2025"
+            r"\btoday,\s+(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}(?:st|nd|rd|th)?(?:,\s*\d{4})?",
+            # "today, mid-November", "today, early November"
+            r"\btoday,\s+(?:early|mid|late)[-\s]?(?:January|February|March|April|May|June|July|August|September|October|November|December)",
+            # "on this Tuesday, November 12th", "this Tuesday, November 12th"
+            r"\b(?:on\s+)?this\s+(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),?\s+(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}(?:st|nd|rd|th)?(?:,\s*\d{4})?",
+        ]
+        result = value
+        for pattern in patterns:
+            result = re.sub(pattern, "today", result, flags=re.IGNORECASE)
+        return result
 
     async def generate_weekly_review(
         self,

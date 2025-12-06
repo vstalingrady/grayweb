@@ -194,23 +194,65 @@ class ProactivityEngine:
         if cadence in {"manual", "paused"} and not force:
             return None
         last_sent_at = await self._last_notification_timestamp(user_id)
+        
+        # For "frequent" or "realtime" cadence, we only need to respect the minimum interval,
+        # not a specific time window. This allows proactive messages to fire when the user
+        # is actively engaging with the app.
+        is_flexible_cadence = cadence in {"frequent", "realtime", "custom"}
+        
         if last_sent_at:
             last_sent_utc = (
                 last_sent_at if last_sent_at.tzinfo else last_sent_at.replace(tzinfo=dt_timezone.utc)
             ).astimezone(dt_timezone.utc)
-            if datetime.now(dt_timezone.utc) - last_sent_utc < timedelta(seconds=MIN_SEND_INTERVAL_SECONDS):
+            time_since_last = datetime.now(dt_timezone.utc) - last_sent_utc
+            
+            if time_since_last < timedelta(seconds=MIN_SEND_INTERVAL_SECONDS):
                 logger.debug("Skipping duplicate proactivity send", extra={
                     "event_type": "proactivity_send_skipped",
                     "user_id": user_id,
                     "source": source,
+                    "seconds_since_last": time_since_last.total_seconds(),
                 })
                 if not force:
                     return None
+            
+            # For flexible cadences, if we've waited long enough, we can send without a window
+            if is_flexible_cadence and time_since_last >= timedelta(seconds=MIN_SEND_INTERVAL_SECONDS):
+                logger.info("Flexible cadence proactivity triggered", extra={
+                    "event_type": "proactivity_flexible_trigger",
+                    "user_id": user_id,
+                    "source": source,
+                    "cadence": cadence,
+                })
+                return await self._send_proactivity_message(user_id, payload, timezone, source=source)
 
         current_window = self._current_window_bounds(payload, timezone)
-        should_send = force or current_window is not None
+        
+        # For flexible cadences without prior notifications, we can send on first connection
+        # (when last_sent_at is None and user has an active, non-manual cadence)
+        # For "daily" cadence, also fire on first connection of the day
+        is_first_of_day = False
+        if cadence == "daily" and last_sent_at:
+            local_tz = self._resolve_timezone(timezone)
+            local_now = datetime.now(local_tz)
+            last_sent_local = last_sent_at.astimezone(local_tz) if last_sent_at.tzinfo else last_sent_at.replace(tzinfo=local_tz)
+            is_first_of_day = last_sent_local.date() < local_now.date()
+        
+        should_send = (
+            force 
+            or current_window is not None 
+            or (is_flexible_cadence and last_sent_at is None)
+            or (cadence == "daily" and (last_sent_at is None or is_first_of_day))
+        )
 
         if not should_send:
+            logger.debug("Proactivity not triggered - no matching window", extra={
+                "event_type": "proactivity_no_window",
+                "user_id": user_id,
+                "source": source,
+                "cadence": cadence,
+                "has_window": current_window is not None,
+            })
             return None
 
         if not force and last_sent_at and current_window:
