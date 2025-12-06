@@ -6311,6 +6311,13 @@ async def stream_ai_response(
                     extra={"event_type": "ai_attachments_ignored", "provider": provider},
                 )
             
+            # Switch to reasoning model if reasoning_mode is enabled
+            if reasoning_mode:
+                # Grok doesn't support reasoning param yet, so we switch to DeepSeek R1
+                reasoning_model = os.getenv("OPENROUTER_REASONING_MODEL", "deepseek/deepseek-r1")
+                api_logger.info(f"Reasoning mode enabled, switching from {model} to {reasoning_model}")
+                model = reasoning_model
+            
             try:
                 t0_provider = time.perf_counter()
                 

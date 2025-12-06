@@ -224,6 +224,7 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
                     <button
                       className={`${styles.menuItem} ${isExpanded ? styles.menuItemExpanded : ""}`}
                       onClick={() => handleGroupToggle(group.id)}
+                      type="button"
                     >
                       <div className={styles.itemIconWrapper}>
                         <Image src={group.iconPath} alt={group.label} width={18} height={18} />
@@ -245,6 +246,7 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
                             key={model.id}
                             className={`${styles.menuItem} ${selectedModelId === model.id ? styles.menuItemActive : ""} ${styles.subMenuItem}`}
                             onClick={() => handlePioneerSelect(model.id)}
+                            type="button"
                           >
                             <div className={styles.itemInfo}>
                               <div className={styles.itemLabel}>{model.label}</div>
@@ -297,6 +299,7 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
                     className={`${styles.menuItem} ${isActive ? styles.menuItemActive : ""} ${isLocked ? styles.menuItemLocked : ""}`}
                     onClick={() => handleSelect(index)}
                     disabled={isLocked}
+                    type="button"
                   >
                     <div className={styles.itemIconWrapper}>
                       {isLocked ? <Lock size={16} /> : <Icon size={18} />}
