@@ -3207,6 +3207,20 @@ except Exception:  # pragma: no cover
 
 app.include_router(chat_router)
 
+# Health check endpoints
+try:
+    from backend.health_check import router as health_router
+except ImportError:
+    from health_check import router as health_router
+
+app.include_router(health_router)
+
+# Initialize audit logger with database
+try:
+    from backend.audit_logger import init_audit_logger
+except ImportError:
+    from audit_logger import init_audit_logger
+
 # Global proactivity services
 proactivity_engine: Optional[ProactivityEngine] = None
 proactivity_scheduler: Optional[ProactivitySchedulerManager] = None
@@ -3228,6 +3242,9 @@ async def _connect_database():
         db_logger.info("Database connection established via startup event", extra={
             "event_type": "database_connected_startup"
         })
+        # Initialize audit logger with database
+        init_audit_logger(database)
+        db_logger.info("Audit logger initialized", extra={"event_type": "audit_logger_initialized"})
     except Exception as e:
         db_logger.error(
             f"Database connection failed on startup: {e}",
