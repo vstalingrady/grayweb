@@ -148,3 +148,146 @@ user_chat_messages = sqlalchemy.Table(
     sqlalchemy.Column("attachments", sqlalchemy.JSON, nullable=True),
     sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
 )
+
+# Proactivity tables
+proactivity_settings = sqlalchemy.Table(
+    "proactivity_settings",
+    metadata,
+    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
+    sqlalchemy.Column("user_id", sqlalchemy.Integer, nullable=False, index=True),
+    sqlalchemy.Column("payload", sqlalchemy.JSON, nullable=False),
+    sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
+    sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
+)
+
+proactive_notifications = sqlalchemy.Table(
+    "proactive_notifications",
+    metadata,
+    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
+    sqlalchemy.Column("user_id", sqlalchemy.Integer, nullable=False, index=True),
+    sqlalchemy.Column("type", sqlalchemy.String, nullable=False),
+    sqlalchemy.Column("title", sqlalchemy.String, nullable=False),
+    sqlalchemy.Column("message", sqlalchemy.String, nullable=False),
+    sqlalchemy.Column("metadata", sqlalchemy.JSON, nullable=True),
+    sqlalchemy.Column("due_at", sqlalchemy.DateTime, nullable=True),
+    sqlalchemy.Column("sent_at", sqlalchemy.DateTime, default=datetime.utcnow),
+    sqlalchemy.Column("read_at", sqlalchemy.DateTime, nullable=True),
+    sqlalchemy.Column("completed_at", sqlalchemy.DateTime, nullable=True),
+    sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
+)
+
+proactivity_logs = sqlalchemy.Table(
+    "proactivity_logs",
+    metadata,
+    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
+    sqlalchemy.Column("user_id", sqlalchemy.Integer, nullable=False, index=True),
+    sqlalchemy.Column("activity_date", sqlalchemy.DateTime, default=datetime.utcnow),
+    sqlalchemy.Column("tasks_completed", sqlalchemy.Integer, default=0),
+    sqlalchemy.Column("total_tasks", sqlalchemy.Integer, default=0),
+    sqlalchemy.Column("score", sqlalchemy.Integer, default=0),
+    sqlalchemy.Column("notes", sqlalchemy.String, nullable=True),
+    sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
+    sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
+)
+
+proactivity_push_subscriptions = sqlalchemy.Table(
+    "proactivity_push_subscriptions",
+    metadata,
+    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
+    sqlalchemy.Column("user_id", sqlalchemy.Integer, nullable=False, index=True),
+    sqlalchemy.Column("endpoint", sqlalchemy.String, unique=True, nullable=False),
+    sqlalchemy.Column("p256dh", sqlalchemy.String, nullable=False),
+    sqlalchemy.Column("auth", sqlalchemy.String, nullable=False),
+    sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
+    sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
+)
+
+dashboard_pulses = sqlalchemy.Table(
+    "dashboard_pulses",
+    metadata,
+    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
+    sqlalchemy.Column("user_id", sqlalchemy.Integer, nullable=False),
+    sqlalchemy.Column("date_key", sqlalchemy.String, nullable=False),
+    sqlalchemy.Column("timestamp", sqlalchemy.DateTime, nullable=False),
+    sqlalchemy.Column("plans", sqlalchemy.JSON, default=[]),
+    sqlalchemy.Column("habits", sqlalchemy.JSON, default=[]),
+    sqlalchemy.Column("proactivity", sqlalchemy.JSON, default={}),
+    sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
+    sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
+)
+
+# Calendar tables
+calendars = sqlalchemy.Table(
+    "calendars",
+    metadata,
+    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
+    sqlalchemy.Column("user_id", sqlalchemy.Integer, nullable=False, index=True),
+    sqlalchemy.Column("label", sqlalchemy.String, nullable=False),
+    sqlalchemy.Column("color", sqlalchemy.String, nullable=False),
+    sqlalchemy.Column("is_visible", sqlalchemy.Boolean, default=True),
+    sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
+    sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
+)
+
+calendar_events = sqlalchemy.Table(
+    "calendar_events",
+    metadata,
+    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
+    sqlalchemy.Column("user_id", sqlalchemy.Integer, nullable=False, index=True),
+    sqlalchemy.Column("calendar_id", sqlalchemy.Integer, nullable=True),
+    sqlalchemy.Column("title", sqlalchemy.String, nullable=False),
+    sqlalchemy.Column("description", sqlalchemy.String, nullable=True),
+    sqlalchemy.Column("start_time", sqlalchemy.DateTime, nullable=False),
+    sqlalchemy.Column("end_time", sqlalchemy.DateTime, nullable=False),
+    sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
+)
+
+google_calendar_credentials = sqlalchemy.Table(
+    "google_calendar_credentials",
+    metadata,
+    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
+    sqlalchemy.Column("user_id", sqlalchemy.Integer, unique=True, nullable=False),
+    sqlalchemy.Column("access_token", sqlalchemy.String, nullable=False),
+    sqlalchemy.Column("refresh_token", sqlalchemy.String, nullable=False),
+    sqlalchemy.Column("token_uri", sqlalchemy.String, nullable=False),
+    sqlalchemy.Column("client_id", sqlalchemy.String, nullable=False),
+    sqlalchemy.Column("client_secret", sqlalchemy.String, nullable=False),
+    sqlalchemy.Column("scopes", sqlalchemy.String, nullable=False),
+    sqlalchemy.Column("expires_at", sqlalchemy.DateTime, nullable=True),
+    sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
+    sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
+)
+
+file_search_stores = sqlalchemy.Table(
+    "file_search_stores",
+    metadata,
+    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
+    sqlalchemy.Column("user_id", sqlalchemy.Integer, unique=True, nullable=False),
+    sqlalchemy.Column("store_name", sqlalchemy.String, unique=True, nullable=False),
+    sqlalchemy.Column("display_name", sqlalchemy.String, nullable=True),
+    sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
+    sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
+)
+
+media_uploads = sqlalchemy.Table(
+    "media_uploads",
+    metadata,
+    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
+    sqlalchemy.Column("user_id", sqlalchemy.Integer, nullable=False, index=True),
+    sqlalchemy.Column("filename", sqlalchemy.String, nullable=False),
+    sqlalchemy.Column("mime_type", sqlalchemy.String, nullable=False),
+    sqlalchemy.Column("size", sqlalchemy.Integer, nullable=False),
+    sqlalchemy.Column("storage_path", sqlalchemy.String, nullable=False),
+    sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
+)
+
+context_cache = sqlalchemy.Table(
+    "context_cache",
+    metadata,
+    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
+    sqlalchemy.Column("user_id", sqlalchemy.Integer, nullable=False, index=True),
+    sqlalchemy.Column("conversation_id", sqlalchemy.String, nullable=True),
+    sqlalchemy.Column("label", sqlalchemy.String, nullable=True),
+    sqlalchemy.Column("content", sqlalchemy.String, nullable=False),
+    sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
+)

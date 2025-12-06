@@ -1991,6 +1991,7 @@ export function GrayChatView({
     sendGeneralMessage,
     modelTier,
     selectedModelId,
+    reasoningMode,
   } = useChatStore();
   const session = sessionId ? getSession(sessionId) : undefined;
   const sessionExists = Boolean(session);
@@ -2478,6 +2479,7 @@ export function GrayChatView({
             should_generate_title: requestTitleHint,
             web_search_enabled: shouldUseWebSearch,
             model: selectedModelId ?? modelTier, // Pass the selected model ID or tier
+            reasoning_mode: reasoningMode,
             ...(modelTier === "lite" ? { maps_enabled: false, maps_widget: false } : mapPayload),
           },
           { signal: abortController.signal }
@@ -2640,6 +2642,7 @@ export function GrayChatView({
             web_search_enabled: shouldUseWebSearch,
             should_generate_title: requestTitleHint,
             model: selectedModelId ?? modelTier, // Pass the selected model ID or tier
+            reasoning_mode: reasoningMode,
             ...(modelTier === "lite" ? { maps_enabled: false, maps_widget: false } : mapPayload),
           });
           streamedConversationId =

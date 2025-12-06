@@ -141,9 +141,9 @@
 }
 
 .glowIcon {
-  color: #a855f7;
-  /* Purple glow for reasoning logic/brain */
-  filter: drop-shadow(0 0 4px rgba(168, 85, 247, 0.5));
+  color: #ffffff;
+  /* Subtle white glow for reasoning icon */
+  filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.6));
 }
 
 .itemInfo {

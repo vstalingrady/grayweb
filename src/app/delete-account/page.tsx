@@ -17,17 +17,33 @@ export default function DeleteAccountPage() {
   const [confirmationEmail, setConfirmationEmail] = useState("");
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
-  // Check if we are returning from an OAuth flow that was initiated for verification
+  // Handle locking the target user for deletion
   useEffect(() => {
-    const verifiedParam = searchParams?.get("verified");
-    if (verifiedParam === "true") {
-      setIsAuthenticated(true);
-      // Clean up URL
-      const newUrl = new URL(window.location.href);
-      newUrl.searchParams.delete("verified");
-      window.history.replaceState({}, "", newUrl.toString());
+    if (loading || !user) return;
+
+    // If we are starting the flow (not verified yet), lock the target email
+    const isVerified = searchParams?.get("verified") === "true";
+    const storedTarget = window.sessionStorage.getItem("delete_account_target");
+
+    if (!isVerified) {
+      // If we are just arriving effectively as a fresh start for this flow, overwrite
+      // We only do this if we are not already in a weird state? 
+      // Actually, if I just land here, I am deleting MY account.
+      if (storedTarget !== user.email) {
+        window.sessionStorage.setItem("delete_account_target", user.email);
+      }
+    } else {
+      // We are verified (came back from auth)
+      // Check if we have a stored target
+      if (storedTarget && storedTarget !== user.email) {
+        setError(`Account mismatch. You started deletion for ${storedTarget} but logged in as ${user.email}. Please log in as the correct user.`);
+        setStatus("error");
+        // We do NOT set isAuthenticated(false) here, because we want renderBody to show the error message.
+        // The handleDelete function will enforce the safety check.
+      }
     }
-  }, [searchParams]);
+  }, [loading, user, searchParams]);
+
 
   useEffect(() => {
     if (status === "deleting" || status === "success") {
@@ -39,8 +55,53 @@ export default function DeleteAccountPage() {
     }
   }, [loading, router, user, status]);
 
+  // Check if we are returning from an OAuth flow that was initiated for verification
+  useEffect(() => {
+    const verifiedParam = searchParams?.get("verified");
+    if (verifiedParam === "true") {
+      // Check for mismatch before approving authentication
+      const storedTarget = window.sessionStorage.getItem("delete_account_target");
+
+      // We need user to be loaded to compare. 
+      // If user is loading, we wait. This effect depends on searchParams only in original code.
+      // But we need to wait for user to verify.
+
+      // The logic is split. Let's combine or be careful.
+      // If I set isAuthenticated(true) here, the renderBody will show.
+      // If I wait for the other effect to check mismatch, I might flash the UI.
+
+      // Better to coordinate. 
+      // But purely functional:
+      // If verified=true, we WANT to set authenticated.
+      // But if there is a mismatch, we want to BLOCK.
+
+      // Let's modify this effect to only clean URL, and let the mismatch logic handle the auth state?
+      // Or just set authenticated here, and let the mismatch logic immediately unset it and show error?
+      // React state updates are batched usually checking mismatch might happen in next render cycle or same.
+
+      // If I let this run, it sets IsAuthenticated(true).
+      // Then my new effect runs, checks user vs stored, and sets Error + IsAuthenticated(false).
+      // That seems acceptable.
+
+      setIsAuthenticated(true);
+
+      // Clean up URL
+      const newUrl = new URL(window.location.href);
+      newUrl.searchParams.delete("verified");
+      window.history.replaceState({}, "", newUrl.toString());
+    }
+  }, [searchParams]);
+
   const handleDelete = useCallback(async () => {
     if (!user || status === "deleting") {
+      return;
+    }
+
+    // Safety check: Ensure the current user matches the stored target
+    const storedTarget = window.sessionStorage.getItem("delete_account_target");
+    if (storedTarget && storedTarget !== user.email) {
+      setError(`Account mismatch. You started deletion for ${storedTarget} but logged in as ${user.email}.`);
+      setStatus("error");
       return;
     }
 

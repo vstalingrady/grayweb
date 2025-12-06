@@ -232,6 +232,7 @@ class OpenRouterService:
         response_format: Optional[Dict[str, Any]] = None,
         tools: Optional[List[Any]] = None,
         tool_choice: Optional[str] = "auto",
+        plugins: Optional[List[Dict[str, Any]]] = None,
     ) -> str:
         """Generate a complete response from OpenRouter."""
         if not self.available:
@@ -271,6 +272,10 @@ class OpenRouterService:
             payload["tools"] = openai_tools
             if tool_choice:
                 payload["tool_choice"] = tool_choice
+
+        # Add plugins for web search, etc.
+        if plugins:
+            payload["plugins"] = plugins
 
         # Add system prompt if provided
         system = self._build_system_prompt(system_prompt, workspace_context, time_context)
@@ -317,6 +322,7 @@ class OpenRouterService:
         response_format: Optional[Dict[str, Any]] = None,
         tools: Optional[List[Any]] = None,
         tool_choice: Optional[str] = "auto",
+        plugins: Optional[List[Dict[str, Any]]] = None,
     ) -> AsyncIterator[str | Dict[str, Any]]:
         """Stream response chunks from OpenRouter.
         
@@ -363,6 +369,10 @@ class OpenRouterService:
             if tool_choice:
                 payload["tool_choice"] = tool_choice
 
+        # Add plugins for web search, etc.
+        if plugins:
+            payload["plugins"] = plugins
+
         # Add system prompt if provided
         system = self._build_system_prompt(system_prompt, workspace_context, time_context)
         if system:
@@ -377,49 +387,49 @@ class OpenRouterService:
             ) as response:
                 response.raise_for_status()
                 
-                async for line in response.aiter_lines():
-                    if not line or line.strip() == "":
-                        continue
-                    
-                    # OpenRouter uses SSE format: "data: {...}"
-                    if line.startswith("data: "):
-                        data_str = line[6:]  # Remove "data: " prefix
-                        
-                        # Check for stream end marker
-                        if data_str.strip() == "[DONE]":
-                            break
-                        
-                        try:
-                            import json
-                            data = json.loads(data_str)
-                            
-                            # Extract delta content
-                            if "choices" in data and len(data["choices"]) > 0:
-                                delta = data["choices"][0].get("delta", {})
-                                content = delta.get("content")
-                                tool_calls = delta.get("tool_calls")
+                buffer = ""
+                async for chunk in response.aiter_text():
+                    buffer += chunk
 
-                                if tool_calls:
-                                    # Yield tool calls as a structured dictionary to be handled by caller
-                                    yield {"tool_calls": tool_calls}
-
-                                # Some models stream reasoning text via reasoning_details.
-                                reasoning_pieces = []
-                                if not content:
-                                    details = delta.get("reasoning_details") or []
-                                    if isinstance(details, list):
-                                        for item in details:
-                                            text_part = item.get("text") if isinstance(item, dict) else None
-                                            if text_part:
-                                                reasoning_pieces.append(text_part)
-                                if content:
-                                    yield content
-                                elif reasoning_pieces:
-                                    yield "".join(reasoning_pieces)
-                                
-                                # Check for usage stats in the final chunk or separate chunk
-                                if include_usage and "usage" in data:
-                                    yield {"usage": data["usage"]}
-                        except json.JSONDecodeError:
-                            # Skip malformed lines
+                    while "\n" in buffer:
+                        line, buffer = buffer.split("\n", 1)
+                        line = line.strip()
+                        if not line:
                             continue
+                        
+                        if line.startswith("data: "):
+                            data_str = line[6:]
+                            try:
+                                if data_str == "[DONE]":
+                                    return
+
+                                import json
+                                data = json.loads(data_str)
+                                
+                                if "choices" in data and len(data["choices"]) > 0:
+                                    delta = data["choices"][0].get("delta", {})
+                                    content = delta.get("content")
+                                    tool_calls = delta.get("tool_calls")
+                                    
+                                    if tool_calls:
+                                        yield {"tool_calls": tool_calls}
+                                    
+                                    reasoning_pieces = []
+                                    if not content:
+                                        details = delta.get("reasoning_details") or []
+                                        if isinstance(details, list):
+                                            for item in details:
+                                                if isinstance(item, dict):
+                                                    txt = item.get("text")
+                                                    if txt:
+                                                        reasoning_pieces.append(txt)
+                                    
+                                    if content:
+                                        yield content
+                                    elif reasoning_pieces:
+                                        yield "".join(reasoning_pieces)
+
+                                    if include_usage and "usage" in data:
+                                        yield {"usage": data["usage"]}
+                            except Exception:
+                                continue

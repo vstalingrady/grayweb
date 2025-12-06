@@ -217,7 +217,14 @@ def _verify_with_jwks(token: str) -> Optional[Dict[str, Any]]:
         return None
     
     try:
-        # PyJWT can use JWKS directly
+        # Optimization: If token is HS256, it's not using JWKS (which is for RS256/ES256)
+        # Skip JWKS check to avoid "Unable to find signing key" warnings for legacy tokens
+        header = jwt.get_unverified_header(token)
+        if header.get("alg") == "HS256":
+            logger.debug("JWKS: Skipping verification for HS256 token")
+            return None
+
+        # PyJWKClient can be used for asymmetric keys
         from jwt import PyJWKClient
         
         jwks_url = _get_jwks_url()

@@ -2587,7 +2587,11 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
           }
           didUpdate = true;
 
-          const normalizedConversationId = coerceConversationIdForRequest(session.conversationId);
+          // For general sessions, try session.conversationId first, then fall back to generalConversationIdRef
+          let normalizedConversationId = coerceConversationIdForRequest(session.conversationId);
+          if (!normalizedConversationId && session.scope === "general") {
+            normalizedConversationId = coerceConversationIdForRequest(generalConversationIdRef.current);
+          }
           const payload = buildConversationHistoryPayload(filtered);
 
           if (normalizedConversationId) {
