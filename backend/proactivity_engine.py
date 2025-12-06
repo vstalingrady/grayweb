@@ -493,8 +493,9 @@ class ProactivityEngine:
                 },
             }
             try:
-                webpush(
-                    subscription_info,
+                await asyncio.to_thread(
+                    webpush,
+                    subscription_info=subscription_info,
                     data=payload,
                     vapid_private_key=vapid_private,
                     vapid_claims={"sub": "mailto:admin@gray.app"},

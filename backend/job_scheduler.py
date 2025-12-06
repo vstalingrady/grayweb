@@ -218,13 +218,21 @@ async def shutdown(ctx: Dict[str, Any]) -> None:
 async def dispatch_all_proactivity(ctx: Dict[str, Any]) -> None:
     """Cron job to dispatch all due proactive check-ins."""
     logger.info("Running scheduled proactivity dispatch...")
+    print(f"[arq] Running scheduled proactivity dispatch at {datetime.utcnow().isoformat()}Z")
     try:
         engine = ctx.get("proactivity_engine")
         if engine:
             results = await engine.dispatch_all_due(source="arq_cron")
-            logger.info("Proactivity dispatch complete: %d users processed", len(results) if results else 0)
+            users_evaluated = results.get("users_evaluated", 0) if results else 0
+            messages_sent = results.get("messages_sent", 0) if results else 0
+            logger.info("Proactivity dispatch complete: %d users evaluated, %d messages sent", users_evaluated, messages_sent)
+            print(f"[arq] Proactivity dispatch complete: {users_evaluated} users evaluated, {messages_sent} messages sent")
+        else:
+            logger.warning("Proactivity engine not available in arq context")
+            print("[arq] WARNING: Proactivity engine not available in arq context")
     except Exception as e:
         logger.error("Proactivity dispatch failed: %s", e, exc_info=True)
+        print(f"[arq] ERROR: Proactivity dispatch failed: {e}")
 
 
 # Worker settings for running with: arq backend.job_scheduler.WorkerSettings
