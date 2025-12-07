@@ -323,6 +323,11 @@ function GrayPageClientInner({
     setIsMounted(true);
   }, []);
 
+  // Reset chat submit state on navigation to prevent blocking after route changes
+  useEffect(() => {
+    chatSubmitInFlightRef.current = false;
+  }, [pathname, activeChatId]);
+
   useEffect(() => {
     if (typeof window === "undefined") {
       return;

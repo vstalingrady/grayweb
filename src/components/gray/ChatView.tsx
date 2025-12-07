@@ -2211,6 +2211,8 @@ export function GrayChatView({
 
   useEffect(() => {
     setActiveStreamingMessageId(null);
+    // Reset submit state to prevent blocking after navigation
+    isSubmittingRef.current = false;
   }, [session?.id]);
 
   useEffect(() => {
