@@ -85,34 +85,6 @@ except Exception:
         apply_conversation_update,
         update_conversation_title,
     )
-try:
-    from backend.core import conversation_store
-    from backend.core.conversation_store import (
-        configure_conversation_store,
-        get_or_create_conversation,
-        save_conversation_message,
-        get_cached_user,
-        cache_conversation_history,
-        append_to_conversation_cache,
-        invalidate_conversation_cache,
-        delete_supabase_user_records,
-        CONVERSATION_OWNER_CACHE,
-        GENERAL_CONVERSATION_PREFIX,
-    )
-except Exception:  # When running with backend/ on sys.path directly (tests)
-    from core import conversation_store  # type: ignore
-    from core.conversation_store import (  # type: ignore
-        configure_conversation_store,
-        get_or_create_conversation,
-        save_conversation_message,
-        get_cached_user,
-        cache_conversation_history,
-        append_to_conversation_cache,
-        invalidate_conversation_cache,
-        delete_supabase_user_records,
-        CONVERSATION_OWNER_CACHE,
-        GENERAL_CONVERSATION_PREFIX,
-    )
 from uuid import UUID, uuid4
 from pathlib import Path
 from urllib.parse import urlparse
@@ -739,171 +711,18 @@ GLOBAL_SYSTEM_PROMPTS_PATH = ROOT_DIR / "public" / "system-prompts.json"
 ONBOARDING_PROMPT_PATH = PROMPTS_DIR / "onboarding.txt"
 
 
-def _ensure_sqlite_users_auth_column():
-    if not DATABASE_URL.startswith("sqlite"):
-        return
-    db_path = DATABASE_URL.replace("sqlite:///", "", 1)
-    if not db_path:
-        return
-    try:
-        conn = sqlite3.connect(db_path)
-        try:
-            cursor = conn.execute("PRAGMA table_info(users)")
-            columns = {row[1] for row in cursor.fetchall()}
-            if "auth_user_id" not in columns:
-                conn.execute("ALTER TABLE users ADD COLUMN auth_user_id TEXT")
-                conn.commit()
-        finally:
-            conn.close()
-    except sqlite3.Error as exc:
-        app_logger.error(
-            "Failed to ensure auth_user_id column on sqlite users table",
-            extra={"event_type": "sqlite_migration_error", "error": str(exc)},
-        )
-
-
-def _ensure_sqlite_has_seen_chat_column():
-    if not DATABASE_URL.startswith("sqlite"):
-        return
-    db_path = DATABASE_URL.replace("sqlite:///", "", 1)
-    if not db_path:
-        return
-    try:
-        conn = sqlite3.connect(db_path)
-        try:
-            cursor = conn.execute("PRAGMA table_info(users)")
-            columns = {row[1] for row in cursor.fetchall()}
-            if "has_seen_general_chat" not in columns:
-                conn.execute("ALTER TABLE users ADD COLUMN has_seen_general_chat BOOLEAN DEFAULT 0")
-                conn.commit()
-            # Backfill nulls to the default so Pydantic validation doesn't see None
-            conn.execute("UPDATE users SET has_seen_general_chat = 0 WHERE has_seen_general_chat IS NULL")
-            conn.commit()
-        finally:
-            conn.close()
-    except sqlite3.Error as exc:
-        app_logger.error(
-            "Failed to ensure has_seen_general_chat column on sqlite users table",
-            extra={"event_type": "sqlite_migration_error", "error": str(exc)},
-        )
-
-
-def _ensure_sqlite_maps_enabled_column():
-    if not DATABASE_URL.startswith("sqlite"):
-        return
-    db_path = DATABASE_URL.replace("sqlite:///", "", 1)
-    if not db_path:
-        return
-    try:
-        conn = sqlite3.connect(db_path)
-        try:
-            cursor = conn.execute("PRAGMA table_info(users)")
-            columns = {row[1] for row in cursor.fetchall()}
-            if "maps_enabled" not in columns:
-                conn.execute("ALTER TABLE users ADD COLUMN maps_enabled BOOLEAN DEFAULT 0")
-                conn.commit()
-            # Backfill nulls to the default so Pydantic validation doesn't see None
-            conn.execute("UPDATE users SET maps_enabled = 0 WHERE maps_enabled IS NULL")
-            conn.commit()
-        finally:
-            conn.close()
-    except sqlite3.Error as exc:
-        app_logger.error(
-            "Failed to ensure maps_enabled column on sqlite users table",
-            extra={"event_type": "sqlite_migration_error", "error": str(exc)},
-        )
-
-
-def _ensure_sqlite_usage_columns():
-    if not DATABASE_URL.startswith("sqlite"):
-        return
-    db_path = DATABASE_URL.replace("sqlite:///", "", 1)
-    if not db_path:
-        return
-    try:
-        conn = sqlite3.connect(db_path)
-        try:
-            cursor = conn.execute("PRAGMA table_info(users)")
-            columns = {row[1] for row in cursor.fetchall()}
-
-            missing_alters = []
-            if "daily_token_usage" not in columns:
-                missing_alters.append("ALTER TABLE users ADD COLUMN daily_token_usage INTEGER DEFAULT 0")
-            if "monthly_cost_usage" not in columns:
-                missing_alters.append("ALTER TABLE users ADD COLUMN monthly_cost_usage REAL DEFAULT 0")
-            if "weekly_cost_usage" not in columns:
-                missing_alters.append("ALTER TABLE users ADD COLUMN weekly_cost_usage REAL DEFAULT 0")
-            if "six_hour_cost_usage" not in columns:
-                missing_alters.append("ALTER TABLE users ADD COLUMN six_hour_cost_usage REAL DEFAULT 0")
-            if "last_daily_reset" not in columns:
-                missing_alters.append("ALTER TABLE users ADD COLUMN last_daily_reset TEXT")
-            if "last_monthly_reset" not in columns:
-                missing_alters.append("ALTER TABLE users ADD COLUMN last_monthly_reset TEXT")
-            if "last_weekly_reset" not in columns:
-                missing_alters.append("ALTER TABLE users ADD COLUMN last_weekly_reset TEXT")
-            if "last_six_hour_reset" not in columns:
-                missing_alters.append("ALTER TABLE users ADD COLUMN last_six_hour_reset TEXT")
-            # New per-user Gemini Pro counters
-            if "daily_gemini_pro_usage" not in columns:
-                missing_alters.append("ALTER TABLE users ADD COLUMN daily_gemini_pro_usage INTEGER DEFAULT 0")
-            if "last_daily_gemini_pro_reset" not in columns:
-                missing_alters.append("ALTER TABLE users ADD COLUMN last_daily_gemini_pro_reset TEXT")
-
-            for statement in missing_alters:
-                conn.execute(statement)
-            if missing_alters:
-                conn.commit()
-
-            # Backfill nulls for counters to zero to avoid None in logic
-            conn.execute(
-                """
-                UPDATE users
-                SET daily_token_usage = COALESCE(daily_token_usage, 0),
-                    monthly_cost_usage = COALESCE(monthly_cost_usage, 0),
-                    weekly_cost_usage = COALESCE(weekly_cost_usage, 0),
-                    six_hour_cost_usage = COALESCE(six_hour_cost_usage, 0),
-                    daily_gemini_pro_usage = COALESCE(daily_gemini_pro_usage, 0)
-                """
-            )
-            conn.commit()
-        finally:
-            conn.close()
-    except sqlite3.Error as exc:
-        app_logger.error(
-            "Failed to ensure usage columns on sqlite users table",
-            extra={"event_type": "sqlite_migration_error", "error": str(exc)},
-        )
-
-
-def _ensure_sqlite_workspace_background_column():
-    if not DATABASE_URL.startswith("sqlite"):
-        return
-    db_path = DATABASE_URL.replace("sqlite:///", "", 1)
-    if not db_path:
-        return
-    try:
-        conn = sqlite3.connect(db_path)
-        try:
-            cursor = conn.execute("PRAGMA table_info(users)")
-            columns = {row[1] for row in cursor.fetchall()}
-            if "workspace_background_id" not in columns:
-                conn.execute("ALTER TABLE users ADD COLUMN workspace_background_id TEXT")
-                conn.commit()
-        finally:
-            conn.close()
-    except sqlite3.Error as exc:
-        app_logger.error(
-            "Failed to ensure workspace_background_id column on sqlite users table",
-            extra={"event_type": "sqlite_migration_error", "error": str(exc)},
-        )
-
-
-def _ensure_sqlite_user_data_columns():
+def _ensure_sqlite_columns(
+    table: str,
+    columns: List[Tuple[str, str, Optional[str]]],
+    backfill_nulls: Optional[Dict[str, str]] = None,
+) -> None:
     """
-    Ensure local SQLite user_data table has the JSON profile fields expected by the app.
+    Add missing columns to a SQLite table.
 
-    Older SQLite schemas created only nickname/occupation/about/custom_instructions, but
-    the runtime models expect profile/context/metadata/workspace_context columns too.
+    Args:
+        table: Table name
+        columns: List of (column_name, column_type, default_value) tuples
+        backfill_nulls: Optional dict of {column: default_value} for NULL backfill
     """
     if not DATABASE_URL.startswith("sqlite"):
         return
@@ -913,33 +732,32 @@ def _ensure_sqlite_user_data_columns():
     try:
         conn = sqlite3.connect(db_path)
         try:
-            cursor = conn.execute("PRAGMA table_info(user_data)")
-            columns = {row[1] for row in cursor.fetchall()}
-
-            missing_alters = []
-            if "profile" not in columns:
-                missing_alters.append("ALTER TABLE user_data ADD COLUMN profile JSON")
-            if "context" not in columns:
-                missing_alters.append("ALTER TABLE user_data ADD COLUMN context JSON")
-            if "metadata" not in columns:
-                missing_alters.append("ALTER TABLE user_data ADD COLUMN metadata JSON")
-            if "workspace_context" not in columns:
-                missing_alters.append("ALTER TABLE user_data ADD COLUMN workspace_context TEXT")
-
-            for statement in missing_alters:
-                conn.execute(statement)
-            if missing_alters:
+            cursor = conn.execute(f"PRAGMA table_info({table})")
+            existing = {row[1] for row in cursor.fetchall()}
+            added = False
+            for col_name, col_type, default in columns:
+                if col_name not in existing:
+                    default_clause = f" DEFAULT {default}" if default is not None else ""
+                    conn.execute(f"ALTER TABLE {table} ADD COLUMN {col_name} {col_type}{default_clause}")
+                    added = True
+            if added:
+                conn.commit()
+            # Backfill NULLs if specified
+            if backfill_nulls:
+                updates = ", ".join(f"{col} = COALESCE({col}, {val})" for col, val in backfill_nulls.items())
+                conn.execute(f"UPDATE {table} SET {updates}")
                 conn.commit()
         finally:
             conn.close()
     except sqlite3.Error as exc:
         app_logger.error(
-            "Failed to ensure profile/context columns on sqlite user_data table",
-            extra={"event_type": "sqlite_migration_error", "error": str(exc)},
+            "SQLite migration failed",
+            extra={"event_type": "sqlite_migration_error", "table": table, "error": str(exc)},
         )
 
 
-def _ensure_sqlite_personalization_show_calendar_column():
+def _ensure_sqlite_table(table: str, create_sql: str) -> None:
+    """Create a SQLite table if it doesn't exist."""
     if not DATABASE_URL.startswith("sqlite"):
         return
     db_path = DATABASE_URL.replace("sqlite:///", "", 1)
@@ -948,56 +766,21 @@ def _ensure_sqlite_personalization_show_calendar_column():
     try:
         conn = sqlite3.connect(db_path)
         try:
-            cursor = conn.execute("PRAGMA table_info(users)")
-            columns = {row[1] for row in cursor.fetchall()}
-            if "personalization_show_calendar" not in columns:
-                conn.execute("ALTER TABLE users ADD COLUMN personalization_show_calendar BOOLEAN DEFAULT 1")
-                conn.commit()
-        finally:
-            conn.close()
-    except sqlite3.Error as exc:
-        app_logger.error(
-            "Failed to ensure personalization_show_calendar column on sqlite users table",
-            extra={"event_type": "sqlite_migration_error", "error": str(exc)},
-        )
-
-
-# Database configuration
-# DATABASE_URL imported from backend.database
-
-def _ensure_sqlite_general_chat_table():
-    if not DATABASE_URL.startswith("sqlite"):
-        return
-    db_path = DATABASE_URL.replace("sqlite:///", "", 1)
-    if not db_path:
-        return
-    try:
-        conn = sqlite3.connect(db_path)
-        try:
-            cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='general_chat_messages'")
+            cursor = conn.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name='{table}'")
             if not cursor.fetchone():
-                conn.execute("""
-                    CREATE TABLE general_chat_messages (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        user_id INTEGER,
-                        user_data_id INTEGER,
-                        role VARCHAR,
-                        content VARCHAR,
-                        grounding_metadata JSON,
-                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                        FOREIGN KEY(user_id) REFERENCES users(id)
-                    )
-                """)
+                conn.execute(create_sql)
                 conn.commit()
         finally:
             conn.close()
     except sqlite3.Error as exc:
         app_logger.error(
-            "Failed to ensure general_chat_messages table on sqlite",
-            extra={"event_type": "sqlite_migration_error", "error": str(exc)},
+            "SQLite table creation failed",
+            extra={"event_type": "sqlite_migration_error", "table": table, "error": str(exc)},
         )
 
-def _ensure_sqlite_indices():
+
+def _ensure_sqlite_index(table: str, index_name: str, column: str) -> None:
+    """Create a SQLite index if it doesn't exist."""
     if not DATABASE_URL.startswith("sqlite"):
         return
     db_path = DATABASE_URL.replace("sqlite:///", "", 1)
@@ -1006,42 +789,75 @@ def _ensure_sqlite_indices():
     try:
         conn = sqlite3.connect(db_path)
         try:
-            # Ensure the user_chat_messages table exists before inspecting indices.
-            cursor = conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name='user_chat_messages'"
-            )
+            # Check if table exists first
+            cursor = conn.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name='{table}'")
             if not cursor.fetchone():
-                app_logger.info(
-                    "Skipping sqlite index check; user_chat_messages table does not exist",
-                    extra={"event_type": "sqlite_index_skip_no_table"},
-                )
+                app_logger.info(f"Skipping index check; {table} table does not exist")
                 return
-            # Check for thread_id index on user_chat_messages
-            cursor = conn.execute("PRAGMA index_list(user_chat_messages)")
+            cursor = conn.execute(f"PRAGMA index_list({table})")
             indices = {row[1] for row in cursor.fetchall()}
-            # SQLAlchemy naming convention or manual name
-            index_name = "ix_user_chat_messages_thread_id"
             if index_name not in indices:
-                app_logger.info("Creating missing index on user_chat_messages.thread_id")
-                conn.execute(f"CREATE INDEX {index_name} ON user_chat_messages (thread_id)")
+                app_logger.info(f"Creating missing index {index_name} on {table}.{column}")
+                conn.execute(f"CREATE INDEX {index_name} ON {table} ({column})")
                 conn.commit()
         finally:
             conn.close()
     except sqlite3.Error as exc:
         app_logger.error(
-            "Failed to ensure indices on sqlite",
-            extra={"event_type": "sqlite_migration_error", "error": str(exc)},
+            "SQLite index creation failed",
+            extra={"event_type": "sqlite_migration_error", "table": table, "error": str(exc)},
         )
 
-_ensure_sqlite_users_auth_column()
-_ensure_sqlite_has_seen_chat_column()
-_ensure_sqlite_maps_enabled_column()
-_ensure_sqlite_usage_columns()
-_ensure_sqlite_workspace_background_column()
-_ensure_sqlite_personalization_show_calendar_column()
-_ensure_sqlite_user_data_columns()
-_ensure_sqlite_general_chat_table()
-_ensure_sqlite_indices()
+
+# Run all SQLite migrations using the unified helpers
+_ensure_sqlite_columns("users", [
+    ("auth_user_id", "TEXT", None),
+    ("has_seen_general_chat", "BOOLEAN", "0"),
+    ("maps_enabled", "BOOLEAN", "0"),
+    ("daily_token_usage", "INTEGER", "0"),
+    ("monthly_cost_usage", "REAL", "0"),
+    ("weekly_cost_usage", "REAL", "0"),
+    ("six_hour_cost_usage", "REAL", "0"),
+    ("last_daily_reset", "TEXT", None),
+    ("last_monthly_reset", "TEXT", None),
+    ("last_weekly_reset", "TEXT", None),
+    ("last_six_hour_reset", "TEXT", None),
+    ("daily_gemini_pro_usage", "INTEGER", "0"),
+    ("last_daily_gemini_pro_reset", "TEXT", None),
+    ("workspace_background_id", "TEXT", None),
+    ("personalization_show_calendar", "BOOLEAN", "1"),
+], backfill_nulls={
+    "has_seen_general_chat": "0",
+    "maps_enabled": "0",
+    "daily_token_usage": "0",
+    "monthly_cost_usage": "0",
+    "weekly_cost_usage": "0",
+    "six_hour_cost_usage": "0",
+    "daily_gemini_pro_usage": "0",
+})
+
+_ensure_sqlite_columns("user_data", [
+    ("profile", "JSON", None),
+    ("context", "JSON", None),
+    ("metadata", "JSON", None),
+    ("workspace_context", "TEXT", None),
+])
+
+_ensure_sqlite_table("general_chat_messages", """
+    CREATE TABLE general_chat_messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        user_data_id INTEGER,
+        role VARCHAR,
+        content VARCHAR,
+        grounding_metadata JSON,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(user_id) REFERENCES users(id)
+    )
+""")
+
+_ensure_sqlite_index("user_chat_messages", "ix_user_chat_messages_thread_id", "thread_id")
+
 
 # database and metadata imported from backend.database
 
@@ -1104,53 +920,29 @@ REMINDER_FUNCTION_NAMES = (
     "complete_onboarding",
 )
 
+# Shared keyword sets for tool/reminder detection
+REMINDER_KEYWORDS = frozenset({
+    "reminder", "remind", "ping", "nudge", "notify", "timer", "alarm", "alert",
+    "goal", "plan", "habit", "schedule", "deadline", "due", "task", "todo",
+})
+
+TOOL_TRIGGER_KEYWORDS = REMINDER_KEYWORDS | frozenset({
+    "meeting", "appointment", "call", "checkin", "check-in", "check in",
+    "sync", "standup", "doctor", "dentist", "gym", "workout", "project", "routine",
+    "at", "tomorrow", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
+})
+
+
 def _needs_structured_tools(message: str) -> bool:
+    """Check if message likely requires tool execution (reminders, calendar, etc)."""
     normalized = (message or "").lower()
-    if not normalized:
-        return False
-    tool_keywords = [
-        "reminder",
-        "remind",
-        "ping",
-        "nudge",
-        "notify",
-        "timer",
-        "alarm",
-        "alert",
-        "plan",
-        "habit",
-        "schedule",
-        "deadline",
-        "due",
-        "task",
-        "todo",
-        "meeting",
-        "appointment",
-        "call",
-        "checkin",
-        "check-in",
-        "check in",
-        "sync",
-        "standup",
-        "doctor",
-        "dentist",
-        "gym",
-        "workout",
-        "deadline",
-        "project",
-        "habit",
-        "routine",
-    "at", # aggressive, but "at 5pm" is a strong signal
-    "tomorrow",
-    "monday",
-    "tuesday",
-    "wednesday",
-    "thursday",
-    "friday",
-    "saturday",
-    "sunday",
-    ]
-    return any(token in normalized for token in tool_keywords)
+    return bool(normalized) and any(kw in normalized for kw in TOOL_TRIGGER_KEYWORDS)
+
+
+def _should_request_structured_reminders(message: str) -> bool:
+    """Check if message specifically relates to reminder functionality."""
+    normalized = (message or "").lower()
+    return bool(normalized) and any(kw in normalized for kw in REMINDER_KEYWORDS)
 
 
 def _split_env_list(value: Optional[str]) -> List[str]:
@@ -1175,31 +967,6 @@ def _prefers_gemini_model(normalized_model: str) -> bool:
         "pro",
         "gray-pro",
     }
-
-
-def _should_request_structured_reminders(message: str) -> bool:
-    normalized = (message or "").lower()
-    if not normalized:
-        return False
-    keywords = [
-        "reminder",
-        "remind",
-        "ping",
-        "nudge",
-        "notify",
-        "timer",
-        "alarm",
-        "alert",
-        "goal",
-        "plan",
-        "habit",
-        "schedule",
-        "deadline",
-        "due",
-        "task",
-        "todo",
-    ]
-    return any(keyword in normalized for keyword in keywords)
 
 
 def _materialize_structured_reminders(raw_text: str) -> Tuple[str, Optional[List[Dict[str, Any]]]]:
