@@ -296,7 +296,6 @@ class OpenRouterService:
         payload: Dict[str, Any] = {
             "model": resolved_model,
             "messages": messages,
-            "max_tokens": self._max_tokens,
             "temperature": self._temperature,
             # OpenRouter optimizations: https://openrouter.ai/docs/provider-routing
             "provider": {
@@ -417,7 +416,6 @@ class OpenRouterService:
         payload: Dict[str, Any] = {
             "model": resolved_model,
             "messages": messages,
-            "max_tokens": self._max_tokens,
             "temperature": self._temperature,
             "stream": True,  # Enable streaming
             # OpenRouter optimizations: https://openrouter.ai/docs/provider-routing
