@@ -60,6 +60,7 @@ import {
   parseGrayTitleMarkers,
   formatConversationTitle,
   coerceConversationIdForRequest,
+  buildConversationHistoryPayload,
 } from "./chat/utils";
 import { extractGrayRemindersFromText, buildReminderConfirmationText } from "./chat/reminderUtils";
 import {
