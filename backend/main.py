@@ -6260,7 +6260,7 @@ async def stream_ai_response(
                         
                         # Skip follow-up call for read-only list tools (optimization)
                         # These just return data - no need for LLM to summarize
-                        read_only_tools = {"list_calendar_events", "list_plans", "list_habits", "list_reminders", "get_workspace_state", "fetch_proactivity_summary"}
+                        read_only_tools = {"list_calendar_events", "list_plans", "list_habits", "list_reminders", "fetch_proactivity_summary"}
                         all_read_only = all(tr.get("tool") in read_only_tools for tr in tool_results)
                         
                         if all_read_only:
