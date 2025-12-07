@@ -191,10 +191,28 @@ const sendReminderNotification = (reminder: Reminder) => {
   }
 };
 
-
-
-
-
+/**
+ * Create a new ChatMessage object with proper id and timestamp.
+ */
+const makeMessage = (
+  role: ChatRole,
+  content: string,
+  tempId?: string,
+  metadata?: GroundingMetadata
+): ChatMessage => {
+  const now = Date.now();
+  return {
+    id:
+      tempId ??
+      (typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `msg-${role}-${now}-${Math.random().toString(36).slice(2, 10)}`),
+    role,
+    content,
+    createdAt: now,
+    groundingMetadata: metadata ?? undefined,
+  };
+};
 
 
 const createEmptyGeneralSession = (timestamp?: number, conversationId?: string | null): ChatSession => {
