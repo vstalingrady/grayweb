@@ -91,6 +91,22 @@ export const normalizeAssistantContent = (candidate: string | null | undefined, 
     return trimmed.length > 0 ? trimmed : buildAssistantReply(prompt);
 };
 
+// Import extractGrayRemindersFromText lazily to avoid module-level circular dependency issues.
+// This function is used to normalize assistant messages and extract reminders.
+export const normalizeAssistantMessage = (
+    role: string,
+    content: string | null | undefined
+): { content: string; reminders: import("./types").GrayReminderCreatedPayload[] } => {
+    // Only process assistant messages
+    if (role !== "assistant" && role !== "model") {
+        return { content: content ?? "", reminders: [] };
+    }
+    // Lazy import to avoid circular dependencies
+    const { extractGrayRemindersFromText } = require("./reminderUtils");
+    const result = extractGrayRemindersFromText(content ?? "");
+    return { content: result.cleanText, reminders: result.reminders };
+};
+
 // Reminder utilities
 const normalizeReminderLabel = (label?: string | null) => {
     if (!label) {

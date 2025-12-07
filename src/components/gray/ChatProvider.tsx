@@ -48,6 +48,7 @@ import {
   buildAssistantReply,
   buildAssistantErrorReply,
   normalizeAssistantContent,
+  normalizeAssistantMessage,
   shouldIncludeWorkspaceContext,
   resolveClientTimezone,
   buildSessionStorageKeyCandidates,
