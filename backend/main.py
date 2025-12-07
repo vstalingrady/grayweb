@@ -6859,6 +6859,7 @@ async def generate_ai_response(
                 )
             try:
                 # response_format initialized in outer scope
+                grounding_metadata = None  # Initialize before potential use
                 response_text = await OPENROUTER_SERVICE.generate(
                     message,
                     conversation_history,
