@@ -7921,46 +7921,18 @@ async def chat_stream(
                     grounding_metadata_payload,
                 )
 
-                # Generate title SYNCHRONOUSLY before sending end event so client gets it
-                ai_generated_title: Optional[str] = None
+                # Generate title in background (fire-and-forget)
+                # Frontend uses fallback title immediately, updates if needed later
                 if chat_request.should_generate_title:
-                    try:
-                        if GEMINI_SERVICE and GEMINI_SERVICE.available:
-                            prompt_template = load_prompt_from_json(
-                                GLOBAL_SYSTEM_PROMPTS_PATH,
-                                "title_generation",
-                                "Analyze the following conversation and generate a concise, descriptive title (under 25 characters, 3-5 words max). Output ONLY the title text, no tags or quotes."
-                            )
-                            transcript = f"User: {effective_message}\nAssistant: {final_response}"
-                            response = await GEMINI_SERVICE.generate(
-                                message=f"{prompt_template}\n\n{transcript}",
-                                conversation_history=None,
-                                workspace_context=None,
-                                system_prompt=load_prompt_from_json(
-                                    GLOBAL_SYSTEM_PROMPTS_PATH,
-                                    "title_generation",
-                                    "Generate a concise title.",
-                                ),
-                                time_context=None,
-                                model=GEMINI_LIGHT_MODEL,
-                            )
-                            if response and response.candidates:
-                                raw_title = _candidate_text(response.candidates[0]).strip()
-                                clean_title = re.sub(r'^["\']|["\']$', '', raw_title)
-                                clean_title = re.sub(r'<[^>]+>', '', clean_title).strip()
-                                if clean_title:
-                                    ai_generated_title = clean_title
-                                    # Update DB in background
-                                    background_tasks.add_task(
-                                        _update_conversation_title,
-                                        conversation_id,
-                                        clean_title
-                                    )
-                    except Exception as title_err:
-                        api_logger.warning(f"Inline title generation failed: {title_err}", extra={"event_type": "title_generation_error"})
+                    background_tasks.add_task(
+                        _generate_chat_title_async,
+                        conversation_id,
+                        effective_message,
+                        final_response,
+                    )
 
-                # Use AI-generated title if available, otherwise fallback
-                final_title = ai_generated_title if ai_generated_title else session_title
+                # Use immediate fallback title - async generation will update DB later
+                final_title = session_title
 
                 end_payload: Dict[str, Any] = {
                     "conversation_id": conversation_id,
