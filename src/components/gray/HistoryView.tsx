@@ -3,6 +3,8 @@
 
 import { useMemo, useState } from "react";
 import { Search, ExternalLink, Pencil, Trash2 } from "lucide-react";
+import Skeleton from "react-loading-skeleton";
+import "react-loading-skeleton/dist/skeleton.css";
 import styles from "@/app/gray/GrayPageClient.module.css";
 import {
   type SidebarHistoryEntry,
@@ -91,7 +93,13 @@ export function GrayHistoryView({
               const content = (
                 <div className={styles.historyRowTitle}>
                   {entry.isGeneratingTitle ? (
-                    <span className={styles.skeletonTitle} aria-label="Generating title..." />
+                    <Skeleton
+                      width={120}
+                      height={14}
+                      borderRadius={999}
+                      baseColor="rgba(255, 255, 255, 0.06)"
+                      highlightColor="rgba(255, 255, 255, 0.15)"
+                    />
                   ) : (
                     <span>{entry.title}</span>
                   )}
