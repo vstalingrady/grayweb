@@ -2614,11 +2614,7 @@ function GrayPageClientInner({
 }
 
 export default function GrayPageClient(props: GrayPageClientProps) {
-  const { variant = "general", activeChatId = null } = props;
-  return (
-    <GrayPageClientInner
-      key={variant === "chat" ? `chat-${activeChatId ?? "new"}` : "gray-root"}
-      {...props}
-    />
-  );
+  // Removed dynamic key that was causing full remount on chat switch.
+  // The activeChatId synchronization useEffect handles chat switching via state updates.
+  return <GrayPageClientInner {...props} />;
 }
