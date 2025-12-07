@@ -691,8 +691,9 @@ SEARCH_TOOL = types.Tool(
 )
 
 # PLAN_TOOLS not included by default - added conditionally based on message intent
+# CALENDAR_TOOLS removed from default - tool definitions add ~2s latency to OpenRouter
 # This prevents the LLM from calling get_workspace_state on simple casual messages
-DEFAULT_CHAT_TOOLS = [SEARCH_TOOL, *CALENDAR_TOOLS]
+DEFAULT_CHAT_TOOLS = [SEARCH_TOOL]
 
 PROMPTS_DIR = ROOT_DIR / "backend" / "prompts"
 GLOBAL_SYSTEM_PROMPTS_PATH = ROOT_DIR / "public" / "system-prompts.json"
@@ -6245,9 +6246,9 @@ async def stream_ai_response(
     
     # Common tool list
     tool_list = [*base_tools, *maps_tools, *file_search_tools]
-    # Add PLAN_TOOLS only when message intent suggests plan/habit/reminder operations
+    # Add PLAN_TOOLS and CALENDAR_TOOLS only when message intent suggests scheduling operations
     if needs_structured_tools:
-        tool_list = [*tool_list, *PLAN_TOOLS]
+        tool_list = [*tool_list, *PLAN_TOOLS, *CALENDAR_TOOLS]
     effective_tool_config = maps_tool_config
 
     # Initialize response_format
@@ -6349,6 +6350,11 @@ async def stream_ai_response(
                     
                     # Native tool call accumulator: index -> {name, arguments_parts, id}
                     pending_tool_calls = {}
+                    # DEBUG: Log what we're sending to OpenRouter
+                    has_plugins = search_enabled
+                    num_tools = len(tool_list) if tool_list else 0
+                    hist_len = len(current_history) if current_history else 0
+                    api_logger.info(f"[OpenRouter Call] search_enabled={search_enabled}, tools={num_tools}, history={hist_len}, model={model}")
 
                     async for chunk in OPENROUTER_SERVICE.stream(
                         current_message,
@@ -7043,9 +7049,9 @@ async def generate_ai_response(
         if not search_enabled:
             base_tools = [t for t in base_tools if t != SEARCH_TOOL]
     tool_list = [*base_tools, *maps_tools, *file_search_tools]
-    # Add PLAN_TOOLS only when message intent suggests plan/habit/reminder operations
+    # Add PLAN_TOOLS and CALENDAR_TOOLS only when message intent suggests scheduling operations
     if needs_structured_tools:
-        tool_list = [*tool_list, *PLAN_TOOLS]
+        tool_list = [*tool_list, *PLAN_TOOLS, *CALENDAR_TOOLS]
     effective_tool_config = maps_tool_config
 
     # Initialize response_format
