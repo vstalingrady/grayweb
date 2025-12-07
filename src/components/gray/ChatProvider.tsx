@@ -2325,6 +2325,11 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       webSearchEnabled,
       markHasSeenGeneralChat,
       refreshUser,
+      modelTier,
+      defaultSystemPrompt,
+      questionnaireSession,
+      handleQuestionnaireResponse,
+      endSearchTracking,
     ]
   );
 
