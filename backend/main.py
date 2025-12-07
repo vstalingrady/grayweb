@@ -6267,9 +6267,14 @@ async def stream_ai_response(
                             # Just finish - the tool results were already yielded as cards/data
                             api_logger.info("Skipping follow-up call for read-only tools")
                             total_accumulated += accumulated
-                            # If we have any text, yield it
+                            # If we have any text, yield it; otherwise yield a default acknowledgment
                             if accumulated.strip():
                                 yield ("delta", accumulated)
+                                yielded_any_tokens = True
+                            elif not total_accumulated.strip():
+                                # No text at all - give a minimal response so frontend doesn't show error
+                                total_accumulated = "Here's what I found."
+                                yield ("delta", total_accumulated)
                                 yielded_any_tokens = True
                             break  # Exit loop, go to final response
                         
