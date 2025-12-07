@@ -501,24 +501,30 @@ class OpenRouterService:
                                 if tool_calls:
                                     yield {"tool_calls": tool_calls}
                                 
+                                # Handle reasoning content - both plaintext and encrypted
                                 reasoning = delta.get("reasoning") or delta.get("reasoning_content")
                                 if reasoning:
                                     yield {"type": "reasoning", "content": reasoning}
                                 
+                                # Handle reasoning_details (may contain encrypted xAI reasoning)
                                 reasoning_pieces = []
-                                if not content and not reasoning:
-                                    details = delta.get("reasoning_details") or []
-                                    if isinstance(details, list):
-                                        for item in details:
-                                            if isinstance(item, dict):
-                                                txt = item.get("text")
-                                                if txt:
-                                                    reasoning_pieces.append(txt)
+                                details = delta.get("reasoning_details") or []
+                                if isinstance(details, list):
+                                    for item in details:
+                                        if isinstance(item, dict):
+                                            # Check for encrypted reasoning (xAI/Grok)
+                                            if item.get("type") == "reasoning.encrypted":
+                                                # Emit a thinking indicator for encrypted reasoning
+                                                yield {"type": "reasoning_active", "encrypted": True}
+                                            # Check for plaintext reasoning
+                                            txt = item.get("text")
+                                            if txt:
+                                                reasoning_pieces.append(txt)
                                 
                                 if content:
                                     yield content
                                 elif reasoning_pieces:
-                                    # Legacy reasoning_details support
+                                    # Plaintext reasoning_details support
                                     yield {"type": "reasoning", "content": "".join(reasoning_pieces)}
 
                                 if include_usage and "usage" in data:
