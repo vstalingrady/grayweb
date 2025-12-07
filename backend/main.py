@@ -7931,45 +7931,71 @@ async def chat_stream(
                     uid: int,
                     text: str,
                     metadata: Optional[Dict[str, Any]],
-                    should_gen_title: bool
                 ):
                     try:
-                        # 1. Save Assistant Message
+                        # Save Assistant Message in background
                         payload: Dict[str, Any] = {"role": "model", "text": text}
                         if metadata:
                             payload["grounding_metadata"] = metadata
                         await save_conversation_message(cid, payload, user_id=uid)
 
-                        # 2. Generate/Update Title (Async separate call)
-                        if should_gen_title:
-                            # We can await it here because this entire function is running in a background task
-                            # (via background_tasks.add_task) which is NOT awaited by the request handler,
-                            # BUT FastAPI background tasks run *after* the response is sent.
-                            # Actually, `event_stream` yields events. `background_tasks` passed to endpoint
-                            # run *after* the response is *completed*.
-                            # However, we are calling `background_tasks.add_task` inside the generator?
-                            # No, we are adding it to the `background_tasks` object passed from FastAPI.
-                            # Those tasks run after the *response closes*.
-                            # So awaiting here is fine.
-                            await _generate_chat_title_async(cid, effective_message, text)
-
                     except Exception as e:
-                        api_logger.error(f"Failed to finalize chat (save/title) in background: {e}", extra={"user_id": uid})
+                        api_logger.error(f"Failed to finalize chat (save message) in background: {e}", extra={"user_id": uid})
 
-                # Offload persistence and title updates to background
+                # Offload message persistence to background (but NOT title generation)
                 background_tasks.add_task(
                     _finalize_chat,
                     conversation_id,
                     chat_request.user_id,
                     final_response,
                     grounding_metadata_payload,
-                    chat_request.should_generate_title
                 )
+
+                # Generate title SYNCHRONOUSLY before sending end event so client gets it
+                ai_generated_title: Optional[str] = None
+                if chat_request.should_generate_title:
+                    try:
+                        if GEMINI_SERVICE and GEMINI_SERVICE.available:
+                            prompt_template = load_prompt_from_json(
+                                GLOBAL_SYSTEM_PROMPTS_PATH,
+                                "title_generation",
+                                "Analyze the following conversation and generate a concise, descriptive title (under 25 characters, 3-5 words max). Output ONLY the title text, no tags or quotes."
+                            )
+                            transcript = f"User: {effective_message}\nAssistant: {final_response}"
+                            response = await GEMINI_SERVICE.generate(
+                                message=f"{prompt_template}\n\n{transcript}",
+                                conversation_history=None,
+                                workspace_context=None,
+                                system_prompt=load_prompt_from_json(
+                                    GLOBAL_SYSTEM_PROMPTS_PATH,
+                                    "title_generation",
+                                    "Generate a concise title.",
+                                ),
+                                time_context=None,
+                                model=GEMINI_LIGHT_MODEL,
+                            )
+                            if response and response.candidates:
+                                raw_title = _candidate_text(response.candidates[0]).strip()
+                                clean_title = re.sub(r'^["\']|["\']$', '', raw_title)
+                                clean_title = re.sub(r'<[^>]+>', '', clean_title).strip()
+                                if clean_title:
+                                    ai_generated_title = clean_title
+                                    # Update DB in background
+                                    background_tasks.add_task(
+                                        _update_conversation_title,
+                                        conversation_id,
+                                        clean_title
+                                    )
+                    except Exception as title_err:
+                        api_logger.warning(f"Inline title generation failed: {title_err}", extra={"event_type": "title_generation_error"})
+
+                # Use AI-generated title if available, otherwise fallback
+                final_title = ai_generated_title if ai_generated_title else session_title
 
                 end_payload: Dict[str, Any] = {
                     "conversation_id": conversation_id,
                     "response": final_response,
-                    "title": session_title, # Return the immediate fallback title
+                    "title": final_title,
                 }
                 if grounding_metadata_payload:
                     end_payload["grounding_metadata"] = grounding_metadata_payload
