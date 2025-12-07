@@ -3372,6 +3372,12 @@ a:hover {
   }
 }
 
+@media (min-width: 1024px) {
+  .hero-split__visual {
+    display: none;
+  }
+}
+
 .footer {
   position: relative;
   display: flex;

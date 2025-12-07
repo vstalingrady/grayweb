@@ -47,3 +47,5 @@ venv/
 backend/logs/
 # Local API client caches
 discovery_cache/
+.config/
+.local/

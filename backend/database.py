@@ -216,6 +216,24 @@ dashboard_pulses = sqlalchemy.Table(
     sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
 )
 
+reminders = sqlalchemy.Table(
+    "reminders",
+    metadata,
+    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
+    sqlalchemy.Column("user_id", sqlalchemy.Integer, nullable=False, index=True),
+    sqlalchemy.Column("label", sqlalchemy.String, nullable=False),
+    sqlalchemy.Column("remind_at", sqlalchemy.DateTime, nullable=False),
+    sqlalchemy.Column("description", sqlalchemy.String, nullable=True),
+    sqlalchemy.Column("summary", sqlalchemy.String, nullable=True),
+    sqlalchemy.Column("entity_type", sqlalchemy.String, nullable=True),
+    sqlalchemy.Column("entity_id", sqlalchemy.Integer, nullable=True),
+    sqlalchemy.Column("delivery_mode", sqlalchemy.String, nullable=True),
+    sqlalchemy.Column("metadata", sqlalchemy.JSON, nullable=True),
+    sqlalchemy.Column("status", sqlalchemy.String, default="pending", index=True),
+    sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
+    sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
+)
+
 # Calendar tables
 calendars = sqlalchemy.Table(
     "calendars",
@@ -278,6 +296,30 @@ media_uploads = sqlalchemy.Table(
     sqlalchemy.Column("mime_type", sqlalchemy.String, nullable=False),
     sqlalchemy.Column("size", sqlalchemy.Integer, nullable=False),
     sqlalchemy.Column("storage_path", sqlalchemy.String, nullable=False),
+    sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
+)
+
+user_streaks = sqlalchemy.Table(
+    "user_streaks",
+    metadata,
+    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
+    sqlalchemy.Column("user_id", sqlalchemy.Integer, unique=True, nullable=False, index=True),
+    sqlalchemy.Column("current_streak", sqlalchemy.Integer, default=0),
+    sqlalchemy.Column("longest_streak", sqlalchemy.Integer, default=0),
+    sqlalchemy.Column("last_activity_date", sqlalchemy.String, nullable=True),
+    sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
+    sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
+)
+
+general_chat_messages = sqlalchemy.Table(
+    "general_chat_messages",
+    metadata,
+    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
+    sqlalchemy.Column("user_id", sqlalchemy.Integer, nullable=False, index=True),
+    sqlalchemy.Column("user_data_id", sqlalchemy.Integer, nullable=True),
+    sqlalchemy.Column("role", sqlalchemy.String, nullable=False),
+    sqlalchemy.Column("content", sqlalchemy.String, nullable=False),
+    sqlalchemy.Column("grounding_metadata", sqlalchemy.JSON, nullable=True),
     sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
 )
 

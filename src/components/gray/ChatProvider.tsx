@@ -45,6 +45,7 @@ import {
   buildGeneralConversationId,
   isGeneralConversationId,
   buildPersonalizedSystemPrompt,
+  computeProfileHash,
   buildAssistantReply,
   buildAssistantErrorReply,
   normalizeAssistantContent,
@@ -732,6 +733,8 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
   const lastAutoCachedWorkspaceRef = useRef<string | null>(null);
   const autoCacheInFlightRef = useRef(false);
+  // Track profile hash to only send full profile when it changes
+  const lastSentProfileHashRef = useRef<string>("");
 
   // Restore model selection from local storage
   useEffect(() => {
@@ -2171,11 +2174,22 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
             const timeContext = buildLocalTimeContext();
             const autoMapPayload = buildAutoMapPayload(trimmed);
 
-            // Only include full profile on first message of the conversation
+            // Only include full profile when it changes or on first message
+            const currentProfileHash = computeProfileHash(resolvedUser);
             const isFirstMessage = generalSession.messages.length <= 1;
-            const systemPromptForRequest = isFirstMessage
-              ? personalizedSystemPrompt
-              : buildPersonalizedSystemPrompt(resolvedUser, defaultSystemPrompt, false);
+            const profileChanged = currentProfileHash !== lastSentProfileHashRef.current;
+            const shouldIncludeFullProfile = isFirstMessage || profileChanged;
+
+            const systemPromptForRequest = buildPersonalizedSystemPrompt(
+              resolvedUser,
+              defaultSystemPrompt,
+              shouldIncludeFullProfile
+            );
+
+            // Update the ref so subsequent messages know the profile was sent
+            if (shouldIncludeFullProfile) {
+              lastSentProfileHashRef.current = currentProfileHash;
+            }
 
             for await (const event of apiService.sendMessageStream({
               message: trimmed,

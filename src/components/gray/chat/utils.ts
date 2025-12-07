@@ -350,8 +350,34 @@ export const buildConversationHistoryPayload = (messages: ChatMessage[]) => {
         .filter((entry): entry is ConversationHistoryEntryPayload => entry !== null);
 };
 
-// Personalized system prompt
-export const buildPersonalizedSystemPrompt = (user?: User | null, basePrompt?: string | null) => {
+/**
+ * Compute a hash string from user profile fields.
+ * Used to detect when profile data has changed and needs to be resent.
+ */
+export const computeProfileHash = (user?: User | null): string => {
+    if (!user) return "";
+    const parts = [
+        user.personalization_nickname || "",
+        user.personalization_occupation || "",
+        user.personalization_about || "",
+        user.personalization_custom_instructions || "",
+    ];
+    return parts.join("|");
+};
+
+/**
+ * Build a personalized system prompt with user profile data.
+ * @param user - User object with personalization fields
+ * @param basePrompt - Base system prompt to include
+ * @param includeProfile - If true, includes full USER PROFILE section. If false, only includes
+ *                         IDENTITY BOUNDARY for nickname addressing. Set to false on subsequent
+ *                         messages when profile hasn't changed to reduce payload size.
+ */
+export const buildPersonalizedSystemPrompt = (
+    user?: User | null,
+    basePrompt?: string | null,
+    includeProfile: boolean = true
+) => {
     const sections: string[] = [];
 
     const trimmedBasePrompt = basePrompt?.trim();
@@ -360,38 +386,42 @@ export const buildPersonalizedSystemPrompt = (user?: User | null, basePrompt?: s
     }
 
     if (user) {
-        const profileLines: string[] = [];
-
         const nickname = user.personalization_nickname?.trim();
         const occupation = user.personalization_occupation?.trim();
         const about = user.personalization_about?.trim();
         const customInstructions = user.personalization_custom_instructions?.trim();
 
-        if (nickname) {
-            profileLines.push(`Preferred name: ${nickname}`);
+        // Only include full profile on first message or when profile changes
+        if (includeProfile) {
+            const profileLines: string[] = [];
+
+            if (nickname) {
+                profileLines.push(`Preferred name: ${nickname}`);
+            }
+
+            if (occupation) {
+                profileLines.push(`Occupation: ${occupation}`);
+            }
+
+            if (about) {
+                profileLines.push(`About: ${about}`);
+            }
+
+            if (profileLines.length > 0) {
+                sections.push(["USER PROFILE (ONLY FROM EXPLICIT PERSONALIZATION FIELDS)", ...profileLines].join("\n"));
+            }
+
+            if (customInstructions) {
+                sections.push(
+                    [
+                        "CUSTOM INSTRUCTIONS FROM USER (SOURCE OF TRUTH)",
+                        customInstructions,
+                    ].join("\n")
+                );
+            }
         }
 
-        if (occupation) {
-            profileLines.push(`Occupation: ${occupation}`);
-        }
-
-        if (about) {
-            profileLines.push(`About: ${about}`);
-        }
-
-        if (profileLines.length > 0) {
-            sections.push(["USER PROFILE (ONLY FROM EXPLICIT PERSONALIZATION FIELDS)", ...profileLines].join("\n"));
-        }
-
-        if (customInstructions) {
-            sections.push(
-                [
-                    "CUSTOM INSTRUCTIONS FROM USER (SOURCE OF TRUTH)",
-                    customInstructions,
-                ].join("\n")
-            );
-        }
-
+        // Always include identity boundary so AI knows the nickname
         if (nickname) {
             sections.push(
                 [

@@ -193,6 +193,9 @@ async def startup(ctx: Dict[str, Any]) -> None:
             broker,
             ai_generator,
         )
+        if engine:
+            # Dispatch reminder using existing engine
+            pass
         ctx["proactivity_engine"] = engine
         logger.info("arq worker: ProactivityEngine initialized")
         

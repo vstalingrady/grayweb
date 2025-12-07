@@ -210,9 +210,33 @@ try:
         context_cache,
         proactive_notifications,
         google_calendar_credentials,
+        user_data,
+        general_chat_messages,
+        user_streaks,
+        reminders,
     )
 except ImportError:
-    from database import database, metadata, users, DATABASE_URL
+    from database import (
+        database,
+        metadata,
+        users,
+        DATABASE_URL,
+        calendars,
+        calendar_events,
+        dashboard_pulses,
+        proactivity_settings,
+        proactivity_push_subscriptions,
+        proactivity_logs,
+        file_search_stores,
+        media_uploads,
+        context_cache,
+        proactive_notifications,
+        google_calendar_credentials,
+        user_data,
+        general_chat_messages,
+        user_streaks,
+        reminders,
+    )
 
 try:
     from backend.core.rate_limit import (
@@ -871,7 +895,7 @@ REMINDER_RESPONSE_FORMAT = {
                         "type": "object",
                         "properties": {
                             "type": {"type": "string", "enum": ["gray.reminder"]},
-                            "source": {"type": "string", "enum": ["mcp/plans-habits-server"]},
+                            "source": {"type": "string", "enum": ["native/backend"]},
                             "status": {"type": "string", "enum": ["created", "updated", "completed", "deleted"]},
                             "entity": {"type": "string", "enum": ["plan", "habit", "reminder"]},
                             "data": {
@@ -1179,52 +1203,8 @@ habits = sqlalchemy.Table(
     sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
 )
 
-reminders = sqlalchemy.Table(
-    "reminders",
-    metadata,
-    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True, index=True),
-    sqlalchemy.Column("user_id", sqlalchemy.ForeignKey("users.id"), nullable=False),
-    sqlalchemy.Column("entity_type", sqlalchemy.String, nullable=True),
-    sqlalchemy.Column("entity_id", sqlalchemy.Integer, nullable=True),
-    sqlalchemy.Column("delivery_mode", sqlalchemy.String, nullable=True),
-    sqlalchemy.Column("label", sqlalchemy.String, nullable=False),
-    sqlalchemy.Column("description", sqlalchemy.String, nullable=True),
-    sqlalchemy.Column("summary", sqlalchemy.String, nullable=True),
-    sqlalchemy.Column("remind_at", sqlalchemy.DateTime, nullable=False),
-    sqlalchemy.Column("status", sqlalchemy.String, default="pending"),
-    sqlalchemy.Column("metadata", sqlalchemy.JSON, nullable=True),
-    sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
-    sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
-    sqlalchemy.Column("delivered_at", sqlalchemy.DateTime, nullable=True),
-)
 
 
-
-
-
-
-general_chat_messages = sqlalchemy.Table(
-    "general_chat_messages",
-    metadata,
-    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True, index=True),
-    sqlalchemy.Column("user_id", sqlalchemy.ForeignKey("users.id")),
-    sqlalchemy.Column("user_data_id", sqlalchemy.Integer, nullable=True),
-    sqlalchemy.Column("role", sqlalchemy.String),
-    sqlalchemy.Column("content", sqlalchemy.String),
-    sqlalchemy.Column("grounding_metadata", sqlalchemy.JSON, nullable=True),
-    sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
-)
-
-user_streaks = sqlalchemy.Table(
-    "user_streaks",
-    metadata,
-    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True, index=True),
-    sqlalchemy.Column("user_id", sqlalchemy.ForeignKey("users.id"), unique=True),
-    sqlalchemy.Column("current_streak", sqlalchemy.Integer, default=0),
-    sqlalchemy.Column("last_activity_date", sqlalchemy.DateTime, nullable=True),
-    sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
-    sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
-)
 
 # Proactivity tracking
 
@@ -2377,44 +2357,8 @@ def _payload_log_summary(payload: Any) -> Dict[str, Any]:
 
 
 def _fetch_supabase_proactivity_settings(user_id: int) -> Optional[ProactivitySettings]:
-    if not supabase:
-        return None
-    try:
-        result = (
-            supabase.table("proactivity_settings")
-            .select("payload")
-            .eq("user_id", user_id)
-            .limit(1)
-            .execute()
-        )
-    except Exception as error:
-        api_logger.warning(f"Failed to fetch proactivity settings from Supabase for user {user_id}: {error}", extra={
-            "event_type": "proactivity_settings_supabase_fetch_error",
-            "user_id": user_id,
-            "error": str(error)
-        })
-        _handle_supabase_table_error(
-            "Warning: Proactivity settings table not found or inaccessible",
-            error,
-        )
-        return None
-    rows = getattr(result, "data", None)
-    if not rows:
-        api_logger.debug(f"No proactivity settings found in Supabase for user {user_id}", extra={
-            "event_type": "proactivity_settings_supabase_not_found",
-            "user_id": user_id
-        })
-        return None
-    payload = rows[0].get("payload")
-    api_logger.debug(
-        f"Retrieved proactivity settings from Supabase for user {user_id}",
-        extra={
-            "event_type": "proactivity_settings_supabase_fetched",
-            "user_id": user_id,
-            **_payload_log_summary(payload)
-        }
-    )
-    return _deserialize_proactivity_settings_payload(payload)
+    # Supabase is now auth-only. Data is stored in local SQLite.
+    return None
 
 
 async def _resolve_user_timezone_for_streak(user_id: int, db: databases.Database) -> Optional[str]:
@@ -2473,48 +2417,8 @@ async def _resolve_user_timezone_for_streak(user_id: int, db: databases.Database
 
 
 def _upsert_supabase_proactivity_settings(user_id: int, payload: Dict[str, Any]) -> None:
-    if not supabase:
-        api_logger.debug(f"Supabase not configured, skipping proactivity settings sync for user {user_id}", extra={
-            "event_type": "proactivity_settings_supabase_skip",
-            "user_id": user_id
-        })
-        return
-    timestamp = datetime.utcnow().isoformat()
-    try:
-        api_logger.debug(
-            f"Upserting proactivity settings to Supabase for user {user_id}",
-            extra={
-                "event_type": "proactivity_settings_supabase_upsert_start",
-                "user_id": user_id,
-                **_payload_log_summary(payload)
-            }
-        )
-        (
-            supabase.table("proactivity_settings")
-            .upsert(
-                {
-                    "user_id": user_id,
-                    "payload": payload,
-                    "updated_at": timestamp,
-                },
-                on_conflict="user_id",
-            )
-            .execute()
-        )
-        api_logger.debug(f"Successfully upserted proactivity settings to Supabase for user {user_id}", extra={
-            "event_type": "proactivity_settings_supabase_upsert_success",
-            "user_id": user_id
-        })
-    except Exception as error:
-        api_logger.warning(f"Failed to upsert proactivity settings to Supabase for user {user_id}: {error}", extra={
-            "event_type": "proactivity_settings_supabase_upsert_error",
-            "user_id": user_id,
-            "error": str(error)
-        })
-        _handle_supabase_table_error(
-            "Warning: Failed to upsert proactivity settings",
-            error,
-        )
+    # Supabase is now auth-only. Data is stored in local SQLite.
+    pass
 
 
 def _timezone_from_time_context(time_context: str) -> Tuple[Optional[str], Optional[timezone]]:
@@ -2943,6 +2847,31 @@ async def _connect_database():
         db_logger.error(f"Database connection failed: {e}", exc_info=True)
         raise
 
+
+
+@app.on_event("startup")
+async def _run_basic_migrations():
+    """Ensure critical SQLite columns exist."""
+    _ensure_sqlite_columns(
+        "user_streaks",
+        [
+            ("longest_streak", "INTEGER", "0"),
+        ]
+    )
+    _ensure_sqlite_columns(
+        "reminders",
+        [
+            ("label", "TEXT", "''"),
+            ("remind_at", "TIMESTAMP", "CURRENT_TIMESTAMP"),
+            ("status", "TEXT", "'pending'"),
+            ("description", "TEXT", "NULL"),
+            ("summary", "TEXT", "NULL"),
+            ("entity_type", "TEXT", "NULL"),
+            ("entity_id", "INTEGER", "NULL"),
+            ("delivery_mode", "TEXT", "NULL"),
+            ("metadata", "TEXT", "NULL"),
+        ]
+    )
 
 
 @app.on_event("shutdown")
@@ -4621,7 +4550,7 @@ def _build_reminder_payload(reminder: Dict[str, Any], user_id: int, status: str,
 
     return {
         "type": "gray.reminder",
-        "source": "mcp/plans-habits-server",
+        "source": "native/backend",
         "status": status,
         "entity": entity,
         "delivery_mode": reminder.get("delivery_mode", entity),
@@ -5459,24 +5388,23 @@ def _coerce_activity_day(value: Any) -> Optional[date]:
 
 
 async def _compute_proactivity_streak(db: databases.Database, user_id: int) -> Dict[str, int]:
-    if not supabase:
-        return {"current_streak": 0, "best_streak": 0}
-
-    rows = []
     try:
-        result = supabase.table("proactivity_logs").select("*").eq("user_id", user_id).order("activity_date", desc=True).execute()
-        rows = getattr(result, "data", None) or []
+        query = (
+            proactivity_logs.select()
+            .where(proactivity_logs.c.user_id == user_id)
+            .order_by(proactivity_logs.c.activity_date.desc())
+        )
+        rows = await db.fetch_all(query)
     except Exception as error:
-        logger.error(f"Failed to fetch proactivity logs from Supabase for user {user_id}: {error}")
+        logger.error(f"Failed to fetch proactivity logs from SQLite for user {user_id}: {error}")
         return {"current_streak": 0, "best_streak": 0}
 
     qualifying_days: List[date] = []
     seen: set[date] = set()
 
     for row in rows:
-        # Handle dict (Supabase) access
-        score = row.get("score")
-        activity_date_val = row.get("activity_date") if isinstance(row, dict) else row["activity_date"]
+        score = row["score"]
+        activity_date_val = row["activity_date"]
 
         if score is not None and score < 70:
             continue
@@ -5530,198 +5458,51 @@ async def _compute_proactivity_streak(db: databases.Database, user_id: int) -> D
 
 # Streak helper functions
 async def _ensure_supabase_user_exists(user_id: int, db: databases.Database) -> bool:
-    """Backfill Supabase users row when streaks are requested for a locally-existing user."""
-    if not supabase:
-        return False
-
-    try:
-        existing = (
-            supabase.table("users").select("id").eq("id", user_id).limit(1).execute()
-        )
-        existing_rows = getattr(existing, "data", None) or []
-        if existing_rows:
-            return True
-
-        user_row = await db.fetch_one(users.select().where(users.c.id == user_id))
-        if not user_row:
-            api_logger.error(
-                "Cannot backfill Supabase user; user missing locally",
-                extra={"user_id": user_id},
-            )
-            return False
-
-        def _iso(value: Any) -> Optional[str]:
-            if value is None:
-                return None
-            if isinstance(value, datetime):
-                return value.isoformat()
-            try:
-                return value.isoformat()  # type: ignore[attr-defined]
-            except Exception:
-                return str(value)
-
-        payload = {
-            "id": user_row["id"],
-            "email": user_row["email"],
-            "full_name": user_row["full_name"],
-            "profile_picture_url": user_row["profile_picture_url"],
-            "role": user_row["role"],
-            "initials": user_row["initials"],
-            "workspace_background_id": user_row["workspace_background_id"],
-            "maps_enabled": user_row["maps_enabled"],
-            "personalization_nickname": user_row["personalization_nickname"],
-            "personalization_occupation": user_row["personalization_occupation"],
-            "personalization_about": user_row["personalization_about"],
-            "personalization_custom_instructions": user_row["personalization_custom_instructions"],
-            "personalization_show_calendar": user_row["personalization_show_calendar"],
-            "plan_tier": user_row["plan_tier"],
-            "has_seen_general_chat": user_row["has_seen_general_chat"],
-            "auth_user_id": user_row["auth_user_id"],
-            "created_at": _iso(user_row["created_at"]),
-            "updated_at": _iso(user_row["updated_at"]),
-        }
-
-        supabase.table("users").upsert(payload, on_conflict="id").execute()
-        api_logger.info(
-            "Backfilled Supabase users row for streak tracking",
-            extra={"user_id": user_id},
-        )
-        return True
-    except Exception as error:  # pragma: no cover - defensive
-        error_str = str(error)
-        
-        # Only return True if the user with this specific ID already exists (primary key duplicate)
-        if "duplicate key value violates unique constraint" in error_str and "users_pkey" in error_str:
-            api_logger.info(
-                "User already exists in Supabase (detected via primary key constraint)",
-                extra={"user_id": user_id},
-            )
-            return True
-        
-        # Simplify handling: upsert user by primary key ID to ensure existence in Supabase
-        try:
-            # Upsert the user record; on_conflict on "id" will insert or update as needed
-            supabase.table("users").upsert(payload, on_conflict="id").execute()
-            api_logger.info(
-                "Ensured Supabase user exists via upsert on ID",
-                extra={"user_id": user_id},
-            )
-            return True
-        except Exception as upsert_error:
-            upsert_error_str = str(upsert_error)
-            lower_error = upsert_error_str.lower()
-
-            # If the only problem is a duplicate email constraint, treat this as
-            # "user already exists" noise rather than a hard error. We'll still
-            # insert a minimal row keyed by the local ID so streak FKs succeed.
-            if (
-                "duplicate key value violates unique constraint" in lower_error
-                and "ix_users_email" in lower_error
-            ):
-                api_logger.info(
-                    "Supabase user already exists with this email; inserting minimal row for local ID",
-                    extra={"user_id": user_id, "error": upsert_error_str},
-                )
-            else:
-                api_logger.error(
-                    "Failed to upsert Supabase user by ID",
-                    extra={"user_id": user_id, "error": upsert_error_str},
-                )
-
-            # Attempt minimal insert as fallback
-            try:
-                supabase.table("users").insert({"id": user_id}).execute()
-                api_logger.info(
-                    "Inserted minimal Supabase user record with ID after upsert failure",
-                    extra={"user_id": user_id},
-                )
-            except Exception as insert_error:
-                api_logger.error(
-                    "Failed to insert minimal Supabase user record",
-                    extra={"user_id": user_id, "error": str(insert_error)},
-                )
-            # Regardless of insert outcome, assume user now exists to avoid downstream FK errors
-            return True
-        
-        # For other errors, log and return False
-        api_logger.error(
-            "Failed to ensure Supabase user exists for streaks",
-            extra={"user_id": user_id, "error": error_str},
-        )
-        return False
+    # Supabase is now auth-only. Data is stored in local SQLite.
+    return True
 
 
 async def get_or_create_user_streak(user_id: int, db: databases.Database) -> UserStreak:
-    """Get existing user streak or create new one"""
-    # Return default streak if Supabase is not configured
-    if not supabase:
-        now = datetime.utcnow()
-        return UserStreak(
-            id=0,
-            user_id=user_id,
-            current_streak=0,
-            last_activity_date=None,
-            created_at=now,
-            updated_at=now
-        )
-
-    if not await _ensure_supabase_user_exists(user_id, db):
-        api_logger.error(
-            "Supabase user row missing; returning default streak",
-            extra={"user_id": user_id},
-        )
-        now = datetime.utcnow()
-        return UserStreak(
-            id=0,
-            user_id=user_id,
-            current_streak=0,
-            last_activity_date=None,
-            created_at=now,
-            updated_at=now
-        )
-
+    """Get existing user streak or create new one using local SQLite."""
     try:
-        result = supabase.table("user_streaks").select("*").eq("user_id", user_id).limit(1).execute()
-        rows = getattr(result, "data", None) or []
-        if rows:
-            return UserStreak(**rows[0])
 
-        now = datetime.utcnow().isoformat()
-        insert_result = supabase.table("user_streaks").insert(
-            {
-                "user_id": user_id,
-                "current_streak": 0,
-                "last_activity_date": None,
-                "created_at": now,
-                "updated_at": now,
-            }
-        ).execute()
 
-        created = (
-            supabase.table("user_streaks").select("*").eq("user_id", user_id).limit(1).execute()
-        )
-        created_rows = getattr(created, "data", None) or []
-        if created_rows:
-            return UserStreak(**created_rows[0])
+        query = user_streaks.select().where(user_streaks.c.user_id == user_id)
+        row = await db.fetch_one(query)
         
-        # If we still can't get the streak, return a default one instead of failing
-        api_logger.warning(f"Failed to retrieve created user streak from Supabase for user {user_id}, returning default")
-        now_dt = datetime.utcnow()
+        if row:
+            return UserStreak(
+                id=row["id"],
+                user_id=row["user_id"],
+                current_streak=row["current_streak"],
+                last_activity_date=row["last_activity_date"],
+                created_at=row["created_at"],
+                updated_at=row["updated_at"],
+            )
+            
+        now = datetime.utcnow()
+        insert_query = user_streaks.insert().values(
+            user_id=user_id,
+            current_streak=0,
+            longest_streak=0,
+            last_activity_date=None,
+            created_at=now,
+            updated_at=now,
+        )
+        streak_id = await db.execute(insert_query)
+        
         return UserStreak(
-            id=0,
+            id=streak_id,
             user_id=user_id,
             current_streak=0,
             last_activity_date=None,
-            created_at=now_dt,
-            updated_at=now_dt
+            created_at=now,
+            updated_at=now,
         )
-
-    except Exception as error:
-        # Log the error but return a default streak instead of crashing the entire app
-        api_logger.error(
-            f"Failed to load or create user streak in Supabase for user {user_id}: {error}, returning default streak"
-        )
+    except Exception as e:
+        api_logger.error(f"Failed to get/create user streak for user {user_id}: {e}")
         now = datetime.utcnow()
+        # Return transient fallback
         return UserStreak(
             id=0,
             user_id=user_id,
@@ -5736,87 +5517,88 @@ async def update_user_streak(
     db: databases.Database,
     user_timezone: Optional[str] = None,
 ):
-    """Update user streak based on daily activity"""
+    """Update user streak based on daily activity using local SQLite."""
     from datetime import datetime, date
+    try:
+        from zoneinfo import ZoneInfo
+    except ImportError:
+        from backports.zoneinfo import ZoneInfo  # type: ignore
+
+
 
     # Use the client's reported timezone when available, falling back
-    # to stored user preferences and finally UTC. This keeps streak
-    # boundaries aligned with the user's local calendar day.
+    # to stored user preferences and finally UTC.
     timezone_name = user_timezone or await _resolve_user_timezone_for_streak(user_id, db)
     if timezone_name:
         try:
+            # Only use valid timezone strings
             user_tz = ZoneInfo(timezone_name)
             today = datetime.utcnow().replace(tzinfo=timezone.utc).astimezone(user_tz).date()
-        except Exception:  # pragma: no cover - defensive fallback
+        except Exception:
             today = datetime.utcnow().date()
     else:
         today = datetime.utcnow().date()
 
-    for _ in range(3):  # Retry loop for optimistic locking
-        streak = await get_or_create_user_streak(user_id, db)
-        
-        # If we got a default streak (id=0), it means the Supabase user doesn't exist
-        # and we can't update the streak. Return the default streak gracefully.
-        if streak.id == 0:
-            api_logger.warning(
-                "Cannot update streak for user without Supabase record; returning default",
-                extra={"user_id": user_id},
-            )
-            return streak
+    query = user_streaks.select().where(user_streaks.c.user_id == user_id)
+    row = await db.fetch_one(query)
 
-        # Check if last activity was yesterday
-        if streak.last_activity_date:
-            last_activity = _coerce_activity_day(streak.last_activity_date)
-            if last_activity is None:
-                # If we can't parse the date, treat as first activity
-                new_streak = 1
-            else:
-                yesterday = date.fromordinal(today.toordinal() - 1)
+    if not row:
+        # Should persist now via SQLite
+        await get_or_create_user_streak(user_id, db)
+        row = await db.fetch_one(query)
+        if not row:
+             api_logger.error(f"Failed to ensure streak record for user {user_id}")
+             # Return fake object to not crash
+             now = datetime.utcnow()
+             return {
+                 "id": 0, "user_id": user_id, "current_streak": 1, 
+                 "last_activity_date": today.isoformat(), 
+                 "created_at": now, "updated_at": now
+             }
 
-                if last_activity == yesterday:
-                    # Continue streak
-                    new_streak = streak.current_streak + 1
-                elif last_activity < yesterday:
-                    # Streak broken, start new one
-                    new_streak = 1
-                else:
-                    # Already updated today
-                    return streak
+    last_activity_date_str = row["last_activity_date"]
+    current_streak = row["current_streak"] or 0
+    longest_streak = row["longest_streak"] or 0
+    
+    last_activity = _coerce_activity_day(last_activity_date_str) if last_activity_date_str else None
+
+    # Determine new streak
+    new_streak = current_streak
+    if last_activity == today:
+        # Already credited today
+        return dict(row)
+    elif last_activity:
+        yesterday = date.fromordinal(today.toordinal() - 1)
+        if last_activity == yesterday:
+            new_streak += 1
         else:
-            # First activity ever
             new_streak = 1
+    else:
+        new_streak = 1
 
-        # Supabase-first update.
-        if not supabase:
-            raise HTTPException(status_code=503, detail="Supabase is not configured")
-
-        try:
-            now = datetime.utcnow().isoformat()
-            # Optimistic locking: Ensure current_streak matches what we read
-            current_val = streak.current_streak
-            
-            res = supabase.table("user_streaks").update(
-                {
-                    "current_streak": new_streak,
-                    "last_activity_date": now,
-                    "updated_at": now,
-                }
-            ).eq("user_id", user_id).eq("current_streak", current_val).execute()
-
-            refreshed_rows = getattr(res, "data", None) or []
-            if refreshed_rows:
-                return refreshed_rows[0]
-            
-            # If no rows returned, the condition failed (race). Retry.
-            continue
-
-        except Exception as error:
-            api_logger.error(
-                f"Critical: Failed to update user streak in Supabase for user {user_id}: {error}"
-            )
-            raise HTTPException(status_code=500, detail="Database update failed for user streak")
-
-    raise HTTPException(status_code=409, detail="Concurrency error updating streak")
+    now_ts = datetime.utcnow()
+    # Update SQLite
+    try:
+        update_q = user_streaks.update().where(user_streaks.c.id == row["id"]).values(
+            current_streak=new_streak,
+            longest_streak=max(longest_streak, new_streak),
+            last_activity_date=today.isoformat(),
+            updated_at=now_ts
+        )
+        await db.execute(update_q)
+        
+        return {
+            "id": row["id"],
+            "user_id": user_id,
+            "current_streak": new_streak,
+            "longest_streak": max(longest_streak, new_streak),
+            "last_activity_date": today.isoformat(),
+            "created_at": row["created_at"],
+            "updated_at": now_ts
+        }
+    except Exception as e:
+        api_logger.error(f"Failed to update streak for user {user_id}: {e}")
+        return dict(row)
 
 # API Routes
 
@@ -10541,22 +10323,6 @@ async def get_dashboard_summary(
 
     # Supabase-first for proactivity logs.
     proactivity_records: List[Any] = []
-    if supabase:
-        try:
-            result = (
-                supabase.table("proactivity_logs")
-                .select("*")
-                .eq("user_id", user_id)
-                .order("activity_date", desc=True)
-                .limit(10)
-                .execute()
-            )
-            proactivity_records = result.data or []
-        except Exception as error:
-            _handle_supabase_table_error(
-                f"Warning: Failed to fetch proactivity logs from Supabase for user {user_id}",
-                error,
-            )
 
     if not proactivity_records:
         proactivity_records = await db.fetch_all(
@@ -11276,65 +11042,6 @@ async def daily_proactivity_checkin(
 
     today = datetime.utcnow().date()
     
-    if supabase:
-        try:
-            # Define "today" range for Supabase timestamp comparison
-            start_of_day = datetime.combine(today, time.min).isoformat()
-            end_of_day = datetime.combine(today, time.max).isoformat()
-
-            # Check for existing log in Supabase
-            result = (
-                supabase.table("proactivity_logs")
-                .select("*")
-                .eq("user_id", user_id)
-                .gte("activity_date", start_of_day)
-                .lte("activity_date", end_of_day)
-                .limit(1)
-                .execute()
-            )
-            rows = getattr(result, "data", None) or []
-            
-            score = min(100, (checkin.tasks_completed / max(checkin.total_tasks, 1)) * 100) if checkin.total_tasks > 0 else 0
-            now = datetime.utcnow().isoformat()
-
-            if rows:
-                existing_id = rows[0]['id']
-                # Update existing
-                update_resp = supabase.table("proactivity_logs").update({
-                    "tasks_completed": checkin.tasks_completed,
-                    "total_tasks": checkin.total_tasks,
-                    "score": score,
-                    "notes": checkin.notes,
-                    "updated_at": now
-                }).eq("id", existing_id).select().execute()
-                
-                updated_rows = getattr(update_resp, "data", None) or []
-                if updated_rows:
-                    return updated_rows[0]
-                raise HTTPException(status_code=500, detail="Failed to retrieve updated proactivity log from Supabase")
-            else:
-                # Create new
-                insert_resp = supabase.table("proactivity_logs").insert({
-                    "user_id": user_id,
-                    "activity_date": now,
-                    "tasks_completed": checkin.tasks_completed,
-                    "total_tasks": checkin.total_tasks,
-                    "score": score,
-                    "notes": checkin.notes,
-                    "created_at": now,
-                    "updated_at": now
-                }).select().execute()
-                
-                new_rows = getattr(insert_resp, "data", None) or []
-                if new_rows:
-                    return new_rows[0]
-                raise HTTPException(status_code=500, detail="Failed to retrieve created proactivity log from Supabase")
-
-        except Exception as error:
-            logger.error(f"Critical: Failed to write proactivity log to Supabase for user {user_id}: {error}")
-            raise HTTPException(status_code=500, detail="Database write failed for proactivity log")
-
-    # Fallback to local SQLite (only if Supabase is not configured)
     from sqlalchemy import func
     existing_log_query = proactivity_logs.select().where(
         (proactivity_logs.c.user_id == user_id) &

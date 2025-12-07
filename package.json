@@ -4,15 +4,12 @@
   "private": true,
   "scripts": {
     "backend": "DATABASE_URL=\"sqlite:///./users.db\" cd backend && ../.venv/bin/python3 start.py",
-    "mcp:build": "cd plans-habits-server && npm run build",
-    "mcp:plans-habits-server": "node plans-habits-server/dist/index.js",
     "arq:worker": "cd backend && ../.venv/bin/arq job_scheduler.WorkerSettings",
-    "backend:with-mcp": "concurrently \"npm run backend\" \"npm run mcp:plans-habits-server\" \"npm run arq:worker\"",
+    "backend:services": "concurrently \"npm run backend\" \"npm run arq:worker\"",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "dev:full": "node scripts/dev-full.js",
     "security:audit": "npm audit --audit-level=high",
     "prestart": "node scripts/checkCriticalVulns.mjs",
     "prebuild": "node scripts/checkCriticalVulns.mjs"
