@@ -12,7 +12,7 @@ import re
 import requests
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone as dt_timezone
-from typing import Any, AsyncIterator, Dict, List, Optional
+from typing import Any, AsyncIterator, Dict, List, Optional, Sequence, Tuple
 from zoneinfo import ZoneInfo
 
 import databases
