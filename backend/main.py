@@ -690,7 +690,9 @@ SEARCH_TOOL = types.Tool(
     google_search=types.GoogleSearch(),
 )
 
-DEFAULT_CHAT_TOOLS = [SEARCH_TOOL, *CALENDAR_TOOLS, *PLAN_TOOLS]
+# PLAN_TOOLS not included by default - added conditionally based on message intent
+# This prevents the LLM from calling get_workspace_state on simple casual messages
+DEFAULT_CHAT_TOOLS = [SEARCH_TOOL, *CALENDAR_TOOLS]
 
 PROMPTS_DIR = ROOT_DIR / "backend" / "prompts"
 GLOBAL_SYSTEM_PROMPTS_PATH = ROOT_DIR / "public" / "system-prompts.json"
@@ -6059,6 +6061,9 @@ async def stream_ai_response(
     
     # Common tool list
     tool_list = [*base_tools, *maps_tools, *file_search_tools]
+    # Add PLAN_TOOLS only when message intent suggests plan/habit/reminder operations
+    if needs_structured_tools:
+        tool_list = [*tool_list, *PLAN_TOOLS]
     effective_tool_config = maps_tool_config
 
     # Initialize response_format
@@ -6794,6 +6799,9 @@ async def generate_ai_response(
         if not search_enabled:
             base_tools = [t for t in base_tools if t != SEARCH_TOOL]
     tool_list = [*base_tools, *maps_tools, *file_search_tools]
+    # Add PLAN_TOOLS only when message intent suggests plan/habit/reminder operations
+    if needs_structured_tools:
+        tool_list = [*tool_list, *PLAN_TOOLS]
     effective_tool_config = maps_tool_config
 
     # Initialize response_format
