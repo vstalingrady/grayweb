@@ -918,19 +918,40 @@ TOOL_TRIGGER_KEYWORDS = REMINDER_KEYWORDS | frozenset({
     "meeting", "appointment", "call", "checkin", "check-in", "check in",
     "sync", "standup", "doctor", "dentist", "gym", "workout", "project", "routine",
     "at", "tomorrow", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
+    # Time expressions to catch conversational follow-ups like "in 2 hours"
+    "pm", "am", "hour", "hours", "minute", "minutes", "oclock", "o'clock",
 })
 
 
 def _needs_structured_tools(message: str) -> bool:
-    """Check if message likely requires tool execution (reminders, calendar, etc)."""
+    """Check if message likely requires tool execution (reminders, calendar, etc).
+    
+    Uses word boundary matching to avoid false positives like 'at' matching 'cat'.
+    """
+    import re
     normalized = (message or "").lower()
-    return bool(normalized) and any(kw in normalized for kw in TOOL_TRIGGER_KEYWORDS)
+    if not normalized:
+        return False
+    # Use word boundaries to match whole words only
+    for kw in TOOL_TRIGGER_KEYWORDS:
+        if re.search(rf'\b{re.escape(kw)}\b', normalized):
+            return True
+    return False
 
 
 def _should_request_structured_reminders(message: str) -> bool:
-    """Check if message specifically relates to reminder functionality."""
+    """Check if message specifically relates to reminder functionality.
+    
+    Uses word boundary matching to avoid false positives.
+    """
+    import re
     normalized = (message or "").lower()
-    return bool(normalized) and any(kw in normalized for kw in REMINDER_KEYWORDS)
+    if not normalized:
+        return False
+    for kw in REMINDER_KEYWORDS:
+        if re.search(rf'\b{re.escape(kw)}\b', normalized):
+            return True
+    return False
 
 
 def _split_env_list(value: Optional[str]) -> List[str]:
