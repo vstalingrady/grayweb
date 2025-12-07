@@ -5106,6 +5106,157 @@ def _extract_function_call(response: types.GenerateContentResponse) -> Optional[
     return None
 
 
+async def _execute_tools_with_gemini_flash(
+    message: str,
+    conversation_history: Optional[List[Dict[str, Any]]],
+    tool_list: List[types.Tool],
+    system_prompt: Optional[str],
+    time_context: Optional[str],
+    workspace_context: Optional[str],
+    user_id: int,
+    db: databases.Database,
+    user_timezone: Optional[str] = None,
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], bool]:
+    """Execute tools using Gemini Flash for speed, return results for hybrid flow.
+    
+    This is used when OpenRouter is the response model but we want fast tool execution.
+    Gemini Flash handles the tool calling, then results are passed to OpenRouter for
+    the final personality-rich response.
+    
+    Returns:
+        tool_results: List of {tool_name, result, args} for each executed tool
+        tool_cards: List of reminder/plan/habit cards to emit to frontend
+        onboarding_completed: True if complete_onboarding was called
+    """
+    if not GEMINI_SERVICE.available:
+        return [], [], False
+    
+    GEMINI_FLASH_MODEL = "models/gemini-flash-latest"
+    tool_results: List[Dict[str, Any]] = []
+    tool_cards: List[Dict[str, Any]] = []
+    onboarding_completed = False
+    
+    try:
+        # Initial generation with tools
+        response = await GEMINI_SERVICE.generate(
+            message,
+            conversation_history,
+            workspace_context,
+            system_prompt,
+            time_context,
+            GEMINI_FLASH_MODEL,
+            tools=tool_list,
+        )
+        
+        # Loop to handle tool execution (max 3 iterations)
+        extra_contents: Optional[List[types.Content]] = None
+        for attempt in range(3):
+            function_call = _extract_function_call(response)
+            if not function_call:
+                break
+            
+            tool_name = function_call.name
+            tool_args = function_call.args or {}
+            
+            api_logger.info(
+                f"[Hybrid] Gemini Flash executing tool: {tool_name}",
+                extra={"user_id": user_id, "tool": tool_name}
+            )
+            
+            try:
+                tool_result = await _execute_function_call(
+                    function_call, user_id, db, user_timezone=user_timezone
+                )
+                tool_results.append({
+                    "tool_name": tool_name,
+                    "args": dict(tool_args),
+                    "result": tool_result,
+                })
+                
+                # Collect reminder/plan/habit cards for frontend
+                if isinstance(tool_result, dict) and tool_result.get("type") in {
+                    "gray.reminder", "gray.plan", "gray.habit"
+                }:
+                    tool_cards.append(tool_result)
+                
+                # Check if onboarding was completed
+                if tool_name == "complete_onboarding":
+                    onboarding_completed = True
+                    break  # Don't continue after onboarding
+                
+                # Build contents for next iteration
+                tool_contents = _build_function_call_contents(function_call, tool_result)
+                if extra_contents:
+                    extra_contents.extend(tool_contents)
+                else:
+                    extra_contents = tool_contents
+                
+                # Generate again to see if more tools are needed
+                response = await GEMINI_SERVICE.generate(
+                    message,
+                    conversation_history,
+                    workspace_context,
+                    system_prompt,
+                    time_context,
+                    GEMINI_FLASH_MODEL,
+                    extra_contents=extra_contents,
+                    tools=tool_list,
+                )
+                
+            except Exception as tool_error:
+                api_logger.error(
+                    f"[Hybrid] Tool execution failed: {tool_name}: {tool_error}",
+                    exc_info=True
+                )
+                tool_results.append({
+                    "tool_name": tool_name,
+                    "args": dict(tool_args),
+                    "error": str(tool_error),
+                })
+                break
+    
+    except Exception as gemini_error:
+        api_logger.error(
+            f"[Hybrid] Gemini Flash tool execution failed: {gemini_error}",
+            exc_info=True,
+            extra={"user_id": user_id}
+        )
+    
+    return tool_results, tool_cards, onboarding_completed
+
+
+def _format_tool_results_for_context(tool_results: List[Dict[str, Any]]) -> str:
+    """Format tool execution results as context for the response model."""
+    if not tool_results:
+        return ""
+    
+    parts = ["[Tool execution results - use these to inform your response:]"]
+    for tr in tool_results:
+        tool_name = tr.get("tool_name", "unknown")
+        if "error" in tr:
+            parts.append(f"- {tool_name}: Error - {tr['error']}")
+        else:
+            result = tr.get("result", {})
+            # Summarize the result based on type
+            if isinstance(result, dict):
+                result_type = result.get("type", "")
+                if result_type == "gray.reminder":
+                    parts.append(f"- {tool_name}: Created reminder '{result.get('label', '')}' for {result.get('remind_at', 'unknown time')}")
+                elif result_type == "gray.plan":
+                    parts.append(f"- {tool_name}: Created plan '{result.get('label', '')}'")
+                elif result_type == "gray.habit":
+                    parts.append(f"- {tool_name}: Created habit '{result.get('label', '')}'")
+                elif result.get("status") == "success":
+                    parts.append(f"- {tool_name}: Success")
+                else:
+                    # Generic result summary
+                    parts.append(f"- {tool_name}: Completed successfully")
+            else:
+                parts.append(f"- {tool_name}: {str(result)[:100]}")
+    
+    return "\n".join(parts)
+
+
 async def _resolve_media_attachments(
     db: databases.Database,
     attachment_specs: Optional[List[ChatAttachment]],
@@ -6118,9 +6269,59 @@ async def stream_ai_response(
             try:
                 t0_provider = time.perf_counter()
                 
-                # Multi-turn loop for tool handling
+                # HYBRID FLOW: When structured tools are needed (reminders, plans, habits),
+                # use Gemini Flash for fast tool execution, then OpenRouter for personality response.
+                # Exception: onboarding flow stays native to preserve tool state handling.
+                use_hybrid_tools = needs_structured_tools and not is_onboarding_tool and GEMINI_SERVICE.available
+                
+                hybrid_tool_results: List[Dict[str, Any]] = []
+                hybrid_tool_cards: List[Dict[str, Any]] = []
+                hybrid_workspace_context = workspace_with_cache
+                
+                if use_hybrid_tools:
+                    api_logger.info(
+                        "[Hybrid] Using Gemini Flash for tool execution",
+                        extra={"user_id": user_id, "model": model}
+                    )
+                    
+                    # Execute tools with Gemini Flash
+                    hybrid_tool_results, hybrid_tool_cards, onboarding_done = await _execute_tools_with_gemini_flash(
+                        message,
+                        conversation_history,
+                        tool_list,
+                        effective_system_prompt,
+                        time_context,
+                        workspace_with_cache,
+                        user_id,
+                        db,
+                        user_timezone,
+                    )
+                    
+                    # Emit tool cards (reminders, plans, habits) to frontend
+                    for card in hybrid_tool_cards:
+                        yield ("reminders", [card])
+                    
+                    # If tools were executed, inject results into context for OpenRouter
+                    if hybrid_tool_results:
+                        tool_context = _format_tool_results_for_context(hybrid_tool_results)
+                        if tool_context:
+                            hybrid_workspace_context = "\n\n".join(filter(None, [
+                                workspace_with_cache,
+                                tool_context,
+                            ]))
+                        
+                        api_logger.info(
+                            f"[Hybrid] Tool execution complete: {len(hybrid_tool_results)} tools executed",
+                            extra={"user_id": user_id, "tools": [tr["tool_name"] for tr in hybrid_tool_results]}
+                        )
+                    
+                    # For hybrid mode, don't pass tools to OpenRouter (they're already executed)
+                    # This ensures OpenRouter generates conversation, not tool calls
+                    tool_list = []
+                
+                # Multi-turn loop for tool handling (standard OpenRouter flow when not using hybrid)
                 current_history = list(conversation_history) if conversation_history else []
-                max_tool_turns = 5
+                max_tool_turns = 5 if not use_hybrid_tools else 1  # Only 1 turn when hybrid handled tools
                 yielded_any_tokens = False
                 total_accumulated = ""
                 current_message = message
@@ -6138,7 +6339,7 @@ async def stream_ai_response(
                     async for chunk in OPENROUTER_SERVICE.stream(
                         current_message,
                         current_history,
-                        workspace_with_cache,
+                        hybrid_workspace_context,  # Uses tool results context when hybrid flow is active
                         effective_system_prompt,
                         time_context,
                         model,

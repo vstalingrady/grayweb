@@ -132,11 +132,11 @@ export type PlanCarrierUser = User & { plan_tier?: string | null };
 
 export const derivePlanTierLabel = (candidate?: PlanCarrierUser | null): string => {
     if (!candidate) {
-        return "Pioneer";
+        return "Scout";
     }
     const rawTier = (candidate.plan_tier ?? candidate.role ?? "").trim();
     if (!rawTier) {
-        return "Pioneer";
+        return "Scout";
     }
     const normalized = rawTier.toLowerCase();
     if (normalized === "voyager") {
@@ -146,7 +146,7 @@ export const derivePlanTierLabel = (candidate?: PlanCarrierUser | null): string 
         return "Pioneer";
     }
     if (normalized === "scout") {
-        return "Pioneer";
+        return "Scout";
     }
     const premiumTokens = new Set(["depth", "pro", "premium", "operator", "admin"]);
     if (premiumTokens.has(normalized)) {
