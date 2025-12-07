@@ -9695,40 +9695,48 @@ async def delete_user_reminder(
 
 @app.get("/users/{user_id}/conversations", response_model=List[Dict[str, Any]])
 async def list_user_conversations(
-
     user_id: int,
     current_user: Dict[str, Any] = Depends(get_current_user),
     limit: int = Query(100, ge=1, le=500),
-
+    db: databases.Database = Depends(get_database),
 ):
     require_same_user(user_id, current_user)
-    if not _conversation_store_available():
-        return []
-
+    
+    # Query local SQLite database for chat threads
     try:
-        result = (
-            supabase.table("user_chat_threads")
-            .select("id, title, created_at, updated_at, last_message_at")
-            .eq("user_identifier", user_id)
-            .order("last_message_at", desc=True)
+        query = (
+            user_chat_threads.select()
+            .where(user_chat_threads.c.user_identifier == user_id)
+            .order_by(user_chat_threads.c.last_message_at.desc())
             .limit(limit)
-            .execute()
         )
-        rows = result.data or []
+        rows = await db.fetch_all(query)
         normalized: List[Dict[str, Any]] = []
         for row in rows:
+            created_at = row["created_at"]
+            updated_at = row["updated_at"]
+            last_message_at = row["last_message_at"]
+            
+            # Convert datetime to ISO string if needed
+            if isinstance(created_at, datetime):
+                created_at = created_at.isoformat() + "Z"
+            if isinstance(updated_at, datetime):
+                updated_at = updated_at.isoformat() + "Z"
+            if isinstance(last_message_at, datetime):
+                last_message_at = last_message_at.isoformat() + "Z"
+            
             normalized.append(
                 {
-                    "id": _row_get(row, "id"),
-                    "title": _row_get(row, "title"),
-                    "created_at": _row_get(row, "created_at"),
-                    "updated_at": _row_get(row, "updated_at"),
-                    "last_message_at": _row_get(row, "last_message_at"),
+                    "id": row["id"],
+                    "title": row["title"],
+                    "created_at": created_at,
+                    "updated_at": updated_at,
+                    "last_message_at": last_message_at,
                 }
             )
         return normalized
     except Exception as error:
-        _handle_conversation_store_error("Warning: Conversations table not found or inaccessible", error)
+        api_logger.error(f"Failed to list conversations from local database: {error}", exc_info=True)
         return []
 
 @app.post("/users/{user_id}/calendar-events", response_model=CalendarEvent, status_code=status.HTTP_201_CREATED)
