@@ -258,8 +258,13 @@ const normalizeAssistantMath = (value: string | null | undefined): string | null
   return normalizeLatexForDisplay(value);
 };
 
-const GrayStreamingSpinner = () => (
+const GrayStreamingSpinner = ({ reasoningSeconds }: { reasoningSeconds?: number | null }) => (
   <div className={styles.chatStreamingInline}>
+    {typeof reasoningSeconds === "number" && reasoningSeconds > 0 && (
+      <span className={styles.chatReasoningTimeLabel}>
+        Thought for {reasoningSeconds.toFixed(1)}s
+      </span>
+    )}
     <Image
       src="/grayaiwhite.svg"
       alt="Gray logo"
@@ -1182,6 +1187,7 @@ type ChatMessagesListProps = {
   shouldShowPendingStreamIndicator: boolean;
   showFirstMessageSpinner: boolean;
   scrollAnchorRef: RefObject<HTMLDivElement | null>;
+  reasoningSeconds?: number | null;
 };
 
 const ThinkingBlock = ({
@@ -1243,6 +1249,7 @@ const ChatMessagesList = memo(
     shouldShowPendingStreamIndicator,
     showFirstMessageSpinner,
     scrollAnchorRef,
+    reasoningSeconds,
   }: ChatMessagesListProps) => {
     const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
     const [editContent, setEditContent] = useState("");
@@ -1707,7 +1714,7 @@ const ChatMessagesList = memo(
         {shouldShowPendingStreamIndicator && (
           <div className={styles.chatMessage} data-role="assistant">
             <div className={styles.chatAssistantBlock}>
-              <GrayStreamingSpinner />
+              <GrayStreamingSpinner reasoningSeconds={reasoningSeconds} />
             </div>
           </div>
         )}
@@ -2018,6 +2025,8 @@ export function GrayChatView({
   const [conversationUsage, setConversationUsage] = useState<ConversationUsage | null>(null);
   const isSubmittingRef = useRef(false);
   const streamAbortControllerRef = useRef<AbortController | null>(null);
+  const reasoningStartTimeRef = useRef<number | null>(null);
+  const [reasoningSeconds, setReasoningSeconds] = useState<number | null>(null);
 
   const composerDockRef = useRef<HTMLDivElement | null>(null);
   const [composerHeight, setComposerHeight] = useState(0);
@@ -2395,6 +2404,11 @@ export function GrayChatView({
       existingAssistantId?: string | null
     ) => {
       updateSession(targetSessionId, { isResponding: true, pendingAutoStream: false });
+      // Track reasoning start time for "Thought for X seconds" display
+      if (reasoningMode) {
+        reasoningStartTimeRef.current = Date.now();
+        setReasoningSeconds(null);
+      }
       const resolvedUser = await resolveChatUser();
       if (!resolvedUser) {
         const fallback = buildAssistantReply(prompt);
@@ -2485,6 +2499,12 @@ export function GrayChatView({
           { signal: abortController.signal }
         )) {
           if (event.type === "token") {
+            // Calculate reasoning duration on first token
+            if (!didReceiveToken && reasoningStartTimeRef.current) {
+              const elapsed = (Date.now() - reasoningStartTimeRef.current) / 1000;
+              setReasoningSeconds(elapsed);
+              reasoningStartTimeRef.current = null;
+            }
             didReceiveToken = true;
             const delta = event.delta;
             accumulated = accumulated + delta;
@@ -3370,6 +3390,7 @@ export function GrayChatView({
             shouldShowPendingStreamIndicator={shouldShowPendingStreamIndicator}
             showFirstMessageSpinner={showFirstMessageSpinner}
             scrollAnchorRef={scrollAnchorRef}
+            reasoningSeconds={reasoningSeconds}
           />
         )}
       </div>

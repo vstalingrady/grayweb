@@ -3519,6 +3519,14 @@
   align-items: center;
 }
 
+.chatReasoningTimeLabel {
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.55);
+  letter-spacing: 0.1em;
+  font-family: var(--font-mono, "IBM Plex Mono", "SFMono-Regular", Menlo, monospace);
+}
+
 .chatMetadataControl {
   position: relative;
   display: flex;

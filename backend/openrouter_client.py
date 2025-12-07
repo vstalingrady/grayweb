@@ -442,9 +442,13 @@ class OpenRouterService:
             payload["plugins"] = plugins
 
         # Add reasoning mode if enabled
-        # OpenRouter supports reasoning parameter with effort levels
+        # Note: Per xAI docs, grok-4 and grok-4-fast don't support reasoning_effort param
+        # Only grok-3-mini supports it. Grok-4 has reasoning built-in.
         if reasoning_mode:
-            payload["reasoning"] = {"effort": "high"}
+            # Skip for grok-4 models which error on reasoning param
+            is_grok4 = "grok-4" in resolved_model.lower() or "grok4" in resolved_model.lower()
+            if not is_grok4:
+                payload["reasoning"] = {"effort": "high"}
 
         # Add system prompt if provided
         system = self._build_system_prompt(system_prompt, workspace_context, time_context)
