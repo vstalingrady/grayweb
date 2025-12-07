@@ -1,6 +1,5 @@
-import type { ChatSession, GrayReminderCreatedPayload } from "@/components/gray/ChatProvider";
-import type { Reminder, User } from "@/lib/api";
-import { GENERAL_CHAT_SESSION_ID } from "@/components/gray/ChatProvider";
+import type { ChatSession, GrayReminderCreatedPayload } from "@/components/gray/chat/types";
+import { GENERAL_CHAT_SESSION_ID } from "@/components/gray/chat/constants";
 import type { CalendarEvent } from "@/components/calendar/types";
 import { REMINDER_RETENTION_WINDOW_MS } from "@/app/gray/constants";
 import { REMINDER_PLAN_ID_PREFIX } from "./constants";

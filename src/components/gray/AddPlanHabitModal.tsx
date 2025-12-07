@@ -126,108 +126,212 @@ export function AddPlanHabitModal({
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    console.log('[AddPlanHabitModal] handleSubmit called', { type, inputValue, user: !!user });
 
-    if (!user) {
-      setError("You must be signed in to perform this action.");
-      return;
-    }
+      e.preventDefault();
 
-    if (!inputValue.trim()) {
-      console.log('[AddPlanHabitModal] Input value is empty, returning');
-      return;
-    }
+      // console.log('[AddPlanHabitModal] handleSubmit called', { type, inputValue, user: !!user });
 
-    if ((planScheduleStart && !planScheduleEnd) || (!planScheduleStart && planScheduleEnd)) {
-      setError("Please provide both a start and end time for the schedule.");
-      return;
-    }
-    if (reminderEnabled && !planDeadline) {
-      setError("Please provide a reminder time when reminder is checked.");
-      return;
-    }
+  
 
-    setIsSubmitting(true);
-    setError(null);
-    console.log('[AddPlanHabitModal] Starting submission...');
+      if (!user) {
 
-    const isEditingPlan = type === "plan" && Boolean(planToEdit);
-    const isEditingHabit = type === "habit" && Boolean(habitToEdit);
-    try {
-      const trimmed = inputValue.trim();
-      const details = detailsValue.trim();
-      if (type === "plan") {
-        const scheduleSlotValue =
-          planScheduleStart && planScheduleEnd
-            ? `${planScheduleStart}-${planScheduleEnd}`
-            : null;
-        const deadlineValue = planDeadline ? planDeadline : null;
-        const descriptionValue = details.length > 0 ? details : null;
-        const payload: PlanUpdates = {
-          label: trimmed,
-          details: descriptionValue,
-          deadline: deadlineValue,
-          scheduleSlot: scheduleSlotValue,
-        };
-        console.log('[AddPlanHabitModal] Saving plan', { isEditing: isEditingPlan, payload, hasOnSubmitPlan: !!onSubmitPlan });
-        if (onSubmitPlan) {
-          await onSubmitPlan(planToEdit?.id ?? null, payload);
-        } else {
-          const result = await apiService.createPlan(user.id, {
-            label: trimmed,
-            completed: false,
-            deadline: deadlineValue,
-            scheduleSlot: scheduleSlotValue,
-            description: descriptionValue,
-          });
-          console.log('[AddPlanHabitModal] Plan created successfully', result);
-        }
-      } else {
-        if (isEditingHabit) {
-          const payload: HabitUpdates = {
-            label: trimmed,
-            details: details.length > 0 ? details : null,
-          };
-          console.log('[AddPlanHabitModal] Updating habit', { payload, hasOnSubmitHabit: !!onSubmitHabit });
-          if (onSubmitHabit) {
-            await onSubmitHabit(habitToEdit?.id ?? null, payload);
-          } else if (user && habitToEdit) {
-            const habitId = Number(habitToEdit.id);
-            await apiService.updateHabit(user.id, habitId, {
-              label: payload.label,
-              description: payload.details ?? null,
-            });
-          }
-        } else {
-          console.log('[AddPlanHabitModal] Creating new habit');
-          const result = await apiService.createHabit(user.id, {
-            label: trimmed,
-            streak_label: "0",
-            previous_label: "No history yet",
-            description: details.length > 0 ? details : null,
-          });
-          console.log('[AddPlanHabitModal] Habit created successfully', result);
-        }
+        setError("You must be signed in to perform this action.");
+
+        return;
+
       }
 
-      setInputValue("");
-      setDetailsValue("");
-      setPlanDeadline("");
-      setPlanScheduleStart("");
-      setPlanScheduleEnd("");
-      console.log('[AddPlanHabitModal] Calling onSuccess...');
-      await onSuccess();
-      console.log('[AddPlanHabitModal] onSuccess completed, closing modal');
-      onClose();
-    } catch (err) {
-      const action = isEditingPlan || isEditingHabit ? "update" : "add";
-      console.error(`[AddPlanHabitModal] Failed to ${action} ${type}:`, err);
-      setError(err instanceof Error ? err.message : `Failed to ${action} ${type}`);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+  
+
+      if (!inputValue.trim()) {
+
+        // console.log('[AddPlanHabitModal] Input value is empty, returning');
+
+        return;
+
+      }
+
+  
+
+      if ((planScheduleStart && !planScheduleEnd) || (!planScheduleStart && planScheduleEnd)) {
+
+        setError("Please provide both a start and end time for the schedule.");
+
+        return;
+
+      }
+
+  
+
+      if (reminderEnabled && !planDeadline) {
+
+        setError("Please provide a reminder time when reminder is checked.");
+
+        return;
+
+      }
+
+  
+
+      setIsSubmitting(true);
+
+      setError(null);
+
+      // console.log('[AddPlanHabitModal] Starting submission...');
+
+  
+
+      const isEditingPlan = type === "plan" && Boolean(planToEdit);
+
+      const isEditingHabit = type === "habit" && Boolean(habitToEdit);
+
+      try {
+
+        const trimmed = inputValue.trim();
+
+        const details = detailsValue.trim();
+
+        if (type === "plan") {
+
+          const scheduleSlotValue =
+
+            planScheduleStart && planScheduleEnd
+
+              ? `${planScheduleStart}-${planScheduleEnd}`
+
+              : null;
+
+          const deadlineValue = planDeadline ? planDeadline : null;
+
+          const descriptionValue = details.length > 0 ? details : null;
+
+          const payload: PlanUpdates = {
+
+            label: trimmed,
+
+            details: descriptionValue,
+
+            deadline: deadlineValue,
+
+            scheduleSlot: scheduleSlotValue,
+
+          };
+
+          // console.log('[AddPlanHabitModal] Saving plan', { isEditing: isEditingPlan, payload, hasOnSubmitPlan: !!onSubmitPlan });
+
+          if (onSubmitPlan) {
+
+            await onSubmitPlan(planToEdit?.id ?? null, payload);
+
+          } else {
+
+            const result = await apiService.createPlan(user.id, {
+
+              label: trimmed,
+
+              completed: false,
+
+              deadline: deadlineValue,
+
+              scheduleSlot: scheduleSlotValue,
+
+              description: descriptionValue,
+
+            });
+
+            // console.log('[AddPlanHabitModal] Plan created successfully', result);
+
+          }
+
+        } else {
+
+          if (isEditingHabit) {
+
+            const payload: HabitUpdates = {
+
+              label: trimmed,
+
+              details: details.length > 0 ? details : null,
+
+            };
+
+            // console.log('[AddPlanHabitModal] Updating habit', { payload, hasOnSubmitHabit: !!onSubmitHabit });
+
+            if (onSubmitHabit) {
+
+              await onSubmitHabit(habitToEdit?.id ?? null, payload);
+
+            } else if (user && habitToEdit) {
+
+              const habitId = Number(habitToEdit.id);
+
+              await apiService.updateHabit(user.id, habitId, {
+
+                label: payload.label,
+
+                description: payload.details ?? null,
+
+              });
+
+            }
+
+          } else {
+
+            // console.log('[AddPlanHabitModal] Creating new habit');
+
+            const result = await apiService.createHabit(user.id, {
+
+              label: trimmed,
+
+              streak_label: "0",
+
+              previous_label: "No history yet",
+
+              description: details.length > 0 ? details : null,
+
+            });
+
+            // console.log('[AddPlanHabitModal] Habit created successfully', result);
+
+          }
+
+        }
+
+  
+
+        setInputValue("");
+
+        setDetailsValue("");
+
+        setPlanDeadline("");
+
+        setPlanScheduleStart("");
+
+        setPlanScheduleEnd("");
+
+        // console.log('[AddPlanHabitModal] Calling onSuccess...');
+
+        await onSuccess();
+
+        // console.log('[AddPlanHabitModal] onSuccess completed, closing modal');
+
+        onClose();
+
+      } catch (err) {
+
+        const action = isEditingPlan || isEditingHabit ? "update" : "add";
+
+        console.error(`[AddPlanHabitModal] Failed to ${action} ${type}:`, err);
+
+        setError(err instanceof Error ? err.message : `Failed to ${action} ${type}`);
+
+      } finally {
+
+        setIsSubmitting(false);
+
+      }
+
+    };
 
   const handleInputChange = (value: string) => {
     setInputValue(value);

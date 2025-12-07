@@ -34,13 +34,19 @@ import {
 import type { CalendarEvent, CalendarInfo } from "@/components/calendar/types";
 import {
   useChatStore,
+} from "@/components/gray/ChatProvider";
+import {
   GENERAL_CHAT_SESSION_ID,
   SHARED_CHAT_PLACEHOLDER_TITLE,
-  normalizeConversationIdValue,
+} from "@/components/gray/chat/constants";
+import {
   type ChatSession,
   type GrayReminderCreatedPayload,
+} from "@/components/gray/chat/types";
+import {
+  normalizeConversationIdValue,
   buildGeneralConversationId,
-} from "@/components/gray/ChatProvider";
+} from "@/components/gray/chat/utils";
 import { DEFAULT_HISTORY_SECTIONS } from "@/components/gray/historySeed";
 import {
   type WorkspaceBackgroundOption,
@@ -1350,8 +1356,8 @@ function GrayPageClientInner({
     }
 
     const directSession = sessions.find((session) => session.id === activeChatId);
-    console.log('[GrayPageClient] Looking for session:', activeChatId, 'found:', directSession?.id, 'messages:', directSession?.messages?.length);
-    console.log('[GrayPageClient] All sessions:', sessions.map(s => ({ id: s.id, msgCount: s.messages?.length })));
+    // console.log('[GrayPageClient] Looking for session:', activeChatId, 'found:', directSession?.id, 'messages:', directSession?.messages?.length);
+    // console.log('[GrayPageClient] All sessions:', sessions.map(s => ({ id: s.id, msgCount: s.messages?.length })));
 
     // Already selected the right session and it exists.
     if (currentChatId === activeChatId && directSession) {
@@ -1360,7 +1366,7 @@ function GrayPageClientInner({
 
     // 1) Exact local session id match (/c/{session.id}).
     if (directSession) {
-      console.log('[GrayPageClient] Found direct session, setting as current');
+      // console.log('[GrayPageClient] Found direct session, setting as current');
       if (currentChatId !== directSession.id) {
         setCurrentChatId(directSession.id);
       }
@@ -2268,18 +2274,18 @@ function GrayPageClientInner({
       const shouldStartStandaloneThread =
         !isGeneralSurface && (!currentChatId || isGeneralChatActive);
 
-      console.log("[GrayPageClient] handleChatSubmit", {
-        isGeneralSurface,
-        currentChatId,
-        isGeneralChatActive,
-        shouldStartStandaloneThread,
-        draft: normalizedDraft.slice(0, 20)
-      });
+      // console.log("[GrayPageClient] handleChatSubmit", {
+      //   isGeneralSurface,
+      //   currentChatId,
+      //   isGeneralChatActive,
+      //   shouldStartStandaloneThread,
+      //   draft: normalizedDraft.slice(0, 20)
+      // });
 
       if (shouldStartStandaloneThread) {
-        console.log("[GrayPageClient] Creating standalone thread...");
+        // console.log("[GrayPageClient] Creating standalone thread...");
         const session = await createThreadSession(normalizedDraft);
-        console.log("[GrayPageClient] Thread created, sessionId:", session.id);
+        // console.log("[GrayPageClient] Thread created, sessionId:", session.id);
 
         void markHasSeenGeneralChat();
         setCurrentChatId(session.id);
@@ -2287,11 +2293,11 @@ function GrayPageClientInner({
         if (supportsInlineChat) {
           setManualViewMode("chat");
           if (typeof window !== "undefined") {
-            console.log("[GrayPageClient] Pushing state to history:", `/c/${session.id}`);
+            // console.log("[GrayPageClient] Pushing state to history:", `/c/${session.id}`);
             window.history.pushState(null, "", `/c/${session.id}`);
           }
         } else {
-          console.log("[GrayPageClient] Routing to new thread:", session.id);
+          // console.log("[GrayPageClient] Routing to new thread:", session.id);
           router.push(`/c/${session.id}`);
         }
         return;
@@ -2299,7 +2305,7 @@ function GrayPageClientInner({
 
       // If not starting a standalone thread, we are sending to the general chat
       // (or the current chat if it happens to be general? logic implies general here)
-      console.log("[GrayPageClient] Sending general message...");
+      // console.log("[GrayPageClient] Sending general message...");
       const sessionId = await sendGeneralMessage(normalizedDraft);
       void markHasSeenGeneralChat();
       setCurrentChatId(sessionId);
@@ -2310,14 +2316,14 @@ function GrayPageClientInner({
       if (supportsInlineChat) {
         setManualViewMode("chat");
         if (!isGeneralSession && typeof window !== "undefined") {
-          console.log("[GrayPageClient] Pushing state to history:", `/c/${sessionId}`);
+          // console.log("[GrayPageClient] Pushing state to history:", `/c/${sessionId}`);
           window.history.pushState(null, "", `/c/${sessionId}`);
         }
       } else if (isGeneralSession) {
-        console.log("[GrayPageClient] Routing to general chat");
+        // console.log("[GrayPageClient] Routing to general chat");
         router.push("/g");
       } else if (activeChatId !== sessionId) {
-        console.log("[GrayPageClient] Routing to existing chat:", sessionId);
+        // console.log("[GrayPageClient] Routing to existing chat:", sessionId);
         router.push(`/c/${sessionId}`);
       }
     } catch (error) {

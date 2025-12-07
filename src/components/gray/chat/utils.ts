@@ -1,4 +1,4 @@
-import type { ChatMessage, GrayReminderCreatedPayload } from "./types";
+import type { ChatMessage, GrayReminderCreatedPayload, ChatSession } from "./types";
 import type { User, Reminder } from "@/lib/api";
 import {
     GREETING_PATTERN,
@@ -18,6 +18,19 @@ import {
 } from "./constants";
 import { formatReminderDateLabel, formatReminderSlotLabel } from "../reminderTimeUtils";
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export const normalizeConversationIdValue = (value?: string | null): string | undefined => {
+    if (typeof value !== "string") {
+        return undefined;
+    }
+    const trimmed = value.trim();
+    if (!trimmed || !UUID_PATTERN.test(trimmed)) {
+        return undefined;
+    }
+    return trimmed;
+};
+
 // Session ID utilities
 export const buildGeneralConversationId = (userId?: number | null) => {
     if (typeof userId !== "number" || !Number.isFinite(userId)) {
@@ -28,6 +41,14 @@ export const buildGeneralConversationId = (userId?: number | null) => {
 
 export const isGeneralConversationId = (value?: string | null): boolean =>
     typeof value === "string" && value.startsWith(GENERAL_CONVERSATION_PREFIX);
+
+export const coerceConversationIdForRequest = (value?: string | null): string | undefined => {
+    const normalized = normalizeConversationIdValue(value);
+    if (normalized) {
+        return normalized;
+    }
+    return isGeneralConversationId(value) ? value ?? undefined : undefined;
+};
 
 // Timezone utilities
 export const resolveClientTimezone = (): string => {
@@ -86,7 +107,7 @@ const formatReminderScheduleLabel = (iso?: string | null) => {
 export const buildReminderPingMessage = (reminder: Reminder): string => {
     const label = normalizeReminderLabel(reminder.label);
     const note = reminder.summary ?? reminder.description ?? null;
-    
+
     // Use a cleaner, less "bot-like" format
     const parts = [`🔔 ${label}`];
     if (note) {
@@ -140,7 +161,48 @@ export const shouldAutoEnableMapsForMessage = (message: string) => {
     return MAP_TRIGGER_PATTERN.test(normalized) || MAP_TRIGGER_PHRASE.test(normalized);
 };
 
+export const formatConversationTitle = (raw: string): string => {
+    const trimmed = raw.trim();
+    if (!trimmed) {
+        return "New Chat";
+    }
+    if (trimmed.length > 100) {
+        return trimmed.slice(0, 100).trim();
+    }
+    return trimmed;
+};
+
 // Title utilities
+export const deriveTitleFromMessage = (content: string) => {
+    const trimmed = content.trim();
+    if (!trimmed) {
+        return "New Chat";
+    }
+    return trimmed.length > 80 ? `${trimmed.slice(0, 77).trim()}…` : trimmed;
+};
+
+const isTitleDerivedFromMessage = (title: string, messages: ChatMessage[]): boolean => {
+    if (!title) return false;
+    const firstUserMsg = messages.find((m) => m.role === "user");
+    if (!firstUserMsg || !firstUserMsg.content) return false;
+
+    const cleanTitle = title.trim().toLowerCase().replace(/\u2026$/, ""); // Remove ellipsis
+    const cleanMsg = firstUserMsg.content.trim().toLowerCase();
+
+    if (!cleanMsg) return false;
+
+    // Check if message starts with title (handling truncation)
+    return cleanMsg.startsWith(cleanTitle);
+};
+
+export const shouldRequestAutoTitleForSession = (session?: ChatSession | null): boolean => {
+    if (!session) return true; // Generate title for new sessions
+    // Generate title if session has auto mode and a generic/placeholder title
+    if (session.titleMode === "auto") {
+        return isGenericSessionTitle(session.title) || isTitleDerivedFromMessage(session.title, session.messages);
+    }
+    return false;
+};
 const isLowInformationTitle = (value: string | null | undefined): boolean => {
     if (!value) {
         return true;
@@ -174,11 +236,17 @@ export const isGenericSessionTitle = (title: string | null | undefined): boolean
         return true;
     }
     const normalized = trimmed.toLowerCase();
-    if (
-        normalized === "new chat" ||
-        normalized === "conversation start" ||
-        normalized === GENERAL_SESSION_TITLE.toLowerCase()
-    ) {
+
+    // Check against generic tokens
+    const GENERIC_TOKENS = [
+        "new chat",
+        "new conversation",
+        "new thread",
+        "new session",
+        "conversation start",
+        GENERAL_SESSION_TITLE.toLowerCase(),
+    ];
+    if (GENERIC_TOKENS.includes(normalized)) {
         return true;
     }
     if (GREETING_PATTERN.test(trimmed)) {

@@ -32,6 +32,50 @@ import { buildLocalTimeContext } from "@/lib/timeContext";
 import { formatReminderDateLabel, formatReminderSlotLabel } from "./reminderTimeUtils";
 import { type QuestionnaireSession } from "@/lib/questionnaire";
 import { IntroSequence, INTRO_MESSAGES } from "./IntroSequence";
+import {
+  ChatRole,
+  ChatMessage,
+  ChatSession,
+  ChatSessionScope,
+  ChatTitleMode,
+  ChatContextValue,
+  GrayReminderCreatedPayload
+} from "./chat/types";
+import {
+  buildGeneralConversationId,
+  isGeneralConversationId,
+  buildPersonalizedSystemPrompt,
+  buildAssistantReply,
+  buildAssistantErrorReply,
+  normalizeAssistantContent,
+  shouldIncludeWorkspaceContext,
+  resolveClientTimezone,
+  buildSessionStorageKeyCandidates,
+  deriveTitleFromMessage,
+  shouldRequestAutoTitleForSession,
+  normalizeConversationIdValue,
+  isGenericSessionTitle as isGenericTitle,
+  stripGrayTitleMarkers,
+
+  formatConversationTitle,
+  coerceConversationIdForRequest,
+} from "./chat/utils";
+import { extractGrayRemindersFromText, buildReminderConfirmationText } from "./chat/reminderUtils";
+import {
+  GENERAL_CHAT_SESSION_ID,
+  GENERAL_CONVERSATION_PREFIX,
+  SHARED_CHAT_PLACEHOLDER_TITLE,
+  GREETING_PATTERN,
+  SELF_CONTEXT_PATTERNS,
+  WORKSPACE_CONTEXT_KEYWORDS,
+  MAP_TRIGGER_PATTERN,
+  MAP_TRIGGER_PHRASE,
+  LOW_SIGNAL_TITLE_WORDS,
+  DUPLICATE_THREAD_WINDOW_MS,
+  REMOTE_SESSION_MERGE_WINDOW_MS,
+  REMINDER_POLL_MIN_INTERVAL,
+  REMINDER_POLL_SHORT_INTERVAL
+} from "./chat/constants";
 
 declare global {
   interface Window {
@@ -46,162 +90,7 @@ const endSearchTracking = () => {
   window.endSearchTracking?.();
 };
 
-export type ChatRole = "user" | "assistant";
 
-export type ChatMessage = {
-  id: string;
-  role: ChatRole;
-  content: string;
-  createdAt: number;
-  reminders?: GrayReminderCreatedPayload[];
-  groundingMetadata?: GroundingMetadata;
-  backendTimings?: ChatStreamTiming;
-  /**
-   * History of assistant responses for this message.
-   * Index 0 is the original, subsequent entries are regenerations.
-   */
-  variants?: string[];
-  activeVariantIndex?: number;
-};
-
-type ConversationHistoryEntryPayload = {
-  role: "user" | "model";
-  text: string;
-};
-
-const buildConversationHistoryPayload = (messages: ChatMessage[]) => {
-  return messages
-    .map<ConversationHistoryEntryPayload | null>((message) => {
-      if (message.role === "user") {
-        return {
-          role: "user",
-          text: message.content ?? "",
-        };
-      }
-      if (message.role === "assistant") {
-        return {
-          role: "model",
-          text: message.content ?? "",
-        };
-      }
-      return null;
-    })
-    .filter((entry): entry is ConversationHistoryEntryPayload => entry !== null);
-};
-
-export type ChatSessionScope = "general" | "thread";
-export type ChatTitleMode = "auto" | "manual";
-
-export type ChatSession = {
-  id: string;
-  title: string;
-  titleMode: ChatTitleMode;
-  createdAt: number;
-  updatedAt: number;
-  messages: ChatMessage[];
-  isResponding: boolean;
-  scope: ChatSessionScope;
-  conversationId?: string;
-  pendingAutoStream?: boolean;
-};
-
-type ChatContextValue = {
-  sessions: ChatSession[];
-  createThreadSession: (
-    initialMessage?: string,
-    options?: {
-      autoStream?: boolean;
-    }
-  ) => Promise<ChatSession>;
-  sendGeneralMessage: (content: string) => Promise<string>;
-  appendMessage: (
-    sessionId: string,
-    role: ChatRole,
-    content: string,
-    tempId?: string,
-    metadata?: GroundingMetadata
-  ) => ChatMessage | null;
-  updateMessage: (
-    sessionId: string,
-    messageId: string,
-    partial: Partial<ChatMessage>
-  ) => void;
-  deleteMessage: (sessionId: string, messageId: string) => void;
-  updateSession: (sessionId: string, partial: Partial<ChatSession>) => void;
-  renameSession: (sessionId: string, title: string) => void;
-  deleteSession: (sessionId: string) => void;
-  getSession: (sessionId: string) => ChatSession | undefined;
-  ensureSession: (sessionId: string, initializer: () => ChatSession) => ChatSession;
-  generalSessionId: string | null;
-  workspaceContext: string | null;
-  setWorkspaceContext: (context: string | null) => void;
-  applyAutoTitle: (sessionId: string, candidate?: string | null) => void;
-  hasAutoStreamTriggered: (sessionId: string, messageId?: string | null) => boolean;
-  markAutoStreamTriggered: (sessionId: string, messageId?: string | null) => void;
-  resetAutoStreamState: (sessionId?: string | null) => void;
-  markHasSeenGeneralChat: () => Promise<void>;
-  personalizedSystemPrompt: string;
-  attachments: MediaUpload[];
-  isAttachmentUploading: boolean;
-  attachmentError: string | null;
-  uploadAttachments: (files: FileList | File[]) => Promise<void>;
-  removeAttachment: (id: number) => void;
-  clearAttachments: () => void;
-  mapsEnabled: boolean;
-  mapsWidgetEnabled: boolean;
-  mapsLatitude: string;
-  mapsLongitude: string;
-  setMapsEnabled: (value: boolean) => void;
-  setMapsWidgetEnabled: (value: boolean) => void;
-  setMapsLatitude: (value: string) => void;
-  setMapsLongitude: (value: string) => void;
-  mapPayload: Record<string, number | boolean | undefined>;
-  pendingLocationRequestMessage: string | null;
-  isRequestingLocation: boolean;
-  requestLocationShare: () => void;
-  skipLocationShare: () => void;
-  contextCaches: ContextCache[];
-  contextCacheLabel: string;
-  contextCacheContent: string;
-  selectedContextCacheId: number | null;
-  contextCacheMessage: string | null;
-  isContextCacheSaving: boolean;
-  createContextCache: (conversationId?: string) => Promise<void>;
-  selectContextCacheId: (cacheId: number | null) => void;
-  setContextCacheLabel: (value: string) => void;
-  setContextCacheContent: (value: string) => void;
-  webSearchEnabled: boolean;
-  setWebSearchEnabled: (value: boolean) => void;
-  fileSearchStores: { name: string; display_name?: string }[];
-  fileSearchDisplayName: string;
-  setFileSearchDisplayName: (value: string) => void;
-  fileSearchStatus: string | null;
-  isCreatingFileSearchStore: boolean;
-  handleCreateFileSearchStore: () => Promise<void>;
-  selectedFileSearchStore: string;
-  setSelectedFileSearchStore: (value: string) => void;
-  fileSearchUploadFile: File | null;
-  setFileSearchUploadFile: (value: File | null) => void;
-  fileSearchUploadStatus: string | null;
-  handleFileSearchUpload: () => Promise<void>;
-  fileSearchChunking: { maxTokensPerChunk: string; maxOverlapTokens: string };
-  setFileSearchChunking: (value: { maxTokensPerChunk: string; maxOverlapTokens: string }) => void;
-  fileSearchImportName: string;
-  setFileSearchImportName: (value: string) => void;
-  fileSearchImportStatus: string | null;
-  handleFileSearchImport: () => Promise<void>;
-  fileSearchUploadInputRef: RefObject<HTMLInputElement | null>;
-  loadConversationMessages: (sessionId: string) => Promise<void>;
-  reasoningMode: boolean;
-  setReasoningMode: (value: boolean) => void;
-  modelTier: "lite" | "pro" | "pioneer";
-  setModelTier: (value: "lite" | "pro" | "pioneer") => void;
-  selectedModelId: string | null;
-  setSelectedModelId: (value: string | null) => void;
-  questionnaireSession: QuestionnaireSession | null;
-  startQuestionnaire: (mode: "quick" | "deep") => void;
-  cancelQuestionnaire: () => void;
-};
 
 type SaveContextCacheOptions = {
   skipMessage?: boolean;
@@ -209,34 +98,7 @@ type SaveContextCacheOptions = {
 };
 
 const ChatContext = createContext<ChatContextValue | null>(null);
-const SESSION_STORAGE_KEY_BASE = "gray-chat-sessions-v1";
-const emailToKeySegment = (email?: string | null) => {
-  if (!email) {
-    return null;
-  }
-  return email.trim().toLowerCase();
-};
-const buildSessionStorageKeyCandidates = (userId?: number | null, email?: string | null): string[] => {
-  const keys: string[] = [];
-  const emailSegment = emailToKeySegment(email);
-  const hasUserId = typeof userId === "number" && Number.isFinite(userId);
 
-  if (hasUserId && emailSegment) {
-    keys.push(`${SESSION_STORAGE_KEY_BASE}:id:${userId}:email:${emailSegment}`);
-  } else if (hasUserId) {
-    keys.push(`${SESSION_STORAGE_KEY_BASE}:id:${userId}`);
-  }
-
-  if (emailSegment) {
-    keys.push(`${SESSION_STORAGE_KEY_BASE}:email:${emailSegment}`);
-  }
-
-  if (!keys.length && hasUserId) {
-    keys.push(`${SESSION_STORAGE_KEY_BASE}:id:${userId}`);
-  }
-
-  return [...new Set(keys)];
-};
 
 const INITIAL_SESSIONS: ChatSession[] = [];
 const PLACEHOLDER_SESSION_IDS = new Set([
@@ -251,126 +113,8 @@ const PLACEHOLDER_TITLES = new Set([
 ]);
 const FALLBACK_ASSISTANT_DELAY_MS = 150;
 const GENERAL_SESSION_ID = "general-session";
-export const GENERAL_CHAT_SESSION_ID = GENERAL_SESSION_ID;
 const GENERAL_SESSION_TITLE = "General Chat";
-export const SHARED_CHAT_PLACEHOLDER_TITLE = "Shared Chat";
-const GENERAL_CONVERSATION_PREFIX = "general:";
-export const buildGeneralConversationId = (userId?: number | null) => {
-  if (typeof userId !== "number" || !Number.isFinite(userId)) {
-    return undefined;
-  }
-  return `${GENERAL_CONVERSATION_PREFIX}${userId}`;
-};
-const isGeneralConversationId = (value?: string | null): boolean =>
-  typeof value === "string" && value.startsWith(GENERAL_CONVERSATION_PREFIX);
-const DUPLICATE_THREAD_WINDOW_MS = 15000;
-const REMOTE_SESSION_MERGE_WINDOW_MS = 5 * 60 * 1000;
-const REMINDER_POLL_MIN_INTERVAL = 60_000;
-const REMINDER_POLL_SHORT_INTERVAL = 15_000;
-export const buildPersonalizedSystemPrompt = (
-  user?: User | null,
-  basePrompt?: string | null,
-  includeProfile: boolean = true
-) => {
-  const sections: string[] = [];
 
-  // Use override if available, otherwise fallback to base prompt
-  const effectiveBasePrompt =
-    user?.personalization_system_prompt_override?.trim() || basePrompt?.trim();
-
-  if (effectiveBasePrompt) {
-    sections.push(effectiveBasePrompt);
-  }
-
-  if (user && includeProfile) {
-    const profileLines: string[] = [];
-
-    // Only treat explicit personalization fields as stable identity.
-    const nickname = user.personalization_nickname?.trim();
-    const occupation = user.personalization_occupation?.trim();
-    const about = user.personalization_about?.trim();
-    const customInstructions = user.personalization_custom_instructions?.trim();
-
-    if (nickname) {
-      profileLines.push(`Preferred name: ${nickname}`);
-    }
-
-    if (occupation) {
-      profileLines.push(`Occupation: ${occupation}`);
-    }
-
-    if (about) {
-      profileLines.push(`About: ${about}`);
-    }
-
-    if (profileLines.length > 0) {
-      sections.push(["USER PROFILE (ONLY FROM EXPLICIT PERSONALIZATION FIELDS)", ...profileLines].join("\n"));
-    }
-
-    if (customInstructions) {
-      sections.push(
-        [
-          "CUSTOM INSTRUCTIONS FROM USER (SOURCE OF TRUTH)",
-          customInstructions,
-        ].join("\n")
-      );
-    }
-
-    if (nickname) {
-      sections.push(
-        [
-          `IDENTITY BOUNDARY`,
-          `- Address the user as "${nickname}".`,
-          "- Ignore any other names from metadata or past conversations.",
-        ].join("\n")
-      );
-    } else {
-      sections.push(
-        [
-          "IDENTITY BOUNDARY",
-          "- Do NOT assume a name for the user.",
-          "- Do NOT use the user's email or username to address them.",
-          "- If you don't know their name, just say 'hey' or 'there'.",
-        ].join("\n")
-      );
-    }
-  } else if (!includeProfile && user) {
-    // Minimal identity instructions when profile is excluded
-    const nickname = user.personalization_nickname?.trim();
-    if (nickname) {
-      sections.push(`Address the user as "${nickname}".`);
-    }
-  } else if (!user) {
-    sections.push(
-      [
-        "IDENTITY BOUNDARY",
-        "- No personalization data is set.",
-        "- Do NOT infer a name or identity for the user from technical metadata (email, auth provider, etc).",
-      ].join("\n")
-    );
-  }
-
-  return sections.join("\n\n");
-};
-
-export const buildAssistantReply = (prompt: string) => {
-  void prompt;
-  return "I encountered an unexpected issue and couldn't generate a response. Please try again.";
-};
-
-const buildAssistantErrorReply = (cause: unknown) => {
-  const base = "I couldn't reach the Gray backend to finish that request.";
-  if (!cause) {
-    return `${base} Make sure the API service is running (try \`npm run backend\`) and then retry.`;
-  }
-  if (cause instanceof Error && cause.message.trim()) {
-    return `${base} Details: ${cause.message.trim()} — verify the service is up and try again.`;
-  }
-  if (typeof cause === "string" && cause.trim().length > 0) {
-    return `${base} Details: ${cause.trim()}.`;
-  }
-  return `${base} Check that the API is reachable and try again.`;
-};
 
 const normalizeReminderLabel = (label?: string | null) => {
   if (!label) {
@@ -446,939 +190,11 @@ const sendReminderNotification = (reminder: Reminder) => {
   }
 };
 
-const GREETING_PATTERN =
-  /^(?:hi|hey|hello|hiya|yo|sup|what'?s up|howdy|good (?:morning|afternoon|evening)|hola|h[ae]y there|hi there|hey there|gm|gn|good night)\b[^\w]*$/i;
 
-// Short "what do you know about me" style questions should still
-// receive full workspace context so the model can surface calendars,
-// events, plans, and habits even if the message is brief.
-const SELF_CONTEXT_PATTERNS: RegExp[] = [
-  /\bwhat do you know about me\b/i,
-  /\bwhat do you remember about me\b/i,
-  /\bwhat do you know about my day\b/i,
-  /\bwhat do you know about today\b/i,
-  /\bwhat do you know about my schedule\b/i,
-  /\bwhat do you know about my calendar\b/i,
-];
 
-const resolveClientTimezone = (): string => {
-  if (typeof Intl === "undefined") {
-    return "UTC";
-  }
-  try {
-    const resolved = Intl.DateTimeFormat().resolvedOptions();
-    return resolved.timeZone || "UTC";
-  } catch {
-    return "UTC";
-  }
-};
 
-const LOW_SIGNAL_TITLE_WORDS = new Set<string>([
-  "hi",
-  "hi there",
-  "hey",
-  "hey there",
-  "hello",
-  "hola",
-  "yo",
-  "sup",
-  "gm",
-  "gn",
-  "good morning",
-  "good afternoon",
-  "good evening",
-  "good night",
-  "whats up",
-  "what's up",
-]);
 
-const isLowInformationTitle = (value: string | null | undefined): boolean => {
-  if (!value) {
-    return true;
-  }
-  const normalized = value.trim().toLowerCase().replace(/\s+/g, " ");
-  if (!normalized) {
-    return true;
-  }
-  if (LOW_SIGNAL_TITLE_WORDS.has(normalized)) {
-    return true;
-  }
-  if (normalized.length <= 3) {
-    return true;
-  }
-  const tokens = normalized.replace(/[^a-z0-9\s]/gi, " ").split(/\s+/).filter(Boolean);
-  if (!tokens.length) {
-    return true;
-  }
-  if (tokens.length <= 2 && tokens.every((token) => token.length <= 3)) {
-    return true;
-  }
-  return false;
-};
 
-const isGenericSessionTitle = (title: string | null | undefined): boolean => {
-  if (!title) {
-    return true;
-  }
-  const trimmed = title.trim();
-  if (!trimmed) {
-    return true;
-  }
-  const normalized = trimmed.toLowerCase();
-  if (
-    normalized === "new chat" ||
-    normalized === "conversation start" ||
-    normalized === GENERAL_SESSION_TITLE.toLowerCase()
-  ) {
-    return true;
-  }
-  if (GREETING_PATTERN.test(trimmed)) {
-    return true;
-  }
-  return isLowInformationTitle(trimmed);
-};
-
-const WORKSPACE_CONTEXT_KEYWORDS = [
-  "calendar",
-  "schedule",
-  "event",
-  "meeting",
-  "plan",
-  "task",
-  "todo",
-  "habit",
-  "routine",
-  "goal",
-  "project",
-  "focus",
-  "pulse",
-  "streak",
-  "history",
-  "reminder",
-];
-const MAP_TRIGGER_PATTERN =
-  /\b(?:nearby|around|directions|route|map|maps|location|locations|address|restaurant|cafe|coffee|diner|bar|hotel|airport|station|train|bus|metro|tram|park|museum|landmark|beach|mall|district|city|town|village|neighborhood|venue|street|trip|plan)\b/i;
-const MAP_TRIGGER_PHRASE =
-  /\b(?:near me|near here|around here|close to|within (?:a )?(?:mile|km|block|minute|minutes)|walking distance|driving distance|in (?:the )?(?:area|neighborhood|city))\b/i;
-const WORKSPACE_CONTEXT_COOLDOWN_MS = 3 * 60 * 1000;
-
-const toTimestamp = (value?: string | number | Date | null): number => {
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return value;
-  }
-  if (value instanceof Date) {
-    return value.getTime();
-  }
-  if (typeof value === "string") {
-    const parsed = Date.parse(value);
-    if (!Number.isNaN(parsed)) {
-      return parsed;
-    }
-  }
-  return Date.now();
-};
-
-export const shouldIncludeWorkspaceContext = (message: string, context: string | null) => {
-  if (!context) {
-    return false;
-  }
-  const normalized = message.trim().toLowerCase();
-  if (!normalized) {
-    return false;
-  }
-  const punctuationTrimmed = normalized.replace(/[.!?]+$/g, "").trim();
-  if (GREETING_PATTERN.test(punctuationTrimmed)) {
-    return false;
-  }
-
-  // Explicit self-context and "what do you know" prompts
-  if (SELF_CONTEXT_PATTERNS.some((pattern) => pattern.test(punctuationTrimmed))) {
-    return true;
-  }
-
-  return WORKSPACE_CONTEXT_KEYWORDS.some((keyword) => punctuationTrimmed.includes(keyword));
-};
-
-const shouldAutoEnableMapsForMessage = (message: string) => {
-  return false;
-};
-
-const MCP_TOOL_BLOCK_REGEX = /<use_mcp_tool[\s\S]*?<\/use_mcp_tool>/gi;
-
-export const normalizeAssistantContent = (candidate: string | null | undefined, prompt: string) => {
-  const raw = (candidate ?? "").replace(MCP_TOOL_BLOCK_REGEX, "");
-  const trimmed = raw.trim();
-  return trimmed.length > 0 ? trimmed : buildAssistantReply(prompt);
-};
-
-/**
- * Parsed representation of a Gray reminder confirmation block embedded
- * in assistant output. This is UI-facing, authoritative metadata.
- */
-export type GrayReminderEntityType = "plan" | "habit" | "reminder";
-export type GrayReminderPayloadType = "gray.reminder" | "gray.plan" | "gray.habit";
-export type GrayReminderStatus = "created" | "updated" | "completed" | "deleted";
-export type GrayReminderSource = "mcp/plans-habits-server" | "mcp";
-
-export interface GrayReminderCreatedPayload {
-  type: GrayReminderPayloadType;
-  source: GrayReminderSource;
-  status: GrayReminderStatus;
-  entity: GrayReminderEntityType;
-  delivery_mode?: string | null;
-  data: {
-    id: number | string;
-    user_id: number;
-    label: string;
-    time_iso?: string | null;
-    raw: Record<string, unknown>;
-    delivery_mode?: string | null;
-    summary?: string | null;
-    reminder_id?: number | string | null;
-    reminder_status?: string | null;
-    reminder?: Record<string, unknown> | null;
-  };
-}
-
-/**
- * Extract all well-formed gray.reminder JSON objects from a blob of assistant text.
- * - Only returns objects that match the strict schema.
- * - Uses a lightweight brace parser instead of regex so nested objects don't break extraction.
- * - Strips those JSON blocks from the visible markdown content so UI can render
- *   a dedicated “real reminder created” chip instead of leaking raw JSON.
- */
-const EMPTY_CODE_FENCE_REGEX = /```(?:[a-zA-Z0-9_-]+)?\s*```/g;
-const REMINDER_PRE_BLOCK_REGEX = /(?:```[a-z0-9_-]*[^\S\r\n]*\n\s*)?gray[._](?:reminder|plan|habit)\s*$/i;
-const REMINDER_CODE_BLOCK_REGEX = /```[a-z0-9_-]*[^\S\r\n]*\n[\s\S]*?gray[._](?:reminder|plan|habit)[\s\S]*?```/gi;
-const REMINDER_GENERIC_FENCE_REGEX = /```[a-z0-9_-]*[\s\S]*?(gray[\s\S]{0,120}?(?:reminder|plan|habit))[\s\S]*?```/gi;
-
-type GrayReminderWrapper = {
-  message: string;
-  reminders: unknown[];
-};
-
-type ParsedReminderBlock = {
-  start: number;
-  end: number;
-  reminder?: GrayReminderCreatedPayload;
-  wrapper?: GrayReminderWrapper;
-};
-
-const REMINDER_STATUS_VALUES: GrayReminderStatus[] = ["created", "updated", "completed", "deleted"];
-const REMINDER_TYPE_VALUES: GrayReminderPayloadType[] = ["gray.reminder", "gray.plan", "gray.habit"];
-const REMINDER_SOURCE_VALUES: GrayReminderSource[] = ["mcp/plans-habits-server", "mcp"];
-
-const normalizeReminderType = (value: unknown): GrayReminderPayloadType | null => {
-  if (typeof value !== "string") {
-    return null;
-  }
-  const normalized = value.trim().toLowerCase();
-  return REMINDER_TYPE_VALUES.find((type) => type === normalized) ?? null;
-};
-
-const normalizeReminderSource = (value: unknown): GrayReminderSource | null => {
-  if (typeof value !== "string") {
-    return null;
-  }
-  const normalized = value.trim().toLowerCase();
-  return REMINDER_SOURCE_VALUES.find((source) => source === normalized) ?? null;
-};
-
-const normalizeReminderStatus = (value: unknown): GrayReminderStatus | null => {
-  if (typeof value !== "string") {
-    return null;
-  }
-  const normalized = value.trim().toLowerCase();
-  return REMINDER_STATUS_VALUES.find((status) => status === normalized) ?? null;
-};
-
-const normalizeReminderEntity = (
-  value: unknown,
-  fallbackType?: GrayReminderPayloadType | null
-): GrayReminderEntityType => {
-  const normalized = typeof value === "string" ? value.trim().toLowerCase() : "";
-  if (normalized.startsWith("habit")) {
-    return "habit";
-  }
-  if (normalized.startsWith("plan")) {
-    return "plan";
-  }
-  if (normalized.startsWith("reminder")) {
-    return "reminder";
-  }
-  if (fallbackType === "gray.habit") {
-    return "habit";
-  }
-  if (fallbackType === "gray.plan") {
-    return "plan";
-  }
-  return "reminder";
-};
-
-const isFullReminderPayload = (candidate: Partial<GrayReminderCreatedPayload>): candidate is GrayReminderCreatedPayload => {
-  const type = normalizeReminderType(candidate?.type);
-  const status = normalizeReminderStatus(candidate?.status);
-  const source = normalizeReminderSource(candidate?.source);
-  if (!candidate || !type || !status || !source) {
-    return false;
-  }
-  if (!(candidate.entity === "plan" || candidate.entity === "habit" || candidate.entity === "reminder")) {
-    return false;
-  }
-  const data = candidate.data;
-  return (
-    data != null &&
-    typeof data.id !== "undefined" &&
-    typeof data.user_id === "number" &&
-    typeof data.label === "string"
-  );
-};
-
-const GRAY_TITLE_HTML_CAPTURE_REGEX = /<graytitle\b[^>]*>([\s\S]*?)<\/graytitle>/i;
-const GRAY_TITLE_HTML_STRIP_REGEX = /<graytitle\b[^>]*>[\s\S]*?<\/graytitle>/gi;
-const GRAY_TITLE_LEGACY_CAPTURE_REGEX = /<<gray-title>>([\s\S]*?)<<gray-title-end>>/i;
-const GRAY_TITLE_LEGACY_STRIP_REGEX = /<<gray-title>>[\s\S]*?<<gray-title-end>>/gi;
-
-export const parseGrayTitleMarkers = (
-  value: string | null | undefined
-): { cleanText: string; title: string | null } => {
-  const source = typeof value === "string" ? value : "";
-  let title: string | null = null;
-
-  const htmlMatch = source.match(GRAY_TITLE_HTML_CAPTURE_REGEX);
-  if (htmlMatch && typeof htmlMatch[1] === "string") {
-    const candidate = htmlMatch[1].trim();
-    if (candidate) {
-      title = candidate;
-    }
-  }
-
-  if (!title) {
-    const legacyMatch = source.match(GRAY_TITLE_LEGACY_CAPTURE_REGEX);
-    if (legacyMatch && typeof legacyMatch[1] === "string") {
-      const candidate = legacyMatch[1].trim();
-      if (candidate) {
-        title = candidate;
-      }
-    }
-  }
-
-  const cleanText = source
-    .replace(GRAY_TITLE_HTML_STRIP_REGEX, "")
-    .replace(GRAY_TITLE_LEGACY_STRIP_REGEX, "")
-    .trim();
-
-  return { cleanText, title };
-};
-
-export const stripGrayTitleMarkers = (value: string | null | undefined): string => {
-  return parseGrayTitleMarkers(value).cleanText;
-};
-
-const toNumber = (value: unknown): number | undefined => {
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return value;
-  }
-  if (typeof value === "string") {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : undefined;
-  }
-  return undefined;
-};
-
-const coerceLegacyReminderPayload = (candidate: Record<string, unknown>): GrayReminderCreatedPayload | null => {
-  const label = typeof candidate.label === "string" ? candidate.label : null;
-  const triggerTimeCandidate =
-    typeof candidate.trigger_time === "string"
-      ? candidate.trigger_time
-      : typeof candidate.remind_at === "string"
-        ? candidate.remind_at
-        : null;
-  const triggerTime = triggerTimeCandidate;
-  if (!label && !triggerTime) {
-    return null;
-  }
-  const normalizedType = normalizeReminderType(candidate.type) ?? "gray.reminder";
-  const entity = normalizeReminderEntity(candidate.entity ?? candidate.type, normalizedType);
-  const deliveryMode =
-    typeof candidate.delivery_mode === "string" ? candidate.delivery_mode : entity;
-  const reminderStatus = normalizeReminderStatus(candidate.status);
-  const summary =
-    typeof candidate.summary === "string"
-      ? candidate.summary
-      : typeof candidate.description === "string"
-        ? candidate.description
-        : null;
-  const legacyId = (candidate.id ?? candidate.reminder_id) as string | number | undefined;
-  const normalizedId =
-    typeof legacyId === "string" || typeof legacyId === "number"
-      ? legacyId
-      : label ?? triggerTime ?? `legacy-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  const numericUserId = toNumber(candidate.user_id) ?? 0;
-
-  const reminderRecord: Record<string, unknown> = {};
-  if (legacyId !== undefined) {
-    reminderRecord.id = legacyId;
-  }
-  if (reminderStatus) {
-    reminderRecord.status = reminderStatus;
-  }
-  if (triggerTime) {
-    reminderRecord.remind_at = triggerTime;
-  }
-
-  return {
-    type: normalizedType,
-    source: normalizeReminderSource(candidate.source) ?? "mcp/plans-habits-server",
-    status: reminderStatus ?? "created",
-    entity,
-    delivery_mode: deliveryMode,
-    data: {
-      id: normalizedId,
-      user_id: numericUserId,
-      label: label ?? "Untitled reminder",
-      time_iso: triggerTime,
-      raw: candidate,
-      delivery_mode: deliveryMode,
-      summary,
-      reminder_id: legacyId ?? null,
-      reminder_status: reminderStatus ?? undefined,
-      reminder: Object.keys(reminderRecord).length ? reminderRecord : null,
-    },
-  };
-};
-
-const coerceStructuredReminderPayload = (candidate: Record<string, unknown>): GrayReminderCreatedPayload | null => {
-  if (isFullReminderPayload(candidate as Partial<GrayReminderCreatedPayload>)) {
-    return candidate as GrayReminderCreatedPayload;
-  }
-
-  const type = normalizeReminderType(candidate.type);
-  const status = normalizeReminderStatus((candidate as Record<string, unknown>).status) ?? "created";
-  const data = (candidate as Record<string, unknown>).data;
-  if (!type || !data || typeof data !== "object" || Array.isArray(data)) {
-    return null;
-  }
-
-  const label = typeof (data as Record<string, unknown>).label === "string"
-    ? (data as Record<string, unknown>).label
-    : null;
-  const reminderId =
-    (data as Record<string, unknown>).id ?? (data as Record<string, unknown>).reminder_id;
-  const userId = toNumber((data as Record<string, unknown>).user_id);
-  if (!label || typeof reminderId === "undefined" || typeof userId !== "number") {
-    return null;
-  }
-
-  const entity = normalizeReminderEntity(
-    (candidate as Record<string, unknown>).entity ??
-    (data as Record<string, unknown>).entity ??
-    (data as Record<string, unknown>).entity_type,
-    type
-  );
-  const deliveryMode =
-    typeof (candidate as Record<string, unknown>).delivery_mode === "string"
-      ? (candidate as Record<string, unknown>).delivery_mode
-      : typeof (data as Record<string, unknown>).delivery_mode === "string"
-        ? (data as Record<string, unknown>).delivery_mode as string
-        : entity;
-  const reminderStatus =
-    typeof (data as Record<string, unknown>).reminder_status === "string"
-      ? (data as Record<string, unknown>).reminder_status
-      : status;
-  const reminderRecord =
-    typeof (data as Record<string, unknown>).reminder === "object" &&
-      (data as Record<string, unknown>).reminder !== null
-      ? (data as Record<string, unknown>).reminder as Record<string, unknown>
-      : null;
-  const timeIso =
-    typeof (data as Record<string, unknown>).time_iso === "string"
-      ? (data as Record<string, unknown>).time_iso
-      : typeof (data as Record<string, unknown>).remind_at === "string"
-        ? (data as Record<string, unknown>).remind_at
-        : null;
-
-  return {
-    type,
-    source: normalizeReminderSource((candidate as Record<string, unknown>).source) ?? "mcp/plans-habits-server",
-    status,
-    entity,
-    delivery_mode: deliveryMode,
-    data: {
-      ...(data as Record<string, unknown>),
-      id: reminderId as string | number,
-      user_id: userId,
-      label,
-      time_iso: timeIso,
-      delivery_mode: deliveryMode,
-      reminder_id: (data as Record<string, unknown>).reminder_id ?? reminderId,
-      reminder_status: reminderStatus,
-      reminder: reminderRecord,
-    },
-  };
-};
-
-const coerceReminderPayload = (candidate: unknown): GrayReminderCreatedPayload | null => {
-  if (candidate && typeof candidate === "object" && !Array.isArray(candidate)) {
-    const structured = coerceStructuredReminderPayload(candidate as Record<string, unknown>);
-    if (structured) {
-      return structured;
-    }
-    return coerceLegacyReminderPayload(candidate as Record<string, unknown>);
-  }
-  return null;
-};
-
-const buildReminderKey = (reminder: GrayReminderCreatedPayload): string => {
-  const data = reminder.data ?? {};
-  const primary = data.reminder_id ?? data.id;
-  if (typeof primary === "string" || typeof primary === "number") {
-    return String(primary);
-  }
-  const label = data.label ?? "";
-  const timeIso = data.time_iso ?? "";
-  return `${reminder.entity}:${label}:${timeIso}`.trim().toLowerCase();
-};
-
-const formatReminderTimeLabel = (reminder: GrayReminderCreatedPayload): { timeLabel: string | null; slotLabel: string | null } => {
-  const data = reminder.data ?? {};
-  const reminderRecord = (data.reminder as Record<string, unknown> | null) ?? null;
-  const remindAtIso =
-    (reminderRecord && typeof reminderRecord.remind_at === "string" && reminderRecord.remind_at) ||
-    (typeof data.time_iso === "string" ? data.time_iso : null);
-
-  const rawRecord = (data.raw as Record<string, unknown> | null) ?? null;
-  const slotValue = rawRecord && typeof rawRecord.schedule_slot === "string" ? rawRecord.schedule_slot : null;
-  const slotDisplayLabel = formatReminderSlotLabel(remindAtIso, slotValue);
-  const isoLabel = formatReminderDateLabel(remindAtIso);
-  const timeLabel = slotDisplayLabel ?? isoLabel;
-  return { timeLabel, slotLabel: slotValue };
-};
-
-const buildReminderConfirmationText = (reminders: GrayReminderCreatedPayload[]): string | null => {
-  if (!reminders.length) {
-    return null;
-  }
-  const [first, ...rest] = reminders;
-  const label = first.data?.label?.trim() || "that";
-  const { timeLabel, slotLabel } = formatReminderTimeLabel(first);
-  let clause: string;
-  if (timeLabel) {
-    clause = `I'll remind you to ${label} on ${timeLabel}.`;
-  } else if (slotLabel) {
-    clause = `I'll remind you to ${label} around ${slotLabel}.`;
-  } else {
-    clause = `I'll remind you to ${label}.`;
-  }
-  const clarifier = slotLabel && timeLabel && !timeLabel.toLowerCase().includes(slotLabel.toLowerCase())
-    ? ` You mentioned ${slotLabel}; if that's the time you want, just tell me and I'll move it.`
-    : timeLabel
-      ? " If that timing's off, let me know and I'll adjust."
-      : " Let me know if you'd like to pin a specific time.";
-  let extra = "";
-  if (rest.length === 1) {
-    extra = " I've also logged one more reminder from the same request.";
-  } else if (rest.length > 1) {
-    extra = ` I've also logged ${rest.length} additional reminders from the same request.`;
-  }
-  return `Got it — ${clause}${clarifier}${extra}`.trim();
-};
-
-const stripReminderPreamble = (segment: string): string => {
-  if (!segment) {
-    return segment;
-  }
-  let updated = segment.replace(REMINDER_PRE_BLOCK_REGEX, "");
-  if (updated === segment) {
-    updated = updated.replace(/gray[._](?:reminder|plan|habit)\s*$/i, "");
-  }
-  updated = updated.replace(/```[a-z0-9_-]*[^\S\r\n]*$/i, "");
-  return updated;
-};
-
-const TOOL_FENCE_LINE_PATTERNS = [
-  /via MCP/i,
-  /^Plan\s+'[^']+'\s+is\s+set\s+for/i,
-  /^I've stored/i,
-  /^Vstalin Grady,/i,
-  /^SYSTEM ACTION:/i,
-];
-
-const TOOL_NOISE_LINE_PATTERNS = [
-  /via MCP/i,
-  /^Plan\s+'[^']+'\s+is\s+set\s+for/i,
-  /^Vstalin Grady,/i,
-  /^SYSTEM ACTION:/i,
-];
-
-const unwrapToolCallCodeFences = (segment: string): string => {
-  if (!segment || !segment.includes("```")) {
-    return segment;
-  }
-  const fencePattern = /```[a-z0-9_-]*[^\S\r\n]*\n([\s\S]*?)```/gi;
-  return segment.replace(fencePattern, (match, body) => {
-    const inner = (body ?? "").trim();
-    if (!inner) {
-      return "";
-    }
-    if (/gray[._](?:reminder|plan|habit)/i.test(inner)) {
-      return "";
-    }
-    const lines = inner
-      .split("\n")
-      .map((line: string) => line.trim())
-      .filter((line: string) => line.length > 0);
-    if (
-      lines.length > 0 &&
-      lines.every((line: string) => TOOL_FENCE_LINE_PATTERNS.some((pattern) => pattern.test(line)))
-    ) {
-      return `${lines.join("\n")}\n`;
-    }
-    return match;
-  });
-};
-
-const stripIncompleteReminderArtifacts = (segment: string): string => {
-  if (!segment) {
-    return segment;
-  }
-  let updated = segment;
-
-  // Remove old, generic reminder code block regex which might remove valid JSON
-  updated = updated.replace(REMINDER_GENERIC_FENCE_REGEX, "");
-
-  // Drop any direct JSON blobs that clearly reference reminder/plan/habit payloads
-  const typedJsonPattern = /\{[^{}]*gray[._](?:reminder|plan|habit)[^{}]*\}/gi;
-  updated = updated.replace(typedJsonPattern, "");
-
-  // Remove text tool-call fences for reminder tools that sometimes leak through
-  const toolJsonPattern =
-    /```(?:json)?\s*\{[\s\S]*?"tool"\s*:\s*"(?:create|update|delete)_(?:reminder|plan|habit)[\s\S]*?```/gi;
-  updated = updated.replace(toolJsonPattern, "");
-
-  // Remove any raw JSON-like structure that contains reminder keywords but isn't in a code block
-  // This is a backup for when the model forgets the code fences.
-  const rawJsonPattern = /\{[^{}]*(?:reminder_id|text|time|status|remind_at|label)[^{}]*\}/gi;
-  updated = updated.replace(rawJsonPattern, "");
-
-  // Clean up extra blank lines
-  updated = updated.replace(/\n{3,}/g, "\n\n");
-
-  return updated.trim();
-};
-
-const parseReminderBlocks = (raw: string): ParsedReminderBlock[] => {
-  const matches: ParsedReminderBlock[] = [];
-  let depth = 0;
-  let startIndex = -1;
-  let inString = false;
-  let escapeNext = false;
-
-  for (let i = 0; i < raw.length; i += 1) {
-    const char = raw[i];
-
-    if (inString) {
-      if (escapeNext) {
-        escapeNext = false;
-      } else if (char === "\\") {
-        escapeNext = true;
-      } else if (char === "\"") {
-        inString = false;
-      }
-      continue;
-    }
-
-    if (char === "\"") {
-      inString = true;
-      continue;
-    }
-
-    if (char === "{") {
-      if (depth === 0) {
-        startIndex = i;
-      }
-      depth += 1;
-      continue;
-    }
-
-    if (char === "}") {
-      if (depth === 0) {
-        continue;
-      }
-      depth -= 1;
-      if (depth === 0 && startIndex !== -1) {
-        const blockText = raw.slice(startIndex, i + 1);
-        try {
-          const parsed = JSON.parse(blockText);
-
-          if (
-            parsed &&
-            typeof parsed === "object" &&
-            typeof parsed.message === "string" &&
-            Array.isArray(parsed.reminders)
-          ) {
-            matches.push({
-              start: startIndex,
-              end: i + 1,
-              wrapper: parsed as GrayReminderWrapper
-            });
-          } else {
-            const payload = coerceReminderPayload(parsed);
-            if (payload) {
-              matches.push({
-                start: startIndex,
-                end: i + 1,
-                reminder: payload,
-              });
-            }
-          }
-        } catch {
-          // Ignore blocks that aren't valid JSON.
-        } finally {
-          startIndex = -1;
-        }
-      }
-    }
-  }
-
-  return matches;
-};
-
-export const extractGrayRemindersFromText = (
-  raw: string
-): { cleanText: string; reminders: GrayReminderCreatedPayload[] } => {
-  if (!raw || typeof raw !== "string") {
-    return { cleanText: raw ?? "", reminders: [] };
-  }
-
-  const sanitizedDisplay = stripIncompleteReminderArtifacts(raw);
-  const blocks = parseReminderBlocks(raw);
-  if (!blocks.length) {
-    return { cleanText: sanitizedDisplay, reminders: [] };
-  }
-
-  const seenReminders = new Set<string>();
-  const reminders: GrayReminderCreatedPayload[] = [];
-  for (const block of blocks) {
-    if (block.wrapper) {
-      for (const candidate of block.wrapper.reminders) {
-        const payload = coerceReminderPayload(candidate);
-        if (payload) {
-          const key = buildReminderKey(payload);
-          if (!seenReminders.has(key)) {
-            seenReminders.add(key);
-            reminders.push(payload);
-          }
-        }
-      }
-    } else if (block.reminder) {
-      const key = buildReminderKey(block.reminder);
-      if (!seenReminders.has(key)) {
-        seenReminders.add(key);
-        reminders.push(block.reminder);
-      }
-    }
-  }
-  // Keep all reminders (deduped above). We no longer drop non-MCP sources to avoid losing cards.
-  const filteredReminders = reminders;
-
-  // Reconstruct cleanText by omitting the raw blocks that were successfully parsed
-  let cleanTextParts: string[] = [];
-  let lastIndex = 0;
-  for (const block of blocks) {
-    if (block.reminder || block.wrapper) {
-      // If it's a parsed reminder or wrapper, we omit its raw text from the cleanText
-      cleanTextParts.push(raw.slice(lastIndex, block.start));
-      lastIndex = block.end;
-    } else {
-      // For non-reminder blocks, include them (or partial blocks leading up to them)
-      cleanTextParts.push(raw.slice(lastIndex, block.end));
-      lastIndex = block.end;
-    }
-  }
-  cleanTextParts.push(raw.slice(lastIndex));
-  let cleanText = cleanTextParts.join("");
-
-  cleanText = stripIncompleteReminderArtifacts(cleanText);
-
-  // Final cleanup for tool call code fences that are not reminders
-  cleanText = unwrapToolCallCodeFences(cleanText)
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(
-      (line) =>
-        line.length > 0 &&
-        !TOOL_NOISE_LINE_PATTERNS.some((pattern) => pattern.test(line))
-    )
-    .join("\n")
-    .trim();
-
-  return { cleanText, reminders: filteredReminders };
-};
-
-const normalizeAssistantMessage = (
-  role: ChatRole,
-  content: string
-): { content: string; reminders?: GrayReminderCreatedPayload[] } => {
-  if (role !== "assistant") {
-    return { content };
-  }
-  const { cleanText, reminders } = extractGrayRemindersFromText(content);
-  let finalizedText = cleanText;
-  if ((!finalizedText || !finalizedText.trim()) && reminders.length > 0) {
-    finalizedText = buildReminderConfirmationText(reminders) ?? "";
-  }
-  return {
-    content: finalizedText,
-    reminders: reminders.length ? reminders : undefined,
-  };
-};
-
-const makeMessage = (
-  role: ChatRole,
-  content: string,
-  tempId?: string,
-  metadata?: GroundingMetadata
-): ChatMessage => {
-  const id = tempId || (typeof crypto !== "undefined" && "randomUUID" in crypto
-    ? crypto.randomUUID()
-    : Math.random().toString(36).slice(2));
-  const normalized = normalizeAssistantMessage(role, content);
-  return {
-    id,
-    role,
-    content: normalized.content,
-    createdAt: Date.now(),
-    reminders: normalized.reminders,
-    groundingMetadata: metadata,
-  };
-};
-
-export const formatConversationTitle = (raw: string): string => {
-  const trimmed = raw.trim();
-  if (!trimmed) {
-    return "New Chat";
-  }
-  if (trimmed.length > 100) {
-    return trimmed.slice(0, 100).trim();
-  }
-  return trimmed;
-};
-
-const SMALL_TITLE_WORDS = new Set([
-  "a",
-  "an",
-  "the",
-  "and",
-  "or",
-  "but",
-  "in",
-  "on",
-  "at",
-  "to",
-  "for",
-  "of",
-  "with",
-  "by",
-]);
-
-export const deriveTitleFromMessage = (content: string) => {
-  const trimmed = content.trim();
-  if (!trimmed) {
-    return "New Chat";
-  }
-  // Simple snippet of the first user message, no reformatting.
-  return trimmed.length > 80 ? `${trimmed.slice(0, 77).trim()}…` : trimmed;
-};
-
-const isSessionTitleSeedDerived = (session?: ChatSession | null): boolean => {
-  if (!session || session.scope !== "thread") {
-    return false;
-  }
-  const normalizedTitle = session.title?.trim();
-  if (!normalizedTitle) {
-    return false;
-  }
-  const firstMeaningfulUserMessage = (session.messages ?? []).find(
-    (message) => message.role === "user" && message.content.trim().length > 0
-  );
-  if (!firstMeaningfulUserMessage) {
-    return false;
-  }
-  const derivedSeedTitle = deriveTitleFromMessage(firstMeaningfulUserMessage.content).trim();
-  return derivedSeedTitle === normalizedTitle;
-};
-
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-export const normalizeConversationIdValue = (value?: string | null): string | undefined => {
-  if (typeof value !== "string") {
-    return undefined;
-  }
-  const trimmed = value.trim();
-  if (!trimmed || !UUID_PATTERN.test(trimmed)) {
-    return undefined;
-  }
-  return trimmed;
-};
-
-const coerceConversationIdForRequest = (value?: string | null): string | undefined => {
-  const normalized = normalizeConversationIdValue(value);
-  if (normalized) {
-    return normalized;
-  }
-  return isGeneralConversationId(value) ? value ?? undefined : undefined;
-};
-
-const GENERIC_TITLE_TOKENS = new Set([
-  "new chat",
-  "new conversation",
-  "new thread",
-  "new session",
-  "conversation start",
-  SHARED_CHAT_PLACEHOLDER_TITLE.toLowerCase(),
-]);
-
-export const isGenericTitle = (title: string | null | undefined): boolean => {
-  if (!title) {
-    return true;
-  }
-  const trimmed = title.trim();
-  if (!trimmed) {
-    return true;
-  }
-  const normalized = trimmed.toLowerCase();
-  if (GENERIC_TITLE_TOKENS.has(normalized)) {
-    return true;
-  }
-  if (GREETING_PATTERN.test(trimmed)) {
-    return true;
-  }
-  return isLowInformationTitle(trimmed);
-};
-
-const isTitleDerivedFromMessage = (title: string, messages: ChatMessage[]): boolean => {
-  if (!title) return false;
-  const firstUserMsg = messages.find((m) => m.role === "user");
-  if (!firstUserMsg || !firstUserMsg.content) return false;
-
-  const cleanTitle = title.trim().toLowerCase().replace(/\u2026$/, ""); // Remove ellipsis
-  const cleanMsg = firstUserMsg.content.trim().toLowerCase();
-
-  if (!cleanMsg) return false;
-
-  // Check if message starts with title (handling truncation)
-  return cleanMsg.startsWith(cleanTitle);
-};
-
-export const shouldRequestAutoTitleForSession = (session?: ChatSession | null): boolean => {
-  if (!session) return true; // Generate title for new sessions
-  // Generate title if session has auto mode and a generic/placeholder title
-  if (session.titleMode === "auto") {
-    return isGenericTitle(session.title) || isTitleDerivedFromMessage(session.title, session.messages);
-  }
-  return false;
-};
 
 const createEmptyGeneralSession = (timestamp?: number, conversationId?: string | null): ChatSession => {
   const now = timestamp ?? Date.now();
@@ -3016,16 +1832,15 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
     };
   }, [user?.id, mergeRemoteConversations]);
 
+  // Ref to break forward reference to sendGeneralMessage (defined later)
+  // This avoids a Temporal Dead Zone error in the bundled output.
+  const sendGeneralMessageRef = useRef<(content: string) => Promise<string>>(() => Promise.resolve(""));
+
   const createThreadSession = useCallback(
     async (
       initialMessage?: string,
       options?: {
         autoStream?: boolean;
-        /**
-         * When called from the General workspace (e.g. primary input box),
-         * we should NOT fork a new thread. Instead, route this through the
-         * canonical General session so "General" stays a single stable thread.
-         */
         fromGeneral?: boolean;
       }
     ): Promise<ChatSession> => {
@@ -3033,15 +1848,16 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       // a new thread session. Reuse the General session instead so that messages
       // sent from "General" always belong to the General conversation.
       if (options?.fromGeneral) {
-        console.log("[ChatProvider] createThreadSession: fromGeneral=true, returning general session");
+        // console.log("[ChatProvider] createThreadSession: fromGeneral=true, returning general session");
         const general = ensureGeneralSession();
         // If there's an initial message, send it via the general path so it
         // streams correctly and binds to the existing conversation_id.
         if ((initialMessage ?? "").trim().length > 0) {
-          void sendGeneralMessage(initialMessage ?? "");
+          void sendGeneralMessageRef.current(initialMessage ?? "");
         }
         return general;
       }
+
       const now = Date.now();
       const trimmedInitial = (initialMessage ?? "").trim();
       const normalizedInitial = trimmedInitial.toLowerCase();
@@ -3074,8 +1890,9 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
             }) ?? null;
         }
       }
+
       if (duplicateCandidate) {
-        console.log("[ChatProvider] createThreadSession: Found duplicate candidate", duplicateCandidate.id);
+        // console.log("[ChatProvider] createThreadSession: Found duplicate candidate", duplicateCandidate.id);
         if (normalizedInitial) {
           pendingThreadSeedsRef.current.set(normalizedInitial, {
             sessionId: duplicateCandidate.id,
@@ -3088,6 +1905,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
         }
         return duplicateCandidate;
       }
+
       const sessionId =
         typeof crypto !== "undefined" && "randomUUID" in crypto
           ? crypto.randomUUID()
@@ -3110,7 +1928,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
         pendingAutoStream: willAutoStream,
       };
 
-      console.log("[ChatProvider] createThreadSession: Created new session", { sessionId, willAutoStream });
+      // console.log("[ChatProvider] createThreadSession: Created new session", { sessionId, willAutoStream });
 
       if (normalizedInitial) {
         pendingThreadSeedsRef.current.set(normalizedInitial, { sessionId, createdAt: now });
@@ -3153,6 +1971,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       promptForLocationConsent,
       shouldAttachWorkspaceContextForSession,
       webSearchEnabled,
+      ensureGeneralSession
     ]
   );
 
@@ -3508,6 +2327,11 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       refreshUser,
     ]
   );
+
+  // Keep the ref in sync with the actual sendGeneralMessage function
+  useEffect(() => {
+    sendGeneralMessageRef.current = sendGeneralMessage;
+  }, [sendGeneralMessage]);
 
   const getSession = useCallback((sessionId: string) => {
     return sessionsRef.current.find((session) => session.id === sessionId);
@@ -4086,7 +2910,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
         apiService
           .createReminder(user.id, payload)
           .then((created) => {
-            console.log("Successfully persisted AI-created reminder:", created);
+            // console.log("Successfully persisted AI-created reminder:", created);
           })
           .catch((error) => {
             console.error("Failed to persist AI-created reminder:", error);

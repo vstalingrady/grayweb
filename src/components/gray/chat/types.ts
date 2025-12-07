@@ -17,6 +17,12 @@ export type ChatMessage = {
     reminders?: GrayReminderCreatedPayload[];
     groundingMetadata?: GroundingMetadata;
     backendTimings?: ChatStreamTiming;
+    /**
+     * History of assistant responses for this message.
+     * Index 0 is the original, subsequent entries are regenerations.
+     */
+    variants?: string[];
+    activeVariantIndex?: number;
 };
 
 export type ChatSessionScope = "general" | "thread";

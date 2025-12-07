@@ -11,7 +11,8 @@ import {
   type ReactNode,
 } from "react";
 import { useUser } from "@/contexts/UserContext";
-import { GENERAL_CHAT_SESSION_ID, useChatStore } from "./ChatProvider";
+import { useChatStore } from "./ChatProvider";
+import { GENERAL_CHAT_SESSION_ID } from "./chat/constants";
 import { resolveApiBaseUrl, type ProactivityNotification } from "@/lib/api";
 import { requestNotificationPermission } from "@/lib/notificationUtils";
 
@@ -196,7 +197,7 @@ export function ProactivityNotificationProvider({ children }: ProactivityNotific
       }
 
       eventSource.onopen = () => {
-        console.log("[Proactivity] SSE Connected");
+        // console.log("[Proactivity] SSE Connected");
       };
 
       eventSource.addEventListener("ping", (event) => {
@@ -206,11 +207,10 @@ export function ProactivityNotificationProvider({ children }: ProactivityNotific
       const handleEvent = (event: MessageEvent) => {
         try {
           const data = JSON.parse(event.data);
-          console.log("[Proactivity] Message received:", data);
+          // console.log("[Proactivity] Message received:", data);
           handleProactivityMessage(data);
 
-          // Track delivery to avoid re-showing
-          const key = data.delivery_key;
+          // Track delivery to avoid re-showing          const key = data.delivery_key;
           if (key) {
             setDeliveredKeys(prev => {
               const next = new Set(prev);

@@ -44,6 +44,8 @@ import Image from "next/image";
 import { GrayChatComposer } from "./ChatComposer";
 import {
   useChatStore,
+} from "./ChatProvider";
+import {
   buildAssistantReply,
   shouldIncludeWorkspaceContext,
   shouldRequestAutoTitleForSession,
@@ -51,15 +53,21 @@ import {
   deriveTitleFromMessage,
   normalizeConversationIdValue,
   buildGeneralConversationId,
-  extractGrayRemindersFromText,
   stripGrayTitleMarkers,
+  resolveClientTimezone,
+} from "./chat/utils";
+import {
   type ChatMessage as ChatSessionMessage,
   type ChatRole,
   type GrayReminderCreatedPayload,
   type GrayReminderEntityType,
-  GENERAL_CHAT_SESSION_ID,
-} from "./ChatProvider";
-import { buildReminderConfirmationText, coerceReminderPayload } from "./chat/reminderUtils";
+} from "./chat/types";
+import { GENERAL_CHAT_SESSION_ID } from "./chat/constants";
+import {
+  buildReminderConfirmationText,
+  coerceReminderPayload,
+  extractGrayRemindersFromText,
+} from "./chat/reminderUtils";
 import { formatReminderDisplayLabels } from "./reminderTimeUtils";
 import AttachmentTray from "./AttachmentTray";
 
@@ -97,17 +105,7 @@ const looksLikeMathContent = (content: string): boolean => {
   return /\\(begin|end|frac|sum|int|lim|sqrt)/i.test(trimmed);
 };
 
-const resolveClientTimezone = (): string => {
-  if (typeof Intl === "undefined") {
-    return "UTC";
-  }
-  try {
-    const resolved = Intl.DateTimeFormat().resolvedOptions();
-    return resolved.timeZone || "UTC";
-  } catch {
-    return "UTC";
-  }
-};
+
 
 const wrapDisplayMathBlock = (content: string): string => {
   const normalized = content.trim();
@@ -2273,22 +2271,22 @@ export function GrayChatView({
   }, []);
 
   useEffect(() => {
-    console.log('[ChatView] History loading effect running', {
-      activeSessionId,
-      activeConversationId,
-      sessionMessagesLength: session?.messages?.length,
-      isLoadingHistoryRef: isLoadingHistoryRef.current
-    });
+    // console.log('[ChatView] History loading effect running', {
+    //   activeSessionId,
+    //   activeConversationId,
+    //   sessionMessagesLength: session?.messages?.length,
+    //   isLoadingHistoryRef: isLoadingHistoryRef.current
+    // });
 
     if (!activeSessionId || !activeConversationId) {
-      console.log('[ChatView] Skipping: no session ID or conversation ID');
+      // console.log('[ChatView] Skipping: no session ID or conversation ID');
       setIsHistoryLoading(false);
       isLoadingHistoryRef.current = null;
       return;
     }
 
     if (isLoadingHistoryRef.current === `${activeSessionId}:${activeConversationId}`) {
-      console.log('[ChatView] Skipping: already loading this conversation');
+      // console.log('[ChatView] Skipping: already loading this conversation');
       return;
     }
 
@@ -2298,11 +2296,11 @@ export function GrayChatView({
     const isGeneralConversation =
       typeof activeConversationId === "string" && activeConversationId.startsWith("general:");
     if (hasAssistantMessages && !isGeneralConversation) {
-      console.log('[ChatView] Skipping: already has assistant messages');
+      // console.log('[ChatView] Skipping: already has assistant messages');
       return;
     }
 
-    console.log('[ChatView] Loading conversation history for:', activeConversationId);
+    // console.log('[ChatView] Loading conversation history for:', activeConversationId);
     let cancelled = false;
     setIsHistoryLoading(true);
     isLoadingHistoryRef.current = `${activeSessionId}:${activeConversationId}`;
@@ -2310,7 +2308,7 @@ export function GrayChatView({
     (async () => {
       try {
         const history = await apiService.getConversation(activeConversationId);
-        console.log('[ChatView] Loaded history:', history?.length, 'messages');
+        // console.log('[ChatView] Loaded history:', history?.length, 'messages');
         if (cancelled) {
           return;
         }
