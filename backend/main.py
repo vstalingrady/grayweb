@@ -6177,6 +6177,7 @@ async def stream_ai_response(
 
     # Check usage limits (now that we know the effective model)
     if user_id is not None and db is not None:
+        t0_limits = time.perf_counter()
         tracker = UsageTracker(db)
         try:
             await tracker.check_limits(user_id, model=model)
@@ -6194,6 +6195,9 @@ async def stream_ai_response(
             yield ("delta", limit_msg)
             yield ("final", {"text": limit_msg, "grounding_metadata": None})
             return
+        limits_ms = (time.perf_counter() - t0_limits) * 1000
+        if limits_ms > 50:
+            api_logger.info(f"[Timing] Usage limits check: {limits_ms:.1f}ms")
 
     # Initialize cached contents
     cached_contents = None
@@ -6212,7 +6216,11 @@ async def stream_ai_response(
     effective_system_prompt = system_prompt
 
     # Prepare tools for all providers
+    t0_media = time.perf_counter()
     media_attachments = await _resolve_media_attachments(db, attachments, user_id)
+    media_ms = (time.perf_counter() - t0_media) * 1000
+    if media_ms > 50:
+        api_logger.info(f"[Timing] Media attachments: {media_ms:.1f}ms")
     
     maps_tools, maps_tool_config = _build_maps_tool_and_config(
         maps_enabled,
@@ -6222,7 +6230,11 @@ async def stream_ai_response(
     )
     file_search_tools = []
     if file_search_enabled:
-         file_search_tools = await _build_file_search_tools(db, user_id)
+        t0_fs = time.perf_counter()
+        file_search_tools = await _build_file_search_tools(db, user_id)
+        fs_ms = (time.perf_counter() - t0_fs) * 1000
+        if fs_ms > 50:
+            api_logger.info(f"[Timing] File search tools: {fs_ms:.1f}ms")
 
     if tools is not None:
         base_tools = tools
@@ -6328,6 +6340,8 @@ async def stream_ai_response(
                 
                 for turn in range(max_tool_turns + 1):
                     accumulated = ""
+                    t0_first_token = time.perf_counter()
+                    got_first_token = False
                     
                     # Buffer for detecting JSON tool calls (legacy text fallback for onboarding)
                     tool_buffer = ""
@@ -6373,6 +6387,10 @@ async def stream_ai_response(
                                 thinking_text = f"<thinking>{r_text}</thinking>"
                                 accumulated += thinking_text
                                 yield ("delta", thinking_text)
+                                if not got_first_token:
+                                    got_first_token = True
+                                    first_token_ms = (time.perf_counter() - t0_first_token) * 1000
+                                    api_logger.info(f"[Timing] First token: {first_token_ms:.0f}ms")
                                 yielded_any_tokens = True
                             continue
                             
@@ -6421,6 +6439,10 @@ async def stream_ai_response(
                             accumulated += chunk
                             if chunk:
                                 yield ("delta", chunk)
+                                if not got_first_token:
+                                    got_first_token = True
+                                    first_token_ms = (time.perf_counter() - t0_first_token) * 1000
+                                    api_logger.info(f"[Timing] First token: {first_token_ms:.0f}ms")
                                 yielded_any_tokens = True
                     
                     # Flush remaining buffer
