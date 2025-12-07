@@ -2845,9 +2845,9 @@ export function GrayChatView({
     // Mark that we've handled this specific user message so we don't re-trigger.
     markAutoStreamTriggered(sessionAutoStreamId, safeLastUserMessage.id);
 
-    if (hasPendingAutoStream) {
-      updateSession(sessionAutoStreamId, { pendingAutoStream: false });
-    }
+    // Set isResponding: true immediately to prevent spinner disappearing during race condition
+    // between clearing pendingAutoStream and streamAssistantReply setting isResponding.
+    updateSession(sessionAutoStreamId, { pendingAutoStream: false, isResponding: true });
 
     const placeholderAssistantId =
       !assistantHasContent && lastAssistantMessage ? lastAssistantMessage.id : null;

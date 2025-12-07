@@ -374,40 +374,40 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
       const preferredPlanTier = supabaseProfile?.planTier ?? null;
 
       // console.log('loadUser: Preferred name:', preferredName, 'Avatar:', preferredAvatar);
-            
-                  try {
-                    // console.log('loadUser: Attempting to get user by email from API...');
-                    const userData = await apiService.getUserByEmail(email);
-                    if (isStale()) {
-                      return;
-                    }
-                    // console.log('loadUser: User data retrieved:', userData);
-            
-                    const updates: { full_name?: string; profile_picture_url?: string; plan_tier?: string | null } = {};
-            
-                    // Only update name if:
-                    // 1. We have a name from Supabase (authoritative source)
-                    // 2. OR the current user has no name (we are filling a gap)
-                    // 3. AND the new name is different
-                    const shouldUpdateName =
-                      preferredName &&
-                      preferredName !== userData.full_name &&
-                      (supabaseName || !userData.full_name || userData.full_name.trim() === '');
-            
-                    if (shouldUpdateName) {
-                      updates.full_name = preferredName;
-                    }
-                    if (preferredAvatar && preferredAvatar !== userData.profile_picture_url) {
-                      updates.profile_picture_url = preferredAvatar;
-                    }
-                    if (preferredPlanTier && preferredPlanTier !== (userData.plan_tier ?? null)) {
-                      updates.plan_tier = preferredPlanTier;
-                    }
-            
-                    if (Object.keys(updates).length > 0) {
-                      try {
-                        // console.log('loadUser: Updating user profile with:', updates);
-                        const updatedUser = await apiService.updateUser(userData.id, updates);            if (isStale()) {
+
+      try {
+        // console.log('loadUser: Attempting to get user by email from API...');
+        const userData = await apiService.getUserByEmail(email);
+        if (isStale()) {
+          return;
+        }
+        // console.log('loadUser: User data retrieved:', userData);
+
+        const updates: { full_name?: string; profile_picture_url?: string; plan_tier?: string | null } = {};
+
+        // Only update name if:
+        // 1. We have a name from Supabase (authoritative source)
+        // 2. OR the current user has no name (we are filling a gap)
+        // 3. AND the new name is different
+        const shouldUpdateName =
+          preferredName &&
+          preferredName !== userData.full_name &&
+          (supabaseName || !userData.full_name || userData.full_name.trim() === '');
+
+        if (shouldUpdateName) {
+          updates.full_name = preferredName;
+        }
+        if (preferredAvatar && preferredAvatar !== userData.profile_picture_url) {
+          updates.profile_picture_url = preferredAvatar;
+        }
+        if (preferredPlanTier && preferredPlanTier !== (userData.plan_tier ?? null)) {
+          updates.plan_tier = preferredPlanTier;
+        }
+
+        if (Object.keys(updates).length > 0) {
+          try {
+            // console.log('loadUser: Updating user profile with:', updates);
+            const updatedUser = await apiService.updateUser(userData.id, updates); if (isStale()) {
               return;
             }
             const hydratedUser = {
@@ -441,33 +441,34 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
           }
         }
       } catch (userError) {
-                    // console.log('[v2] loadUser: Error getting user, checking if user not found...');
-                    // If user doesn't exist, create them
-                    if (isMissingUserError(userError)) {
-                      // console.log('[v2] loadUser: User not found, creating new user...');
-                      const defaultUserData = {
-                        email,
-                        full_name: preferredName,
-                        profile_picture_url: preferredAvatar,
-                        role: 'user',
-                        plan_tier: preferredPlanTier,
-                      };
-                      const newUser = await apiService.createUser(defaultUserData);
-                      // console.log('[v2] loadUser: New user created:', newUser);
-                      if (!isStale()) {
-                        const hydratedUser = {
-                          ...newUser,
-                          profile_picture_url: preferredAvatar ?? newUser.profile_picture_url ?? null,
-                        };
-                        setUser(hydratedUser);
-                        persistCachedUser(hydratedUser.email, hydratedUser);
-                        touchDailyStreakOnce(hydratedUser.id);
-                      }
-                    } else {
-                      console.debug('[v2] loadUser: Unexpected error getting user:', userError);
-                      throw userError;
-                    }
-                  }    } catch (err) {
+        // console.log('[v2] loadUser: Error getting user, checking if user not found...');
+        // If user doesn't exist, create them
+        if (isMissingUserError(userError)) {
+          // console.log('[v2] loadUser: User not found, creating new user...');
+          const defaultUserData = {
+            email,
+            full_name: preferredName,
+            profile_picture_url: preferredAvatar,
+            role: 'user',
+            plan_tier: preferredPlanTier,
+          };
+          const newUser = await apiService.createUser(defaultUserData);
+          // console.log('[v2] loadUser: New user created:', newUser);
+          if (!isStale()) {
+            const hydratedUser = {
+              ...newUser,
+              profile_picture_url: preferredAvatar ?? newUser.profile_picture_url ?? null,
+            };
+            setUser(hydratedUser);
+            persistCachedUser(hydratedUser.email, hydratedUser);
+            touchDailyStreakOnce(hydratedUser.id);
+          }
+        } else {
+          console.debug('[v2] loadUser: Unexpected error getting user:', userError);
+          throw userError;
+        }
+      }
+    } catch (err) {
       if (!isStale()) {
         setError(err instanceof Error ? err.message : 'Failed to load user');
       }
@@ -632,7 +633,18 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
       return Promise.resolve(null);
     }
     return new Promise((resolve) => {
-      pendingUserResolversRef.current.add(resolve);
+      // Set a safety timeout to prevent hanging forever
+      const timeoutId = setTimeout(() => {
+        pendingUserResolversRef.current.delete(resolve);
+        resolve(null);
+      }, 15000);
+
+      const wrapper = (u: User | null) => {
+        clearTimeout(timeoutId);
+        resolve(u);
+      };
+
+      pendingUserResolversRef.current.add(wrapper);
     });
   }, [loading, user]);
 
@@ -655,25 +667,25 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
   }, []);
 
   useEffect(() => {
-          if (userEmail) {
-            // console.log('[v2] UserContext: Loading user with email:', userEmail);
-            loadUser(userEmail, { silent: Boolean(user) }).catch((err) => {
-              if (isApiNetworkError(err)) {
-                if (process.env.NODE_ENV !== 'production') {
-                  console.debug('[v2] User profile API unreachable while bootstrapping:', err);
-                }
-                return;
-              }
-              console.debug('[v2] Failed to load user profile:', err);
-              console.debug('[v2] User load error details:', err);
-            });
-          } else {
-            // console.log('[v2] UserContext: No userEmail provided');
-            setUser(null);
-            setLoading(false);
-            removeCachedUser(null);
+    if (userEmail) {
+      // console.log('[v2] UserContext: Loading user with email:', userEmail);
+      loadUser(userEmail, { silent: Boolean(user) }).catch((err) => {
+        if (isApiNetworkError(err)) {
+          if (process.env.NODE_ENV !== 'production') {
+            console.debug('[v2] User profile API unreachable while bootstrapping:', err);
           }
-        }, [userEmail]);
+          return;
+        }
+        console.debug('[v2] Failed to load user profile:', err);
+        console.debug('[v2] User load error details:', err);
+      });
+    } else {
+      // console.log('[v2] UserContext: No userEmail provided');
+      setUser(null);
+      setLoading(false);
+      removeCachedUser(null);
+    }
+  }, [userEmail]);
   useEffect(() => {
     if (user && userEmail) {
       persistCachedUser(userEmail, user);

@@ -106,6 +106,13 @@ const ModelSelector = dynamic(
   { loading: () => null }
 );
 
+const SettingsModal = dynamic(
+  () => import("@/components/gray/SettingsModal").then((mod) => mod.SettingsModal),
+  { loading: () => null }
+);
+
+
+
 const ChatDraftInput = dynamic(
   () => import("@/components/gray/ChatDraftInput").then((mod) => mod.ChatDraftInput),
   { loading: () => null }
@@ -136,11 +143,6 @@ const GrayGeneralView = dynamic(
   { loading: () => null }
 );
 
-const GrayHistoryView = dynamic(
-  () => import("@/components/gray/HistoryView").then((mod) => mod.GrayHistoryView),
-  { loading: () => null }
-);
-
 const GrayReferenceView = dynamic(
   () => import("@/components/gray/ReferenceView").then((mod) => mod.ReferenceView),
   { loading: () => null }
@@ -154,8 +156,8 @@ const PersonalizationPanel = dynamic(
   { loading: () => null }
 );
 
-const SettingsModal = dynamic(
-  () => import("@/components/gray/SettingsModal").then((mod) => mod.SettingsModal),
+const HistoryOverlay = dynamic(
+  () => import("@/components/gray/HistoryOverlay").then((mod) => mod.HistoryOverlay),
   { loading: () => null }
 );
 
@@ -166,16 +168,37 @@ type GrayPageClientProps = {
   activeNav?: SidebarNavKey;
   variant?: "general" | "dashboard" | "chat";
   activeChatId?: string | null;
+  initialChatTitle?: string;
+  initialChatModelId?: string;
 };
-
-type ViewMode = "general" | "dashboard" | "history" | "chat";
 
 function GrayPageClientInner({
   initialTimestamp,
-  activeNav,
+  activeNav = "general",
   variant = "general",
   activeChatId = null,
+  initialChatTitle,
+  initialChatModelId,
 }: GrayPageClientProps) {
+  if (typeof window === 'undefined') {
+    console.log("[DEBUG] GrayPageClient RENDER imports check:", {
+      GrayEnhancedSidebar: !!GrayEnhancedSidebar,
+      GrayWorkspaceHeader: !!GrayWorkspaceHeader,
+      GrayChatView: !!GrayChatView,
+      GrayGeneralView: !!GrayGeneralView,
+      SettingsModal: !!SettingsModal,
+      ChatDraftInput: !!ChatDraftInput,
+      AttachmentTray: !!AttachmentTray,
+      AddPlanHabitModal: !!AddPlanHabitModal,
+      PersonalizationPanel: !!PersonalizationPanel,
+      HistoryOverlay: !!HistoryOverlay,
+      ModelSelector: !!ModelSelector,
+      MobileSuggestionCards: !!MobileSuggestionCards,
+      GrayDashboardView: !!GrayDashboardView,
+      GrayReferenceView: !!GrayReferenceView,
+    });
+  }
+
   const { user, loading: userLoading, updateUser } = useUser();
   const usageStatus = user?.usage_status;
   const isUsageLimitReached = usageStatus?.is_monthly_limit_reached || usageStatus?.is_six_hour_limit_reached;
@@ -373,6 +396,19 @@ function GrayPageClientInner({
   const [workspaceBackgroundId, setWorkspaceBackgroundId] = useState<string>(() =>
     user?.workspace_background_id ?? SOLID_BLACK_BACKGROUND.id
   );
+
+  const [isHistoryOverlayOpen, setIsHistoryOverlayOpen] = useState(false);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        setIsHistoryOverlayOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
 
 
@@ -654,18 +690,7 @@ function GrayPageClientInner({
         />
       );
     }
-    if (isHistoryView) {
-      return (
-        <GrayHistoryView
-          sections={historySections}
-          onOpenEntry={handleOpenHistoryEntry}
-          activeEntryId={currentChatId ?? null}
-          onOpenEntryExternal={handleOpenHistoryEntryExternal}
-          onRenameEntry={handleRenameHistoryEntry}
-          onDeleteEntry={handleDeleteHistoryEntry}
-        />
-      );
-    }
+
     return (
       <div className={styles.generalViewSection}>
         <GrayGeneralView
@@ -1054,7 +1079,7 @@ function GrayPageClientInner({
   );
   const isDashboardView = viewMode === "dashboard";
   const isChatView = viewMode === "chat";
-  const isHistoryView = viewMode === "history";
+
   const sidebarActiveNav: SidebarNavKey =
     activeNav === "threads"
       ? "threads"
@@ -1075,16 +1100,7 @@ function GrayPageClientInner({
     }
 
     if (navId === "history") {
-      // Navigate to the dedicated History page route
-      const target = NAVIGATION_ROUTES[navId];
-      if (target) {
-        setManualViewMode(null);
-        router.push(target);
-      } else {
-        // Fallback: force the in-layout history view if route is missing
-        setManualViewMode("history");
-      }
-      setIsSidebarExpanded(true);
+      setIsHistoryOverlayOpen(true);
       return;
     }
 
@@ -2608,15 +2624,42 @@ function GrayPageClientInner({
           />
         )}
         {isSettingsOpen && (
-          <SettingsModal isOpen={isSettingsOpen} onClose={handleCloseSettings} />
+          <SettingsModal
+            isOpen={isSettingsOpen}
+            onClose={() => setIsSettingsOpen(false)}
+            user={user}
+            updateUser={updateUser}
+            loadWorkspaceBackgrounds={loadWorkspaceBackgrounds}
+          />
         )}
+
+        <HistoryOverlay
+          isOpen={isHistoryOverlayOpen}
+          onClose={() => setIsHistoryOverlayOpen(false)}
+          sections={historySections}
+          onOpenEntry={handleOpenHistoryEntry}
+          onOpenEntryExternal={handleOpenHistoryEntryExternal}
+          onRenameEntry={handleRenameHistoryEntry}
+          onDeleteEntry={handleDeleteHistoryEntry}
+          onCreateNewChat={() => {
+            const newId = getOrCreateGeneralSessionId();
+            handleNavigate("general");
+            // If we are already on general, we might want to ensure a fresh session or just focus input?
+            // Since getOrCreate returns an ID, we probably want to navigate to it or just close overlay.
+            // If the intention is "New Chat", we likely want to reset the current general chat if generic?
+            // For now, simply close and ensuring general view is intuitive enough.
+            // Actually, the user likely wants to be dropped into a standard chat state.
+            setManualViewMode(null); // Ensure we aren't in some other mode
+            router.push("/"); // Go to home/dashboard/general
+          }}
+        />
       </div>
     </>
   );
 }
 
-export default function GrayPageClient(props: GrayPageClientProps) {
-  // Removed dynamic key that was causing full remount on chat switch.
-  // The activeChatId synchronization useEffect handles chat switching via state updates.
-  return <GrayPageClientInner {...props} />;
-}
+export const GrayPageClient = dynamic(() => Promise.resolve(GrayPageClientInner), {
+  ssr: false,
+});
+
+export default GrayPageClient;

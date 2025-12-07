@@ -3,10 +3,10 @@
   min-height: 100vh;
   height: 100vh;
   width: 100%;
-  --chat-column-max-width: min(680px, 88vw);
+  --chat-column-max-width: min(840px, 92vw);
   --mobile-sidebar-width: clamp(260px, 70vw, 540px);
   flex: 1 1 auto;
-  background: var(--background, #050505);
+  background: var(--background, #121212);
   color: var(--foreground, #f5f5f5);
   font-family: var(--font-sans, "Plus Jakarta Sans", system-ui, -apple-system, BlinkMacSystemFont, sans-serif);
   display: flex;
@@ -232,7 +232,7 @@
   padding: 16px 0 16px;
   width: 80px;
   border-radius: 0;
-  background: #0f0f11;
+  background: #0a0a0a;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-left: none;
   box-shadow: none;
@@ -409,7 +409,7 @@
 
   border-radius: 0;
 
-  background: #0f0f11;
+  background: #0a0a0a;
 
   border: 1px solid rgba(255, 255, 255, 0.1);
 
@@ -428,6 +428,7 @@
   gap: 16px;
   margin-top: auto;
   position: relative;
+  background: linear-gradient(180deg, rgba(10, 10, 10, 0) 0%, #0a0a0a 100%);
 }
 
 .profileMenu {
@@ -442,10 +443,8 @@
   padding: 3px;
   border-radius: 14px;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(12, 12, 14, 0.96);
-  box-shadow:
-    0 20px 40px rgba(0, 0, 0, 0.46),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+  background: #0a0a0a;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
   backdrop-filter: blur(14px);
   z-index: 2;
   gap: 0;
@@ -1462,7 +1461,7 @@
   border-radius: 16px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(255, 255, 255, 0.02);
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+  box-shadow: none;
   cursor: pointer;
   transition:
     background 0.2s ease,
@@ -1864,9 +1863,9 @@
   flex-shrink: 0;
   pointer-events: none;
   background: linear-gradient(to bottom,
-      rgba(15, 15, 17, 0) 0%,
-      rgba(15, 15, 17, 0.4) 40%,
-      #0f0f11 100%);
+      rgba(10, 10, 10, 0) 0%,
+      rgba(10, 10, 10, 0.4) 40%,
+      #0a0a0a 100%);
   z-index: 1;
 }
 
@@ -2566,7 +2565,7 @@
   --gray-sidebar-width: 52px;
   --chat-bar-horizontal-shift: calc(var(--gray-sidebar-width) / 2);
   background: var(--background, #050505);
-  --chat-column-max-width: min(680px, 88vw);
+  --chat-column-max-width: min(840px, 92vw);
   --chat-composer-height: clamp(112px, 16vh, 180px);
 }
 
@@ -2678,7 +2677,7 @@
   justify-items: start;
   grid-template-rows: minmax(0, 1fr) auto;
   row-gap: 0;
-  --chat-column-max-width: min(680px, 88vw);
+  --chat-column-max-width: min(840px, 92vw);
   overflow: hidden;
 }
 
@@ -2969,12 +2968,12 @@
   justify-content: flex-end;
   gap: clamp(4px, 1vh, 10px);
   min-height: 0;
-  padding: clamp(4px, 1vh, 10px) 0 calc(var(--chat-composer-height, 80px) + 4px) 0;
+  padding: clamp(4px, 1vh, 10px) 24px calc(var(--chat-composer-height, 80px) + 4px) 24px;
   overflow-y: auto;
   overflow-x: hidden;
   scroll-behavior: smooth;
   width: 100%;
-  max-width: var(--chat-column-max-width, 680px);
+  max-width: min(calc(1.1 * var(--chat-bubble-max-width, var(--chat-column-max-width, 840px))), 100%);
   margin: 0 auto;
   align-items: stretch;
 }
@@ -8517,7 +8516,7 @@ h1.greeting {
   margin: 0 auto;
   border-radius: 30px;
   border: 1px solid rgba(255, 255, 255, 0.16);
-  background: #111111;
+  background: #1a1a1a;
   backdrop-filter: none;
   padding: 10px;
   position: relative;
@@ -8527,16 +8526,16 @@ h1.greeting {
 
 .chatBarRounded:focus-within {
   border-color: rgba(255, 255, 255, 0.24);
-  background: #111111;
+  background: #1a1a1a;
 }
 
 .layout[data-view="general"] .chatBarRounded {
-  background: #050505;
+  background: #1a1a1a;
   backdrop-filter: none;
 }
 
 .layout[data-view="general"] .chatBarRounded:focus-within {
-  background: #050505;
+  background: #1a1a1a;
 }
 
 .chatBarRow {
@@ -8659,10 +8658,8 @@ h1.greeting {
   width: min(var(--chat-column-max-width, 680px), 100%);
   max-width: min(var(--chat-column-max-width, 680px), 100%);
   border-radius: 32px 32px 0 0;
-  background: linear-gradient(180deg, rgba(8, 8, 8, 0.7), rgba(3, 3, 3, 0.6));
-  box-shadow:
-    0 34px 60px rgba(0, 0, 0, 0.52),
-    0 12px 24px rgba(0, 0, 0, 0.28);
+  background: linear-gradient(180deg, rgba(18, 18, 18, 0) 0%, rgba(18, 18, 18, 0) 60%, rgba(18, 18, 18, 0.95) 100%);
+  box-shadow: none;
   pointer-events: none;
   z-index: 0;
   display: block;

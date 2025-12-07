@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
-import GrayPageClient from "@/app/gray/GrayPageClient";
+import { GrayPageClient } from "@/app/gray/GrayPageClient";
 import { readServerSession } from "@/lib/auth/server";
 import { GENERAL_CHAT_SESSION_ID } from "@/components/gray/ChatProvider";
 import { hostFromHeaders, isGrayWorkspaceHost } from "@/lib/grayRouting";
