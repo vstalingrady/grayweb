@@ -7023,7 +7023,7 @@ def _build_starter_prompt(payload: ChatStarterRequest, profile_context: str) -> 
     base_prompt = load_prompt_from_json(
         GLOBAL_SYSTEM_PROMPTS_PATH,
         "starter",
-        "You are Gray. Write a brief greeting.",
+        "You are Gray. Write a warm, engaging greeting to start the conversation.",
     )
     prompt_parts = [base_prompt]
     if profile_context:

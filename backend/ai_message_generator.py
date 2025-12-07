@@ -78,7 +78,7 @@ class AIMessageGenerator:
         
         base_prompt = self.prompts.get(
             "proactivity_summary",
-            "Summarize the conversation concisely."
+            "Summarize the conversation, preserving key details and context."
         )
         
         system_prompt = (
@@ -161,7 +161,7 @@ class AIMessageGenerator:
 
         base_prompt = self.prompts.get(
             "proactivity_daily", 
-            "Write a concise check-in message."
+            "Write a warm, personalized check-in message."
         )
 
         system_prompt = (
