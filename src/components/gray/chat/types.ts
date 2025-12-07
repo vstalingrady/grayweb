@@ -39,6 +39,7 @@ export type ChatSession = {
     scope: ChatSessionScope;
     conversationId?: string;
     pendingAutoStream?: boolean;
+    isGeneratingTitle?: boolean;
 };
 
 export type ChatContextValue = {

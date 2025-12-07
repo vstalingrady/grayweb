@@ -20,6 +20,7 @@ export type SidebarHistoryEntry = {
   title: string;
   href: string;
   createdAt: number;
+  isGeneratingTitle?: boolean;
 };
 
 export type SidebarHistorySection = {

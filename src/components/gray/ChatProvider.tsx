@@ -1333,7 +1333,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       if (session.title?.trim() === rawTitle) {
         return;
       }
-      updateSession(sessionId, { title: rawTitle, titleMode: "auto" });
+      updateSession(sessionId, { title: rawTitle, titleMode: "auto", isGeneratingTitle: false });
       queueConversationTitleSync(sessionId, rawTitle);
     },
     [queueConversationTitleSync, updateSession]
@@ -1949,6 +1949,8 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
         scope: "thread",
         conversationId: sessionId,
         pendingAutoStream: willAutoStream,
+        // Show skeleton while title generates in background
+        isGeneratingTitle: willAutoStream,
       };
 
       // console.log("[ChatProvider] createThreadSession: Created new session", { sessionId, willAutoStream });

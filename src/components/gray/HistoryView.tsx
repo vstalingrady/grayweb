@@ -90,7 +90,11 @@ export function GrayHistoryView({
 
               const content = (
                 <div className={styles.historyRowTitle}>
-                  <span>{entry.title}</span>
+                  {entry.isGeneratingTitle ? (
+                    <span className={styles.skeletonTitle} aria-label="Generating title..." />
+                  ) : (
+                    <span>{entry.title}</span>
+                  )}
                   {entry.sectionLabel ? (
                     <span className={styles.historyRowSection}>{entry.sectionLabel}</span>
                   ) : null}

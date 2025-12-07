@@ -1017,6 +1017,7 @@ function GrayPageClientInner({
         title: getReadableSessionTitle(session),
         href,
         createdAt: session.updatedAt,
+        isGeneratingTitle: session.isGeneratingTitle,
       });
     });
 
