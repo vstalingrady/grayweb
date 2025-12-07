@@ -308,7 +308,6 @@ function GrayPageClientInner({
 
   const [habitEditorTarget, setHabitEditorTarget] = useState<HabitItem | null>(null);
   const [planTab, setPlanTab] = useState<"plans" | "habits">("plans");
-  const chatSubmitInFlightRef = useRef(false);
 
   const [isSidebarExpanded, setIsSidebarExpanded] = useState<boolean>(false);
   const [hasLoadedSidebarPref, setHasLoadedSidebarPref] = useState(false);
@@ -322,11 +321,6 @@ function GrayPageClientInner({
   useEffect(() => {
     setIsMounted(true);
   }, []);
-
-  // Reset chat submit state on navigation to prevent blocking after route changes
-  useEffect(() => {
-    chatSubmitInFlightRef.current = false;
-  }, [pathname, activeChatId]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -2263,10 +2257,6 @@ function GrayPageClientInner({
     if (!normalizedDraft) {
       return;
     }
-    if (chatSubmitInFlightRef.current) {
-      return;
-    }
-    chatSubmitInFlightRef.current = true;
     controls.clear();
 
     try {
@@ -2334,8 +2324,6 @@ function GrayPageClientInner({
     } catch (error) {
       console.error("Failed to send general message:", error);
       controls.restore(draft);
-    } finally {
-      chatSubmitInFlightRef.current = false;
     }
   };
 
