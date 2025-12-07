@@ -1931,6 +1931,7 @@ export function GrayChatView({
   hideThinkingIndicator = false,
 }: GrayChatViewProps) {
   const {
+    sessions,
     getSession,
     ensureSession,
     appendMessage,
@@ -1998,7 +1999,11 @@ export function GrayChatView({
     selectedModelId,
     reasoningMode,
   } = useChatStore();
-  const session = sessionId ? getSession(sessionId) : undefined;
+  // Use sessions state directly for reactivity - getSession uses a ref which doesn't trigger re-renders
+  const session = useMemo(() => {
+    if (!sessionId) return undefined;
+    return sessions.find((s) => s.id === sessionId);
+  }, [sessionId, sessions]);
   const sessionExists = Boolean(session);
 
   // Load messages if they are missing (e.g. for historical threads)
