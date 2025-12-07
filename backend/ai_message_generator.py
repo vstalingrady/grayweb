@@ -43,10 +43,10 @@ class AIMessageGenerator:
             prompts_path = root_dir / "public" / "system-prompts.json"
             raw = prompts_path.read_text(encoding="utf-8")
             self.prompts = json.loads(raw)
-        except Exception:
-            logger.warning("Failed to load system-prompts.json, using minimal fallbacks.")
+        except Exception as e:
+            logger.error(f"CRITICAL: Failed to load system-prompts.json: {e}")
         
-        self.persona_prompt = self.prompts.get("chat", "You are Gray.")
+        self.persona_prompt = self.prompts["chat"]  # No fallback - must exist
         
         if self.openrouter.available:
             pass  # Using Grok for proactive messaging
@@ -76,10 +76,7 @@ class AIMessageGenerator:
         
         transcript = "\n".join(transcript_parts)
         
-        base_prompt = self.prompts.get(
-            "proactivity_summary",
-            "Summarize the conversation, preserving key details and context."
-        )
+        base_prompt = self.prompts["proactivity_summary"]  # No fallback - must exist
         
         system_prompt = (
             f"{self.persona_prompt}\n\n"
@@ -159,10 +156,7 @@ class AIMessageGenerator:
 
         user_context = "\n\n".join(part for part in context_chunks if part.strip())
 
-        base_prompt = self.prompts.get(
-            "proactivity_daily", 
-            "Write a warm, personalized check-in message."
-        )
+        base_prompt = self.prompts["proactivity_daily"]  # No fallback - must exist
 
         system_prompt = (
             f"{self.persona_prompt}\n\n"

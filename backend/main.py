@@ -332,38 +332,24 @@ def load_prompt_from_file(path: Path, fallback: str) -> str:
     return fallback.strip()
 
 
-def load_prompt_from_json(path: Path, key: str, fallback: str) -> str:
+def load_prompt_from_json(path: Path, key: str, fallback: str = "") -> str:
     """
     Load a prompt string from a JSON config file, using a dotted key path like
-    \"chat\" or \"proactivity.daily\". Falls back to the provided default when
-    the file or key is missing.
+    "chat" or "proactivity.daily". Raises RuntimeError if prompt can't be loaded.
+    
+    The fallback parameter is DEPRECATED and ignored.
     """
-    try:
-        raw = path.read_text(encoding="utf-8")
-        data: Any = json.loads(raw)
-        value: Any = data
-        for segment in key.split("."):
-            if not isinstance(value, dict) or segment not in value:
-                value = None
-                break
-            value = value[segment]
-        if isinstance(value, str) and value.strip():
-            return value.strip()
-        app_logger.warning(
-            "Prompt key missing or empty; using fallback",
-            extra={"prompt_path": str(path), "prompt_key": key},
-        )
-    except FileNotFoundError:
-        app_logger.warning(
-            "Prompt JSON file missing; using fallback",
-            extra={"prompt_path": str(path), "prompt_key": key},
-        )
-    except Exception as exc:
-        app_logger.error(
-            "Failed to load prompt JSON; using fallback",
-            extra={"prompt_path": str(path), "prompt_key": key, "error": str(exc)},
-        )
-    return fallback.strip()
+    raw = path.read_text(encoding="utf-8")
+    data: Any = json.loads(raw)
+    value: Any = data
+    for segment in key.split("."):
+        if not isinstance(value, dict) or segment not in value:
+            raise RuntimeError(f"Prompt key '{key}' not found in {path}")
+        value = value[segment]
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    raise RuntimeError(f"Prompt key '{key}' is empty in {path}")
+
 
 
 AI_PROVIDER = (os.getenv("AI_PROVIDER") or "openrouter").strip().lower()
