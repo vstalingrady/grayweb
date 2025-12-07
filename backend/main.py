@@ -6882,12 +6882,13 @@ async def generate_ai_response(
                 return response_text, grounding_metadata
             except Exception as openrouter_error:  # pragma: no cover - best effort logging
                 api_logger.error(
-                    "OpenRouter generation failed; falling back to Gemini",
+                    f"OpenRouter generation failed ({type(openrouter_error).__name__}: {openrouter_error}); falling back to Gemini",
                     extra={
                         "event_type": "ai_provider_fallback",
                         "provider": provider,
                         "error": str(openrouter_error),
                     },
+                    exc_info=True,
                 )
                 # Fall back to Gemini
                 provider = "gemini"
