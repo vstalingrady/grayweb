@@ -6169,6 +6169,8 @@ async def stream_ai_response(
                     
                     # Native tool call accumulator: index -> {name, arguments_parts, id}
                     pending_tool_calls = {}
+                    # Track if we've started streaming reasoning content (to wrap in <thinking> tags once)
+                    reasoning_started = False
                     # DEBUG: Log what we're sending to OpenRouter
                     has_plugins = search_enabled
                     num_tools = len(tool_list) if tool_list else 0
@@ -6216,12 +6218,17 @@ async def stream_ai_response(
                                     if func.get("arguments"):
                                         pending_tool_calls[idx]["arguments"].append(func["arguments"])
                             
-                            # Handle reasoning chunks
+                            # Handle reasoning chunks - stream as opening tag once, then content
                             if chunk.get("type") == "reasoning":
                                 r_text = chunk.get("content", "")
-                                thinking_text = f"<thinking>{r_text}</thinking>"
-                                accumulated += thinking_text
-                                yield ("delta", thinking_text)
+                                if not reasoning_started:
+                                    # First reasoning chunk - emit opening tag
+                                    yield ("delta", "<thinking>")
+                                    accumulated += "<thinking>"
+                                    reasoning_started = True
+                                # Stream the raw thinking content
+                                accumulated += r_text
+                                yield ("delta", r_text)
                                 if not got_first_token:
                                     got_first_token = True
                                     first_token_ms = (time.perf_counter() - t0_first_token) * 1000
@@ -6270,7 +6277,11 @@ async def stream_ai_response(
                                 accumulated += tool_buffer
                                 tool_buffer = ""
                         else:
-                            # Normal streaming
+                            # Normal streaming - close thinking tag if we were in reasoning mode
+                            if reasoning_started:
+                                yield ("delta", "</thinking>\n")
+                                accumulated += "</thinking>\n"
+                                reasoning_started = False  # Reset for potential future reasoning
                             accumulated += chunk
                             if chunk:
                                 yield ("delta", chunk)
@@ -6285,6 +6296,12 @@ async def stream_ai_response(
                         yield ("delta", tool_buffer)
                         yielded_any_tokens = True
                         accumulated += tool_buffer
+                    
+                    # Close thinking tag if stream ended while still in reasoning mode
+                    if reasoning_started:
+                        yield ("delta", "</thinking>\n")
+                        accumulated += "</thinking>\n"
+                        reasoning_started = False
                                 
                     # Process any accumulated native tool calls
                     if pending_tool_calls:
