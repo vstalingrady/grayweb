@@ -31,6 +31,7 @@ import {
   Pencil,
   X,
   Check,
+  Sparkles,
 } from "lucide-react";
 import ReactMarkdown, { type Components } from "react-markdown";
 // Type definition for code component
@@ -1191,31 +1192,45 @@ type ChatMessagesListProps = {
 const ThinkingBlock = ({
   content,
   markdownComponents,
+  reasoningSeconds,
 }: {
   content: string;
   markdownComponents: Components;
+  reasoningSeconds?: number | null;
 }) => {
-  const [isExpanded, setIsExpanded] = useState(true);
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  const timeLabel = useMemo(() => {
+    if (typeof reasoningSeconds !== "number" || reasoningSeconds <= 0) {
+      return null;
+    }
+    const seconds = Math.round(reasoningSeconds);
+    return `Thought for ${seconds} second${seconds !== 1 ? "s" : ""}`;
+  }, [reasoningSeconds]);
 
   return (
-    <div className={styles.chatThinkingBlock}>
-      <div
+    <div className={styles.chatThinkingBlock} data-expanded={isExpanded ? "true" : "false"}>
+      <button
+        type="button"
         className={styles.chatThinkingHeader}
         onClick={() => setIsExpanded(!isExpanded)}
-        role="button"
-        tabIndex={0}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            setIsExpanded(!isExpanded);
-          }
-        }}
+        aria-expanded={isExpanded}
+        aria-label={isExpanded ? "Collapse thinking" : "Expand thinking"}
       >
-        {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-        <span>Thinking Process</span>
-      </div>
-      {isExpanded && (
-        <div className={styles.chatThinkingBody}>
+        <Sparkles size={14} className={styles.chatThinkingIcon} />
+        <span className={styles.chatThinkingLabel}>
+          {timeLabel || "Thinking"}
+        </span>
+        <ChevronDown
+          size={14}
+          className={`${styles.chatThinkingChevron} ${isExpanded ? styles.chatThinkingChevronExpanded : ""}`}
+        />
+      </button>
+      <div
+        className={`${styles.chatThinkingBody} ${isExpanded ? styles.chatThinkingBodyExpanded : ""}`}
+        aria-hidden={!isExpanded}
+      >
+        <div className={styles.chatThinkingContent}>
           <ReactMarkdown
             components={markdownComponents}
             remarkPlugins={MARKDOWN_PLUGINS}
@@ -1224,7 +1239,7 @@ const ThinkingBlock = ({
             {content}
           </ReactMarkdown>
         </div>
-      )}
+      </div>
     </div>
   );
 };
@@ -1389,6 +1404,7 @@ const ChatMessagesList = memo(
                       <ThinkingBlock
                         content={normalizedThinkingText ?? ""}
                         markdownComponents={markdownComponents}
+                        reasoningSeconds={isLatestAssistantMessage ? reasoningSeconds : undefined}
                       />
                     )}
                     {hasTextContent && (

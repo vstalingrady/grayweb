@@ -3637,48 +3637,108 @@
 .chatThinkingBlock {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin: 4px 0 12px;
+  margin: 8px 0 16px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+  transition: background 0.2s ease;
+}
+
+.chatThinkingBlock:hover {
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .chatThinkingHeader {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 0.8rem;
+  padding: 10px 14px;
+  font-size: 0.82rem;
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.5);
+  color: rgba(255, 255, 255, 0.65);
   cursor: pointer;
   user-select: none;
+  border: none;
+  background: transparent;
+  width: 100%;
+  text-align: left;
   transition: color 0.15s ease;
-  width: fit-content;
 }
 
 .chatThinkingHeader:hover {
-  color: rgba(255, 255, 255, 0.8);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.chatThinkingIcon {
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+.chatThinkingLabel {
+  flex: 1;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+.chatThinkingChevron {
+  flex-shrink: 0;
+  opacity: 0.5;
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.15s ease;
+}
+
+.chatThinkingChevronExpanded {
+  transform: rotate(180deg);
+}
+
+.chatThinkingHeader:hover .chatThinkingChevron {
+  opacity: 0.8;
 }
 
 .chatThinkingBody {
-  position: relative;
-  padding-left: 12px;
-  margin-left: 3px;
-  border-left: 2px solid rgba(255, 255, 255, 0.12);
-  font-size: 0.88rem;
-  color: rgba(255, 255, 255, 0.75);
-  /* Ensure markdown content doesn't overflow */
-  overflow-x: auto;
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.3s cubic-bezier(0.4, 0, 0.2, 1), padding 0.3s ease;
+  padding: 0 14px;
 }
 
-.chatThinkingBody {
+.chatThinkingBodyExpanded {
+  grid-template-rows: 1fr;
+  padding: 0 14px 14px;
+}
+
+.chatThinkingContent {
+  overflow: hidden;
   font-size: 0.85rem;
-  color: rgba(255, 255, 255, 0.92);
-  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.75);
+  line-height: 1.55;
+  font-style: italic;
+  border-left: 2px solid rgba(255, 255, 255, 0.15);
+  padding-left: 12px;
+  margin-left: 2px;
 }
 
-.chatThinkingBody :global(p),
-.chatThinkingBody :global(li) {
+.chatThinkingContent :global(p),
+.chatThinkingContent :global(li) {
   margin: 0;
-  line-height: 1.4;
+  line-height: 1.55;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.chatThinkingContent :global(ul),
+.chatThinkingContent :global(ol) {
+  margin: 8px 0;
+  padding-left: 1.2em;
+}
+
+.chatThinkingContent :global(p:first-child) {
+  margin-top: 0;
+}
+
+.chatThinkingContent :global(p:last-child),
+.chatThinkingContent :global(ul:last-child),
+.chatThinkingContent :global(ol:last-child) {
+  margin-bottom: 0;
 }
 
 .chatMarkdownGenerating {
