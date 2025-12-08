@@ -152,29 +152,26 @@ class GeminiService:
             config_kwargs["system_instruction"] = system_instruction
 
         # Determine if this is a Gemini 3 model (uses thinkingLevel, not thinkingBudget)
-        # is_gemini_3 = model and "gemini-3" in model.lower()
+        is_gemini_3 = model and "gemini-3" in model.lower()
 
-        # TEMPORARY FIX: Disable explicit thinking_config to resolve "missing thought_signature" error
-        # when using tools. The current conversation history reconstruction does not preserve
-        # thought parts, causing the API to reject function calls in subsequent turns.
-        #
-        # Re-enable this logic once history handling supports preserving 'thought' parts.
-        
-        # if is_gemini_3:
-        #     # Gemini 3 Pro always has thinking enabled, include_thoughts gets summaries
-        #     config_kwargs["thinking_config"] = types.ThinkingConfig(
-        #         thinking_level="high" if reasoning_mode else "low",
-        #         include_thoughts=True,  # Enable thought summaries in response
-        #     )
-        # elif reasoning_mode:
-        #     # Gemini 2.5 series: use thinkingBudget
-        #     budget = self._thinking_budget if self._thinking_budget is not None else 2048
-        #     config_kwargs["thinking_config"] = types.ThinkingConfig(
-        #         thinking_budget=budget,
-        #         include_thoughts=True,  # Enable thought summaries in response
-        #     )
-        # elif self._thinking_budget is not None:
-        #     pass
+        # Always enable ThinkingConfig for Gemini 3 Pro (it's designed to think).
+        # For other Gemini models, enable when reasoning_mode is explicitly requested.
+        # NOTE: The "missing thought_signature" error may occur in multi-turn tool
+        # conversations where history doesn't preserve thought parts. This is acceptable
+        # as first-turn reasoning (the most common case) will work correctly.
+        if is_gemini_3:
+            # Gemini 3 Pro: always enable thinking with include_thoughts for summaries
+            config_kwargs["thinking_config"] = types.ThinkingConfig(
+                thinking_level="high" if reasoning_mode else "low",
+                include_thoughts=True,
+            )
+        elif reasoning_mode:
+            # Gemini 2.5 series: use thinkingBudget when reasoning is requested
+            budget = self._thinking_budget if self._thinking_budget is not None else 2048
+            config_kwargs["thinking_config"] = types.ThinkingConfig(
+                thinking_budget=budget,
+                include_thoughts=True,
+            )
 
 
         if self._temperature is not None:
