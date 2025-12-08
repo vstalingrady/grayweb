@@ -2182,9 +2182,9 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       const shouldUseWebSearch = webSearchEnabled;
 
       const streamGeneralResponse = () => {
-        console.log("[sendGeneralMessage] streamGeneralResponse function called");
+        console.log("[sendGeneralMessage] *** streamGeneralResponse INVOKED ***");
         (async () => {
-          console.log("[sendGeneralMessage] Inside streamGeneralResponse async IIFE");
+          console.log("[sendGeneralMessage] Inside streamGeneralResponse async IIFE - about to start streaming");
           let accumulated = "";
           let capturedReminders: unknown[] = [];
           const streamingUserId = resolvedUser.id;
