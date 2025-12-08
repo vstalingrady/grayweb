@@ -23,9 +23,8 @@ export const buildLocalTimeContext = (referenceDate?: Date) => {
     timeZoneName: "short",
   });
   const labeledTime = formatter.format(now);
-  const utcOffset = formatUtcOffset(-now.getTimezoneOffset());
-
-  return `The user's local time is ${labeledTime}. Timezone: ${timeZone} (UTC${utcOffset}).`;
+  // Only show the formatted time - don't explicitly mention timezone/city to avoid AI incorrectly naming cities
+  return `The user's local time is ${labeledTime}.`;
 };
 
 export default buildLocalTimeContext;
