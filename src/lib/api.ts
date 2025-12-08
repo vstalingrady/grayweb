@@ -1531,12 +1531,29 @@ class ApiService {
       }
     }
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(request),
-      signal: options?.signal,
+    console.log('[ApiService.sendMessageStream] About to fetch:', {
+      url,
+      hasAuthHeader: !!headers['Authorization'],
+      bodyKeys: Object.keys(request),
     });
+
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(request),
+        signal: options?.signal,
+      });
+      console.log('[ApiService.sendMessageStream] Fetch completed:', {
+        status: response.status,
+        statusText: response.statusText,
+        contentType: response.headers.get('content-type'),
+      });
+    } catch (fetchError) {
+      console.error('[ApiService.sendMessageStream] Fetch FAILED:', fetchError);
+      throw fetchError;
+    }
 
     if (!response.ok) {
       let detail = `HTTP error! status: ${response.status}`;

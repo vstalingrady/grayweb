@@ -5465,7 +5465,10 @@ async def _ensure_supabase_user_exists(user_id: int, db: databases.Database) -> 
 async def get_or_create_user_streak(user_id: int, db: databases.Database) -> UserStreak:
     """Get existing user streak or create new one using local SQLite."""
     try:
-
+        try:
+            from backend.database import user_streaks
+        except ImportError:
+            from database import user_streaks
 
         query = user_streaks.select().where(user_streaks.c.user_id == user_id)
         row = await db.fetch_one(query)
@@ -5524,7 +5527,10 @@ async def update_user_streak(
     except ImportError:
         from backports.zoneinfo import ZoneInfo  # type: ignore
 
-
+    try:
+        from backend.database import user_streaks
+    except ImportError:
+        from database import user_streaks
 
     # Use the client's reported timezone when available, falling back
     # to stored user preferences and finally UTC.
@@ -9704,6 +9710,11 @@ async def list_user_conversations(
     
     # Query local SQLite database for chat threads
     try:
+        try:
+            from backend.database import user_chat_threads
+        except ImportError:
+            from database import user_chat_threads
+
         query = (
             user_chat_threads.select()
             .where(user_chat_threads.c.user_identifier == user_id)

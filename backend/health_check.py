@@ -16,7 +16,11 @@ router = APIRouter(tags=["Health"])
 async def check_redis() -> Dict[str, Any]:
     """Check Redis connectivity."""
     try:
-        from redis_client import get_redis_client
+        try:
+            from backend.redis_client import get_redis_client
+        except ImportError:
+            from redis_client import get_redis_client
+            
         client = get_redis_client()
         if not client.available:
             return {"status": "unavailable", "message": "Redis not configured"}
@@ -36,7 +40,10 @@ async def check_redis() -> Dict[str, Any]:
 async def check_database() -> Dict[str, Any]:
     """Check database connectivity."""
     try:
-        from database import database
+        try:
+            from backend.database import database
+        except ImportError:
+            from database import database
         
         if not database.is_connected:
             return {"status": "disconnected"}
