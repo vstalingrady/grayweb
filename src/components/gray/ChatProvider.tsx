@@ -716,6 +716,8 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
   const autoCacheInFlightRef = useRef(false);
   // Track profile hash to only send full profile when it changes
   const lastSentProfileHashRef = useRef<string>("");
+  // Track when reasoning mode starts to calculate reasoning duration
+  const reasoningStartTimeRef = useRef<number | null>(null);
 
   // Restore model selection from local storage
   useEffect(() => {
@@ -2174,6 +2176,11 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
             // Update the ref so subsequent messages know the profile was sent
             if (shouldIncludeFullProfile) {
               lastSentProfileHashRef.current = currentProfileHash;
+            }
+
+            // Start tracking reasoning time if reasoning mode is enabled
+            if (reasoningMode) {
+              reasoningStartTimeRef.current = Date.now();
             }
 
             for await (const event of apiService.sendMessageStream({
