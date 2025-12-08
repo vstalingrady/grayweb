@@ -24,8 +24,10 @@ export type GrayChatBarProps = {
   isReasoningLocked?: boolean;
   isSearchEnabled?: boolean;
   onToggleSearch?: () => void;
+  onToggleSearch?: () => void;
   modelSelector?: React.ReactNode;
   onPasteFiles?: (files: File[]) => void;
+  attachmentTray?: React.ReactNode;
 };
 
 export function GrayChatBar({
@@ -43,6 +45,7 @@ export function GrayChatBar({
   onToggleSearch,
   modelSelector,
   onPasteFiles,
+  attachmentTray,
 }: GrayChatBarProps) {
   const computedDisabled =
     typeof isSubmitDisabled === "boolean" ? isSubmitDisabled : value.trim().length === 0;
@@ -142,6 +145,7 @@ export function GrayChatBar({
         </button>
       ) : null}
       <div className={styles.chatInputWrapper}>
+        {attachmentTray}
         <textarea
           ref={textareaRef}
           value={value}

@@ -32,6 +32,7 @@ import {
   X,
   Check,
   Sparkles,
+  Brain,
 } from "lucide-react";
 import ReactMarkdown, { type Components } from "react-markdown";
 // Type definition for code component
@@ -952,9 +953,9 @@ const MarkdownCodeBlock: CodeComponent = ({ inline, className, children, ...prop
     const normalized = stripUniformIndent(raw);
 
     return {
-      normalizedRaw: normalized,
+      normalizedRaw: normalized.trim(),
       trimmedRaw: normalized.trim(),
-      codeLines: tokenizeCode(normalized, language),
+      codeLines: tokenizeCode(normalized.trim(), language),
     };
   }, [raw, language]);
 
@@ -1215,9 +1216,9 @@ const ThinkingBlock = ({
         className={styles.chatThinkingHeader}
         onClick={() => setIsExpanded(!isExpanded)}
         aria-expanded={isExpanded}
-        aria-label={isExpanded ? "Collapse thinking" : "Expand thinking"}
+        aria-label={isExpanded ? "Collapse reasoning" : "Expand reasoning"}
       >
-        <Sparkles size={14} className={styles.chatThinkingIcon} />
+        <Brain size={14} className={styles.chatThinkingIcon} />
         <span className={styles.chatThinkingLabel}>
           {timeLabel || "Thinking"}
         </span>
@@ -1404,7 +1405,7 @@ const ChatMessagesList = memo(
                       <ThinkingBlock
                         content={normalizedThinkingText ?? ""}
                         markdownComponents={markdownComponents}
-                        reasoningSeconds={isLatestAssistantMessage ? reasoningSeconds : undefined}
+                        reasoningSeconds={message.reasoningSeconds}
                       />
                     )}
                     {hasTextContent && (

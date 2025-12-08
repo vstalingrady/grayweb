@@ -77,6 +77,7 @@ export const ChatDraftInput = ({
             onSubmit={handleSubmit}
             isSubmitDisabled={isSubmitDisabled}
             onPasteFiles={onPasteFiles}
+            attachmentTray={attachmentTray}
         />
     );
 };

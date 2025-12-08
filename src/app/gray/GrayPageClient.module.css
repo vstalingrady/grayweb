@@ -3489,7 +3489,7 @@
 .chatStreamingSpinner {
   width: 18px;
   height: 18px;
-  animation: spin 1s linear infinite;
+  animation: graySpin 1s linear infinite;
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
@@ -3709,20 +3709,18 @@
 
 .chatThinkingContent {
   overflow: hidden;
-  font-size: 0.85rem;
-  color: rgba(255, 255, 255, 0.75);
-  line-height: 1.55;
-  font-style: italic;
-  border-left: 2px solid rgba(255, 255, 255, 0.15);
-  padding-left: 12px;
-  margin-left: 2px;
+  font-size: 0.9rem;
+  color: hsl(230, 25%, 70%);
+  line-height: 1.65;
+  padding-left: 2px;
+  margin-left: 0;
 }
 
 .chatThinkingContent :global(p),
 .chatThinkingContent :global(li) {
   margin: 0;
-  line-height: 1.55;
-  color: rgba(255, 255, 255, 0.75);
+  line-height: 1.65;
+  color: hsl(230, 25%, 70%);
 }
 
 .chatThinkingContent :global(ul),
@@ -3792,7 +3790,8 @@
 .chatMarkdown :global(ol) {
   margin: 0;
   padding-left: 1.2em;
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 6px;
   list-style-position: outside;
 }
@@ -5083,6 +5082,16 @@
 }
 
 @keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes graySpin {
   from {
     transform: rotate(0deg);
   }
@@ -7400,7 +7409,7 @@ h1.greeting {
   /* Match calendarCard: fill available column height */
   height: 100%;
   max-width: 576px;
-  background: rgba(6, 6, 6, 0.86);
+  background: rgba(18, 18, 18, 0.94);
   border: 1px solid rgba(255, 255, 255, 0.05);
   border-radius: 32px;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
@@ -7418,7 +7427,7 @@ h1.greeting {
   margin: 0;
   height: 100%;
   max-width: 576px;
-  background: rgba(6, 6, 6, 0.86);
+  background: rgba(18, 18, 18, 0.94);
   border: 1px solid rgba(255, 255, 255, 0.05);
   border-radius: 32px;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
@@ -8801,6 +8810,95 @@ h1.greeting {
   background: transparent;
   min-width: 0;
   position: relative;
+  gap: 8px;
+  padding-left: 8px;
+}
+
+.chatAttachmentTrayInline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.chatAttachmentThumb {
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  overflow: hidden;
+  position: relative;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.chatAttachmentThumbImage {
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+.chatAttachmentThumbImage img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.chatAttachmentThumbFile {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.chatAttachmentThumbFile span {
+  font-size: 0.5rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.chatAttachmentRemoveBtn {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 14px;
+  height: 14px;
+  background: rgba(0, 0, 0, 0.6);
+  border: none;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-bottom-left-radius: 4px;
+}
+
+.chatAttachmentRemoveBtn:hover {
+  background: rgba(200, 50, 50, 0.9);
+}
+
+.chatAttachmentLoading {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.chatAttachmentSpinner {
+  opacity: 0.6;
+  animation: spin 1s linear infinite;
+}
+
+.chatAttachmentErrorInline {
+  font-size: 0.75rem;
+  color: #ff6b6b;
+  margin-left: 4px;
 }
 
 .chatModelSelectorWrapper {
@@ -9640,6 +9738,7 @@ h1.greeting {
   background: rgba(255, 255, 255, 0.05);
   color: #fff;
 }
+
 .dashboardCalendarContainer[data-overlay="true"] {
   height: auto !important;
   min-height: 0;
@@ -9685,7 +9784,8 @@ h1.greeting {
   max-height: 100vh !important;
   min-height: 0;
   overflow: hidden !important;
-  padding: 40px 60px !important; /* Fix padding mess */
+  padding: 40px 60px !important;
+  /* Fix padding mess */
   box-sizing: border-box;
 }
 
@@ -9703,7 +9803,8 @@ h1.greeting {
   height: 100% !important;
   max-height: 100% !important;
   overflow: hidden !important;
-  background: transparent !important; /* Ensure transparency if needed */
+  background: transparent !important;
+  /* Ensure transparency if needed */
 }
 
 /* Body becomes the flex container for columns */
@@ -9719,23 +9820,28 @@ h1.greeting {
 /* Left Column: Calendar & Proactivity */
 .dashboardCalendarContainer[data-overlay="true"] .calendarSidebarColumn {
   height: 100% !important;
-  overflow-y: auto !important; /* Allow scroll if content (proactivity) overflows */
+  overflow-y: auto !important;
+  /* Allow scroll if content (proactivity) overflows */
   flex-shrink: 0;
-  scrollbar-width: none; /* Clean look */
+  scrollbar-width: none;
+  /* Clean look */
 }
 
 /* Right Column: Plans/Habits */
 .dashboardCalendarContainer[data-overlay="true"] .pulseBoard {
   height: 100% !important;
-  overflow: hidden !important; /* Container doesn't scroll, child does */
+  overflow: hidden !important;
+  /* Container doesn't scroll, child does */
   flex: 1;
 }
 
 /* The Grid inside right column */
 .dashboardCalendarContainer[data-overlay="true"] .pulseBoardContent {
   height: 100% !important;
-  overflow-y: auto !important; /* Independent scroll for plans */
-  padding-right: 12px; /* Space for scrollbar */
+  overflow-y: auto !important;
+  /* Independent scroll for plans */
+  padding-right: 12px;
+  /* Space for scrollbar */
 }
 
 /* Remove Drop Shadows and borders for cleaner look in overlay */
@@ -9743,7 +9849,8 @@ h1.greeting {
 .dashboardCalendarContainer[data-overlay="true"] .calendarSidebarPanel,
 .dashboardCalendarContainer[data-overlay="true"] .calendarCard {
   box-shadow: none !important;
-  background: rgba(20, 20, 20, 0.4) !important; /* Subtle separate bg */
+  background: rgba(20, 20, 20, 0.4) !important;
+  /* Subtle separate bg */
   border: 1px solid rgba(255, 255, 255, 0.05) !important;
 }
 
@@ -9753,17 +9860,18 @@ h1.greeting {
 }
 
 /* Robust Column Scroll Isolation */
-.dashboardCalendarContainer[data-overlay="true"] .calendarSurfaceBody[data-has-sidebar="true"] > div:first-child {
+.dashboardCalendarContainer[data-overlay="true"] .calendarSurfaceBody[data-has-sidebar="true"]>div:first-child {
   height: 100% !important;
   max-height: 100% !important;
   overflow-y: auto !important;
-  scrollbar-width: none; /* Clean */
+  scrollbar-width: none;
+  /* Clean */
 }
 
-.dashboardCalendarContainer[data-overlay="true"] .calendarSurfaceBody[data-has-sidebar="true"] > div:last-child {
+.dashboardCalendarContainer[data-overlay="true"] .calendarSurfaceBody[data-has-sidebar="true"]>div:last-child {
   height: 100% !important;
   max-height: 100% !important;
-  overflow: hidden !important; 
+  overflow: hidden !important;
   /* For Calendar tab, the last child IS the scrollable board, so we might need to handle that */
 }
 
@@ -9777,15 +9885,16 @@ h1.greeting {
 /* Let's be specific. */
 
 .dashboardCalendarContainer[data-overlay="true"] .calendarBoard {
-   height: 100% !important;
-   overflow-y: auto !important;
+  height: 100% !important;
+  overflow-y: auto !important;
 }
 
 /* Layout Isolation Fixes */
 .dashboardCalendarContainer[data-overlay="true"] .pulseBoardContent {
   display: flex !important;
   flex-direction: column !important;
-  gap: 24px !important; /* Explicit gap between Plans and Habits */
+  gap: 24px !important;
+  /* Explicit gap between Plans and Habits */
   height: auto !important;
   min-height: 0 !important;
   overflow-y: auto !important;
@@ -9794,11 +9903,16 @@ h1.greeting {
 
 /* Ensure cards don't collapse or overlap */
 .dashboardCalendarContainer[data-overlay="true"] .dashboardCard {
-  flex: none !important; /* Don't shrink */
-  height: auto !important; /* Natural height based on content */
-  margin-bottom: 0 !important; /* Gap handles spacing */
-  background: rgba(14, 14, 14, 0.6) !important; /* Ensure opacity */
-  backdrop-filter: none !important; /* Remove blur here too */
+  flex: none !important;
+  /* Don't shrink */
+  height: auto !important;
+  /* Natural height based on content */
+  margin-bottom: 0 !important;
+  /* Gap handles spacing */
+  background: rgba(14, 14, 14, 0.6) !important;
+  /* Ensure opacity */
+  backdrop-filter: none !important;
+  /* Remove blur here too */
 }
 
 /* Remove sticky positioning if any inside cards causing overlap */
@@ -9809,12 +9923,14 @@ h1.greeting {
 /* Ensure sidebar is strictly isolated z-index wise just in case */
 .dashboardCalendarContainer[data-overlay="true"] .calendarSidebarColumn {
   z-index: 5 !important;
-  background: transparent !important; /* Container transparent */
+  background: transparent !important;
+  /* Container transparent */
 }
 
 .dashboardCalendarContainer[data-overlay="true"] .calendarSidebar {
   z-index: 5 !important;
-  background: #080808 !important; /* Opaque background */
+  background: #080808 !important;
+  /* Opaque background */
 }
 
 /* Color Harmonization */
@@ -9822,6 +9938,7 @@ h1.greeting {
 .dashboardCalendarContainer[data-overlay="true"] .calendarSidebar,
 .dashboardCalendarContainer[data-overlay="true"] .calendarSidebarPanel,
 .dashboardCalendarContainer[data-overlay="true"] .calendarCard {
-  background: #0a0a0a !important; /* Unified opaque color matching container */
+  background: #0a0a0a !important;
+  /* Unified opaque color matching container */
   border-color: rgba(255, 255, 255, 0.08) !important;
 }

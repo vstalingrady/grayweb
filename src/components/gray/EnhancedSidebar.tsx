@@ -12,6 +12,7 @@ import {
   LogOut,
   Star,
 } from "lucide-react";
+import Skeleton from "react-loading-skeleton";
 import { SiDiscord } from "react-icons/si";
 import { useUser } from "@/contexts/UserContext";
 import styles from "@/app/gray/GrayPageClient.module.css";
@@ -283,16 +284,28 @@ function GrayEnhancedSidebarComponent({
                             const isActive = entry.id === activeChatId;
                             return (
                               <li key={entry.id}>
-                                <Link
-                                  href={entry.href}
-                                  className={
-                                    isActive
-                                      ? `${styles.sidebarHistoryLink} ${styles.sidebarHistoryLinkActive}`
-                                      : styles.sidebarHistoryLink
-                                  }
-                                >
-                                  {entry.title}
-                                </Link>
+                                {entry.isGeneratingTitle ? (
+                                  <div style={{ padding: "6px 16px" }}>
+                                    <Skeleton
+                                      height={14}
+                                      width={140}
+                                      baseColor="rgba(255, 255, 255, 0.05)"
+                                      highlightColor="rgba(255, 255, 255, 0.1)"
+                                      borderRadius={4}
+                                    />
+                                  </div>
+                                ) : (
+                                  <Link
+                                    href={entry.href}
+                                    className={
+                                      isActive
+                                        ? `${styles.sidebarHistoryLink} ${styles.sidebarHistoryLinkActive}`
+                                        : styles.sidebarHistoryLink
+                                    }
+                                  >
+                                    {entry.title}
+                                  </Link>
+                                )}
                               </li>
                             );
                           })}

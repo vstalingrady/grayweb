@@ -23,6 +23,7 @@ export type ChatMessage = {
      */
     variants?: string[];
     activeVariantIndex?: number;
+    reasoningSeconds?: number;
 };
 
 export type ChatSessionScope = "general" | "thread";

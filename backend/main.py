@@ -7357,6 +7357,7 @@ async def import_file_search(
 @limiter.limit("5/minute")
 async def upload_media(
     request: Request,
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     current_user: Dict[str, Any] = Depends(get_current_user),
     db: databases.Database = Depends(get_database),
@@ -7391,9 +7392,8 @@ async def upload_media(
   )
   media_record_id = await db.execute(query)
   if FILE_SEARCH_ENABLED and FILE_SEARCH_SERVICE:
-      store_name = await _ensure_user_file_search_store(db, user_id)
-      if store_name:
-          await _upload_file_search_document(store_name, storage_path, sanitized_name)
+      background_tasks.add_task(_background_file_search_upload, db, user_id, storage_path, sanitized_name)
+
   return MediaUpload(
       id=media_record_id,
       user_id=user_id,
@@ -7403,6 +7403,19 @@ async def upload_media(
       created_at=now,
       public_url=public_url,
   )
+
+async def _background_file_search_upload(db: databases.Database, user_id: str, storage_path: Path, sanitized_name: str):
+    """Helper to handle file search upload in background."""
+    try:
+        # We need to re-verify service availability in background context
+        if not FILE_SEARCH_SERVICE:
+            return
+            
+        store_name = await _ensure_user_file_search_store(db, user_id)
+        if store_name:
+            await _upload_file_search_document(store_name, storage_path, sanitized_name)
+    except Exception as exc:
+        file_logger.error(f"Background upload to file search failed: {exc}")
 
 
 async def chat_endpoint(

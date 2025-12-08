@@ -2153,6 +2153,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
         (async () => {
           let accumulated = "";
           let capturedReminders: unknown[] = [];
+          let didReceiveToken = false;
           const streamingUserId = resolvedUser.id;
           try {
             const timeContext = buildLocalTimeContext();
@@ -2200,7 +2201,16 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
                 const extraction = extractGrayRemindersFromText(accumulated);
                 const content = extraction.cleanText;
                 if (assistantMessageId) {
-                  updateMessage(generalSession.id, assistantMessageId, { content });
+                  const updates: Partial<ChatMessage> = { content: accumulated };
+                  // Persist reasoning duration on first token update
+                  if (!didReceiveToken && reasoningStartTimeRef.current) {
+                    const elapsed = (Date.now() - reasoningStartTimeRef.current) / 1000;
+                    // setReasoningSeconds(elapsed); // This line is likely for a local state, not directly in message update
+                    reasoningStartTimeRef.current = null; // Clear it after first token
+                    updates.reasoningSeconds = elapsed;
+                    didReceiveToken = true;
+                  }
+                  updateMessage(generalSession.id, assistantMessageId, updates);
                 }
                 continue;
               }
@@ -2245,13 +2255,21 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
                   }
                 }
 
+                const finalMessageUpdates: Partial<ChatMessage> = {
+                  content: finalContent,
+                  groundingMetadata: metadata,
+                  reminders: finalReminders,
+                  ...(timingUpdate ?? {}),
+                };
+
+                // If reasoningSeconds was not set on first token (e.g., very fast response), set it now
+                if (!didReceiveToken && reasoningStartTimeRef.current) {
+                  const elapsed = (Date.now() - reasoningStartTimeRef.current) / 1000;
+                  finalMessageUpdates.reasoningSeconds = elapsed;
+                }
+
                 if (assistantMessageId) {
-                  updateMessage(generalSession.id, assistantMessageId, {
-                    content: finalContent,
-                    groundingMetadata: metadata,
-                    reminders: finalReminders,
-                    ...(timingUpdate ?? {}),
-                  });
+                  updateMessage(generalSession.id, assistantMessageId, finalMessageUpdates);
                 } else {
                   const assistantMessage = appendMessage(
                     generalSession.id,
