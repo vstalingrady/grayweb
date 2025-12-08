@@ -5944,10 +5944,16 @@ async def stream_ai_response(
         # Ensure tools are passed to OpenRouter if it's the selected provider
         if provider == "openrouter":
             pass # OpenRouter will handle tools directly
+        elif provider == "gemini":
+            # Provider is already Gemini from tier alias selection (pro/lite)
+            # Keep the model that was set by the tier alias - don't override it
+            pass
         else:
-            # Fallback to Gemini if OpenRouter is not selected for tool-heavy requests
+            # No provider set yet, fallback to Gemini with appropriate model
             provider = "gemini"
-            model = REMINDER_MODEL if needs_structured_tools else GEMINI_SERVICE.default_model
+            # Only use REMINDER_MODEL if user didn't explicitly select a tier
+            if not explicit_model_is_tier_alias:
+                model = REMINDER_MODEL if needs_structured_tools else GEMINI_SERVICE.default_model
     elif provider:
         # provider was decided above based on explicit model hints
         pass
