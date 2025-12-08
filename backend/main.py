@@ -6035,7 +6035,8 @@ async def stream_ai_response(
     # Common tool list
     tool_list = [*base_tools, *maps_tools, *file_search_tools]
     # Add PLAN_TOOLS and CALENDAR_TOOLS only when message intent suggests scheduling operations
-    if needs_structured_tools:
+    # BUT skip for onboarding flow - it only needs complete_onboarding tool, extra tools add latency
+    if needs_structured_tools and not is_onboarding_tool:
         tool_list = [*tool_list, *PLAN_TOOLS, *CALENDAR_TOOLS]
     effective_tool_config = maps_tool_config
 
@@ -6141,8 +6142,18 @@ async def stream_ai_response(
                     # DEBUG: Log what we're sending to OpenRouter
                     has_plugins = search_enabled
                     num_tools = len(tool_list) if tool_list else 0
+                    tool_names = []
+                    if tool_list:
+                        for t in tool_list:
+                            if hasattr(t, 'function_declarations') and t.function_declarations:
+                                for fd in t.function_declarations:
+                                    tool_names.append(fd.name)
+                            elif hasattr(t, 'google_search'):
+                                tool_names.append('google_search')
+                            elif hasattr(t, 'google_maps'):
+                                tool_names.append('google_maps')
                     hist_len = len(current_history) if current_history else 0
-                    api_logger.info(f"[OpenRouter Call] search_enabled={search_enabled}, tools={num_tools}, history={hist_len}, model={model}")
+                    api_logger.info(f"[OpenRouter Call] search_enabled={search_enabled}, tools={num_tools} ({tool_names}), history={hist_len}, model={model}")
 
                     async for chunk in OPENROUTER_SERVICE.stream(
                         current_message,
@@ -6838,7 +6849,8 @@ async def generate_ai_response(
             base_tools = [t for t in base_tools if t != SEARCH_TOOL]
     tool_list = [*base_tools, *maps_tools, *file_search_tools]
     # Add PLAN_TOOLS and CALENDAR_TOOLS only when message intent suggests scheduling operations
-    if needs_structured_tools:
+    # BUT skip for onboarding flow - it only needs complete_onboarding tool, extra tools add latency
+    if needs_structured_tools and not is_onboarding_tool:
         tool_list = [*tool_list, *PLAN_TOOLS, *CALENDAR_TOOLS]
     effective_tool_config = maps_tool_config
 
