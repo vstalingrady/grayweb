@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useCallback, useMemo, useState, useRef, useEffect } from "react";
-import { Zap, Sparkles, Lock, ChevronUp, Rocket, Grid, ChevronRight, Check, Brain, Settings, ArrowRight, Box } from "lucide-react"; // Replaced Cube with Box
+import { Zap, Sparkles, Lock, ChevronUp, Rocket, Grid, ChevronRight, Check, Brain, Settings, ArrowRight, Box, Calendar } from "lucide-react"; // Replaced Cube with Box
 import Image from "next/image";
 import { useChatStore } from "@/components/gray/ChatProvider";
 import { useUser } from "@/contexts/UserContext";
@@ -93,10 +93,18 @@ type ModelSelectorProps = {
 };
 
 export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
-  const { modelTier, setModelTier, selectedModelId, setSelectedModelId, reasoningMode, setReasoningMode } = useChatStore();
+  const {
+    modelTier, setModelTier, selectedModelId, setSelectedModelId,
+    reasoningMode, setReasoningMode,
+    webSearchEnabled, toggleWebSearchEnabled,
+    mapsEnabled, toggleMapsEnabled,
+    remindersEnabled, toggleRemindersEnabled
+  } = useChatStore();
   const { user } = useUser();
   const [isOpen, setIsOpen] = useState(false);
   const [showAllModels, setShowAllModels] = useState(false);
+  // Tools section expanded state
+  const [isToolsExpanded, setIsToolsExpanded] = useState(false);
   const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -266,23 +274,101 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
             <div className={styles.menuContent}>
 
 
-              {/* Reasoning Toggle - Prominent at top */}
-              <button
-                className={`${styles.menuItem} ${reasoningMode ? styles.menuItemActive : ""}`}
-                onClick={() => setReasoningMode(!reasoningMode)}
-                type="button"
-              >
-                <div className={styles.itemIconWrapper}>
-                  <Brain size={18} className={reasoningMode ? styles.glowIcon : ""} />
-                </div>
-                <div className={styles.itemInfo}>
-                  <div className={styles.itemLabel}>Reasoning</div>
-                  <div className={styles.itemDescription}>Deep thinking mode</div>
-                </div>
-                <div className={`${styles.toggle} ${reasoningMode ? styles.toggleOn : ""}`}>
-                  <div className={styles.toggleKnob} />
-                </div>
-              </button>
+              {/* Tools Section */}
+              <div className={styles.groupContainer}>
+                <button
+                  className={`${styles.menuItem} ${isToolsExpanded ? styles.menuItemExpanded : ""}`}
+                  onClick={() => setIsToolsExpanded(!isToolsExpanded)}
+                  type="button"
+                >
+                  <div className={styles.itemIconWrapper}>
+                    <Settings size={18} />
+                  </div>
+                  <div className={styles.itemInfo}>
+                    <div className={styles.itemLabel}>Tools</div>
+                    <div className={styles.itemDescription}>Reasoning, Search & More</div>
+                  </div>
+                  <ChevronRight
+                    size={14}
+                    className={styles.actionArrow}
+                    style={{ transform: isToolsExpanded ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s' }}
+                  />
+                </button>
+
+                {isToolsExpanded && (
+                  <div className={styles.groupModels}>
+                    {/* Reasoning Toggle */}
+                    <button
+                      className={`${styles.menuItem} ${styles.subMenuItem}`}
+                      onClick={() => setReasoningMode(!reasoningMode)}
+                      type="button"
+                    >
+                      <div className={styles.itemIconWrapper}>
+                        <Brain size={16} className={reasoningMode ? styles.glowIcon : ""} />
+                      </div>
+                      <div className={styles.itemInfo}>
+                        <div className={styles.itemLabel}>Reasoning</div>
+                      </div>
+                      <div className={`${styles.toggle} ${reasoningMode ? styles.toggleOn : ""}`}>
+                        <div className={styles.toggleKnob} />
+                      </div>
+                    </button>
+
+                    {/* Web Search Toggle */}
+                    <button
+                      className={`${styles.menuItem} ${styles.subMenuItem}`}
+                      onClick={toggleWebSearchEnabled}
+                      type="button"
+                    >
+                      <div className={styles.itemIconWrapper}>
+                        {/* Using Grid as placeholder for Globe/Search icon in lucide set provided */}
+                        <Grid size={16} />
+                      </div>
+                      <div className={styles.itemInfo}>
+                        <div className={styles.itemLabel}>Web Search</div>
+                      </div>
+                      <div className={`${styles.toggle} ${webSearchEnabled ? styles.toggleOn : ""}`}>
+                        <div className={styles.toggleKnob} />
+                      </div>
+                    </button>
+
+                    {/* Maps Grounding Toggle */}
+                    <button
+                      className={`${styles.menuItem} ${styles.subMenuItem}`}
+                      onClick={toggleMapsEnabled}
+                      type="button"
+                    >
+                      <div className={styles.itemIconWrapper}>
+                        {/* Using Box -> Compass/Map placeholder */}
+                        <Box size={16} />
+                      </div>
+                      <div className={styles.itemInfo}>
+                        <div className={styles.itemLabel}>Google Maps</div>
+                      </div>
+                      <div className={`${styles.toggle} ${mapsEnabled ? styles.toggleOn : ""}`}>
+                        <div className={styles.toggleKnob} />
+                      </div>
+                    </button>
+
+                    {/* Reminders & Plans Toggle */}
+                    <button
+                      className={`${styles.menuItem} ${styles.subMenuItem}`}
+                      onClick={toggleRemindersEnabled}
+                      type="button"
+                    >
+                      <div className={styles.itemIconWrapper}>
+                        <Calendar size={16} />
+                      </div>
+                      <div className={styles.itemInfo}>
+                        <div className={styles.itemLabel}>Reminders & Plans</div>
+                      </div>
+                      <div className={`${styles.toggle} ${remindersEnabled ? styles.toggleOn : ""}`}>
+                        <div className={styles.toggleKnob} />
+                      </div>
+                    </button>
+                  </div>
+                )}
+              </div>
 
               <div className={styles.divider} />
 

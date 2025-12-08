@@ -143,6 +143,11 @@ const GrayGeneralView = dynamic(
   { loading: () => null }
 );
 
+const DashboardOverlay = dynamic(
+  () => import("@/components/gray/DashboardOverlay").then((mod) => mod.DashboardOverlay),
+  { loading: () => null }
+);
+
 const GrayReferenceView = dynamic(
   () => import("@/components/gray/ReferenceView").then((mod) => mod.ReferenceView),
   { loading: () => null }
@@ -180,24 +185,6 @@ function GrayPageClientInner({
   initialChatTitle,
   initialChatModelId,
 }: GrayPageClientProps) {
-  if (typeof window === 'undefined') {
-    console.log("[DEBUG] GrayPageClient RENDER imports check:", {
-      GrayEnhancedSidebar: !!GrayEnhancedSidebar,
-      GrayWorkspaceHeader: !!GrayWorkspaceHeader,
-      GrayChatView: !!GrayChatView,
-      GrayGeneralView: !!GrayGeneralView,
-      SettingsModal: !!SettingsModal,
-      ChatDraftInput: !!ChatDraftInput,
-      AttachmentTray: !!AttachmentTray,
-      AddPlanHabitModal: !!AddPlanHabitModal,
-      PersonalizationPanel: !!PersonalizationPanel,
-      HistoryOverlay: !!HistoryOverlay,
-      ModelSelector: !!ModelSelector,
-      MobileSuggestionCards: !!MobileSuggestionCards,
-      GrayDashboardView: !!GrayDashboardView,
-      GrayReferenceView: !!GrayReferenceView,
-    });
-  }
 
   const { user, loading: userLoading, updateUser } = useUser();
   const usageStatus = user?.usage_status;
@@ -398,6 +385,7 @@ function GrayPageClientInner({
   );
 
   const [isHistoryOverlayOpen, setIsHistoryOverlayOpen] = useState(false);
+  const [isDashboardOpen, setIsDashboardOpen] = useState(false);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -606,7 +594,7 @@ function GrayPageClientInner({
     return activeNav === "history" && baseViewMode !== "chat" ? "history" : null;
   });
 
-  const effectiveManualViewMode = activeNav === "dashboard" ? null : manualViewMode;
+  const effectiveManualViewMode = manualViewMode;
 
   const viewMode: ViewMode =
     baseViewMode === "chat"
@@ -615,70 +603,6 @@ function GrayPageClientInner({
   const renderPrimaryView = () => {
     if (activeNav === "reference") {
       return <GrayReferenceView />;
-    }
-    if (isDashboardView) {
-      return (
-        <GrayDashboardView
-          pulseEntries={pulseEntries}
-          currentPulse={activePulse}
-          isCurrentPulseEditable={Boolean(isActivePulseEditable)}
-          livePlans={derivedPlans}
-          onSelectPulse={setActivePulseId}
-          proactivityFallback={proactivity}
-          onProactivitySelect={selectProactivityPreset}
-          onProactivityRemove={removeProactivity}
-          onTestProactivity={handleTestProactivity}
-          onTogglePlan={togglePlan}
-          onToggleHabit={toggleHabit}
-          onSavePlan={savePlan}
-          onDeletePlan={deletePlan}
-          activeTab={dashboardTab}
-          onSelectTab={setDashboardTab}
-          currentDate={now}
-          calendars={derivedCalendars}
-          onCalendarsChange={handleCalendarsChange}
-          calendarEvents={derivedEvents}
-          onCalendarEventsChange={handleEventsChange}
-          calendarSelectedDate={calendarSelectedDate}
-          onCalendarSelectedDateChange={setCalendarSelectedDate}
-          onEditHabit={editHabit}
-          onDeleteHabit={deleteHabit}
-          onIntegrationAction={handleCalendarIntegration}
-          onRefreshData={refreshPlansAndHabits}
-          chatBar={
-            shouldShowDashboardChatBar ? (
-              shouldShowDashboardChatBar ? (
-                <ChatDraftInput
-                  variant="composer"
-                  onSubmitMessage={handleChatSubmit}
-                  isSubmitDisabled={isUsageLimitReached}
-                  onPasteFiles={handleAttachmentPaste}
-                  attachmentTray={
-                    attachments.length > 0 ? (
-                      <AttachmentTray
-                        attachments={attachments}
-                        isUploading={isAttachmentUploading}
-                        error={attachmentError}
-                        onAddAttachment={openAttachmentPicker}
-                        onRemoveAttachment={removeAttachment}
-                      />
-                    ) : null
-                  }
-                />
-              ) : undefined
-            ) : undefined
-          }
-          isCompactLayout={isCompactLayout}
-          userId={userId}
-          reminderPlans={reminderPlans}
-          proactivityDeliveryKeys={deliveredProactivityKeys}
-          onReminderMove={handleReminderMove}
-          streakCount={streakCount}
-          hideCalendar={isScout || !(user?.personalization_show_calendar ?? true)}
-          onUpgradeClick={handleUpgradePlan}
-          showUpgradeButton={shouldShowUpgradeButton}
-        />
-      );
     }
     if (isChatView) {
       return (
@@ -1105,11 +1029,7 @@ function GrayPageClientInner({
     }
 
     if (navId === "dashboard") {
-      setManualViewMode(null);
-      const target = NAVIGATION_ROUTES[navId];
-      if (target) {
-        router.push(target);
-      }
+      setIsDashboardOpen(true);
       return;
     }
 
@@ -2633,6 +2553,46 @@ function GrayPageClientInner({
           />
         )}
 
+        <DashboardOverlay
+          isOpen={isDashboardOpen}
+          onClose={() => setIsDashboardOpen(false)}
+          pulseEntries={pulseEntries}
+          currentPulse={activePulse}
+          isCurrentPulseEditable={Boolean(isActivePulseEditable)}
+          livePlans={derivedPlans}
+          onSelectPulse={setActivePulseId}
+          proactivityFallback={proactivity}
+          onProactivitySelect={selectProactivityPreset}
+          onProactivityRemove={removeProactivity}
+          onTestProactivity={handleTestProactivity}
+          onTogglePlan={togglePlan}
+          onToggleHabit={toggleHabit}
+          onSavePlan={savePlan}
+          onDeletePlan={deletePlan}
+          activeTab={dashboardTab}
+          onSelectTab={setDashboardTab}
+          currentDate={now}
+          calendars={derivedCalendars}
+          onCalendarsChange={handleCalendarsChange}
+          calendarEvents={derivedEvents}
+          onCalendarEventsChange={handleEventsChange}
+          calendarSelectedDate={calendarSelectedDate}
+          onCalendarSelectedDateChange={setCalendarSelectedDate}
+          onEditHabit={editHabit}
+          onDeleteHabit={deleteHabit}
+          onIntegrationAction={handleCalendarIntegration}
+          onRefreshData={refreshPlansAndHabits}
+          chatBar={null}
+          isCompactLayout={isCompactLayout}
+          userId={userId}
+          reminderPlans={reminderPlans}
+          proactivityDeliveryKeys={deliveredProactivityKeys}
+          onReminderMove={handleReminderMove}
+          streakCount={streakCount}
+          hideCalendar={isScout || !(user?.personalization_show_calendar ?? true)}
+          onUpgradeClick={handleUpgradePlan}
+          showUpgradeButton={shouldShowUpgradeButton}
+        />
         <HistoryOverlay
           isOpen={isHistoryOverlayOpen}
           onClose={() => setIsHistoryOverlayOpen(false)}

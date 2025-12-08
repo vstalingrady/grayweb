@@ -2968,7 +2968,7 @@
   justify-content: flex-end;
   gap: clamp(4px, 1vh, 10px);
   min-height: 0;
-  padding: clamp(4px, 1vh, 10px) 24px calc(var(--chat-composer-height, 80px) + 4px) 24px;
+  padding: clamp(4px, 1vh, 10px) 24px calc(var(--chat-composer-height, 80px) + 32px) 24px;
   overflow-y: auto;
   overflow-x: hidden;
   scroll-behavior: smooth;
@@ -3100,7 +3100,7 @@
 
 .chatBubbleUser {
   align-self: flex-end;
-  background: #161616;
+  background: #222222;
   border: 1px solid rgba(255, 255, 255, 0.08);
   color: rgba(245, 245, 245, 0.95);
   max-width: min(70%, calc(var(--chat-column-max-width, 680px) * 0.7));
@@ -4238,7 +4238,7 @@
 
 .chatComposerDock {
   position: fixed;
-  bottom: clamp(8px, 1vh, 16px);
+  bottom: 0;
   left: 0;
   right: 0;
   display: flex;
@@ -8507,7 +8507,7 @@ h1.greeting {
 
 .chatBarRounded {
   width: 100%;
-  max-width: min(calc(1.1 * var(--chat-bubble-max-width, var(--chat-column-max-width, 780px))),
+  max-width: min(calc(1.05 * var(--chat-bubble-max-width, var(--chat-column-max-width, 780px))),
       100%);
   display: flex;
   flex-wrap: nowrap;
@@ -8568,7 +8568,7 @@ h1.greeting {
   border-top: none;
   width: 100%;
   max-width: min(var(--chat-column-max-width, 680px), 100%);
-  margin: 0 auto;
+  margin: 0 auto clamp(24px, 4vh, 48px);
   z-index: 100;
   /* Ensure composer is above other page elements */
 }
@@ -8658,7 +8658,7 @@ h1.greeting {
   width: min(var(--chat-column-max-width, 680px), 100%);
   max-width: min(var(--chat-column-max-width, 680px), 100%);
   border-radius: 32px 32px 0 0;
-  background: linear-gradient(180deg, rgba(18, 18, 18, 0) 0%, rgba(18, 18, 18, 0) 60%, rgba(18, 18, 18, 0.95) 100%);
+  background: linear-gradient(180deg, rgba(18, 18, 18, 0) 0%, rgba(18, 18, 18, 0.4) 40%, #121212 100%);
   box-shadow: none;
   pointer-events: none;
   z-index: 0;
@@ -9579,4 +9579,189 @@ h1.greeting {
 .chatEditCancelButton:hover {
   background: rgba(255, 255, 255, 0.05);
   color: #fff;
+}
+.dashboardCalendarContainer[data-overlay="true"] {
+  height: auto !important;
+  min-height: 0;
+  overflow: visible !important;
+  padding-bottom: 40px;
+}
+
+.dashboardCalendarContainer[data-overlay="true"] .dashboardCalendarShell {
+  height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+  flex: none !important;
+}
+
+.dashboardCalendarContainer[data-overlay="true"] .dashboardCalendarSurface {
+  height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+  flex: none !important;
+}
+
+.dashboardCalendarContainer[data-overlay="true"] .calendarSurfaceBody {
+  height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+  flex: none !important;
+}
+
+.dashboardCalendarContainer[data-overlay="true"] .calendarCard {
+  height: auto !important;
+  min-height: 500px;
+}
+
+/* Ensure pulse grid expands naturally in overlay */
+.dashboardCalendarContainer[data-overlay="true"] .pulseBoardContent {
+  height: auto !important;
+  overflow: visible !important;
+}
+
+/* Overlay Layout Fixes */
+.dashboardCalendarContainer[data-overlay="true"] {
+  height: 100vh !important;
+  max-height: 100vh !important;
+  min-height: 0;
+  overflow: hidden !important;
+  padding: 40px 60px !important; /* Fix padding mess */
+  box-sizing: border-box;
+}
+
+/* Shell adapts to full container size sans padding */
+.dashboardCalendarContainer[data-overlay="true"] .dashboardCalendarShell {
+  height: 100% !important;
+  max-height: 100% !important;
+  overflow: hidden !important;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Surface also fills height */
+.dashboardCalendarContainer[data-overlay="true"] .dashboardCalendarSurface {
+  height: 100% !important;
+  max-height: 100% !important;
+  overflow: hidden !important;
+  background: transparent !important; /* Ensure transparency if needed */
+}
+
+/* Body becomes the flex container for columns */
+.dashboardCalendarContainer[data-overlay="true"] .calendarSurfaceBody {
+  height: 100% !important;
+  max-height: 100% !important;
+  overflow: hidden !important;
+  display: flex !important;
+  align-items: stretch !important;
+  padding-bottom: 0 !important;
+}
+
+/* Left Column: Calendar & Proactivity */
+.dashboardCalendarContainer[data-overlay="true"] .calendarSidebarColumn {
+  height: 100% !important;
+  overflow-y: auto !important; /* Allow scroll if content (proactivity) overflows */
+  flex-shrink: 0;
+  scrollbar-width: none; /* Clean look */
+}
+
+/* Right Column: Plans/Habits */
+.dashboardCalendarContainer[data-overlay="true"] .pulseBoard {
+  height: 100% !important;
+  overflow: hidden !important; /* Container doesn't scroll, child does */
+  flex: 1;
+}
+
+/* The Grid inside right column */
+.dashboardCalendarContainer[data-overlay="true"] .pulseBoardContent {
+  height: 100% !important;
+  overflow-y: auto !important; /* Independent scroll for plans */
+  padding-right: 12px; /* Space for scrollbar */
+}
+
+/* Remove Drop Shadows and borders for cleaner look in overlay */
+.dashboardCalendarContainer[data-overlay="true"] .dashboardCard,
+.dashboardCalendarContainer[data-overlay="true"] .calendarSidebarPanel,
+.dashboardCalendarContainer[data-overlay="true"] .calendarCard {
+  box-shadow: none !important;
+  background: rgba(20, 20, 20, 0.4) !important; /* Subtle separate bg */
+  border: 1px solid rgba(255, 255, 255, 0.05) !important;
+}
+
+/* Fix "touching the edge" - handled by container padding, but safe-guard cards */
+.dashboardCalendarContainer[data-overlay="true"] .calendarSidebarPanel {
+  margin-top: 0 !important;
+}
+
+/* Robust Column Scroll Isolation */
+.dashboardCalendarContainer[data-overlay="true"] .calendarSurfaceBody[data-has-sidebar="true"] > div:first-child {
+  height: 100% !important;
+  max-height: 100% !important;
+  overflow-y: auto !important;
+  scrollbar-width: none; /* Clean */
+}
+
+.dashboardCalendarContainer[data-overlay="true"] .calendarSurfaceBody[data-has-sidebar="true"] > div:last-child {
+  height: 100% !important;
+  max-height: 100% !important;
+  overflow: hidden !important; 
+  /* For Calendar tab, the last child IS the scrollable board, so we might need to handle that */
+}
+
+/* Specific handling for Calendar Tab Board (likely .calendarBoard) */
+/* The .calendarBoard has class .calendarBoard in JS, so likely matches. */
+/* But if it is the direct child, we want it to scroll. */
+
+/* If child 2 is .pulseBoard (custom class in Pulse view), we set overflow: hidden on it, and scroll inner .pulseBoardContent */
+/* If child 2 is .calendarBoard (native class in Calendar view), it has overflow-y: auto natively. */
+/* So we need not force overflow: hidden on last-child generically if it breaks CalendarBoard. */
+/* Let's be specific. */
+
+.dashboardCalendarContainer[data-overlay="true"] .calendarBoard {
+   height: 100% !important;
+   overflow-y: auto !important;
+}
+
+/* Layout Isolation Fixes */
+.dashboardCalendarContainer[data-overlay="true"] .pulseBoardContent {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 24px !important; /* Explicit gap between Plans and Habits */
+  height: auto !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  padding-bottom: 40px !important;
+}
+
+/* Ensure cards don't collapse or overlap */
+.dashboardCalendarContainer[data-overlay="true"] .dashboardCard {
+  flex: none !important; /* Don't shrink */
+  height: auto !important; /* Natural height based on content */
+  margin-bottom: 0 !important; /* Gap handles spacing */
+  background: rgba(14, 14, 14, 0.6) !important; /* Ensure opacity */
+  backdrop-filter: none !important; /* Remove blur here too */
+}
+
+/* Remove sticky positioning if any inside cards causing overlap */
+.dashboardCalendarContainer[data-overlay="true"] .dashboardCardHeader {
+  position: static !important;
+}
+
+/* Ensure sidebar is strictly isolated z-index wise just in case */
+.dashboardCalendarContainer[data-overlay="true"] .calendarSidebarColumn {
+  z-index: 5 !important;
+  background: transparent !important; /* Container transparent */
+}
+
+.dashboardCalendarContainer[data-overlay="true"] .calendarSidebar {
+  z-index: 5 !important;
+  background: #080808 !important; /* Opaque background */
+}
+
+/* Color Harmonization */
+.dashboardCalendarContainer[data-overlay="true"] .dashboardCard,
+.dashboardCalendarContainer[data-overlay="true"] .calendarSidebar,
+.dashboardCalendarContainer[data-overlay="true"] .calendarSidebarPanel,
+.dashboardCalendarContainer[data-overlay="true"] .calendarCard {
+  background: #0a0a0a !important; /* Unified opaque color matching container */
+  border-color: rgba(255, 255, 255, 0.08) !important;
 }

@@ -542,6 +542,7 @@ export interface ChatRequest {
   file_search_enabled?: boolean;
   should_generate_title?: boolean;
   reasoning_mode?: boolean;
+  reminders_enabled?: boolean;
 }
 
 export interface ChatResponse {

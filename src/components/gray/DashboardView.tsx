@@ -320,6 +320,7 @@ type GrayDashboardViewProps = {
   hideCalendar?: boolean;
   onUpgradeClick?: () => void;
   showUpgradeButton?: boolean;
+  isOverlay?: boolean;
 };
 
 export function GrayDashboardView({
@@ -359,6 +360,7 @@ export function GrayDashboardView({
   hideCalendar = false,
   onUpgradeClick,
   showUpgradeButton = false,
+  isOverlay = false,
 }: GrayDashboardViewProps) {
   const hasPulseData = Boolean(currentPulse && pulseEntries.length > 0);
   const displayPlans = useMemo(() => {
@@ -440,53 +442,53 @@ export function GrayDashboardView({
       }
 
       // Handle reminder events (e.g., "reminder-31")
-            if (event.id.startsWith("reminder-")) {
-              const targetPlan = displayPlans.find((plan) => plan.id === event.id);
-              if (targetPlan) {
-                // console.log(`[CALENDAR] Deleting reminder event: ${event.id}`);
-                onDeletePlan(targetPlan);
-                return;
-              }
-      
-              // Fallback 1: Try to match complex chat-session reminder IDs (reminder-assistant-{id}-{iso})
-              // to the normalized plan ID (reminder-{id}).
-              const complexMatch = event.id.match(/^reminder-[^-]+-(\d+)-/);
-              if (complexMatch) {
-                const numericId = complexMatch[1];
-                const simpleId = `reminder-${numericId}`;
-                const fallbackPlan = displayPlans.find((plan) => plan.id === simpleId);
-                if (fallbackPlan) {
-                  // console.log(`[CALENDAR] Deleting reminder event via fallback: ${event.id} -> ${simpleId}`);
-                  onDeletePlan(fallbackPlan);
-                  return;
-                }
-              }
-      
-              // Fallback 2: If still not found (e.g. stale displayPlans but valid chat event),
-              // construct a synthetic plan to trigger deletion by ID.
-              // console.log(`[CALENDAR] Deleting reminder event via synthetic fallback: ${event.id}`);
-              const syntheticPlan: PlanItem = {
-                id: event.id,
-                label: event.title,
-                completed: false,
-                deadline: null,
-                scheduleSlot: null,
-                details: null,
-              };
-              onDeletePlan(syntheticPlan);
-              return;
-            }
-      
-            // Handle plan events (e.g., "plan-event-123")
-            if (event.id.startsWith(PLAN_EVENT_ID_PREFIX)) {
-              const planId = event.id.slice(PLAN_EVENT_ID_PREFIX.length);
-              const targetPlan = displayPlans.find((plan) => plan.id === planId);
-              if (targetPlan) {
-                // console.log(`[CALENDAR] Deleting plan event: ${event.id}`);
-                onDeletePlan(targetPlan);
-                return;
-              }
-            }
+      if (event.id.startsWith("reminder-")) {
+        const targetPlan = displayPlans.find((plan) => plan.id === event.id);
+        if (targetPlan) {
+          // console.log(`[CALENDAR] Deleting reminder event: ${event.id}`);
+          onDeletePlan(targetPlan);
+          return;
+        }
+
+        // Fallback 1: Try to match complex chat-session reminder IDs (reminder-assistant-{id}-{iso})
+        // to the normalized plan ID (reminder-{id}).
+        const complexMatch = event.id.match(/^reminder-[^-]+-(\d+)-/);
+        if (complexMatch) {
+          const numericId = complexMatch[1];
+          const simpleId = `reminder-${numericId}`;
+          const fallbackPlan = displayPlans.find((plan) => plan.id === simpleId);
+          if (fallbackPlan) {
+            // console.log(`[CALENDAR] Deleting reminder event via fallback: ${event.id} -> ${simpleId}`);
+            onDeletePlan(fallbackPlan);
+            return;
+          }
+        }
+
+        // Fallback 2: If still not found (e.g. stale displayPlans but valid chat event),
+        // construct a synthetic plan to trigger deletion by ID.
+        // console.log(`[CALENDAR] Deleting reminder event via synthetic fallback: ${event.id}`);
+        const syntheticPlan: PlanItem = {
+          id: event.id,
+          label: event.title,
+          completed: false,
+          deadline: null,
+          scheduleSlot: null,
+          details: null,
+        };
+        onDeletePlan(syntheticPlan);
+        return;
+      }
+
+      // Handle plan events (e.g., "plan-event-123")
+      if (event.id.startsWith(PLAN_EVENT_ID_PREFIX)) {
+        const planId = event.id.slice(PLAN_EVENT_ID_PREFIX.length);
+        const targetPlan = displayPlans.find((plan) => plan.id === planId);
+        if (targetPlan) {
+          // console.log(`[CALENDAR] Deleting plan event: ${event.id}`);
+          onDeletePlan(targetPlan);
+          return;
+        }
+      }
       console.warn(`[CALENDAR] Could not find plan/reminder for event: ${event.id}`);
     },
     [displayPlans, onDeletePlan]
@@ -1694,8 +1696,8 @@ export function GrayDashboardView({
           title={undefined}
           rangeLabel={undefined}
           className={headerClassName}
-        onUpgradeClick={onUpgradeClick}
-        showUpgradeButton={showUpgradeButton}
+          onUpgradeClick={onUpgradeClick}
+          showUpgradeButton={showUpgradeButton}
         />
       )}
       embedWithinParentSurface
@@ -1739,6 +1741,7 @@ export function GrayDashboardView({
       <div
         className={styles.dashboardCalendarContainer}
         data-compact={isCompactLayout ? "true" : "false"}
+        data-overlay={isOverlay ? "true" : "false"}
         ref={calendarContainerRef}
       >
         <div

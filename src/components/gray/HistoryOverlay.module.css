@@ -14,10 +14,10 @@
 
 .overlayContainer {
   width: min(640px, 92vw);
-  background: #09090b;
+  background: #0a0a0a;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 16px;
-  box-shadow: 
+  box-shadow:
     0 24px 48px -12px rgba(0, 0, 0, 0.7),
     0 0 0 1px rgba(255, 255, 255, 0.05);
   display: flex;
@@ -61,13 +61,14 @@
   padding: 8px;
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 2px;
 }
 
 .section {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  margin-bottom: 20px;
 }
 
 .sectionHeader {
@@ -107,7 +108,9 @@
   color: inherit;
 }
 
-.item:hover, .item:focus-visible, .item[data-active="true"] {
+.item:hover,
+.item:focus-visible,
+.item[data-active="true"] {
   background: rgba(255, 255, 255, 0.06);
   outline: none;
 }
@@ -194,11 +197,23 @@
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes scaleIn {
-  from { opacity: 0; transform: scale(0.96); }
-  to { opacity: 1; transform: scale(1); }
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }

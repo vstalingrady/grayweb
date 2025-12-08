@@ -197,7 +197,7 @@ export const deriveTitleFromMessage = (content: string) => {
     return trimmed.length > 80 ? `${trimmed.slice(0, 77).trim()}…` : trimmed;
 };
 
-const isTitleDerivedFromMessage = (title: string, messages: ChatMessage[]): boolean => {
+export const isTitleDerivedFromMessage = (title: string, messages: ChatMessage[]): boolean => {
     if (!title) return false;
     const firstUserMsg = messages.find((m) => m.role === "user");
     if (!firstUserMsg || !firstUserMsg.content) return false;

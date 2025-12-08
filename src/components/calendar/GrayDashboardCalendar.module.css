@@ -67,11 +67,19 @@
   flex-direction: column;
   gap: 22px;
   min-height: 0;
-  min-width: 240px;
+  min-width: 210px;
   box-shadow: none;
-  backdrop-filter: blur(8px);
+  /* backdrop-filter: blur(8px); removed */
   overflow: hidden;
   isolation: isolate;
+  flex-shrink: 0;
+}
+
+/* ... existing styles ... */
+
+.calendarSurfaceBody[data-has-sidebar="true"] {
+  grid-template-columns: 210px 1fr;
+  column-gap: clamp(20px, 3vw, 32px);
 }
 
 .calendarSidebarIntegrated {
@@ -85,7 +93,7 @@
 }
 
 .calendarSidebarIntegrated::after {
-  display: none;
+  display: none !important;
 }
 
 .calendarSidebar>* {
@@ -120,7 +128,7 @@
 }
 
 .calendarSidebarHeader h2 {
-  font-size: 1.24rem;
+  font-size: 1rem;
   letter-spacing: 0.08em;
   text-transform: capitalize;
   color: rgba(245, 245, 245, 0.94);
@@ -134,6 +142,14 @@
   min-height: 0;
   transition: opacity 0.2s ease;
   padding-left: 12px;
+  flex-shrink: 0;
+  /* Hide scrollbar */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.calendarSidebarContent::-webkit-scrollbar {
+  display: none;
 }
 
 .calendarSidebarContent[data-visible="false"] {
@@ -296,11 +312,12 @@
 }
 
 .calendarSidebarSubhead {
-  font-size: 0.72rem;
+  font-size: 0.65rem;
   letter-spacing: 0.2em;
   text-transform: uppercase;
   color: rgba(230, 230, 230, 0.5);
 }
+
 
 .calendarSidebarHeaderActions {
   display: inline-flex;
@@ -446,10 +463,9 @@
 }
 
 .calendarSurfaceBody[data-has-sidebar="true"] {
-  grid-template-columns: 260px 1fr;
-  column-gap: clamp(20px, 3vw, 32px);
+  grid-template-columns: 210px 1fr;
+  column-gap: clamp(40px, 4vw, 56px);
 }
-
 
 .calendarSidebarColumn {
   display: flex;
@@ -457,6 +473,13 @@
   gap: clamp(18px, 3vw, 28px);
   min-height: 0;
   align-self: stretch;
+  /* Hide scrollbar */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.calendarSidebarColumn::-webkit-scrollbar {
+  display: none;
 }
 
 .calendarSidebarColumn>* {
@@ -464,11 +487,13 @@
 }
 
 
+
 .calendarSidebarPanel {
   min-height: 0;
   padding-right: 0;
   margin-right: 0;
   align-self: stretch;
+  flex-shrink: 0;
 }
 
 .calendarBoard {

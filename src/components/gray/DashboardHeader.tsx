@@ -122,19 +122,6 @@ export function DashboardHeader({
         )}
       </div>
       <div className={calendarStyles.calendarSurfaceHeaderRight}>
-        {showUpgradeButton ? (
-          <div className={styles.upgradeFloat}>
-            <button
-              type="button"
-              className={styles.planBadge}
-              data-state="cta"
-              aria-label="Upgrade"
-              onClick={onUpgradeClick}
-            >
-              <span className={styles.planBadgeLabel}>Upgrade</span>
-            </button>
-          </div>
-        ) : null}
         {normalizedStreak > 0 ? (
           <div className={styles.streakBadge} aria-label={`${normalizedStreak} day streak`}>
             <Zap size={12} />

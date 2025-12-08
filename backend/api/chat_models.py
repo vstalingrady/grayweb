@@ -43,6 +43,7 @@ class ChatRequest(BaseModel):
     file_search_enabled: bool = False
     should_generate_title: bool = False
     reasoning_mode: bool = False
+    reminders_enabled: bool = False
     timezone: Optional[str] = None
 
 

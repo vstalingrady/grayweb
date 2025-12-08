@@ -51,7 +51,6 @@ import {
   normalizeAssistantContent,
   normalizeAssistantMessage,
   shouldIncludeWorkspaceContext,
-  shouldAutoEnableMapsForMessage,
   resolveClientTimezone,
   buildSessionStorageKeyCandidates,
   deriveTitleFromMessage,
@@ -63,8 +62,10 @@ import {
   formatConversationTitle,
   coerceConversationIdForRequest,
   buildConversationHistoryPayload,
+  toTimestamp,
+  isTitleDerivedFromMessage,
 } from "./chat/utils";
-import { extractGrayRemindersFromText, buildReminderConfirmationText } from "./chat/reminderUtils";
+import { extractGrayRemindersFromText, buildReminderConfirmationText, buildReminderKey, coerceReminderPayload } from "./chat/reminderUtils";
 import {
   GENERAL_CHAT_SESSION_ID,
   GENERAL_CONVERSATION_PREFIX,
@@ -72,8 +73,6 @@ import {
   GREETING_PATTERN,
   SELF_CONTEXT_PATTERNS,
   WORKSPACE_CONTEXT_KEYWORDS,
-  MAP_TRIGGER_PATTERN,
-  MAP_TRIGGER_PHRASE,
   LOW_SIGNAL_TITLE_WORDS,
   DUPLICATE_THREAD_WINDOW_MS,
   REMOTE_SESSION_MERGE_WINDOW_MS,
@@ -591,9 +590,11 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
   const [mapsWidgetEnabled, setMapsWidgetEnabled] = useState(false);
   const [mapsLatitude, setMapsLatitude] = useState("");
   const [mapsLongitude, setMapsLongitude] = useState("");
-  const [pendingLocationRequestMessage, setPendingLocationRequestMessage] = useState<string | null>(null);
-  const [isHandlingLocationRequest, setIsHandlingLocationRequest] = useState(false);
-  const pendingLocationRequestActionRef = useRef<(() => void) | null>(null);
+  // Removed: pendingLocationRequestMessage, isHandlingLocationRequest, pendingLocationRequestActionRef
+  // as we no longer block sending for location consent.
+  const pendingLocationRequestMessage = null;
+  const isHandlingLocationRequest = false;
+
   const mapPayload = useMemo(() => {
     const normalizedLatitude = mapsLatitude.trim();
     const normalizedLongitude = mapsLongitude.trim();
@@ -616,9 +617,11 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
     }
     return payload;
   }, [mapsEnabled, mapsLatitude, mapsLongitude, mapsWidgetEnabled]);
+
   const hasLocationCoordinates = Boolean(
     mapPayload.maps_latitude != null && mapPayload.maps_longitude != null
   );
+
   const getGeolocation = (): Promise<{ latitude: number; longitude: number } | null> => {
     return new Promise((resolve) => {
       if (typeof window === "undefined" || !window.navigator?.geolocation) {
@@ -636,78 +639,55 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       );
     });
   };
-  const runPendingLocationAction = () => {
-    const action = pendingLocationRequestActionRef.current;
-    pendingLocationRequestActionRef.current = null;
-    setTimeout(() => {
-      action?.();
-    }, 0);
-  };
-  const handleLocationConsent = async (shareLocation: boolean) => {
-    const action = pendingLocationRequestActionRef.current;
-    if (!action) {
-      setPendingLocationRequestMessage(null);
-      return;
-    }
-    if (!shareLocation) {
-      setPendingLocationRequestMessage(null);
-      runPendingLocationAction();
-      return;
-    }
-    setIsHandlingLocationRequest(true);
-    try {
-      const coords = await getGeolocation();
-      if (coords) {
-        setMapsLatitude(coords.latitude.toString());
-        setMapsLongitude(coords.longitude.toString());
-        setMapsEnabled(true);
-        setMapsWidgetEnabled(true);
-      }
-      setPendingLocationRequestMessage(null);
-      runPendingLocationAction();
-    } finally {
-      setIsHandlingLocationRequest(false);
-    }
-  };
-  const promptForLocationConsent = (message: string, sendAction: () => void) => {
-    if (
-      !shouldAutoEnableMapsForMessage(message) ||
-      mapsEnabled ||
-      hasLocationCoordinates ||
-      pendingLocationRequestMessage
-    ) {
-      void sendAction();
+
+  // Helper to manually request location (e.g. from the Tools menu)
+  const requestLocationCoordinates = async () => {
+    const coords = await getGeolocation();
+    if (coords) {
+      setMapsLatitude(coords.latitude.toString());
+      setMapsLongitude(coords.longitude.toString());
+      setMapsWidgetEnabled(true);
       return true;
     }
-    pendingLocationRequestActionRef.current = sendAction;
-    setPendingLocationRequestMessage(message);
     return false;
   };
+
+  const toggleMapsEnabled = useCallback(async () => {
+    const nextState = !mapsEnabled;
+    setMapsEnabled(nextState);
+
+    // If enabling, also try to get coordinates if not already present
+    if (nextState && !hasLocationCoordinates) {
+      await requestLocationCoordinates();
+    }
+  }, [mapsEnabled, hasLocationCoordinates]);
+
+  const toggleWebSearchEnabled = useCallback(() => {
+    setWebSearchEnabled((prev) => !prev);
+  }, []);
+
+  const [remindersEnabled, setRemindersEnabled] = useState(false);
+  const toggleRemindersEnabled = useCallback(() => {
+    setRemindersEnabled((prev) => !prev);
+  }, []);
+
+  // Deprecated: No longer blocks execution.
+  const promptForLocationConsent = (message: string, sendAction: () => void) => {
+    // Always proceed immediately. 
+    // We strictly rely on the manual "Maps" toggle or backend inference (without blocking).
+    void sendAction();
+    return true;
+  };
+
   const requestLocationShare = () => {
-    void handleLocationConsent(true);
+    // No-op or manual trigger if needed
+    void requestLocationCoordinates();
   };
+
   const skipLocationShare = () => {
-    void handleLocationConsent(false);
+    // No-op
   };
-  const buildAutoMapPayload = useCallback(
-    (message: string) => {
-      const trimmedMessage = message.trim();
-      if (!trimmedMessage) {
-        return mapPayload;
-      }
-      if (mapPayload.maps_enabled) {
-        return mapPayload;
-      }
-      return shouldAutoEnableMapsForMessage(trimmedMessage)
-        ? {
-          ...mapPayload,
-          maps_enabled: true,
-          maps_widget: mapPayload.maps_widget || true,
-        }
-        : mapPayload;
-    },
-    [mapPayload]
-  );
+
   const [contextCaches, setContextCaches] = useState<ContextCache[]>([]);
   const [contextCacheLabel, setContextCacheLabel] = useState("");
   const [contextCacheContent, setContextCacheContent] = useState("");
@@ -730,7 +710,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
   const [fileSearchImportStatus, setFileSearchImportStatus] = useState<string | null>(null);
   const [fileSearchUploadInputRef] = useState<RefObject<HTMLInputElement | null>>({ current: null });
   const [reasoningMode, setReasoningMode] = useState(false);
-  const [modelTier, setModelTier] = useState<"lite" | "pro" | "pioneer">("lite");
+  const [modelTier, setModelTier] = useState<"lite" | "pro" | "pioneer">("pro");
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
   const lastAutoCachedWorkspaceRef = useRef<string | null>(null);
   const autoCacheInFlightRef = useRef(false);
@@ -1993,7 +1973,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       schedulePendingSeedCleanup,
       personalizedSystemPrompt,
       markAutoStreamTriggered,
-      buildAutoMapPayload,
+
       promptForLocationConsent,
       shouldAttachWorkspaceContextForSession,
       webSearchEnabled,
@@ -2176,7 +2156,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
           const streamingUserId = resolvedUser.id;
           try {
             const timeContext = buildLocalTimeContext();
-            const autoMapPayload = buildAutoMapPayload(trimmed);
+            // const autoMapPayload = buildAutoMapPayload(trimmed); // Removed
 
             // Only include full profile when it changes or on first message
             const currentProfileHash = computeProfileHash(resolvedUser);
@@ -2207,7 +2187,9 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
               context_cache_id: selectedContextCacheId ?? undefined,
               should_generate_title: shouldRequestAutoTitleForSession(generalSession),
               web_search_enabled: shouldUseWebSearch,
-              ...(modelTier === "lite" ? { maps_enabled: false, maps_widget: false } : autoMapPayload),
+              ...mapPayload,
+              reasoning_mode: reasoningMode,
+              reminders_enabled: remindersEnabled,
               model: modelTier,
             })) {
               if (event.type === "token") {
@@ -2353,14 +2335,15 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       resolveChatUser,
       workspaceContextValue,
       personalizedSystemPrompt,
-      markAutoStreamTriggered,
       applyAutoTitle,
       clearAttachments,
-      buildAutoMapPayload,
+      mapPayload, // Replaced buildAutoMapPayload
       promptForLocationConsent,
       selectedContextCacheId,
       shouldAttachWorkspaceContextForSession,
       webSearchEnabled,
+      reasoningMode, // Added
+      remindersEnabled, // Added
       markHasSeenGeneralChat,
       refreshUser,
       modelTier,
@@ -2758,11 +2741,16 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       setMapsWidgetEnabled,
       setMapsLatitude,
       setMapsLongitude,
+      toggleMapsEnabled,
+      toggleWebSearchEnabled,
+      remindersEnabled,
+      toggleRemindersEnabled,
       mapPayload,
-      pendingLocationRequestMessage,
-      isRequestingLocation: isHandlingLocationRequest,
+      pendingLocationRequestMessage: null,
+      isHandlingLocationRequest: false,
       requestLocationShare,
       skipLocationShare,
+      // Context Cache
       contextCaches,
       contextCacheLabel,
       contextCacheContent,
@@ -2770,11 +2758,13 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       contextCacheMessage,
       isContextCacheSaving,
       createContextCache,
-      selectContextCacheId,
+      selectContextCacheId: setSelectedContextCacheId,
       setContextCacheLabel,
       setContextCacheContent,
+      // Web Search (with toggles above)
       webSearchEnabled,
       setWebSearchEnabled,
+      // File Search / Stores
       fileSearchStores,
       fileSearchDisplayName,
       setFileSearchDisplayName,

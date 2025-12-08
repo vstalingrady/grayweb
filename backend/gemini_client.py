@@ -52,11 +52,11 @@ class GeminiService:
         self._response_mime_type = os.getenv("GEMINI_RESPONSE_MIME_TYPE")
 
         self._api_key = self._first_valid_api_key()
-        # Default to Gemini 2.5 Flash Lite (stable version with full tool support)
-        self._default_model = os.getenv("GEMINI_DEFAULT_MODEL", "models/gemini-2.5-flash-lite")
-        self._light_model = os.getenv("GEMINI_LIGHT_MODEL", "models/gemini-2.5-flash-lite")
-        # Optional dedicated model for "pro" tier; falls back to default if unset.
-        self._pro_model = os.getenv("GEMINI_PRO_MODEL", self._default_model)
+        # Default to Gemini Flash Lite
+        self._default_model = os.getenv("GEMINI_DEFAULT_MODEL", "models/gemini-flash-lite-latest")
+        self._light_model = os.getenv("GEMINI_LIGHT_MODEL", "models/gemini-flash-lite-latest")
+        # Optional dedicated model for "pro" tier; falls back to Gemini 3 Pro if unset.
+        self._pro_model = os.getenv("GEMINI_PRO_MODEL", "models/gemini-3-pro-preview")
 
         if self._api_key:
             self._client = genai.Client(api_key=self._api_key)

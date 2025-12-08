@@ -92,10 +92,11 @@ export type ChatContextValue = {
     setMapsLatitude: (value: string) => void;
     setMapsLongitude: (value: string) => void;
     mapPayload: Record<string, number | boolean | undefined>;
+    toggleMapsEnabled: () => void;
+    toggleWebSearchEnabled: () => void;
+    // Deprecated properties kept for compatibility if needed, but effectively unused
     pendingLocationRequestMessage: string | null;
-    isRequestingLocation: boolean;
-    requestLocationShare: () => void;
-    skipLocationShare: () => void;
+    isHandlingLocationRequest: boolean;
     contextCaches: ContextCache[];
     contextCacheLabel: string;
     contextCacheContent: string;
@@ -108,6 +109,9 @@ export type ChatContextValue = {
     setContextCacheContent: (value: string) => void;
     webSearchEnabled: boolean;
     setWebSearchEnabled: (value: boolean) => void;
+    toggleWebSearchEnabled: () => void;
+    remindersEnabled: boolean;
+    toggleRemindersEnabled: () => void;
     fileSearchStores: { name: string; display_name?: string }[];
     fileSearchDisplayName: string;
     setFileSearchDisplayName: (value: string) => void;
