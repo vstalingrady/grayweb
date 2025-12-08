@@ -143,6 +143,7 @@ class GeminiService:
         tools: Optional[List[types.Tool]] = None,
         tool_config: Optional[types.ToolConfig] = None,
         reasoning_mode: bool = False,
+        model: Optional[str] = None,
     ) -> Optional[types.GenerateContentConfig]:
         config_kwargs: Dict[str, Any] = {}
 
@@ -150,8 +151,20 @@ class GeminiService:
         if system_instruction:
             config_kwargs["system_instruction"] = system_instruction
 
-        if reasoning_mode:
-            # Use environment budget if set, otherwise default to 2048 for reasoning mode
+        # Determine if this is a Gemini 3 model (uses thinkingLevel, not thinkingBudget)
+        is_gemini_3 = model and "gemini-3" in model.lower()
+        
+        # Gemini 3 Pro has thinking built-in (cannot be disabled per docs)
+        # For Gemini 3: use thinkingLevel ("low" or "high")
+        # For Gemini 2.5: use thinkingBudget
+        if is_gemini_3:
+            # Gemini 3 Pro always has thinking enabled, include_thoughts gets summaries
+            config_kwargs["thinking_config"] = types.ThinkingConfig(
+                thinking_level="high" if reasoning_mode else "low",
+                include_thoughts=True,  # Enable thought summaries in response
+            )
+        elif reasoning_mode:
+            # Gemini 2.5 series: use thinkingBudget
             budget = self._thinking_budget if self._thinking_budget is not None else 2048
             config_kwargs["thinking_config"] = types.ThinkingConfig(
                 thinking_budget=budget,
@@ -295,6 +308,7 @@ class GeminiService:
             tools=effective_tools,
             tool_config=effective_tool_config,
             reasoning_mode=reasoning_mode,
+            model=selected_model,
         )
 
         response = await self._client.aio.models.generate_content(
@@ -338,6 +352,7 @@ class GeminiService:
             tools=effective_tools,
             tool_config=effective_tool_config,
             reasoning_mode=reasoning_mode,
+            model=selected_model,
         )
 
         stream_iter = await self._client.aio.models.generate_content_stream(
