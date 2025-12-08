@@ -9014,7 +9014,7 @@ h1.greeting {
   color: rgba(245, 245, 245, 0.92);
   font-family: var(--font-sans, "Plus Jakarta Sans", system-ui, -apple-system, BlinkMacSystemFont, sans-serif);
   font-size: 0.95rem;
-  padding: 10px 80px 14px 14px;
+  padding: 4px 80px 4px 14px;
   outline: none;
   min-width: 0;
   line-height: 1.5;

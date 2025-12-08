@@ -1199,6 +1199,7 @@ type ChatMessagesListProps = {
   showFirstMessageSpinner: boolean;
   scrollAnchorRef: RefObject<HTMLDivElement | null>;
   reasoningSeconds?: number | null;
+  isResponding?: boolean;
 };
 
 const ThinkingBlock = ({
@@ -1275,6 +1276,7 @@ const ChatMessagesList = memo(
     showFirstMessageSpinner,
     scrollAnchorRef,
     reasoningSeconds,
+    isResponding,
   }: ChatMessagesListProps) => {
     const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
     const [editContent, setEditContent] = useState("");
@@ -1707,7 +1709,7 @@ const ChatMessagesList = memo(
                           type="button"
                           aria-label="Regenerate response"
                           onClick={() => handleRegenerate(message.id)}
-                          disabled={isRegenerating}
+                          disabled={isRegenerating || isResponding}
                         >
                           <RefreshCw size={15} className={isRegenerating ? styles.spin : undefined} />
                         </button>
@@ -3232,6 +3234,11 @@ export function GrayChatView({
         return;
       }
 
+      // Prevent regeneration while already streaming a response
+      if (session.isResponding || activeStreamingMessageId) {
+        return;
+      }
+
       const assistantIndex = messages.findIndex((message) => message.id === messageId);
       if (assistantIndex === -1) {
         return;
@@ -3269,6 +3276,7 @@ export function GrayChatView({
       })();
     },
     [
+      activeStreamingMessageId,
       messages,
       session,
       streamAssistantReply,
@@ -3510,6 +3518,7 @@ export function GrayChatView({
             showFirstMessageSpinner={showFirstMessageSpinner}
             scrollAnchorRef={scrollAnchorRef}
             reasoningSeconds={reasoningSeconds}
+            isResponding={session?.isResponding}
           />
         )}
       </div>
