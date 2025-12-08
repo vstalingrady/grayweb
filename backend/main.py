@@ -9789,6 +9789,8 @@ async def list_user_conversations(
         query = (
             user_chat_threads.select()
             .where(user_chat_threads.c.user_identifier == user_id)
+            # Exclude General Chat conversations (format: "general:123")
+            .where(~user_chat_threads.c.id.like("general:%"))
             .order_by(user_chat_threads.c.last_message_at.desc())
             .limit(limit)
         )
