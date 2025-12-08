@@ -670,24 +670,15 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
     }
   };
   const promptForLocationConsent = (message: string, sendAction: () => void) => {
-    console.log("[promptForLocationConsent] Called with message:", message.slice(0, 50));
-    console.log("[promptForLocationConsent] State:", {
-      shouldAutoEnableMaps: shouldAutoEnableMapsForMessage(message),
-      mapsEnabled,
-      hasLocationCoordinates,
-      pendingLocationRequestMessage: !!pendingLocationRequestMessage,
-    });
     if (
       !shouldAutoEnableMapsForMessage(message) ||
       mapsEnabled ||
       hasLocationCoordinates ||
       pendingLocationRequestMessage
     ) {
-      console.log("[promptForLocationConsent] Auto-consenting, calling sendAction");
       void sendAction();
       return true;
     }
-    console.log("[promptForLocationConsent] Prompting for location consent");
     pendingLocationRequestActionRef.current = sendAction;
     setPendingLocationRequestMessage(message);
     return false;
@@ -2096,12 +2087,10 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
     async (content: string): Promise<string> => {
       // Check if questionnaire is active
       if (questionnaireSession) {
-        console.log("[sendGeneralMessage] Questionnaire active");
         await handleQuestionnaireResponse(content, questionnaireSession);
         return ensureGeneralSession().id;
       }
 
-      console.log("[sendGeneralMessage] Starting send for:", content.slice(0, 50));
 
       const trimmed = content.trim();
       const generalSession = ensureGeneralSession();
@@ -2155,9 +2144,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       });
 
       // 3) Wait for the authenticated user so the first streamed reply connects properly.
-      console.log("[sendGeneralMessage] Waiting for resolvedUser...");
       const resolvedUser = await resolveChatUser();
-      console.log("[sendGeneralMessage] resolvedUser:", resolvedUser ? "Found" : "Null");
       if (resolvedUser && !requestConversationId) {
         requestConversationId = buildGeneralConversationId(resolvedUser.id);
       }
@@ -2183,13 +2170,10 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       const shouldUseWebSearch = webSearchEnabled;
 
       const streamGeneralResponse = () => {
-        console.log("[sendGeneralMessage] *** streamGeneralResponse INVOKED ***");
         (async () => {
-          console.log("[sendGeneralMessage] Inside streamGeneralResponse async IIFE - about to start streaming");
           let accumulated = "";
           let capturedReminders: unknown[] = [];
           const streamingUserId = resolvedUser.id;
-          console.log("[sendGeneralMessage] streamingUserId:", streamingUserId);
           try {
             const timeContext = buildLocalTimeContext();
             const autoMapPayload = buildAutoMapPayload(trimmed);
@@ -2211,13 +2195,6 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
               lastSentProfileHashRef.current = currentProfileHash;
             }
 
-            console.log("[sendGeneralMessage] About to call apiService.sendMessageStream", {
-              message: trimmed.slice(0, 50),
-              user_id: streamingUserId,
-              conversation_id: requestConversationId,
-              model: modelTier,
-            });
-
             for await (const event of apiService.sendMessageStream({
               message: trimmed,
               system_prompt: systemPromptForRequest,
@@ -2233,9 +2210,6 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
               ...(modelTier === "lite" ? { maps_enabled: false, maps_widget: false } : autoMapPayload),
               model: modelTier,
             })) {
-              if (!accumulated) {
-                console.log("[sendGeneralMessage] Received first event from stream:", event.type);
-              }
               if (event.type === "token") {
                 const delta = event.delta;
                 accumulated = accumulated && delta.startsWith(accumulated)
@@ -2365,12 +2339,9 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
         })();
       };
 
-      console.log("[sendGeneralMessage] Prompting for location consent...");
       if (!promptForLocationConsent(trimmed, streamGeneralResponse)) {
-        console.log("[sendGeneralMessage] Prompted for location consent (waiting for user)");
         return generalSession.id;
       }
-      console.log("[sendGeneralMessage] Auto-consented or no consent needed");
 
       return generalSession.id;
     },
