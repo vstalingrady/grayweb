@@ -297,7 +297,7 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
 
                 {isToolsExpanded && (
                   <div className={styles.groupModels}>
-                    {/* Reasoning Toggle */}
+                    {/* Reasoning Toggle - Gemini 3 Pro shows Low/High, others show On/Off */}
                     <button
                       className={`${styles.menuItem} ${styles.subMenuItem}`}
                       onClick={() => setReasoningMode(!reasoningMode)}
@@ -308,9 +308,12 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
                       </div>
                       <div className={styles.itemInfo}>
                         <div className={styles.itemLabel}>Reasoning</div>
+                        <div className={styles.itemDescription}>
+                          {modelTier === "pro" ? (reasoningMode ? "High" : "Low") : (reasoningMode ? "On" : "Off")}
+                        </div>
                       </div>
-                      <div className={`${styles.toggle} ${reasoningMode ? styles.toggleOn : ""}`}>
-                        <div className={styles.toggleKnob} />
+                      <div className={`${styles.thinkingLevel} ${reasoningMode ? styles.thinkingLevelHigh : styles.thinkingLevelLow}`}>
+                        {modelTier === "pro" ? (reasoningMode ? "High" : "Low") : (reasoningMode ? "On" : "Off")}
                       </div>
                     </button>
 
