@@ -2160,6 +2160,8 @@ export function GrayChatView({
     setHasHydrated(true);
   }, []);
 
+  const chatViewportRef = useRef<HTMLDivElement | null>(null);
+
   useEffect(() => {
     if (!hasHydrated || !session?.id || !scrollAnchorRef.current) {
       return;
@@ -2179,30 +2181,30 @@ export function GrayChatView({
     return `${activeStreamingMessageId}:${contentLength}`;
   }, [activeStreamingMessageId, messages]);
 
-  useEffect(() => {
-    if (!scrollAnchorRef.current) {
-      return;
-    }
-    scrollAnchorRef.current.scrollIntoView({ behavior: "auto" });
-  }, [messages.length, session?.isResponding]);
+  const scrollToBottomIfNear = useCallback(() => {
+    const viewport = chatViewportRef.current;
+    if (!viewport || !scrollAnchorRef.current) return;
 
-  useEffect(() => {
-    if (!streamingContentSignature || !scrollAnchorRef.current) {
-      return;
-    }
-    scrollAnchorRef.current.scrollIntoView({ behavior: "smooth" });
-  }, [streamingContentSignature]);
+    const threshold = 100;
+    const isNearBottom =
+      viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight <= threshold;
 
-  // Auto-scroll during active streaming
-  useEffect(() => {
-    if (!isResponding || !scrollAnchorRef.current) {
-      return;
-    }
-    const lastMessage = messages[messages.length - 1];
-    if (lastMessage?.role === "assistant") {
+    if (isNearBottom) {
       scrollAnchorRef.current.scrollIntoView({ behavior: "smooth" });
     }
-  }, [messages, isResponding]);
+  }, []);
+
+  // Auto-scroll on new messages if near bottom
+  useEffect(() => {
+    scrollToBottomIfNear();
+  }, [messages.length, scrollToBottomIfNear]);
+
+  // Auto-scroll during active streaming if near bottom
+  useEffect(() => {
+    if (streamingContentSignature) {
+      scrollToBottomIfNear();
+    }
+  }, [streamingContentSignature, scrollToBottomIfNear]);
 
   useLayoutEffect(() => {
     const node = composerDockRef.current;
@@ -3384,7 +3386,7 @@ export function GrayChatView({
     <div className={styles.chatView} aria-live="polite" style={chatViewStyle}>
       <div className={styles.chatHeaderControls}>
       </div>
-      <div className={styles.chatViewport}>
+      <div className={styles.chatViewport} ref={chatViewportRef}>
 
         <div className={styles.chatFade} aria-hidden="true" />
         {topAttachmentTray}

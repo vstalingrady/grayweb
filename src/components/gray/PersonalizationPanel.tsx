@@ -742,90 +742,6 @@ export function PersonalizationPanel({
                 )}
               </div>
             </section>
-            <section className={styles.personalizationCard}>
-              <div className={styles.personalizationCardHeader}>
-                <div>
-                  <h3>Workspace background</h3>
-                  <p>Swap the mural behind the Gray workspace.</p>
-                </div>
-              </div>
-              <div className={styles.personalizationBackgroundGrid}>
-                {resolvedBackgroundOptions.map((background) => {
-                  const thumbStyle = background.backdropStyle || background.previewStyle;
-                  return (
-                    <button
-                      key={background.id}
-                      type="button"
-                      className={styles.personalizationBackgroundCard}
-                      data-active={selectedBackgroundId === background.id ? "true" : "false"}
-                      onClick={() => onSelectBackground(background.id)}
-                    >
-                      <span
-                        className={styles.personalizationBackgroundThumb}
-                        style={{ background: thumbStyle }}
-                        aria-hidden="true"
-                      />
-                      <span className={styles.personalizationBackgroundMeta}>
-                        <span>{background.label}</span>
-                        <span>{background.description ?? "Custom mural"}</span>
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-              {backgroundsLoading ? (
-                <p className={styles.personalizationHint}>Loading backgrounds…</p>
-              ) : backgroundError ? (
-                <p className={styles.personalizationHint}>Unable to load backgrounds: {backgroundError}</p>
-              ) : null}
-              {onCreateBackground ? (
-                <form className={styles.personalizationForm} onSubmit={handleBackgroundSubmit}>
-                  <div className={styles.personalizationBackgroundFileRow}>
-                    <label className={styles.personalizationBackgroundFileButton}>
-                      <input
-                        id="newBackgroundFile"
-                        type="file"
-                        accept={WORKSPACE_BACKGROUND_FILE_ACCEPT}
-                        className={styles.personalizationBackgroundFileInput}
-                        onChange={handleBackgroundFileChange}
-                        aria-label="Upload workspace background image"
-                      />
-                      <span>Upload image</span>
-                    </label>
-                    <span className={styles.personalizationBackgroundFileName}>
-                      {newBackgroundFileName ?? "No file selected"}
-                    </span>
-                  </div>
-                  {newBackgroundFileError ? (
-                    <p
-                      className={styles.personalizationFormStatus}
-                      data-status="error"
-                      aria-live="polite"
-                    >
-                      {newBackgroundFileError}
-                    </p>
-                  ) : null}
-                  <div className={styles.personalizationFormActions}>
-                    {backgroundSaveState.message ? (
-                      <span
-                        className={styles.personalizationFormStatus}
-                        data-status={backgroundSaveState.tone}
-                        aria-live="polite"
-                      >
-                        {backgroundSaveState.message}
-                      </span>
-                    ) : null}
-                    <button
-                      type="submit"
-                      className={styles.personalizationFormButton}
-                      disabled={!canSubmitNewBackground}
-                    >
-                      {backgroundSaveState.tone === "loading" ? "Saving..." : "Save"}
-                    </button>
-                  </div>
-                </form>
-              ) : null}
-            </section>
 
             <section className={styles.personalizationCard}>
               <div className={styles.personalizationCardHeader}>
@@ -861,40 +777,6 @@ export function PersonalizationPanel({
               </form>
             </section>
 
-            <section className={styles.personalizationCard}>
-              <div className={styles.personalizationCardHeader}>
-                <div>
-                  <h3>System Prompt Override</h3>
-                  <p>Completely replace the default system prompt for General Chat.</p>
-                </div>
-              </div>
-              <form className={styles.personalizationForm} onSubmit={handleSystemPromptOverrideSubmit}>
-                <textarea
-                  className={styles.personalizationTextarea}
-                  value={systemPromptOverride}
-                  onChange={handleSystemPromptOverrideChange}
-                  placeholder="Enter a custom system prompt to override the default..."
-                />
-                <div className={styles.personalizationFormActions}>
-                  {overrideSaveMessage ? (
-                    <span
-                      className={styles.personalizationFormStatus}
-                      data-status={overrideSaveState}
-                      aria-live="polite"
-                    >
-                      {overrideSaveMessage}
-                    </span>
-                  ) : null}
-                  <button
-                    type="submit"
-                    className={styles.personalizationFormButton}
-                    disabled={!canSubmitSystemPromptOverride}
-                  >
-                    {overrideSaveState === "saving" ? "Saving..." : "Save"}
-                  </button>
-                </div>
-              </form>
-            </section>
 
             <section className={`${styles.personalizationCard} ${styles.personalizationAboutCard}`}>
               <div className={styles.personalizationCardHeader}>
