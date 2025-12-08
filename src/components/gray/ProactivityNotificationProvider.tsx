@@ -125,7 +125,7 @@ export function ProactivityNotificationProvider({ children }: ProactivityNotific
       // 3. Show in-app toast
       setToastMessage(payload.message || "New message");
     },
-    []
+    [appendMessage]
   );
 
   useEffect(() => {
