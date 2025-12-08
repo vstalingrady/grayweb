@@ -3465,7 +3465,8 @@ def _candidate_text(candidate: Any) -> str:
 def _candidate_thought(candidate: Any) -> Optional[str]:
     """Extract thinking/thought content from a Gemini candidate when reasoning mode is used.
     
-    Gemini's ThinkingConfig returns thinking in parts with a 'thought' attribute.
+    Per Gemini API docs: parts with thought=True contain the thought summary text.
+    The 'thought' attribute is a boolean flag, and the actual text is in 'text'.
     """
     content = getattr(candidate, "content", None)
     parts = getattr(content, "parts", None) if content else None
@@ -3473,23 +3474,12 @@ def _candidate_thought(candidate: Any) -> Optional[str]:
         return None
     thoughts = []
     for part in parts:
-        # Check for 'thought' attribute (Gemini thinking mode)
-        # Debug logging to see what attributes exist
-        try:
-             logger.info(f"DEBUG: Part attributes: {dir(part)}")
-        except:
-            pass
-            
-        thought = getattr(part, "thought", None)
-        if thought:
-            thoughts.append(str(thought))
-        
-    if not thoughts and parts: # Only log if we have parts but no thoughts
-        # Debug: print candidate content to see if thought is hidden elsewhere
-        try:
-             logger.info(f"DEBUG: No thought attribute. Parts content: {[p.__dict__ for p in parts if hasattr(p, '__dict__')]}") 
-        except:
-             logger.info(f"DEBUG: No thought attribute. Parts: {parts}")
+        # Check for 'thought' boolean attribute (Gemini thinking mode)
+        # When thought=True, the text in this part is the thought summary
+        is_thought = getattr(part, "thought", False)
+        text = getattr(part, "text", None)
+        if is_thought and text:
+            thoughts.append(str(text))
         
     return "\n".join(thoughts) if thoughts else None
 

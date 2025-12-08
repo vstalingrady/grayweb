@@ -153,7 +153,10 @@ class GeminiService:
         if reasoning_mode:
             # Use environment budget if set, otherwise default to 2048 for reasoning mode
             budget = self._thinking_budget if self._thinking_budget is not None else 2048
-            config_kwargs["thinking_config"] = types.ThinkingConfig(thinking_budget=budget)
+            config_kwargs["thinking_config"] = types.ThinkingConfig(
+                thinking_budget=budget,
+                include_thoughts=True,  # Enable thought summaries in response
+            )
         elif self._thinking_budget is not None:
             # Fallback: if env var is explicitly set, use it even if reasoning_mode is False (legacy behavior)
             # Or we can decide that reasoning_mode is the ONLY way to enable it.
