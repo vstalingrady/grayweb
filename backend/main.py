@@ -3454,12 +3454,21 @@ def _candidate_grounding_payload(candidate: Any) -> Optional[Dict[str, Any]]:
 
 
 def _candidate_text(candidate: Any) -> str:
-    """Join all text parts from a Gemini candidate without touching function/tool parts."""
+    """Join all non-thought text parts from a Gemini candidate.
+    
+    Excludes parts with thought=True so they can be handled separately
+    by _candidate_thought and displayed in the thinking UI.
+    """
     content = getattr(candidate, "content", None)
     parts = getattr(content, "parts", None) if content else None
     if not parts:
         return ""
-    return "".join(getattr(part, "text", "") for part in parts if getattr(part, "text", None))
+    # Exclude thought parts - they're handled separately for the thinking UI
+    return "".join(
+        getattr(part, "text", "") 
+        for part in parts 
+        if getattr(part, "text", None) and not getattr(part, "thought", False)
+    )
 
 
 def _candidate_thought(candidate: Any) -> Optional[str]:

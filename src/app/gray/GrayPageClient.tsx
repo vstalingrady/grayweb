@@ -248,7 +248,8 @@ function GrayPageClientInner({
     const host = window.location.host.toLowerCase();
     const allowedHosts = ["gray.localhost:3000", "gray.alignment.id", "alignment.id"];
     const isAllowedHost = allowedHosts.includes(host) || host.endsWith(".alignment.id");
-    const isWorkspacePath = pathname === "/" || pathname.startsWith("/gray");
+    // Only allow custom backgrounds on explicit /gray subpaths, not on the root dashboard
+    const isWorkspacePath = pathname.startsWith("/gray");
     setIsWorkspaceBackgroundAllowed(isAllowedHost && isWorkspacePath);
   }, [pathname]);
 
