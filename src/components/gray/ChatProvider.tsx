@@ -51,6 +51,7 @@ import {
   normalizeAssistantContent,
   normalizeAssistantMessage,
   shouldIncludeWorkspaceContext,
+  shouldAutoEnableMapsForMessage,
   resolveClientTimezone,
   buildSessionStorageKeyCandidates,
   deriveTitleFromMessage,
