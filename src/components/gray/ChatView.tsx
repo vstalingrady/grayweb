@@ -258,7 +258,13 @@ const normalizeAssistantMath = (value: string | null | undefined): string | null
   return normalizeLatexForDisplay(value);
 };
 
-const GrayStreamingSpinner = ({ reasoningSeconds }: { reasoningSeconds?: number | null }) => (
+const GrayStreamingSpinner = ({
+  reasoningSeconds,
+  toolLabel
+}: {
+  reasoningSeconds?: number | null;
+  toolLabel?: string | null;
+}) => (
   <div className={styles.chatStreamingInline}>
     {typeof reasoningSeconds === "number" && reasoningSeconds > 0 && (
       <span className={styles.chatReasoningTimeLabel}>
@@ -272,6 +278,11 @@ const GrayStreamingSpinner = ({ reasoningSeconds }: { reasoningSeconds?: number 
       height={18}
       className={styles.chatStreamingSpinner}
     />
+    {toolLabel && (
+      <span className={styles.chatToolStatus}>
+        {toolLabel}
+      </span>
+    )}
   </div>
 );
 import { useUser } from "@/contexts/UserContext";
@@ -1391,6 +1402,24 @@ const ChatMessagesList = memo(
                   </div>
                 ) : (
                   <>
+                    {message.attachments && message.attachments.length > 0 && (
+                      <div className={styles.chatMessageAttachments}>
+                        {message.attachments.map((attachment, index) => (
+                          <div key={attachment.id || index} className={styles.chatMessageAttachment}>
+                            {attachment.mime_type?.startsWith("image/") ? (
+                              <img
+                                src={attachment.previewUrl || attachment.public_url}
+                                alt="Attachment"
+                              />
+                            ) : (
+                              <div className={styles.chatMessageAttachmentFile}>
+                                <span>{attachment.filename}</span>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                     {assistantReminders.length > 0 ? (
                       <div className={styles.reminderCardList}>
                         {assistantReminders.map((reminder, reminderIndex) => (
@@ -1729,7 +1758,15 @@ const ChatMessagesList = memo(
         {shouldShowPendingStreamIndicator && (
           <div className={styles.chatMessage} data-role="assistant">
             <div className={styles.chatAssistantBlock}>
-              <GrayStreamingSpinner reasoningSeconds={reasoningSeconds} />
+              <GrayStreamingSpinner
+                reasoningSeconds={reasoningSeconds}
+                toolLabel={
+                  // Check the very last message in the list if it's an assistant message
+                  messages.length > 0 && messages[messages.length - 1].role === "assistant"
+                    ? extractCurrentToolStatus(messages[messages.length - 1].content)
+                    : null
+                }
+              />
             </div>
           </div>
         )}
@@ -1818,6 +1855,57 @@ const stripToolUseBlocks = (text: string): string => {
   // Strip any residual <tool_result> blocks if present.
   result = result.replace(/<tool_result[\s\S]*?<\/tool_result>/gi, "");
   return result;
+};
+
+const extractCurrentToolStatus = (text: string): string | null => {
+  if (!text) return null;
+
+  // Look for the last tool_use block
+  const matches = [...text.matchAll(/<tool_use>([\s\S]*?)<\/tool_use>/gi)];
+  if (matches.length === 0) return null;
+
+  const lastMatch = matches[matches.length - 1];
+  const content = lastMatch[1];
+
+  let toolName = "";
+
+  try {
+    // Try parsing as JSON first
+    const json = JSON.parse(content);
+    if (json.name) toolName = json.name;
+    else if (json.tool) toolName = json.tool;
+  } catch {
+    // Fallback: simple regex search for "name": "foo"
+    const nameMatch = content.match(/"name"\s*:\s*"([^"]+)"/);
+    if (nameMatch) {
+      toolName = nameMatch[1];
+    }
+  }
+
+  if (!toolName) return null;
+
+  const normalized = toolName.toLowerCase();
+
+  if (normalized.includes("search") || normalized.includes("web")) {
+    return "Reading the internet...";
+  }
+  if (normalized.includes("image") || normalized.includes("painting")) {
+    return "Painting pixels...";
+  }
+  if (normalized.includes("plan") || normalized.includes("habit") || normalized.includes("calendar")) {
+    return "Checking schedule...";
+  }
+  if (normalized.includes("memory") || normalized.includes("remember")) {
+    return "Accessing memory...";
+  }
+
+  // Clean up snake_case or camelCase to Sentence case
+  const readable = toolName
+    .replace(/_/g, " ")
+    .replace(/([A-Z])/g, " $1")
+    .trim();
+
+  return `Using ${readable.toLowerCase()}...`;
 };
 
 const parseStructuredAssistantMessage = (content?: string | null): AssistantSections => {
@@ -2182,7 +2270,7 @@ export function GrayChatView({
     return `${activeStreamingMessageId}:${contentLength}`;
   }, [activeStreamingMessageId, messages]);
 
-  const scrollToBottomIfNear = useCallback(() => {
+  const scrollToBottomIfNear = useCallback((instant = false) => {
     const viewport = chatViewportRef.current;
     if (!viewport || !scrollAnchorRef.current) return;
 
@@ -2191,7 +2279,7 @@ export function GrayChatView({
       viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight <= threshold;
 
     if (isNearBottom) {
-      scrollAnchorRef.current.scrollIntoView({ behavior: "smooth" });
+      scrollAnchorRef.current.scrollIntoView({ behavior: instant ? "instant" : "smooth" });
     }
   }, []);
 
@@ -2200,10 +2288,10 @@ export function GrayChatView({
     scrollToBottomIfNear();
   }, [messages.length, scrollToBottomIfNear]);
 
-  // Auto-scroll during active streaming if near bottom
+  // Auto-scroll during active streaming if near bottom (use instant to prevent jitter)
   useEffect(() => {
     if (streamingContentSignature) {
-      scrollToBottomIfNear();
+      scrollToBottomIfNear(true);
     }
   }, [streamingContentSignature, scrollToBottomIfNear]);
 
@@ -2222,6 +2310,13 @@ export function GrayChatView({
       observer.disconnect();
     };
   }, []);
+
+  // Scroll when composer height changes (input expansion)
+  useEffect(() => {
+    if (composerHeight > 0) {
+      scrollToBottomIfNear();
+    }
+  }, [composerHeight, scrollToBottomIfNear]);
 
 
 

@@ -16,6 +16,7 @@ export type ChatMessage = {
     createdAt: number;
     reminders?: GrayReminderCreatedPayload[];
     groundingMetadata?: GroundingMetadata;
+    attachments?: MediaUpload[];
     backendTimings?: ChatStreamTiming;
     /**
      * History of assistant responses for this message.

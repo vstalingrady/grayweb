@@ -200,7 +200,8 @@ const makeMessage = (
   role: ChatRole,
   content: string,
   tempId?: string,
-  metadata?: GroundingMetadata
+  metadata?: GroundingMetadata,
+  attachments?: MediaUpload[]
 ): ChatMessage => {
   const now = Date.now();
   return {
@@ -212,7 +213,9 @@ const makeMessage = (
     role,
     content,
     createdAt: now,
+    createdAt: now,
     groundingMetadata: metadata ?? undefined,
+    attachments: attachments ?? undefined,
   };
 };
 
@@ -590,6 +593,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
   const [mapsWidgetEnabled, setMapsWidgetEnabled] = useState(false);
   const [mapsLatitude, setMapsLatitude] = useState("");
   const [mapsLongitude, setMapsLongitude] = useState("");
+
   // Removed: pendingLocationRequestMessage, isHandlingLocationRequest, pendingLocationRequestActionRef
   // as we no longer block sending for location consent.
   const pendingLocationRequestMessage = null;
@@ -1503,7 +1507,8 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       role: ChatRole,
       content: string,
       tempId?: string,
-      metadata?: GroundingMetadata
+      metadata?: GroundingMetadata,
+      attachments?: MediaUpload[]
     ) => {
       let assistantAutoTitle: string | null = null;
       let normalizedContent = content;
@@ -1514,7 +1519,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       }
 
       // Create the message immediately instead of inside setState
-      const createdMessage = makeMessage(role, normalizedContent, tempId, metadata);
+      const createdMessage = makeMessage(role, normalizedContent, tempId, metadata, attachments);
 
       setSessions((prev) => {
         let didUpdate = false;
@@ -2113,8 +2118,15 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       markAutoStreamTriggered(generalSession.id, tempUserMessageId);
 
       // 1) Optimistically append user message immediately with the temp ID
-      appendMessage(generalSession.id, "user", trimmed, tempUserMessageId);
-
+      const userMessage = appendMessage(
+        generalSession.id,
+        "user",
+        trimmed,
+        tempUserMessageId,
+        undefined,
+        selectedAttachments.length > 0 ? [...selectedAttachments] : undefined
+      );
+      clearAttachments();
       // 2) Immediately insert an empty assistant message so UI shows instant response start.
       let assistantMessageId: string | null = null;
       const initialAssistant = appendMessage(generalSession.id, "assistant", "");

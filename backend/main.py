@@ -7740,24 +7740,6 @@ async def chat_stream(
         effective_message = chat_request.message
         session_title = _fallback_title_from_message(effective_message)
 
-        # 3. Start Session Logging (Background Task)
-        # Move to background task to avoid blocking/contention on the main thread/connection
-        async def _log_session_background(uid: int, title: str, created_at: datetime):
-            try:
-                query = chat_sessions.insert().values(
-                    user_id=uid,
-                    title=title,
-                    scope="thread",
-                    created_at=created_at,
-                    updated_at=created_at
-                )
-                await db.execute(query)
-            except Exception as e:
-                api_logger.error(f"Failed to log chat session in background: {e}", extra={"user_id": uid})
-
-        now = datetime.utcnow()
-        background_tasks.add_task(_log_session_background, chat_request.user_id, session_title, now)
-
         # 4. Start Conversation Setup (Async)
         t0_conv = time.perf_counter()
         requested_conversation_id = chat_request.conversation_id
