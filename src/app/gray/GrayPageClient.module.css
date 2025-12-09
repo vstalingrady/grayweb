@@ -4175,11 +4175,55 @@
 }
 
 .chatMessageFooter {
-  margin-top: 4px;
+  /* Hidden by default, revealed on tap */
+  display: grid;
+  grid-template-rows: 0fr;
+  overflow: hidden;
+  transition: grid-template-rows 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+    margin-top 0.25s ease,
+    padding 0.25s ease;
+  margin-top: 0;
+}
+
+.chatMessageFooter>* {
+  min-height: 0;
+}
+
+/* Expanded state - reveal the footer */
+.chatMessage[data-actions-expanded="true"] .chatMessageFooter {
+  grid-template-rows: 1fr;
+  margin-top: 8px;
+}
+
+/* Subtle highlight when actions are expanded */
+.chatMessage[data-actions-expanded="true"] {
+  cursor: pointer;
+}
+
+.chatMessage[data-actions-expanded="true"] .chatBubbleUser {
+  background: rgba(75, 81, 98, 0.75);
+}
+
+.chatMessage[data-actions-expanded="true"] .chatAssistantBlock {
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 12px;
+  margin: -8px;
+  padding: 8px;
+}
+
+.chatMessageFooterInner {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  opacity: 0;
+  transform: translateY(-8px);
+  transition: opacity 0.2s ease 0.05s, transform 0.2s ease 0.05s;
+}
+
+.chatMessage[data-actions-expanded="true"] .chatMessageFooterInner {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .chatMessageFooterLeft {
@@ -4199,13 +4243,6 @@
   letter-spacing: 0.04em;
   color: rgba(185, 188, 198, 0.78);
   white-space: nowrap;
-  opacity: 0;
-  transition: opacity 160ms ease;
-}
-
-.chatMessage:hover .chatMessageTimestamp,
-.chatMessage:focus-within .chatMessageTimestamp {
-  opacity: 1;
 }
 
 .chatMessageVariantControls {
@@ -4214,9 +4251,6 @@
   gap: 4px;
   font-size: 0.72rem;
   color: rgba(185, 188, 198, 0.9);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.15s ease;
 }
 
 .chatMessageVariantControls button {
@@ -4234,12 +4268,6 @@
 .chatMessageVariantLabel {
   min-width: 40px;
   text-align: center;
-}
-
-.chatMessage[data-role="assistant"]:hover .chatMessageFooter .chatMessageVariantControls,
-.chatMessage[data-role="assistant"]:focus-within .chatMessageFooter .chatMessageVariantControls {
-  opacity: 1;
-  pointer-events: auto;
 }
 
 .chatSourcesFooter {
@@ -4289,21 +4317,6 @@
   cursor: pointer;
   color: rgba(176, 179, 184, 0.96);
   transition: color 0.15s ease, transform 0.15s ease;
-}
-
-/* Hide actions by default */
-.chatMessageFooter .chatActionRow {
-  opacity: 0;
-  pointer-events: none;
-  transform: translateY(2px);
-}
-
-/* Reveal actions on assistant message hover/focus */
-.chatMessage[data-role="assistant"]:hover .chatMessageFooter .chatActionRow,
-.chatMessage[data-role="assistant"]:focus-within .chatMessageFooter .chatActionRow {
-  opacity: 1;
-  pointer-events: auto;
-  transform: translateY(0);
 }
 
 /* Icon hover state */
@@ -4375,21 +4388,6 @@
   color: rgba(180, 183, 190, 0.96);
   cursor: pointer;
   transition: color 0.15s ease;
-}
-
-/* Hide actions until the message is hovered/focused */
-.chatMessageFooter .chatActionIconRow {
-  opacity: 0;
-  pointer-events: none;
-}
-
-/* Show on hover/focus of entire message row */
-.chatMessage[data-role="assistant"]:hover .chatMessageFooter .chatActionIconRow,
-.chatMessage[data-role="assistant"]:focus-within .chatMessageFooter .chatActionIconRow,
-.chatMessage[data-role="user"]:hover .chatMessageFooter .chatActionIconRow,
-.chatMessage[data-role="user"]:focus-within .chatMessageFooter .chatActionIconRow {
-  opacity: 1;
-  pointer-events: auto;
 }
 
 /* Icon hover effect */

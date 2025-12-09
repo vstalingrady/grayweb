@@ -1313,6 +1313,8 @@ const ChatMessagesList = memo(
   }: ChatMessagesListProps) => {
     const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
     const [editContent, setEditContent] = useState("");
+    // Track which message has its action bar expanded (tap to reveal)
+    const [expandedMessageId, setExpandedMessageId] = useState<string | null>(null);
 
     const startEditing = useCallback((messageId: string, currentContent: string) => {
       setEditingMessageId(messageId);
@@ -1331,6 +1333,11 @@ const ChatMessagesList = memo(
       setEditingMessageId(null);
       setEditContent("");
     }, [editContent, handleEditMessage]);
+
+    // Toggle message action bar visibility on tap/click
+    const toggleMessageActions = useCallback((messageId: string) => {
+      setExpandedMessageId((prev) => prev === messageId ? null : messageId);
+    }, []);
 
     return (
       <div
@@ -1429,6 +1436,13 @@ const ChatMessagesList = memo(
               className={styles.chatMessage}
               data-role={isUser ? "user" : "assistant"}
               data-streaming={isStreamingMessage ? "true" : undefined}
+              data-actions-expanded={expandedMessageId === message.id ? "true" : undefined}
+              onClick={() => {
+                // Only toggle if not editing
+                if (!editingMessageId) {
+                  toggleMessageActions(message.id);
+                }
+              }}
             >
               <div className={messageBodyClassName}>
                 {editingMessageId === message.id ? (
@@ -1706,105 +1720,107 @@ const ChatMessagesList = memo(
               </div>
               {!showStreamingIndicator && editingMessageId !== message.id && (
                 <div className={styles.chatMessageFooter}>
-                  <div className={styles.chatMessageFooterLeft}>
-                    <time className={styles.chatMessageTimestamp} dateTime={messageTimestampIso}>
-                      {timestampLabel}
-                    </time>
-                    {isAssistant && Array.isArray(message.variants) && message.variants.length > 1 ? (
-                      <div className={styles.chatMessageVariantControls}>
-                        <button
-                          type="button"
-                          aria-label="Previous response"
-                          onClick={() => handleCycleAssistantVariant(message.id, "prev")}
-                        >
-                          <ChevronLeft size={14} />
-                        </button>
-                        <span className={styles.chatMessageVariantLabel}>
-                          {(message.activeVariantIndex ?? message.variants.length - 1) + 1} /{" "}
-                          {message.variants.length}
-                        </span>
-                        <button
-                          type="button"
-                          aria-label="Next response"
-                          onClick={() => handleCycleAssistantVariant(message.id, "next")}
-                        >
-                          <ChevronRight size={14} />
-                        </button>
-                      </div>
-                    ) : null}
-                  </div>
-                  <div className={styles.chatMessageFooterRight}>
-                    <div className={styles.chatActionIconRow}>
-                      {isMetadataAvailable ? (
-                        <div className={styles.chatMetadataControl}>
-                          <button type="button" aria-label="Response details" tabIndex={0}>
-                            <SignalHigh size={15} />
+                  <div className={styles.chatMessageFooterInner} onClick={(e) => e.stopPropagation()}>
+                    <div className={styles.chatMessageFooterLeft}>
+                      <time className={styles.chatMessageTimestamp} dateTime={messageTimestampIso}>
+                        {timestampLabel}
+                      </time>
+                      {isAssistant && Array.isArray(message.variants) && message.variants.length > 1 ? (
+                        <div className={styles.chatMessageVariantControls}>
+                          <button
+                            type="button"
+                            aria-label="Previous response"
+                            onClick={() => handleCycleAssistantVariant(message.id, "prev")}
+                          >
+                            <ChevronLeft size={14} />
                           </button>
-                          <div className={styles.chatMetadataPopover} role="tooltip" aria-hidden="true">
-                            {metadataRows.map((row) => (
-                              <div key={row.label}>
-                                <span>{row.label}</span>
-                                <strong>{row.value}</strong>
-                              </div>
-                            ))}
-                          </div>
+                          <span className={styles.chatMessageVariantLabel}>
+                            {(message.activeVariantIndex ?? message.variants.length - 1) + 1} /{" "}
+                            {message.variants.length}
+                          </span>
+                          <button
+                            type="button"
+                            aria-label="Next response"
+                            onClick={() => handleCycleAssistantVariant(message.id, "next")}
+                          >
+                            <ChevronRight size={14} />
+                          </button>
                         </div>
                       ) : null}
-                      <button
-                        type="button"
-                        aria-label="Copy message"
-                        onClick={() => handleCopyMessage(message.id, isAssistant ? fullText : rawContent)}
-                        disabled={!(isAssistant ? fullText.trim() : rawContent.trim())}
-                      >
-                        {copiedMessageId === message.id ? <CheckCircle2 size={15} /> : <Copy size={15} />}
-                      </button>
-                      {isAssistant && (
-                        <button
-                          type="button"
-                          aria-label="Regenerate response"
-                          onClick={() => handleRegenerate(message.id)}
-                          disabled={isRegenerating || isResponding}
-                        >
-                          <RefreshCw size={15} className={isRegenerating ? styles.spin : undefined} />
-                        </button>
-                      )}
-                      {!isAssistant && (
-                        <button
-                          type="button"
-                          aria-label="Edit message"
-                          onClick={() => startEditing(message.id, rawContent)}
-                        >
-                          <Pencil size={15} />
-                        </button>
-                      )}
-                      {!isAssistant && (
-                        <button
-                          type="button"
-                          aria-label="Retry message"
-                          onClick={() => handleRetryUserMessage(message.id)}
-                          disabled={!rawContent.trim()}
-                        >
-                          <RefreshCw size={15} />
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        aria-label="Delete message"
-                        onClick={() => handleDeleteMessage(message.id)}
-                      >
-                        <Trash2 size={15} />
-                      </button>
                     </div>
+                    <div className={styles.chatMessageFooterRight}>
+                      <div className={styles.chatActionIconRow}>
+                        {isMetadataAvailable ? (
+                          <div className={styles.chatMetadataControl}>
+                            <button type="button" aria-label="Response details" tabIndex={0}>
+                              <SignalHigh size={15} />
+                            </button>
+                            <div className={styles.chatMetadataPopover} role="tooltip" aria-hidden="true">
+                              {metadataRows.map((row) => (
+                                <div key={row.label}>
+                                  <span>{row.label}</span>
+                                  <strong>{row.value}</strong>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null}
+                        <button
+                          type="button"
+                          aria-label="Copy message"
+                          onClick={() => handleCopyMessage(message.id, isAssistant ? fullText : rawContent)}
+                          disabled={!(isAssistant ? fullText.trim() : rawContent.trim())}
+                        >
+                          {copiedMessageId === message.id ? <CheckCircle2 size={15} /> : <Copy size={15} />}
+                        </button>
+                        {isAssistant && (
+                          <button
+                            type="button"
+                            aria-label="Regenerate response"
+                            onClick={() => handleRegenerate(message.id)}
+                            disabled={isRegenerating || isResponding}
+                          >
+                            <RefreshCw size={15} className={isRegenerating ? styles.spin : undefined} />
+                          </button>
+                        )}
+                        {!isAssistant && (
+                          <button
+                            type="button"
+                            aria-label="Edit message"
+                            onClick={() => startEditing(message.id, rawContent)}
+                          >
+                            <Pencil size={15} />
+                          </button>
+                        )}
+                        {!isAssistant && (
+                          <button
+                            type="button"
+                            aria-label="Retry message"
+                            onClick={() => handleRetryUserMessage(message.id)}
+                            disabled={!rawContent.trim()}
+                          >
+                            <RefreshCw size={15} />
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          aria-label="Delete message"
+                          onClick={() => handleDeleteMessage(message.id)}
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    </div>
+                    {isAssistant && quickReplies.length > 0 && (
+                      <div className={styles.chatQuickReplies}>
+                        {quickReplies.map((reply) => (
+                          <button key={reply} type="button">
+                            {reply}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                  {isAssistant && quickReplies.length > 0 && (
-                    <div className={styles.chatQuickReplies}>
-                      {quickReplies.map((reply) => (
-                        <button key={reply} type="button">
-                          {reply}
-                        </button>
-                      ))}
-                    </div>
-                  )}
                 </div>
               )}
             </div>
