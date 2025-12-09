@@ -408,16 +408,27 @@ async def apply_conversation_update(
 
 
 async def update_conversation_title(conversation_id: str, title: str) -> None:
-    """Update the title of a conversation in Supabase."""
-    if not _conversation_store_available() or not _is_valid_uuid(conversation_id):
+    """Update the title of a conversation in Supabase AND local SQLite."""
+    if not _is_valid_uuid(conversation_id):
         return
 
+    # 1. Update Supabase
+    if _conversation_store_available():
+        try:
+            conversation_store.supabase.table("user_chat_threads").update(
+                {"title": title}
+            ).eq("id", conversation_id).execute()
+        except Exception as error:
+            _handle_conversation_store_error("Error updating conversation title", error)
+
+    # 2. Update Local SQLite
     try:
-        conversation_store.supabase.table("user_chat_threads").update(
-            {"title": title}
-        ).eq("id", conversation_id).execute()
+        query = user_chat_threads.update().where(
+            user_chat_threads.c.id == conversation_id
+        ).values(title=title, updated_at=datetime.utcnow())
+        await database.execute(query)
     except Exception as error:
-        _handle_conversation_store_error("Error updating conversation title", error)
+        _handle_conversation_store_error("Error updating local conversation title", error)
 
 
 __all__ = [
