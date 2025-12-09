@@ -6533,8 +6533,9 @@ async def stream_ai_response(
                         if payload:
                             grounding_metadata = payload
                         
-                        # Extract thinking content if reasoning_mode is enabled
-                        if reasoning_mode:
+                        # Extract thinking content for Gemini 3 models (always think via include_thoughts) or when reasoning_mode is enabled
+                        is_gemini_3_model = model and "gemini-3" in model.lower()
+                        if reasoning_mode or is_gemini_3_model:
                             thought_content = _candidate_thought(candidate)
                             if thought_content and not accumulated.startswith("<thinking>"):
                                 # Stream thinking content wrapped in <thinking> tags on first occurrence
@@ -7895,13 +7896,25 @@ async def chat_stream(
         )
         if should_persist_user:
             # Make persistence non-blocking to improve time-to-first-token
-            asyncio.create_task(
-                save_conversation_message(
-                    conversation_id,
-                    user_message_payload,
-                    user_id=chat_request.user_id,
-                )
-            )
+            async def _persist_user_msg():
+                try:
+                    general_user_id = _general_conversation_user_id(conversation_id)
+                    if general_user_id is not None:
+                         await _insert_general_conversation_message(
+                            user_id=general_user_id,
+                            role="user",
+                            text=effective_message,
+                        )
+                    else:
+                        await save_conversation_message(
+                            conversation_id,
+                            user_message_payload,
+                            user_id=chat_request.user_id,
+                        )
+                except Exception as e:
+                    api_logger.error(f"Failed to persist user message: {e}", extra={"user_id": chat_request.user_id})
+
+            asyncio.create_task(_persist_user_msg())
 
         # Enforce tier restrictions for streaming
         # user_record was already fetched above
@@ -7986,10 +7999,23 @@ async def chat_stream(
                 ):
                     try:
                         # Save Assistant Message in background
-                        payload: Dict[str, Any] = {"role": "model", "text": text}
-                        if metadata:
-                            payload["grounding_metadata"] = metadata
-                        await save_conversation_message(cid, payload, user_id=uid)
+                        # Check for General Chat ID format "general:123"
+                        general_user_id = _general_conversation_user_id(cid)
+                        
+                        if general_user_id is not None:
+                            # Use specialized helper for General Chat messages
+                            await _insert_general_conversation_message(
+                                user_id=general_user_id,
+                                role="model",
+                                text=text,
+                                grounding_metadata=metadata,
+                            )
+                        else:
+                            # Standard Thread persistence
+                            payload: Dict[str, Any] = {"role": "model", "text": text}
+                            if metadata:
+                                payload["grounding_metadata"] = metadata
+                            await save_conversation_message(cid, payload, user_id=uid)
 
                     except Exception as e:
                         api_logger.error(f"Failed to finalize chat (save message) in background: {e}", extra={"user_id": uid})
