@@ -3019,9 +3019,9 @@
   flex-direction: column-reverse;
   /* Messages should start from top and grow downward */
   justify-content: flex-start;
-  gap: clamp(4px, 1vh, 10px);
+  gap: 0;
   min-height: min-content;
-  padding: clamp(4px, 1vh, 10px) 24px 24px 24px;
+  padding: clamp(4px, 1vh, 10px) 24px 0 24px;
   overflow: visible;
   width: 100%;
   max-width: min(calc(1.1 * var(--chat-bubble-max-width, var(--chat-column-max-width, 840px))), 100%);
@@ -3050,8 +3050,8 @@
   .chatMessages {
     padding-left: max(14px, env(safe-area-inset-left, 0px));
     padding-right: max(14px, env(safe-area-inset-right, 0px));
-    padding-bottom: 24px;
-    scroll-padding-bottom: clamp(24px, 6vh, 48px);
+    padding-bottom: 0px;
+    scroll-padding-bottom: 0px;
   }
 
   .chatIntro {
@@ -4201,11 +4201,13 @@
 }
 
 .chatMessage[data-actions-expanded="true"] .chatBubbleUser {
-  background: rgba(75, 81, 98, 0.75);
+  /* No highlighting on selection */
+  background: #222222;
 }
 
 .chatMessage[data-actions-expanded="true"] .chatAssistantBlock {
-  background: rgba(255, 255, 255, 0.02);
+  /* No highlighting on selection */
+  background: transparent;
   border-radius: 12px;
   margin: -8px;
   padding: 8px;
