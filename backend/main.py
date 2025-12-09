@@ -6194,7 +6194,7 @@ async def stream_ai_response(
                             elif hasattr(t, 'google_maps'):
                                 tool_names.append('google_maps')
                     hist_len = len(current_history) if current_history else 0
-                    api_logger.info(f"[OpenRouter Call] search_enabled={search_enabled}, tools={num_tools} ({tool_names}), history={hist_len}, model={model}")
+                    api_logger.info(f"[OpenRouter Call] search_enabled={search_enabled}, tools={num_tools} ({tool_names}), history={hist_len}, model={model}, reasoning_mode={reasoning_mode}")
 
                     async for chunk in OPENROUTER_SERVICE.stream(
                         current_message,
