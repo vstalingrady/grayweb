@@ -1,15 +1,15 @@
 "use client";
 
 import styles from "@/app/gray/GrayPageClient.module.css";
-import { Paperclip, ArrowUpRight } from "lucide-react";
+import { Paperclip, ArrowUpRight, Globe, Brain, Plus } from "lucide-react";
 import {
   type ClipboardEvent as ReactClipboardEvent,
   type FormEvent,
-  useRef,
-  useEffect,
   useCallback,
   useState,
+  useEffect,
 } from "react";
+import TextareaAutosize from "react-textarea-autosize";
 
 export type GrayChatBarProps = {
   value: string;
@@ -24,7 +24,6 @@ export type GrayChatBarProps = {
   isReasoningLocked?: boolean;
   isSearchEnabled?: boolean;
   onToggleSearch?: () => void;
-  onToggleSearch?: () => void;
   modelSelector?: React.ReactNode;
   onPasteFiles?: (files: File[]) => void;
   attachmentTray?: React.ReactNode;
@@ -34,7 +33,7 @@ export function GrayChatBar({
   value,
   onChange,
   onSubmit,
-  placeholder = "Ask anything",
+  placeholder = "Ask Gray",
   isSubmitDisabled,
   isSubmitting = false,
   onAddAttachment,
@@ -49,40 +48,20 @@ export function GrayChatBar({
 }: GrayChatBarProps) {
   const computedDisabled =
     typeof isSubmitDisabled === "boolean" ? isSubmitDisabled : value.trim().length === 0;
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // We trigger a re-render/check on mount to ensure mobile detection if needed, 
+  // but for TextareaAutosize we mainly just need the component.
+  // The original code had isMobile state to prevent enter-submit on mobile.
   const [isMobile, setIsMobile] = useState(false);
-
-  const adjustHeight = useCallback(() => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-
-    // Reset height to 'inherit' to correctly calculate scrollHeight
-    // This allows the textarea to shrink when text is deleted
-    textarea.style.height = "inherit";
-
-    // Calculate new height
-    const computedStyle = window.getComputedStyle(textarea);
-    const newHeight = Math.min(textarea.scrollHeight, 200);
-
-    textarea.style.height = `${newHeight}px`;
-
-    // Show scrollbar only if we hit the max height
-    textarea.style.overflowY = newHeight >= 200 ? "auto" : "hidden";
-  }, []);
 
   useEffect(() => {
     const handleResize = () => {
       setIsMobile(window.matchMedia("(pointer: coarse)").matches);
-      adjustHeight();
     };
     handleResize();
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
-  }, [adjustHeight]);
-
-  useEffect(() => {
-    adjustHeight();
-  }, [value, adjustHeight]);
+  }, []);
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === "Enter" && !event.shiftKey) {
@@ -129,53 +108,82 @@ export function GrayChatBar({
     [onPasteFiles]
   );
 
+
   const isStreaming = isSubmitting;
   const actionLabel = isStreaming ? "Stop response" : "Send message";
 
+  // Track if textarea is expanded beyond single line
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  const handleHeightChange = useCallback((height: number) => {
+    // Single line is roughly 24-28px, multi-line is taller
+    setIsExpanded(height > 36);
+  }, []);
+
   return (
-    <form className={styles.chatBarRounded} onSubmit={onSubmit}>
-      {onAddAttachment ? (
-        <button
-          type="button"
-          className={styles.chatIconButton}
-          aria-label="Upload a document"
-          onClick={onAddAttachment}
-        >
-          <Paperclip size={18} />
-        </button>
-      ) : null}
+    <form className={styles.chatBarRounded} onSubmit={onSubmit} data-expanded={isExpanded}>
+      <div className={styles.chatBarLeftGroup}>
+        {onAddAttachment ? (
+          <button
+            type="button"
+            className={styles.chatIconButton}
+            aria-label="Upload a document"
+            onClick={onAddAttachment}
+          >
+            <Paperclip size={18} />
+          </button>
+        ) : null}
+
+      </div>
+
       <div className={styles.chatInputWrapper}>
         {attachmentTray}
-        <textarea
-          ref={textareaRef}
+        <TextareaAutosize
           value={value}
           onChange={(event) => onChange(event.target.value)}
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}
           onDrop={handleDrop}
+          onHeightChange={handleHeightChange}
           placeholder={placeholder}
           className={styles.chatInput}
           aria-label={placeholder}
-          rows={1}
-          style={{ resize: "none", overflowY: "auto" }}
+          minRows={1}
+          maxRows={5}
+          cacheMeasurements
+          style={{
+            resize: "none",
+            background: "transparent",
+            border: "none",
+            outline: "none",
+            overflowY: "hidden",
+            flex: "1 1 auto",
+            width: "100%",
+            boxSizing: "border-box",
+            lineHeight: "1.5",
+          }}
         />
-        <div className={styles.chatModelSelectorWrapper}>
+      </div>
+
+      <div className={styles.chatBarRightGroup}>
+        <div className={styles.chatModelSelectorDirect}>
           {modelSelector}
         </div>
+        <button
+          type="submit"
+          aria-label={actionLabel}
+          title={actionLabel}
+          className={styles.chatActionButton}
+          disabled={computedDisabled}
+        >
+          {isStreaming ? (
+            <span className={styles.chatStopIcon} aria-hidden="true" />
+          ) : (
+            <ArrowUpRight size={18} />
+          )}
+        </button>
       </div>
-      <button
-        type="submit"
-        aria-label={actionLabel}
-        title={actionLabel}
-        className={styles.chatActionButton}
-        disabled={computedDisabled}
-      >
-        {isStreaming ? (
-          <span className={styles.chatStopIcon} aria-hidden="true" />
-        ) : (
-          <ArrowUpRight size={18} />
-        )}
-      </button>
     </form>
   );
 }
+

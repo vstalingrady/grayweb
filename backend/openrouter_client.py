@@ -511,14 +511,11 @@ class OpenRouterService:
                                 # Handle reasoning content - both plaintext and encrypted
                                 reasoning = delta.get("reasoning") or delta.get("reasoning_content")
                                 if reasoning:
-                                    _logger.info(f"[OpenRouter] Received reasoning content: {reasoning[:100]}...")
                                     yield {"type": "reasoning", "content": reasoning}
                                 
                                 # Handle reasoning_details (may contain encrypted xAI reasoning)
                                 reasoning_pieces = []
                                 details = delta.get("reasoning_details") or []
-                                if details:
-                                    _logger.info(f"[OpenRouter] Received reasoning_details: {details}")
                                 if isinstance(details, list):
                                     for item in details:
                                         if isinstance(item, dict):
@@ -535,7 +532,6 @@ class OpenRouterService:
                                     yield content
                                 elif reasoning_pieces:
                                     # Plaintext reasoning_details support
-                                    _logger.info(f"[OpenRouter] Yielding reasoning_pieces: {reasoning_pieces}")
                                     yield {"type": "reasoning", "content": "".join(reasoning_pieces)}
 
                                 if include_usage and "usage" in data:

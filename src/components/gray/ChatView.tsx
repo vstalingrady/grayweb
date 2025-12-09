@@ -1935,6 +1935,39 @@ const parseStructuredAssistantMessage = (content?: string | null): AssistantSect
   const findIndex = (needle: string, fromIndex = 0) =>
     lower.indexOf(needle.toLowerCase(), fromIndex);
 
+  // NEW: First check for <thinking> tags at the start (modern backend format)
+  // This handles the case where backend sends: <thinking>content</thinking>\nActual response
+  const thinkingTagCandidates = [
+    { open: "<thinking>", close: "</thinking>" },
+    { open: "<chainofthought>", close: "</chainofthought>" },
+    { open: "<chain_of_thought>", close: "</chain_of_thought>" },
+  ];
+
+  for (const candidate of thinkingTagCandidates) {
+    const openIndex = findIndex(candidate.open);
+    if (openIndex !== -1 && openIndex < 50) {
+      // Tags found near the start of the message
+      const thinkingContentStart = openIndex + candidate.open.length;
+      const closeIndex = findIndex(candidate.close, thinkingContentStart);
+      if (closeIndex !== -1) {
+        base.thinking = normalized.slice(thinkingContentStart, closeIndex).trim() || null;
+        const afterTagIndex = closeIndex + candidate.close.length;
+        base.ai = normalized.slice(afterTagIndex).trim();
+        base.isStructured = true;
+        // Cache and return early
+        parseCache.set(cacheKey, base);
+        if (parseCache.size > PARSE_CACHE_SIZE) {
+          const firstKey = parseCache.keys().next().value;
+          if (firstKey !== undefined) {
+            parseCache.delete(firstKey);
+          }
+        }
+        return base;
+      }
+    }
+  }
+
+  // LEGACY: Fall back to labeled format ("thinking (not visible):", "chain of thought:")
   const userLabel = "user:";
   const thinkingLabel = "thinking (not visible):";
   const chainOfThoughtLabel = "chain of thought:";
@@ -1959,11 +1992,6 @@ const parseStructuredAssistantMessage = (content?: string | null): AssistantSect
 
   let afterThinkingIndex = -1;
   if (effectiveThinkingIndex !== -1) {
-    const thinkingTagCandidates = [
-      { open: "<thinking>", close: "</thinking>" },
-      { open: "<chainofthought>", close: "</chainofthought>" },
-      { open: "<chain_of_thought>", close: "</chain_of_thought>" },
-    ];
     let tagBounds: { start: number; open: string; close: string } | null = null;
     for (const candidate of thinkingTagCandidates) {
       const candidateStart = findIndex(candidate.open, effectiveThinkingIndex);

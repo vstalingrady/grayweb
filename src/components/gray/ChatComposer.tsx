@@ -40,11 +40,10 @@ const GrayChatComposerBase = ({
           onToggleSearch={() => setSearchEnabled(!searchEnabled)}
           modelSelector={<ModelSelector />}
           onPasteFiles={rest.onPasteFiles}
+          attachmentTray={attachmentTray}
         />
         {showUnderline ? <div className={styles.chatBarUnderline} aria-hidden="true" /> : null}
       </div>
-      {attachmentTray}
-
     </div>
   );
 };

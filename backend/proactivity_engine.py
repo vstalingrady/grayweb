@@ -501,27 +501,33 @@ class ProactivityEngine:
                     vapid_claims={"sub": "mailto:admin@gray.app"},
                 )
             except WebPushException as exc:
-                response_text = getattr(exc.response, "text", "") if hasattr(exc, "response") else ""
-                logger.error(
-                    f"Web push failed for user {user_id}: {exc}",
-                    exc_info=True,
-                    extra={"response_body": response_text}
-                )
                 response = getattr(exc, "response", None)
                 status_code = getattr(response, "status_code", None)
-                # Clean up clearly invalid subscriptions so we don't keep retrying them forever.
-                # 400/404/410 indicate a bad or gone subscription; delete it so we stop retrying.
+                response_text = getattr(response, "text", "") if response else ""
+
                 if status_code in (400, 404, 410):
+                    # These mean the subscription is invalid or expired.
+                    logger.warning(
+                        f"Web push subscription expired/invalid for user {user_id} (status {status_code}). Removing.",
+                        extra={"response_body": response_text}
+                    )
                     try:
                         await self.db.execute(
                             f"DELETE FROM {PROACTIVITY_PUSH_TABLE} WHERE id = :id",
                             {"id": row["id"]},
                         )
-                    except Exception as delete_exc:  # pragma: no cover - defensive cleanup
+                    except Exception as delete_exc:
                         logger.error(
                             f"Failed to delete invalid push subscription for user {user_id}: {delete_exc}",
                             exc_info=True,
                         )
+                else:
+                    # Unexpected error
+                    logger.error(
+                        f"Web push failed for user {user_id}: {exc}",
+                        exc_info=True,
+                        extra={"response_body": response_text}
+                    )
             except requests.exceptions.RequestException as exc:
                 # Catch network-level errors, including DNS failures for invalid endpoints
                 # like 'permanently-removed.invalid' which some browsers use to signal dead subs.

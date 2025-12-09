@@ -284,7 +284,7 @@ function GrayEnhancedSidebarComponent({
                             const isActive = entry.id === activeChatId;
                             return (
                               <li key={entry.id}>
-                                {entry.isGeneratingTitle ? (
+                                {entry.isGeneratingTitle || !entry.title?.trim() ? (
                                   <div style={{ padding: "6px 16px" }}>
                                     <Skeleton
                                       height={14}

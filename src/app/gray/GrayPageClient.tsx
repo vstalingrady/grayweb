@@ -2478,11 +2478,7 @@ function GrayPageClientInner({
               )}
 
               {/* Centered Transparent Logo (mobile only; hidden on desktop via CSS) */}
-              {viewMode === "general" && !activeChatId && (
-                <div className={styles.centerLogo}>
-                  <img src="/grayaiwhitenotspinning.svg" alt="" />
-                </div>
-              )}
+
 
               {isDashboardView ? renderPrimaryView() : renderMainSurface()}
               {isMounted && viewMode === "general" && activeNav !== "reference" ? (

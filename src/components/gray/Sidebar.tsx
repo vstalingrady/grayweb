@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { ChevronsRight, ChevronsUp, UserRound } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import Skeleton from "react-loading-skeleton";
 import { useUser } from "@/contexts/UserContext";
 import styles from "@/app/gray/GrayPageClient.module.css";
 import {
@@ -171,13 +172,25 @@ export function GraySidebar({
                     <ul>
                       {section.entries.map((entry) => (
                         <li key={entry.id}>
-                          <Link
-                            href={entry.href}
-                            className={styles.historyLink}
-                            data-active={entry.id === activeChatId ? "true" : "false"}
-                          >
-                            {entry.title}
-                          </Link>
+                          {entry.isGeneratingTitle || !entry.title?.trim() ? (
+                            <div style={{ padding: "4px 12px" }}>
+                              <Skeleton
+                                height={14}
+                                width={120}
+                                baseColor="rgba(255, 255, 255, 0.05)"
+                                highlightColor="rgba(255, 255, 255, 0.1)"
+                                borderRadius={4}
+                              />
+                            </div>
+                          ) : (
+                            <Link
+                              href={entry.href}
+                              className={styles.historyLink}
+                              data-active={entry.id === activeChatId ? "true" : "false"}
+                            >
+                              {entry.title}
+                            </Link>
+                          )}
                         </li>
                       ))}
                     </ul>

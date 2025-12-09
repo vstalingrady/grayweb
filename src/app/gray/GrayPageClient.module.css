@@ -1057,6 +1057,54 @@
 }
 
 @media (max-width: 768px) {
+  .hideOnMobile {
+    display: none;
+  }
+}
+
+.chatBarLeftGroup {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  margin-right: 8px;
+  /* Align with input text roughly */
+}
+
+.chatBarRightGroup {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  margin-left: 8px;
+  /* Align with input text roughly */
+}
+
+.chatBarRounded[data-expanded="true"] .chatBarLeftGroup,
+.chatBarRounded[data-expanded="true"] .chatBarRightGroup {
+  align-items: flex-end;
+  padding-bottom: 4px;
+}
+
+.chatModelSelectorDirect {
+  display: flex;
+  align-items: center;
+  position: relative;
+}
+
+.chatIconActive {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+}
+
+.chatActionActive {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+}
+
+@media (max-width: 768px) {
   .centerLogo {
     display: block;
   }
@@ -2771,6 +2819,7 @@
   padding-bottom: 0;
   flex: 1 1 auto;
   align-self: stretch;
+  overflow: hidden;
 }
 
 .mainContent[data-view="chat"]>* {
@@ -2903,7 +2952,7 @@
   --chat-bubble-max-width: var(--chat-column-max-width);
   --chat-composer-overlap: calc(var(--gray-chat-bar-clearance) + clamp(10px, 2vh, 18px));
   --chat-composer-height: clamp(64px, 10vh, 120px);
-  overflow: visible;
+  overflow: hidden;
 }
 
 .chatHeaderControls {
@@ -2945,7 +2994,8 @@
   flex-direction: column;
   justify-content: flex-start;
   width: 100%;
-  overflow: visible;
+  min-height: 0;
+  overflow-y: auto;
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
@@ -2968,7 +3018,7 @@
   justify-content: flex-end;
   gap: clamp(4px, 1vh, 10px);
   min-height: 0;
-  padding: clamp(4px, 1vh, 10px) 24px calc(var(--chat-composer-height, 80px) + 32px) 24px;
+  padding: clamp(4px, 1vh, 10px) 24px 24px 24px;
   overflow-y: auto;
   overflow-x: hidden;
   scroll-behavior: smooth;
@@ -3047,7 +3097,7 @@
   .chatMessages {
     padding-left: max(14px, env(safe-area-inset-left, 0px));
     padding-right: max(14px, env(safe-area-inset-right, 0px));
-    padding-bottom: calc(var(--chat-composer-height, 80px) + clamp(28px, 7vh, 64px));
+    padding-bottom: 24px;
     scroll-padding-bottom: clamp(24px, 6vh, 48px);
   }
 
@@ -4338,24 +4388,28 @@
 }
 
 .chatComposerDock {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
+  position: relative;
+  /* Changed from fixed to participate in flex flow */
+  bottom: auto;
+  left: auto;
+  right: auto;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 0;
   padding: 0;
-  padding-bottom: env(safe-area-inset-bottom, 8px);
+  padding-bottom: 0;
   background: transparent;
   z-index: 40;
   width: 100%;
   margin-top: 0;
   box-shadow: none;
   overflow: visible;
-  pointer-events: none;
+  flex-shrink: 0;
+  /* Don't shrink the input area */
 }
+
+
 
 .chatAttachmentTopTray {
   width: 100%;
@@ -4379,18 +4433,13 @@
 }
 
 /* Offset composer for sidebar */
-/* Offset composer for sidebar */
+/* Sidebar offset removed - grid layout handles positioning */
 .layout:has(.sidebar) .chatComposerDock {
-  left: 52px;
-  /* Default collapsed width */
-  width: calc(100% - 52px);
-  transition: left 0.3s ease, width 0.3s ease;
+  /* Centering is handled by the grid layout and margin: 0 auto on children */
 }
 
 .layout:has(.sidebar[data-expanded="true"]) .chatComposerDock {
-  left: 260px;
-  /* Expanded width */
-  width: calc(100% - 260px);
+  /* Centering is handled by the grid layout and margin: 0 auto on children */
 }
 
 /* Reset offset on mobile sidebar (overlay mode) */
@@ -8090,10 +8139,21 @@ h1.greeting {
   gap: 0;
 }
 
+.proactivityCard {
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  /* Ensure full height to push button down */
+}
+
 .proactivityCard .dashboardCardHeader {
   padding: 0;
   margin: 0;
   margin-bottom: 12px;
+  flex-shrink: 0;
 }
 
 .proactivityCard .dashboardCardBody {
@@ -8101,16 +8161,30 @@ h1.greeting {
   padding: 0;
   min-height: 0;
   justify-content: flex-start;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  /* Take remaining height */
+  overflow: hidden;
+  /* Contain scrolling children */
 }
 
 .proactivityCard .secondaryAction {
-  margin-top: 6px;
+  margin-top: auto;
+  /* Push to bottom */
+  flex-shrink: 0;
+  width: 100%;
 }
 
 .proactivityCard .planList {
   gap: 6px;
   padding: 0;
   max-height: none;
+  flex: 1;
+  /* Allow list to grow */
+  overflow-y: auto;
+  /* Enable internal scrolling */
+  min-height: 0;
 }
 
 .proactivityCard .planListItem {
@@ -8624,15 +8698,20 @@ h1.greeting {
   flex-wrap: nowrap;
   align-items: center;
   gap: 0;
-  margin: 0 auto;
-  border-radius: 26px;
+  margin: 0 auto 24px;
+  border-radius: 27px;
   border: 1px solid rgba(255, 255, 255, 0.16);
   background: #1a1a1a;
   backdrop-filter: none;
-  padding: 10px;
+  padding: 8px 10px;
   position: relative;
   z-index: 1;
-  transition: background 0.2s ease, border-color 0.2s ease;
+  transition: background 0.2s ease, border-color 0.2s ease, border-radius 0.15s ease;
+}
+
+/* When textarea grows beyond single line, adjust alignment */
+.chatBarRounded[data-expanded="true"] {
+  align-items: flex-end;
 }
 
 .chatBarRounded:focus-within {
@@ -8647,6 +8726,40 @@ h1.greeting {
 
 .layout[data-view="general"] .chatBarRounded:focus-within {
   background: #1a1a1a;
+}
+
+.chatView {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  /* Key to stacking viewport then composer */
+  align-items: stretch;
+  justify-content: flex-start;
+  position: relative;
+  overflow: hidden;
+  /* Prevent body scroll */
+}
+
+.chatViewport {
+  position: relative;
+  flex: 1 1 0;
+  /* Grow to fill space, shrink if needed */
+  min-height: 0;
+  /* Allow shrinking */
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  overflow-x: hidden;
+  overflow-y: auto;
+  /* Scroll internally */
+  padding: 0;
+  overscroll-behavior-y: contain;
+  scroll-behavior: smooth;
+  z-index: 0;
 }
 
 .chatBarRow {
@@ -8679,7 +8792,7 @@ h1.greeting {
   border-top: none;
   width: 100%;
   max-width: min(var(--chat-column-max-width, 680px), 100%);
-  margin: 0 auto clamp(24px, 4vh, 48px);
+  margin: 0 auto;
   z-index: 100;
   /* Ensure composer is above other page elements */
 }
@@ -8855,6 +8968,7 @@ h1.greeting {
   position: relative;
   gap: 0;
   padding-left: 0;
+  text-align: left;
 }
 
 .chatAttachmentTrayInline {
@@ -8997,14 +9111,11 @@ h1.greeting {
 
 .chatModelSelectorWrapper {
   position: absolute;
-  bottom: 0;
-  right: 0;
-  height: auto;
-  min-height: 40px;
+  top: 50%;
+  right: 8px;
+  transform: translateY(-50%);
   display: flex;
   align-items: center;
-  padding-right: 8px;
-  padding-bottom: 6px;
 }
 
 .chatInput {
@@ -9014,19 +9125,21 @@ h1.greeting {
   color: rgba(245, 245, 245, 0.92);
   font-family: var(--font-sans, "Plus Jakarta Sans", system-ui, -apple-system, BlinkMacSystemFont, sans-serif);
   font-size: 0.95rem;
-  padding: 4px 80px 4px 14px;
+  padding: 4px 8px;
   outline: none;
   min-width: 0;
   line-height: 1.5;
   vertical-align: middle;
   box-sizing: border-box;
   width: 100%;
+  text-align: left;
 }
 
 .chatInput::placeholder {
   color: rgba(235, 235, 235, 0.45);
   letter-spacing: 0.08em;
   font-family: inherit;
+  text-align: left;
 }
 
 @media (max-width: 1080px) {
@@ -9635,25 +9748,62 @@ h1.greeting {
     padding-top: 2px !important;
     padding-bottom: 2px !important;
     padding-left: 6px !important;
-    padding-right: 112px !important;
+    padding-right: 14px !important;
     font-size: 16px !important;
     /* Prevent iOS zoom */
   }
 
   .chatBarRounded {
     gap: 0 !important;
-    padding: 10px !important;
-    border-radius: 24px !important;
+    padding: 14px 14px 10px !important;
+    border-radius: 20px !important;
+    /* Rounded square */
     width: 95% !important;
     max-width: none !important;
     margin: 0 auto !important;
+    flex-wrap: wrap !important;
+    /* Allow multi-row */
+    align-items: center !important;
+  }
+
+  .chatInputWrapper {
+    order: 1;
+    width: 100% !important;
+    flex: 0 0 100% !important;
+    padding-bottom: 8px;
+    /* Space between input and tools */
+  }
+
+  .chatBarLeftGroup {
+    order: 2;
+    margin-right: auto;
+    /* Push others right */
+    padding-bottom: 0 !important;
+    /* Reset overlap align fix */
+  }
+
+  .chatBarRightGroup {
+    order: 3;
+    margin-left: auto;
+    padding-bottom: 0 !important;
+    /* Reset overlap align fix */
+  }
+
+  .chatInput {
+    padding-top: 2px !important;
+    padding-bottom: 2px !important;
+    padding-left: 4px !important;
+    padding-right: 4px !important;
+    font-size: 16px !important;
+    min-height: 44px;
+    /* Ensure touch target/visual spacing */
   }
 
   .chatIconButton,
   .chatActionButton {
-    width: 32px !important;
-    height: 32px !important;
-    padding: 6px !important;
+    width: 36px !important;
+    height: 36px !important;
+    padding: 8px !important;
   }
 
   .generalChatBarRow {
@@ -10006,8 +10156,12 @@ h1.greeting {
   /* Natural height based on content */
   margin-bottom: 0 !important;
   /* Gap handles spacing */
-  background: rgba(14, 14, 14, 0.6) !important;
-  /* Ensure opacity */
+  background: transparent !important;
+  /* Remove background */
+  border: none !important;
+  /* Remove border */
+  box-shadow: none !important;
+  /* Remove shadow */
   backdrop-filter: none !important;
   /* Remove blur here too */
 }

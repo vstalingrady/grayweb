@@ -18,7 +18,7 @@
 .dashboardCalendarStandalone .calendarSurface {
   background: rgba(18, 18, 18, 0.94);
   border: 1px solid rgba(255, 255, 255, 0.05);
-  padding: clamp(18px, 2.4vw, 28px);
+  padding: clamp(12px, 2vw, 20px);
 }
 
 .dashboardCalendarStandalone .calendarSurfaceTitle {
@@ -397,7 +397,7 @@
 
 .calendarSurface {
   position: relative;
-  background: rgba(18, 18, 18, 0.94);
+  background: rgba(28, 28, 32, 0.95);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 24px;
   padding: 0;
@@ -427,7 +427,7 @@
 }
 
 .calendarSurfaceCompact {
-  padding: clamp(18px, 2.4vw, 24px);
+  padding: clamp(12px, 1.5vw, 20px);
   gap: 16px;
   background: rgba(4, 4, 4, 0.9);
   border: 1px solid rgba(255, 255, 255, 0.05);
@@ -729,7 +729,7 @@
 
 .calendarHeaderRow {
   display: grid;
-  grid-template-columns: var(--calendar-timeline-width, 56px) repeat(var(--calendar-grid-columns, 7), minmax(120px, 1fr));
+  grid-template-columns: var(--calendar-timeline-width, 56px) repeat(var(--calendar-grid-columns, 7), minmax(0, 1fr));
   gap: 0;
   align-items: end;
   font-size: 0.6rem;
@@ -897,12 +897,7 @@
 .calendarDayColumn {
   position: relative;
   background-color: var(--background, #050505);
-  background-image: linear-gradient(to bottom,
-      var(--calendar-grid-line-color, rgba(255, 255, 255, 0.08)) 1px,
-      transparent 1px);
-  background-size: 100% var(--calendar-hour-height, 64px);
-  background-repeat: repeat-y;
-  background-position: 0 calc(var(--calendar-hour-height, 64px) / -2);
+  /* Removed gradient lines for even color */
   border: none;
   border-radius: 0;
   min-height: calc(var(--calendar-hour-height, 64px) * 24);
@@ -916,7 +911,7 @@
 
 .calendarWeekColumns {
   display: grid;
-  grid-template-columns: repeat(7, minmax(120px, 1fr));
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   width: 100%;
   background: transparent;
   border: none;
@@ -1543,11 +1538,11 @@
   }
 
   .calendarHeaderRow {
-    grid-template-columns: var(--calendar-timeline-width, 56px) repeat(var(--calendar-grid-columns, 7), minmax(110px, 1fr));
+    grid-template-columns: var(--calendar-timeline-width, 56px) repeat(var(--calendar-grid-columns, 7), minmax(0, 1fr));
   }
 
   .calendarWeekColumns {
-    grid-template-columns: repeat(7, minmax(110px, 1fr));
+    grid-template-columns: repeat(7, minmax(0, 1fr));
   }
 
   .calendarBoard {
@@ -1564,7 +1559,7 @@
   }
 
   .calendarHeaderRow {
-    grid-template-columns: var(--calendar-timeline-width, 56px) repeat(var(--calendar-grid-columns, 7), minmax(96px, 1fr));
+    grid-template-columns: var(--calendar-timeline-width, 56px) repeat(var(--calendar-grid-columns, 7), minmax(0, 1fr));
   }
 
   .calendarBody {
@@ -1576,7 +1571,7 @@
   }
 
   .calendarWeekColumns {
-    grid-template-columns: repeat(7, minmax(96px, 1fr));
+    grid-template-columns: repeat(7, minmax(0, 1fr));
   }
 }
 
@@ -1594,11 +1589,11 @@
   }
 
   .calendarWeekColumns {
-    grid-template-columns: repeat(7, minmax(80px, 1fr));
+    grid-template-columns: repeat(7, minmax(0, 1fr));
   }
 
   .calendarHeaderRow {
-    grid-template-columns: var(--calendar-timeline-width, 56px) repeat(var(--calendar-grid-columns, 7), minmax(80px, 1fr));
+    grid-template-columns: var(--calendar-timeline-width, 56px) repeat(var(--calendar-grid-columns, 7), minmax(0, 1fr));
   }
 }
 
