@@ -1304,7 +1304,26 @@ const ChatMessagesList = memo(
         className={styles.chatMessages}
         data-streaming={shouldShowPendingStreamIndicator ? "true" : undefined}
       >
-        {messages.map((message, messageIndex) => {
+        <div ref={scrollAnchorRef} style={{ order: -1 }} />
+
+        {shouldShowPendingStreamIndicator && (
+          <div className={styles.chatMessage} data-role="assistant" style={{ order: -1 }}>
+            <div className={styles.chatAssistantBlock}>
+              <GrayStreamingSpinner
+                reasoningSeconds={reasoningSeconds}
+                toolLabel={
+                  // Check the very last message in the list if it's an assistant message
+                  messages.length > 0 && messages[messages.length - 1].role === "assistant"
+                    ? extractCurrentToolStatus(messages[messages.length - 1].content)
+                    : null
+                }
+              />
+            </div>
+          </div>
+        )}
+
+        {[...messages].reverse().map((message, reverseIndex) => {
+          const messageIndex = messages.length - 1 - reverseIndex;
           const isUser = message.role === "user";
           const isAssistant = !isUser;
           const quickReplies: string[] = [];
@@ -1756,24 +1775,6 @@ const ChatMessagesList = memo(
             </div>
           );
         })}
-
-        {shouldShowPendingStreamIndicator && (
-          <div className={styles.chatMessage} data-role="assistant">
-            <div className={styles.chatAssistantBlock}>
-              <GrayStreamingSpinner
-                reasoningSeconds={reasoningSeconds}
-                toolLabel={
-                  // Check the very last message in the list if it's an assistant message
-                  messages.length > 0 && messages[messages.length - 1].role === "assistant"
-                    ? extractCurrentToolStatus(messages[messages.length - 1].content)
-                    : null
-                }
-              />
-            </div>
-          </div>
-        )}
-
-        <div ref={scrollAnchorRef} />
       </div>
     );
   }
@@ -2349,12 +2350,7 @@ export function GrayChatView({
     };
   }, []);
 
-  // Scroll when composer height changes (input expansion)
-  useEffect(() => {
-    if (composerHeight > 0) {
-      scrollToBottomIfNear();
-    }
-  }, [composerHeight, scrollToBottomIfNear]);
+
 
 
 
@@ -2957,6 +2953,11 @@ export function GrayChatView({
       return;
     }
 
+    // Wait for user to be available to avoid race conditions with resolveChatUser
+    if (!user) {
+      return;
+    }
+
     // Only ever auto-respond to genuine user messages, never to assistant output.
     const hasPendingAutoStream = sessionPendingAutoStream;
     const lastUserMessage =
@@ -3001,6 +3002,7 @@ export function GrayChatView({
     }
 
     // Mark that we've handled this specific user message so we don't re-trigger.
+    // Mark that we've handled this specific user message so we don't re-trigger.
     markAutoStreamTriggered(sessionAutoStreamId, safeLastUserMessage.id);
 
     // Set isResponding: true immediately to prevent spinner disappearing during race condition
@@ -3028,6 +3030,7 @@ export function GrayChatView({
     sessionPendingAutoStream,
     streamAssistantReply,
     updateSession,
+    user,
   ]);
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
