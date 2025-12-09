@@ -2227,7 +2227,7 @@ function GrayPageClientInner({
           setManualViewMode("chat");
           if (typeof window !== "undefined") {
             // console.log("[GrayPageClient] Pushing state to history:", `/c/${session.id}`);
-            window.history.pushState(null, "", `/c/${session.id}`);
+            router.push(`/c/${session.id}`);
           }
         } else {
           // console.log("[GrayPageClient] Routing to new thread:", session.id);
@@ -2250,7 +2250,7 @@ function GrayPageClientInner({
         setManualViewMode("chat");
         if (!isGeneralSession && typeof window !== "undefined") {
           // console.log("[GrayPageClient] Pushing state to history:", `/c/${sessionId}`);
-          window.history.pushState(null, "", `/c/${sessionId}`);
+          router.push(`/c/${sessionId}`);
         }
       } else if (isGeneralSession) {
         // console.log("[GrayPageClient] Routing to general chat");
