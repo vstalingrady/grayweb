@@ -2624,6 +2624,10 @@ export function GrayChatView({
       if (streamingMessageId) {
         setActiveStreamingMessageId(streamingMessageId);
       }
+      // Show skeleton loader in sidebar while title is being generated
+      if (requestTitleHint) {
+        updateSession(targetSessionId, { isGeneratingTitle: true });
+      }
       try {
         const timeContext = buildLocalTimeContext();
         for await (const event of apiService.sendMessageStream(
@@ -2753,6 +2757,7 @@ export function GrayChatView({
                 : session?.conversationId ?? undefined,
               isResponding: false,
               pendingAutoStream: false,
+              isGeneratingTitle: false,
             });
             clearAttachments();
             return finalContent;
@@ -2788,6 +2793,7 @@ export function GrayChatView({
             : session?.conversationId ?? undefined,
           isResponding: false,
           pendingAutoStream: false,
+          isGeneratingTitle: false,
         });
         clearAttachments();
         return accumulated;
