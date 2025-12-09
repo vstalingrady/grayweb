@@ -2195,6 +2195,11 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
               reasoningStartTimeRef.current = Date.now();
             }
 
+            const shouldGenerateTitle = shouldRequestAutoTitleForSession(generalSession);
+            if (shouldGenerateTitle) {
+              updateSession(generalSession.id, { isGeneratingTitle: true });
+            }
+
             for await (const event of apiService.sendMessageStream({
               message: trimmed,
               system_prompt: systemPromptForRequest,
@@ -2205,7 +2210,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
               timezone: resolveClientTimezone(),
               attachments: attachmentPayloads,
               context_cache_id: selectedContextCacheId ?? undefined,
-              should_generate_title: shouldRequestAutoTitleForSession(generalSession),
+              should_generate_title: shouldGenerateTitle,
               web_search_enabled: shouldUseWebSearch,
               ...mapPayload,
               reasoning_mode: reasoningMode,
@@ -2307,6 +2312,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
                   conversationId: streamedConversationId ?? resolvedGeneralConversationId ?? undefined,
                   isResponding: false,
                   pendingAutoStream: false,
+                  isGeneratingTitle: false,
                 });
                 void markHasSeenGeneralChat();
                 clearAttachments();
@@ -2332,6 +2338,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
               conversationId: streamedConversationId ?? resolvedGeneralConversationId ?? undefined,
               isResponding: false,
               pendingAutoStream: false,
+              isGeneratingTitle: false,
             });
           } catch (error) {
             console.error("Failed to send general message:", error);
@@ -2345,6 +2352,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
               conversationId: streamedConversationId ?? resolvedGeneralConversationId ?? undefined,
               isResponding: false,
               pendingAutoStream: false,
+              isGeneratingTitle: false,
             });
             clearAttachments();
           } finally {
