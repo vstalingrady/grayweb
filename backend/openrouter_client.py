@@ -62,7 +62,7 @@ class OpenRouterService:
         "deepseek-v3.2-speciale": "deepseek/deepseek-v3.2-speciale",  # Always-reasoning variant
         "deepseek-r1": "deepseek/deepseek-r1",
         # Moonshot / Kimi models
-        "kimi-k2": "moonshotai/kimi-k2",
+        "kimi-k2": "moonshotai/kimi-k2-0905",  # Non-reasoning variant
         "kimi-k2-thinking": "moonshotai/kimi-k2-thinking",  # Always-reasoning variant
         # xAI Grok models
         "grok-4": "x-ai/grok-4.1-fast",
