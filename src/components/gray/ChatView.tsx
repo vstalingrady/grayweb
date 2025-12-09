@@ -2285,8 +2285,9 @@ export function GrayChatView({
     if (!hasHydrated || !session?.id || !scrollAnchorRef.current) {
       return;
     }
+    // Scroll to bottom on initial load (after messages are loaded)
     scrollAnchorRef.current.scrollIntoView({ behavior: "auto" });
-  }, [hasHydrated, session?.id]);
+  }, [hasHydrated, session?.id, messages.length]);
 
   const streamingContentSignature = useMemo(() => {
     if (!activeStreamingMessageId) {
@@ -2320,10 +2321,10 @@ export function GrayChatView({
     scrollAnchorRef.current.scrollIntoView({ behavior: instant ? "instant" : "smooth" });
   }, []);
 
-  // Auto-scroll on new messages if near bottom
+  // Auto-scroll on new messages - always scroll to show the new message
   useEffect(() => {
-    scrollToBottomIfNear();
-  }, [messages.length, scrollToBottomIfNear]);
+    scrollToBottom();
+  }, [messages.length, scrollToBottom]);
 
   // Auto-scroll during active streaming if near bottom (use instant to prevent jitter)
   useEffect(() => {
