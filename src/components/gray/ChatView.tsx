@@ -2304,7 +2304,8 @@ export function GrayChatView({
     const viewport = chatViewportRef.current;
     if (!viewport || !scrollAnchorRef.current) return;
 
-    const threshold = 100;
+    // Use a generous threshold to ensure smooth auto-scroll on mobile devices
+    const threshold = 300;
     const isNearBottom =
       viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight <= threshold;
 
