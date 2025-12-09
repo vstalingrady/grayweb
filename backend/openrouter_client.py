@@ -59,7 +59,11 @@ class OpenRouterService:
         # DeepSeek models
         "deepseek-v3": "deepseek/deepseek-chat",
         "deepseek-v3.2": "deepseek/deepseek-v3.2",
+        "deepseek-v3.2-speciale": "deepseek/deepseek-v3.2-speciale",  # Always-reasoning variant
         "deepseek-r1": "deepseek/deepseek-r1",
+        # Moonshot / Kimi models
+        "kimi-k2": "moonshotai/kimi-k2",
+        "kimi-k2-thinking": "moonshotai/kimi-k2-thinking",  # Always-reasoning variant
         # xAI Grok models
         "grok-4": "x-ai/grok-4.1-fast",
         "grok-4.1": "x-ai/grok-4.1-fast",
@@ -73,17 +77,20 @@ class OpenRouterService:
 
     # Models that have separate reasoning variants
     # Maps non-reasoning model ID -> reasoning model ID
+    # NOTE: Only for models where reasoning requires a DIFFERENT model ID
     REASONING_MODEL_VARIANTS = {
         "openai/gpt-5.1-chat": "openai/gpt-5.1",  # gpt-5.1 is the reasoning variant
-        "deepseek/deepseek-v3.2": "deepseek/deepseek-v3.2-speciale",  # speciale has reasoning always on
+        # DeepSeek v3.2 uses the reasoning param, NOT a separate model
         # Grok models handle reasoning via the reasoning param
         # Anthropic models handle reasoning via extended thinking, not separate model
     }
 
     # Models where reasoning is ALWAYS on (toggle should be grayed out in frontend)
+    # These models don't need/support the reasoning param - they always reason
     ALWAYS_REASONING_MODELS = {
-        "deepseek/deepseek-v3.2-speciale",
+        "deepseek/deepseek-v3.2-speciale",  # Speciale variant always reasons
         "openai/gpt-5.1",  # The reasoning variant of gpt-5.1
+        "moonshotai/kimi-k2-thinking",  # Kimi thinking model always reasons
     }
 
     def __init__(self) -> None:
