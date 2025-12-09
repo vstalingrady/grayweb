@@ -259,18 +259,12 @@ const normalizeAssistantMath = (value: string | null | undefined): string | null
 };
 
 const GrayStreamingSpinner = ({
-  reasoningSeconds,
   toolLabel
 }: {
-  reasoningSeconds?: number | null;
+  reasoningSeconds?: number | null;  // Keep prop for compatibility but don't display
   toolLabel?: string | null;
 }) => (
   <div className={styles.chatStreamingInline}>
-    {typeof reasoningSeconds === "number" && reasoningSeconds > 0 && (
-      <span className={styles.chatReasoningTimeLabel}>
-        Thought for {reasoningSeconds.toFixed(1)}s
-      </span>
-    )}
     <Image
       src="/grayaiwhite.svg"
       alt="Gray logo"

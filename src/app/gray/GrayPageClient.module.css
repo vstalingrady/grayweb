@@ -3812,7 +3812,7 @@
 .chatThinkingContent {
   overflow: hidden;
   font-size: 0.9rem;
-  color: hsl(230, 25%, 70%);
+  color: rgba(200, 200, 205, 0.85);
   line-height: 1.65;
   padding-left: 2px;
   margin-left: 0;
@@ -3822,7 +3822,7 @@
 .chatThinkingContent :global(li) {
   margin: 0;
   line-height: 1.65;
-  color: hsl(230, 25%, 70%);
+  color: rgba(200, 200, 205, 0.85);
 }
 
 .chatThinkingContent :global(ul),
