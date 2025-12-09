@@ -41,25 +41,49 @@ class OpenRouterService:
     BASE_URL = "https://openrouter.ai/api/v1"
 
     # Model mappings for Pioneer tier models (using real OpenRouter model IDs)
+    # These are the default (non-reasoning) model variants
     MODEL_MAPPINGS = {
         # Anthropic models
         "claude-4": "anthropic/claude-sonnet-4",
         "claude-sonnet-4": "anthropic/claude-sonnet-4",
+        "claude-sonnet-4.5": "anthropic/claude-sonnet-4.5",
+        "claude-opus-4.5": "anthropic/claude-opus-4.5",
         "claude-3.5": "anthropic/claude-3.5-sonnet",
         "claude-3.5-sonnet": "anthropic/claude-3.5-sonnet",
-        # OpenAI models
+        # OpenAI models (non-reasoning variants)
+        "gpt-5.1": "openai/gpt-5.1-chat",  # Default to chat variant
+        "gpt-5.1-chat": "openai/gpt-5.1-chat",
         "gpt-4o": "openai/gpt-4o",
         "gpt-4-turbo": "openai/gpt-4-turbo",
         "gpt-4o-mini": "openai/gpt-4o-mini",
         # DeepSeek models
         "deepseek-v3": "deepseek/deepseek-chat",
+        "deepseek-v3.2": "deepseek/deepseek-v3.2",
         "deepseek-r1": "deepseek/deepseek-r1",
         # xAI Grok models
+        "grok-4": "x-ai/grok-4.1-fast",
+        "grok-4.1": "x-ai/grok-4.1-fast",
+        "grok-4.1-fast": "x-ai/grok-4.1-fast",
         "grok-3": "x-ai/grok-3",
         "grok-2": "x-ai/grok-2-1212",
         # Note: Gemini is handled directly via Gemini API, not OpenRouter
         # Default fallback
-        "default": "anthropic/claude-3.5-sonnet",
+        "default": "anthropic/claude-sonnet-4.5",
+    }
+
+    # Models that have separate reasoning variants
+    # Maps non-reasoning model ID -> reasoning model ID
+    REASONING_MODEL_VARIANTS = {
+        "openai/gpt-5.1-chat": "openai/gpt-5.1",  # gpt-5.1 is the reasoning variant
+        "deepseek/deepseek-v3.2": "deepseek/deepseek-v3.2-speciale",  # speciale has reasoning always on
+        # Grok models handle reasoning via the reasoning param
+        # Anthropic models handle reasoning via extended thinking, not separate model
+    }
+
+    # Models where reasoning is ALWAYS on (toggle should be grayed out in frontend)
+    ALWAYS_REASONING_MODELS = {
+        "deepseek/deepseek-v3.2-speciale",
+        "openai/gpt-5.1",  # The reasoning variant of gpt-5.1
     }
 
     def __init__(self) -> None:
@@ -103,28 +127,37 @@ class OpenRouterService:
     def lite_model(self) -> str:
         return self._lite_model
 
-    def _resolve_model(self, model: Optional[str]) -> str:
-        """Resolve model name to OpenRouter model ID."""
+    def _resolve_model(self, model: Optional[str], reasoning_mode: bool = False) -> str:
+        """Resolve model name to OpenRouter model ID.
+        
+        Args:
+            model: The model name or ID to resolve
+            reasoning_mode: If True, return the reasoning variant for models that have one
+        """
         if not model:
-            return self._default_model
+            base_model = self._default_model
+        else:
+            # Normalize model name
+            model_lower = model.strip().lower()
+            
+            # Handle specific Grok free model access
+            if model_lower in {"grok", "grok-lite"}:
+                base_model = self._lite_model
+            # Handle tier mappings
+            elif model_lower in {"lite", "gray-lite"}:
+                base_model = self._lite_model
+            # Check if it's a shorthand key
+            elif model in self.MODEL_MAPPINGS:
+                base_model = self.MODEL_MAPPINGS[model]
+            else:
+                # Otherwise return as-is (assume it's already a full model ID)
+                base_model = model
         
-        # Normalize model name
-        model_lower = model.strip().lower()
+        # If reasoning mode is enabled, check if this model has a reasoning variant
+        if reasoning_mode and base_model in self.REASONING_MODEL_VARIANTS:
+            return self.REASONING_MODEL_VARIANTS[base_model]
         
-        # Handle specific Grok free model access
-        if model_lower in {"grok", "grok-lite"}:
-            return self._lite_model
-        
-        # Handle tier mappings
-        if model_lower in {"lite", "gray-lite"}:
-            return self._lite_model
-        
-        # Check if it's a shorthand key
-        if model in self.MODEL_MAPPINGS:
-            return self.MODEL_MAPPINGS[model]
-        
-        # Otherwise return as-is (assume it's already a full model ID)
-        return model
+        return base_model
 
     def _history_window_for_model(self, resolved_model: str) -> int:
         """Pick an appropriate history window based on the target model."""
@@ -392,7 +425,9 @@ class OpenRouterService:
         if not self.available:
             raise RuntimeError("OpenRouter client is not configured (missing API key)")
 
-        resolved_model = self._resolve_model(model)
+        # Resolve model with reasoning mode to get the correct variant
+        # e.g., openai/gpt-5.1-chat -> openai/gpt-5.1 when reasoning_mode=True
+        resolved_model = self._resolve_model(model, reasoning_mode=reasoning_mode)
         history_limit = self._history_window_for_model(resolved_model)
         messages = self._build_messages(conversation_history, message, history_limit)
         
