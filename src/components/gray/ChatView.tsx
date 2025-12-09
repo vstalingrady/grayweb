@@ -1194,26 +1194,63 @@ type ChatMessagesListProps = {
   scrollAnchorRef: RefObject<HTMLDivElement | null>;
   reasoningSeconds?: number | null;
   isResponding?: boolean;
+  isActivelyThinking?: boolean;
+  thinkingStartTime?: number | null;
 };
 
 const ThinkingBlock = ({
   content,
   markdownComponents,
   reasoningSeconds,
+  isActivelyThinking,
+  thinkingStartTime,
 }: {
   content: string;
   markdownComponents: Components;
   reasoningSeconds?: number | null;
+  isActivelyThinking?: boolean;
+  thinkingStartTime?: number | null;
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [liveSeconds, setLiveSeconds] = useState(0);
+
+  // Live timer effect - updates every 100ms while actively thinking
+  useEffect(() => {
+    if (!isActivelyThinking || !thinkingStartTime) {
+      return;
+    }
+
+    // Update immediately
+    setLiveSeconds((Date.now() - thinkingStartTime) / 1000);
+
+    const interval = setInterval(() => {
+      setLiveSeconds((Date.now() - thinkingStartTime) / 1000);
+    }, 100);
+
+    return () => clearInterval(interval);
+  }, [isActivelyThinking, thinkingStartTime]);
+
+  // Format time display: "3.2 seconds" or "1:23.4" for longer durations
+  const formatTime = (seconds: number): string => {
+    if (seconds < 60) {
+      return `${seconds.toFixed(1)} second${seconds >= 2 || seconds < 1 ? "s" : ""}`;
+    }
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toFixed(1).padStart(4, "0")}`;
+  };
 
   const timeLabel = useMemo(() => {
-    if (typeof reasoningSeconds !== "number" || reasoningSeconds <= 0) {
-      return null;
+    // If actively thinking, show live timer
+    if (isActivelyThinking && thinkingStartTime) {
+      return `Thinking for ${formatTime(liveSeconds)}`;
     }
-    const seconds = Math.round(reasoningSeconds);
-    return `Thought for ${seconds} second${seconds !== 1 ? "s" : ""}`;
-  }, [reasoningSeconds]);
+    // If we have a final duration, show it
+    if (typeof reasoningSeconds === "number" && reasoningSeconds > 0) {
+      return `Thought for ${formatTime(reasoningSeconds)}`;
+    }
+    return null;
+  }, [isActivelyThinking, thinkingStartTime, liveSeconds, reasoningSeconds]);
 
   return (
     <div className={styles.chatThinkingBlock} data-expanded={isExpanded ? "true" : "false"}>
@@ -1271,6 +1308,8 @@ const ChatMessagesList = memo(
     scrollAnchorRef,
     reasoningSeconds,
     isResponding,
+    isActivelyThinking,
+    thinkingStartTime,
   }: ChatMessagesListProps) => {
     const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
     const [editContent, setEditContent] = useState("");
@@ -1450,6 +1489,8 @@ const ChatMessagesList = memo(
                         content={normalizedThinkingText ?? ""}
                         markdownComponents={markdownComponents}
                         reasoningSeconds={message.reasoningSeconds}
+                        isActivelyThinking={isStreamingMessage && isActivelyThinking}
+                        thinkingStartTime={isStreamingMessage ? thinkingStartTime : null}
                       />
                     )}
                     {hasTextContent && (
@@ -2164,7 +2205,9 @@ export function GrayChatView({
   const [conversationUsage, setConversationUsage] = useState<ConversationUsage | null>(null);
   const isSubmittingRef = useRef(false);
   const streamAbortControllerRef = useRef<AbortController | null>(null);
-  const reasoningStartTimeRef = useRef<number | null>(null);
+  // Track when thinking content (inside <thinking> tags) actually starts
+  const [isActivelyThinking, setIsActivelyThinking] = useState(false);
+  const [thinkingStartTime, setThinkingStartTime] = useState<number | null>(null);
   const [reasoningSeconds, setReasoningSeconds] = useState<number | null>(null);
 
   const composerDockRef = useRef<HTMLDivElement | null>(null);
@@ -2557,11 +2600,10 @@ export function GrayChatView({
       existingAssistantId?: string | null
     ) => {
       updateSession(targetSessionId, { isResponding: true, pendingAutoStream: false });
-      // Track reasoning start time for "Thought for X seconds" display
-      if (reasoningMode) {
-        reasoningStartTimeRef.current = Date.now();
-        setReasoningSeconds(null);
-      }
+      // Reset thinking tracking state
+      setIsActivelyThinking(false);
+      setThinkingStartTime(null);
+      setReasoningSeconds(null);
       const resolvedUser = await resolveChatUser();
       if (!resolvedUser) {
         const fallback = buildAssistantReply(prompt);
@@ -2656,15 +2698,30 @@ export function GrayChatView({
           { signal: abortController.signal }
         )) {
           if (event.type === "token") {
-            // Calculate reasoning duration on first token
-            if (!didReceiveToken && reasoningStartTimeRef.current) {
-              const elapsed = (Date.now() - reasoningStartTimeRef.current) / 1000;
-              setReasoningSeconds(elapsed);
-              reasoningStartTimeRef.current = null;
-            }
             didReceiveToken = true;
             const delta = event.delta;
+            const prevAccumulated = accumulated;
             accumulated = accumulated + delta;
+
+            // Detect when thinking content starts (first <thinking> tag appears)
+            const hasThinkingTag = accumulated.toLowerCase().includes("<thinking>");
+            const hadThinkingTag = prevAccumulated.toLowerCase().includes("<thinking>");
+            if (hasThinkingTag && !hadThinkingTag) {
+              // Thinking just started
+              setIsActivelyThinking(true);
+              setThinkingStartTime(Date.now());
+            }
+
+            // Detect when thinking ends (</thinking> tag appears)
+            const hasClosingTag = accumulated.toLowerCase().includes("</thinking>");
+            const hadClosingTag = prevAccumulated.toLowerCase().includes("</thinking>");
+            if (hasClosingTag && !hadClosingTag && thinkingStartTime) {
+              // Thinking just ended - calculate final duration
+              const elapsed = (Date.now() - thinkingStartTime) / 1000;
+              setReasoningSeconds(elapsed);
+              setIsActivelyThinking(false);
+            }
+
             if (!assistantMessageId) {
               const assistantMessage = appendMessage(targetSessionId, "assistant", accumulated);
               assistantMessageId = (assistantMessage as { id: string } | null)?.id ?? null;
@@ -3564,6 +3621,8 @@ export function GrayChatView({
             scrollAnchorRef={scrollAnchorRef}
             reasoningSeconds={reasoningSeconds}
             isResponding={session?.isResponding}
+            isActivelyThinking={isActivelyThinking}
+            thinkingStartTime={thinkingStartTime}
           />
         )}
       </div>
