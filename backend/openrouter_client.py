@@ -509,9 +509,12 @@ class OpenRouterService:
                                     yield {"tool_calls": tool_calls}
                                 
                                 # Handle reasoning content - both plaintext and encrypted
+                                # Track if we yielded reasoning to avoid double-yielding content
                                 reasoning = delta.get("reasoning") or delta.get("reasoning_content")
+                                yielded_reasoning = False
                                 if reasoning:
                                     yield {"type": "reasoning", "content": reasoning}
+                                    yielded_reasoning = True
                                 
                                 # Handle reasoning_details (may contain encrypted xAI reasoning)
                                 reasoning_pieces = []
@@ -528,9 +531,12 @@ class OpenRouterService:
                                             if txt:
                                                 reasoning_pieces.append(txt)
                                 
-                                if content:
+                                # Only yield content if we didn't already yield reasoning from this delta
+                                # This prevents DeepSeek v3.2 from doubling text when it sends both
+                                # reasoning_content AND content in the same chunk
+                                if content and not yielded_reasoning:
                                     yield content
-                                elif reasoning_pieces:
+                                elif reasoning_pieces and not yielded_reasoning:
                                     # Plaintext reasoning_details support
                                     yield {"type": "reasoning", "content": "".join(reasoning_pieces)}
 

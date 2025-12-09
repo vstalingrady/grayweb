@@ -1946,25 +1946,31 @@ const parseStructuredAssistantMessage = (content?: string | null): AssistantSect
 
   for (const candidate of thinkingTagCandidates) {
     const openIndex = findIndex(candidate.open);
-    if (openIndex !== -1 && openIndex < 50) {
-      // Tags found near the start of the message
+    if (openIndex !== -1) {
+      // Tags found in the message (allow any position to support streaming with prefix content)
       const thinkingContentStart = openIndex + candidate.open.length;
       const closeIndex = findIndex(candidate.close, thinkingContentStart);
+
       if (closeIndex !== -1) {
         base.thinking = normalized.slice(thinkingContentStart, closeIndex).trim() || null;
         const afterTagIndex = closeIndex + candidate.close.length;
         base.ai = normalized.slice(afterTagIndex).trim();
-        base.isStructured = true;
-        // Cache and return early
-        parseCache.set(cacheKey, base);
-        if (parseCache.size > PARSE_CACHE_SIZE) {
-          const firstKey = parseCache.keys().next().value;
-          if (firstKey !== undefined) {
-            parseCache.delete(firstKey);
-          }
-        }
-        return base;
+      } else {
+        // Tag opened but not closed (streaming)
+        base.thinking = normalized.slice(thinkingContentStart).trim() || null;
+        base.ai = "";
       }
+
+      base.isStructured = true;
+      // Cache and return early
+      parseCache.set(cacheKey, base);
+      if (parseCache.size > PARSE_CACHE_SIZE) {
+        const firstKey = parseCache.keys().next().value;
+        if (firstKey !== undefined) {
+          parseCache.delete(firstKey);
+        }
+      }
+      return base;
     }
   }
 

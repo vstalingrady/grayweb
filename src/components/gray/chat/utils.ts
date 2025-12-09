@@ -25,10 +25,18 @@ export const normalizeConversationIdValue = (value?: string | null): string | un
         return undefined;
     }
     const trimmed = value.trim();
-    if (!trimmed || !UUID_PATTERN.test(trimmed)) {
+    if (!trimmed) {
         return undefined;
     }
-    return trimmed;
+    // Allow valid UUIDs
+    if (UUID_PATTERN.test(trimmed)) {
+        return trimmed;
+    }
+    // Allow general conversation IDs
+    if (trimmed.startsWith(GENERAL_CONVERSATION_PREFIX)) {
+        return trimmed;
+    }
+    return undefined;
 };
 
 // Session ID utilities

@@ -2835,17 +2835,18 @@
 .mainContent[data-view="general"] {
   height: 100%;
   min-height: 0;
-  align-items: flex-start;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
   justify-content: flex-start;
-  gap: clamp(18px, 3.5vh, 36px);
+  gap: 0;
   padding-top: clamp(24px, 5vh, 56px);
-  padding-bottom: calc(var(--chat-composer-height, clamp(112px, 16vh, 180px)) + clamp(20px, 4vh, 36px));
-  overflow-y: auto;
-  scrollbar-gutter: stable both-edges;
+  padding-bottom: 0;
+  overflow: hidden;
 }
 
 .page[data-general-attachments="true"] .mainContent[data-view="general"] {
-  padding-bottom: calc(var(--chat-composer-height, clamp(112px, 16vh, 180px)) + clamp(200px, 28vh, 340px));
+  padding-bottom: 0px;
 }
 
 .mainContent[data-compact="true"] {
@@ -2997,6 +2998,7 @@
   min-height: 0;
   overflow-y: auto;
   scrollbar-width: none;
+  overflow-anchor: auto;
   -ms-overflow-style: none;
 }
 
@@ -3014,7 +3016,7 @@
 .chatMessages {
   flex: 1 0 auto;
   display: flex;
-  flex-direction: column;
+  flex-direction: column-reverse;
   /* Messages should start from top and grow downward */
   justify-content: flex-start;
   gap: clamp(4px, 1vh, 10px);
@@ -3087,7 +3089,7 @@
 }
 
 .chatMessage[data-streaming="true"] {
-  animation: tokenFadeIn 0.15s ease-out forwards;
+  animation: tokenFadeIn 0.65s ease-out forwards;
 }
 
 /* Apply subtle text shimmer to actively streaming content */
@@ -3126,7 +3128,7 @@
 }
 
 .chatMessage[data-streaming="true"] {
-  animation: tokenFadeIn 0.15s ease-out forwards;
+  animation: tokenFadeIn 0.65s ease-out forwards;
 }
 
 /* Apply subtle text shimmer to actively streaming content */

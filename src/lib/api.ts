@@ -258,6 +258,7 @@ export interface User {
   created_at: string;
   updated_at: string;
   usage_status?: UsageStatus | null;
+  preferred_model?: string | null;
 }
 
 export interface ChatSession {
@@ -703,6 +704,7 @@ export interface UserUpdate {
   personalization_about?: string | null;
   personalization_custom_instructions?: string | null;
   personalization_show_calendar?: boolean;
+  preferred_model?: string | null;
 }
 
 class ApiService {

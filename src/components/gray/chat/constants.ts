@@ -3,7 +3,7 @@ export const SESSION_STORAGE_KEY_BASE = "gray-chat-sessions-v1";
 export const GENERAL_SESSION_ID = "general-session";
 export const GENERAL_CHAT_SESSION_ID = GENERAL_SESSION_ID;
 export const GENERAL_SESSION_TITLE = "General Chat";
-export const SHARED_CHAT_PLACEHOLDER_TITLE = "Shared Chat";
+export const SHARED_CHAT_PLACEHOLDER_TITLE = "New Chat";
 export const GENERAL_CONVERSATION_PREFIX = "general:";
 
 // Timing constants

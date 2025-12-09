@@ -839,6 +839,7 @@ _ensure_sqlite_columns("users", [
     ("last_daily_gemini_pro_reset", "TEXT", None),
     ("workspace_background_id", "TEXT", None),
     ("personalization_show_calendar", "BOOLEAN", "1"),
+    ("preferred_model", "TEXT", None),
 ], backfill_nulls={
     "has_seen_general_chat": "0",
     "maps_enabled": "0",
@@ -1258,6 +1259,7 @@ class UserBase(BaseModel):
     monthly_cost_usage: Optional[float] = 0.0
     weekly_cost_usage: Optional[float] = 0.0
     six_hour_cost_usage: Optional[float] = 0.0
+    preferred_model: Optional[str] = None
 
 class UserCreate(UserBase):
     pass
@@ -1276,6 +1278,7 @@ class UserUpdate(BaseModel):
     personalization_custom_instructions: Optional[str] = None
     personalization_system_prompt_override: Optional[str] = None
     personalization_show_calendar: Optional[bool] = None
+    preferred_model: Optional[str] = None
 
 class UsageStatus(BaseModel):
     tier: str

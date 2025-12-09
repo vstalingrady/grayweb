@@ -288,30 +288,13 @@ const getSessionSeedFingerprint = (session: ChatSession): { fingerprint: string;
 
 const dedupeSessionsByConversation = (sessions: ChatSession[]): ChatSession[] => {
   const map = new Map<string, ChatSession>();
-  const fingerprintEntries: Array<{ fingerprint: string; mapKey: string; createdAt: number }> = [];
   sessions.forEach((session) => {
     const normalizedConversationId = normalizeConversationIdValue(session.conversationId);
-    let key =
+    const key =
       session.scope === "general"
         ? GENERAL_SESSION_ID
         : normalizedConversationId ?? `session:${session.id}`;
-    const fingerprint = getSessionSeedFingerprint(session);
-    if (fingerprint) {
-      const duplicateMatch = fingerprintEntries.find(
-        (entry) =>
-          entry.fingerprint === fingerprint.fingerprint &&
-          Math.abs(entry.createdAt - fingerprint.createdAt) <= DUPLICATE_THREAD_WINDOW_MS
-      );
-      if (duplicateMatch) {
-        key = duplicateMatch.mapKey;
-      } else {
-        fingerprintEntries.push({
-          fingerprint: fingerprint.fingerprint,
-          mapKey: key,
-          createdAt: fingerprint.createdAt,
-        });
-      }
-    }
+
     const existing = map.get(key);
     if (!existing) {
       map.set(key, session);
@@ -490,6 +473,26 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       controller.abort();
     };
   }, []);
+
+  // Sync selected model from user profile on load
+  useEffect(() => {
+    if (user?.preferred_model) {
+      setSelectedModelId(user.preferred_model);
+    }
+  }, [user]);
+
+  const handleSetSelectedModelId = useCallback(
+    (id: string | null) => {
+      setSelectedModelId(id);
+      if (user && id) {
+        // Persist preference to backend
+        void apiService.updateUser(user.id, { preferred_model: id }).catch((err) => {
+          console.error("Failed to persist model preference:", err);
+        });
+      }
+    },
+    [user]
+  );
 
   const personalizedSystemPrompt = useMemo(
     () => buildPersonalizedSystemPrompt(user, defaultSystemPrompt),
@@ -1873,49 +1876,8 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       const trimmedInitial = (initialMessage ?? "").trim();
       const normalizedInitial = trimmedInitial.toLowerCase();
       const shouldAutoStream = options?.autoStream !== false;
-      let duplicateCandidate: ChatSession | null = null;
-      if (trimmedInitial.length > 0) {
-        const pendingSeed = pendingThreadSeedsRef.current.get(normalizedInitial);
-        if (pendingSeed && now - pendingSeed.createdAt <= DUPLICATE_THREAD_WINDOW_MS) {
-          duplicateCandidate =
-            sessionsRef.current.find((session) => session.id === pendingSeed.sessionId) ?? null;
-        }
-        if (!duplicateCandidate) {
-          duplicateCandidate =
-            sessionsRef.current.find((session) => {
-              if (session.scope !== "thread") {
-                return false;
-              }
-              const [firstMessage] = session.messages;
-              if (!firstMessage || firstMessage.role !== "user") {
-                return false;
-              }
-              if (firstMessage.content.trim().toLowerCase() !== normalizedInitial) {
-                return false;
-              }
-              const ageMs = now - session.createdAt;
-              if (!Number.isFinite(ageMs) || ageMs > DUPLICATE_THREAD_WINDOW_MS) {
-                return false;
-              }
-              return session.isResponding || session.pendingAutoStream;
-            }) ?? null;
-        }
-      }
+      // Duplicate detection removed to ensure fresh sessions
 
-      if (duplicateCandidate) {
-        // console.log("[ChatProvider] createThreadSession: Found duplicate candidate", duplicateCandidate.id);
-        if (normalizedInitial) {
-          pendingThreadSeedsRef.current.set(normalizedInitial, {
-            sessionId: duplicateCandidate.id,
-            createdAt: now,
-          });
-          schedulePendingSeedCleanup(normalizedInitial, duplicateCandidate.id);
-        }
-        if (!shouldAutoStream && duplicateCandidate.pendingAutoStream) {
-          updateSession(duplicateCandidate.id, { pendingAutoStream: false });
-        }
-        return duplicateCandidate;
-      }
 
       const sessionId =
         typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -2215,7 +2177,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
               ...mapPayload,
               reasoning_mode: reasoningMode,
               reminders_enabled: remindersEnabled,
-              model: modelTier,
+              model: selectedModelId ?? modelTier,
             })) {
               if (event.type === "token") {
                 const delta = event.delta;
@@ -2835,7 +2797,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       modelTier,
       setModelTier,
       selectedModelId,
-      setSelectedModelId,
+      setSelectedModelId: handleSetSelectedModelId,
       questionnaireSession,
       startQuestionnaire,
       cancelQuestionnaire,

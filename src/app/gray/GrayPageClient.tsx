@@ -324,10 +324,7 @@ function GrayPageClientInner({
   const [hasLoadedSidebarPref, setHasLoadedSidebarPref] = useState(false);
   const [isMobileViewport, setIsMobileViewport] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
-  const shouldHideDesktopWorkspaceChrome = !isMobileViewport
-    && ((pathname?.startsWith("/c/") ?? false)
-      || pathname === "/g"
-      || (pathname?.startsWith("/g/") ?? false));
+
 
   useEffect(() => {
     setIsMounted(true);
@@ -601,6 +598,12 @@ function GrayPageClientInner({
     baseViewMode === "chat"
       ? "chat"
       : effectiveManualViewMode ?? (activeNav === "history" ? "history" : baseViewMode);
+
+  const shouldHideDesktopWorkspaceChrome = !isMobileViewport
+    && (viewMode === "chat"
+      || (pathname?.startsWith("/c/") ?? false)
+      || pathname === "/g"
+      || (pathname?.startsWith("/g/") ?? false));
   const renderPrimaryView = () => {
     if (activeNav === "reference") {
       return <GrayReferenceView />;
