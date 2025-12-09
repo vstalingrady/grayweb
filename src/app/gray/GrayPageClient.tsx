@@ -2282,12 +2282,19 @@ function GrayPageClientInner({
       return;
     }
 
+    // Find the current session and use its conversationId (backend UUID) for the URL
+    // This ensures the URL uses the ID that the backend can find on reload
+    const currentSession = sessions.find(
+      (session) => session.id === currentChatId || session.conversationId === currentChatId
+    );
+    const urlId = currentSession?.conversationId ?? currentChatId;
+
     const pathname = window.location.pathname;
-    const targetPath = `/c/${currentChatId}`;
+    const targetPath = `/c/${urlId}`;
     if (pathname !== targetPath) {
       window.history.replaceState(null, "", targetPath);
     }
-  }, [currentChatId, generalSessionId, manualViewMode, supportsInlineChat]);
+  }, [currentChatId, generalSessionId, manualViewMode, sessions, supportsInlineChat]);
 
   const handleOpenHistoryEntry = (entry: SidebarHistoryEntry) => {
     if (!entry.href || entry.href === "#") {

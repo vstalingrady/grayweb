@@ -5060,7 +5060,7 @@ async def _execute_tools_with_gemini_flash(
     if not GEMINI_SERVICE.available:
         return [], [], False
     
-    GEMINI_FLASH_MODEL = "models/gemini-flash-latest"
+    GEMINI_FLASH_MODEL = "models/gemini-2.0-flash"
     tool_results: List[Dict[str, Any]] = []
     tool_cards: List[Dict[str, Any]] = []
     onboarding_completed = False
