@@ -92,8 +92,8 @@ def normalize_conversation_history(
 
 async def load_thread_history(conversation_id: str, user_id: int) -> List[Dict[str, Any]]:
     """
-    Load a non-general conversation's messages from local storage, enforcing
-    ownership and using the shared conversation caches.
+    Load a non-general conversation's messages from local SQLite storage,
+    enforcing ownership and using the shared conversation caches.
     """
     if not _is_valid_uuid(conversation_id):
         return []
@@ -104,52 +104,7 @@ async def load_thread_history(conversation_id: str, user_id: int) -> List[Dict[s
         if cached_history is not None:
             return [dict(message) for message in cached_history]
 
-    # 1. Try Supabase first (primary storage for cross-device persistence)
-    if _conversation_store_available():
-        try:
-            # Verify ownership in Supabase
-            thread_result = (
-                conversation_store.supabase.table("user_chat_threads")
-                .select("id")
-                .eq("id", conversation_id)
-                .eq("user_identifier", user_id)
-                .limit(1)
-                .execute()
-            )
-            thread_rows = getattr(thread_result, "data", None) or []
-            
-            if thread_rows:
-                CONVERSATION_OWNER_CACHE.set(conversation_id, user_id)
-                
-                # Load messages from Supabase
-                messages_result = (
-                    conversation_store.supabase.table("user_chat_messages")
-                    .select("role, text, grounding_metadata, attachments, created_at")
-                    .eq("thread_id", conversation_id)
-                    .order("created_at", desc=False)
-                    .execute()
-                )
-                message_rows = getattr(messages_result, "data", None) or []
-                
-                messages: List[Dict[str, Any]] = []
-                for row in message_rows:
-                    messages.append({
-                        "role": row.get("role"),
-                        "text": row.get("text"),
-                        "grounding_metadata": row.get("grounding_metadata"),
-                        "attachments": row.get("attachments"),
-                    })
-                
-                if messages:
-                    cache_conversation_history(conversation_id, user_id, messages)
-                    return messages
-        except Exception as error:
-            _handle_conversation_store_error(
-                "Warning: Failed to load thread history from Supabase", error
-            )
-            # Fall through to SQLite
-
-    # 2. Fallback to local SQLite
+    # Verify ownership in local SQLite
     try:
         query = user_chat_threads.select().where(
             (user_chat_threads.c.id == conversation_id)
@@ -163,6 +118,7 @@ async def load_thread_history(conversation_id: str, user_id: int) -> List[Dict[s
         logger.warning("Failed to verify thread ownership: %s", error)
         return []
 
+    # Load messages from local SQLite
     try:
         query = (
             user_chat_messages.select()
