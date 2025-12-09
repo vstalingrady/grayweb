@@ -9895,7 +9895,40 @@ async def list_user_conversations(
 ):
     require_same_user(user_id, current_user)
     
-    # Query local SQLite database for chat threads
+    # 1. Try Supabase first (primary storage for cross-device persistence)
+    if _conversation_store_available():
+        try:
+            result = (
+                supabase.table("user_chat_threads")
+                .select("id, title, created_at, updated_at, last_message_at")
+                .eq("user_identifier", user_id)
+                .neq("id", f"general:{user_id}")  # Exclude general chat
+                .order("last_message_at", desc=True)
+                .limit(limit)
+                .execute()
+            )
+            rows = getattr(result, "data", None) or []
+            if rows:
+                normalized: List[Dict[str, Any]] = []
+                for row in rows:
+                    # Skip any general chat IDs that might slip through
+                    thread_id = row.get("id", "")
+                    if thread_id.startswith("general:"):
+                        continue
+                    normalized.append({
+                        "id": thread_id,
+                        "title": row.get("title"),
+                        "created_at": row.get("created_at"),
+                        "updated_at": row.get("updated_at"),
+                        "last_message_at": row.get("last_message_at"),
+                    })
+                if normalized:
+                    return normalized
+        except Exception as error:
+            _handle_conversation_store_error("Error listing conversations from Supabase", error)
+            # Fall through to SQLite
+    
+    # 2. Fallback to local SQLite database
     try:
         try:
             from backend.database import user_chat_threads
@@ -9938,6 +9971,7 @@ async def list_user_conversations(
     except Exception as error:
         api_logger.error(f"Failed to list conversations from local database: {error}", exc_info=True)
         return []
+
 
 @app.post("/users/{user_id}/calendar-events", response_model=CalendarEvent, status_code=status.HTTP_201_CREATED)
 async def create_calendar_event(
