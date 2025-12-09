@@ -3019,8 +3019,8 @@
   gap: clamp(4px, 1vh, 10px);
   min-height: 0;
   padding: clamp(4px, 1vh, 10px) 24px 24px 24px;
-  overflow-y: auto;
-  overflow-x: hidden;
+  /* Removed overflow-y: auto - parent chatViewport handles scrolling */
+  overflow: visible;
   scroll-behavior: smooth;
   width: 100%;
   max-width: min(calc(1.1 * var(--chat-bubble-max-width, var(--chat-column-max-width, 840px))), 100%);
@@ -3122,6 +3122,68 @@
 
 .chatMessage[data-role="user"] {
   align-items: flex-end;
+}
+
+/* Token streaming fade-in animation */
+@keyframes tokenFadeIn {
+  from {
+    opacity: 0.3;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.chatMessage[data-streaming="true"] {
+  animation: tokenFadeIn 0.15s ease-out forwards;
+}
+
+/* Apply subtle text shimmer to actively streaming content */
+.chatMessage[data-streaming="true"] p:last-child::after {
+  content: "";
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 2px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.8), rgba(255,255,255,0.3));
+  animation: cursorBlink 0.8s ease-in-out infinite;
+  vertical-align: text-bottom;
+}
+
+@keyframes cursorBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+/* Token streaming fade-in animation */
+@keyframes tokenFadeIn {
+  from {
+    opacity: 0.3;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.chatMessage[data-streaming="true"] {
+  animation: tokenFadeIn 0.15s ease-out forwards;
+}
+
+/* Apply subtle text shimmer to actively streaming content */
+.chatMessage[data-streaming="true"] p:last-child::after {
+  content: "";
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 2px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.8), rgba(255,255,255,0.3));
+  animation: cursorBlink 0.8s ease-in-out infinite;
+  vertical-align: text-bottom;
+}
+
+@keyframes cursorBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
 }
 
 .chatBubble {
