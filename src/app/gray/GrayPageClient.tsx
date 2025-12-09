@@ -2292,7 +2292,7 @@ function GrayPageClientInner({
     const pathname = window.location.pathname;
     const targetPath = `/c/${urlId}`;
     if (pathname !== targetPath) {
-      window.history.replaceState(null, "", targetPath);
+      router.replace(targetPath);
     }
   }, [currentChatId, generalSessionId, manualViewMode, sessions, supportsInlineChat]);
 
