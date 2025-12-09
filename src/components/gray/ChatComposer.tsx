@@ -13,7 +13,7 @@ type GrayChatComposerProps = GrayChatBarProps & {
 };
 
 const GrayChatComposerBase = ({
-  showUnderline = true,
+  showUnderline = false,
   attachmentTray,
   ...rest
 }: GrayChatComposerProps) => {
