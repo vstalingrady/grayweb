@@ -2320,10 +2320,10 @@ export function GrayChatView({
     scrollAnchorRef.current.scrollIntoView({ behavior: instant ? "instant" : "smooth" });
   }, []);
 
-  // Auto-scroll on new messages - always scroll to show the new message
+  // Auto-scroll on new messages if near bottom
   useEffect(() => {
-    scrollToBottom();
-  }, [messages.length, scrollToBottom]);
+    scrollToBottomIfNear();
+  }, [messages.length, scrollToBottomIfNear]);
 
   // Auto-scroll during active streaming if near bottom (use instant to prevent jitter)
   useEffect(() => {

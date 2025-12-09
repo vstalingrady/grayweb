@@ -3015,7 +3015,8 @@
   flex: 1 0 auto;
   display: flex;
   flex-direction: column;
-  justify-content: flex-end;
+  /* Messages should start from top and grow downward */
+  justify-content: flex-start;
   gap: clamp(4px, 1vh, 10px);
   min-height: min-content;
   padding: clamp(4px, 1vh, 10px) 24px 24px 24px;
