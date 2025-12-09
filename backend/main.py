@@ -3731,6 +3731,62 @@ async def _generate_chat_title_async(
         )
 
 
+async def _generate_chat_title_inline(
+    message: str,
+    response_text: str,
+) -> Optional[str]:
+    """
+    Generate a concise title for the conversation using a lightweight model.
+    Returns the generated title or None if generation fails.
+    This is called inline (blocking) so the SSE end event can include the title.
+    """
+    if not GEMINI_SERVICE or not GEMINI_SERVICE.available:
+        return None
+
+    # Load prompt from JSON or fallback
+    prompt_template = load_prompt_from_json(
+        GLOBAL_SYSTEM_PROMPTS_PATH,
+        "title_generation",
+        "Analyze the following conversation and generate a concise, descriptive title (under 25 characters, 3-5 words max). Output ONLY the title text, no tags or quotes."
+    )
+
+    # Construct a minimal transcript for the title model
+    transcript = f"User: {message}\nAssistant: {response_text}"
+    
+    try:
+        # Use the configured light model (e.g. Gemini Flash Lite)
+        response = await GEMINI_SERVICE.generate(
+            message=f"{prompt_template}\n\n{transcript}",
+            conversation_history=None,
+            workspace_context=None,
+            system_prompt=load_prompt_from_json(
+                GLOBAL_SYSTEM_PROMPTS_PATH,
+                "title_generation",
+                "Generate a concise title.",
+            ),
+            time_context=None,
+            model=GEMINI_LIGHT_MODEL,
+        )
+        
+        # Extract and clean title
+        if response and response.candidates:
+            raw_title = _candidate_text(response.candidates[0]).strip()
+            # Remove any accidental quotes or tags
+            clean_title = re.sub(r'^["\']|["\']$', '', raw_title)
+            clean_title = re.sub(r'<[^>]+>', '', clean_title).strip()
+            
+            if clean_title:
+                return clean_title
+
+    except Exception as e:
+        api_logger.warning(
+            f"Inline title generation failed: {e}",
+            extra={"event_type": "title_generation_error"}
+        )
+
+    return None
+
+
 def _merge_extra_contents(*lists: Optional[List[types.Content]]) -> Optional[List[types.Content]]:
   merged: List[types.Content] = []
   for candidate in lists:
@@ -7570,20 +7626,35 @@ async def chat_endpoint(
             assistant_message_payload["grounding_metadata"] = grounding_metadata
         assistant_message_id = await save_conversation_message(conversation_id, assistant_message_payload, user_id=chat_request.user_id)
 
-        # Trigger async title generation if requested
+        # Generate title inline so it's returned with the response.
+        # This adds ~100-300ms latency but only on first message of new conversations.
+        final_title = session_title
         if chat_request.should_generate_title:
-            background_tasks.add_task(
-                _generate_chat_title_async,
-                conversation_id,
-                chat_request.message,
-                ai_response
-            )
+            try:
+                generated_title = await _generate_chat_title_inline(
+                    chat_request.message,
+                    ai_response
+                )
+                if generated_title:
+                    final_title = generated_title
+                    # Store in DB in background (non-blocking)
+                    background_tasks.add_task(
+                        _update_conversation_title,
+                        conversation_id,
+                        generated_title,
+                    )
+            except Exception as title_error:
+                api_logger.warning(
+                    f"Inline title generation failed: {title_error}",
+                    extra={"event_type": "title_generation_error"}
+                )
+                # Fall back to session_title, already set above
 
         return ChatResponse(
             response=ai_response,
             conversation_id=conversation_id,
             grounding_metadata=grounding_metadata,
-            title=session_title,
+            title=final_title,
             message_id=assistant_message_id,
         )
 
@@ -8029,18 +8100,30 @@ async def chat_stream(
                     grounding_metadata_payload,
                 )
 
-                # Generate title in background (fire-and-forget)
-                # Frontend uses fallback title immediately, updates if needed later
-                if chat_request.should_generate_title:
-                    background_tasks.add_task(
-                        _generate_chat_title_async,
-                        conversation_id,
-                        effective_message,
-                        final_response,
-                    )
-
-                # Use immediate fallback title - async generation will update DB later
+                # Generate title inline so it's returned with the SSE end event.
+                # This adds ~100-300ms latency but only on first message of new conversations.
+                # The generated title is also stored in the DB in the background.
                 final_title = session_title
+                if chat_request.should_generate_title:
+                    try:
+                        generated_title = await _generate_chat_title_inline(
+                            effective_message,
+                            final_response,
+                        )
+                        if generated_title:
+                            final_title = generated_title
+                            # Store in DB in background (non-blocking)
+                            background_tasks.add_task(
+                                _update_conversation_title,
+                                conversation_id,
+                                generated_title,
+                            )
+                    except Exception as title_error:
+                        api_logger.warning(
+                            f"Inline title generation failed: {title_error}",
+                            extra={"event_type": "title_generation_error"}
+                        )
+                        # Fall back to session_title, already set above
 
                 end_payload: Dict[str, Any] = {
                     "conversation_id": conversation_id,
