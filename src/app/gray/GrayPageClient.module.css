@@ -8813,6 +8813,8 @@ h1.greeting {
   align-items: stretch;
   gap: 12px;
   padding: 0;
+  /* Consistent bottom padding to ensure chat bar hovers above screen edge */
+  padding-bottom: 12px;
   border-top-left-radius: 0;
   border-top-right-radius: 0;
   background: transparent;
@@ -9767,7 +9769,8 @@ h1.greeting {
   /* Add bottom padding on mobile to lift chat bar above screen edge */
   .generalChatComposer {
     padding: 0 !important;
-    padding-bottom: max(6px, env(safe-area-inset-bottom)) !important;
+    /* Ensure consistent bottom padding: minimum 12px plus safe area */
+    padding-bottom: max(12px, calc(12px + env(safe-area-inset-bottom, 0px))) !important;
     width: 100% !important;
     max-width: none !important;
   }
