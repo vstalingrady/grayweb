@@ -1759,7 +1759,6 @@ export function GrayDashboardView({
         {isChatBarVisible ? (
           <div className={styles.chatComposerDock} ref={chatDockRef}>
             {chatBar}
-            <p className={styles.chatDisclaimer}>Gray can make mistakes. Check important info.</p>
           </div>
         ) : null}
       </div>
