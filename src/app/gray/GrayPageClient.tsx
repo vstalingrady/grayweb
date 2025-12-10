@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 // Icons used directly in this component's JSX
-import { Menu, Zap } from "lucide-react";
+import { Menu, Zap, MessageCircle, LayoutDashboard } from "lucide-react";
 import { useUser } from "@/contexts/UserContext";
 import {
   apiService,
@@ -143,11 +143,7 @@ const GrayGeneralView = dynamic(
   { loading: () => null }
 );
 
-const DashboardOverlay = dynamic(
-  () => import("@/components/gray/DashboardOverlay").then((mod) => mod.DashboardOverlay),
-  { loading: () => null }
-);
-
+// DashboardOverlay removed
 const GrayReferenceView = dynamic(
   () => import("@/components/gray/ReferenceView").then((mod) => mod.ReferenceView),
   { loading: () => null }
@@ -383,7 +379,7 @@ function GrayPageClientInner({
   );
 
   const [isHistoryOverlayOpen, setIsHistoryOverlayOpen] = useState(false);
-  const [isDashboardOpen, setIsDashboardOpen] = useState(false);
+
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -608,7 +604,49 @@ function GrayPageClientInner({
     if (activeNav === "reference") {
       return <GrayReferenceView />;
     }
+    if (isDashboardView) {
+      return (
+        <GrayDashboardView
+          pulseEntries={pulseEntries}
+          currentPulse={activePulse}
+          isCurrentPulseEditable={isActivePulseEditable}
+          onSelectPulse={setActivePulseId}
+          proactivityFallback={proactivity}
+          onProactivitySelect={selectProactivityPreset}
+          onProactivityRemove={removeProactivity}
+          onTestProactivity={handleTestProactivity}
+          onTogglePlan={togglePlan}
+          onToggleHabit={toggleHabit}
+          onSavePlan={savePlan}
+          onDeletePlan={deletePlan}
+          activeTab={dashboardTab}
+          onSelectTab={setDashboardTab}
+          currentDate={now}
+          calendars={derivedCalendars}
+          onCalendarsChange={handleCalendarsChange}
+          calendarEvents={derivedEvents}
+          onCalendarEventsChange={handleEventsChange}
+          calendarSelectedDate={calendarSelectedDate}
+          onCalendarSelectedDateChange={setCalendarSelectedDate}
+          onEditHabit={editHabit}
+          onDeleteHabit={deleteHabit}
+          onIntegrationAction={handleCalendarIntegration}
+          onRefreshData={refreshPlansAndHabits}
+          chatBar={null}
+          isCompactLayout={isCompactLayout}
+          userId={userId}
+          reminderPlans={reminderPlans}
+          proactivityDeliveryKeys={deliveredProactivityKeys}
+          onReminderMove={handleReminderMove}
+          streakCount={streakCount}
+          hideCalendar={isScout || !(user?.personalization_show_calendar ?? true)}
+          onUpgradeClick={handleUpgradePlan}
+          showUpgradeButton={shouldShowUpgradeButton}
+        />
+      );
+    }
     if (isChatView) {
+
       return (
         <GrayChatView
           sessionId={currentChatId ?? null}
@@ -647,6 +685,7 @@ function GrayPageClientInner({
           showGreeting={false}
           userId={user?.id ?? null}
           onReminderMove={handleReminderMove}
+          hidePlans={effectiveIsMobileViewport}
         />
       </div>
     );
@@ -1033,7 +1072,8 @@ function GrayPageClientInner({
     }
 
     if (navId === "dashboard") {
-      setIsDashboardOpen(true);
+      setManualViewMode(null);
+      router.push("/d");
       return;
     }
 
@@ -2299,6 +2339,8 @@ function GrayPageClientInner({
     }
   }, [currentChatId, generalSessionId, manualViewMode, sessions, supportsInlineChat]);
 
+  const [isStreakValueVisible, setIsStreakValueVisible] = useState(false);
+
   const handleOpenHistoryEntry = (entry: SidebarHistoryEntry) => {
     if (!entry.href || entry.href === "#") {
       return;
@@ -2406,10 +2448,17 @@ function GrayPageClientInner({
 
                 <div className={styles.mobileHeaderRight}>
                   {streakCount > 0 && (
-                    <div className={styles.streakBadge} aria-label={`${streakCount} day streak`}>
-                      <Zap size={12} />
-                      <span>{streakCount}</span>
-                    </div>
+                    <button
+                      className={styles.mobileMenuButton}
+                      onClick={() => setIsStreakValueVisible((prev) => !prev)}
+                      aria-label="Toggle streak count"
+                    >
+                      {isStreakValueVisible ? (
+                        <span style={{ fontSize: "0.9rem", fontWeight: 600 }}>{streakCount}</span>
+                      ) : (
+                        <Zap size={24} />
+                      )}
+                    </button>
                   )}
                   {isScout && (
                     <button className={styles.upgradePill} onClick={handleUpgradePlan}>
@@ -2420,6 +2469,30 @@ function GrayPageClientInner({
                 </div>
               </>
             )}
+
+            {/* Mobile View Toggle - Always Visible */}
+            <div className={styles.mobileToggle}>
+              <button
+                className={styles.mobileToggleOption}
+                data-active={activeNav === "threads" || activeNav === "general" ? "true" : "false"}
+                onClick={() => handleMobileNavigate("threads")}
+              >
+                <span className={styles.mobileToggleIcon}>
+                  <MessageCircle size={16} />
+                </span>
+                <span>Main</span>
+              </button>
+              <button
+                className={styles.mobileToggleOption}
+                data-active={activeNav === "dashboard" ? "true" : "false"}
+                onClick={() => handleMobileNavigate("dashboard")}
+              >
+                <span className={styles.mobileToggleIcon}>
+                  <LayoutDashboard size={16} />
+                </span>
+                <span>Dashboard</span>
+              </button>
+            </div>
           </div>
         )}
 
@@ -2560,46 +2633,7 @@ function GrayPageClientInner({
           />
         )}
 
-        <DashboardOverlay
-          isOpen={isDashboardOpen}
-          onClose={() => setIsDashboardOpen(false)}
-          pulseEntries={pulseEntries}
-          currentPulse={activePulse}
-          isCurrentPulseEditable={Boolean(isActivePulseEditable)}
-          livePlans={derivedPlans}
-          onSelectPulse={setActivePulseId}
-          proactivityFallback={proactivity}
-          onProactivitySelect={selectProactivityPreset}
-          onProactivityRemove={removeProactivity}
-          onTestProactivity={handleTestProactivity}
-          onTogglePlan={togglePlan}
-          onToggleHabit={toggleHabit}
-          onSavePlan={savePlan}
-          onDeletePlan={deletePlan}
-          activeTab={dashboardTab}
-          onSelectTab={setDashboardTab}
-          currentDate={now}
-          calendars={derivedCalendars}
-          onCalendarsChange={handleCalendarsChange}
-          calendarEvents={derivedEvents}
-          onCalendarEventsChange={handleEventsChange}
-          calendarSelectedDate={calendarSelectedDate}
-          onCalendarSelectedDateChange={setCalendarSelectedDate}
-          onEditHabit={editHabit}
-          onDeleteHabit={deleteHabit}
-          onIntegrationAction={handleCalendarIntegration}
-          onRefreshData={refreshPlansAndHabits}
-          chatBar={null}
-          isCompactLayout={isCompactLayout}
-          userId={userId}
-          reminderPlans={reminderPlans}
-          proactivityDeliveryKeys={deliveredProactivityKeys}
-          onReminderMove={handleReminderMove}
-          streakCount={streakCount}
-          hideCalendar={isScout || !(user?.personalization_show_calendar ?? true)}
-          onUpgradeClick={handleUpgradePlan}
-          showUpgradeButton={shouldShowUpgradeButton}
-        />
+
         <HistoryOverlay
           isOpen={isHistoryOverlayOpen}
           onClose={() => setIsHistoryOverlayOpen(false)}

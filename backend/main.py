@@ -1006,6 +1006,27 @@ def _should_request_structured_reminders(message: str) -> bool:
     return False
 
 
+def _should_enable_search(message: str) -> bool:
+    """Check if message implies a need for web search.
+    
+    Uses word boundary matching for specific keywords to avoid over-triggering.
+    """
+    import re
+    keywords = {
+        "search", "google", "find", "latest", "news", 
+        "weather", "who", "what", "when", "where"
+    }
+    normalized = (message or "").lower()
+    if not normalized:
+        return False
+        
+    for kw in keywords:
+        if re.search(rf'\\b{re.escape(kw)}\\b', normalized):
+            return True
+            
+    return False
+
+
 def _split_env_list(value: Optional[str]) -> List[str]:
     if not value:
         return []
@@ -1721,87 +1742,12 @@ def _extract_project_ref(url_value: Optional[str]) -> Optional[str]:
     return None
 
 
-def _ensure_supabase_chat_tables(supabase_url: Optional[str]) -> None:
-    """Create chat persistence tables in Supabase when missing.
-
-    The deployment recently switched Supabase projects, and the new project is
-    missing the user_chat_* schema. This guard self-heals by applying the chat
-    migrations directly against the Supabase Postgres instance using the
-    service password so chat history can be stored again.
-    """
-    project_ref = _extract_project_ref(supabase_url)
-    password = os.getenv("SUPABASE_DB_PASSWORD")
-    if not project_ref or not password:
-        return
-
-    host = SUPABASE_POOLER_HOST
-    port = SUPABASE_POOLER_PORT
-    username = f"postgres.{project_ref}"
-    dsn = f"postgresql://{username}:{password}@{host}:{port}/postgres"
-    
-    connect_args = {"connect_timeout": 4, "port": port}
-    try:
-        # Force IPv4 resolution to avoid "Network is unreachable" on IPv6 failures
-        # Use getaddrinfo to specifically request IPv4 (AF_INET)
-        addr_info = socket.getaddrinfo(host, port, socket.AF_INET)
-        if addr_info:
-            # sockaddr is (ip, port) for AF_INET
-            ip_address = addr_info[0][4][0]
-            connect_args["hostaddr"] = ip_address
-    except Exception as e:
-        print(f"Warning: Failed to resolve IPv4 for Supabase host: {e}")
-
-    try:
-        conn = psycopg2.connect(dsn, **connect_args)
-        conn.autocommit = True
-    except Exception as exc:
-        print(f"Warning: Skipping Supabase chat schema check (connection failed): {exc}")
-        return
-
-    try:
-        with conn.cursor() as cursor:
-            cursor.execute(
-                """
-                select
-                  to_regclass('public.user_chat_threads'),
-                  to_regclass('public.user_chat_messages'),
-                  to_regclass('public.general_chat_messages'),
-                  to_regclass('public.user_data');
-                """
-            )
-            row = cursor.fetchone() or []
-            missing_tables = any(value is None for value in row)
-            if not missing_tables:
-                return
-
-            migration_paths = [
-                ROOT_DIR / "supabase" / "migrations" / "20251116140000_user_first_chat_schema.sql",
-                ROOT_DIR / "supabase" / "migrations" / "20251116133000_refactor_chat_tables.sql",
-                ROOT_DIR / "supabase" / "migrations" / "20251116143000_link_general_chat_to_user_data.sql",
-            ]
-            for path in migration_paths:
-                if not path.exists():
-                    continue
-                cursor.execute(path.read_text())
-
-            print(
-                "Supabase chat tables were missing; applied chat migrations so messages persist again."
-            )
-    except Exception as exc:
-        print(f"Warning: Failed to ensure Supabase chat tables exist: {exc}")
-    finally:
-        try:
-            conn.close()
-        except Exception:
-            pass
+# Removed _ensure_supabase_chat_tables helper as Supabase data usage is deprecated.
 
 # Supabase setup
 SUPABASE_URL, SUPABASE_KEY, SUPABASE_KEY_SOURCE = resolve_supabase_credentials()
 
-# Self-heal missing Supabase chat tables so conversation history can be stored.
-_ensure_supabase_chat_tables(SUPABASE_URL)
-
-# Initialize Supabase using unified helper
+# Initialize Supabase using unified helper (Auth only)
 supabase: Optional[Client] = None
 supabase_admin: Optional[Client] = None
 SUPABASE_ADMIN_KEY_SOURCE: Optional[str] = None
@@ -1809,22 +1755,11 @@ if SUPABASE_URL and SUPABASE_KEY and SUPABASE_URL != "your_supabase_url_here":
     supabase = create_supabase_client()
     supabase_admin, SUPABASE_ADMIN_KEY_SOURCE = create_supabase_service_client()
 
-configure_conversation_store(
-    supabase_client=supabase,
-    supabase_admin_client=supabase_admin,
-    supabase_key_source=SUPABASE_KEY_SOURCE,
-)
+# Note: Conversation store is now strictly local (SQLite/Postgres).
+# We no longer configure the conversation store with Supabase clients for data.
+
 
 # =============================================================================
-# SECURITY OVERHAUL (2025-12-06): Supabase is now auth-only.
-# All data operations go through local SQLite. Supabase is only used for
-# OAuth flows on the frontend via @supabase/ssr.
-# =============================================================================
-# Disable Supabase data clients in backend - all data goes to local DB
-supabase = None
-supabase_admin = None
-
-
 # Data storage configuration: Supabase is used for auth only.
 # Plans, habits, reminders, and other user data are stored locally (SQLite/Postgres).
 # To re-enable Supabase data storage, set supabase_data = supabase
@@ -1904,121 +1839,13 @@ async def _require_conversation_owner(conversation_id: str, current_user: Dict[s
     # Fallback: check Supabase ownership only if the conversation store is enabled.
     if not _conversation_store_available():
         return
-
-    try:
-        result = (
-            supabase.table("user_chat_threads")
-            .select("user_identifier")
-            .eq("id", conversation_id)
-            .maybe_single()
-            .execute()
-        )
-        owner_raw = _row_get(getattr(result, "data", None) or {}, "user_identifier")
-        if owner_raw is None:
-            # If we can't find an owner row in Supabase, fall back to local
-            # checks and cached history without blocking the request.
-            return
-        try:
-            owner_id = int(owner_raw)
-        except (TypeError, ValueError):
-            owner_id = owner_raw
-        if str(owner_id) != str(current_user["id"]):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="You can only access your own conversations",
-            )
-        try:
-            CONVERSATION_OWNER_CACHE.set(conversation_id, int(owner_id))
-        except Exception:
-            # Cache failures are non-fatal.
-            pass
-    except HTTPException:
-        # Preserve explicit 4xx errors such as real cross-user access.
-        raise
-    except Exception as error:
-        # If Supabase is misconfigured, temporarily unavailable, or the
-        # conversations tables are missing/locked down, disable the remote
-        # store and fall back to local history checks instead of hard-failing
-        # with a 403 for legitimate users.
-        _handle_conversation_store_error("Error verifying conversation ownership", error)
-        if not _conversation_store_available():
-            # Conversation store has been disabled; allow the request to
-            # proceed so downstream loaders (_load_conversation_history)
-            # can enforce access using local tables and simply return an
-            # empty history when no data is available.
-            return
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You can only access your own conversations",
-        )
+        
+    # NOTE: Functionality to check Supabase for ownership has been removed as we are strictly local-only now.
+    return
 
 
 async def _load_general_conversation_history(user_id: int) -> List[Dict[str, Any]]:
-    history: List[Dict[str, Any]] = []
-    
-    # 1. Try Supabase
-    if _conversation_store_available():
-        try:
-            # Check plan tier for retention policy (Scout = 14 days)
-            is_restricted = True
-            try:
-                user_res = supabase.table("users").select("plan_tier").eq("id", user_id).single().execute()
-                if user_res.data:
-                    tier = (user_res.data.get("plan_tier") or "").lower()
-                    if tier in ("voyager", "pioneer", "depth"):
-                        is_restricted = False
-            except Exception:
-                pass
-
-            query = (
-                supabase.table("general_chat_messages")
-                .select("role, content, grounding_metadata, created_at")
-                .eq("user_id", user_id)
-                .order("created_at", desc=True)
-                .limit(100)
-            )
-            
-            if is_restricted:
-                cutoff = (datetime.utcnow() - timedelta(days=14)).isoformat()
-                query = query.gte("created_at", cutoff)
-
-            result = query.execute()
-            rows = getattr(result, "data", None) or []
-            
-            for row in reversed(rows):
-                entry = {
-                    "role": row.get("role"),
-                    "text": row.get("content"),
-                }
-                grounding_metadata = row.get("grounding_metadata")
-                if grounding_metadata is not None:
-                    entry["grounding_metadata"] = grounding_metadata
-                
-                created_at = row.get("created_at")
-                if created_at is not None:
-                    from dateutil import parser as dateutil_parser
-                    try:
-                        dt = dateutil_parser.isoparse(created_at)
-                        timestamp_ms = int(dt.timestamp() * 1000)
-                        entry["timestamp"] = timestamp_ms
-                    except Exception:
-                        pass
-                
-                history.append(entry)
-            
-            # If we got data, return it. If empty, we might still want to check SQLite 
-            # in case the user was offline/local-only recently.
-            if history:
-                return history
-                
-        except Exception as error:
-            _handle_conversation_store_error(
-                "Warning: General chat messages table not found or inaccessible (Supabase)",
-                error,
-            )
-            # Fall through to SQLite
-
-    # 2. Fallback to SQLite
+    # Only load from SQLite
     try:
         query = general_chat_messages.select().where(general_chat_messages.c.user_id == user_id).order_by(general_chat_messages.c.created_at.desc()).limit(100)
         rows = await database.fetch_all(query)
@@ -2058,37 +1885,9 @@ async def _insert_general_conversation_message(
         f"Inserting general chat message for user {user_id}, role={role}, text_len={len(text)}",
         extra={"event_type": "general_message_insert_start", "user_id": user_id, "role": role}
     )
-    supabase_success = False
     user_data_id = await _ensure_user_data_record(user_id)
-    supabase_user_data_id: Optional[int] = None
 
-    if _conversation_store_available():
-        supabase_user_data_id = await _resolve_supabase_user_data_id(user_id)
-
-    if _conversation_store_available():
-        if supabase_user_data_id is not None:
-            payload: Dict[str, Any] = {
-                "user_id": user_id,
-                "user_data_id": supabase_user_data_id,
-                "role": role,
-                "content": text,
-            }
-            if grounding_metadata is not None:
-                payload["grounding_metadata"] = grounding_metadata
-            if attachments is not None:
-                payload["attachments"] = attachments
-            try:
-                response = supabase.table("general_chat_messages").insert(payload).execute()
-                supabase_success = True
-            except Exception as error:
-                _handle_conversation_store_error("Error saving general conversation message (Supabase)", error)
-
-            if supabase_success:
-                if response.data and len(response.data) > 0:
-                     return response.data[0].get('id')
-                return None
-
-    # Fallback to SQLite
+    # Insert into SQLite
     try:
         effective_user_data_id = user_data_id if user_data_id is not None else user_id
         now = datetime.utcnow()
@@ -2115,47 +1914,14 @@ async def _insert_general_conversation_message(
             "Error saving general conversation message (SQLite)",
             extra={"event_type": "sqlite_message_insert_error", "error": str(error), "user_id": user_id},
         )
+        return None
 
 
 async def _replace_general_conversation_history(user_id: int, history: List[Dict[str, Any]]) -> None:
     app_logger.info(f"Replacing general history for user {user_id}", extra={"event_type": "general_history_replace_start", "history_length": len(history)})
-    # 1. Delete from Supabase
     user_data_id = await _ensure_user_data_record(user_id)
-    if user_data_id is None:
-        app_logger.warning(f"Could not resolve user_data_id for user {user_id}; skipping Supabase update", extra={"event_type": "general_history_replace_skip_supabase"})
 
-    supabase_user_data_id: Optional[int] = None
-    if _conversation_store_available():
-        supabase_user_data_id = await _resolve_supabase_user_data_id(user_id)
-        if supabase_user_data_id is None and history:
-            app_logger.warning(
-                f"Could not resolve Supabase user_data_id for user {user_id}; skipping Supabase history replace",
-                extra={"event_type": "general_history_replace_skip_supabase_user_data"},
-            )
-
-    if _conversation_store_available():
-        try:
-            # Use RPC for atomic delete+insert to avoid race conditions
-            rpc_messages = []
-            if supabase_user_data_id is not None and history:
-                for entry in history:
-                    rpc_messages.append(
-                        {
-                            "user_data_id": supabase_user_data_id,
-                            "role": entry.get("role"),
-                            "content": entry.get("text") or "",
-                            "grounding_metadata": entry.get("grounding_metadata"),
-                        }
-                    )
-            
-            supabase.rpc("replace_general_chat_history", {
-                "p_user_id": user_id,
-                "p_messages": rpc_messages
-            }).execute()
-        except Exception as error:
-            _handle_conversation_store_error("Error replacing general conversation history (Supabase)", error)
-
-    # 2. Replace in SQLite
+    # Replace in SQLite
     try:
         # Delete existing
         await database.execute(
@@ -2204,12 +1970,8 @@ async def _replace_general_conversation_history(user_id: int, history: List[Dict
 
 
 def _delete_general_conversation_history(user_id: int) -> None:
-    if not _conversation_store_available():
-        return
-    try:
-        supabase.table("general_chat_messages").delete().eq("user_id", user_id).execute()
-    except Exception as error:
-        _handle_conversation_store_error("Error deleting general conversation history", error)
+    # Local only; Supabase deletion no longer supported directly.
+    pass
 
 
 def _delete_supabase_user_records(user_id: int) -> None:
@@ -2269,92 +2031,10 @@ async def _ensure_user_data_record(user_identifier: int) -> Optional[int]:
     return None
 
 
-async def _resolve_supabase_user_data_id(user_id: int) -> Optional[int]:
-    """Return the Supabase user_data.id for the given user, creating it if missing."""
-    if not _conversation_store_available():
-        return None
-
-    supabase_user_data_id: Optional[int] = None
-    try:
-        supabase_lookup = (
-            supabase.table("user_data")
-            .select("id")
-            .eq("user_identifier", user_id)
-            .limit(1)
-            .execute()
-        )
-        supabase_match = getattr(supabase_lookup, "data", None) or []
-        if supabase_match and supabase_match[0].get("id") is not None:
-            supabase_user_data_id = supabase_match[0]["id"]
-        else:
-            supabase.table("user_data").upsert({"user_identifier": user_id}).execute()
-            fetch_after_upsert = (
-                supabase.table("user_data")
-                .select("id")
-                .eq("user_identifier", user_id)
-                .limit(1)
-                .execute()
-            )
-            supabase_data = getattr(fetch_after_upsert, "data", None) or []
-            if supabase_data and supabase_data[0].get("id") is not None:
-                supabase_user_data_id = supabase_data[0]["id"]
-
-        return supabase_user_data_id
-    except Exception as error:
-        _handle_conversation_store_error("Error ensuring user_data in Supabase", error)
-        return None
+# Removed _resolve_supabase_user_data_id and _require_supabase_user_data_id.
 
 
-async def _require_supabase_user_data_id(user_id: int) -> int:
-    """Resolve the Supabase user_data.id or raise if it's unavailable."""
-    supabase_user_data_id = await _resolve_supabase_user_data_id(user_id)
-    if supabase_user_data_id is None:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="User metadata storage is not available.",
-        )
-    return supabase_user_data_id
-
-
-async def _ensure_supabase_thread_exists(conversation_id: str, user_id: int, *, title: Optional[str] = None) -> bool:
-    """Ensure a Supabase conversation thread exists for the given ID."""
-    if not _conversation_store_available() or not _is_valid_uuid(conversation_id):
-        return False
-    try:
-        existing = (
-            supabase.table("user_chat_threads")
-            .select("id")
-            .eq("id", conversation_id)
-            .limit(1)
-            .execute()
-        )
-        rows = getattr(existing, "data", None) or []
-        if rows:
-            return True
-    except Exception as error:
-        _handle_conversation_store_error("Error checking Supabase conversation thread", error)
-        return False
-
-    try:
-        supabase_user_data_id = await _require_supabase_user_data_id(user_id)
-        now_iso = datetime.utcnow().isoformat() + "Z"
-        seed_title = title or "Recovered Conversation"
-        supabase.table("user_chat_threads").insert(
-            {
-                "id": conversation_id,
-                "user_identifier": user_id,
-                "user_data_id": supabase_user_data_id,
-                "title": seed_title,
-                "context_snapshot": [],
-                "metadata": {},
-                "created_at": now_iso,
-                "updated_at": now_iso,
-            }
-        ).execute()
-        return True
-    except Exception as error:
-        _handle_conversation_store_error("Error creating missing conversation thread", error)
-        return False
+# Removed _ensure_supabase_thread_exists as Supabase data usage is deprecated.
 
 
 def _deserialize_proactivity_settings_payload(payload: Any) -> Optional[ProactivitySettings]:
@@ -3979,40 +3659,8 @@ async def _fetch_proactivity_summary(user_id: int, info_type: Optional[str], db:
     assistant's view aligned with the canonical per-user records.
     """
     plan_labels: List[str] = []
-    habit_labels: List[str] = []
-
-    # Prefer Supabase-backed tables when available so the view matches the
-    # rest of the app's plan/habit APIs.
-    if supabase_data:
-        try:
-            plan_result = (
-                supabase_data.table("plans")
-                .select("label")
-                .eq("user_id", user_id)
-                .order("created_at", desc=False)
-                .execute()
-            )
-            for row in getattr(plan_result, "data", []) or []:
-                label = str(_row_get(row, "label") or "").strip()
-                if label:
-                    plan_labels.append(label)
-        except Exception as error:
-            _handle_supabase_table_error("Warning: Proactivity summary could not load plans from Supabase", error)
-
-        try:
-            habit_result = (
-                supabase_data.table("habits")
-                .select("label")
-                .eq("user_id", user_id)
-                .order("created_at", desc=False)
-                .execute()
-            )
-            for row in getattr(habit_result, "data", []) or []:
-                label = str(_row_get(row, "label") or "").strip()
-                if label:
-                    habit_labels.append(label)
-        except Exception as error:
-            _handle_supabase_table_error("Warning: Proactivity summary could not load habits from Supabase", error)
+    # Supabase data loading for proactivity summary removed.
+    # Relying on local data fallbacks below.
 
     # Fallback: use the local relational tables only if Supabase isn't configured.
     if not plan_labels:
@@ -4188,22 +3836,6 @@ async def _delete_calendar_event(user_id: int, args: Dict[str, Any], db: databas
 
 async def _list_plans_tool(user_id: int, args: Dict[str, Any], db: databases.Database) -> Dict[str, Any]:
     limit = args.get("limit")
-    if supabase_data:
-        try:
-            query = (
-                supabase_data.table("plans")
-                .select("*")
-                .eq("user_id", user_id)
-                .order("created_at", desc=False)
-            )
-            if limit:
-                query = query.limit(limit)
-            result = query.execute()
-            if result.data is not None:
-                return {"plans": result.data}
-        except Exception as error:
-            pass # Fallback to local DB
-            
     query = plans.select().where(plans.c.user_id == user_id).order_by(plans.c.created_at)
     if limit:
         query = query.limit(limit)
@@ -4213,22 +3845,7 @@ async def _list_plans_tool(user_id: int, args: Dict[str, Any], db: databases.Dat
 
 async def _list_habits_tool(user_id: int, args: Dict[str, Any], db: databases.Database) -> Dict[str, Any]:
     limit = args.get("limit")
-    if supabase_data:
-        try:
-            query = (
-                supabase_data.table("habits")
-                .select("*")
-                .eq("user_id", user_id)
-                .order("created_at", desc=False)
-            )
-            if limit:
-                query = query.limit(limit)
-            result = query.execute()
-            if result.data is not None:
-                return {"habits": [_serialize_habit_record(row) for row in result.data]}
-        except Exception as error:
-            _handle_supabase_table_error("Warning: Habits table not found or inaccessible", error)
-
+    
     query = habits.select().where(habits.c.user_id == user_id).order_by(habits.c.created_at)
     if limit:
         query = query.limit(limit)
@@ -4255,22 +3872,6 @@ async def _create_habit_tool(user_id: int, args: Dict[str, Any], db: databases.D
         "previous_label": args.get("previous_label") or "",
     }
     
-    if supabase_data:
-        await _ensure_supabase_user_exists(user_id, db)
-        timestamp = now.isoformat()
-        payload = {**base_values, "created_at": timestamp, "updated_at": timestamp}
-        try:
-            result = supabase_data.table("habits").insert(payload).execute()
-            rows = getattr(result, "data", None) or []
-            if isinstance(rows, list) and rows:
-                return _build_reminder_payload(rows[0], user_id, "created", entity="habit")
-            if isinstance(rows, dict) and rows:
-                return _build_reminder_payload(rows, user_id, "created", entity="habit")
-            return {"error": "Failed to create habit in Supabase"}
-        except Exception as e:
-            api_logger.warning(f"Supabase habit creation failed, falling back to local DB: {e}")
-            pass
-
     habit_id = await db.execute(
         habits.insert().values(
             **base_values,
@@ -4303,16 +3904,6 @@ async def _update_habit_tool(user_id: int, args: Dict[str, Any], db: databases.D
         
     now = datetime.utcnow()
     
-    if supabase_data:
-        await _ensure_supabase_user_exists(user_id, db)
-        payload = {**updates, "updated_at": now.isoformat()}
-        try:
-            result = supabase_data.table("habits").update(payload).eq("id", habit_id).eq("user_id", user_id).execute()
-            return {"status": "success", "message": f"Habit {habit_id} updated."}
-        except Exception as e:
-            api_logger.warning(f"Supabase habit update failed: {e}")
-            pass
-            
     updates["updated_at"] = now
     await db.execute(
         habits.update()
@@ -4327,14 +3918,6 @@ async def _delete_habit_tool(user_id: int, args: Dict[str, Any], db: databases.D
     if not habit_id:
         return {"error": "habit_id is required"}
         
-    if supabase_data:
-        try:
-            supabase_data.table("habits").delete().eq("id", habit_id).eq("user_id", user_id).execute()
-            return {"status": "success", "message": f"Habit {habit_id} deleted."}
-        except Exception as e:
-            api_logger.warning(f"Supabase habit deletion failed: {e}")
-            pass
-
     await db.execute(
         habits.delete().where((habits.c.id == habit_id) & (habits.c.user_id == user_id))
     )
@@ -4374,22 +3957,6 @@ async def _create_reminder_tool(
         "entity_type": "plan",
     }
     
-    if supabase_data:
-        await _ensure_supabase_user_exists(user_id, db)
-        try:
-            supabase_payload = {
-                **base_data,
-                "remind_at": remind_at_dt.isoformat(),
-                "created_at": now.isoformat(),
-                "updated_at": now.isoformat(),
-            }
-            result = supabase_data.table("reminders").insert(supabase_payload).execute()
-            if result.data:
-                created = result.data[0]
-                return _build_reminder_payload(created, user_id, "created")
-        except Exception as error:
-            api_logger.warning(f"Supabase reminder insert failed: {error}")
-    
     local_payload = {
         **base_data,
         "remind_at": remind_at_dt,
@@ -4425,22 +3992,6 @@ async def _update_reminder_tool(user_id: int, args: Dict[str, Any], db: database
     if not updates:
         raise HTTPException(status_code=400, detail="No fields to update")
     
-    if supabase_data:
-        await _ensure_supabase_user_exists(user_id, db)
-        try:
-            result = (
-                supabase_data.table("reminders")
-                .update(updates)
-                .eq("id", reminder_id)
-                .eq("user_id", user_id)
-                .execute()
-            )
-            if result.data:
-                updated = result.data[0]
-                return _build_reminder_payload(updated, user_id, "updated")
-        except Exception as error:
-            api_logger.warning(f"Supabase reminder update failed: {error}")
-    
     query = (
         reminders.update()
         .where(reminders.c.id == reminder_id)
@@ -4460,23 +4011,6 @@ async def _delete_reminder_tool(user_id: int, args: Dict[str, Any], db: database
     reminder_id = args.get("reminder_id")
     if not reminder_id:
         raise HTTPException(status_code=400, detail="reminder_id is required")
-    
-    # Fetch before delete for payload
-    if supabase_data:
-        try:
-            fetch_result = (
-                supabase_data.table("reminders")
-                .select("*")
-                .eq("id", reminder_id)
-                .eq("user_id", user_id)
-                .execute()
-            )
-            if fetch_result.data:
-                reminder = fetch_result.data[0]
-                supabase_data.table("reminders").delete().eq("id", reminder_id).eq("user_id", user_id).execute()
-                return _build_reminder_payload(reminder, user_id, "deleted")
-        except Exception as error:
-            api_logger.warning(f"Supabase reminder delete failed: {error}")
     
     reminder = await db.fetch_one(
         reminders.select()
@@ -4516,59 +4050,6 @@ async def _delete_latest_reminder_tool(user_id: int, args: Dict[str, Any], db: d
 
     before_dt = _parse_dt(remind_before)
     after_dt = _parse_dt(remind_after)
-
-    # Try Supabase first
-    if supabase_data:
-        try:
-            builder = (
-                supabase_data.table("reminders")
-                .select("*")
-                .eq("user_id", user_id)
-            )
-            if label_substring:
-                builder = builder.ilike("label", f"%{label_substring}%")
-            if before_dt:
-                builder = builder.lte("remind_at", before_dt.isoformat())
-            if after_dt:
-                builder = builder.gte("remind_at", after_dt.isoformat())
-            if status_filter:
-                builder = builder.eq("status", status_filter)
-            else:
-                builder = builder.in_("status", ["pending", "delivered"])
-            
-            builder = builder.order("created_at", desc=True).order("id", desc=True)
-            
-            if not delete_all:
-                builder = builder.limit(1)
-            
-            result = builder.execute()
-            rows = result.data if result.data else []
-            
-            if not rows:
-                raise HTTPException(status_code=404, detail="No matching reminder found to delete.")
-            
-            deleted_messages = []
-            for record in rows:
-                reminder_id = record["id"]
-                reminder_label = record.get("label")
-                reminder_time = record.get("remind_at")
-                
-                supabase_data.table("reminders").delete().eq("id", reminder_id).eq("user_id", user_id).execute()
-                
-                summary_parts = [f"Deleted reminder {reminder_id}"]
-                if reminder_label:
-                    summary_parts.append(f'"{reminder_label}"')
-                if reminder_time:
-                    summary_parts.append(f"at {reminder_time}")
-                deleted_messages.append(" ".join(summary_parts))
-            
-            if delete_all:
-                return {"status": "success", "message": f"Deleted {len(rows)} reminder(s)", "details": deleted_messages}
-            return {"status": "success", "message": deleted_messages[0]}
-        except HTTPException:
-            raise
-        except Exception as error:
-            api_logger.warning(f"Supabase delete_latest_reminder failed, falling back to local: {error}")
 
     # Fallback to local database
     query = reminders.select().where(reminders.c.user_id == user_id)
@@ -4665,30 +4146,6 @@ async def _list_reminders_tool(user_id: int, args: Dict[str, Any], db: databases
     entity_type = args.get("entity_type")
     include_archived = bool(args.get("include_archived"))
 
-    if supabase_data:
-        try:
-            builder = (
-                supabase_data.table("reminders")
-                .select("*")
-                .eq("user_id", user_id)
-            )
-            if status_filter:
-                builder = builder.eq("status", status_filter)
-            elif not include_archived:
-                builder = builder.in_("status", ["pending", "delivered"])
-            if delivery_mode:
-                builder = builder.eq("delivery_mode", delivery_mode)
-            if entity_type:
-                builder = builder.eq("entity_type", entity_type)
-            builder = builder.order("remind_at", desc=False)
-            if limit:
-                builder = builder.limit(limit)
-            result = builder.execute()
-            rows = result.data if result.data is not None else []
-            return {"reminders": [_serialize_reminder_row(row) for row in rows]}
-        except Exception as error:
-            _handle_supabase_table_error("Warning: Reminders table not found or inaccessible", error)
-
     query = reminders.select().where(reminders.c.user_id == user_id)
     if status_filter:
         query = query.where(reminders.c.status == status_filter)
@@ -4756,23 +4213,6 @@ async def _create_plan_tool(user_id: int, args: Dict[str, Any], db: databases.Da
         "description": args.get("description"),
     }
     
-    if supabase_data:
-        await _ensure_supabase_user_exists(user_id, db)
-        timestamp = datetime.utcnow().isoformat()
-        payload = {**base_values, "created_at": timestamp, "updated_at": timestamp}
-        try:
-            result = supabase_data.table("plans").insert(payload).execute()
-            rows = getattr(result, "data", None) or []
-            if isinstance(rows, list) and rows:
-                return _build_reminder_payload(rows[0], user_id, "created", entity="plan")
-            if isinstance(rows, dict) and rows:
-                return _build_reminder_payload(rows, user_id, "created", entity="plan")
-            return {"error": "Failed to create plan in Supabase"}
-        except Exception as e:
-            # Fallback to local DB
-            api_logger.warning(f"Supabase plan creation failed, falling back to local DB: {e}")
-            pass
-
     now = datetime.utcnow()
     plan_id = await db.execute(
         plans.insert().values(
@@ -4805,26 +4245,6 @@ async def _update_plan_tool(user_id: int, args: Dict[str, Any], db: databases.Da
     if not updates:
         return {"status": "no_changes", "message": "No updates provided."}
         
-    if supabase_data:
-        await _ensure_supabase_user_exists(user_id, db)
-        updates["updated_at"] = datetime.utcnow().isoformat()
-        try:
-            result = (
-                supabase_data.table("plans")
-                .update(updates)
-                .eq("id", plan_id)
-                .eq("user_id", user_id)
-                .execute()
-            )
-            rows = getattr(result, "data", None) or []
-            if rows:
-                return {"status": "success", "plan": rows[0], "message": "Plan updated."}
-            return {"error": "Plan not found or update failed."}
-        except Exception as e:
-            # Fallback to local DB
-            api_logger.warning(f"Supabase plan update failed, falling back to local DB: {e}")
-            pass
-
     # Verify ownership locally
     check_query = plans.select().where((plans.c.id == plan_id) & (plans.c.user_id == user_id))
     existing = await db.fetch_one(check_query)
@@ -4842,43 +4262,6 @@ async def _delete_plan_tool(user_id: int, args: Dict[str, Any], db: databases.Da
     if not plan_id:
         return {"error": "plan_id is required"}
         
-    if supabase_data:
-        try:
-            # Delete from plans table
-            result = supabase_data.table("plans").delete().eq("id", plan_id).eq("user_id", user_id).execute()
-            # Check if anything was deleted? Supabase delete returns data of deleted rows.
-            deleted_rows = getattr(result, "data", None)
-            if not deleted_rows:
-                 return {"error": "Plan not found."}
-            
-            # Attempt to sync with dashboard_pulses
-            try:
-                today_key = datetime.utcnow().strftime("%Y-%m-%d")
-                pulse_res = supabase_data.table("dashboard_pulses").select("*").eq("user_id", user_id).eq("date_key", today_key).execute()
-                if pulse_res.data:
-                    pulse = pulse_res.data[0]
-                    current_plans = pulse.get("plans", []) or []
-                    new_plans = [p for p in current_plans if str(p.get("id")) != str(plan_id)]
-                    
-                    if len(new_plans) != len(current_plans):
-                        supabase_data.table("dashboard_pulses").update({
-                            "plans": new_plans, 
-                            "updated_at": datetime.utcnow().isoformat()
-                        }).eq("id", pulse["id"]).execute()
-            except Exception:
-                pass # Best effort sync
-                
-            return {"status": "success", "message": "Plan deleted."}
-        except Exception as e:
-            # Fallback to local DB
-            api_logger.warning(f"Supabase plan deletion failed, falling back to local DB: {e}")
-            pass
-
-    # Delete from local DB
-    query = plans.delete().where((plans.c.id == plan_id) & (plans.c.user_id == user_id))
-    await db.execute(query)
-    return {"status": "success", "message": "Plan deleted."}
-
     # Verify ownership locally
     check_query = plans.select().where((plans.c.id == plan_id) & (plans.c.user_id == user_id))
     existing = await db.fetch_one(check_query)
@@ -4996,7 +4379,7 @@ async def _complete_onboarding(
         
         # Set check-in times based on cadence
         if cadence == "frequent":
-            # Frequent: 9am, 3pm, 6pm
+            # Frequent: 9am, 15pm, 18pm
             settings_payload["times"] = ["09:00", "15:00", "18:00"]
         elif cadence == "daily":
             # Daily: 9am (or user-specified time)
@@ -5558,25 +4941,6 @@ def _carry_forward_dashboard_entries(
 
 async def _load_dashboard_pulse_by_date(db: databases.Database, user_id: int, date_key: str):
     # Prefer Supabase when available.
-    if supabase_data:
-        try:
-            result = (
-                supabase_data.table("dashboard_pulses")
-                .select("*")
-                .eq("user_id", user_id)
-                .eq("date_key", date_key)
-                .limit(1)
-                .execute()
-            )
-            rows = result.data or []
-            if rows:
-                return rows[0]
-        except Exception as error:
-            _handle_supabase_table_error(
-                f"Warning: Failed to load dashboard pulse from Supabase for user {user_id}",
-                error,
-            )
-
     query = (
         dashboard_pulses.select()
         .where(
@@ -5590,26 +4954,6 @@ async def _load_dashboard_pulse_by_date(db: databases.Database, user_id: int, da
 
 async def _load_previous_dashboard_pulse(db: databases.Database, user_id: int, date_key: str):
     # Prefer Supabase when available.
-    if supabase_data:
-        try:
-            result = (
-                supabase_data.table("dashboard_pulses")
-                .select("*")
-                .eq("user_id", user_id)
-                .lt("date_key", date_key)
-                .order("date_key", desc=True)
-                .limit(1)
-                .execute()
-            )
-            rows = result.data or []
-            if rows:
-                return rows[0]
-        except Exception as error:
-            _handle_supabase_table_error(
-                f"Warning: Failed to load previous dashboard pulse from Supabase for user {user_id}",
-                error,
-            )
-
     query = (
         dashboard_pulses.select()
         .where(
@@ -6146,6 +5490,11 @@ async def stream_ai_response(
     if needs_structured_tools:
         request_structured_reminders = True
 
+    # Auto-enable search based on heuristic if not explicitly requested
+    if not search_enabled and _should_enable_search(message):
+        api_logger.info(f"Auto-enabling search for message: {message[:50]}...")
+        search_enabled = True
+
     explicit_model = (model or "").strip()
     normalized_model = explicit_model.lower()
     explicit_model_is_tier_alias = normalized_model in {"lite", "gray-lite", "pro", "gray-pro"}
@@ -6486,11 +5835,16 @@ async def stream_ai_response(
                     hist_len = len(current_history) if current_history else 0
                     api_logger.info(f"[OpenRouter Call] search_enabled={search_enabled}, tools={num_tools} ({tool_names}), history={hist_len}, model={model}, reasoning_mode={reasoning_mode}")
 
+                    run_system_prompt = effective_system_prompt
+                    if search_enabled:
+                        # Explicitly tell the model about the search capability so it knows to use it (via the plugin)
+                        run_system_prompt = (run_system_prompt or "") + "\n\nYou have access to Google Search. You must use it for current events, news, or factual queries where your knowledge might be outdated."
+
                     async for chunk in OPENROUTER_SERVICE.stream(
                         current_message,
                         current_history,
                         hybrid_workspace_context,  # Uses tool results context when hybrid flow is active
-                        effective_system_prompt,
+                        run_system_prompt,
                         time_context,
                         model,
                         include_usage=False,
@@ -6545,7 +5899,7 @@ async def stream_ai_response(
                             if is_collecting_tool:
                                 if "```" in tool_buffer.split("```json")[-1] or "}" in tool_buffer:
                                     try:
-                                        json_match = re.search(r"```json\s*({.*?})\s*```", tool_buffer, re.DOTALL)
+                                        json_match = re.search(r"```(?:javascript|json)?\s*({.*?})\s*```", tool_buffer, re.DOTALL)
                                         if not json_match:
                                             json_match = re.search(r"({.*\"tool\":\s*\"complete_onboarding\".*})", tool_buffer, re.DOTALL)
                                         
@@ -8640,9 +7994,20 @@ async def delete_conversation(
             _invalidate_conversation_cache(conversation_id)
             return
 
-        if _conversation_store_available() and _is_valid_uuid(conversation_id):
+        if _is_valid_uuid(conversation_id):
             try:
-                supabase.table("user_chat_threads").delete().eq("id", conversation_id).execute()
+                # Local SQLite deletion for threads
+                # Note: Delete messages first due to FK constraint if not cascaded, though SQLAlchemy usually handles it or SQLite pragma
+                # But to be safe:
+                await database.execute(user_chat_messages.delete().where(user_chat_messages.c.thread_id == conversation_id))
+                await database.execute(user_chat_threads.delete().where(user_chat_threads.c.id == conversation_id))
+                
+                # Also try deleting from legacy Supabase if credentials exist, just to be clean (optional)
+                if supabase and _conversation_store_available():
+                     try:
+                        supabase.table("user_chat_threads").delete().eq("id", conversation_id).execute()
+                     except Exception:
+                        pass
             except Exception as error:
                 _handle_conversation_store_error("Error deleting conversation", error)
         _invalidate_conversation_cache(conversation_id)
@@ -9199,45 +8564,7 @@ async def delete_user_account(
         except Exception as e:
             api_logger.error(f"Failed to delete Supabase Auth user: {e}", extra={"user_id": user_id, "error": str(e)})
 
-        # Also delete any corresponding row in the public.users table so the email
-        # is not retained and future signups do not hit duplicate-email errors.
-        try:
-            # Best-effort cleanup of dependent Supabase rows that may reference
-            # public.users via foreign keys (e.g., reminders.user_id → users.id).
-            try:
-                users_result = admin_client.table("users").select("id").eq("email", user_email).execute()
-                supabase_users = getattr(users_result, "data", None) or []
-            except Exception as lookup_error:
-                supabase_users = []
-                _handle_supabase_table_error(
-                    f"Warning: Failed to lookup Supabase users row for {user_email} prior to deletion",
-                    lookup_error,
-                )
 
-            for supa_user in supabase_users:
-                supa_user_id = supa_user.get("id")
-                if supa_user_id is None:
-                    continue
-                try:
-                    # Some Supabase deployments use reminders.user_id → users.id,
-                    # so prune those rows first to satisfy FK constraints.
-                    admin_client.table("reminders").delete().eq("user_id", supa_user_id).execute()
-                except Exception as dep_error:
-                    _handle_supabase_table_error(
-                        f"Warning: Failed to delete Supabase reminders for users.id={supa_user_id}",
-                        dep_error,
-                    )
-
-            admin_client.table("users").delete().eq("email", user_email).execute()
-            api_logger.info(
-                "Deleted Supabase users row(s) by email during account deletion",
-                extra={"user_id": user_id, "email": user_email},
-            )
-        except Exception as table_error:
-            _handle_supabase_table_error(
-                f"Warning: Failed to delete Supabase users row for {user_email}",
-                table_error,
-            )
 
 
     elif admin_client and SUPABASE_KEY_SOURCE in anon_sources:
@@ -9372,21 +8699,6 @@ async def get_user_plans(
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     require_same_user(user_id, current_user)
-    if supabase_data:
-        try:
-            query = (
-                supabase_data.table("plans")
-                .select("*")
-                .eq("user_id", user_id)
-                .order("created_at", desc=False)
-            )
-            if limit:
-                query = query.limit(limit)
-            result = query.execute()
-            if result.data is not None:
-                return result.data
-        except Exception as error:
-            _handle_supabase_table_error("Warning: Plans table not found or inaccessible", error)
     query = plans.select().where(plans.c.user_id == user_id).order_by(plans.c.created_at)
     if limit:
         query = query.limit(limit)
@@ -9408,20 +8720,6 @@ async def create_plan(
         "schedule_slot": plan.schedule_slot,
         "description": plan.description,
     }
-    if supabase_data:
-        timestamp = datetime.utcnow().isoformat()
-        payload = {**base_values, "created_at": timestamp, "updated_at": timestamp}
-        try:
-            result = supabase_data.table("plans").insert(payload).execute()
-            rows = getattr(result, "data", None) or []
-            if isinstance(rows, list) and rows:
-                return rows[0]
-            if isinstance(rows, dict) and rows:
-                return rows
-            raise HTTPException(status_code=500, detail="Failed to create plan in Supabase: No data returned")
-        except Exception as e:
-            api_logger.error(f"Supabase plan creation failed: {e}", exc_info=True)
-            raise HTTPException(status_code=500, detail=f"Failed to create plan in Supabase: {str(e)}")
 
     now = datetime.utcnow()
     plan_id = await db.execute(
@@ -9444,48 +8742,7 @@ async def update_plan(
 ):
     require_same_user(user_id, current_user)
     update_data = plan_update.dict(exclude_unset=True)
-    if supabase_data:
-        existing = (
-            supabase_data.table("plans")
-            .select("id")
-            .eq("id", plan_id)
-            .eq("user_id", user_id)
-            .limit(1)
-            .execute()
-        )
-        if not existing.data:
-            raise HTTPException(status_code=404, detail="Plan not found")
-        if not update_data:
-            plan_record = (
-                supabase_data.table("plans")
-                .select("*")
-                .eq("id", plan_id)
-                .eq("user_id", user_id)
-                .single()
-                .execute()
-            )
-            record_rows = getattr(plan_record, "data", None) or []
-            if isinstance(record_rows, list) and record_rows:
-                return record_rows[0]
-            if isinstance(record_rows, dict) and record_rows:
-                return record_rows
-            raise HTTPException(status_code=404, detail="Plan not found")
-        update_payload = {
-            **update_data,
-            "updated_at": datetime.utcnow().isoformat(),
-        }
-        result = (
-            supabase_data.table("plans")
-            .update(update_payload)
-            .eq("id", plan_id)
-            .eq("user_id", user_id)
-            .execute()
-        )
-        rows = getattr(result, "data", None) or []
-        if isinstance(rows, list) and rows:
-            return rows[0]
-        if isinstance(rows, dict) and rows:
-            return rows
+
     existing = await db.fetch_one(
         plans.select().where(
             (plans.c.id == plan_id) & (plans.c.user_id == user_id)
@@ -9512,41 +8769,7 @@ async def delete_plan(
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     require_same_user(user_id, current_user)
-    if supabase_data:
-        existing = (
-            supabase_data.table("plans")
-            .select("id")
-            .eq("id", plan_id)
-            .eq("user_id", user_id)
-            .limit(1)
-            .execute()
-        )
-        if not existing.data:
-            raise HTTPException(status_code=404, detail="Plan not found")
-        
-        # Delete from plans table
-        supabase_data.table("plans").delete().eq("id", plan_id).eq("user_id", user_id).execute()
-        
-        # Attempt to sync with dashboard_pulses (remove from today's pulse if present)
-        try:
-            today_key = datetime.utcnow().strftime("%Y-%m-%d")
-            pulse_res = supabase_data.table("dashboard_pulses").select("*").eq("user_id", user_id).eq("date_key", today_key).execute()
-            if pulse_res.data:
-                pulse = pulse_res.data[0]
-                current_plans = pulse.get("plans", []) or []
-                # Filter out the deleted plan. Handle string/int mismatch.
-                new_plans = [p for p in current_plans if str(p.get("id")) != str(plan_id)]
-                
-                if len(new_plans) != len(current_plans):
-                    supabase_data.table("dashboard_pulses").update({
-                        "plans": new_plans, 
-                        "updated_at": datetime.utcnow().isoformat()
-                    }).eq("id", pulse["id"]).execute()
-                    api_logger.info(f"Synced plan deletion to dashboard_pulse for user {user_id}")
-        except Exception as e:
-            api_logger.warning(f"Failed to sync plan deletion to dashboard_pulses: {e}")
-            
-        return None
+    
     query = plans.select().where(
         (plans.c.id == plan_id) & (plans.c.user_id == user_id)
     )
@@ -9567,21 +8790,6 @@ async def get_habits(
     db: databases.Database = Depends(get_database)
 ):
     require_same_user(user_id, current_user)
-    if supabase_data:
-        try:
-            query = (
-                supabase_data.table("habits")
-                .select("*")
-                .eq("user_id", user_id)
-                .order("created_at", desc=False)
-            )
-            if limit:
-                query = query.limit(limit)
-            result = query.execute()
-            if result.data is not None:
-                return [_serialize_habit_record(row) for row in result.data]
-        except Exception as error:
-            _handle_supabase_table_error("Warning: Habits table not found or inaccessible", error)
     query = habits.select().where(habits.c.user_id == user_id).order_by(habits.c.created_at)
     if limit:
         query = query.limit(limit)
@@ -9603,20 +8811,6 @@ async def create_habit(
         "previous_label": habit.previous_label,
         "description": habit.description,
     }
-    if supabase_data:
-        timestamp = datetime.utcnow().isoformat()
-        payload = {**base_values, "created_at": timestamp, "updated_at": timestamp}
-        try:
-            result = supabase_data.table("habits").insert(payload).execute()
-            rows = getattr(result, "data", None) or []
-            if isinstance(rows, list) and rows:
-                return rows[0]
-            if isinstance(rows, dict) and rows:
-                return rows
-            raise HTTPException(status_code=500, detail="Failed to create habit in Supabase: No data returned")
-        except Exception as e:
-            api_logger.error(f"Supabase habit creation failed: {e}", exc_info=True)
-            raise HTTPException(status_code=500, detail=f"Failed to create habit in Supabase: {str(e)}")
 
     now = datetime.utcnow()
     habit_id = await db.execute(
@@ -9639,50 +8833,6 @@ async def update_habit(
 ):
     require_same_user(user_id, current_user)
     update_data = habit_update.dict(exclude_unset=True)
-    if supabase_data:
-        existing = (
-            supabase_data.table("habits")
-            .select("id")
-            .eq("id", habit_id)
-            .eq("user_id", user_id)
-            .limit(1)
-            .execute()
-        )
-        if not existing.data:
-            raise HTTPException(status_code=404, detail="Habit not found")
-        if not update_data:
-            habit_row = (
-                supabase_data.table("habits")
-                .select("*")
-                .eq("id", habit_id)
-                .eq("user_id", user_id)
-                .single()
-                .execute()
-            )
-            habit_rows = getattr(habit_row, "data", None) or []
-            if isinstance(habit_rows, list) and habit_rows:
-                return habit_rows[0]
-            if isinstance(habit_rows, dict) and habit_rows:
-                return habit_rows
-            raise HTTPException(status_code=404, detail="Habit not found")
-        update_payload = {
-            **update_data,
-            "updated_at": datetime.utcnow().isoformat(),
-        }
-        result = (
-            supabase_data.table("habits")
-            .update(update_payload)
-            .eq("id", habit_id)
-            .eq("user_id", user_id)
-            .execute()
-        )
-        rows = getattr(result, "data", None) or []
-        if isinstance(rows, list) and rows:
-            return rows[0]
-        if isinstance(rows, dict) and rows:
-            return rows
-            
-        raise HTTPException(status_code=500, detail="Failed to update habit in Supabase")
 
     existing = await db.fetch_one(
         habits.select().where(
@@ -9710,41 +8860,6 @@ async def delete_habit(
     db: databases.Database = Depends(get_database)
 ):
     require_same_user(user_id, current_user)
-    if supabase_data:
-        existing = (
-            supabase_data.table("habits")
-            .select("id")
-            .eq("id", habit_id)
-            .eq("user_id", user_id)
-            .limit(1)
-            .execute()
-        )
-        if not existing.data:
-            raise HTTPException(status_code=404, detail="Habit not found")
-        
-        # Delete from habits table
-        supabase_data.table("habits").delete().eq("id", habit_id).eq("user_id", user_id).execute()
-        
-        # Attempt to sync with dashboard_pulses (remove from today's pulse if present)
-        try:
-            today_key = datetime.utcnow().strftime("%Y-%m-%d")
-            pulse_res = supabase_data.table("dashboard_pulses").select("*").eq("user_id", user_id).eq("date_key", today_key).execute()
-            if pulse_res.data:
-                pulse = pulse_res.data[0]
-                current_habits = pulse.get("habits", []) or []
-                # Filter out the deleted habit.
-                new_habits = [h for h in current_habits if str(h.get("id")) != str(habit_id)]
-                
-                if len(new_habits) != len(current_habits):
-                    supabase_data.table("dashboard_pulses").update({
-                        "habits": new_habits, 
-                        "updated_at": datetime.utcnow().isoformat()
-                    }).eq("id", pulse["id"]).execute()
-                    api_logger.info(f"Synced habit deletion to dashboard_pulse for user {user_id}")
-        except Exception as e:
-            api_logger.warning(f"Failed to sync habit deletion to dashboard_pulses: {e}")
-            
-        return None
     query = habits.select().where(
         (habits.c.id == habit_id) & (habits.c.user_id == user_id)
     )
@@ -9787,33 +8902,8 @@ async def get_user_calendar_events(
 
 ):
     require_same_user(user_id, current_user)
-    # Supabase-first for calendar events.
-    if supabase_data:
-        try:
-            query = supabase_data.table("calendar_events").select("*").eq("user_id", user_id)
-            
-            if start_date:
-                query = query.gte("start_time", start_date)
-            if end_date:
-                query = query.lte("end_time", end_date)
-                
-            result = query.order("start_time", desc=False).execute()
-            rows = result.data or []
-            now = datetime.utcnow().isoformat()
-            normalized = []
-            for row in rows:
-                record = dict(row)
-                if record.get("created_at") is None:
-                    record["created_at"] = now
-                normalized.append(record)
-            return normalized
-        except Exception as error:
-            _handle_supabase_table_error(
-                f"Warning: Failed to fetch calendar events from Supabase for user {user_id}",
-                error,
-            )
-
-    # Fallback to local SQLite.
+    
+    # Use local SQLite.
     query = calendar_events.select().where(calendar_events.c.user_id == user_id)
     
     if start_date:
@@ -9865,63 +8955,6 @@ async def list_user_reminders(
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     require_same_user(user_id, current_user)
-    if supabase_data:
-        try:
-            builder = (
-                supabase_data.table("reminders")
-                .select("*")
-                .eq("user_id", user_id)
-            )
-            if status_filter:
-                builder = builder.eq("status", status_filter)
-            elif not include_archived:
-                builder = builder.in_("status", ["pending", "delivered"])
-            if delivery_mode:
-                builder = builder.eq("delivery_mode", delivery_mode)
-            if entity_type:
-                builder = builder.eq("entity_type", entity_type)
-            builder = builder.order("remind_at", desc=False)
-            if limit is not None:
-                builder = builder.limit(limit)
-            result = builder.execute()
-            
-            rows = result.data if result.data is not None else []
-
-            # Self-healing: Auto-DELETE stale pending reminders to prevent loop
-            # Only delete reminders that haven't been delivered yet (delivered_at is None)
-            if status_filter == "pending" and rows:
-                now = datetime.utcnow()
-                stale_threshold = now - timedelta(minutes=15)
-                stale_ids = []
-                for row in rows:
-                    try:
-                        remind_at_str = row.get("remind_at")
-                        delivered_at = row.get("delivered_at")
-                        # Only delete if it hasn't been delivered before
-                        if remind_at_str and not delivered_at:
-                            remind_at = datetime.fromisoformat(remind_at_str.replace("Z", "+00:00")).replace(tzinfo=None)
-                            if remind_at < stale_threshold:
-                                stale_ids.append(row["id"])
-                    except (ValueError, TypeError):
-                        continue
-                
-                if stale_ids:
-                    # Delete stale reminders completely instead of marking as delivered
-                    try:
-                        api_logger.info(f"Auto-deleting {len(stale_ids)} stale reminders", extra={"user_id": user_id, "reminder_ids": stale_ids})
-                        supabase_data.table("reminders").delete().in_("id", stale_ids).execute()
-                        # Filter out the deleted reminders from the response
-                        rows = [row for row in rows if row["id"] not in stale_ids]
-                    except Exception as e:
-                        api_logger.error(f"Failed to auto-delete stale reminders: {e}")
-
-            return [_serialize_reminder_row(row) for row in rows]
-        except Exception as error:
-            _handle_supabase_table_error("Warning: Reminders table not found or inaccessible", error)
-
-        except Exception as error:
-            _handle_supabase_table_error("Warning: Reminders table not found or inaccessible", error)
-
     try:
         query = reminders.select().where(reminders.c.user_id == user_id)
 
@@ -10014,19 +9047,6 @@ async def create_user_reminder(
         "created_at": now.isoformat(),
         "updated_at": now.isoformat(),
     }
-    if supabase_data:
-        try:
-            result = supabase_data.table("reminders").insert(values).execute()
-            rows = getattr(result, "data", None) or []
-            if isinstance(rows, list) and rows:
-                return _serialize_reminder_row(rows[0])
-            if isinstance(rows, dict) and rows:
-                return _serialize_reminder_row(rows)
-            raise HTTPException(status_code=500, detail="Failed to create reminder in Supabase: No data returned")
-        except Exception as error:
-            api_logger.error(f"Supabase reminder creation failed: {error}", exc_info=True)
-            raise HTTPException(status_code=500, detail=f"Failed to create reminder in Supabase: {str(error)}")
-
     sqlite_values = {
         **values,
         "remind_at": payload.remind_at,
@@ -10064,46 +9084,6 @@ async def update_user_reminder(
         update_values["delivery_mode"] = payload.delivery_mode
     if payload.metadata is not None:
         update_values["metadata"] = payload.metadata
-
-    if supabase_data:
-        try:
-            existing = (
-                supabase_data.table("reminders")
-                .select("*")
-                .eq("id", reminder_id)
-                .eq("user_id", user_id)
-                .single()
-                .execute()
-            )
-            if not existing.data:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reminder not found")
-            if not update_values:
-                return _serialize_reminder_row(existing.data)
-            update_payload = {
-                **update_values,
-                "updated_at": datetime.utcnow().isoformat(),
-            }
-            result = (
-                supabase_data.table("reminders")
-                .update(update_payload)
-                .eq("id", reminder_id)
-                .eq("user_id", user_id)
-                .execute()
-            )
-            rows = getattr(result, "data", None) or []
-            if isinstance(rows, list) and rows:
-                return _serialize_reminder_row(rows[0])
-            if isinstance(rows, dict) and rows:
-                return _serialize_reminder_row(rows)
-            
-            # If Supabase returns no data, it implies failure to update (likely permission or not found)
-            api_logger.error(f"Supabase update returned no data for reminder {reminder_id}", extra={"user_id": user_id})
-            raise HTTPException(status_code=500, detail="Failed to update reminder in Supabase (no data returned)")
-        except HTTPException:
-            raise
-        except Exception as error:
-            api_logger.error(f"Supabase update failed: {error}", exc_info=True)
-            raise HTTPException(status_code=500, detail=f"Supabase update failed: {str(error)}")
 
     existing = await db.fetch_one(
         reminders.select().where(
@@ -10147,42 +9127,6 @@ async def delete_user_reminder(
 ):
     require_same_user(user_id, current_user)
     api_logger.info(f"DELETE reminder request: user_id={user_id}, reminder_id={reminder_id}")
-    if supabase_data:
-        try:
-            existing = (
-                supabase_data.table("reminders")
-                .select("id")
-                .eq("id", reminder_id)
-                .eq("user_id", user_id)
-                .limit(1)
-                .execute()
-            )
-            if not existing.data:
-                api_logger.warning(f"Reminder {reminder_id} not found for user {user_id}")
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reminder not found")
-            
-            api_logger.info(f"Deleting reminder {reminder_id} from Supabase")
-            result = supabase_data.table("reminders").delete().eq("id", reminder_id).eq("user_id", user_id).execute()
-            deleted_payload = getattr(result, "data", None)
-            deleted_count = len(deleted_payload) if isinstance(deleted_payload, list) else (1 if deleted_payload else 0)
-            api_logger.info(
-                f"Successfully deleted reminder {reminder_id}",
-                extra={"user_id": user_id, "deleted_count": deleted_count}
-            )
-            
-            # Verify deletion
-            check = supabase_data.table("reminders").select("id").eq("id", reminder_id).execute()
-            if check.data:
-                api_logger.error(f"Reminder {reminder_id} still exists after deletion attempt!")
-                raise HTTPException(status_code=500, detail="Failed to delete reminder (persistence error)")
-                
-            return
-        except HTTPException:
-            raise
-        except Exception as error:
-            api_logger.error(f"Failed to delete reminder {reminder_id}: {error}", exc_info=True)
-            _handle_supabase_table_error("Warning: Failed to delete reminder", error)
-
     existing = await db.fetch_one(
         reminders.select().where(
             reminders.c.id == reminder_id,
@@ -10264,27 +9208,6 @@ async def create_calendar_event(
     require_same_user(user_id, current_user)
     now = datetime.utcnow()
     # Supabase-first create.
-    if supabase_data:
-        try:
-            payload = {
-                "user_id": user_id,
-                "calendar_id": event.calendar_id,
-                "title": event.title,
-                "description": event.description,
-                "start_time": event.start_time.isoformat(),
-                "end_time": event.end_time.isoformat(),
-                "created_at": now.isoformat(),
-            }
-            result = supabase_data.table("calendar_events").insert(payload).execute()
-            data = result.data if isinstance(result.data, list) else [result.data]
-            if data:
-                return data[0]
-        except Exception as error:
-            _handle_supabase_table_error(
-                f"Warning: Failed to create calendar event in Supabase for user {user_id}",
-                error,
-            )
-
     # Fallback to local SQLite.
     event_id = await db.execute(
         calendar_events.insert().values(
@@ -10312,57 +9235,13 @@ async def update_calendar_event(
     require_same_user(user_id, current_user)
     update_data = event_update.dict(exclude_unset=True)
 
-    if supabase_data:
-        try:
-            existing = (
-                supabase_data.table("calendar_events")
-                .select("*")
-                .eq("id", event_id)
-                .eq("user_id", user_id)
-                .single()
-                .execute()
-            )
-            # If Supabase has no record, fall back to SQLite without raising; the event
-            # may be stored only in the local DB.
-            if not existing.data:
-                existing = None  # type: ignore[assignment]
-            elif not update_data:
-                return existing.data
-
-            if update_data:
-                # Work on a copy so the SQLite fallback still receives datetime objects.
-                supabase_update: Dict[str, Any] = dict(update_data)
-                if "start_time" in supabase_update and isinstance(supabase_update["start_time"], datetime):
-                    supabase_update["start_time"] = supabase_update["start_time"].isoformat()
-                if "end_time" in supabase_update and isinstance(supabase_update["end_time"], datetime):
-                    supabase_update["end_time"] = supabase_update["end_time"].isoformat()
-
-                update_payload = {
-                    **supabase_update,
-                }
-                result = (
-                    supabase_data.table("calendar_events")
-                    .update(update_payload)
-                    .eq("id", event_id)
-                    .eq("user_id", user_id)
-                    .execute()
-                )
-                rows = getattr(result, "data", None) or []
-                if isinstance(rows, list) and rows:
-                    return rows[0]
-                if isinstance(rows, dict) and rows:
-                    return rows
-        except Exception as error:
-            _handle_supabase_table_error(
-                f"Warning: Failed to update calendar event {event_id} for user {user_id}",
-                error,
-            )
-
-    # Filter out fields that don't exist on the local SQLite table (for example, "color").
-    allowed_sqlite_keys = set(calendar_events.c.keys())
-    sqlite_update_data = {
-        key: value for key, value in update_data.items() if key in allowed_sqlite_keys
-    }
+    sqlite_update_data: Dict[str, Any] = {}
+    if update_data:
+         # Filter out fields that don't exist on the local SQLite table
+        allowed_sqlite_keys = set(calendar_events.c.keys())
+        sqlite_update_data = {
+            key: value for key, value in update_data.items() if key in allowed_sqlite_keys
+        }
 
     existing = await db.fetch_one(
         calendar_events.select().where(
@@ -10395,27 +9274,6 @@ async def delete_calendar_event(
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     require_same_user(user_id, current_user)
-    if supabase_data:
-        try:
-            existing = (
-                supabase_data.table("calendar_events")
-                .select("id")
-                .eq("id", event_id)
-                .eq("user_id", user_id)
-                .limit(1)
-                .execute()
-            )
-            # If Supabase has no record, fall back to SQLite without raising; the event
-            # may be stored only in the local DB.
-            if existing.data:
-                supabase_data.table("calendar_events").delete().eq("id", event_id).eq("user_id", user_id).execute()
-                return None
-        except Exception as error:
-            _handle_supabase_table_error(
-                f"Warning: Failed to delete calendar event {event_id} for user {user_id}",
-                error,
-            )
-
     existing = await db.fetch_one(
         calendar_events.select().where(
             (calendar_events.c.id == event_id) & (calendar_events.c.user_id == user_id)
@@ -10445,23 +9303,6 @@ async def list_dashboard_pulses(
 
     records: List[Any] = []
     # Prefer Supabase when available.
-    if supabase_data:
-        try:
-            result = (
-                supabase_data.table("dashboard_pulses")
-                .select("*")
-                .eq("user_id", user_id)
-                .order("date_key", desc=True)
-                .limit(safe_limit)
-                .execute()
-            )
-            records = result.data or []
-        except Exception as error:
-            _handle_supabase_table_error(
-                f"Warning: Failed to list dashboard pulses from Supabase for user {user_id}",
-                error,
-            )
-
     if not records:
         query = (
             dashboard_pulses.select()
@@ -10523,63 +9364,6 @@ async def create_dashboard_pulse(
     now = datetime.utcnow()
 
     # Supabase-first implementation.
-    if supabase_data:
-        try:
-            existing = await _load_dashboard_pulse_by_date(db, user_id, pulse.date_key)
-            if existing and isinstance(existing, dict):
-                pulse_id = existing.get("id")
-                update_payload = {
-                    "timestamp": timestamp_dt.isoformat(),
-                    "plans": plans_payload,
-                    "habits": habits_payload,
-                    "proactivity": proactivity_payload,
-                    "updated_at": now.isoformat(),
-                }
-                result = (
-                    supabase_data.table("dashboard_pulses")
-                    .update(update_payload)
-                    .eq("id", pulse_id)
-                    .eq("user_id", user_id)
-                    .select("*")
-                    .single()
-                    .execute()
-                )
-                record = result.data
-            else:
-                insert_payload = {
-                    "user_id": user_id,
-                    "date_key": pulse.date_key,
-                    "timestamp": timestamp_dt.isoformat(),
-                    "plans": plans_payload,
-                    "habits": habits_payload,
-                    "proactivity": proactivity_payload,
-                    "created_at": now.isoformat(),
-                    "updated_at": now.isoformat(),
-                }
-                result = (
-                    supabase_data.table("dashboard_pulses")
-                    .insert(insert_payload)
-                    .select("*")
-                    .single()
-                    .execute()
-                )
-                record = result.data
-
-            payload = _serialize_dashboard_pulse_record(record)
-            if not payload:
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail="Failed to persist dashboard pulse",
-                )
-            return DashboardPulse(**payload)
-        except HTTPException:
-            raise
-        except Exception as error:
-            _handle_supabase_table_error(
-                f"Warning: Failed to create dashboard pulse in Supabase for user {user_id}",
-                error,
-            )
-
     # Fallback to local SQLite.
     existing = await _load_dashboard_pulse_by_date(db, user_id, pulse.date_key)
 
@@ -10632,82 +9416,7 @@ async def update_dashboard_pulse(
     require_same_user(user_id, current_user)
     existing: Any = None
     # Supabase-first lookup.
-    if supabase_data:
-        try:
-            result = (
-                supabase_data.table("dashboard_pulses")
-                .select("*")
-                .eq("id", pulse_id)
-                .eq("user_id", user_id)
-                .limit(1)
-                .execute()
-            )
-            rows = result.data or []
-            if rows:
-                existing = rows[0]
-        except Exception as error:
-            _handle_supabase_table_error(
-                f"Warning: Failed to load dashboard pulse from Supabase for user {user_id}",
-                error,
-            )
-
-    if existing is None:
-        existing = await db.fetch_one(
-            dashboard_pulses.select().where(
-                (dashboard_pulses.c.id == pulse_id) & (dashboard_pulses.c.user_id == user_id)
-            )
-        )
-    if not existing:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pulse entry not found")
-    update_data: Dict[str, Any] = {}
-    if pulse_update.timestamp is not None:
-        update_data["timestamp"] = _timestamp_ms_to_datetime(pulse_update.timestamp)
-    if pulse_update.plans is not None:
-        update_data["plans"] = _normalize_plan_items([item.dict() for item in pulse_update.plans])
-    if pulse_update.habits is not None:
-        update_data["habits"] = _normalize_habit_items([item.dict() for item in pulse_update.habits])
-    if pulse_update.proactivity is not None:
-        update_data["proactivity"] = _normalize_proactivity(pulse_update.proactivity.dict())
-
-    if not update_data:
-        payload = _serialize_dashboard_pulse_record(existing)
-        if not payload:
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to load dashboard pulse")
-        return DashboardPulse(**payload)
-
-    # Supabase-first update path.
-    if supabase_data:
-        try:
-            update_payload = {
-                **update_data,
-                "updated_at": datetime.utcnow().isoformat(),
-            }
-            result = (
-                supabase_data.table("dashboard_pulses")
-                .update(update_payload)
-                .eq("id", pulse_id)
-                .eq("user_id", user_id)
-                .select("*")
-                .single()
-                .execute()
-            )
-            record = result.data
-            payload = _serialize_dashboard_pulse_record(record)
-            if not payload:
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail="Failed to update dashboard pulse",
-                )
-            return DashboardPulse(**payload)
-        except HTTPException:
-            raise
-        except Exception as error:
-            _handle_supabase_table_error(
-                f"Warning: Failed to update dashboard pulse in Supabase for user {user_id}",
-                error,
-            )
-
-    # Fallback to local SQLite.
+    # Local SQLite implementation
     update_data["updated_at"] = datetime.utcnow()
     await db.execute(
         dashboard_pulses.update()
@@ -10730,29 +9439,6 @@ async def delete_dashboard_pulse(
 ):
     require_same_user(user_id, current_user)
     # Supabase-first delete.
-    if supabase_data:
-        try:
-            existing = (
-                supabase_data.table("dashboard_pulses")
-                .select("id")
-                .eq("id", pulse_id)
-                .eq("user_id", user_id)
-                .limit(1)
-                .execute()
-            )
-            rows = existing.data or []
-            if not rows:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pulse entry not found")
-            supabase_data.table("dashboard_pulses").delete().eq("id", pulse_id).eq("user_id", user_id).execute()
-            return None
-        except HTTPException:
-            raise
-        except Exception as error:
-            _handle_supabase_table_error(
-                f"Warning: Failed to delete dashboard pulse in Supabase for user {user_id}",
-                error,
-            )
-
     existing = await db.fetch_one(
         dashboard_pulses.select().where(
             (dashboard_pulses.c.id == pulse_id) & (dashboard_pulses.c.user_id == user_id)
@@ -10776,23 +9462,6 @@ async def get_dashboard_summary(
     require_same_user(user_id, current_user)
     pulse_records: List[Any] = []
     # Supabase-first for dashboard pulses.
-    if supabase_data:
-        try:
-            result = (
-                supabase_data.table("dashboard_pulses")
-                .select("*")
-                .eq("user_id", user_id)
-                .order("date_key", desc=True)
-                .limit(MAX_DASHBOARD_PULSE_HISTORY)
-                .execute()
-            )
-            pulse_records = result.data or []
-        except Exception as error:
-            _handle_supabase_table_error(
-                f"Warning: Failed to fetch dashboard pulses from Supabase for user {user_id}",
-                error,
-            )
-
     if not pulse_records:
         pulses_query = (
             dashboard_pulses.select()

@@ -249,6 +249,33 @@ if __name__ == "__main__":
         sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=sqlalchemy.func.now(), onupdate=sqlalchemy.func.now()),
         sqlalchemy.UniqueConstraint("user_id", "date_key", name="uq_dashboard_pulses_user_date"),
     )
+
+    user_chat_threads = sqlalchemy.Table(
+        "user_chat_threads",
+        metadata,
+        sqlalchemy.Column("id", sqlalchemy.String, primary_key=True),  # UUID
+        sqlalchemy.Column("user_data_id", sqlalchemy.Integer, sqlalchemy.ForeignKey("user_data.id"), nullable=False),
+        sqlalchemy.Column("user_identifier", sqlalchemy.Integer, nullable=False),
+        sqlalchemy.Column("title", sqlalchemy.String, default="New Conversation"),
+        sqlalchemy.Column("summary", sqlalchemy.String, nullable=True),
+        sqlalchemy.Column("context_snapshot", sqlalchemy.JSON, default=[]),
+        sqlalchemy.Column("metadata", sqlalchemy.JSON, default={}),
+        sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=sqlalchemy.func.now()),
+        sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=sqlalchemy.func.now(), onupdate=sqlalchemy.func.now()),
+        sqlalchemy.Column("last_message_at", sqlalchemy.DateTime, default=sqlalchemy.func.now()),
+    )
+
+    user_chat_messages = sqlalchemy.Table(
+        "user_chat_messages",
+        metadata,
+        sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
+        sqlalchemy.Column("thread_id", sqlalchemy.String, sqlalchemy.ForeignKey("user_chat_threads.id"), nullable=False, index=True),
+        sqlalchemy.Column("role", sqlalchemy.String, nullable=False),
+        sqlalchemy.Column("text", sqlalchemy.String, nullable=False),
+        sqlalchemy.Column("grounding_metadata", sqlalchemy.JSON, nullable=True),
+        sqlalchemy.Column("attachments", sqlalchemy.JSON, nullable=True),
+        sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=sqlalchemy.func.now()),
+    )
     proactivity_settings = sqlalchemy.Table(
         "proactivity_settings",
         metadata,

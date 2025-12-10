@@ -23,9 +23,7 @@ try:
         _conversation_store_available,
         _handle_conversation_store_error,
         _general_conversation_user_id,
-        ensure_supabase_thread_exists,
         ensure_user_data_record,
-        require_supabase_user_data_id,
         cache_conversation_history,
     )
 except Exception:  # pragma: no cover - fallback when running backend/ directly
@@ -36,9 +34,7 @@ except Exception:  # pragma: no cover - fallback when running backend/ directly
         _conversation_store_available,
         _handle_conversation_store_error,
         _general_conversation_user_id,
-        ensure_supabase_thread_exists,
         ensure_user_data_record,
-        require_supabase_user_data_id,
         cache_conversation_history,
     )
 
@@ -159,42 +155,12 @@ async def overwrite_thread_history(
     updated_at_iso = datetime.utcnow().isoformat() + "Z"
 
     # 1. Update Supabase if available
-    if _conversation_store_available() and _is_valid_uuid(conversation_id):
-        try:
-            seed_title = None
-            if normalized_history:
-                first_text = normalized_history[0].get("text") or ""
-                if first_text:
-                    seed_title = first_text[:60]
+    # 1. Update Supabase if available (Auth only, no data tables)
+    # Supabase data operations removed.
 
-            await ensure_supabase_thread_exists(
-                conversation_id, user_id, title=seed_title
-            )
-            conversation_store.supabase.table("user_chat_messages").delete().eq(
-                "thread_id", conversation_id
-            ).execute()
+    # 2. Update local SQLite database
 
-            if normalized_history:
-                rows: List[Dict[str, Any]] = []
-                for entry in normalized_history:
-                    rows.append(
-                        {
-                            "thread_id": conversation_id,
-                            "role": entry.get("role"),
-                            "text": entry.get("text") or "",
-                        }
-                    )
-                conversation_store.supabase.table("user_chat_messages").insert(
-                    rows
-                ).execute()
 
-            conversation_store.supabase.table("user_chat_threads").update(
-                {"updated_at": updated_at_iso, "last_message_at": updated_at_iso}
-            ).eq("id", conversation_id).execute()
-        except Exception as error:
-            _handle_conversation_store_error(
-                "Error overwriting conversation history", error
-            )
 
     # 2. Update local SQLite database
     if _is_valid_uuid(conversation_id):
@@ -305,11 +271,7 @@ async def apply_conversation_update(
             update_values["title"] = normalized_title
         if target_user_id is not None:
             update_values["user_identifier"] = target_user_id
-            if supabase_user_data_id is None:
-                supabase_user_data_id = await require_supabase_user_data_id(
-                    target_user_id
-                )
-            update_values["user_data_id"] = supabase_user_data_id
+            # Removed require_supabase_user_data_id usage
 
         try:
             result = conversation_store.supabase.table("user_chat_threads").update(
@@ -337,10 +299,7 @@ async def apply_conversation_update(
 
             if target_user_id is not None:
                 seed_title = normalized_title or "New Conversation"
-                if supabase_user_data_id is None:
-                    supabase_user_data_id = await require_supabase_user_data_id(
-                        target_user_id
-                    )
+                # Removed require_supabase_user_data_id usage
                 try:
                     created = (
                         conversation_store.supabase.table("user_chat_threads")
@@ -348,7 +307,7 @@ async def apply_conversation_update(
                             {
                                 "id": conversation_id,
                                 "user_identifier": target_user_id,
-                                "user_data_id": supabase_user_data_id,
+                                "user_data_id": local_user_data_id, # Fallback to local ID if needed, though this block is Supabase specific
                                 "title": seed_title,
                                 "context_snapshot": [],
                                 "metadata": {},

@@ -39,17 +39,10 @@ def configure_conversation_store(
     supabase_key_source: Optional[str],
 ) -> None:
     """
-    Configure Supabase clients for the conversation store.
-
-    This is called once from the main application after Supabase has been
-    initialized. It intentionally avoids importing from backend.main to keep
-    dependencies one-way.
+    No-op configuration for conversation store.
+    Supabase clients are no longer used for data storage.
     """
-    global supabase, supabase_admin, SUPABASE_CONVERSATIONS_ENABLED, SUPABASE_KEY_SOURCE
-    supabase = supabase_client
-    supabase_admin = supabase_admin_client
-    SUPABASE_KEY_SOURCE = supabase_key_source
-    SUPABASE_CONVERSATIONS_ENABLED = supabase_client is not None
+    pass
 
 
 GENERAL_CONVERSATION_PREFIX = "general:"
@@ -267,109 +260,7 @@ async def ensure_user_data_record(user_identifier: int) -> Optional[int]:
     return None
 
 
-async def _resolve_supabase_user_data_id(user_id: int) -> Optional[int]:
-    """Return the Supabase user_data.id for the given user, creating it if missing."""
-    if not _conversation_store_available() or not supabase:
-        return None
-
-    supabase_user_data_id: Optional[int] = None
-    try:
-        supabase_lookup = (
-            supabase.table("user_data")
-            .select("id")
-            .eq("user_identifier", user_id)
-            .limit(1)
-            .execute()
-        )
-        supabase_match = getattr(supabase_lookup, "data", None) or []
-        if supabase_match and supabase_match[0].get("id") is not None:
-            supabase_user_data_id = supabase_match[0]["id"]
-        else:
-            supabase.table("user_data").upsert({"user_identifier": user_id}).execute()
-            fetch_after_upsert = (
-                supabase.table("user_data")
-                .select("id")
-                .eq("user_identifier", user_id)
-                .limit(1)
-                .execute()
-            )
-            supabase_data = getattr(fetch_after_upsert, "data", None) or []
-            if supabase_data and supabase_data[0].get("id") is not None:
-                supabase_user_data_id = supabase_data[0]["id"]
-
-        return supabase_user_data_id
-    except Exception as error:
-        _handle_conversation_store_error("Error ensuring user_data in Supabase", error)
-        return None
-
-
-async def require_supabase_user_data_id(user_id: int) -> int:
-    """Resolve the Supabase user_data.id or raise if it's unavailable."""
-    supabase_user_data_id = await _resolve_supabase_user_data_id(user_id)
-    if supabase_user_data_id is None:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="User metadata storage is not available.",
-        )
-    return supabase_user_data_id
-
-
-async def ensure_supabase_thread_exists(
-    conversation_id: str,
-    user_id: int,
-    *,
-    title: Optional[str] = None,
-) -> bool:
-    """Ensure a Supabase conversation thread exists for the given ID."""
-    if not _conversation_store_available() or not supabase:
-        return False
-    from uuid import UUID
-
-    try:
-        # Validate UUID without raising on bad input
-        UUID(str(conversation_id))
-    except Exception:
-        return False
-
-    try:
-        existing = (
-            supabase.table("user_chat_threads")
-            .select("id")
-            .eq("id", conversation_id)
-            .limit(1)
-            .execute()
-        )
-        rows = getattr(existing, "data", None) or []
-        if rows:
-            return True
-    except Exception as error:
-        _handle_conversation_store_error(
-            "Error checking Supabase conversation thread", error
-        )
-        return False
-
-    try:
-        supabase_user_data_id = await require_supabase_user_data_id(user_id)
-        now_iso = datetime.utcnow().isoformat() + "Z"
-        seed_title = title or "Recovered Conversation"
-        supabase.table("user_chat_threads").insert(
-            {
-                "id": conversation_id,
-                "user_identifier": user_id,
-                "user_data_id": supabase_user_data_id,
-                "title": seed_title,
-                "context_snapshot": [],
-                "metadata": {},
-                "created_at": now_iso,
-                "updated_at": now_iso,
-            }
-        ).execute()
-        return True
-    except Exception as error:
-        _handle_conversation_store_error(
-            "Error creating missing conversation thread", error
-        )
-        return False
+# Removed _resolve_supabase_user_data_id, require_supabase_user_data_id, and ensure_supabase_thread_exists.
 
 
 async def get_or_create_conversation(
@@ -510,88 +401,7 @@ async def save_conversation_message(
 
 def delete_supabase_user_records(user_id: int) -> None:
     """
-    Delete all Supabase records associated with a user.
-
-    This is used during account deletion and centralizes the mapping of
-    tables → user foreign-key columns for Supabase.
+    Legacy stub for deleting Supabase records.
+    Supabase is now auth-only; data deletion is handled locally.
     """
-    admin_client = supabase_admin or supabase
-    if not admin_client:
-        logger.info(
-            "Supabase not configured, skipping remote deletion", extra={"user_id": user_id}
-        )
-        return
-
-    anon_sources = {"SUPABASE_ANON_KEY", "NEXT_PUBLIC_SUPABASE_ANON_KEY"}
-    if supabase_admin is None and SUPABASE_KEY_SOURCE in anon_sources:
-        logger.warning(
-            "Supabase service-role key missing; skipping Supabase data deletion",
-            extra={
-                "user_id": user_id,
-                "event_type": "account_deletion_skipped_supabase",
-            },
-        )
-        return
-
-    logger.info(
-        "Starting Supabase data deletion for user %d", user_id, extra={"user_id": user_id}
-    )
-
-    try:
-        threads_result = (
-            admin_client.table("user_chat_threads")
-            .select("id")
-            .eq("user_identifier", user_id)
-            .execute()
-        )
-        thread_rows = threads_result.data or []
-        thread_ids = [row["id"] for row in thread_rows]
-
-        if thread_ids:
-            logger.info(
-                "Deleting chat messages for %d threads",
-                len(thread_ids),
-                extra={"user_id": user_id, "thread_count": len(thread_ids)},
-            )
-            admin_client.table("user_chat_messages").delete().in_(  # type: ignore[attr-defined]
-                "thread_id", thread_ids
-            ).execute()
-    except Exception as error:
-        _handle_supabase_table_error(
-            f"Warning: Failed to delete user_chat_messages for user {user_id}", error
-        )
-
-    delete_targets: List[Tuple[str, str]] = [
-        ("general_chat_messages", "user_id"),
-        ("chat_sessions", "user_id"),
-        ("user_chat_threads", "user_identifier"),
-        ("user_data", "user_identifier"),
-        ("plans", "user_id"),
-        ("habits", "user_id"),
-        ("reminders", "user_id"),
-        ("calendars", "user_id"),
-        ("calendar_events", "user_id"),
-        ("dashboard_pulses", "user_id"),
-        ("user_streaks", "user_id"),
-        ("context_cache", "user_id"),
-        ("file_search_stores", "user_id"),
-        ("media_uploads", "user_id"),
-        ("proactivity_logs", "user_id"),
-        ("proactivity_settings", "user_id"),
-        ("proactive_notifications", "user_id"),
-        ("google_calendar_credentials", "user_id"),
-        ("proactivity_push_subscriptions", "user_id"),
-    ]
-
-    for table_name, column in delete_targets:
-        try:
-            admin_client.table(table_name).delete().eq(column, user_id).execute()
-        except Exception as error:
-            _handle_supabase_table_error(
-                f"Warning: Failed to delete Supabase data for user {user_id} in {table_name}",
-                error,
-            )
-
-    logger.info(
-        "Completed Supabase data deletion for user %d", user_id, extra={"user_id": user_id}
-    )
+    pass

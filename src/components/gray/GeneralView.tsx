@@ -39,6 +39,7 @@ type GrayGeneralViewProps = {
   userId?: number | null;
   onReminderMove?: (reminderId: number, range: { start: Date; end: Date }) => Promise<void> | void;
   hideCalendar?: boolean;
+  hidePlans?: boolean;
 };
 
 export function GrayGeneralView({
@@ -67,6 +68,7 @@ export function GrayGeneralView({
   showGreeting = true,
   userId,
   hideCalendar = false,
+  hidePlans = false,
 }: GrayGeneralViewProps) {
   const [modalState, setModalState] = useState<{ isOpen: boolean; type: "plan" | "habit" | null }>({
     isOpen: false,
@@ -193,124 +195,62 @@ export function GrayGeneralView({
           </div>
         ) : null}
 
-        <div className={`${styles.secondaryColumn} ${styles.secondaryColumnSlim}`}>
-          <div
-            className={`${styles.planPanel} ${styles.planPanelSlim}`}
-            style={
-              isCompactLayout
-                ? undefined
-                : { minHeight: PANEL_HEIGHT, height: PANEL_HEIGHT }
-            }
-            data-match-calendar-height={isCompactLayout ? "false" : "true"}
-          >
-            <div className={styles.tabBar}>
-              <button
-                type="button"
-                data-active={activeTab === "plans"}
-                onClick={() => onChangeTab("plans")}
-              >
-                Plans
-              </button>
-              <button
-                type="button"
-                data-active={activeTab === "habits"}
-                onClick={() => onChangeTab("habits")}
-              >
-                Habits
-              </button>
-            </div>
-            <div className={styles.planBody}>
-              {activeTab === "plans" ? (
-                <>
-                  <ul className={styles.planList}>
-                    {(plans || []).map((plan) => (
-                      <li key={plan.id} className={styles.planListItem}>
-                        <div
-                          className={styles.planItemButton}
-                          data-completed={plan.completed ? "true" : "false"}
-                          role="group"
-                        >
-                          <button
-                            type="button"
-                            className={styles.planCheckboxButton}
-                            aria-label={plan.completed ? "Mark plan as incomplete" : "Mark plan as complete"}
-                            onClick={(event) => {
-                              event.preventDefault();
-                              event.stopPropagation();
-                              onTogglePlan(plan.id);
-                            }}
+        {!hidePlans ? (
+          <div className={`${styles.secondaryColumn} ${styles.secondaryColumnSlim}`}>
+            <div
+              className={`${styles.planPanel} ${styles.planPanelSlim}`}
+              style={
+                isCompactLayout
+                  ? undefined
+                  : { minHeight: PANEL_HEIGHT, height: PANEL_HEIGHT }
+              }
+              data-match-calendar-height={isCompactLayout ? "false" : "true"}
+            >
+              <div className={styles.tabBar}>
+                <button
+                  type="button"
+                  data-active={activeTab === "plans"}
+                  onClick={() => onChangeTab("plans")}
+                >
+                  Plans
+                </button>
+                <button
+                  type="button"
+                  data-active={activeTab === "habits"}
+                  onClick={() => onChangeTab("habits")}
+                >
+                  Habits
+                </button>
+              </div>
+              <div className={styles.planBody}>
+                {activeTab === "plans" ? (
+                  <>
+                    <ul className={styles.planList}>
+                      {(plans || []).map((plan) => (
+                        <li key={plan.id} className={styles.planListItem}>
+                          <div
+                            className={styles.planItemButton}
+                            data-completed={plan.completed ? "true" : "false"}
+                            role="group"
                           >
-                            <span className={styles.planCheckbox} aria-hidden="true">
-                              {plan.completed ? <CheckSquare size={16} /> : <Square size={16} />}
+                            <button
+                              type="button"
+                              className={styles.planCheckboxButton}
+                              aria-label={plan.completed ? "Mark plan as incomplete" : "Mark plan as complete"}
+                              onClick={(event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                onTogglePlan(plan.id);
+                              }}
+                            >
+                              <span className={styles.planCheckbox} aria-hidden="true">
+                                {plan.completed ? <CheckSquare size={16} /> : <Square size={16} />}
+                              </span>
+                            </button>
+                            <span className={styles.planLabelGroup}>
+                              <span className={styles.planLabel}>{plan.label}</span>
                             </span>
-                          </button>
-                          <span className={styles.planLabelGroup}>
-                            <span className={styles.planLabel}>{plan.label}</span>
-                          </span>
-                        </div>
-                        <span className={styles.listItemActions}>
-                          <button
-                            type="button"
-                            className={styles.listItemActionButton}
-                            onClick={(event) => {
-                              event.preventDefault();
-                              event.stopPropagation();
-                              setPlanEditorTarget(plan);
-                            }}
-                            aria-label={`Edit plan ${plan.label}`}
-                            disabled={!onSavePlan}
-                          >
-                            <Pencil size={14} />
-                          </button>
-                          <button
-                            type="button"
-                            className={styles.listItemActionButton}
-                            onClick={(event) => {
-                              event.preventDefault();
-                              event.stopPropagation();
-                              onDeletePlan(plan);
-                            }}
-                            aria-label={`Delete plan ${plan.label}`}
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                  <button type="button" className={styles.secondaryAction} onClick={() => openModal("plan")}>
-                    Add plans
-                  </button>
-                </>
-              ) : (
-                <>
-                  <ul className={styles.habitList}>
-                    {habits.map((habit) => (
-                      <li key={habit.id} className={styles.habitListItem}>
-                        <div
-                          className={styles.planItemButton}
-                          data-completed={habit.completed ? "true" : "false"}
-                          role="group"
-                        >
-                          <button
-                            type="button"
-                            className={styles.planCheckboxButton}
-                            aria-label={habit.completed ? "Mark habit as incomplete" : "Mark habit as complete"}
-                            onClick={(event) => {
-                              event.preventDefault();
-                              event.stopPropagation();
-                              onToggleHabit(habit.id);
-                            }}
-                          >
-                            <span className={styles.planCheckbox} aria-hidden="true">
-                              {habit.completed ? <CheckSquare size={16} /> : <Square size={16} />}
-                            </span>
-                          </button>
-                          <span className={styles.habitContent}>
-                            <span className={styles.habitLabel}>{habit.label}</span>
-                          </span>
-                        </div>
-                        <span className={styles.habitRightSection}>
+                          </div>
                           <span className={styles.listItemActions}>
                             <button
                               type="button"
@@ -318,9 +258,10 @@ export function GrayGeneralView({
                               onClick={(event) => {
                                 event.preventDefault();
                                 event.stopPropagation();
-                                onEditHabit(habit);
+                                setPlanEditorTarget(plan);
                               }}
-                              aria-label={`Edit habit ${habit.label}`}
+                              aria-label={`Edit plan ${plan.label}`}
+                              disabled={!onSavePlan}
                             >
                               <Pencil size={14} />
                             </button>
@@ -330,29 +271,92 @@ export function GrayGeneralView({
                               onClick={(event) => {
                                 event.preventDefault();
                                 event.stopPropagation();
-                                onDeleteHabit(habit);
+                                onDeletePlan(plan);
                               }}
-                              aria-label={`Delete habit ${habit.label}`}
+                              aria-label={`Delete plan ${plan.label}`}
                             >
                               <Trash2 size={14} />
                             </button>
                           </span>
-                          <span className={styles.habitStreak}>
-                            <Zap size={12} aria-hidden="true" />
-                            <span>{habit.streakLabel}</span>
+                        </li>
+                      ))}
+                    </ul>
+                    <button type="button" className={styles.secondaryAction} onClick={() => openModal("plan")}>
+                      Add plans
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <ul className={styles.habitList}>
+                      {habits.map((habit) => (
+                        <li key={habit.id} className={styles.habitListItem}>
+                          <div
+                            className={styles.planItemButton}
+                            data-completed={habit.completed ? "true" : "false"}
+                            role="group"
+                          >
+                            <button
+                              type="button"
+                              className={styles.planCheckboxButton}
+                              aria-label={habit.completed ? "Mark habit as incomplete" : "Mark habit as complete"}
+                              onClick={(event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                onToggleHabit(habit.id);
+                              }}
+                            >
+                              <span className={styles.planCheckbox} aria-hidden="true">
+                                {habit.completed ? <CheckSquare size={16} /> : <Square size={16} />}
+                              </span>
+                            </button>
+                            <span className={styles.habitContent}>
+                              <span className={styles.habitLabel}>{habit.label}</span>
+                            </span>
+                          </div>
+                          <span className={styles.habitRightSection}>
+                            <span className={styles.listItemActions}>
+                              <button
+                                type="button"
+                                className={styles.listItemActionButton}
+                                onClick={(event) => {
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                                  onEditHabit(habit);
+                                }}
+                                aria-label={`Edit habit ${habit.label}`}
+                              >
+                                <Pencil size={14} />
+                              </button>
+                              <button
+                                type="button"
+                                className={styles.listItemActionButton}
+                                onClick={(event) => {
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                                  onDeleteHabit(habit);
+                                }}
+                                aria-label={`Delete habit ${habit.label}`}
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </span>
+                            <span className={styles.habitStreak}>
+                              <Zap size={12} aria-hidden="true" />
+                              <span>{habit.streakLabel}</span>
+                            </span>
                           </span>
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                  <button type="button" className={styles.secondaryAction} onClick={() => openModal("habit")}>
-                    Add habits
-                  </button>
-                </>
-              )}
+                        </li>
+                      ))}
+                    </ul>
+                    <button type="button" className={styles.secondaryAction} onClick={() => openModal("habit")}>
+                      Add habits
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
           </div>
-        </div>
+        ) : null}
       </section>
 
       {modalState.isOpen && modalState.type && (

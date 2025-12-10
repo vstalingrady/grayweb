@@ -24,7 +24,7 @@ export const SIDEBAR_RAIL_ITEMS: SidebarNavItem[] = [
 export const NAVIGATION_ROUTES: Partial<Record<SidebarNavKey, string>> = {
     general: "/g",
     threads: "/",
-    dashboard: "/dashboard",
+    dashboard: "/d",
     reference: "/reference",
     history: "/history",
 };
