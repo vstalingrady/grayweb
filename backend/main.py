@@ -11869,7 +11869,7 @@ async def trigger_proactivity_for_user(
     """
     global proactivity_engine
 
-    require_admin(current_user)
+    require_same_user(user_id, current_user)
     if not proactivity_engine:
         raise HTTPException(status_code=503, detail="Proactivity engine not initialized")
 

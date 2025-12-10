@@ -1779,7 +1779,7 @@ class ApiService {
   }
 
   async saveMessage(conversationId: string, role: 'user' | 'model', text: string, userId?: number): Promise<void> {
-    await this.fetch(`/api/conversation/${conversationId}/messages`, {
+    await this.fetch(`/api/conversation/${encodeURIComponent(conversationId)}/messages`, {
       method: 'POST',
       body: JSON.stringify({ role, text, user_id: userId }),
     });
@@ -1793,7 +1793,7 @@ class ApiService {
   }
 
   async getConversation(conversationId: string): Promise<ChatMessage[]> {
-    return this.fetch<ChatMessage[]>(`/api/conversation/${conversationId}`);
+    return this.fetch<ChatMessage[]>(`/api/conversation/${encodeURIComponent(conversationId)}`);
   }
 
   async getConversationUsage(conversationId: string): Promise<ConversationUsage | null> {
@@ -1806,7 +1806,7 @@ class ApiService {
         provider: string;
         model_name?: string | null;
         model_label?: string | null;
-      }>(`/api/conversation/${conversationId}/usage`);
+      }>(`/api/conversation/${encodeURIComponent(conversationId)}/usage`);
 
       const normalizedLimit =
         typeof payload.limit === "number" && Number.isFinite(payload.limit)

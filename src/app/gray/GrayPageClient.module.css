@@ -3019,7 +3019,7 @@
   flex-direction: column-reverse;
   /* Messages should start from top and grow downward */
   justify-content: flex-start;
-  gap: 0;
+  gap: 24px;
   min-height: min-content;
   padding: clamp(4px, 1vh, 10px) 24px 0 24px;
   overflow: visible;
@@ -8731,9 +8731,10 @@ h1.greeting {
   gap: 0;
   margin: 0 auto;
   border-radius: 27px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  background: #1a1a1a;
-  backdrop-filter: none;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(26, 26, 26, 0.8);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   padding: 8px 10px;
   position: relative;
   z-index: 1;
@@ -8751,8 +8752,9 @@ h1.greeting {
 }
 
 .layout[data-view="general"] .chatBarRounded {
-  background: #1a1a1a;
-  backdrop-filter: none;
+  background: rgba(26, 26, 26, 0.8);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
 }
 
 .layout[data-view="general"] .chatBarRounded:focus-within {
@@ -9858,14 +9860,20 @@ h1.greeting {
   .chatComposerDock {
     position: fixed !important;
     bottom: 0 !important;
-    left: 0 !important;
-    right: 0 !important;
-    width: 100% !important;
+    left: 12px !important;
+    right: 12px !important;
+    width: auto !important;
     z-index: 100 !important;
-    background: #000 !important;
-    padding-bottom: max(8px, env(safe-area-inset-bottom, 8px)) !important;
-    padding-left: max(8px, env(safe-area-inset-left, 8px)) !important;
-    padding-right: max(8px, env(safe-area-inset-right, 8px)) !important;
+    background: rgba(18, 18, 18, 0.85) !important;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-top: none !important;
+    border-top-left-radius: 32px;
+    border-top-right-radius: 32px;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.4);
+    padding-bottom: max(18px, env(safe-area-inset-bottom, 18px)) !important;
+    padding-left: 12px !important;
+    padding-right: 12px !important;
   }
 
   /* Ensure chat viewport accounts for fixed composer */

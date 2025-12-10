@@ -383,11 +383,14 @@ async def get_or_create_conversation(
 
     valid_id: Optional[str] = None
     if conversation_id:
-        try:
-            UUID(str(conversation_id))
-            valid_id = str(conversation_id)
-        except Exception:
-            valid_id = None
+        if str(conversation_id).startswith("general:"):
+             valid_id = str(conversation_id)
+        else:
+            try:
+                UUID(str(conversation_id))
+                valid_id = str(conversation_id)
+            except Exception:
+                valid_id = None
 
     if valid_id:
         cached_owner = CONVERSATION_OWNER_CACHE.get(valid_id)
@@ -417,7 +420,7 @@ async def get_or_create_conversation(
                 detail="User metadata storage is not available.",
             )
 
-        new_id = str(uuid4())
+        new_id = valid_id if valid_id else str(uuid4())
         now = datetime.utcnow()
         insert_query = user_chat_threads.insert().values(
             id=new_id,
