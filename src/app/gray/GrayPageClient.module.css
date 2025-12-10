@@ -8970,8 +8970,11 @@ h1.greeting {
 .chatComposerSkirt {
   display: block;
   position: absolute;
-  inset: 0;
-  /* Fully cover the dock area */
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: -12px;
+  /* Extend below dock to reach screen bottom (compensate for dock's bottom: 12px) */
   background: rgba(18, 18, 18, 0.85);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);

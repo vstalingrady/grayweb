@@ -88,6 +88,7 @@ users = sqlalchemy.Table(
     sqlalchemy.Column("last_weekly_reset", sqlalchemy.String, nullable=True),
     sqlalchemy.Column("last_six_hour_reset", sqlalchemy.String, nullable=True),
     sqlalchemy.Column("last_daily_gemini_pro_reset", sqlalchemy.String, nullable=True),
+    sqlalchemy.Column("preferred_model", sqlalchemy.String, nullable=True),
     sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
     sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
 )
