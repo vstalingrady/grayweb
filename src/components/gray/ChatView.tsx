@@ -1477,17 +1477,10 @@ const ChatMessagesList = memo(
                     <textarea
                       className={styles.chatEditInput}
                       value={editContent}
-                      onChange={(e) => {
-                        setEditContent(e.target.value);
-                        e.target.style.height = "auto";
-                        e.target.style.height = `${e.target.scrollHeight}px`;
-                      }}
+                      onChange={(e) => setEditContent(e.target.value)}
                       ref={(el) => {
                         if (el) {
-                          // Initial resize
-                          el.style.height = "auto";
-                          el.style.height = `${el.scrollHeight}px`;
-                          // Focus cursor at end
+                          // Focus cursor at end on mount
                           if (document.activeElement !== el) {
                             el.setSelectionRange(el.value.length, el.value.length);
                             el.focus();
