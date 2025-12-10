@@ -1321,27 +1321,30 @@ const ChatMessagesList = memo(
     thinkingStartTime,
   }: ChatMessagesListProps) => {
     const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
-    const [editContent, setEditContent] = useState("");
+    // Use ref instead of state to avoid re-rendering on every keystroke
+    const editContentRef = useRef<string>("");
+    const editTextareaRef = useRef<HTMLTextAreaElement | null>(null);
     // Track which message has its action bar expanded (tap to reveal)
     const [expandedMessageId, setExpandedMessageId] = useState<string | null>(null);
 
     const startEditing = useCallback((messageId: string, currentContent: string) => {
       setEditingMessageId(messageId);
-      setEditContent(currentContent);
+      editContentRef.current = currentContent;
     }, []);
 
     const cancelEditing = useCallback(() => {
       setEditingMessageId(null);
-      setEditContent("");
+      editContentRef.current = "";
     }, []);
 
     const saveEditing = useCallback((messageId: string) => {
-      if (editContent.trim()) {
-        handleEditMessage(messageId, editContent);
+      const content = editTextareaRef.current?.value || editContentRef.current;
+      if (content.trim()) {
+        handleEditMessage(messageId, content);
       }
       setEditingMessageId(null);
-      setEditContent("");
-    }, [editContent, handleEditMessage]);
+      editContentRef.current = "";
+    }, [handleEditMessage]);
 
     // Toggle message action bar visibility on tap/click
     const toggleMessageActions = useCallback((messageId: string) => {
@@ -1476,9 +1479,9 @@ const ChatMessagesList = memo(
                   <div className={styles.chatEditContainer}>
                     <textarea
                       className={styles.chatEditInput}
-                      value={editContent}
-                      onChange={(e) => setEditContent(e.target.value)}
+                      defaultValue={editContentRef.current}
                       ref={(el) => {
+                        editTextareaRef.current = el;
                         if (el) {
                           // Focus cursor at end on mount
                           if (document.activeElement !== el) {
