@@ -563,7 +563,7 @@
 .personalizationOverlay {
   position: fixed;
   inset: 0;
-  z-index: 60;
+  z-index: 2000;
   background: rgba(0, 0, 0, 0.8);
   display: flex;
   align-items: center;
@@ -2997,13 +2997,29 @@
   width: 100%;
   min-height: 0;
   overflow-y: auto;
-  scrollbar-width: none;
+  /* scrollbar-width: none; */
   overflow-anchor: auto;
-  -ms-overflow-style: none;
+  padding-bottom: calc(var(--chat-composer-height, 120px) + 60px);
+  scroll-padding-bottom: calc(var(--chat-composer-height, 120px) + 36px);
 }
 
 .chatViewport::-webkit-scrollbar {
-  display: none;
+  display: block;
+  width: 6px;
+  background: transparent;
+}
+
+.chatViewport::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.chatViewport::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+}
+
+.chatViewport::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
 }
 
 .chatFade {
@@ -3021,7 +3037,8 @@
   justify-content: flex-start;
   gap: 24px;
   min-height: min-content;
-  padding: clamp(4px, 1vh, 10px) 24px 0 24px;
+  padding: clamp(4px, 1vh, 10px) 24px 24px 24px;
+  /* Increased bottom padding for overlay */
   overflow: visible;
   width: 100%;
   max-width: min(calc(1.1 * var(--chat-bubble-max-width, var(--chat-column-max-width, 840px))), 100%);
@@ -4209,8 +4226,6 @@
   /* No highlighting on selection */
   background: transparent;
   border-radius: 12px;
-  margin: -8px;
-  padding: 8px;
 }
 
 .chatMessageFooterInner {
@@ -4419,25 +4434,28 @@
 }
 
 .chatComposerDock {
-  position: relative;
-  /* Changed from fixed to participate in flex flow */
-  bottom: auto;
-  left: auto;
-  right: auto;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 0;
   padding: 0;
-  padding-bottom: 0;
+  /* Compensate for scrollbar */
+  padding-bottom: 24px;
   background: transparent;
+  /* Translucent overlay */
+  /* Optional: subtle border separator */
   z-index: 40;
   width: 100%;
   margin-top: 0;
   box-shadow: none;
   overflow: visible;
   flex-shrink: 0;
-  /* Don't shrink the input area */
+  pointer-events: none;
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 
@@ -4464,14 +4482,17 @@
 }
 
 /* Offset composer for sidebar */
-/* Sidebar offset removed - grid layout handles positioning */
-.layout:has(.sidebar) .chatComposerDock {
-  /* Centering is handled by the grid layout and margin: 0 auto on children */
+/* .layout:has(.sidebar) .chatComposerDock {
+  left: 52px;
+  width: auto;
+  right: 0;
 }
 
 .layout:has(.sidebar[data-expanded="true"]) .chatComposerDock {
-  /* Centering is handled by the grid layout and margin: 0 auto on children */
-}
+  left: 260px;
+  width: auto;
+  right: 0;
+} */
 
 /* Reset offset on mobile sidebar (overlay mode) */
 .layout[data-mobile-sidebar="true"] .chatComposerDock {
@@ -6269,7 +6290,7 @@ h1.greeting {
   padding: clamp(20px, 6vw, 48px);
   background: rgba(0, 0, 0, 0.85);
   backdrop-filter: none;
-  z-index: 60;
+  z-index: 2000;
 }
 
 .proactivityModal {
@@ -8663,7 +8684,7 @@ h1.greeting {
   position: fixed;
   top: clamp(64px, 10vh, 110px);
   right: clamp(16px, 4vw, 32px);
-  z-index: 60;
+  z-index: 2000;
 }
 
 .planDetailCard {
@@ -8766,7 +8787,7 @@ h1.greeting {
   flex-direction: column;
   /* Key to stacking viewport then composer */
   align-items: stretch;
-  justify-content: flex-start;
+  justify-content: flex-end;
   position: relative;
   overflow: hidden;
   /* Prevent body scroll */
@@ -8826,6 +8847,7 @@ h1.greeting {
   margin: 0 auto;
   z-index: 100;
   /* Ensure composer is above other page elements */
+  pointer-events: auto;
 }
 
 
@@ -8868,16 +8890,21 @@ h1.greeting {
   z-index: 2;
 }
 
+
 .chatComposerSkirt {
+  display: block;
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 100vh;
-  background: #121212;
-  border-radius: 28px 28px 0 0;
+  inset: 0;
+  /* Fully cover the dock area */
+  background: rgba(18, 18, 18, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-radius: 26px 26px 0 0;
+  /* Top rounded, bottom squared */
   z-index: -1;
-  box-shadow: 0 -20px 40px rgba(0, 0, 0, 0.4);
+  box-shadow: none;
+  pointer-events: none;
+  border: none;
 }
 
 .generalChatComposer[data-has-attachments="true"] {
@@ -9869,30 +9896,10 @@ h1.greeting {
     padding-right: 0 !important;
   }
 
-  /* MOBILE CHAT COMPOSER FIX - Force composer to stay on screen */
-  .chatComposerDock {
-    position: fixed !important;
-    bottom: 0 !important;
-    left: 12px !important;
-    right: 12px !important;
-    width: auto !important;
-    z-index: 100 !important;
-    background: rgba(18, 18, 18, 0.85) !important;
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    border-top: none !important;
-    border-top-left-radius: 32px;
-    border-top-right-radius: 32px;
-    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.4);
-    padding-bottom: max(18px, env(safe-area-inset-bottom, 18px)) !important;
-    padding-left: 12px !important;
-    padding-right: 12px !important;
-  }
+
 
   /* Ensure chat viewport accounts for fixed composer */
-  .chatViewport {
-    padding-bottom: calc(140px + env(safe-area-inset-bottom, 0px)) !important;
-  }
+
 
   /* Ensure chat view takes full height minus safe areas */
   .chatView {
@@ -10006,46 +10013,75 @@ h1.greeting {
   flex-direction: column;
   gap: 8px;
   width: 100%;
+  position: relative;
+  background: rgba(20, 20, 20, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  padding: 12px;
 }
 
 .chatEditInput {
   width: 100%;
-  min-height: 80px;
-  background: rgba(20, 20, 20, 0.95);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 8px;
-  padding: 10px;
+  height: auto;
+  min-height: 24px;
+  background: transparent;
+  border: none;
+  padding: 0;
   color: #f5f5f5;
   font-family: inherit;
   font-size: 0.95rem;
   line-height: 1.5;
-  resize: vertical;
+  resize: none;
+  overflow-y: hidden;
+  box-shadow: none;
 }
 
 .chatEditInput:focus {
   outline: none;
-  border-color: rgba(255, 255, 255, 0.3);
+  border: none;
+  box-shadow: none;
 }
 
 .chatEditActions {
   display: flex;
   gap: 8px;
   justify-content: flex-end;
+  margin-top: 4px;
 }
 
 .chatEditSaveButton,
 .chatEditCancelButton {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border-radius: 6px;
-  font-size: 0.8rem;
+  justify-content: center;
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 0.85rem;
   font-weight: 500;
   cursor: pointer;
-  border: 1px solid transparent;
   transition: all 0.2s ease;
+  border: none;
 }
+
+.chatEditSaveButton {
+  background: #f5f5f5;
+  color: #000;
+}
+
+.chatEditSaveButton:hover {
+  background: #ffffff;
+}
+
+.chatEditCancelButton {
+  background: transparent;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.chatEditCancelButton:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
 
 .chatEditSaveButton {
   background: rgba(255, 255, 255, 0.1);

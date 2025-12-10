@@ -1477,21 +1477,37 @@ const ChatMessagesList = memo(
                     <textarea
                       className={styles.chatEditInput}
                       value={editContent}
-                      onChange={(e) => setEditContent(e.target.value)}
-                      rows={3}
+                      onChange={(e) => {
+                        setEditContent(e.target.value);
+                        e.target.style.height = "auto";
+                        e.target.style.height = `${e.target.scrollHeight}px`;
+                      }}
+                      ref={(el) => {
+                        if (el) {
+                          // Initial resize
+                          el.style.height = "auto";
+                          el.style.height = `${el.scrollHeight}px`;
+                          // Focus cursor at end
+                          if (document.activeElement !== el) {
+                            el.setSelectionRange(el.value.length, el.value.length);
+                            el.focus();
+                          }
+                        }
+                      }}
+                      rows={1}
                     />
                     <div className={styles.chatEditActions}>
-                      <button
-                        onClick={() => saveEditing(message.id)}
-                        className={styles.chatEditSaveButton}
-                      >
-                        <Check size={14} /> Save
-                      </button>
                       <button
                         onClick={cancelEditing}
                         className={styles.chatEditCancelButton}
                       >
-                        <X size={14} /> Cancel
+                        Cancel
+                      </button>
+                      <button
+                        onClick={() => saveEditing(message.id)}
+                        className={styles.chatEditSaveButton}
+                      >
+                        Save
                       </button>
                     </div>
                   </div>
@@ -3623,7 +3639,6 @@ export function GrayChatView({
       <div className={styles.chatHeaderControls}>
       </div>
       <div className={styles.chatViewport} ref={chatViewportRef}>
-
         <div className={styles.chatFade} aria-hidden="true" />
         {topAttachmentTray}
         {showIntro ? (
