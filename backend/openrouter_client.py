@@ -97,32 +97,33 @@ class OpenRouterService:
     # Used for displaying accurate context limits in the UI
     # Default is 2M for models not listed here
     MODEL_CONTEXT_LIMITS = {
-        # DeepSeek models (256k context)
-        "deepseek/deepseek-chat": 256_000,
-        "deepseek/deepseek-v3.2": 256_000,
-        "deepseek/deepseek-v3.2-speciale": 256_000,
-        "deepseek/deepseek-r1": 256_000,
-        # Anthropic Claude models (200k context)
+        # DeepSeek models (163k context)
+        "deepseek/deepseek-chat": 163_840,
+        "deepseek/deepseek-v3.2": 163_840,
+        "deepseek/deepseek-v3.2-speciale": 163_840,
+        "deepseek/deepseek-r1": 163_840,
+        # Anthropic Claude models
         "anthropic/claude-sonnet-4": 200_000,
-        "anthropic/claude-sonnet-4.5": 200_000,
+        "anthropic/claude-sonnet-4.5": 1_000_000,  # 1M context
         "anthropic/claude-opus-4.5": 200_000,
+        "anthropic/claude-haiku-4.5": 200_000,
         "anthropic/claude-3.5-sonnet": 200_000,
-        # OpenAI models (128k context)
-        "openai/gpt-5.1": 128_000,
-        "openai/gpt-5.1-chat": 128_000,
+        # OpenAI models
+        "openai/gpt-5.1": 400_000,        # Reasoning variant - 400k
+        "openai/gpt-5.1-chat": 128_000,   # Chat variant - 128k
         "openai/gpt-4o": 128_000,
         "openai/gpt-4-turbo": 128_000,
         "openai/gpt-4o-mini": 128_000,
-        # Kimi models (1M context)
-        "moonshotai/kimi-k2-0905": 1_000_000,
-        "moonshotai/kimi-k2-thinking": 1_000_000,
-        # xAI Grok models (2M context for Grok 4.1)
-        "x-ai/grok-4.1-fast": 2_000_000,
+        # Kimi models (262k context)
+        "moonshotai/kimi-k2-0905": 262_144,
+        "moonshotai/kimi-k2-thinking": 262_144,
+        # xAI Grok models
+        "x-ai/grok-4.1-fast": 2_000_000,  # 2M context
         "x-ai/grok-3": 131_072,
         "x-ai/grok-2-1212": 131_072,
-        # Google Gemini (handled via Gemini API, but for reference)
-        # "gemini-2.5-pro": 2_000_000,
-        # "gemini-2.5-flash": 1_000_000,
+        # Google Gemini (via OpenRouter)
+        "google/gemini-3-pro-preview": 1_048_576,  # 1M context
+        "google/gemini-2.5-flash-preview-09-2025": 1_048_576,  # 1M context
     }
 
     @classmethod
