@@ -48,6 +48,7 @@ class OpenRouterService:
         "claude-sonnet-4": "anthropic/claude-sonnet-4",
         "claude-sonnet-4.5": "anthropic/claude-sonnet-4.5",
         "claude-opus-4.5": "anthropic/claude-opus-4.5",
+        "claude-haiku-4.5": "anthropic/claude-haiku-4.5",
         "claude-3.5": "anthropic/claude-3.5-sonnet",
         "claude-3.5-sonnet": "anthropic/claude-3.5-sonnet",
         # OpenAI models (non-reasoning variants)
@@ -70,7 +71,9 @@ class OpenRouterService:
         "grok-4.1-fast": "x-ai/grok-4.1-fast",
         "grok-3": "x-ai/grok-3",
         "grok-2": "x-ai/grok-2-1212",
-        # Note: Gemini is handled directly via Gemini API, not OpenRouter
+        # Google Gemini models (via OpenRouter)
+        "gemini-3-pro": "google/gemini-3-pro-preview",
+        "gemini-2.5-flash": "google/gemini-2.5-flash-preview-09-2025",
         # Default fallback
         "default": "anthropic/claude-sonnet-4.5",
     }
