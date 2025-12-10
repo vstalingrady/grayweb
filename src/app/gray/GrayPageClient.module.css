@@ -9900,7 +9900,7 @@ h1.greeting {
   .generalChatComposer {
     padding: 0 !important;
     /* Bottom padding to account for phone home indicator/navigation bar */
-    padding-bottom: max(12px, calc(12px + env(safe-area-inset-bottom, 0px))) !important;
+    padding-bottom: env(safe-area-inset-bottom, 0px) !important;
     width: 100% !important;
     max-width: none !important;
   }
