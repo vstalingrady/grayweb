@@ -9836,15 +9836,15 @@ h1.greeting {
 
   .chatBarRounded {
     gap: 0 !important;
-    /* Consistent padding */
-    padding: 8px 10px !important;
-    border-radius: 27px !important;
-    /* Pill shape like desktop */
-    width: calc(100% - 24px) !important;
-    max-width: min(calc(1.05 * var(--chat-bubble-max-width, var(--chat-column-max-width, 780px))), 100%) !important;
+    /* Even padding on all sides for consistent mobile spacing */
+    padding: 14px !important;
+    border-radius: 20px !important;
+    /* Rounded square */
+    width: 95% !important;
+    max-width: none !important;
     margin: 0 auto !important;
-    flex-wrap: nowrap !important;
-    /* Single row pill */
+    flex-wrap: wrap !important;
+    /* Allow multi-row */
     align-items: center !important;
   }
 
