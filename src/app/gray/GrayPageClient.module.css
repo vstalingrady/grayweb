@@ -8881,7 +8881,7 @@ h1.greeting {
   /* Scroll internally */
   padding: 0;
   /* Preserve bottom padding to push content above chat composer */
-  padding-bottom: calc(var(--chat-composer-height, 120px) + 20px);
+  padding-bottom: 24px;
   overscroll-behavior-y: contain;
   scroll-behavior: smooth;
   z-index: 0;
