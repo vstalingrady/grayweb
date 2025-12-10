@@ -3206,6 +3206,14 @@
   border-top-right-radius: 5px;
 }
 
+/* When editing, expand the bubble to full width */
+.chatBubbleUser:has(.chatEditContainer) {
+  max-width: min(var(--chat-column-max-width, 680px), 100%);
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+
 .chatAssistantBlock {
   align-self: stretch;
   width: 100%;
