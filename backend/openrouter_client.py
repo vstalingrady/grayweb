@@ -93,6 +93,43 @@ class OpenRouterService:
         "moonshotai/kimi-k2-thinking",  # Kimi thinking model always reasons
     }
 
+    # Model-specific context limits (in tokens)
+    # Used for displaying accurate context limits in the UI
+    # Default is 2M for models not listed here
+    MODEL_CONTEXT_LIMITS = {
+        # DeepSeek models (256k context)
+        "deepseek/deepseek-chat": 256_000,
+        "deepseek/deepseek-v3.2": 256_000,
+        "deepseek/deepseek-v3.2-speciale": 256_000,
+        "deepseek/deepseek-r1": 256_000,
+        # Anthropic Claude models (200k context)
+        "anthropic/claude-sonnet-4": 200_000,
+        "anthropic/claude-sonnet-4.5": 200_000,
+        "anthropic/claude-opus-4.5": 200_000,
+        "anthropic/claude-3.5-sonnet": 200_000,
+        # OpenAI models (128k context)
+        "openai/gpt-5.1": 128_000,
+        "openai/gpt-5.1-chat": 128_000,
+        "openai/gpt-4o": 128_000,
+        "openai/gpt-4-turbo": 128_000,
+        "openai/gpt-4o-mini": 128_000,
+        # Kimi models (1M context)
+        "moonshotai/kimi-k2-0905": 1_000_000,
+        "moonshotai/kimi-k2-thinking": 1_000_000,
+        # xAI Grok models (2M context for Grok 4.1)
+        "x-ai/grok-4.1-fast": 2_000_000,
+        "x-ai/grok-3": 131_072,
+        "x-ai/grok-2-1212": 131_072,
+        # Google Gemini (handled via Gemini API, but for reference)
+        # "gemini-2.5-pro": 2_000_000,
+        # "gemini-2.5-flash": 1_000_000,
+    }
+
+    @classmethod
+    def get_model_context_limit(cls, model_id: str) -> int:
+        """Get the context limit for a specific model. Returns 2M if not found."""
+        return cls.MODEL_CONTEXT_LIMITS.get(model_id, 2_000_000)
+
     def __init__(self) -> None:
         self._api_key = _trim(os.getenv("OPENROUTER_API_KEY"))
         self._enabled = (os.getenv("OPENROUTER_ENABLED") or "true").strip().lower() not in {

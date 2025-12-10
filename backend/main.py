@@ -8756,10 +8756,11 @@ async def get_conversation_usage(
             app_logger.warning(f"Could not determine user tier for conversation {conversation_id}: {tier_error}")
 
         # Set context limits by tier
+        # Note: Pioneer models may have lower limits based on specific model (e.g., Deepseek=256k)
         TIER_CONTEXT_LIMITS = {
-            "scout": 65_536,      # 64k tokens
-            "voyager": 1_048_576, # 1M tokens (full context)
-            "pioneer": 1_048_576, # 1M tokens (full context)
+            "scout": 65_536,        # 64k tokens
+            "voyager": 2_000_000,   # 2M tokens (Gemini Pro context)
+            "pioneer": 2_000_000,   # 2M tokens (varies by model - Grok 4.1 Fast has 2M)
         }
         
         context_limit = TIER_CONTEXT_LIMITS.get(user_tier, TIER_CONTEXT_LIMITS["pioneer"])
