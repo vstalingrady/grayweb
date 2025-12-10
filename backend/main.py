@@ -721,7 +721,7 @@ URL_CONTEXT_TOOL = types.Tool(
 
 # Pattern to extract URLs from messages (excludes localhost/internal URLs)
 URL_EXTRACTION_PATTERN = re.compile(r'https?://[^\s<>"{}|\\^`\[\]\(\)]+')
-URL_CONTEXT_MODEL = "models/gemini-2.5-flash-lite-latest"  # Fast model for URL fetching
+URL_CONTEXT_MODEL = "models/gemini-flash-lite-latest"  # Fast model for URL fetching
 
 def _extract_urls_from_message(message: str) -> List[str]:
     """Extract URLs from a message for URL context processing.
