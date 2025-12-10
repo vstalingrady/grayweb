@@ -2999,8 +2999,8 @@
   overflow-y: auto;
   /* scrollbar-width: none; */
   overflow-anchor: auto;
-  padding-bottom: calc(var(--chat-composer-height, 120px) + 12px);
-  scroll-padding-bottom: calc(var(--chat-composer-height, 120px) + 12px);
+  padding-bottom: calc(var(--chat-composer-height, 120px) + 0px);
+  scroll-padding-bottom: calc(var(--chat-composer-height, 120px) + 0px);
 }
 
 .chatViewport::-webkit-scrollbar {
