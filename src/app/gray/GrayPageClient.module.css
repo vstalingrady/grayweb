@@ -8732,7 +8732,7 @@ h1.greeting {
   margin: 0 auto;
   border-radius: 27px;
   border: 1px solid rgba(255, 255, 255, 0.12);
-  background: #121212;
+  background: #1a1a1a;
   padding: 8px 10px;
   position: relative;
   z-index: 1;
@@ -8746,15 +8746,15 @@ h1.greeting {
 
 .chatBarRounded:focus-within {
   border-color: rgba(255, 255, 255, 0.24);
-  background: #121212;
+  background: #1f1f1f;
 }
 
 .layout[data-view="general"] .chatBarRounded {
-  background: #121212;
+  background: #1a1a1a;
 }
 
 .layout[data-view="general"] .chatBarRounded:focus-within {
-  background: #121212;
+  background: #1f1f1f;
 }
 
 .chatView {
@@ -8877,7 +8877,7 @@ h1.greeting {
   background: #121212;
   border-radius: 28px 28px 0 0;
   z-index: -1;
-  box-shadow: none;
+  box-shadow: 0 -20px 40px rgba(0, 0, 0, 0.4);
 }
 
 .generalChatComposer[data-has-attachments="true"] {
