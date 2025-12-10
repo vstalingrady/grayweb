@@ -1052,30 +1052,16 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
     };
   }, []);
 
-  // Ensure existing conversations are synced to the backend at least once so that
-  // any past local edits (including deletions that previously only affected
-  // localStorage) are reflected in the remote history.
+  // DISABLED: This sync effect was causing data loss by overwriting backend
+  // history with stale/incomplete local state on page reload. The backend
+  // should be the authoritative source of truth. Message deletions should be
+  // synced via explicit API calls from the delete handler, not via full
+  // history overwrites on every session change.
+  //
+  // Original purpose: Sync local edits (including deletions) to backend.
+  // Problem: Local state could be stale/incomplete, overwriting valid backend data.
+  // Fix: Only sync on explicit user actions (delete, edit), not on session changes.
   const syncedHistoryRef = useRef<Set<string>>(new Set());
-  useEffect(() => {
-    const seen = syncedHistoryRef.current;
-    sessions.forEach((session) => {
-      const normalizedConversationId = normalizeConversationIdValue(session.conversationId ?? undefined);
-      if (!normalizedConversationId || seen.has(normalizedConversationId)) {
-        return;
-      }
-      if (!session.messages || session.messages.length === 0) {
-        // Skip syncing empty shells (e.g. shared links before hydration) so we don't wipe remote history.
-        return;
-      }
-      if (session.isResponding || session.pendingAutoStream) {
-        // Avoid racing with active streams; we'll sync once the session settles.
-        return;
-      }
-      const payload = buildConversationHistoryPayload(session.messages);
-      enqueueHistorySync(normalizedConversationId, payload);
-      seen.add(normalizedConversationId);
-    });
-  }, [sessions, enqueueHistorySync]);
   const resolveChatUser = useCallback(async () => {
     if (user) {
       return user;
