@@ -593,9 +593,19 @@ export interface ConversationUsage {
    *  - 0 or negative: treated as "unlimited" / "no cap" by the UI.
    */
   limit: number;
+  /** Model-specific context limit (may be lower than tier limit for some Pioneer models) */
+  modelLimit?: number;
   provider: string;
   modelName?: string | null;
   modelLabel?: string | null;
+  /** Warning message when context exceeds model limit */
+  contextWarning?: string | null;
+  /** Suggested models with higher context limits */
+  suggestedModels?: Array<{
+    model_id: string;
+    name: string;
+    context_limit: number;
+  }> | null;
 }
 
 export interface WorkspaceBackground {
@@ -1803,9 +1813,16 @@ class ApiService {
         message_count: number;
         conversation_tokens: number;
         limit: number;
+        model_limit?: number;
         provider: string;
         model_name?: string | null;
         model_label?: string | null;
+        context_warning?: string | null;
+        suggested_models?: Array<{
+          model_id: string;
+          name: string;
+          context_limit: number;
+        }> | null;
       }>(`/api/conversation/${encodeURIComponent(conversationId)}/usage`);
 
       const normalizedLimit =
@@ -1818,9 +1835,12 @@ class ApiService {
         messageCount: payload.message_count,
         conversationTokens: payload.conversation_tokens,
         limit: normalizedLimit,
+        modelLimit: payload.model_limit,
         provider: payload.provider ?? "local",
         modelName: payload.model_name ?? null,
         modelLabel: payload.model_label ?? null,
+        contextWarning: payload.context_warning ?? null,
+        suggestedModels: payload.suggested_models ?? null,
       };
     } catch (error) {
       if (error instanceof ApiError && error.status === 404) {

@@ -3491,12 +3491,15 @@ export function GrayChatView({
       modelName: conversationUsage?.modelName ?? null,
       modelLabel: conversationUsage?.modelLabel ?? null,
       limit,
+      modelLimit: conversationUsage?.modelLimit ?? null,
       messageCount,
       conversationTokens,
       workspaceTokens,
       totalTokens,
       percentUsed,
       tokensRemaining,
+      contextWarning: conversationUsage?.contextWarning ?? null,
+      suggestedModels: conversationUsage?.suggestedModels ?? null,
     };
   }, [contextLimit, conversationUsage, fallbackConversationTokens, session?.messages.length, workspaceContext]);
 

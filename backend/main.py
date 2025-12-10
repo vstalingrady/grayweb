@@ -8763,21 +8763,54 @@ async def get_conversation_usage(
             "pioneer": 2_000_000,   # 2M tokens (varies by model - Grok 4.1 Fast has 2M)
         }
         
-        context_limit = TIER_CONTEXT_LIMITS.get(user_tier, TIER_CONTEXT_LIMITS["pioneer"])
+        tier_context_limit = TIER_CONTEXT_LIMITS.get(user_tier, TIER_CONTEXT_LIMITS["pioneer"])
         
         # Get provider info from environment
         provider = os.getenv("AI_PROVIDER", "openrouter")
         model_name = os.getenv("AI_MODEL_NAME", None)
         
+        # For Pioneer tier, check model-specific context limit
+        model_context_limit = tier_context_limit
+        context_warning = None
+        suggested_models = None
+        
+        if user_tier == "pioneer" and model_name:
+            # Get model-specific limit from OpenRouter service
+            model_context_limit = OPENROUTER_SERVICE.get_model_context_limit(model_name)
+            
+            # If conversation exceeds this model's limit, suggest alternatives
+            if total_tokens > model_context_limit:
+                # Find models with higher context limits
+                higher_context_models = []
+                for model_id, limit in OPENROUTER_SERVICE.MODEL_CONTEXT_LIMITS.items():
+                    if limit > model_context_limit:
+                        # Get a friendly name
+                        friendly_name = model_id.split("/")[-1] if "/" in model_id else model_id
+                        higher_context_models.append({
+                            "model_id": model_id,
+                            "name": friendly_name,
+                            "context_limit": limit
+                        })
+                
+                # Sort by context limit descending
+                higher_context_models.sort(key=lambda x: x["context_limit"], reverse=True)
+                
+                if higher_context_models:
+                    context_warning = f"This conversation ({total_tokens:,} tokens) exceeds {model_name}'s context limit ({model_context_limit:,} tokens). Consider switching models."
+                    suggested_models = higher_context_models[:3]  # Top 3 suggestions
+        
         return {
             "conversation_id": conversation_id,
             "message_count": message_count,
             "conversation_tokens": total_tokens,
-            "limit": context_limit,
+            "limit": tier_context_limit,
+            "model_limit": model_context_limit,
             "provider": provider,
             "model_name": model_name,
             "model_label": model_name,
             "user_tier": user_tier,
+            "context_warning": context_warning,
+            "suggested_models": suggested_models,
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching conversation usage: {str(e)}")
