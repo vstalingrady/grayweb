@@ -10018,7 +10018,7 @@ h1.greeting {
   flex-direction: column;
   gap: 8px;
   width: 100%;
-  max-width: min(70%, calc(var(--chat-column-max-width, 680px) * 0.7));
+  max-width: min(var(--chat-column-max-width, 680px), 100%);
   position: relative;
   background: #222222;
   border: none;
