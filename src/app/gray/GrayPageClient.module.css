@@ -9983,11 +9983,10 @@ h1.greeting {
 
   /* Fix for real mobile devices: account for home indicator/navigation bar */
 
-
-
-
   /* Ensure chat viewport accounts for fixed composer */
-
+  .chatViewport {
+    padding-bottom: 16px !important;
+  }
 
   /* Ensure chat view takes full height minus safe areas */
   .chatView {
