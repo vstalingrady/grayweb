@@ -201,6 +201,9 @@ def append_to_conversation_cache(
         or message.get("groundingMetadata"),
         "attachments": message.get("attachments"),
     }
+    # Preserve timestamp if available
+    if message.get("timestamp"):
+        normalized["timestamp"] = message.get("timestamp")
     new_history = cached_history + [normalized]
     if owner is not None:
         CONVERSATION_OWNER_CACHE.set(conversation_id, owner)
@@ -382,6 +385,11 @@ async def save_conversation_message(
         )
         await database.execute(update_query)
 
+        # Calculate timestamp for the cache (in milliseconds since epoch)
+        from datetime import timezone
+        now = datetime.utcnow()
+        timestamp_ms = int(now.replace(tzinfo=timezone.utc).timestamp() * 1000)
+
         append_to_conversation_cache(
             conversation_id,
             user_id,
@@ -390,6 +398,7 @@ async def save_conversation_message(
                 "text": text,
                 "grounding_metadata": grounding_metadata,
                 "attachments": message.get("attachments"),
+                "timestamp": timestamp_ms,
             },
         )
     except Exception as error:  # pragma: no cover - defensive logging

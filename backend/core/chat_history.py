@@ -125,14 +125,20 @@ async def load_thread_history(conversation_id: str, user_id: int) -> List[Dict[s
 
         messages: List[Dict[str, Any]] = []
         for row in rows:
-            messages.append(
-                {
-                    "role": row["role"],
-                    "text": row["text"],
-                    "grounding_metadata": row["grounding_metadata"],
-                    "attachments": row["attachments"],
-                }
-            )
+            entry = {
+                "role": row["role"],
+                "text": row["text"],
+                "grounding_metadata": row["grounding_metadata"],
+                "attachments": row["attachments"],
+            }
+            # Include timestamp so frontend displays the actual message time
+            if row["created_at"]:
+                from datetime import timezone
+                created_at = row["created_at"]
+                if created_at.tzinfo is None:
+                    created_at = created_at.replace(tzinfo=timezone.utc)
+                entry["timestamp"] = int(created_at.timestamp() * 1000)
+            messages.append(entry)
         cache_conversation_history(conversation_id, user_id, messages)
         return messages
     except Exception as error:
