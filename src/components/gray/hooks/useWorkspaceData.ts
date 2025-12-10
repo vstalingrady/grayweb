@@ -4,6 +4,9 @@ import { sanitizeEventColor, DEFAULT_EVENT_COLOR, REMINDER_RETENTION_WINDOW_MS }
 import { type PlanItem, type HabitItem } from "@/components/gray/types";
 import type { CalendarEvent, CalendarInfo } from "@/components/calendar/types";
 
+// Custom event name for triggering reminder refresh from anywhere in the app
+export const REMINDERS_REFRESH_EVENT = "gray:reminders-refresh";
+
 const shouldIncludeCalendarReminder = (reminder: Reminder, nowMs: number): boolean => {
   if (reminder.status === "pending") {
     return true;
@@ -65,6 +68,59 @@ export function useWorkspaceData(userId: number | null, variant: "general" | "da
       setError(err);
     }
   }, [userId]);
+
+  const refreshReminders = useCallback(async () => {
+    if (!userId) return;
+
+    try {
+      const reminderResponse = await apiService.getUserReminders(userId, {
+        limit: 50,
+        includeArchived: true,
+      });
+
+      const nowMs = Date.now();
+      const includedReminders: Reminder[] = Array.isArray(reminderResponse)
+        ? reminderResponse.filter((reminder) => shouldIncludeCalendarReminder(reminder, nowMs))
+        : [];
+
+      setReminderPlans(
+        includedReminders.map((reminder) => ({
+          id: `reminder-${reminder.id}`,
+          label: reminder.label,
+          completed: reminder.status === "completed",
+          deadline: reminder.remind_at ?? null,
+          scheduleSlot: null,
+          details: reminder.description ?? reminder.summary ?? null,
+          reminderId: reminder.id,
+          reminderStatus: reminder.status,
+        }))
+      );
+    } catch (err) {
+      console.error("Failed to refresh reminders:", err);
+      setError(err);
+    }
+  }, [userId]);
+
+  const refreshWorkspaceData = useCallback(async () => {
+    await Promise.all([
+      refreshPlansAndHabits(),
+      refreshReminders(),
+    ]);
+  }, [refreshPlansAndHabits, refreshReminders]);
+
+  // Listen for custom event to refresh reminders (dispatched by ChatProvider after reminder creation)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const handleRemindersRefresh = () => {
+      void refreshReminders();
+    };
+
+    window.addEventListener(REMINDERS_REFRESH_EVENT, handleRemindersRefresh);
+    return () => {
+      window.removeEventListener(REMINDERS_REFRESH_EVENT, handleRemindersRefresh);
+    };
+  }, [refreshReminders]);
 
   useEffect(() => {
     if (variant === "chat" || userId === null) {
@@ -256,6 +312,8 @@ export function useWorkspaceData(userId: number | null, variant: "general" | "da
     streakCount,
     loading,
     error,
-    refreshPlansAndHabits
+    refreshPlansAndHabits,
+    refreshReminders,
+    refreshWorkspaceData
   };
 }

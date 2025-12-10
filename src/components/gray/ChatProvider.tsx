@@ -79,6 +79,7 @@ import {
   REMINDER_POLL_MIN_INTERVAL,
   REMINDER_POLL_SHORT_INTERVAL
 } from "./chat/constants";
+import { REMINDERS_REFRESH_EVENT } from "./hooks/useWorkspaceData";
 
 declare global {
   interface Window {
@@ -2936,7 +2937,10 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
         apiService
           .createReminder(user.id, payload)
           .then((created) => {
-            // console.log("Successfully persisted AI-created reminder:", created);
+            // Dispatch custom event so useWorkspaceData can refresh reminder list
+            if (typeof window !== "undefined") {
+              window.dispatchEvent(new CustomEvent(REMINDERS_REFRESH_EVENT));
+            }
           })
           .catch((error) => {
             console.error("Failed to persist AI-created reminder:", error);
