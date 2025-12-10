@@ -36,6 +36,7 @@ const PIONEER_GROUPS: ModelGroup[] = [
     models: [
       { id: "anthropic/claude-sonnet-4.5", label: "Claude Sonnet 4.5" },
       { id: "anthropic/claude-opus-4.5", label: "Claude Opus 4.5" },
+      { id: "anthropic/claude-haiku-4.5", label: "Claude Haiku 4.5" },
     ],
   },
   {
