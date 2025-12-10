@@ -3206,9 +3206,9 @@
   border-top-right-radius: 5px;
 }
 
-/* When editing, expand the bubble to full width */
+/* When editing, expand the bubble to allow edit container */
 .chatBubbleUser:has(.chatEditContainer) {
-  max-width: min(calc(1.1 * var(--chat-bubble-max-width, var(--chat-column-max-width, 840px))), 100%);
+  max-width: min(70%, calc(var(--chat-column-max-width, 680px) * 0.7));
   background: transparent;
   border: none;
   padding: 0;
@@ -10026,8 +10026,8 @@ h1.greeting {
   flex-direction: column;
   gap: 8px;
   width: 100%;
-  /* Use full chat column width like assistant messages */
-  max-width: min(calc(1.1 * var(--chat-bubble-max-width, var(--chat-column-max-width, 840px))), 100%);
+  /* Match normal chat bubble width (70%) */
+  max-width: min(70%, calc(var(--chat-column-max-width, 680px) * 0.7));
   position: relative;
   background: #222222;
   border: none;
