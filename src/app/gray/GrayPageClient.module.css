@@ -3037,8 +3037,8 @@
   justify-content: flex-start;
   gap: 24px;
   min-height: min-content;
-  padding: clamp(4px, 1vh, 10px) 24px 24px 24px;
-  /* Increased bottom padding for overlay */
+  padding: clamp(4px, 1vh, 10px) 24px 8px 24px;
+  /* Reduced bottom padding - overlay padding handled by chatViewport */
   overflow: visible;
   width: 100%;
   max-width: min(calc(1.1 * var(--chat-bubble-max-width, var(--chat-column-max-width, 840px))), 100%);
