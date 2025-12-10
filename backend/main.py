@@ -2028,6 +2028,10 @@ async def _insert_general_conversation_message(
     grounding_metadata: Optional[Any] = None,
     attachments: Optional[Any] = None,
 ) -> Optional[int]:
+    app_logger.debug(
+        f"Inserting general chat message for user {user_id}, role={role}, text_len={len(text)}",
+        extra={"event_type": "general_message_insert_start", "user_id": user_id, "role": role}
+    )
     supabase_success = False
     user_data_id = await _ensure_user_data_record(user_id)
     supabase_user_data_id: Optional[int] = None
@@ -2074,11 +2078,16 @@ async def _insert_general_conversation_message(
             "grounding_metadata": json.dumps(grounding_metadata) if grounding_metadata else None,
             "created_at": now.isoformat(),
         }
-        return await database.execute(query, values)
+        result = await database.execute(query, values)
+        app_logger.info(
+            f"Successfully saved general chat message for user {user_id}, role={role}, id={result}",
+            extra={"event_type": "general_message_insert_success", "user_id": user_id, "role": role, "message_id": result}
+        )
+        return result
     except Exception as error:
         app_logger.error(
             "Error saving general conversation message (SQLite)",
-            extra={"event_type": "sqlite_message_insert_error", "error": str(error)},
+            extra={"event_type": "sqlite_message_insert_error", "error": str(error), "user_id": user_id},
         )
 
 
@@ -8145,6 +8154,24 @@ async def chat_stream(
                 yield _sse_event("end", end_payload)
             except Exception as stream_error:
                 api_logger.error(f"Stream loop error: {stream_error}", exc_info=True)
+                # Still save any accumulated response, even on error
+                if accumulated_visible:
+                    try:
+                        general_user_id = _general_conversation_user_id(conversation_id)
+                        if general_user_id is not None:
+                            await _insert_general_conversation_message(
+                                user_id=general_user_id,
+                                role="model",
+                                text=accumulated_visible,
+                            )
+                        else:
+                            await save_conversation_message(
+                                conversation_id,
+                                {"role": "model", "text": accumulated_visible},
+                                user_id=chat_request.user_id,
+                            )
+                    except Exception as save_error:
+                        api_logger.error(f"Failed to save partial response on error: {save_error}", extra={"user_id": chat_request.user_id})
                 yield _sse_event("error", {"message": str(stream_error)})
 
         headers = {
