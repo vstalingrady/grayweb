@@ -5435,6 +5435,68 @@ async def _resolve_media_attachments(
     return attachments
 
 
+async def _generate_image_descriptions(
+    attachments: List[GeminiAttachment],
+) -> str:
+    """Generate text descriptions of images using Gemini Flash Lite.
+    
+    This is used when sending messages to non-vision models (like DeepSeek)
+    so they can understand what images the user sent.
+    
+    Args:
+        attachments: List of GeminiAttachment objects with image data
+        
+    Returns:
+        A formatted string with image descriptions, or empty string if no images
+    """
+    if not attachments or not GEMINI_SERVICE.available:
+        return ""
+    
+    # Filter to only image attachments
+    image_attachments = [
+        a for a in attachments 
+        if a.mime_type and a.mime_type.startswith("image/")
+    ]
+    if not image_attachments:
+        return ""
+    
+    descriptions = []
+    for i, attachment in enumerate(image_attachments, 1):
+        try:
+            # Use Gemini Flash Lite for fast, cheap description
+            response = await GEMINI_SERVICE.generate(
+                message="Describe this image in 2-3 sentences. Focus on the key visual elements, any text visible, and the overall context. Be concise but informative.",
+                conversation_history=None,
+                workspace_context=None,
+                system_prompt="You are an image description assistant. Provide concise, accurate descriptions of images. Do not add any preamble like 'This image shows' - just describe what you see directly.",
+                time_context=None,
+                model=GEMINI_LIGHT_MODEL,
+                attachments=[attachment],
+            )
+            
+            if response.candidates:
+                text = _candidate_text(response.candidates[0])
+                if text:
+                    filename = attachment.filename or f"Image {i}"
+                    descriptions.append(f"[{filename}]: {text.strip()}")
+                    api_logger.info(
+                        f"Generated image description for {filename}",
+                        extra={"event_type": "image_description_generated", "filename": filename}
+                    )
+        except Exception as e:
+            api_logger.warning(
+                f"Failed to generate image description: {e}",
+                extra={"event_type": "image_description_error", "error": str(e)}
+            )
+            continue
+    
+    if descriptions:
+        header = "[User attached images - descriptions for context]"
+        footer = "[End of image descriptions]"
+        return f"{header}\n" + "\n".join(descriptions) + f"\n{footer}\n\n"
+    return ""
+
+
 def _carry_forward_dashboard_entries(
     previous: Optional[Dict[str, Any]],
     plans: List[Dict[str, Any]],
@@ -6293,11 +6355,19 @@ async def stream_ai_response(
             return
         else:
 
-            if attachments:
+            # Generate image descriptions for OpenRouter (non-vision models like DeepSeek)
+            if media_attachments:
                 api_logger.info(
-                    "OpenRouter does not support attachments in this flow; ignoring attachments",
-                    extra={"event_type": "ai_attachments_ignored", "provider": provider},
+                    "Generating image descriptions for OpenRouter model",
+                    extra={"event_type": "ai_image_description_start", "provider": provider, "count": len(media_attachments)},
                 )
+                image_desc = await _generate_image_descriptions(media_attachments)
+                if image_desc:
+                    message = image_desc + message
+                    api_logger.info(
+                        f"Added image descriptions to message for OpenRouter",
+                        extra={"event_type": "ai_image_description_added", "count": len(media_attachments)},
+                    )
             
 
             
@@ -7180,16 +7250,25 @@ async def generate_ai_response(
             if not model or "/" in model:
                 model = GEMINI_DEFAULT_MODEL
         else:
-            if attachments:
+            # Generate image descriptions for OpenRouter (non-vision models like DeepSeek)
+            effective_message = message
+            if attachment_payloads:
                 api_logger.info(
-                    "OpenRouter does not support attachments in this flow; ignoring attachments",
-                    extra={"event_type": "ai_attachments_ignored", "provider": provider},
+                    "Generating image descriptions for OpenRouter model (non-streaming)",
+                    extra={"event_type": "ai_image_description_start", "provider": provider, "count": len(attachment_payloads)},
                 )
+                image_desc = await _generate_image_descriptions(attachment_payloads)
+                if image_desc:
+                    effective_message = image_desc + message
+                    api_logger.info(
+                        f"Added image descriptions to message for OpenRouter (non-streaming)",
+                        extra={"event_type": "ai_image_description_added", "count": len(attachment_payloads)},
+                    )
             try:
                 # response_format initialized in outer scope
                 grounding_metadata = None  # Initialize before potential use
                 response_text = await OPENROUTER_SERVICE.generate(
-                    message,
+                    effective_message,
                     conversation_history,
                     workspace_with_cache,
                     effective_system_prompt,

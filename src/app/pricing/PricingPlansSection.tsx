@@ -45,7 +45,7 @@ export const VOYAGER_FEATURES: FeatureItem[] = [
     {
         label: "Unlimited Gray Lite + limited Gray Pro",
         icon: Zap,
-        subtext: "Unlimited Grok 4.1 Fast + Gemini 3 Pro",
+        subtext: "Unlimited Grok 4.1 Fast + Kimi K2 Thinking",
     },
     {
         label: "32x more message credits",
@@ -76,13 +76,12 @@ export const PIONEER_FEATURES: FeatureItem[] = [
     {
         label: "Model switcher",
         icon: Shuffle,
-        subtext: "Claude 4.5, Grok 4.1, GPT 5.1, DeepSeek V3.2, Kimi K2 Thinking",
+        subtext: "Claude 4.5, Gemini 3 Pro, Grok 4.1, GPT 5.1, DeepSeek V3.2, Kimi K2 Thinking",
     },
     { label: "Expanded reasoning budget", icon: InfinityIcon },
     {
         label: "128x more message credits",
         icon: Pin,
-        subtext: "Plus unlimited Gray Lite",
     },
     { label: "Priority response during peaks", icon: Headphones },
     { label: "Early access to experimental features", icon: FlaskConical },
@@ -143,7 +142,7 @@ export function PricingPlansSection() {
             </div>
 
             <section className={styles.planGrid}>
-                <article className={styles.planCard} data-variant="highlighted">
+                <article className={styles.planCard} data-variant="muted">
                     <div className={styles.cardBody}>
                         <div className={styles.cardIntro}>
                             <header className={styles.cardHeader}>
@@ -174,7 +173,7 @@ export function PricingPlansSection() {
                     </div>
                 </article>
 
-                <article className={styles.planCard} data-variant="primary">
+                <article className={styles.planCard} data-variant="highlighted">
                     <div className={styles.cardBody}>
                         <div className={styles.cardIntro}>
                             <header className={styles.cardHeader}>
@@ -210,7 +209,7 @@ export function PricingPlansSection() {
                     <div className={styles.cardFooter}>
                         <button
                             type="button"
-                            className={`${styles.planButton} ${styles.planButtonPrimary}`}
+                            className={`${styles.planButton} ${styles.planButtonOutline}`}
                             onClick={() => handleUpgrade("voyager")}
                         >
                             Upgrade
@@ -218,7 +217,7 @@ export function PricingPlansSection() {
                     </div>
                 </article>
 
-                <article className={styles.planCard} data-variant="muted">
+                <article className={styles.planCard} data-variant="primary">
                     <div className={styles.cardBody}>
                         <div className={styles.cardIntro}>
                             <header className={styles.cardHeader}>
@@ -254,7 +253,7 @@ export function PricingPlansSection() {
                     <div className={styles.cardFooter}>
                         <button
                             type="button"
-                            className={`${styles.planButton} ${styles.planButtonOutline}`}
+                            className={`${styles.planButton} ${styles.planButtonPrimary}`}
                             onClick={() => handleUpgrade("pioneer")}
                         >
                             Upgrade

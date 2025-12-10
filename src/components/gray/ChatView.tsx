@@ -1453,6 +1453,24 @@ const ChatMessagesList = memo(
                 }
               }}
             >
+              {message.attachments && message.attachments.length > 0 && (
+                <div className={styles.chatMessageAttachments}>
+                  {message.attachments.map((attachment, index) => (
+                    <div key={attachment.id || index} className={styles.chatMessageAttachment}>
+                      {attachment.mime_type?.startsWith("image/") ? (
+                        <img
+                          src={attachment.previewUrl || attachment.public_url}
+                          alt="Attachment"
+                        />
+                      ) : (
+                        <div className={styles.chatMessageAttachmentFile}>
+                          <span>{attachment.filename}</span>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
               <div className={messageBodyClassName}>
                 {editingMessageId === message.id ? (
                   <div className={styles.chatEditContainer}>
@@ -1479,24 +1497,7 @@ const ChatMessagesList = memo(
                   </div>
                 ) : (
                   <>
-                    {message.attachments && message.attachments.length > 0 && (
-                      <div className={styles.chatMessageAttachments}>
-                        {message.attachments.map((attachment, index) => (
-                          <div key={attachment.id || index} className={styles.chatMessageAttachment}>
-                            {attachment.mime_type?.startsWith("image/") ? (
-                              <img
-                                src={attachment.previewUrl || attachment.public_url}
-                                alt="Attachment"
-                              />
-                            ) : (
-                              <div className={styles.chatMessageAttachmentFile}>
-                                <span>{attachment.filename}</span>
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    )}
+
                     {assistantReminders.length > 0 ? (
                       <div className={styles.reminderCardList}>
                         {assistantReminders.map((reminder, reminderIndex) => (

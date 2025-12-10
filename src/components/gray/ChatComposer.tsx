@@ -30,6 +30,7 @@ const GrayChatComposerBase = ({
       className={styles.generalChatComposer}
       data-has-attachments={attachmentTray ? "true" : "false"}
     >
+      <div className={styles.chatComposerSkirt} aria-hidden="true" />
       <div className={`${styles.chatBarRow} ${styles.generalChatBarRow}`}>
         <GrayChatBar
           {...rest}
