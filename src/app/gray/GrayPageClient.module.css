@@ -4456,6 +4456,8 @@
   flex-shrink: 0;
   pointer-events: none;
   transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  /* Match scrollbar gutter with chatViewport for proper alignment */
+  scrollbar-gutter: stable both-edges;
 }
 
 
@@ -8807,9 +8809,12 @@ h1.greeting {
   overflow-y: auto;
   /* Scroll internally */
   padding: 0;
+  /* Preserve bottom padding to push content above chat composer */
+  padding-bottom: calc(var(--chat-composer-height, 120px) + 60px);
   overscroll-behavior-y: contain;
   scroll-behavior: smooth;
   z-index: 0;
+  scrollbar-gutter: stable both-edges;
 }
 
 .chatBarRow {
