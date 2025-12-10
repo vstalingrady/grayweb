@@ -83,9 +83,17 @@ class OpenRouterService:
     # NOTE: Only for models where reasoning requires a DIFFERENT model ID
     REASONING_MODEL_VARIANTS = {
         "openai/gpt-5.1-chat": "openai/gpt-5.1",  # gpt-5.1 is the reasoning variant
+        "moonshotai/kimi-k2-0905": "moonshotai/kimi-k2-thinking",  # kimi-k2-thinking is the reasoning variant
         # DeepSeek v3.2 uses the reasoning param, NOT a separate model
         # Grok models handle reasoning via the reasoning param
         # Anthropic models handle reasoning via extended thinking, not separate model
+    }
+
+    # Reverse mapping: reasoning model -> non-reasoning model
+    # Used to downgrade when reasoning_mode is False but user selected thinking variant
+    REVERSE_REASONING_VARIANTS = {
+        "openai/gpt-5.1": "openai/gpt-5.1-chat",
+        "moonshotai/kimi-k2-thinking": "moonshotai/kimi-k2-0905",
     }
 
     # Models where reasoning is ALWAYS on (toggle should be grayed out in frontend)
@@ -180,7 +188,8 @@ class OpenRouterService:
         
         Args:
             model: The model name or ID to resolve
-            reasoning_mode: If True, return the reasoning variant for models that have one
+            reasoning_mode: If True, return the reasoning variant for models that have one.
+                           If False, downgrade from reasoning variants to base models.
         """
         if not model:
             base_model = self._default_model
@@ -204,6 +213,11 @@ class OpenRouterService:
         # If reasoning mode is enabled, check if this model has a reasoning variant
         if reasoning_mode and base_model in self.REASONING_MODEL_VARIANTS:
             return self.REASONING_MODEL_VARIANTS[base_model]
+        
+        # If reasoning mode is disabled but user selected a thinking variant,
+        # downgrade to the non-reasoning base model
+        if not reasoning_mode and base_model in self.REVERSE_REASONING_VARIANTS:
+            return self.REVERSE_REASONING_VARIANTS[base_model]
         
         return base_model
 
