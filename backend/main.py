@@ -714,6 +714,32 @@ SEARCH_TOOL = types.Tool(
     google_search=types.GoogleSearch(),
 )
 
+# URL Context Tool - allows AI to fetch and analyze content from URLs
+URL_CONTEXT_TOOL = types.Tool(
+    url_context=types.UrlContext(),
+)
+
+# Pattern to extract URLs from messages (excludes localhost/internal URLs)
+URL_EXTRACTION_PATTERN = re.compile(r'https?://[^\s<>"{}|\\^`\[\]\(\)]+')
+URL_CONTEXT_MODEL = "models/gemini-2.5-flash-lite-latest"  # Fast model for URL fetching
+
+def _extract_urls_from_message(message: str) -> List[str]:
+    """Extract URLs from a message for URL context processing.
+    
+    Returns up to 20 URLs (API limit), filtered to exclude internal/localhost URLs.
+    """
+    if not message:
+        return []
+    
+    urls = URL_EXTRACTION_PATTERN.findall(message)
+    # Filter out internal/localhost URLs
+    filtered = [
+        url for url in urls 
+        if not any(x in url.lower() for x in ['localhost', '127.0.0.1', '0.0.0.0'])
+    ]
+    # API supports up to 20 URLs per request
+    return filtered[:20]
+
 # PLAN_TOOLS not included by default - added conditionally based on message intent
 # CALENDAR_TOOLS removed from default - tool definitions add ~2s latency to OpenRouter
 # This prevents the LLM from calling get_workspace_state on simple casual messages
@@ -5103,6 +5129,106 @@ def _extract_function_call(response: types.GenerateContentResponse) -> Optional[
     return None
 
 
+async def _fetch_url_context_with_gemini(
+    message: str,
+    urls: List[str],
+    workspace_context: Optional[str] = None,
+    time_context: Optional[str] = None,
+) -> Tuple[str, Optional[Dict[str, Any]]]:
+    """Fetch URL content using Gemini with URL Context tool.
+    
+    This is used for the hybrid architecture: Gemini fetches URL content,
+    which is then passed to any model (OpenRouter, Gemini Pro, etc.) as context.
+    
+    Args:
+        message: The user's original message
+        urls: List of URLs extracted from the message
+        workspace_context: Optional workspace context
+        time_context: Optional time context
+        
+    Returns:
+        Tuple of (url_content_summary, url_context_metadata)
+    """
+    if not GEMINI_SERVICE or not GEMINI_SERVICE.available:
+        return "", None
+    
+    if not urls:
+        return "", None
+    
+    # Build a prompt that asks Gemini to fetch and summarize the URL content
+    url_list = "\n".join(f"- {url}" for url in urls)
+    system_prompt = (
+        "You have access to the URL Context tool which can fetch content from URLs. "
+        "Fetch the content from the provided URLs and provide a comprehensive summary "
+        "of the relevant information. Include key facts, data, and context that would "
+        "help answer the user's question."
+    )
+    
+    context_prompt = f"The user is asking about content from these URLs:\n{url_list}\n\nUser message: {message}"
+    
+    try:
+        api_logger.info(
+            f"[URL Context] Fetching content from {len(urls)} URLs",
+            extra={"event_type": "url_context_fetch_start", "url_count": len(urls)}
+        )
+        
+        response = await GEMINI_SERVICE.generate(
+            context_prompt,
+            conversation_history=None,
+            workspace_context=workspace_context,
+            system_prompt=system_prompt,
+            time_context=time_context,
+            model=URL_CONTEXT_MODEL,
+            attachments=None,
+            extra_contents=None,
+            response_schema=None,
+            response_mime_type=None,
+            tools=[URL_CONTEXT_TOOL],
+            tool_config=None,
+            reasoning_mode=False,
+        )
+        
+        if not response.candidates:
+            api_logger.warning(
+                "[URL Context] No candidates in response",
+                extra={"event_type": "url_context_no_candidates"}
+            )
+            return "", None
+        
+        candidate = response.candidates[0]
+        url_content = _candidate_text(candidate)
+        
+        # Extract URL context metadata if available
+        url_metadata: Optional[Dict[str, Any]] = None
+        if hasattr(candidate, 'url_context_metadata') and candidate.url_context_metadata:
+            url_metadata = {
+                "url_metadata": [
+                    {
+                        "retrieved_url": m.retrieved_url,
+                        "url_retrieval_status": str(m.url_retrieval_status) if m.url_retrieval_status else None
+                    }
+                    for m in (candidate.url_context_metadata.url_metadata or [])
+                ]
+            }
+        
+        api_logger.info(
+            f"[URL Context] Successfully fetched content ({len(url_content)} chars)",
+            extra={
+                "event_type": "url_context_fetch_success",
+                "content_len": len(url_content),
+                "url_count": len(urls)
+            }
+        )
+        
+        return url_content.strip(), url_metadata
+        
+    except Exception as error:
+        api_logger.warning(
+            f"[URL Context] Failed to fetch URL content: {error}",
+            extra={"event_type": "url_context_fetch_error", "error": str(error)},
+        )
+        return "", None
+
 async def _execute_tools_with_gemini_flash(
     message: str,
     conversation_history: Optional[List[Dict[str, Any]]],
@@ -6178,6 +6304,32 @@ async def stream_ai_response(
             try:
                 t0_provider = time.perf_counter()
                 
+                # HYBRID URL CONTEXT: When URLs are detected in the message,
+                # use Gemini Flash Lite to fetch URL content, then pass to OpenRouter.
+                message_urls = _extract_urls_from_message(message)
+                if message_urls and GEMINI_SERVICE.available:
+                    api_logger.info(
+                        f"[URL Context] Detected {len(message_urls)} URLs, fetching with Gemini",
+                        extra={"event_type": "url_context_hybrid_start", "url_count": len(message_urls)}
+                    )
+                    url_content, url_metadata = await _fetch_url_context_with_gemini(
+                        message,
+                        message_urls,
+                        workspace_with_cache,
+                        time_context,
+                    )
+                    if url_content:
+                        # Inject URL content as context for OpenRouter
+                        url_context_section = f"--- URL Content ---\n{url_content}\n--- End URL Content ---"
+                        workspace_with_cache = "\n\n".join(filter(None, [
+                            workspace_with_cache,
+                            url_context_section,
+                        ]))
+                        api_logger.info(
+                            "[URL Context] Injected URL content into workspace context",
+                            extra={"event_type": "url_context_injected", "content_len": len(url_content)}
+                        )
+                
                 # HYBRID FLOW: When structured tools are needed (reminders, plans, habits),
                 # use Gemini Flash for fast tool execution, then OpenRouter for personality response.
                 # Exception: onboarding flow stays native to preserve tool state handling.
@@ -6528,22 +6680,44 @@ async def stream_ai_response(
                 if not model or not str(model).startswith("models/"):
                     model = GEMINI_LIGHT_MODEL
 
+    # URL Context: Add URL context tool when URLs are detected in the message
+    # This allows Gemini to fetch and analyze content from URLs
+    message_urls = _extract_urls_from_message(message)
+    if provider == "gemini" and message_urls:
+        api_logger.info(
+            f"[URL Context] Adding URL context tool for {len(message_urls)} URLs",
+            extra={"event_type": "url_context_gemini_tool_add", "url_count": len(message_urls)}
+        )
+        if tool_list is None:
+            tool_list = []
+        # Check if URL context tool is already in the list
+        has_url_context = any(
+            hasattr(t, 'url_context') and t.url_context is not None 
+            for t in tool_list
+        )
+        if not has_url_context:
+            tool_list.append(URL_CONTEXT_TOOL)
+
     # Gemini-specific tool list adjustment (consolidating)
     if provider == "gemini" and tool_list:
         all_declarations = []
         search_instance = None
+        url_context_instance = None
         
         for t in tool_list:
             if t.function_declarations:
                 all_declarations.extend(t.function_declarations)
             if t.google_search:
                 search_instance = t.google_search
+            if hasattr(t, 'url_context') and t.url_context is not None:
+                url_context_instance = t.url_context
         
         # Rebuild a single tool if we have any components
-        if all_declarations or search_instance:
+        if all_declarations or search_instance or url_context_instance:
             tool_list = [types.Tool(
                 function_declarations=all_declarations if all_declarations else None,
-                google_search=search_instance
+                google_search=search_instance,
+                url_context=url_context_instance
             )]
 
     
