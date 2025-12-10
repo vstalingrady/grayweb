@@ -12,6 +12,9 @@ export const buildLocalTimeContext = (referenceDate?: Date) => {
   const now = referenceDate ?? new Date();
   const resolved = Intl.DateTimeFormat().resolvedOptions();
   const timeZone = resolved.timeZone || "UTC";
+  const offsetMinutes = -now.getTimezoneOffset();
+  const utcOffset = formatUtcOffset(offsetMinutes);
+  const isoTimestamp = now.toISOString();
   const formatter = new Intl.DateTimeFormat(undefined, {
     weekday: "long",
     month: "long",
@@ -23,8 +26,8 @@ export const buildLocalTimeContext = (referenceDate?: Date) => {
     timeZoneName: "short",
   });
   const labeledTime = formatter.format(now);
-  // Only show the formatted time - don't explicitly mention timezone/city to avoid AI incorrectly naming cities
-  return `The user's local time is ${labeledTime}.`;
+  // Include explicit timezone offset and ISO timestamp for accurate reminder scheduling
+  return `The user's local time is ${labeledTime} (timezone: ${timeZone}, UTC${utcOffset}). ISO timestamp: ${isoTimestamp}. When creating reminders, output remind_at in ISO 8601 format with the user's timezone offset (e.g., 2024-12-11T21:00:00${utcOffset}).`;
 };
 
 export default buildLocalTimeContext;

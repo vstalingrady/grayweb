@@ -209,7 +209,7 @@ PLAN_TOOL = types.Tool(
                     ),
                     "remind_at": types.Schema(
                         type="STRING",
-                        description="ISO 8601 datetime string for the reminder time.",
+                        description="ISO 8601 datetime string with timezone offset for the reminder time (e.g., 2024-12-11T21:00:00+07:00). Always include the user's timezone offset from the time context.",
                     ),
                     "description": types.Schema(
                         type="STRING",
@@ -235,7 +235,7 @@ PLAN_TOOL = types.Tool(
                     ),
                     "remind_at": types.Schema(
                         type="STRING",
-                        description="New reminder time (ISO 8601).",
+                        description="New reminder time (ISO 8601 with timezone offset, e.g., 2024-12-11T21:00:00+07:00).",
                     ),
                     "status": types.Schema(
                         type="STRING",

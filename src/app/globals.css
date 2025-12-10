@@ -73,15 +73,19 @@ body {
 
 html {
   font-size: 17px;
+  /* scrollbar-width and color are now handled by the global selectors below implicitly or explicitly if we add * selector, but usually webkit is enough for chrome. 
+     Firefox needs scrollbar-width: thin on the element. */
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
 }
 
-html::-webkit-scrollbar {
-  width: 6px;
+
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
 }
 
-html::-webkit-scrollbar-track {
+::-webkit-scrollbar-track {
   background: transparent;
 }
 
@@ -208,13 +212,18 @@ html::-webkit-scrollbar-track {
   font-style: italic;
 }
 
-html::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.18);
-  border-radius: 999px;
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 0;
 }
 
-html::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.28);
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.35);
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 html::-webkit-scrollbar-button,
