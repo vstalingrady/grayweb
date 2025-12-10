@@ -1204,12 +1204,14 @@ const ThinkingBlock = ({
   reasoningSeconds,
   isActivelyThinking,
   thinkingStartTime,
+  isStreamingMessage,
 }: {
   content: string;
   markdownComponents: Components;
   reasoningSeconds?: number | null;
   isActivelyThinking?: boolean;
   thinkingStartTime?: number | null;
+  isStreamingMessage?: boolean;
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [liveSeconds, setLiveSeconds] = useState(0);
@@ -1245,12 +1247,19 @@ const ThinkingBlock = ({
     if (isActivelyThinking && thinkingStartTime) {
       return `Thinking for ${formatTime(liveSeconds)}`;
     }
-    // If we have a final duration, show it
+    // Only show "Thought for" when the entire stream is complete (not just thinking portion)
+    // While streaming continues after thinking ends, show simple "Thinking" label
+    if (isStreamingMessage) {
+      // Still streaming content after thinking ended - show just "Thinking" 
+      // (the final time will be calculated and shown when stream completes)
+      return "Thinking";
+    }
+    // If we have a final duration and stream is complete, show it
     if (typeof reasoningSeconds === "number" && reasoningSeconds > 0) {
       return `Thought for ${formatTime(reasoningSeconds)}`;
     }
     return null;
-  }, [isActivelyThinking, thinkingStartTime, liveSeconds, reasoningSeconds]);
+  }, [isActivelyThinking, thinkingStartTime, liveSeconds, reasoningSeconds, isStreamingMessage]);
 
   return (
     <div className={styles.chatThinkingBlock} data-expanded={isExpanded ? "true" : "false"}>
@@ -1505,6 +1514,7 @@ const ChatMessagesList = memo(
                         reasoningSeconds={message.reasoningSeconds}
                         isActivelyThinking={isStreamingMessage && isActivelyThinking}
                         thinkingStartTime={isStreamingMessage ? thinkingStartTime : null}
+                        isStreamingMessage={isStreamingMessage}
                       />
                     )}
                     {hasTextContent && (
