@@ -1862,9 +1862,13 @@ async def _load_general_conversation_history(user_id: int) -> List[Dict[str, Any
             if row["created_at"]:
                 entry["timestamp"] = int(row["created_at"].replace(tzinfo=timezone.utc).timestamp() * 1000)
             
-            # Include reminders if present
-            if row.get("reminders"):
-                entry["reminders"] = _parse_json_field(row["reminders"]) if isinstance(row["reminders"], str) else row["reminders"]
+            # Include reminders if present (use try/except since older DB may not have column)
+            try:
+                reminders_value = row["reminders"]
+                if reminders_value:
+                    entry["reminders"] = _parse_json_field(reminders_value) if isinstance(reminders_value, str) else reminders_value
+            except (KeyError, IndexError):
+                pass  # Column doesn't exist or not accessible
             
             local_history.append(entry)
             
