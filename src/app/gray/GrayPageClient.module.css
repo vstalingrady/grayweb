@@ -8829,6 +8829,7 @@ h1.greeting {
   position: relative;
   z-index: 1;
   transition: background 0.2s ease, border-color 0.2s ease;
+  pointer-events: auto;
 }
 
 /* When attachments are present */
@@ -8870,7 +8871,7 @@ h1.greeting {
     padding: 14px 16px;
     margin-top: 8px;
   }
-  
+
   .chatBarControlsRow {
     display: flex;
     flex-direction: row;
@@ -8879,11 +8880,11 @@ h1.greeting {
     gap: 8px;
     width: 100%;
   }
-  
+
   .chatBarRounded[data-expanded="true"] {
     align-items: stretch;
   }
-  
+
   .chatBarRounded[data-expanded="true"] .chatBarInputRow {
     align-items: flex-start;
   }
