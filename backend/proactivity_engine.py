@@ -742,13 +742,9 @@ class ProactivityEngine:
 
 
 
-    def _ensure_user_data_record(self, user_identifier: int) -> Optional[int]:
+    async def _ensure_user_data_record(self, user_identifier: int) -> Optional[int]:
         """
         Return the user_data.id for the provided identifier, creating it if needed.
-
-        This mirrors the helper in backend.main but is kept local to avoid
-        introducing circular imports. It is intentionally synchronous because
-        the Supabase client itself is sync-only.
         """
         if not user_identifier:
             return None
@@ -757,22 +753,27 @@ class ProactivityEngine:
         if cached is not None:
             return cached
 
-        # Use local SQLite
-        # Note: This method was sync because Supabase client was sync.
-        # But databases (self.db) is async. This method is called from inside async methods usually,
-        # but the signature here implies sync usage if it wasn't async def.
-        # Wait, _ensure_user_data_record is defined as def (sync).
-        # But self.db.fetch_one is async.
-        # We need to make this async or use a sync db driver?
-        # The codebase uses `databases` which is async.
-        # Since this helper is only used by AI generation which is async, we should change it to async def
-        # OR relying on the callers to await it if we change signature.
-        # However, looking at usage: it is NOT used in the visible code.
-        # It's a helper 'mirrored from backend.main'.
-        # I will leave it broken/unused or attempt to fix it if I see usage.
-        # Searching usage... not found in snippet.
-        # I will comment out the body to prevent errors.
-        return None
+        await self._ensure_connection()
+        try:
+            query = "SELECT id FROM user_data WHERE user_identifier = :uid"
+            row = await self.db.fetch_one(query, {"uid": user_identifier})
+            if row:
+                uid = row["id"]
+                self._user_data_cache[user_identifier] = uid
+                return uid
+
+            # Create new record
+            insert_query = """
+                INSERT INTO user_data (user_identifier, created_at, updated_at)
+                VALUES (:uid, :now, :now)
+            """
+            now = datetime.now(dt_timezone.utc)
+            uid = await self.db.execute(insert_query, {"uid": user_identifier, "now": now})
+            self._user_data_cache[user_identifier] = uid
+            return uid
+        except Exception as exc:
+            logger.error(f"Failed checking/creating user_data for {user_identifier}: {exc}", exc_info=True)
+            return None
 
 
 
@@ -780,13 +781,19 @@ class ProactivityEngine:
         # Use local SQLite exclusively.
         await self._ensure_connection()
 
+        user_data_id = await self._ensure_user_data_record(user_id)
+        if not user_data_id:
+            logger.error(f"Cannot save general message: failed to resolve user_data_id for user {user_id}")
+            return False
+
         try:
             query_insert = """
-                INSERT INTO general_chat_messages (user_id, role, content, created_at)
-                VALUES (:user_id, :role, :content, :created_at)
+                INSERT INTO general_chat_messages (user_id, user_data_id, role, content, created_at)
+                VALUES (:user_id, :user_data_id, :role, :content, :created_at)
             """
             values = {
                 "user_id": user_id,
+                "user_data_id": user_data_id,
                 "role": role,
                 "content": content,
                 "created_at": datetime.now(dt_timezone.utc),

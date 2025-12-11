@@ -390,7 +390,7 @@ const loadStoredSessions = (
 };
 
 const mapApiMessagesToChatMessages = (
-  history: { role: string; text: string; timestamp?: number; grounding_metadata?: GroundingMetadata | null; groundingMetadata?: GroundingMetadata | null }[],
+  history: { role: string; text: string; timestamp?: number; grounding_metadata?: GroundingMetadata | null; groundingMetadata?: GroundingMetadata | null; reminders?: unknown[] | null }[],
   conversationId: string,
   fallbackTimestamp: number = Date.now()
 ): ChatMessage[] => {
@@ -408,10 +408,17 @@ const mapApiMessagesToChatMessages = (
     const role: ChatRole = message.role === "model" ? "assistant" : "user";
     const rawText = message.text ?? "";
     const normalizedText = role === "assistant" ? stripGrayTitleMarkers(rawText) : rawText;
+
+    // Prefer reminders from API (database-persisted) over text extraction
+    const apiReminders = Array.isArray(message.reminders) && message.reminders.length > 0
+      ? message.reminders.map((r) => coerceReminderPayload(r)).filter((r): r is GrayReminderCreatedPayload => Boolean(r))
+      : null;
+
     const reminderExtraction =
-      role === "assistant"
+      role === "assistant" && !apiReminders
         ? extractGrayRemindersFromText(normalizedText)
         : { cleanText: normalizedText, reminders: [] };
+
     const normalizedMetadata =
       message.grounding_metadata ??
       message.groundingMetadata ??
@@ -431,9 +438,10 @@ const mapApiMessagesToChatMessages = (
       content: reminderExtraction.cleanText,
       createdAt: messageTimestamp,
       reminders:
-        role === "assistant" && reminderExtraction.reminders.length
+        apiReminders ??
+        (role === "assistant" && reminderExtraction.reminders.length
           ? reminderExtraction.reminders
-          : undefined,
+          : undefined),
       groundingMetadata: normalizedMetadata ?? undefined,
     };
   });

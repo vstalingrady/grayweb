@@ -1862,6 +1862,10 @@ async def _load_general_conversation_history(user_id: int) -> List[Dict[str, Any
             if row["created_at"]:
                 entry["timestamp"] = int(row["created_at"].replace(tzinfo=timezone.utc).timestamp() * 1000)
             
+            # Include reminders if present
+            if row.get("reminders"):
+                entry["reminders"] = _parse_json_field(row["reminders"]) if isinstance(row["reminders"], str) else row["reminders"]
+            
             local_history.append(entry)
             
         return local_history
@@ -1880,6 +1884,7 @@ async def _insert_general_conversation_message(
     text: str,
     grounding_metadata: Optional[Any] = None,
     attachments: Optional[Any] = None,
+    reminders: Optional[Any] = None,
 ) -> Optional[int]:
     app_logger.debug(
         f"Inserting general chat message for user {user_id}, role={role}, text_len={len(text)}",
@@ -1892,8 +1897,8 @@ async def _insert_general_conversation_message(
         effective_user_data_id = user_data_id if user_data_id is not None else user_id
         now = datetime.utcnow()
         query = """
-            INSERT INTO general_chat_messages (user_id, user_data_id, role, content, grounding_metadata, created_at)
-            VALUES (:user_id, :user_data_id, :role, :content, :grounding_metadata, :created_at)
+            INSERT INTO general_chat_messages (user_id, user_data_id, role, content, grounding_metadata, reminders, created_at)
+            VALUES (:user_id, :user_data_id, :role, :content, :grounding_metadata, :reminders, :created_at)
         """
         values = {
             "user_id": user_id,
@@ -1901,6 +1906,7 @@ async def _insert_general_conversation_message(
             "role": role,
             "content": text,
             "grounding_metadata": json.dumps(grounding_metadata) if grounding_metadata else None,
+            "reminders": json.dumps(reminders) if reminders else None,
             "created_at": now.isoformat(),
         }
         result = await database.execute(query, values)
@@ -1938,13 +1944,14 @@ async def _replace_general_conversation_history(user_id: int, history: List[Dict
                     "role": entry.get("role"),
                     "content": entry.get("text") or "",
                     "grounding_metadata": json.dumps(entry.get("grounding_metadata")) if entry.get("grounding_metadata") else None,
+                    "reminders": json.dumps(entry.get("reminders")) if entry.get("reminders") else None,
                     "created_at": datetime.utcnow(),
                 })
 
             if values_list:
                 # SQLite has a 999-parameter limit; chunk to avoid "too many SQL variables"
                 query = general_chat_messages.insert()
-                chunk_size = 150  # 150 * 5 columns = 750 params (< 999)
+                chunk_size = 140  # 140 * 7 columns = 980 params (< 999)
                 for i in range(0, len(values_list), chunk_size):
                     chunk = values_list[i:i + chunk_size]
                     await database.execute_many(query, chunk)

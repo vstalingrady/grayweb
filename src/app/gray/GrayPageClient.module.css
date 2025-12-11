@@ -8821,7 +8821,7 @@ h1.greeting {
   align-items: center;
   gap: 0;
   margin: 0 auto;
-  border-radius: 9999px;
+  border-radius: 26px;
   border: 1px solid rgba(255, 255, 255, 0.16);
   background: #1a1a1a;
   backdrop-filter: blur(16px);
@@ -8864,7 +8864,7 @@ h1.greeting {
   align-items: center;
   flex-wrap: wrap;
   gap: 12px;
-  padding: 8px 4px 12px 4px;
+  padding: 0 !important;
   width: 100%;
 }
 

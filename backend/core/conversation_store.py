@@ -200,6 +200,7 @@ def append_to_conversation_cache(
         "grounding_metadata": message.get("grounding_metadata")
         or message.get("groundingMetadata"),
         "attachments": message.get("attachments"),
+        "reminders": message.get("reminders"),
     }
     # Preserve timestamp if available
     if message.get("timestamp"):
@@ -365,12 +366,15 @@ async def save_conversation_message(
         return
 
     try:
+        import json
+        reminders_data = message.get("reminders")
         insert_query = user_chat_messages.insert().values(
             thread_id=conversation_id,
             role=role,
             text=text,
             grounding_metadata=grounding_metadata,
             attachments=message.get("attachments"),
+            reminders=json.dumps(reminders_data) if reminders_data else None,
             created_at=datetime.utcnow(),
         )
         await database.execute(insert_query)
@@ -398,6 +402,7 @@ async def save_conversation_message(
                 "text": text,
                 "grounding_metadata": grounding_metadata,
                 "attachments": message.get("attachments"),
+                "reminders": reminders_data,
                 "timestamp": timestamp_ms,
             },
         )

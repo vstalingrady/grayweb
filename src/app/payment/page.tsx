@@ -3,7 +3,7 @@
 import React, { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Script from "next/script";
-import { Check, CheckCircle, AlertCircle, Loader2, ArrowLeft, CreditCard, Landmark, Smartphone, ShieldCheck, Zap, Globe, Radio } from "lucide-react";
+import { Check, CheckCircle, AlertCircle, Loader2, ArrowLeft, CreditCard, Landmark, Smartphone, ShieldCheck, Zap, Globe, Radio, Brain, Clock, Pin, Plus, CalendarClock, MessageSquare, Shuffle, Infinity as InfinityIcon, Headphones, FlaskConical, Database } from "lucide-react";
 import styles from "./payment.module.css";
 import { VOYAGER_FEATURES, PIONEER_FEATURES } from "../pricing/PricingPlansSection";
 
@@ -180,8 +180,8 @@ function PaymentContent() {
             <div className={styles.page}>
                 <div className={styles.container}>
                     <div className={styles.successContainer}>
-                        <div style={{ padding: "1.5rem", background: "rgba(34, 197, 94, 0.1)", borderRadius: "50%" }}>
-                            <CheckCircle size={48} color="#4ade80" />
+                        <div style={{ padding: "1.5rem", background: "rgba(255, 255, 255, 0.1)", borderRadius: "50%" }}>
+                            <CheckCircle size={48} color="white" />
                         </div>
                         <div>
                             <h2 style={{ fontSize: "1.75rem", fontWeight: 700, color: "white" }}>Order Created</h2>
@@ -236,9 +236,50 @@ function PaymentContent() {
                 <ArrowLeft size={20} />
             </button>
 
-            <div className={styles.container}>
-                {/* LEFT COLUMN: Controls */}
+            <div className={styles.mainGrid}>
+                {/* RIGHT COLUMN MOVED LEFT: Summary & Features */}
+                <div className={styles.summaryColumn}>
+                    <article className={styles.planCard} data-variant="muted">
+                        <div className={styles.cardBody}>
+                            <div className={styles.cardIntro}>
+                                <header className={styles.cardHeader}>
+                                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                                        <div style={{ padding: "0.25rem 0.6rem", background: "rgba(255,255,255,0.1)", borderRadius: "6px", fontSize: "0.75rem", letterSpacing: "0.05em", color: "#fff", fontWeight: 700, textTransform: "uppercase" }}>
+                                            {shortPlanName}
+                                        </div>
+                                    </div>
+                                    <h2 className={styles.priceValue}>{currentPriceDisplay}</h2>
+                                    <p className={styles.priceMeta}>per month{billingCycle === "annual" ? ", billed annually" : ""}</p>
+                                </header>
+                            </div>
+
+                            <div>
+                                <ul className={styles.featureList} style={{ marginTop: "1.5rem" }}>
+                                    {features.map(({ label, icon: Icon, variant, subtext }) => (
+                                        <li key={label} data-variant={variant}>
+                                            <Icon size={16} />
+                                            <span
+                                                className={
+                                                    variant === "inherit" ? styles.featureLabelInherit : styles.featureLabel
+                                                }
+                                            >
+                                                {label}
+                                                {subtext && <span className={styles.featureSubtext}>{subtext}</span>}
+                                            </span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        </div>
+                    </article>
+                </div>
+
                 <div className={styles.inputColumn}>
+                    <div className={styles.header}>
+                        <h2 className={styles.title}>{planName}</h2>
+                        <p className={styles.subtitle}>Complete your subscription</p>
+                    </div>
+
                     <div>
                         <h3 className={styles.sectionTitle}>Billing Cycle</h3>
                         <div className={styles.billingSelector}>
@@ -249,7 +290,7 @@ function PaymentContent() {
                             >
                                 <div className={styles.billingLabel}>
                                     Monthly
-                                    {billingCycle === "monthly" && <CheckCircle size={14} color="#22c55e" />}
+                                    {billingCycle === "monthly" && <CheckCircle size={14} color="white" />}
                                 </div>
                                 <div className={styles.billingPrice}>{pricingData.monthly.fullPrice} /mo</div>
                             </button>
@@ -264,8 +305,8 @@ function PaymentContent() {
                                 </div>
                                 <div className={styles.billingPrice}>{pricingData.annual.fullPrice} /yr</div>
                             </button>
-                        </div>
-                    </div>
+                        </div >
+                    </div >
 
                     <div>
                         <h3 className={styles.sectionTitle}>Payment Method</h3>
@@ -311,58 +352,62 @@ function PaymentContent() {
                         </div>
                     </div>
 
-                    {paymentMethod === "bank_transfer" && (
-                        <div className={styles.bankList}>
-                            {(["bca", "bni", "bri"] as const).map(bank => (
-                                <button
-                                    key={bank}
-                                    className={styles.bankButton}
-                                    data-active={selectedBank === bank}
-                                    onClick={() => setSelectedBank(bank)}
-                                >
-                                    {bank}
-                                </button>
-                            ))}
-                        </div>
-                    )}
-
-                    {paymentMethod === "credit_card" && (
-                        <div className={styles.cardForm}>
-                            <input
-                                className={styles.input}
-                                type="text"
-                                placeholder="Card Number"
-                                value={cardNumber}
-                                onChange={e => setCardNumber(e.target.value)}
-                            />
-                            <div className={styles.expiryRow}>
-                                <input
-                                    className={styles.input}
-                                    type="text"
-                                    placeholder="MM"
-                                    value={cardExpMonth}
-                                    onChange={e => setCardExpMonth(e.target.value)}
-                                    maxLength={2}
-                                />
-                                <input
-                                    className={styles.input}
-                                    type="text"
-                                    placeholder="YYYY"
-                                    value={cardExpYear}
-                                    onChange={e => setCardExpYear(e.target.value)}
-                                    maxLength={4}
-                                />
-                                <input
-                                    className={styles.input}
-                                    type="text"
-                                    placeholder="CVV"
-                                    value={cardCVV}
-                                    onChange={e => setCardCVV(e.target.value)}
-                                    maxLength={4}
-                                />
+                    {
+                        paymentMethod === "bank_transfer" && (
+                            <div className={styles.bankList}>
+                                {(["bca", "bni", "bri"] as const).map(bank => (
+                                    <button
+                                        key={bank}
+                                        className={styles.bankButton}
+                                        data-active={selectedBank === bank}
+                                        onClick={() => setSelectedBank(bank)}
+                                    >
+                                        {bank}
+                                    </button>
+                                ))}
                             </div>
-                        </div>
-                    )}
+                        )
+                    }
+
+                    {
+                        paymentMethod === "credit_card" && (
+                            <div className={styles.cardForm}>
+                                <input
+                                    className={styles.input}
+                                    type="text"
+                                    placeholder="Card Number"
+                                    value={cardNumber}
+                                    onChange={e => setCardNumber(e.target.value)}
+                                />
+                                <div className={styles.expiryRow}>
+                                    <input
+                                        className={styles.input}
+                                        type="text"
+                                        placeholder="MM"
+                                        value={cardExpMonth}
+                                        onChange={e => setCardExpMonth(e.target.value)}
+                                        maxLength={2}
+                                    />
+                                    <input
+                                        className={styles.input}
+                                        type="text"
+                                        placeholder="YYYY"
+                                        value={cardExpYear}
+                                        onChange={e => setCardExpYear(e.target.value)}
+                                        maxLength={4}
+                                    />
+                                    <input
+                                        className={styles.input}
+                                        type="text"
+                                        placeholder="CVV"
+                                        value={cardCVV}
+                                        onChange={e => setCardCVV(e.target.value)}
+                                        maxLength={4}
+                                    />
+                                </div>
+                            </div>
+                        )
+                    }
 
                     <div className={styles.payButtonContainer}>
                         {status === "error" && (
@@ -388,41 +433,14 @@ function PaymentContent() {
                             Powered by Midtrans • Secure 256-bit SSL Header
                         </div>
                     </div>
-                </div>
+                </div >
 
-                {/* RIGHT COLUMN: Summary & Features */}
-                <div className={styles.summaryColumn}>
-                    <header className={styles.planSummaryHeader}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem" }}>
-                            <div style={{ padding: "0.25rem 0.5rem", background: "rgba(255,255,255,0.1)", borderRadius: "6px", fontSize: "0.75rem", letterSpacing: "0.05em", color: "#fff", fontWeight: 700, textTransform: "uppercase" }}>
-                                {shortPlanName}
-                            </div>
-                        </div>
-                        <h1 className={styles.bigPrice}>{currentPriceDisplay}</h1>
-                        <div className={styles.perPeriod}>per month{billingCycle === "annual" ? ", billed annually" : ""}</div>
-                    </header>
-
-                    <div>
-                        <div className={styles.whatsIncluded}>What's included</div>
-                        <ul className={styles.featureList}>
-                            {features.map(({ label, subtext }) => (
-                                <li key={label} className={styles.featureItem}>
-                                    <Check size={18} className={styles.checkIcon} />
-                                    <div>
-                                        <div>{label}</div>
-                                        {subtext && <div style={{ fontSize: "0.8rem", color: "rgba(255,255,255,0.5)", marginTop: "0.1rem" }}>{subtext}</div>}
-                                    </div>
-                                </li>
-                            ))}
-                        </ul>
-                    </div>
-                </div>
             </div>
 
             <div className={styles.particleBackground}>
                 <div className={styles.starLayer} />
             </div>
-        </div>
+        </div >
     );
 }
 
