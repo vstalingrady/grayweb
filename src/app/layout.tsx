@@ -70,6 +70,7 @@ export const viewport = {
   maximumScale: 1,
   userScalable: false,
   viewportFit: 'cover',
+  interactiveWidget: 'resizes-content',
 };
 
 const plusJakartaSans = Plus_Jakarta_Sans({

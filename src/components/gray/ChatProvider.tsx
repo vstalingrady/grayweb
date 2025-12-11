@@ -32,6 +32,7 @@ import { buildLocalTimeContext } from "@/lib/timeContext";
 import { formatReminderDateLabel, formatReminderSlotLabel } from "./reminderTimeUtils";
 import { type QuestionnaireSession } from "@/lib/questionnaire";
 import { IntroSequence, INTRO_MESSAGES } from "./IntroSequence";
+import { compressImage } from "@/lib/imageCompression";
 import {
   ChatRole,
   ChatMessage,
@@ -355,8 +356,36 @@ const normalizeSessionsList = (sessions: ChatSession[]): ChatSession[] =>
 const loadStoredSessions = (
   _storageKeys: readonly string[]
 ): { key: string | null; sessions: ChatSession[] } => {
-  // All chat session state is now ephemeral in memory and backed by the
-  // database. We no longer hydrate from browser storage.
+  if (typeof window === "undefined") {
+    return { key: null, sessions: defaultSessions() };
+  }
+
+  for (const key of _storageKeys) {
+    try {
+      const raw = window.localStorage.getItem(key);
+      if (!raw) {
+        continue;
+      }
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        // Basic schema validation / migration could go here
+        const sessions = parsed.slice(0, 50) as ChatSession[]; // Limit to 50 recent
+        // Ensure data shapes are correct (e.g. dates are timestamps)
+        const validSessions = sessions.filter(
+          (s) =>
+            s &&
+            typeof s.id === "string" &&
+            Array.isArray(s.messages)
+        );
+        if (validSessions.length > 0) {
+          return { key, sessions: validSessions };
+        }
+      }
+    } catch (error) {
+      console.warn(`Failed to parse stored sessions for key "${key}":`, error);
+    }
+  }
+
   return { key: null, sessions: defaultSessions() };
 };
 
@@ -421,6 +450,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
   const [showIntro, setShowIntro] = useState(false);
   const onboardingSeenRef = useRef(false);
   const onboardingKickoffRef = useRef(false);
+  const hasLoadedFromStorageRef = useRef(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -982,7 +1012,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       setFileSearchImportStatus(message);
     }
   }, [fileSearchChunkingConfig, fileSearchImportName, selectedFileSearchStore]);
-  const hasLoadedFromStorageRef = useRef(true);
+
   const autoStreamTriggeredRef = useRef<Set<string>>(new Set());
   const pendingHistorySyncRef = useRef<Set<string>>(new Set());
   const sessionStorageKeyCandidates = useMemo(
@@ -1109,7 +1139,9 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
           if (!file) {
             continue;
           }
-          const upload = await apiService.uploadMediaFile(file);
+          // Compress image before uploading
+          const processedFile = await compressImage(file);
+          const upload = await apiService.uploadMediaFile(processedFile);
           const previewUrl = file.type?.toLowerCase().startsWith("image/")
             ? URL.createObjectURL(file)
             : (upload as any)?.publicUrl || (upload as any)?.url || null;
@@ -1162,10 +1194,53 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
     }
   }, [workspaceContext]);
 
+  // Hydrate from local storage on mount
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    // Only load if we haven't already (though this component should only mount once per app life ideally)
+    if (hasLoadedFromStorageRef.current && sessions.length > 0) {
+      return;
+    }
+
+    const { sessions: loadedSessions } = loadStoredSessions(
+      buildSessionStorageKeyCandidates(user?.id, user?.email)
+    );
+
+    if (loadedSessions.length > 0) {
+      setSessions((prev) => {
+        // Merge loaded sessions with any that might have been initialized (e.g. general)
+        // For simplicity, just use loaded ones but ensure General exists if needed.
+        const merged = dedupeSessionsByConversation([...prev, ...loadedSessions]);
+        const ordered = normalizeSessionsList(merged);
+        return ordered;
+      });
+    }
+    hasLoadedFromStorageRef.current = true;
+  }, [user?.id, user?.email]);
+
   const persistSessions = useCallback((_next: ChatSession[]) => {
-    // Sessions are kept in React state only; persistence is handled by the
-    // backend via conversations and conversation_messages.
-  }, []);
+    if (typeof window === "undefined") {
+      return;
+    }
+    const keys = buildSessionStorageKeyCandidates(user?.id, user?.email);
+    const key = keys[0]; // Use the most specific key (ID + Email, or ID)
+    if (!key) {
+      return;
+    }
+
+    try {
+      const serializable = _next.map((session) => ({
+        ...session,
+        // Don't persist large properties if not needed, but for now we accept full state.
+        // We might want to trim messages in the future if quota is an issue.
+      }));
+      window.localStorage.setItem(key, JSON.stringify(serializable));
+    } catch (error) {
+      console.warn("Failed to persist sessions to localStorage:", error);
+    }
+  }, [user?.id, user?.email]);
 
   useEffect(() => {
     setSessions((prev) => {
@@ -2073,7 +2148,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
         trimmed,
         tempUserMessageId,
         undefined,
-        selectedAttachments.length > 0 ? [...selectedAttachments] : undefined
+        attachmentsRef.current.length > 0 ? [...attachmentsRef.current] : undefined
       );
       clearAttachments();
       // 2) Immediately insert an empty assistant message so UI shows instant response start.

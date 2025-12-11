@@ -56,7 +56,9 @@ export function GrayChatBar({
 
   useEffect(() => {
     const handleResize = () => {
-      setIsMobile(window.matchMedia("(pointer: coarse)").matches);
+      // Use width to determine mobile behavior (Enter = newline vs submit)
+      // Pointer: coarse is unreliable on touch-capable laptops
+      setIsMobile(window.matchMedia("(max-width: 768px)").matches);
     };
     handleResize();
     window.addEventListener("resize", handleResize);
@@ -156,7 +158,7 @@ export function GrayChatBar({
             background: "transparent",
             border: "none",
             outline: "none",
-            overflowY: "hidden",
+            overflowY: "auto",
             flex: "1 1 auto",
             width: "100%",
             boxSizing: "border-box",

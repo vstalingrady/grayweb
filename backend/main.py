@@ -4848,10 +4848,10 @@ async def _generate_image_descriptions(
         try:
             # Use Gemini Flash Lite for fast, cheap description
             response = await GEMINI_SERVICE.generate(
-                message="Describe this image in 2-3 sentences. Focus on the key visual elements, any text visible, and the overall context. Be concise but informative.",
+                message="1. Describe this image in 1-2 sentences. 2. If there is ANY text in the image, transcribe it verbatim. Format: [Description]: <text> [Transcription]: <text>",
                 conversation_history=None,
                 workspace_context=None,
-                system_prompt="You are an image description assistant. Provide concise, accurate descriptions of images. Do not add any preamble like 'This image shows' - just describe what you see directly.",
+                system_prompt="You are an image analysis assistant. Always separate your response into Description and Transcription sections. If no text is visible, write 'None' for Transcription.",
                 time_context=None,
                 model=GEMINI_LIGHT_MODEL,
                 attachments=[attachment],
@@ -4861,10 +4861,10 @@ async def _generate_image_descriptions(
                 text = _candidate_text(response.candidates[0])
                 if text:
                     filename = attachment.filename or f"Image {i}"
-                    descriptions.append(f"[{filename}]: {text.strip()}")
+                    descriptions.append(f"[{filename} Analysis]:\n{text.strip()}")
                     api_logger.info(
                         f"Generated image description for {filename}",
-                        extra={"event_type": "image_description_generated", "filename": filename}
+                        extra={"event_type": "image_description_generated", "image_filename": filename}
                     )
         except Exception as e:
             api_logger.warning(
