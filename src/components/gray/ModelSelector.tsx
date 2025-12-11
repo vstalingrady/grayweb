@@ -33,9 +33,9 @@ const PIONEER_GROUPS: ModelGroup[] = [
     label: "Anthropic",
     iconPath: "/logos/claude-color.svg",
     models: [
-      { id: "anthropic/claude-haiku-4.5", label: "Claude Haiku 4.5" },
-      { id: "anthropic/claude-sonnet-4.5", label: "Claude Sonnet 4.5" },
-      { id: "anthropic/claude-opus-4.5", label: "Claude Opus 4.5", tierRequired: "pioneer" },
+      { id: "anthropic/claude-haiku-4.5", label: "Claude Haiku 4.5 $$" },
+      { id: "anthropic/claude-sonnet-4.5", label: "Claude Sonnet 4.5 $$$" },
+      { id: "anthropic/claude-opus-4.5", label: "Claude Opus 4.5 $$$$", tierRequired: "pioneer" },
     ],
   },
   {
@@ -43,8 +43,8 @@ const PIONEER_GROUPS: ModelGroup[] = [
     label: "Google",
     iconPath: "/logos/gemini-color.svg",
     models: [
-      { id: "google/gemini-3-pro-preview", label: "Gemini 3 Pro Preview" },
-      { id: "google/gemini-2.5-flash", label: "Gemini 2.5 Flash" },
+      { id: "google/gemini-3-pro-preview", label: "Gemini 3 Pro Preview $$$" },
+      { id: "google/gemini-2.5-flash", label: "Gemini 2.5 Flash $$" },
     ],
   },
   {
@@ -52,7 +52,7 @@ const PIONEER_GROUPS: ModelGroup[] = [
     label: "OpenAI",
     iconPath: "/logos/whiteopenai.svg",
     models: [
-      { id: "openai/gpt-5.1-chat", label: "GPT 5.1" },
+      { id: "openai/gpt-5.1-chat", label: "GPT 5.1 $$$" },
     ],
   },
   {
@@ -60,8 +60,8 @@ const PIONEER_GROUPS: ModelGroup[] = [
     label: "DeepSeek",
     iconPath: "/logos/deepseek-color.svg",
     models: [
-      { id: "deepseek/deepseek-v3.2", label: "Deepseek V3.2" },
-      { id: "deepseek/deepseek-v3.2-speciale", label: "Deepseek V3.2 Speciale" },
+      { id: "deepseek/deepseek-v3.2", label: "Deepseek V3.2 $" },
+      { id: "deepseek/deepseek-v3.2-speciale", label: "Deepseek V3.2 Speciale $" },
     ],
   },
   {
@@ -69,7 +69,7 @@ const PIONEER_GROUPS: ModelGroup[] = [
     label: "xAI",
     iconPath: "/logos/whitegrok.svg",
     models: [
-      { id: "x-ai/grok-4.1-fast", label: "Grok 4.1 Fast" },
+      { id: "x-ai/grok-4.1-fast", label: "Grok 4.1 Fast $" },
     ],
   },
   {
@@ -77,7 +77,7 @@ const PIONEER_GROUPS: ModelGroup[] = [
     label: "Moonshot AI",
     iconPath: "/logos/whitekimi.svg",
     models: [
-      { id: "moonshotai/kimi-k2-thinking", label: "Kimi K2 Thinking" },
+      { id: "moonshotai/kimi-k2-thinking", label: "Kimi K2 Thinking $$" },
     ],
   },
 ];
