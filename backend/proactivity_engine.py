@@ -779,35 +779,22 @@ class ProactivityEngine:
     async def _save_general_message(self, user_id: int, role: str, content: str) -> bool:
         # Use local SQLite exclusively.
         await self._ensure_connection()
-        
-        # Find the most recent thread for the user to attach the message to
-        query_thread = "SELECT id FROM user_chat_threads WHERE user_identifier = :uid ORDER BY updated_at DESC LIMIT 1"
-        try:
-            row = await self.db.fetch_one(query_thread, {"uid": user_id})
-        except Exception:
-            # Handle case where fetch_one might fail if DB not ready
-            return False
-            
-        if not row:
-            # No thread found, cannot save message
-            return False
-            
-        thread_id = row._mapping["id"] if hasattr(row, "_mapping") else row["id"]
 
         try:
             query_insert = """
-                INSERT INTO user_chat_messages (thread_id, role, text, created_at)
-                VALUES (:tid, :role, :content, :created_at)
+                INSERT INTO general_chat_messages (user_id, role, content, created_at)
+                VALUES (:user_id, :role, :content, :created_at)
             """
-            await self.db.execute(query_insert, {
-                "tid": thread_id,
+            values = {
+                "user_id": user_id,
                 "role": role,
                 "content": content,
-                "created_at": datetime.now(dt_timezone.utc)
-            })
+                "created_at": datetime.now(dt_timezone.utc),
+            }
+            await self.db.execute(query_insert, values)
             return True
         except Exception as exc:
-            logger.error(f"Failed to save proactive message to SQLite: {exc}")
+            logger.error(f"Failed to save general chat message for user {user_id}: {exc}", exc_info=True)
             return False
 
 
