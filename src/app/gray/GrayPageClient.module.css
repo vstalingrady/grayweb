@@ -4514,8 +4514,8 @@
   align-items: center;
   gap: 0;
   padding: 0;
-  /* Compensate for scrollbar */
-  padding-bottom: 0;
+  /* Compensate for scrollbar and mobile safe area */
+  padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
   background: transparent;
   /* Translucent overlay */
   /* Optional: subtle border separator */
@@ -4548,7 +4548,9 @@
   width: 100%;
   max-width: min(var(--chat-column-max-width, 680px), 100%);
   margin: 0 auto;
+  pointer-events: auto;
 }
+
 
 .chatComposerDock .generalChatBarRow {
   /* Allow max-width to be inherited from chatBarRow */
@@ -7626,9 +7628,10 @@ h1.greeting {
   height: 100%;
   max-width: 576px;
   background: rgba(28, 28, 28, 0.95);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  /* Removed border and shadow as requested */
+  border: none;
+  box-shadow: none;
   border-radius: 32px;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
 /* Reminders: literally same card as planPanel for consistent UI */
@@ -9052,6 +9055,8 @@ h1.greeting {
   transition:
     background 0.2s ease,
     color 0.2s ease;
+  position: relative;
+  z-index: 2;
 }
 
 .chatIconButton {
