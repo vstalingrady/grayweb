@@ -8816,47 +8816,53 @@ h1.greeting {
   max-width: min(calc(1.05 * var(--chat-bubble-max-width, var(--chat-column-max-width, 780px))),
       100%);
   display: flex;
-  flex-direction: row;
-  flex-wrap: nowrap;
-  align-items: center;
-  gap: 0;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
   margin: 0 auto;
   margin-top: 8px;
-  border-radius: 18px;
+  border-radius: 26px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   background: rgba(40, 40, 42, 0.95);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  padding: 8px 10px;
+  padding: 14px 16px;
   position: relative;
   z-index: 1;
-  transition: background 0.2s ease, border-color 0.2s ease, border-radius 0.15s ease;
+  transition: background 0.2s ease, border-color 0.2s ease;
 }
 
-/* When attachments are present, switch to column layout */
+/* When attachments are present */
 .chatBarRounded[data-has-attachments="true"] {
-  flex-direction: column;
-  align-items: stretch;
-  border-radius: 18px;
+  gap: 12px;
 }
 
-/* Row for the input controls (attachment button, input field, model selector, send button) */
+/* Top row: Text input */
 .chatBarInputRow {
   display: flex;
   flex-direction: row;
-  flex-wrap: nowrap;
   align-items: center;
   gap: 0;
   width: 100%;
 }
 
+/* Bottom row: Controls */
+.chatBarControlsRow {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+}
+
 /* When textarea grows beyond single line, adjust alignment */
 .chatBarRounded[data-expanded="true"] {
-  align-items: flex-end;
+  align-items: stretch;
 }
 
 .chatBarRounded[data-expanded="true"] .chatBarInputRow {
-  align-items: flex-end;
+  align-items: flex-start;
 }
 
 /* Attachment tray at the top of the chat bar */

@@ -129,20 +129,8 @@ export function GrayChatBar({
           {attachmentTray}
         </div>
       )}
+      {/* Top row: Text input */}
       <div className={styles.chatBarInputRow}>
-        <div className={styles.chatBarLeftGroup}>
-          {onAddAttachment ? (
-            <button
-              type="button"
-              className={styles.chatIconButton}
-              aria-label="Upload a document"
-              onClick={onAddAttachment}
-            >
-              <Paperclip size={18} />
-            </button>
-          ) : null}
-        </div>
-
         <div className={styles.chatInputWrapper}>
           <TextareaAutosize
             value={value}
@@ -170,7 +158,21 @@ export function GrayChatBar({
             }}
           />
         </div>
-
+      </div>
+      {/* Bottom row: Controls */}
+      <div className={styles.chatBarControlsRow}>
+        <div className={styles.chatBarLeftGroup}>
+          {onAddAttachment ? (
+            <button
+              type="button"
+              className={styles.chatIconButton}
+              aria-label="Upload a document"
+              onClick={onAddAttachment}
+            >
+              <Paperclip size={18} />
+            </button>
+          ) : null}
+        </div>
         <div className={styles.chatBarRightGroup}>
           <div className={styles.chatModelSelectorDirect}>
             {modelSelector}
