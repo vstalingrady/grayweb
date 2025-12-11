@@ -49,3 +49,7 @@ backend/logs/
 discovery_cache/
 .config/
 .local/
+
+# Docker data directories
+/data/
+/redis_data/

@@ -10,6 +10,9 @@ const normalizeProxyTarget = (value: string) => value.replace(/\/+$/, "");
 const proxyTarget = normalizeProxyTarget(rawProxyTarget);
 
 const nextConfig: NextConfig = {
+  // Enable standalone output for Docker builds
+  output: 'standalone',
+
   transpilePackages: ['three', '@react-three/fiber', 'react-reconciler'],
 
   // ═══════════════════════════════════════════════════════════════════════════

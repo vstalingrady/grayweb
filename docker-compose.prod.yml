@@ -1,0 +1,29 @@
+# Production Docker Compose
+# Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+services:
+  frontend:
+    image: ghcr.io/${GITHUB_REPOSITORY}/gray-frontend:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+
+  backend:
+    image: ghcr.io/${GITHUB_REPOSITORY}/gray-backend:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    volumes:
+      # Use absolute path for production data persistence
+      - /home/ubuntu/gray/data:/app/data
+      - /home/ubuntu/gray/backend/media_uploads:/app/media_uploads
+
+  worker:
+    image: ghcr.io/${GITHUB_REPOSITORY}/gray-backend:latest
+    volumes:
+      - /home/ubuntu/gray/data:/app/data
+
+  redis:
+    # Redis stays the same in production
+    volumes:
+      - /home/ubuntu/gray/redis_data:/data
