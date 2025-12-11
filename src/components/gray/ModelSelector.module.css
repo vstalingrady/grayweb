@@ -128,9 +128,7 @@
 }
 
 .menuItemActive {
-  /* No distinct background for active in inspo, just the checkmark.
-       But we add subtle bg for clarity */
-  /* background: rgba(255, 255, 255, 0.03); */
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .itemIconWrapper {
@@ -175,8 +173,7 @@
 }
 
 .checkIcon {
-  color: #fff;
-  margin-left: auto;
+  display: none;
 }
 
 .divider {
