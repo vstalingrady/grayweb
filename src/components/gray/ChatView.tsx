@@ -3088,6 +3088,8 @@ export function GrayChatView({
             previous === streamingMessageId ? null : previous
           );
         }
+        // Always ensure isResponding is reset to prevent blocking future submissions
+        updateSession(targetSessionId, { isResponding: false, pendingAutoStream: false });
       }
     },
     [
@@ -3246,8 +3248,18 @@ export function GrayChatView({
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    console.log('[handleSubmit] called', {
+      sessionId,
+      sessionExists: !!session,
+      sessionScope: session?.scope,
+      isResponding: session?.isResponding,
+      activeStreamingMessageId,
+      isSubmittingRef: isSubmittingRef.current,
+      draft: draft.trim().substring(0, 50),
+    });
     // If a stream is in progress, treat submit as "cancel".
     if (session?.isResponding || activeStreamingMessageId) {
+      console.log('[handleSubmit] CANCELING stream - isResponding or activeStreamingMessageId present');
       const controller = streamAbortControllerRef.current;
       if (controller) {
         controller.abort();
@@ -3261,6 +3273,7 @@ export function GrayChatView({
       return;
     }
     if (isSubmittingRef.current) {
+      console.log('[handleSubmit] BLOCKED by isSubmittingRef');
       return;
     }
     isSubmittingRef.current = true;

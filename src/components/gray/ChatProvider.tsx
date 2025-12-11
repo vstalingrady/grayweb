@@ -2397,6 +2397,8 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
             // Keep the local user profile in sync with any onboarding/profile tools
             // that may have run during this message (e.g., complete_onboarding).
             void refreshUser();
+            // Safety net: ensure isResponding is always reset
+            updateSession(generalSession.id, { isResponding: false, pendingAutoStream: false });
           }
           clearAttachments();
         })();
