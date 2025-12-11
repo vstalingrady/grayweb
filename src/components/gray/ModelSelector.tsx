@@ -15,10 +15,9 @@ type ModelOption = {
   tierRequired: "scout" | "voyager" | "pioneer";
 };
 
-// Renamed and updated strictly to match the "Fast" / "Expert" vibe of the inspo
+// Base model option - Lite is available to all tiers
 const OPTIONS: ModelOption[] = [
   { id: "lite", label: "Gray Lite", description: "Quick responses", icon: Zap, tierRequired: "scout" },
-  { id: "pro", label: "Gray Pro", description: "Complex tasks", icon: Sparkles, tierRequired: "voyager" },
 ];
 
 type ModelGroup = {
@@ -124,10 +123,9 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
         const IconComponent = () => (
           group?.iconPath ? <Image src={group.iconPath} alt={group.label} width={18} height={18} /> : <Grid size={18} />
         );
-        return { ...pioneerModel, icon: IconComponent, description: "Pioneer Model", tierRequired: "pioneer" as const };
+        return { ...pioneerModel, icon: IconComponent, description: "Selected Model", tierRequired: "voyager" as const };
       }
     }
-    if (modelTier === "pro") return OPTIONS[1];
     return OPTIONS[0];
   }, [modelTier, selectedModelId]);
 
@@ -155,7 +153,7 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
 
   const handlePioneerSelect = useCallback(
     (modelId: string) => {
-      if (currentLevel < TIER_LEVELS["pioneer"]) return;
+      if (currentLevel < TIER_LEVELS["voyager"]) return;
       setModelTier("pioneer");
       setSelectedModelId(modelId);
       setIsOpen(false);
@@ -166,7 +164,7 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
 
   const toggleAllModels = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
-    if (currentLevel >= TIER_LEVELS["pioneer"]) {
+    if (currentLevel >= TIER_LEVELS["voyager"]) {
       setShowAllModels((prev) => !prev);
     }
   }, [currentLevel]);
@@ -407,8 +405,8 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
                 );
               })}
 
-              {/* Display Active Pioneer Model if selected */}
-              {selectedModelId && activeOption.tierRequired === 'pioneer' && (
+              {/* Display Active Model if selected */}
+              {selectedModelId && activeOption.tierRequired === 'voyager' && (
                 <button className={`${styles.menuItem} ${styles.menuItemActive}`} disabled>
                   {/* We use activeOption.icon here which I will update in useMemo to be the group icon */}
                   <div className={styles.itemIconWrapper}>
@@ -419,7 +417,7 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
                   </div>
                   <div className={styles.itemInfo}>
                     <div className={styles.itemLabel}>{activeOption.label}</div>
-                    <div className={styles.itemDescription}>Selected Pioneer Model</div>
+                    <div className={styles.itemDescription}>Selected Model</div>
                   </div>
                   <Check size={14} className={styles.checkIcon} />
                 </button>
@@ -450,14 +448,14 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
 
               {/* All Models */}
               <button
-                className={`${styles.actionItem} ${currentLevel < TIER_LEVELS["pioneer"] ? styles.menuItemLocked : ''}`}
+                className={`${styles.actionItem} ${currentLevel < TIER_LEVELS["voyager"] ? styles.menuItemLocked : ''}`}
                 type="button"
                 onClick={toggleAllModels}
-                disabled={currentLevel < TIER_LEVELS["pioneer"]}
+                disabled={currentLevel < TIER_LEVELS["voyager"]}
               >
                 <Box size={16} />
                 <span>All Models</span>
-                {currentLevel < TIER_LEVELS["pioneer"] ? (
+                {currentLevel < TIER_LEVELS["voyager"] ? (
                   <Lock size={14} className={styles.actionLock} />
                 ) : (
                   <ChevronRight size={14} className={styles.actionArrow} />

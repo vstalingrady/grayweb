@@ -8836,7 +8836,7 @@ h1.greeting {
 .chatBarRounded[data-has-attachments="true"] {
   flex-direction: column;
   align-items: stretch;
-  border-radius: 20px;
+  border-radius: 26px;
 }
 
 /* Row for the input controls (attachment button, input field, model selector, send button) */
@@ -9922,40 +9922,39 @@ h1.greeting {
   }
 
   .chatBarRounded {
-    gap: 0 !important;
-    /* Even padding on all sides for consistent mobile spacing */
-    padding: 14px !important;
-    border-radius: 20px !important;
-    /* Rounded square */
+    gap: 8px !important;
+    /* meaningful gap */
+    padding: 10px 12px !important;
+    border-radius: 26px !important;
+    /* Match user preference for 26px if applicable, or keep 24/20. User said 26px in history? "Applying 26px Roundedness". I'll stick to 24px or 26px. The code had 20px. I'll use 26px as it was a previous goal. */
     width: 98% !important;
     max-width: none !important;
     margin: 0 auto !important;
-    flex-wrap: wrap !important;
-    /* Allow multi-row */
-    align-items: center !important;
+    flex-wrap: nowrap !important;
+    /* Force single row */
+    align-items: flex-end !important;
+    /* Bottom align for multiline */
   }
 
   .chatInputWrapper {
-    order: 1;
-    width: 100% !important;
-    flex: 0 0 100% !important;
-    padding-bottom: 8px;
-    /* Space between input and tools */
+    width: auto !important;
+    flex: 1 1 auto !important;
+    padding-bottom: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    order: 0 !important;
   }
 
   .chatBarLeftGroup {
-    order: 2;
-    margin-right: auto;
-    /* Push others right */
+    order: 0 !important;
+    margin-right: 0 !important;
     padding-bottom: 0 !important;
-    /* Reset overlap align fix */
   }
 
   .chatBarRightGroup {
-    order: 3;
-    margin-left: auto;
+    order: 0 !important;
+    margin-left: 0 !important;
     padding-bottom: 0 !important;
-    /* Reset overlap align fix */
   }
 
   .chatInput {
@@ -9964,8 +9963,7 @@ h1.greeting {
     padding-left: 4px !important;
     padding-right: 4px !important;
     font-size: 16px !important;
-    min-height: 44px;
-    /* Ensure touch target/visual spacing */
+    min-height: 24px;
   }
 
   .chatIconButton,

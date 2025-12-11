@@ -21,26 +21,24 @@
 
 /* LEFT COLUMN: Inputs & Controls */
 .inputColumn {
-    padding: 3rem;
-    background: #09090b;
-    /* Clean dark background */
+    padding: 1.5rem;
+    background: radial-gradient(circle at top right, rgba(255, 255, 255, 0.03), transparent 70%);
+    background-color: rgba(255, 255, 255, 0.01);
     display: flex;
     flex-direction: column;
     gap: 2rem;
     overflow-y: auto;
-    /* border-right removed */
+    position: relative;
 }
 
 /* RIGHT COLUMN: Summary & Features */
 .summaryColumn {
-    padding: 3rem;
+    padding: 1.5rem;
     background: radial-gradient(circle at top right, rgba(255, 255, 255, 0.03), transparent 70%);
     display: flex;
     flex-direction: column;
     overflow-y: auto;
     background-color: rgba(255, 255, 255, 0.01);
-    border-right: 1px solid rgba(255, 255, 255, 0.06);
-    /* Subtle difference */
 }
 
 .header {
@@ -61,56 +59,46 @@
     font-size: 0.95rem;
 }
 
-/* Billing Cycle Toggle */
-.billingSelector {
-    display: flex;
+/* Billing Cycle Toggle - card style */
+.billingToggle {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
     gap: 1rem;
-    width: 100%;
 }
 
-.billingOption {
-    flex: 1;
-    padding: 1rem;
-    border-radius: 12px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+.billingToggle button {
+    appearance: none;
+    border: 1.5px solid rgba(255, 255, 255, 0.15);
     background: rgba(255, 255, 255, 0.02);
+    color: rgba(255, 255, 255, 0.7);
+    font-weight: 500;
+    font-size: 0.9rem;
+    padding: 1rem 1.2rem;
+    border-radius: 12px;
     cursor: pointer;
     transition: all 0.2s ease;
     display: flex;
     flex-direction: column;
-    gap: 0.25rem;
-    position: relative;
+    align-items: flex-start;
+    gap: 0.5rem;
     text-align: left;
 }
 
-.billingOption:hover {
-    background: rgba(255, 255, 255, 0.05);
+.billingToggle button:hover {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.25);
 }
 
-.billingOption[data-active="true"] {
-    background: rgba(255, 255, 255, 0.08);
-    border-color: rgba(255, 255, 255, 0.6);
-}
-
-.billingLabel {
-    font-weight: 600;
-    font-size: 0.95rem;
+.billingToggle button[data-active="true"] {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.5);
     color: white;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
 }
 
-.billingPrice {
-    font-size: 0.85rem;
-    color: rgba(255, 255, 255, 0.6);
-}
-
-.saveBadge {
+.billingToggle .saveBadge {
     font-size: 0.75rem;
-    color: white;
-    font-weight: 600;
-    opacity: 0.8;
+    color: rgba(255, 255, 255, 0.7);
+    font-weight: 500;
 }
 
 /* Payment Methods */

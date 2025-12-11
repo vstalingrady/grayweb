@@ -1775,6 +1775,10 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
           if (!conversationId) {
             return;
           }
+          // Skip general conversations - they should not appear as separate threads in the sidebar
+          if (isGeneralConversationId(conversationId)) {
+            return;
+          }
           const normalizedTitle =
             record.title?.trim() && record.title.trim().length > 0 ? record.title.trim() : "New Chat";
           const createdAt = toTimestamp(record.created_at);

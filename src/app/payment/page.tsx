@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import Script from "next/script";
 import { Check, CheckCircle, AlertCircle, Loader2, ArrowLeft, CreditCard, Landmark, Smartphone, ShieldCheck, Zap, Globe, Radio, Brain, Clock, Pin, Plus, CalendarClock, MessageSquare, Shuffle, Infinity as InfinityIcon, Headphones, FlaskConical, Database } from "lucide-react";
 import styles from "./payment.module.css";
+import pricingStyles from "../pricing/page.module.css";
 import { VOYAGER_FEATURES, PIONEER_FEATURES } from "../pricing/PricingPlansSection";
 
 type PaymentStatus = "idle" | "loading" | "success" | "pending" | "error";
@@ -237,76 +238,68 @@ function PaymentContent() {
             </button>
 
             <div className={styles.mainGrid}>
-                {/* RIGHT COLUMN MOVED LEFT: Summary & Features */}
+                {/* LEFT COLUMN: Summary & Features - using exact pricing page styles */}
                 <div className={styles.summaryColumn}>
-                    <article className={styles.planCard} data-variant="muted">
-                        <div className={styles.cardBody}>
-                            <div className={styles.cardIntro}>
-                                <header className={styles.cardHeader}>
-                                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                                        <div style={{ padding: "0.25rem 0.6rem", background: "rgba(255,255,255,0.1)", borderRadius: "6px", fontSize: "0.75rem", letterSpacing: "0.05em", color: "#fff", fontWeight: 700, textTransform: "uppercase" }}>
-                                            {shortPlanName}
-                                        </div>
-                                    </div>
-                                    <h2 className={styles.priceValue}>{currentPriceDisplay}</h2>
-                                    <p className={styles.priceMeta}>per month{billingCycle === "annual" ? ", billed annually" : ""}</p>
+                    <article className={pricingStyles.planCard} data-variant="highlighted">
+                        <div className={pricingStyles.cardBody}>
+                            <div className={pricingStyles.cardIntro}>
+                                <header className={pricingStyles.cardHeader}>
+                                    <h2>{shortPlanName}</h2>
+                                    <p>
+                                        {planParam === "pioneer"
+                                            ? "Uncapped context, models, and proactive workflows for daily reliance."
+                                            : "Unlock model switching, integrations, and customizable automations."}
+                                    </p>
                                 </header>
+                                <div className={pricingStyles.priceBlock}>
+                                    <span className={pricingStyles.priceValue}>{currentPriceDisplay}</span>
+                                    <span className={pricingStyles.priceMeta}>/ {billingCycle === "annual" ? "month" : "month"}</span>
+                                </div>
                             </div>
 
-                            <div>
-                                <ul className={styles.featureList} style={{ marginTop: "1.5rem" }}>
-                                    {features.map(({ label, icon: Icon, variant, subtext }) => (
-                                        <li key={label} data-variant={variant}>
-                                            <Icon size={16} />
-                                            <span
-                                                className={
-                                                    variant === "inherit" ? styles.featureLabelInherit : styles.featureLabel
-                                                }
-                                            >
-                                                {label}
-                                                {subtext && <span className={styles.featureSubtext}>{subtext}</span>}
-                                            </span>
-                                        </li>
-                                    ))}
-                                </ul>
-                            </div>
+                            <ul className={pricingStyles.featureList}>
+                                {features.map(({ label, icon: Icon, variant, subtext }) => (
+                                    <li key={label} data-variant={variant}>
+                                        <Icon size={16} />
+                                        <span className={variant === "inherit" ? pricingStyles.featureLabelInherit : pricingStyles.featureLabel}>
+                                            {label}
+                                            {subtext && <span className={pricingStyles.featureSubtext}>{subtext}</span>}
+                                        </span>
+                                    </li>
+                                ))}
+                            </ul>
                         </div>
                     </article>
                 </div>
 
                 <div className={styles.inputColumn}>
-                    <div className={styles.header}>
-                        <h2 className={styles.title}>{planName}</h2>
-                        <p className={styles.subtitle}>Complete your subscription</p>
-                    </div>
 
                     <div>
                         <h3 className={styles.sectionTitle}>Billing Cycle</h3>
-                        <div className={styles.billingSelector}>
+                        <div className={pricingStyles.billingToggle} role="group" aria-label="Billing cadence" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', width: '100%' }}>
                             <button
-                                className={styles.billingOption}
+                                type="button"
                                 data-active={billingCycle === "monthly"}
                                 onClick={() => setBillingCycle("monthly")}
+                                style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '0.5rem' }}
                             >
-                                <div className={styles.billingLabel}>
-                                    Monthly
-                                    {billingCycle === "monthly" && <CheckCircle size={14} color="white" />}
-                                </div>
-                                <div className={styles.billingPrice}>{pricingData.monthly.fullPrice} /mo</div>
+                                <div style={{ fontWeight: 600 }}>Pay monthly</div>
+                                <div style={{ fontSize: '0.85rem', opacity: 0.7 }}>{pricingData.monthly.fullPrice} per month</div>
                             </button>
                             <button
-                                className={styles.billingOption}
+                                type="button"
                                 data-active={billingCycle === "annual"}
                                 onClick={() => setBillingCycle("annual")}
+                                style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '0.5rem' }}
                             >
-                                <div className={styles.billingLabel}>
-                                    Annual
-                                    <span className={styles.saveBadge}>SAVE 17%</span>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 600 }}>
+                                    Pay yearly
+                                    <span style={{ fontSize: '0.7rem', opacity: 0.8 }}>Save 17%</span>
                                 </div>
-                                <div className={styles.billingPrice}>{pricingData.annual.fullPrice} /yr</div>
+                                <div style={{ fontSize: '0.85rem', opacity: 0.7 }}>{pricingData.annual.fullPrice} per year</div>
                             </button>
-                        </div >
-                    </div >
+                        </div>
+                    </div>
 
                     <div>
                         <h3 className={styles.sectionTitle}>Payment Method</h3>

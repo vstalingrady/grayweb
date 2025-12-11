@@ -43,9 +43,9 @@ const FREE_FEATURES: FeatureItem[] = [
 
 export const VOYAGER_FEATURES: FeatureItem[] = [
     {
-        label: "Unlimited Gray Lite + limited Gray Pro",
-        icon: Zap,
-        subtext: "Unlimited Grok 4.1 Fast + Kimi K2 Thinking",
+        label: "Model switcher",
+        icon: Shuffle,
+        subtext: "Claude 4.5, Gemini 3 Pro, GPT 5.1, DeepSeek V3.2, Kimi K2",
     },
     {
         label: "5x more message credits",
@@ -70,19 +70,11 @@ export const VOYAGER_FEATURES: FeatureItem[] = [
 
 export const PIONEER_FEATURES: FeatureItem[] = [
     {
-        label: "Expanded Gray Pro",
-        icon: Zap,
-    },
-    {
-        label: "Model switcher",
-        icon: Shuffle,
-        subtext: "Claude 4.5, Gemini 3 Pro, Grok 4.1, GPT 5.1, DeepSeek V3.2, Kimi K2 Thinking",
-    },
-    { label: "Expanded reasoning budget", icon: InfinityIcon },
-    {
         label: "25x more message credits",
         icon: MessageSquare,
+        subtext: "Heavy usage across all models",
     },
+    { label: "Expanded reasoning budget", icon: InfinityIcon },
     { label: "Priority response during peaks", icon: Headphones },
     { label: "Early access to experimental features", icon: FlaskConical },
     { label: "Reference library (docs/files RAG)", icon: Database },
