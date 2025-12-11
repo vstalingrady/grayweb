@@ -129,8 +129,22 @@ export function GrayChatBar({
           {attachmentTray}
         </div>
       )}
-      {/* Top row: Text input */}
+      {/* Input row: on desktop includes all controls, on mobile just input */}
       <div className={styles.chatBarInputRow}>
+        {/* Left group - visible on desktop only */}
+        <div className={`${styles.chatBarLeftGroup} ${styles.hideOnMobile}`}>
+          {onAddAttachment ? (
+            <button
+              type="button"
+              className={styles.chatIconButton}
+              aria-label="Upload a document"
+              onClick={onAddAttachment}
+            >
+              <Paperclip size={18} />
+            </button>
+          ) : null}
+        </div>
+
         <div className={styles.chatInputWrapper}>
           <TextareaAutosize
             value={value}
@@ -158,8 +172,29 @@ export function GrayChatBar({
             }}
           />
         </div>
+
+        {/* Right group - visible on desktop only */}
+        <div className={`${styles.chatBarRightGroup} ${styles.hideOnMobile}`}>
+          <div className={styles.chatModelSelectorDirect}>
+            {modelSelector}
+          </div>
+          <button
+            type="submit"
+            aria-label={actionLabel}
+            title={actionLabel}
+            className={styles.chatActionButton}
+            disabled={computedDisabled}
+          >
+            {isStreaming ? (
+              <span className={styles.chatStopIcon} aria-hidden="true" />
+            ) : (
+              <ArrowUpRight size={18} />
+            )}
+          </button>
+        </div>
       </div>
-      {/* Bottom row: Controls */}
+
+      {/* Bottom row: Controls - visible on mobile only */}
       <div className={styles.chatBarControlsRow}>
         <div className={styles.chatBarLeftGroup}>
           {onAddAttachment ? (
