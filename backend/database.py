@@ -28,19 +28,24 @@ def _select_database_url() -> str:
     Priority (unless DB_MODE overrides):
     1) DATABASE_URL (env override / CLI)
     2) LOCAL_DATABASE_URL (fast local)
-    3) Fallback to local users.db
+    3) SQLITE_DB_PATH (Docker volume mount)
+    4) Fallback to local backend/users.db
     """
     db_mode = (os.getenv("DB_MODE") or "").lower()
     primary_url = os.getenv("DATABASE_URL")
     local_url = os.getenv("LOCAL_DATABASE_URL")
+    
+    # Support Docker volume mount via SQLITE_DB_PATH
+    sqlite_path = os.getenv("SQLITE_DB_PATH")
+    default_fallback = f"sqlite:///{sqlite_path}" if sqlite_path else "sqlite:///./backend/users.db"
 
     chosen: str
     if db_mode == "remote":
-        chosen = primary_url or local_url or "sqlite:///./backend/users.db"
+        chosen = primary_url or local_url or default_fallback
     elif db_mode == "local":
-        chosen = local_url or primary_url or "sqlite:///./backend/users.db"
+        chosen = local_url or primary_url or default_fallback
     else:
-        chosen = primary_url or local_url or "sqlite:///./backend/users.db"
+        chosen = primary_url or local_url or default_fallback
 
     return _normalize_sqlite_url(chosen)
 

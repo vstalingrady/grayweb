@@ -53,3 +53,5 @@ discovery_cache/
 # Docker data directories
 /data/
 /redis_data/
+.ssh_deploy_key
+.ssh_deploy_key.pub
