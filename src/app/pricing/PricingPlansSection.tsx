@@ -48,7 +48,7 @@ export const VOYAGER_FEATURES: FeatureItem[] = [
         subtext: "Unlimited Grok 4.1 Fast + Kimi K2 Thinking",
     },
     {
-        label: "32x more message credits",
+        label: "5x more message credits",
         icon: MessageSquare,
     },
     {
@@ -80,8 +80,8 @@ export const PIONEER_FEATURES: FeatureItem[] = [
     },
     { label: "Expanded reasoning budget", icon: InfinityIcon },
     {
-        label: "128x more message credits",
-        icon: Pin,
+        label: "25x more message credits",
+        icon: MessageSquare,
     },
     { label: "Priority response during peaks", icon: Headphones },
     { label: "Early access to experimental features", icon: FlaskConical },

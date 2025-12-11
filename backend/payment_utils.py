@@ -53,7 +53,7 @@ def create_core_api_transaction(
     if payment_type == "gopay":
         payload["gopay"] = {
             "enable_callback": True,
-            "callback_url": "https://pay.alignment.id" + "/payment/finish"
+            "callback_url": "https://gray.alignment.id" + "/payment/finish"
         }
     elif payment_type == "bank_transfer" and bank_transfer_args:
         payload["bank_transfer"] = bank_transfer_args

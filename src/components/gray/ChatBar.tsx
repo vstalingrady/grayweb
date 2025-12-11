@@ -123,67 +123,72 @@ export function GrayChatBar({
   }, []);
 
   return (
-    <form className={styles.chatBarRounded} onSubmit={onSubmit} data-expanded={isExpanded}>
-      <div className={styles.chatBarLeftGroup}>
-        {onAddAttachment ? (
-          <button
-            type="button"
-            className={styles.chatIconButton}
-            aria-label="Upload a document"
-            onClick={onAddAttachment}
-          >
-            <Paperclip size={18} />
-          </button>
-        ) : null}
-
-      </div>
-
-      <div className={styles.chatInputWrapper}>
-        {attachmentTray}
-        <TextareaAutosize
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          onKeyDown={handleKeyDown}
-          onPaste={handlePaste}
-          onDrop={handleDrop}
-          onHeightChange={handleHeightChange}
-          placeholder={placeholder}
-          className={styles.chatInput}
-          aria-label={placeholder}
-          minRows={1}
-          maxRows={5}
-          cacheMeasurements
-          style={{
-            resize: "none",
-            background: "transparent",
-            border: "none",
-            outline: "none",
-            overflowY: "auto",
-            flex: "1 1 auto",
-            width: "100%",
-            boxSizing: "border-box",
-            lineHeight: "1.5",
-          }}
-        />
-      </div>
-
-      <div className={styles.chatBarRightGroup}>
-        <div className={styles.chatModelSelectorDirect}>
-          {modelSelector}
+    <form className={styles.chatBarRounded} onSubmit={onSubmit} data-expanded={isExpanded} data-has-attachments={attachmentTray ? "true" : "false"}>
+      {attachmentTray && (
+        <div className={styles.chatAttachmentTrayTop}>
+          {attachmentTray}
         </div>
-        <button
-          type="submit"
-          aria-label={actionLabel}
-          title={actionLabel}
-          className={styles.chatActionButton}
-          disabled={computedDisabled}
-        >
-          {isStreaming ? (
-            <span className={styles.chatStopIcon} aria-hidden="true" />
-          ) : (
-            <ArrowUpRight size={18} />
-          )}
-        </button>
+      )}
+      <div className={styles.chatBarInputRow}>
+        <div className={styles.chatBarLeftGroup}>
+          {onAddAttachment ? (
+            <button
+              type="button"
+              className={styles.chatIconButton}
+              aria-label="Upload a document"
+              onClick={onAddAttachment}
+            >
+              <Paperclip size={18} />
+            </button>
+          ) : null}
+        </div>
+
+        <div className={styles.chatInputWrapper}>
+          <TextareaAutosize
+            value={value}
+            onChange={(event) => onChange(event.target.value)}
+            onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
+            onDrop={handleDrop}
+            onHeightChange={handleHeightChange}
+            placeholder={placeholder}
+            className={styles.chatInput}
+            aria-label={placeholder}
+            minRows={1}
+            maxRows={5}
+            cacheMeasurements
+            style={{
+              resize: "none",
+              background: "transparent",
+              border: "none",
+              outline: "none",
+              overflowY: "auto",
+              flex: "1 1 auto",
+              width: "100%",
+              boxSizing: "border-box",
+              lineHeight: "1.5",
+            }}
+          />
+        </div>
+
+        <div className={styles.chatBarRightGroup}>
+          <div className={styles.chatModelSelectorDirect}>
+            {modelSelector}
+          </div>
+          <button
+            type="submit"
+            aria-label={actionLabel}
+            title={actionLabel}
+            className={styles.chatActionButton}
+            disabled={computedDisabled}
+          >
+            {isStreaming ? (
+              <span className={styles.chatStopIcon} aria-hidden="true" />
+            ) : (
+              <ArrowUpRight size={18} />
+            )}
+          </button>
+        </div>
       </div>
     </form>
   );

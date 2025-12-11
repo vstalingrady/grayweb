@@ -2143,6 +2143,34 @@ function GrayPageClientInner({
         continue;
       }
 
+      // Handle temporary events (evt-*) that were created locally but not yet persisted
+      if (event.id.startsWith('evt-')) {
+        // Treat as a new event that needs to be created
+        const numericCalendarId = event.calendarId ? Number(event.calendarId) : null;
+        if (!Number.isNaN(numericCalendarId) || event.calendarId === "default") {
+          try {
+            const createdEvent = await apiService.createCalendarEvent(user.id, {
+              calendar_id: event.calendarId === "default" ? null : numericCalendarId,
+              title: event.title,
+              description: event.description,
+              start_time: event.start.toISOString(),
+              end_time: event.end.toISOString(),
+              color: event.color,
+            });
+            // Update local state with the real ID
+            setCalendarEvents(prev => prev.map(e => e.id === event.id ? {
+              ...e,
+              id: createdEvent.id.toString()
+            } : e));
+          } catch (error) {
+            logCalendarSyncError("create calendar event from temporary", error);
+            // Keep the temporary event in local state even if creation fails
+            continue;
+          }
+        }
+        continue;
+      }
+
       const numericEventId = Number(event.id);
       const numericCalendarId = event.calendarId ? Number(event.calendarId) : null;
       if (!Number.isNaN(numericEventId) && (!Number.isNaN(numericCalendarId) || event.calendarId === "default")) {

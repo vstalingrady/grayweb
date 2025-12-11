@@ -1331,16 +1331,14 @@ const ThinkingBlock = ({
     if (isActivelyThinking && thinkingStartTime) {
       return `Thinking for ${formatTime(liveSeconds)}`;
     }
-    // Only show "Thought for" when the entire stream is complete (not just thinking portion)
-    // While streaming continues after thinking ends, show simple "Thinking" label
-    if (isStreamingMessage) {
-      // Still streaming content after thinking ended - show just "Thinking" 
-      // (the final time will be calculated and shown when stream completes)
-      return "Thinking";
-    }
-    // If we have a final duration and stream is complete, show it
+    // If we have a final duration, show it (even if still streaming content)
     if (typeof reasoningSeconds === "number" && reasoningSeconds > 0) {
       return `Thought for ${formatTime(reasoningSeconds)}`;
+    }
+
+    // Only show "Thinking" if purely streaming and no reasoning time yet
+    if (isStreamingMessage) {
+      return "Thinking";
     }
     return null;
   }, [isActivelyThinking, thinkingStartTime, liveSeconds, reasoningSeconds, isStreamingMessage]);
@@ -2798,6 +2796,7 @@ export function GrayChatView({
         updateSession(targetSessionId, { isGeneratingTitle: true });
       }
       try {
+        let localThinkingStartTime: number | null = null;
         const timeContext = buildLocalTimeContext();
         for await (const event of apiService.sendMessageStream(
           {
@@ -2832,15 +2831,16 @@ export function GrayChatView({
             if (hasThinkingTag && !hadThinkingTag) {
               // Thinking just started
               setIsActivelyThinking(true);
-              setThinkingStartTime(Date.now());
+              localThinkingStartTime = Date.now();
+              setThinkingStartTime(localThinkingStartTime);
             }
 
             // Detect when thinking ends (</thinking> tag appears)
             const hasClosingTag = accumulated.toLowerCase().includes("</thinking>");
             const hadClosingTag = prevAccumulated.toLowerCase().includes("</thinking>");
-            if (hasClosingTag && !hadClosingTag && thinkingStartTime) {
+            if (hasClosingTag && !hadClosingTag && localThinkingStartTime) {
               // Thinking just ended - calculate final duration
-              const elapsed = (Date.now() - thinkingStartTime) / 1000;
+              const elapsed = (Date.now() - localThinkingStartTime) / 1000;
               setReasoningSeconds(elapsed);
               setIsActivelyThinking(false);
             }

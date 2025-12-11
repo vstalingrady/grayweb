@@ -3485,7 +3485,7 @@
   align-self: stretch;
   max-width: 100%;
   width: 100%;
-  font-size: 0.88rem;
+  font-size: 0.95rem;
 }
 
 .chatMessage[data-role="user"] .chatMarkdown,
@@ -3494,7 +3494,7 @@
   align-self: stretch;
   max-width: 100%;
   width: 100%;
-  font-size: 0.88rem;
+  font-size: 0.95rem;
 }
 
 .chatMarkdown :where(h1, h2, h3, h4, h5, h6) {
@@ -3526,7 +3526,6 @@
 .chatMarkdown :where(ul, ol) {
   margin: 0.5em 0 0.65em 1.25em;
   padding: 0;
-  color: rgba(235, 235, 235, 0.9);
   list-style-position: outside;
 }
 
@@ -3549,6 +3548,10 @@
 .chatMarkdown li {
   margin: 0.25em 0;
   line-height: 1.5;
+}
+
+.chatMarkdown li::marker {
+  color: rgba(200, 200, 205, 0.88);
 }
 
 .chatTableWrapper {
@@ -4514,11 +4517,8 @@
   align-items: center;
   gap: 0;
   padding: 0;
-  /* Compensate for scrollbar and mobile safe area */
   padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
   background: transparent;
-  /* Translucent overlay */
-  /* Optional: subtle border separator */
   z-index: 40;
   width: 100%;
   margin-top: 0;
@@ -4526,9 +4526,6 @@
   overflow: visible;
   flex-shrink: 0;
   pointer-events: none;
-  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  /* Match scrollbar gutter with chatViewport for proper alignment */
-  scrollbar-gutter: stable both-edges;
 }
 
 
@@ -5253,15 +5250,15 @@
   width: min(var(--chat-column-max-width, 680px),
       calc(100vw - clamp(32px, 8vw, 120px)));
   text-align: center;
-  font-size: 0.7rem;
+  font-size: 0.68rem;
   font-weight: 500;
   line-height: 1.4;
-  letter-spacing: 0.08em;
-  color: rgba(235, 235, 235, 0.72);
-  margin: clamp(8px, 1.4vh, 12px) auto 0;
+  letter-spacing: 0.06em;
+  color: rgba(150, 150, 150, 0.55);
+  margin: clamp(6px, 1vh, 10px) auto 0;
   padding: 0 clamp(6px, 1vw, 12px);
   pointer-events: none;
-  text-shadow: 0 10px 24px rgba(0, 0, 0, 0.65);
+  text-shadow: none;
   background: transparent;
   position: relative;
   z-index: 1;
@@ -5282,16 +5279,12 @@
 
 @supports (-webkit-background-clip: text) or (background-clip: text) {
   .chatDisclaimer {
-    background: linear-gradient(90deg,
-        rgba(255, 255, 255, 0) 0%,
-        rgba(255, 255, 255, 0.65) 22%,
-        rgba(255, 255, 255, 0.85) 50%,
-        rgba(255, 255, 255, 0.65) 78%,
-        rgba(255, 255, 255, 0) 100%);
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
-    -webkit-text-fill-color: transparent;
+    /* Remove gradient text effect for more muted look */
+    background: none;
+    -webkit-background-clip: unset;
+    background-clip: unset;
+    color: rgba(120, 120, 120, 0.5);
+    -webkit-text-fill-color: unset;
   }
 }
 
@@ -5635,7 +5628,7 @@ h1.greeting {
   min-height: 0;
   flex: 1 1 auto;
   padding-left: clamp(8px, 1vw, 16px);
-  border-left: 0;
+  border-left: 0 !important;
 }
 
 .pulseBoardContent {
@@ -5758,12 +5751,7 @@ h1.greeting {
   gap: 6px;
 }
 
-.pulseHeaderEyebrow {
-  font-size: 0.62rem;
-  letter-spacing: 0.28em;
-  text-transform: uppercase;
-  color: rgba(230, 230, 230, 0.52);
-}
+/* Duplicated style definition, using the second one below */
 
 .pulseHeaderContent h2 {
   margin: 0;
@@ -5790,6 +5778,8 @@ h1.greeting {
   width: min(var(--chat-column-max-width, 680px), 100%);
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
 }
+
+
 
 @media (max-width: 940px) {
   .dashboardPulseLayout {
@@ -6177,6 +6167,9 @@ h1.greeting {
   min-height: clamp(220px, 32vh, 300px);
   height: 100%;
   overflow: hidden;
+  box-shadow: none !important;
+  border: none !important;
+  background: rgba(18, 18, 18, 0.6);
 }
 
 .dashboardSignalCard {
@@ -7630,7 +7623,7 @@ h1.greeting {
   background: rgba(28, 28, 28, 0.95);
   /* Removed border and shadow as requested */
   border: none;
-  box-shadow: none;
+  box-shadow: none !important;
   border-radius: 32px;
 }
 
@@ -8250,7 +8243,7 @@ h1.greeting {
   gap: 14px;
   padding: 14px 18px;
   border-radius: 18px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: none;
   background: rgba(12, 12, 14, 0.82);
   transition: background 0.2s ease;
   width: 100%;
@@ -8550,7 +8543,7 @@ h1.greeting {
 .listEmptyMessage {
   padding: 18px;
   border-radius: 18px;
-  border: 1px dashed rgba(255, 255, 255, 0.1);
+  border: none;
   background: rgba(8, 8, 8, 0.6);
   color: rgba(235, 235, 235, 0.6);
   font-size: 0.82rem;
@@ -8564,7 +8557,7 @@ h1.greeting {
 .cardEmptyMessage {
   padding: 22px;
   border-radius: 18px;
-  border: 1px dashed rgba(255, 255, 255, 0.1);
+  border: none;
   background: rgba(8, 8, 8, 0.6);
   color: rgba(235, 235, 235, 0.64);
   font-size: 0.86rem;
@@ -8823,22 +8816,43 @@ h1.greeting {
   max-width: min(calc(1.05 * var(--chat-bubble-max-width, var(--chat-column-max-width, 780px))),
       100%);
   display: flex;
-  flex-wrap: nowrap;
-  align-items: center;
+  flex-direction: column;
   gap: 0;
   margin: 0 auto;
   border-radius: 27px;
   border: 1px solid rgba(255, 255, 255, 0.16);
   background: #1a1a1a;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   padding: 8px 10px;
   position: relative;
   z-index: 1;
   transition: background 0.2s ease, border-color 0.2s ease, border-radius 0.15s ease;
 }
 
+/* Row for the input controls (attachment button, input field, model selector, send button) */
+.chatBarInputRow {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0;
+  width: 100%;
+}
+
 /* When textarea grows beyond single line, adjust alignment */
-.chatBarRounded[data-expanded="true"] {
+.chatBarRounded[data-expanded="true"] .chatBarInputRow {
   align-items: flex-end;
+}
+
+/* Attachment tray at the top of the chat bar */
+.chatAttachmentTrayTop {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 8px 4px 12px 4px;
+  width: 100%;
 }
 
 .chatBarRounded:focus-within {
@@ -8847,11 +8861,12 @@ h1.greeting {
 }
 
 .layout[data-view="general"] .chatBarRounded {
-  background: #1a1a1a;
+  background: #050505;
+  backdrop-filter: none;
 }
 
 .layout[data-view="general"] .chatBarRounded:focus-within {
-  background: #1f1f1f;
+  background: #050505;
 }
 
 .chatView {
@@ -8865,8 +8880,8 @@ h1.greeting {
   align-items: stretch;
   justify-content: flex-end;
   position: relative;
-  overflow: hidden;
-  /* Prevent body scroll */
+  overflow: visible;
+  /* Allow skirt to extend beyond container */
 }
 
 .chatViewport {
@@ -8903,6 +8918,7 @@ h1.greeting {
   box-sizing: border-box;
   margin: 0;
   pointer-events: auto;
+  z-index: 2;
 }
 
 .generalChatComposer {
@@ -8914,8 +8930,8 @@ h1.greeting {
   align-items: stretch;
   gap: 12px;
   padding: 0;
-  /* Consistent bottom padding to ensure chat bar hovers above screen edge */
-  padding-bottom: 12px;
+  /* No bottom padding - skirt handles bottom spacing */
+  padding-bottom: 0;
   border-top-left-radius: 0;
   border-top-right-radius: 0;
   background: transparent;
@@ -8927,6 +8943,7 @@ h1.greeting {
   z-index: 100;
   /* Ensure composer is above other page elements */
   pointer-events: auto;
+  overflow: visible;
 }
 
 
@@ -8971,22 +8988,7 @@ h1.greeting {
 
 
 .chatComposerSkirt {
-  display: block;
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: -12px;
-  /* Extend below dock to reach screen bottom (compensate for dock's bottom: 12px) */
-  background: rgba(18, 18, 18, 0.85);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border-radius: 26px 26px 0 0;
-  /* Top rounded, bottom squared */
-  z-index: -1;
-  box-shadow: none;
-  pointer-events: none;
-  border: none;
+  display: none;
 }
 
 .generalChatComposer[data-has-attachments="true"] {
@@ -9025,20 +9027,7 @@ h1.greeting {
 }
 
 .chatBarUnderline {
-  position: absolute;
-  top: 0;
-  bottom: calc(-1 * clamp(26px, 4vh, 42px));
-  left: 0;
-  right: 0;
-  margin: 0 auto;
-  width: min(var(--chat-column-max-width, 680px), 100%);
-  max-width: min(var(--chat-column-max-width, 680px), 100%);
-  border-radius: 32px 32px 0 0;
-  background: linear-gradient(180deg, rgba(18, 18, 18, 0) 0%, rgba(18, 18, 18, 0.4) 40%, #121212 100%);
-  box-shadow: none;
-  pointer-events: none;
-  z-index: 0;
-  display: block;
+  display: none;
 }
 
 .chatIconButton,

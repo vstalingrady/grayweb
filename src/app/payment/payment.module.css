@@ -1,0 +1,380 @@
+.page {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
+    background: #000000;
+    color: #f5f5f5;
+    font-family: var(--font-sans, "Plus Jakarta Sans", system-ui, -apple-system, BlinkMacSystemFont, sans-serif);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+}
+
+.particleBackground {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+.starLayer {
+    position: absolute;
+    inset: -15%;
+    background-image: radial-gradient(1px 1px at 20px 30px, rgba(255, 255, 255, 0.4), transparent 65%),
+        radial-gradient(1px 1px at 120px 80px, rgba(255, 255, 255, 0.25), transparent 55%),
+        radial-gradient(2px 2px at 60px 140px, rgba(255, 255, 255, 0.35), transparent 60%);
+    background-size: 180px 180px;
+    opacity: 0.35;
+    animation: drift 60s linear infinite;
+}
+
+@keyframes drift {
+    from {
+        transform: translate3d(0, 0, 0);
+    }
+
+    to {
+        transform: translate3d(-120px, -120px, 0);
+    }
+}
+
+.dismiss {
+    position: absolute;
+    top: 1.5rem;
+    left: 1.5rem;
+    z-index: 100;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(0, 0, 0, 0.5);
+    color: #f5f5f5;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.dismiss:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.container {
+    width: 95%;
+    max-width: 1000px; /* Slightly wider for better balance */
+    height: auto;
+    min-height: 550px;
+    max-height: 85vh;
+    background: #09090b;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 20px;
+    box-shadow: 0 40px 80px -20px rgba(0, 0, 0, 0.8);
+    display: grid;
+    grid-template-columns: 1fr 1fr; /* Equal width columns */
+    overflow: hidden;
+    position: relative;
+    backdrop-filter: blur(0px);
+}
+
+/* LEFT COLUMN: Inputs & Controls */
+.inputColumn {
+    padding: 3rem;
+    background: #09090b; /* Clean dark background */
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+    overflow-y: auto;
+    border-right: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* RIGHT COLUMN: Summary & Features */
+.summaryColumn {
+    padding: 3rem;
+    background: radial-gradient(circle at top right, rgba(255, 255, 255, 0.03), transparent 70%);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    background-color: rgba(255, 255, 255, 0.01); /* Subtle difference */
+}
+
+.header {
+    margin-bottom: 0.5rem;
+}
+
+.title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin: 0;
+    color: white;
+    letter-spacing: -0.01em;
+}
+
+.subtitle {
+    color: rgba(255, 255, 255, 0.5);
+    margin-top: 0.5rem;
+    font-size: 0.95rem;
+}
+
+/* Billing Cycle Toggle */
+.billingSelector {
+    display: flex;
+    gap: 1rem;
+    width: 100%;
+}
+
+.billingOption {
+    flex: 1;
+    padding: 1rem;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.02);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    position: relative;
+    text-align: left;
+}
+
+.billingOption:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.billingOption[data-active="true"] {
+    background: rgba(34, 197, 94, 0.05); /* Very subtle green tint */
+    border-color: #22c55e;
+}
+
+.billingLabel {
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: white;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.billingPrice {
+    font-size: 0.85rem;
+    color: rgba(255, 255, 255, 0.6);
+}
+
+.saveBadge {
+    font-size: 0.75rem;
+    color: #22c55e;
+    font-weight: 600;
+}
+
+/* Payment Methods */
+.sectionTitle {
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 600;
+    margin-bottom: 1rem;
+    color: rgba(255, 255, 255, 0.4);
+}
+
+.paymentMethods {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.methodButton {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    color: white;
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.2s;
+}
+
+.methodButton:hover {
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.methodButton[data-selected="true"] {
+    background: rgba(255, 255, 255, 0.08); /* Neutral selection */
+    border-color: rgba(255, 255, 255, 0.4);
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1);
+}
+
+/* Summary Box in Right Column */
+.planSummaryHeader {
+    margin-bottom: 2rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    padding-bottom: 1.5rem;
+}
+
+.bigPrice {
+    font-size: 2.5rem;
+    font-weight: 800;
+    color: white;
+    letter-spacing: -0.02em;
+    margin: 0.5rem 0 0.25rem 0;
+}
+
+.perPeriod {
+    font-size: 1rem;
+    color: rgba(255, 255, 255, 0.5);
+    font-weight: 400;
+}
+
+.whatsIncluded {
+    margin-bottom: 1rem;
+    color: white;
+    font-weight: 600;
+    font-size: 1rem;
+}
+
+.featureList {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+}
+
+.featureItem {
+    display: flex;
+    gap: 0.75rem;
+    align-items: flex-start;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 0.9rem;
+    line-height: 1.4;
+}
+
+.checkIcon {
+    color: #22c55e; /* Green check */
+    flex-shrink: 0;
+    margin-top: 0.1rem;
+}
+
+/* Input Fields */
+.cardForm {
+    /* margin-top: 1rem; */ /* Nested in a stack now */
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 1rem;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.input {
+    width: 100%;
+    padding: 0.85rem;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    color: white;
+    outline: none;
+    transition: border-color 0.2s;
+    font-size: 0.95rem;
+}
+
+.input:focus {
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+.expiryRow {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 0.5rem;
+}
+
+.payButtonContainer {
+    margin-top: auto;
+    padding-top: 2rem;
+}
+
+.payButton {
+    width: 100%;
+    padding: 1.1rem;
+    border-radius: 12px;
+    border: none;
+    background: #22c55e; /* Green primary action */
+    color: #000;
+    font-weight: 700;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.payButton:hover:not(:disabled) {
+    background: #4ade80;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3);
+}
+
+.payButton:disabled {
+    opacity: 0.6;
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.4);
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+/* Success State */
+.successContainer {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    gap: 1.5rem;
+    text-align: center;
+    grid-column: span 2; /* Take full width if successful */
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+    .page {
+        position: relative;
+        height: auto;
+        min-height: 100vh;
+        display: block;
+        overflow-y: auto;
+    }
+
+    .container {
+        width: 100%;
+        height: auto;
+        max-height: none;
+        grid-template-columns: 1fr; /* Stack */
+        border-radius: 0;
+        border: none;
+    }
+
+    .inputColumn,
+    .summaryColumn {
+        padding: 1.5rem;
+        height: auto;
+        overflow-y: visible;
+    }
+
+    .inputColumn {
+        order: 2; /* Put inputs below summary on mobile? Or keep inputs first? 
+                   Typically summary first on mobile is nice, but "Perplexity style" often has form.
+                   Let's keep natural order: Inputs (Left) -> 1, Summary (Right) -> 2. 
+                   Actually, usually summary is top or collapsed. 
+                   Let's stick to Inputs -> bottom (2), Summary -> top (1) for context?
+                   No, let's keep it simple: Inputs first. */
+        border-right: none;
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
+    }
+}

@@ -154,23 +154,25 @@ def calculate_cost(
 
 # All limits are in USD
 LIMITS = {
-    # Scout: free tier - generous for personal use
-    # ~100 messages per 6-hour window, ~4,400 per month (at Grok lite pricing)
+    # Scout: free tier - conversion-optimized
+    # ~65 messages per 6-hour window, ~2,850 per month (at Grok lite pricing)
+    # Generous enough to hook users, restrictive enough for natural upgrade
     "scout": {
-        "monthly_cost": 2.00,
-        "six_hour_cost": 0.045,
+        "monthly_cost": 1.00,
+        "six_hour_cost": 0.023,
     },
     # Voyager: $17/month global, Rp77k Indonesia
-    # ~500 messages per 6-hour, ~22,000 per month
+    # ~328 messages per 6-hour, ~14,250 per month (5x Scout)
     "voyager": {
-        "monthly_cost": 10.00,
-        "six_hour_cost": 0.225,
+        "monthly_cost": 5.00,
+        "six_hour_cost": 0.115,
     },
     # Pioneer: $37/month global, Rp377k Indonesia
-    # ~2,500 messages per 6-hour, ~111,000 per month (generous limits)
+    # ~1,600 messages per 6-hour, ~71,400 per month (25x Scout)
+    # NOTE: Premium models (Claude, GPT, Gemini Pro) burn credits faster
     "pioneer": {
-        "monthly_cost": 50.00,
-        "six_hour_cost": 1.125,
+        "monthly_cost": 25.00,
+        "six_hour_cost": 0.56,
     },
 }
 
