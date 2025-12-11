@@ -262,11 +262,9 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
                               type="button"
                             >
                               <div className={styles.itemInfo}>
-                                <div className={styles.itemLabel}>
-                                  {model.label}
-                                  {model.cost && <span className={styles.costIndicator}>{model.cost}</span>}
-                                </div>
+                                <div className={styles.itemLabel}>{model.label}</div>
                               </div>
+                              {model.cost && <span className={styles.costIndicator}>{model.cost}</span>}
                               {isModelLocked ? (
                                 <Lock size={14} className={styles.actionLock} />
                               ) : selectedModelId === model.id ? (

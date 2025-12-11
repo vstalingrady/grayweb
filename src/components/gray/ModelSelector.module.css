@@ -168,9 +168,10 @@
 .costIndicator {
   font-size: 0.7rem;
   color: rgba(255, 255, 255, 0.35);
-  margin-left: 6px;
+  margin-left: auto;
   font-weight: 400;
   letter-spacing: 0.02em;
+  flex-shrink: 0;
 }
 
 .checkIcon {
@@ -435,7 +436,12 @@
 .subMenuItem {
   padding-left: 24px;
   /* Align text with group title text */
-  font-size: 0.9rem;
+  font-size: 0.85rem;
+}
+
+.subMenuItem .itemLabel {
+  font-size: 0.85rem;
+  font-weight: 400;
 }
 
 /* Mobile hiding */
