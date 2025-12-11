@@ -5764,12 +5764,24 @@ async def stream_ai_response(
                         extra={"user_id": user_id, "model": model}
                     )
                     
+                    # Inject explicit tool usage instructions so the model knows to CALL the tools
+                    tool_instruction = """
+You have tools available and MUST use them when the user requests:
+- create_plan: Use when user asks to set, create, or make a plan/goal with a deadline
+- create_reminder: Use when user asks for a reminder at a specific time  
+- create_habit: Use when user wants to track a recurring habit
+- update_plan/update_reminder/update_habit: Use when user wants to modify existing items
+- delete_plan/delete_reminder/delete_habit: Use when user wants to remove items
+
+CRITICAL: When the user asks to "set a plan" or create any plan/reminder/habit, you MUST call the appropriate tool. Do not just describe what you would do - actually invoke the function."""
+                    hybrid_system_prompt = (effective_system_prompt or "") + "\n\n" + tool_instruction
+                    
                     # Execute tools with Gemini Flash
                     hybrid_tool_results, hybrid_tool_cards, onboarding_done = await _execute_tools_with_gemini_flash(
                         message,
                         conversation_history,
                         tool_list,
-                        effective_system_prompt,
+                        hybrid_system_prompt,
                         time_context,
                         workspace_with_cache,
                         user_id,
