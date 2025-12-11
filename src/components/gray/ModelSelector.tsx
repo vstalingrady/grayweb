@@ -24,7 +24,7 @@ type ModelGroup = {
   id: string;
   label: string;
   iconPath: string;
-  models: { id: string; label: string }[];
+  models: { id: string; label: string; tierRequired?: "voyager" | "pioneer" }[];
 };
 
 const PIONEER_GROUPS: ModelGroup[] = [
@@ -33,9 +33,9 @@ const PIONEER_GROUPS: ModelGroup[] = [
     label: "Anthropic",
     iconPath: "/logos/claude-color.svg",
     models: [
-      { id: "anthropic/claude-sonnet-4.5", label: "Claude Sonnet 4.5" },
-      { id: "anthropic/claude-opus-4.5", label: "Claude Opus 4.5" },
       { id: "anthropic/claude-haiku-4.5", label: "Claude Haiku 4.5" },
+      { id: "anthropic/claude-sonnet-4.5", label: "Claude Sonnet 4.5" },
+      { id: "anthropic/claude-opus-4.5", label: "Claude Opus 4.5", tierRequired: "pioneer" },
     ],
   },
   {
@@ -248,19 +248,30 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
 
                     {isExpanded && (
                       <div className={styles.groupModels}>
-                        {group.models.map((model) => (
-                          <button
-                            key={model.id}
-                            className={`${styles.menuItem} ${selectedModelId === model.id ? styles.menuItemActive : ""} ${styles.subMenuItem}`}
-                            onClick={() => handlePioneerSelect(model.id)}
-                            type="button"
-                          >
-                            <div className={styles.itemInfo}>
-                              <div className={styles.itemLabel}>{model.label}</div>
-                            </div>
-                            {selectedModelId === model.id && <Check size={14} className={styles.checkIcon} />}
-                          </button>
-                        ))}
+                        {group.models.map((model) => {
+                          const modelTierRequired = model.tierRequired || "voyager";
+                          const modelTierLevel = TIER_LEVELS[modelTierRequired] ?? 1;
+                          const isModelLocked = currentLevel < modelTierLevel;
+
+                          return (
+                            <button
+                              key={model.id}
+                              className={`${styles.menuItem} ${selectedModelId === model.id ? styles.menuItemActive : ""} ${styles.subMenuItem} ${isModelLocked ? styles.menuItemLocked : ""}`}
+                              onClick={() => !isModelLocked && handlePioneerSelect(model.id)}
+                              disabled={isModelLocked}
+                              type="button"
+                            >
+                              <div className={styles.itemInfo}>
+                                <div className={styles.itemLabel}>{model.label}</div>
+                              </div>
+                              {isModelLocked ? (
+                                <Lock size={14} className={styles.actionLock} />
+                              ) : selectedModelId === model.id ? (
+                                <Check size={14} className={styles.checkIcon} />
+                              ) : null}
+                            </button>
+                          );
+                        })}
                       </div>
                     )}
                   </div>

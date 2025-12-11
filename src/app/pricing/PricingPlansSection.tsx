@@ -45,7 +45,7 @@ export const VOYAGER_FEATURES: FeatureItem[] = [
     {
         label: "Model switcher",
         icon: Shuffle,
-        subtext: "Claude 4.5, Gemini 3 Pro, GPT 5.1, DeepSeek V3.2, Kimi K2",
+        subtext: "Claude Haiku/Sonnet, Gemini 3 Pro, GPT 5.1, DeepSeek, Kimi K2",
     },
     {
         label: "5x more message credits",
@@ -69,6 +69,11 @@ export const VOYAGER_FEATURES: FeatureItem[] = [
 ];
 
 export const PIONEER_FEATURES: FeatureItem[] = [
+    {
+        label: "Claude Opus 4.5 access",
+        icon: Zap,
+        subtext: "Most capable Claude model",
+    },
     {
         label: "25x more message credits",
         icon: MessageSquare,
