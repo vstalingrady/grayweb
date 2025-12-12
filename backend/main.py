@@ -9564,12 +9564,13 @@ async def create_payment_charge(
     Create a transaction with Midtrans Core API.
     """
     # 1. Determine Amount & Item Details based on plan tier and billing cycle
+    # TESTING MODE: All amounts set to 1 IDR
     is_annual = request.billing_cycle == "annual"
     if request.plan_tier == "voyager":
-        amount = 777000 if is_annual else 77000  # IDR
+        amount = 1  # TEST: 1 IDR (real: 777000 if is_annual else 77000)
         item_name = f"Gray Voyager Plan ({'Annual' if is_annual else 'Monthly'})"
     elif request.plan_tier == "pioneer":
-        amount = 3777000 if is_annual else 377000  # IDR
+        amount = 1  # TEST: 1 IDR (real: 3777000 if is_annual else 377000)
         item_name = f"Gray Pioneer Plan ({'Annual' if is_annual else 'Monthly'})"
     else:
         raise HTTPException(status_code=400, detail="Invalid plan tier")
