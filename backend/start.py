@@ -502,6 +502,7 @@ if __name__ == "__main__":
     ensure_column("plans", "description", "VARCHAR")
     ensure_column("habits", "description", "VARCHAR")
     ensure_column("chat_sessions", "scope", "VARCHAR DEFAULT 'thread'")
+    ensure_column("users", "subscription_expires_at", "DATETIME")
 
     migration_time = (time.time() - migration_start) * 1000
     if migrations_performed:
@@ -573,4 +574,3 @@ if __name__ == "__main__":
         log_level=uvicorn_log_level,
         access_log=False
     )
-

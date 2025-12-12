@@ -140,6 +140,119 @@
     color: rgba(255, 255, 255, 0.5);
 }
 
+/* Payment method layout (tabs + grid) */
+.methodGroupTabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+    margin-bottom: 0.85rem;
+}
+
+.methodGroupTabs button {
+    appearance: none;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(0, 0, 0, 0.5);
+    color: rgba(255, 255, 255, 0.85);
+    padding: 0.9rem 1rem;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 0.9rem;
+    text-align: left;
+    cursor: pointer;
+    transition: border-color 100ms ease, background 100ms ease;
+}
+
+.methodGroupTabs button[data-active="true"] {
+    border-color: rgba(255, 255, 255, 0.32);
+    background: rgba(255, 255, 255, 0.06);
+    color: white;
+}
+
+.methodGroupTabs button:hover {
+    border-color: rgba(255, 255, 255, 0.22);
+}
+
+.methodSearch {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 0.85rem;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(0, 0, 0, 0.45);
+    color: rgba(255, 255, 255, 0.7);
+    margin-bottom: 0.9rem;
+}
+
+.methodSearchInput {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: white;
+    font-size: 0.95rem;
+}
+
+.methodSearchInput::placeholder {
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.methodGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 0.75rem;
+}
+
+.methodOption {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.65rem;
+    padding: 1.1rem 0.9rem;
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: rgba(255, 255, 255, 0.9);
+    cursor: pointer;
+    text-align: center;
+    transition: border-color 100ms ease, background 100ms ease;
+    min-height: 96px;
+}
+
+.methodOption:hover {
+    border-color: rgba(255, 255, 255, 0.22);
+    background: rgba(10, 10, 10, 0.75);
+}
+
+.methodOption[data-selected="true"] {
+    border-color: rgba(59, 130, 246, 0.9);
+    box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.9);
+    background: rgba(18, 26, 44, 0.8);
+}
+
+.methodLogo {
+    height: 28px;
+    width: auto;
+    object-fit: contain;
+    max-width: 110px;
+    filter: brightness(1.05);
+}
+
+.methodLabel {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.methodEmpty {
+    grid-column: 1 / -1;
+    color: rgba(255, 255, 255, 0.55);
+    font-size: 0.9rem;
+    padding: 0.5rem 0.25rem;
+    text-align: center;
+}
+
 .paymentGroup {
     display: flex;
     flex-direction: column;

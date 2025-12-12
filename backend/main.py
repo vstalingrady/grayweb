@@ -851,6 +851,7 @@ def _ensure_sqlite_index(table: str, index_name: str, column: str) -> None:
 # Run all SQLite migrations using the unified helpers
 _ensure_sqlite_columns("users", [
     ("auth_user_id", "TEXT", None),
+    ("subscription_expires_at", "DATETIME", None),
     ("has_seen_general_chat", "BOOLEAN", "0"),
     ("maps_enabled", "BOOLEAN", "0"),
     ("daily_token_usage", "INTEGER", "0"),

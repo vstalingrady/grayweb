@@ -3,7 +3,7 @@
 import React, { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Script from "next/script";
-import { CheckCircle, AlertCircle, Loader2, ArrowLeft, CreditCard, Landmark, Smartphone, ShieldCheck, Zap, Globe, Radio, Brain, Clock, Pin, Plus, CalendarClock, MessageSquare, Shuffle, Infinity as InfinityIcon, Headphones, FlaskConical, Database } from "lucide-react";
+import { CheckCircle, AlertCircle, Loader2, ArrowLeft, CreditCard, Landmark, Smartphone, ShieldCheck, Zap, Globe, Radio, Brain, Clock, Pin, Plus, CalendarClock, MessageSquare, Shuffle, Infinity as InfinityIcon, Headphones, FlaskConical, Database, Search } from "lucide-react";
 import styles from "./payment.module.css";
 import pricingStyles from "../pricing/page.module.css";
 import { VOYAGER_FEATURES, PIONEER_FEATURES } from "../pricing/PricingPlansSection";
@@ -43,55 +43,55 @@ const PAYMENT_METHODS = [
     {
         id: "danamon",
         label: "Danamon",
-        logo: "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d3/Logo_Danamon_2018.svg/2560px-Logo_Danamon_2018.svg.png",
+        logo: "/logos/payment/danamon.png",
         type: "bank_transfer",
         bank: "danamon"
     },
     {
         id: "cimb",
         label: "CIMB Niaga",
-        logo: "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a8/Logo_CIMB_Niaga_2008.png/800px-Logo_CIMB_Niaga_2008.png",
+        logo: "/logos/payment/cimb.svg",
         type: "bank_transfer",
         bank: "cimb"
     },
     {
         id: "qris",
         label: "GoPay Dynamic QRIS",
-        logo: "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a2/Logo_QRIS.svg/1200px-Logo_QRIS.svg.png",
+        logo: "/logos/payment/qris.png",
         type: "gopay",
         isQris: true
     },
     {
         id: "bni",
         label: "BNI",
-        logo: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5c/Bank_Negara_Indonesia_logo.svg/2560px-Bank_Negara_Indonesia_logo.svg.png",
+        logo: "/logos/payment/bni.svg",
         type: "bank_transfer",
         bank: "bni"
     },
     {
         id: "bri",
         label: "BRI",
-        logo: "https://upload.wikimedia.org/wikipedia/commons/thumb/6/68/BANK_BRI_logo.svg/2560px-BANK_BRI_logo.svg.png",
+        logo: "/logos/payment/bri.svg",
         type: "bank_transfer",
         bank: "bri"
     },
     {
         id: "gopay",
         label: "GoPay",
-        logo: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/86/Gopay_logo.svg/2560px-Gopay_logo.svg.png",
+        logo: "/logos/payment/gopay.svg",
         type: "gopay",
         isDeepLink: true
     },
     {
         id: "mandiri",
         label: "Bank Mandiri",
-        logo: "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ad/Bank_Mandiri_logo_2016.svg/2560px-Bank_Mandiri_logo_2016.svg.png",
+        logo: "/logos/payment/mandiri.png",
         type: "echannel"
     },
     {
         id: "permata",
         label: "PermataBank",
-        logo: "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3a/Bank_Permata_Logo.svg/1200px-Bank_Permata_Logo.svg.png",
+        logo: "/logos/payment/permata.svg",
         type: "bank_transfer",
         bank: "permata"
     }
@@ -106,6 +106,8 @@ function PaymentContent() {
     // State
     const [billingCycle, setBillingCycle] = useState<"monthly" | "annual">((cycleParam as "monthly" | "annual") || "monthly");
     const [selectedMethodId, setSelectedMethodId] = useState<string>("gopay");
+    const [methodGroup, setMethodGroup] = useState<"wallet" | "va">("wallet");
+    const [bankSearch, setBankSearch] = useState<string>("");
 
     const [status, setStatus] = useState<PaymentStatus>("idle");
     const [chargeData, setChargeData] = useState<ChargeResponse | null>(null);
@@ -113,6 +115,22 @@ function PaymentContent() {
 
     const walletMethods = PAYMENT_METHODS.filter((m) => ["gopay", "qris"].includes(m.id));
     const virtualAccountMethods = PAYMENT_METHODS.filter((m) => !["gopay", "qris"].includes(m.id));
+    const activeMethods = methodGroup === "wallet" ? walletMethods : virtualAccountMethods;
+    const filteredActiveMethods =
+        methodGroup === "va" && bankSearch.trim().length
+            ? activeMethods.filter((method) =>
+                  method.label.toLowerCase().includes(bankSearch.trim().toLowerCase()),
+              )
+            : activeMethods;
+
+    useEffect(() => {
+        // Keep group in sync with selected method (e.g., deep links)
+        if (["gopay", "qris"].includes(selectedMethodId)) {
+            setMethodGroup("wallet");
+        } else {
+            setMethodGroup("va");
+        }
+    }, [selectedMethodId]);
 
 
     // Derived Data
@@ -369,35 +387,73 @@ function PaymentContent() {
 
                     <div className={styles.activePaymentMethodsCard}>
                         <h3 className={styles.activePaymentMethodsTitle}>Active payment methods</h3>
-                        <div className={styles.paymentSelectWrapper}>
-                            <label htmlFor="payment-method" className={styles.paymentSelectLabel}>
-                                Choose a method
-                            </label>
-                            <select
-                                id="payment-method"
-                                className={styles.paymentSelect}
-                                value={selectedMethodId}
-                                onChange={(e) => setSelectedMethodId(e.target.value)}
+                        <div className={styles.methodGroupTabs} role="tablist" aria-label="Payment method type">
+                            <button
+                                type="button"
+                                role="tab"
+                                data-active={methodGroup === "wallet"}
+                                aria-selected={methodGroup === "wallet"}
+                                onClick={() => {
+                                    setMethodGroup("wallet");
+                                    setSelectedMethodId(walletMethods[0]?.id ?? "gopay");
+                                    setBankSearch("");
+                                }}
                             >
-                                <optgroup label="E‑Wallet & QRIS">
-                                    {walletMethods.map((method) => (
-                                        <option key={method.id} value={method.id}>
-                                            {method.label}
-                                        </option>
-                                    ))}
-                                </optgroup>
-                                <optgroup label="Virtual Accounts">
-                                    {virtualAccountMethods.map((method) => (
-                                        <option key={method.id} value={method.id}>
-                                            {method.label}
-                                        </option>
-                                    ))}
-                                </optgroup>
-                            </select>
-                            <div className={styles.paymentSelectHint}>
-                                You can change this later in checkout.
-                            </div>
+                                E‑Wallet & QRIS
+                            </button>
+                            <button
+                                type="button"
+                                role="tab"
+                                data-active={methodGroup === "va"}
+                                aria-selected={methodGroup === "va"}
+                                onClick={() => {
+                                    setMethodGroup("va");
+                                    setSelectedMethodId(virtualAccountMethods[0]?.id ?? "bni");
+                                }}
+                            >
+                                Virtual Accounts
+                            </button>
                         </div>
+
+                        {methodGroup === "va" && (
+                            <div className={styles.methodSearch}>
+                                <Search size={16} aria-hidden="true" />
+                                <input
+                                    type="text"
+                                    value={bankSearch}
+                                    onChange={(e) => setBankSearch(e.target.value)}
+                                    placeholder="Search for your bank"
+                                    className={styles.methodSearchInput}
+                                    aria-label="Search for your bank"
+                                />
+                            </div>
+                        )}
+
+                        <div className={styles.methodGrid} role="tabpanel">
+                            {filteredActiveMethods.map((method) => (
+                                <button
+                                    key={method.id}
+                                    type="button"
+                                    className={styles.methodOption}
+                                    data-selected={selectedMethodId === method.id}
+                                    onClick={() => setSelectedMethodId(method.id)}
+                                >
+                                    {method.logo ? (
+                                        <img
+                                            src={method.logo}
+                                            alt=""
+                                            className={styles.methodLogo}
+                                            loading="lazy"
+                                        />
+                                    ) : null}
+                                    <span className={styles.methodLabel}>{method.label}</span>
+                                </button>
+                            ))}
+                            {filteredActiveMethods.length === 0 && (
+                                <div className={styles.methodEmpty}>No banks match that search.</div>
+                            )}
+                        </div>
+                        <div className={styles.paymentSelectHint}>You can change this later in checkout.</div>
                     </div>
 
 
