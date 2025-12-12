@@ -25,5 +25,5 @@ services:
       - ./data-dev:/app/data
 
   redis:
-    ports: []
-
+    ports:
+      - "6380:6379"
