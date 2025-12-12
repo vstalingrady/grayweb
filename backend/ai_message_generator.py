@@ -9,6 +9,7 @@ error is logged and no message is sent.
 import os
 import re
 from datetime import datetime, timezone, timedelta
+from zoneinfo import ZoneInfo
 from typing import List, Dict, Any, Optional, AsyncGenerator
 import json
 import asyncio
@@ -175,9 +176,16 @@ class AIMessageGenerator:
                 raise RuntimeError(f"Usage limit exceeded: {e}")
 
         try:
-            # Give the model temporal context for the check-in.
-            now_utc = datetime.now(timezone.utc)
-            time_context = f"Check-in requested at {now_utc.isoformat()} UTC for timezone {timezone_str} with cadence '{cadence or 'unspecified'}' and label '{label}'."
+            # Give the model temporal context for the check-in in the user's local timezone.
+            tzinfo = self._resolve_timezone(timezone_str)
+            now_local = datetime.now(tzinfo)
+            time_context = (
+                f"User's local time is {now_local.isoformat()} "
+                f"(timezone: {timezone_str}). "
+                f"This proactive check-in is scheduled for their current local time "
+                f"based on cadence '{cadence or 'unspecified'}' and label '{label}'. "
+                "Respond as if it's that local time and avoid referencing UTC unless the user asks."
+            )
 
             gemini_response = await self.gemini.generate(
                 message=user_context,
@@ -204,6 +212,26 @@ class AIMessageGenerator:
 
         except Exception as error:
             raise RuntimeError(f"Gemini proactive message generation failed: {error}") from error
+
+    @staticmethod
+    def _resolve_timezone(timezone_str: str):
+        """
+        Resolve a timezone string to tzinfo.
+        Accepts IANA names (e.g., 'Asia/Jakarta') and fixed offsets like 'UTC+07:00'.
+        """
+        normalized = (timezone_str or "").strip()
+        if not normalized:
+            return timezone.utc
+        try:
+            return ZoneInfo(normalized)
+        except Exception:
+            match = re.match(r"^(?:UTC)?([+-])(\d{1,2})(?::?(\d{2}))?$", normalized, re.IGNORECASE)
+            if match:
+                sign = 1 if match.group(1) == "+" else -1
+                hours = int(match.group(2))
+                minutes = int(match.group(3) or "0")
+                return timezone(sign * timedelta(hours=hours, minutes=minutes))
+        return timezone.utc
 
         if isinstance(response, str):
             text = response
@@ -273,4 +301,3 @@ class AIMessageGenerator:
 
         message = template.format(habit_name=habit_name, days_since=days_since)
         return "Habit Check-in", message
-
