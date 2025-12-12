@@ -1,0 +1,39 @@
+.git
+.github
+.vscode
+.idea
+
+# Node / Next
+node_modules
+**/node_modules
+.next
+out
+dist
+coverage
+.turbo
+.swc
+
+# Python
+.venv
+**/__pycache__
+**/*.pyc
+
+# Logs and artifacts
+logs
+**/*.log
+backend.log
+start.log
+
+# Local/Server data
+data
+data-dev
+**/*.db
+**/*.db-shm
+**/*.db-wal
+
+# Misc large/unneeded
+public/metallic/node_modules
+public/metallic/.next
+supabase/.temp
+*.avif
+*.webp
