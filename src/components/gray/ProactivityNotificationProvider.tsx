@@ -15,6 +15,7 @@ import { useChatStore } from "./ChatProvider";
 import { GENERAL_CHAT_SESSION_ID } from "./chat/constants";
 import { resolveApiBaseUrl, type ProactivityNotification } from "@/lib/api";
 import { requestNotificationPermission } from "@/lib/notificationUtils";
+import { useI18n } from "@/contexts/I18nContext";
 
 type ProactivityNotificationContextValue = {
   deliveredKeys: ReadonlySet<string>;
@@ -98,6 +99,7 @@ type ProactivityNotificationProviderProps = {
 };
 
 export function ProactivityNotificationProvider({ children }: ProactivityNotificationProviderProps) {
+  const { t } = useI18n();
   const { user } = useUser();
   const userId = typeof user?.id === "number" ? user.id : null;
   const { appendMessage, generalSessionId, ensureSession } = useChatStore();
@@ -115,7 +117,7 @@ export function ProactivityNotificationProvider({ children }: ProactivityNotific
       // 2. Show browser notification if enabled
       if (Notification.permission === "granted") {
         new Notification("Gray", {
-          body: payload.message || "New message from Gray",
+          body: payload.message || t("New message from Gray"),
           icon: "/grayai.png",
           requireInteraction: true,
           tag: payload.delivery_key ? `gray-proactivity-${payload.delivery_key}` : undefined,
@@ -123,9 +125,9 @@ export function ProactivityNotificationProvider({ children }: ProactivityNotific
       }
 
       // 3. Show in-app toast
-      setToastMessage(payload.message || "New message");
+      setToastMessage(payload.message || t("New message"));
     },
-    [appendMessage]
+    [appendMessage, t]
   );
 
   useEffect(() => {

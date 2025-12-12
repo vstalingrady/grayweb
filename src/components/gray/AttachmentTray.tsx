@@ -3,6 +3,7 @@
 import { LoaderCircle, X } from "lucide-react";
 import styles from "@/app/gray/GrayPageClient.module.css";
 import type { MediaUpload } from "@/lib/api";
+import { useI18n } from "@/contexts/I18nContext";
 
 type AttachmentTrayProps = {
   attachments: MediaUpload[];
@@ -17,6 +18,7 @@ const AttachmentTray = ({
   error,
   onRemoveAttachment,
 }: AttachmentTrayProps) => {
+  const { t } = useI18n();
   const hasAttachments = attachments.length > 0;
 
   if (!hasAttachments && !error && !isUploading) {
@@ -36,7 +38,7 @@ const AttachmentTray = ({
               />
             ) : (
               <div className={styles.chatAttachmentThumbFile}>
-                <span>{attachment.mime_type?.split("/").pop()?.toUpperCase() || "FILE"}</span>
+                <span>{attachment.mime_type?.split("/").pop()?.toUpperCase() || t("FILE")}</span>
               </div>
             )}
             <button

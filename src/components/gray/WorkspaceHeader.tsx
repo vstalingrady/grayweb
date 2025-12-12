@@ -1,6 +1,7 @@
 import { memo, type ReactNode } from "react";
 import { Zap } from "lucide-react";
 import styles from "@/app/gray/GrayPageClient.module.css";
+import { useI18n } from "@/contexts/I18nContext";
 
 type GrayWorkspaceHeaderProps = {
   streakCount: number;
@@ -19,7 +20,8 @@ function GrayWorkspaceHeader({
   showUpgradeButton = true,
   hideDesktopMeta = false,
 }: GrayWorkspaceHeaderProps) {
-  const normalizedPlanLabel = planLabel.trim().length ? planLabel.trim() : "Pioneer";
+  const { t } = useI18n();
+  const normalizedPlanLabel = planLabel.trim().length ? planLabel.trim() : t("Pioneer");
   const normalizedPlanLower = normalizedPlanLabel.toLowerCase();
   const normalizedStreak = Number.isFinite(streakCount)
     ? Math.max(0, Math.trunc(streakCount))
@@ -42,7 +44,10 @@ function GrayWorkspaceHeader({
       {!hideDesktopMeta ? (
         <div className={`${styles.headerRight} hidden md:flex`}>
           {normalizedStreak > 0 ? (
-            <div className={styles.streakBadge} aria-label={`${normalizedStreak} day streak`}>
+            <div
+              className={styles.streakBadge}
+              aria-label={t("{count} day streak", { count: normalizedStreak })}
+            >
               <Zap size={12} />
               <span>{normalizedStreak}</span>
             </div>

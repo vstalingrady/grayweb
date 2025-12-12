@@ -6,6 +6,7 @@ import styles from "@/app/gray/GrayPageClient.module.css";
 import { useUser } from "@/contexts/UserContext";
 import { apiService } from "@/lib/api";
 import type { HabitItem, HabitUpdates, PlanItem, PlanUpdates } from "./types";
+import { useI18n } from "@/contexts/I18nContext";
 
 const toDateTimeLocalValue = (value: string | null | undefined): string => {
   if (!value) {
@@ -55,6 +56,7 @@ export function AddPlanHabitModal({
   habitToEdit,
   onSubmitHabit,
 }: AddPlanHabitModalProps) {
+  const { t } = useI18n();
   const [inputValue, setInputValue] = useState("");
   const [detailsValue, setDetailsValue] = useState("");
   const [planDeadline, setPlanDeadline] = useState("");
@@ -135,7 +137,7 @@ export function AddPlanHabitModal({
 
       if (!user) {
 
-        setError("You must be signed in to perform this action.");
+        setError(t("You must be signed in to perform this action."));
 
         return;
 
@@ -155,7 +157,7 @@ export function AddPlanHabitModal({
 
       if ((planScheduleStart && !planScheduleEnd) || (!planScheduleStart && planScheduleEnd)) {
 
-        setError("Please provide both a start and end time for the schedule.");
+        setError(t("Please provide both a start and end time for the schedule."));
 
         return;
 
@@ -165,7 +167,7 @@ export function AddPlanHabitModal({
 
       if (reminderEnabled && !planDeadline) {
 
-        setError("Please provide a reminder time when reminder is checked.");
+        setError(t("Please provide a reminder time when reminder is checked."));
 
         return;
 
@@ -279,17 +281,17 @@ export function AddPlanHabitModal({
 
             // console.log('[AddPlanHabitModal] Creating new habit');
 
-            const result = await apiService.createHabit(user.id, {
+	            const result = await apiService.createHabit(user.id, {
 
-              label: trimmed,
+	              label: trimmed,
 
-              streak_label: "0",
+	              streak_label: "0",
 
-              previous_label: "No history yet",
+	              previous_label: t("No history yet"),
 
-              description: details.length > 0 ? details : null,
+	              description: details.length > 0 ? details : null,
 
-            });
+	            });
 
             // console.log('[AddPlanHabitModal] Habit created successfully', result);
 
@@ -319,13 +321,16 @@ export function AddPlanHabitModal({
 
       } catch (err) {
 
-        const action = isEditingPlan || isEditingHabit ? "update" : "add";
+		        const typeLabel = type === "plan" ? t("Plan") : t("Habit");
+		        const fallbackError = isEditingPlan || isEditingHabit
+		          ? t("Failed to update {type}", { type: typeLabel })
+		          : t("Failed to add {type}", { type: typeLabel });
 
-        console.error(`[AddPlanHabitModal] Failed to ${action} ${type}:`, err);
+	        console.error(`[AddPlanHabitModal] Failed to ${isEditingPlan || isEditingHabit ? "update" : "add"} ${type}:`, err);
 
-        setError(err instanceof Error ? err.message : `Failed to ${action} ${type}`);
+	        setError(err instanceof Error ? err.message : fallbackError);
 
-      } finally {
+	      } finally {
 
         setIsSubmitting(false);
 
@@ -347,7 +352,7 @@ export function AddPlanHabitModal({
   }
 
   const isPlan = type === "plan";
-  const title = isPlan ? "Add Plan" : "Add Habit";
+  const title = isPlan ? t("Add Plan") : t("Add Habit");
 
   return (
     <div
@@ -371,7 +376,7 @@ export function AddPlanHabitModal({
             type="button"
             className={styles.personalizationClose}
             onClick={onClose}
-            aria-label={`Close ${title.toLowerCase()}`}
+            aria-label={t("Close modal")}
           >
             <X size={18} />
           </button>
@@ -389,33 +394,33 @@ export function AddPlanHabitModal({
           <div className={styles.personalizationColumn}>
             {isPlan ? (
               <>
-                <div className={styles.personalizationFieldGroup}>
-                  <label htmlFor="plan-description">Plan *</label>
-                  <textarea
-                    id="plan-description"
-                    className={styles.personalizationField}
-                    value={inputValue}
-                    onChange={(event) => handleInputChange(event.target.value)}
-                    placeholder="What needs to happen?"
-                    disabled={isSubmitting}
-                    rows={3}
-                    autoFocus
-                    required
-                  />
-                </div>
+	                <div className={styles.personalizationFieldGroup}>
+	                  <label htmlFor="plan-description">{t("Plan *")}</label>
+	                  <textarea
+	                    id="plan-description"
+	                    className={styles.personalizationField}
+	                    value={inputValue}
+	                    onChange={(event) => handleInputChange(event.target.value)}
+	                    placeholder={t("What needs to happen?")}
+	                    disabled={isSubmitting}
+	                    rows={3}
+	                    autoFocus
+	                    required
+	                  />
+	                </div>
 
-                <div className={styles.personalizationFieldGroup}>
-                  <label htmlFor="plan-details">Details</label>
-                  <textarea
-                    id="plan-details"
-                    className={styles.personalizationField}
-                    value={detailsValue}
-                    onChange={(event) => handleDetailsChange(event.target.value)}
-                    placeholder="Add notes, links, or context"
-                    disabled={isSubmitting}
-                    rows={3}
-                  />
-                </div>
+	                <div className={styles.personalizationFieldGroup}>
+	                  <label htmlFor="plan-details">{t("Details")}</label>
+	                  <textarea
+	                    id="plan-details"
+	                    className={styles.personalizationField}
+	                    value={detailsValue}
+	                    onChange={(event) => handleDetailsChange(event.target.value)}
+	                    placeholder={t("Add notes, links, or context")}
+	                    disabled={isSubmitting}
+	                    rows={3}
+	                  />
+	                </div>
 
                 <div
                   style={{
@@ -430,7 +435,7 @@ export function AddPlanHabitModal({
                     className={styles.personalizationFieldGroup}
                     style={{ minWidth: "260px", flex: "1 1 260px" }}
                   >
-                    <label htmlFor="plan-schedule-start">Schedule window</label>
+	                    <label htmlFor="plan-schedule-start">{t("Schedule window")}</label>
                     <div
                       style={{
                         display: "grid",
@@ -444,7 +449,7 @@ export function AddPlanHabitModal({
                           className={styles.personalizationHint}
                           style={{ textTransform: "uppercase", letterSpacing: "0.2em" }}
                         >
-                          Start
+	                          {t("Start")}
                         </span>
                         <input
                           id="plan-schedule-start"
@@ -461,7 +466,7 @@ export function AddPlanHabitModal({
                           className={styles.personalizationHint}
                           style={{ textTransform: "uppercase", letterSpacing: "0.2em" }}
                         >
-                          End
+	                          {t("End")}
                         </span>
                         <input
                           id="plan-schedule-end"
@@ -500,7 +505,7 @@ export function AddPlanHabitModal({
                           disabled={isSubmitting}
                           className={styles.reminderCheckboxInput}
                         />
-                        Reminder
+	                        {t("Reminder")}
                       </label>
                     </div>
                     <div
@@ -528,27 +533,27 @@ export function AddPlanHabitModal({
             ) : (
               <>
                 <div className={styles.personalizationFieldGroup}>
-                  <label htmlFor="habit-label">Habit *</label>
+	                  <label htmlFor="habit-label">{t("Habit *")}</label>
                   <input
                     id="habit-label"
                     type="text"
                     className={styles.personalizationField}
                     value={inputValue}
                     onChange={(event) => handleInputChange(event.target.value)}
-                    placeholder="Name the habit..."
+	                    placeholder={t("Name the habit...")}
                     disabled={isSubmitting}
                     autoFocus
                     required
                   />
                 </div>
                 <div className={styles.personalizationFieldGroup} style={{ marginTop: "16px" }}>
-                  <label htmlFor="habit-details">Details</label>
+	                  <label htmlFor="habit-details">{t("Details")}</label>
                   <textarea
                     id="habit-details"
                     className={styles.personalizationField}
                     value={detailsValue}
                     onChange={(event) => handleDetailsChange(event.target.value)}
-                    placeholder="What does success look like?"
+	                    placeholder={t("What does success look like?")}
                     disabled={isSubmitting}
                     rows={3}
                   />
@@ -568,17 +573,17 @@ export function AddPlanHabitModal({
                 onClick={onClose}
                 disabled={isSubmitting}
                 style={{ flex: 1 }}
-              >
-                Cancel
-              </button>
+	              >
+	                {t("Cancel")}
+	              </button>
               <button
                 type="submit"
                 className={styles.secondaryAction}
                 disabled={!inputValue.trim() || isSubmitting}
                 style={{ flex: 1 }}
-              >
-                {isSubmitting ? "Saving..." : "Save"}
-              </button>
+	              >
+	                {isSubmitting ? t("Saving...") : t("Save")}
+	              </button>
             </div>
           </div>
         </form>

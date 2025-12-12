@@ -72,6 +72,7 @@ import {
 } from "./chat/reminderUtils";
 import { formatReminderDisplayLabels } from "./reminderTimeUtils";
 import AttachmentTray from "./AttachmentTray";
+import { useI18n } from "@/contexts/I18nContext";
 
 const LEGACY_REMINDER_SNIPPET_REGEX =
   /```[a-z0-9_-]*[\s\S]*?(gray[\s\S]{0,120}?(?:reminder|plan|habit))[\s\S]*?```/gi;
@@ -263,22 +264,25 @@ const GrayStreamingSpinner = ({
 }: {
   reasoningSeconds?: number | null;  // Keep prop for compatibility but don't display
   toolLabel?: string | null;
-}) => (
-  <div className={styles.chatStreamingInline}>
-    <Image
-      src="/grayaiwhite.svg"
-      alt="Gray logo"
-      width={18}
-      height={18}
-      className={styles.chatStreamingSpinner}
-    />
-    {toolLabel && (
-      <span className={styles.chatToolStatus}>
-        {toolLabel}
-      </span>
-    )}
-  </div>
-);
+}) => {
+  const { t } = useI18n();
+  return (
+    <div className={styles.chatStreamingInline}>
+      <Image
+        src="/grayaiwhite.svg"
+        alt={t("Gray logo")}
+        width={18}
+        height={18}
+        className={styles.chatStreamingSpinner}
+      />
+      {toolLabel && (
+        <span className={styles.chatToolStatus}>
+          {toolLabel}
+        </span>
+      )}
+    </div>
+  );
+};
 import { useUser } from "@/contexts/UserContext";
 import { UsageLimitBanner } from "@/components/gray/UsageLimitBanner";
 import { apiService, type ConversationUsage, type GroundingMetadata } from "@/lib/api";
@@ -359,7 +363,9 @@ const getRandomGreeting = (): string => {
 };
 
 const MobileWelcomeScreen = memo(() => {
-  const greeting = useMemo(() => getRandomGreeting(), []);
+  const { t } = useI18n();
+  const greetingKey = useMemo(() => getRandomGreeting(), []);
+  const greeting = t(greetingKey);
 
   return (
     <div className={styles.mobileWelcomeScreen}>
@@ -457,7 +463,10 @@ const buildGroundingSourceFaviconUrl = (source: DerivedGroundingSource): string 
   return undefined;
 };
 
-const buildGroundingSourceCards = (metadata: GroundingMetadata | undefined | null): DerivedGroundingSource[] => {
+const buildGroundingSourceCards = (
+  metadata: GroundingMetadata | undefined | null,
+  t: (message: string, vars?: Record<string, string | number>) => string
+): DerivedGroundingSource[] => {
   if (!metadata) {
     return [];
   }
@@ -504,7 +513,7 @@ const buildGroundingSourceCards = (metadata: GroundingMetadata | undefined | nul
       sources.push({
         id: `${id}-web`,
         siteLabel: siteLabel,
-        title: chunk.web.title ?? siteLabel ?? "Referenced web content",
+        title: chunk.web.title ?? siteLabel ?? t("Referenced web content"),
         href: chunk.web.uri ?? undefined,
         isReferenced,
         faviconHost: derivedHost,
@@ -531,7 +540,10 @@ const buildGroundingSourceCards = (metadata: GroundingMetadata | undefined | nul
       sources.push({
         id: `${id}-retrieved`,
         siteLabel: siteLabel,
-        title: retrieved.title || retrieved.text?.slice(0, 80) || (siteLabel ?? "Referenced context"),
+        title:
+          retrieved.title ||
+          retrieved.text?.slice(0, 80) ||
+          (siteLabel ?? t("Referenced context")),
         href: retrieved.uri ?? undefined,
         excerpt: retrieved.text,
         isReferenced,
@@ -1034,6 +1046,7 @@ const LATEX_MATH_BLOCK_PATTERN = /^\s*(\$\$[\s\S]*\$\$|\\\[[\s\S]*\\\])\s*$/;
 const MarkdownCodeBlock: CodeComponent = ({ inline, className, children, ...props }: any) => {
   const isInline = Boolean(inline);
   const [copied, setCopied] = useState(false);
+  const { t } = useI18n();
   const raw = typeof children === "string" ? children : String(children ?? "");
   const language = getLanguageId(className?.replace("language-", "") ?? undefined);
   const { normalizedRaw, trimmedRaw, codeLines } = useMemo(() => {
@@ -1135,13 +1148,13 @@ const MarkdownCodeBlock: CodeComponent = ({ inline, className, children, ...prop
     >
       <div className={`${styles.codeHeader} ${isCompactBlock ? styles.codeHeaderCompact : ""}`}>
         <span className={styles.codeLanguage}>{language}</span>
-        <button
-          className={styles.codeCopyButton}
-          type="button"
-          onClick={handleCopy}
-          aria-label="Copy code"
-          data-copied={copied ? "true" : undefined}
-        >
+	        <button
+	          className={styles.codeCopyButton}
+	          type="button"
+	          onClick={handleCopy}
+	          aria-label={t("Copy code")}
+	          data-copied={copied ? "true" : undefined}
+	        >
           {copied ? <CheckCircle2 size={13} /> : <Copy size={13} />}
         </button>
       </div>
@@ -1211,6 +1224,7 @@ const resolveReminderStatusLabel = (status?: string | null) => {
 };
 
 const ReminderCard = ({ reminder }: { reminder: GrayReminderCreatedPayload }) => {
+  const { t } = useI18n();
   const data = reminder.data;
   const reminderRecord = (data.reminder as Record<string, unknown> | null | undefined) ?? null;
   const rawRecord = (data.raw as Record<string, unknown> | null | undefined) ?? null;
@@ -1224,12 +1238,12 @@ const ReminderCard = ({ reminder }: { reminder: GrayReminderCreatedPayload }) =>
     (rawRecord && typeof rawRecord["description"] === "string"
       ? (rawRecord["description"] as string)
       : undefined);
-  const statusLabel = resolveReminderStatusLabel(data.reminder_status);
+  const statusLabel = t(resolveReminderStatusLabel(data.reminder_status));
   const mode = resolveReminderMode(data.delivery_mode, reminder.entity);
   const typeLabels: Record<"plan" | "habit" | "reminder", string> = {
-    plan: "Plan",
-    habit: "Habit",
-    reminder: "Reminder",
+    plan: t("Plan"),
+    habit: t("Habit"),
+    reminder: t("Reminder"),
   };
   const { primary: scheduleLabel } = formatReminderDisplayLabels(scheduleIso);
 
@@ -1237,7 +1251,7 @@ const ReminderCard = ({ reminder }: { reminder: GrayReminderCreatedPayload }) =>
     <article className={styles.reminderCard} data-mode={mode}>
       <header className={styles.reminderCardHeader}>
         <div>
-          <h4>{data.label || "Untitled reminder"}</h4>
+          <h4>{data.label || t("Untitled reminder")}</h4>
           <h2 className={styles.reminderCardType}>{typeLabels[mode]}</h2>
           {summaryCandidate ? <p className={styles.reminderCardSummary}>{summaryCandidate}</p> : null}
         </div>
@@ -1401,8 +1415,9 @@ const ChatMessagesList = memo(
     isResponding,
     isActivelyThinking,
     thinkingStartTime,
-  }: ChatMessagesListProps) => {
-    const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+	  }: ChatMessagesListProps) => {
+	    const { t } = useI18n();
+	    const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
     // Use ref instead of state to avoid re-rendering on every keystroke
     const editContentRef = useRef<string>("");
     const editTextareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -1447,10 +1462,10 @@ const ChatMessagesList = memo(
                 reasoningSeconds={reasoningSeconds}
                 toolLabel={
                   // Check the very last message in the list if it's an assistant message
-                  messages.length > 0 && messages[messages.length - 1].role === "assistant"
-                    ? extractCurrentToolStatus(messages[messages.length - 1].content)
-                    : null
-                }
+	                  messages.length > 0 && messages[messages.length - 1].role === "assistant"
+	                    ? extractCurrentToolStatus(messages[messages.length - 1].content, t)
+	                    : null
+	                }
               />
             </div>
           </div>
@@ -1480,9 +1495,9 @@ const ChatMessagesList = memo(
           const isStreamingMessage = isAssistant && message.id === activeStreamingMessageId;
           const hasTextContent = Boolean(visibleAssistantText.trim());
           const assistantReminders = isAssistant && Array.isArray(message.reminders) ? message.reminders : [];
-          const sourceCards = isAssistant && message.groundingMetadata
-            ? buildGroundingSourceCards(message.groundingMetadata)
-            : [];
+	          const sourceCards = isAssistant && message.groundingMetadata
+	            ? buildGroundingSourceCards(message.groundingMetadata, t)
+	            : [];
           const showAssistantMarkdown = isAssistant && hasTextContent;
           const hasVisibleContent =
             hasThinkingContent || showAssistantMarkdown || assistantReminders.length > 0;
@@ -1507,16 +1522,18 @@ const ChatMessagesList = memo(
           const responseDurationLabel = isAssistant ? getResponseDurationLabel(messageIndex) : null;
           const tokenCount = isAssistant ? estimateTokenCount(rawContent) : null;
           const hasTokenEstimate = typeof tokenCount === "number" && Number.isFinite(tokenCount) && tokenCount > 0;
-          const metadataTokenLabel = hasTokenEstimate ? `${tokenCount.toLocaleString()} tokens` : "—";
-          const metadataRows: { label: string; value: string }[] = [];
-          metadataRows.push({ label: "Tokens", value: metadataTokenLabel });
-          if (responseDurationLabel) {
-            metadataRows.push({ label: "Duration", value: responseDurationLabel });
-          }
-          const backendTimingLabel = formatBackendTimingLabel(message.backendTimings);
-          if (backendTimingLabel) {
-            metadataRows.push({ label: "Backend", value: backendTimingLabel });
-          }
+	          const metadataTokenLabel = hasTokenEstimate
+	            ? t("{count} tokens", { count: tokenCount.toLocaleString() })
+	            : "—";
+	          const metadataRows: { label: string; value: string }[] = [];
+	          metadataRows.push({ label: t("Tokens"), value: metadataTokenLabel });
+	          if (responseDurationLabel) {
+	            metadataRows.push({ label: t("Duration"), value: responseDurationLabel });
+	          }
+	          const backendTimingLabel = formatBackendTimingLabel(message.backendTimings);
+	          if (backendTimingLabel) {
+	            metadataRows.push({ label: t("Backend"), value: backendTimingLabel });
+	          }
           const isMetadataAvailable = isAssistant && metadataRows.length > 0;
           const isLatestAssistantMessage = isAssistant && message.id === latestAssistantMessageId;
           const isRegenerating = regeneratingMessageId === message.id;
@@ -1746,10 +1763,10 @@ const ChatMessagesList = memo(
                                             initials
                                           )}
                                         </div>
-                                        <div className={styles.chatGroundingSourceCardContent}>
-                                          <div className={styles.chatGroundingSourceCardTitle}>
-                                            {source.title ?? "Referenced source"}
-                                          </div>
+	                                        <div className={styles.chatGroundingSourceCardContent}>
+	                                          <div className={styles.chatGroundingSourceCardTitle}>
+	                                            {source.title ?? t("Referenced source")}
+	                                          </div>
                                           {source.siteLabel ? (
                                             <div className={styles.chatGroundingSourceCardSite}>
                                               {source.siteLabel}
@@ -1786,9 +1803,9 @@ const ChatMessagesList = memo(
                             ) : null}
                             {mapSources.length > 0 ? (
                               <div className={styles.chatGroundingSources}>
-                                {mapSources.map((maps, index) => {
-                                  const label = maps.title ?? maps.placeId ?? "Maps source";
-                                  const href = maps.uri ?? maps.googleMapsUri ?? undefined;
+	                                {mapSources.map((maps, index) => {
+	                                  const label = maps.title ?? maps.placeId ?? t("Maps source");
+	                                  const href = maps.uri ?? maps.googleMapsUri ?? undefined;
                                   return (
                                     <div key={`${message.id}-maps-source-${index}`} className={styles.chatGroundingSource}>
                                       {href ? (
@@ -1811,10 +1828,10 @@ const ChatMessagesList = memo(
                               </div>
                             ) : null}
                             {metadata?.google_maps_widget_context_token ? (
-                              <div className={styles.chatGroundingWidget}>
-                                <span>Widget token:</span>
-                                <code>{metadata?.google_maps_widget_context_token}</code>
-                              </div>
+	                              <div className={styles.chatGroundingWidget}>
+	                                <span>{t("Widget token:")}</span>
+	                                <code>{metadata?.google_maps_widget_context_token}</code>
+	                              </div>
                             ) : null}
                           </div>
                         );
@@ -2016,7 +2033,10 @@ const stripToolUseBlocks = (text: string): string => {
   return result;
 };
 
-const extractCurrentToolStatus = (text: string): string | null => {
+const extractCurrentToolStatus = (
+  text: string,
+  t: (message: string, vars?: Record<string, string | number>) => string
+): string | null => {
   if (!text) return null;
 
   // Look for the last tool_use block
@@ -2046,16 +2066,16 @@ const extractCurrentToolStatus = (text: string): string | null => {
   const normalized = toolName.toLowerCase();
 
   if (normalized.includes("search") || normalized.includes("web")) {
-    return "Reading the internet...";
+    return t("Reading the internet...");
   }
   if (normalized.includes("image") || normalized.includes("painting")) {
-    return "Painting pixels...";
+    return t("Painting pixels...");
   }
   if (normalized.includes("plan") || normalized.includes("habit") || normalized.includes("calendar")) {
-    return "Checking schedule...";
+    return t("Checking schedule...");
   }
   if (normalized.includes("memory") || normalized.includes("remember")) {
-    return "Accessing memory...";
+    return t("Accessing memory...");
   }
 
   // Clean up snake_case or camelCase to Sentence case
@@ -2064,7 +2084,7 @@ const extractCurrentToolStatus = (text: string): string | null => {
     .replace(/([A-Z])/g, " $1")
     .trim();
 
-  return `Using ${readable.toLowerCase()}...`;
+  return t("Using {tool}...", { tool: readable.toLowerCase() });
 };
 
 const parseStructuredAssistantMessage = (content?: string | null): AssistantSections => {
@@ -2389,12 +2409,12 @@ export function GrayChatView({
       if (!message.groundingMetadata) {
         return [];
       }
-      const allSources = buildGroundingSourceCards(message.groundingMetadata);
-      const searchSources = allSources.filter((source) => Boolean(source.href));
-      return searchSources;
-    }
-    return [];
-  }, [messages]);
+	      const allSources = buildGroundingSourceCards(message.groundingMetadata, t);
+	      const searchSources = allSources.filter((source) => Boolean(source.href));
+	      return searchSources;
+	    }
+	    return [];
+	  }, [messages, t]);
   const locationRequestSummary = pendingLocationRequestMessage
     ? pendingLocationRequestMessage.length > 120
       ? `${pendingLocationRequestMessage.slice(0, 120)}…`
