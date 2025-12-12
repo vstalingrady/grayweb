@@ -106,7 +106,7 @@ sudo certbot --nginx -d gray.alignment.id
 cd /home/ubuntu/gray
 
 # Build and start containers
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+docker compose -f docker-compose.yml up -d --build
 
 # Check status
 docker ps

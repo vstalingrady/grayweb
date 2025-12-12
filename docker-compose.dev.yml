@@ -1,14 +1,12 @@
-# Staging/Dev overlay for running alongside production on the same server.
-# Usage (server): docker compose -p gray-dev -f docker-compose.yml -f docker-compose.dev.yml up -d
+# Dev overlay for running alongside production on the same server.
+# Manual usage (server): docker compose -p gray-dev -f docker-compose.yml -f docker-compose.dev.yml up -d --build
 
 services:
   frontend:
-    image: ghcr.io/${GITHUB_REPOSITORY:-vstalingrady/gray}/gray-frontend:dev
     ports:
       - "3001:3000"
 
   backend:
-    image: ghcr.io/${GITHUB_REPOSITORY:-vstalingrady/gray}/gray-backend:dev
     ports:
       - "8001:8000"
     environment:
@@ -18,7 +16,6 @@ services:
       - ./backend/media_uploads-dev:/app/media_uploads
 
   worker:
-    image: ghcr.io/${GITHUB_REPOSITORY:-vstalingrady/gray}/gray-backend:dev
     environment:
       - SQLITE_DB_PATH=/app/data/users-dev.db
     volumes:

@@ -154,15 +154,21 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 
 ## Deployment (Dev + Prod on one server)
 
-- `main` auto-deploys a staging stack on the same server using `docker-compose.dev.yml` (ports `3001/8001`, separate SQLite volume in `data-dev/`).
-- `prod` auto-deploys production using `docker-compose.prod.yml` (ports `3000/8000`, production volumes in `data/`).
-- Captcha (Turnstile) is automatically disabled on localhost and port `3001`.
-- Promote to production:
+- Production (ports `3000/8000`):
   ```bash
-  git checkout prod
-  git merge main
-  git push origin prod
+  cd /home/ubuntu/gray
+  git checkout prod   # or main, if you don't use a prod branch
+  git pull
+  docker compose -f docker-compose.yml up -d --build --remove-orphans
   ```
+- Optional staging/dev stack on the same server (ports `3001/8001`, separate SQLite in `data-dev/`):
+  ```bash
+  cd /home/ubuntu/gray
+  git checkout main
+  git pull
+  docker compose -p gray-dev -f docker-compose.yml -f docker-compose.dev.yml up -d --build --remove-orphans
+  ```
+- Captcha (Turnstile) is automatically disabled on localhost and port `3001`.
 
 ## Auth experience
 
