@@ -296,7 +296,6 @@
   flex-direction: column;
   gap: 0.5rem;
   align-items: flex-start;
-  margin-top: clamp(1.5rem, 3vw, 2.5rem);
 }
 
 .authTitle {
@@ -787,9 +786,9 @@
   .authContent {
     align-items: flex-start;
     overflow-y: auto;
-    background: #050505;
+    background: transparent;
     border-left: 1px solid rgba(255, 255, 255, 0.06);
     border-radius: 0 clamp(24px, 4vw, 36px) clamp(24px, 4vw, 36px) 0;
-    box-shadow: 0 40px 90px rgba(0, 0, 0, 0.6);
+    box-shadow: none;
   }
 }

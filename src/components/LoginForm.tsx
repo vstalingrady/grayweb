@@ -822,7 +822,7 @@ export default function LoginForm({
             </div>
           </ShaderBackground>
         </aside>
-        <section className={styles.authContent}>
+        <div className={styles.authPanel}>
           <Image
             src="/alignmentlogo.svg"
             alt={t("Alignment logo")}
@@ -831,160 +831,158 @@ export default function LoginForm({
             priority
             className={styles.authAlignmentLogo}
           />
-          <div className={styles.authPanel}>
-            <header className={styles.authHeading}>
-              <h1 className={styles.authTitle}>{heading}</h1>
-              <p className={styles.authSubtitle}>{subtitle}</p>
-            </header>
+          <header className={styles.authHeading}>
+            <h1 className={styles.authTitle}>{heading}</h1>
+            <p className={styles.authSubtitle}>{subtitle}</p>
+          </header>
 
-            <div className={styles.authOauth}>
-              {providers.map(({ id, label, icon: Icon }) => (
-                <button
-                  key={id}
-                  type="button"
-                  className={styles.authOauthButton}
-                  onClick={() => handleOAuth(id)}
+          <div className={styles.authOauth}>
+            {providers.map(({ id, label, icon: Icon }) => (
+              <button
+                key={id}
+                type="button"
+                className={styles.authOauthButton}
+                onClick={() => handleOAuth(id)}
+                disabled={loading}
+              >
+                <span className={styles.authOauthIcon}>
+                  <Icon size={18} />
+                </span>
+                {t("Continue with {provider}", { provider: label })}
+              </button>
+            ))}
+          </div>
+
+          <div className={styles.authDivider}>{t("or continue with email")}</div>
+
+          <form className={styles.authForm} onSubmit={handleEmailAuth}>
+            <div className={styles.authFields}>
+              <div className={styles.authField}>
+                <label className={styles.authFieldLabel} htmlFor="email">
+                  {t("Email")}
+                </label>
+                <input
+                  id="email"
+                  type="email"
+                  className={styles.authFieldInput}
+                  placeholder="you@example.com"
+                  autoComplete="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
                   disabled={loading}
-                >
-                  <span className={styles.authOauthIcon}>
-                    <Icon size={18} />
-                  </span>
-                  {t("Continue with {provider}", { provider: label })}
-                </button>
-              ))}
-            </div>
+                  required
+                />
+              </div>
 
-            <div className={styles.authDivider}>{t("or continue with email")}</div>
-
-            <form className={styles.authForm} onSubmit={handleEmailAuth}>
-              <div className={styles.authFields}>
-                <div className={styles.authField}>
-                  <label className={styles.authFieldLabel} htmlFor="email">
-                    {t("Email")}
-                  </label>
+              <div className={styles.authField}>
+                <label className={styles.authFieldLabel} htmlFor="password">
+                  {t("Password")}
+                </label>
+                <div className={styles.authFieldInputWrapper}>
                   <input
-                    id="email"
-                    type="email"
+                    id="password"
+                    type={showPassword ? "text" : "password"}
                     className={styles.authFieldInput}
-                    placeholder="you@example.com"
-                    autoComplete="email"
-                    value={email}
-                    onChange={(event) => setEmail(event.target.value)}
+                    placeholder="••••••••"
+                    autoComplete={
+                      isSignIn ? "current-password" : "new-password"
+                    }
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
                     disabled={loading}
                     required
                   />
-                </div>
-
-                <div className={styles.authField}>
-                  <label className={styles.authFieldLabel} htmlFor="password">
-                    {t("Password")}
-                  </label>
-                  <div className={styles.authFieldInputWrapper}>
-                    <input
-                      id="password"
-                      type={showPassword ? "text" : "password"}
-                      className={styles.authFieldInput}
-                      placeholder="••••••••"
-                      autoComplete={
-                        isSignIn ? "current-password" : "new-password"
-                      }
-                      value={password}
-                      onChange={(event) => setPassword(event.target.value)}
-                      disabled={loading}
-                      required
-                    />
-                    <button
-                      type="button"
-                      className={styles.authPasswordToggle}
-                      onClick={() => setShowPassword((value) => !value)}
-                      aria-pressed={showPassword}
-                      aria-label={
-                        showPassword ? t("Hide password") : t("Show password")
-                      }
-                      disabled={loading}
-                    >
-                      {showPassword ? t("Hide") : t("Show")}
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <div className={styles.authOptions}>
-                <label className={styles.authRemember}>
-                  <input
-                    type="checkbox"
-                    className={styles.authToggleInput}
-                    checked={remember}
-                    onChange={(event) => setRemember(event.target.checked)}
+                  <button
+                    type="button"
+                    className={styles.authPasswordToggle}
+                    onClick={() => setShowPassword((value) => !value)}
+                    aria-pressed={showPassword}
+                    aria-label={
+                      showPassword ? t("Hide password") : t("Show password")
+                    }
                     disabled={loading}
-                  />
-                  <span className={styles.authToggleTrack} aria-hidden>
-                    <span className={styles.authToggleThumb} />
-                  </span>
-                  <span className={styles.authRememberLabel}>{t("Remember me")}</span>
-                </label>
-                <button
-                  type="button"
-                  className={styles.authForgot}
-                  onClick={handleForgotPassword}
-                  disabled={loading}
-                >
-                  {t("Forgot password?")}
-                </button>
-              </div>
-
-              {turnstileSiteKey && (
-                <div style={{ marginBottom: "1rem" }}>
-                  <Turnstile
-                    ref={turnstileRef}
-                    siteKey={turnstileSiteKey}
-                    onSuccess={(token) => setCaptchaToken(token)}
-                    onExpire={() => setCaptchaToken(undefined)}
-                    onError={() => setCaptchaToken(undefined)}
-                    options={{ theme: "auto", appearance: "always" }}
-                  />
+                  >
+                    {showPassword ? t("Hide") : t("Show")}
+                  </button>
                 </div>
-              )}
+              </div>
+            </div>
 
-              {renderedMessage}
-
-              {pendingEmailConfirmation && message.type === "success" && (
-                <button
-                  type="button"
-                  className={styles.authResendVerification}
-                  onClick={handleResendVerification}
+            <div className={styles.authOptions}>
+              <label className={styles.authRemember}>
+                <input
+                  type="checkbox"
+                  className={styles.authToggleInput}
+                  checked={remember}
+                  onChange={(event) => setRemember(event.target.checked)}
                   disabled={loading}
-                >
-                  {t("Resend verification email")}
-                </button>
-              )}
-
-              <button
-                type="submit"
-                className={styles.authSubmit}
-                disabled={loading}
-              >
-                {loading ? (
-                  <LoaderCircle size={18} className={styles.authSpinner} />
-                ) : (
-                  submitLabel
-                )}
-              </button>
-            </form>
-
-            <div className={styles.authFooter}>
-              <span className={styles.authFooterPrompt}>{footerPrompt}</span>
+                />
+                <span className={styles.authToggleTrack} aria-hidden>
+                  <span className={styles.authToggleThumb} />
+                </span>
+                <span className={styles.authRememberLabel}>{t("Remember me")}</span>
+              </label>
               <button
                 type="button"
-                className={styles.authFooterLink}
-                onClick={handleModeToggle}
+                className={styles.authForgot}
+                onClick={handleForgotPassword}
                 disabled={loading}
               >
-                {footerAction}
+                {t("Forgot password?")}
               </button>
             </div>
+
+            {turnstileSiteKey && (
+              <div style={{ marginBottom: "1rem" }}>
+                <Turnstile
+                  ref={turnstileRef}
+                  siteKey={turnstileSiteKey}
+                  onSuccess={(token) => setCaptchaToken(token)}
+                  onExpire={() => setCaptchaToken(undefined)}
+                  onError={() => setCaptchaToken(undefined)}
+                  options={{ theme: "auto", appearance: "always" }}
+                />
+              </div>
+            )}
+
+            {renderedMessage}
+
+            {pendingEmailConfirmation && message.type === "success" && (
+              <button
+                type="button"
+                className={styles.authResendVerification}
+                onClick={handleResendVerification}
+                disabled={loading}
+              >
+                {t("Resend verification email")}
+              </button>
+            )}
+
+            <button
+              type="submit"
+              className={styles.authSubmit}
+              disabled={loading}
+            >
+              {loading ? (
+                <LoaderCircle size={18} className={styles.authSpinner} />
+              ) : (
+                submitLabel
+              )}
+            </button>
+          </form>
+
+          <div className={styles.authFooter}>
+            <span className={styles.authFooterPrompt}>{footerPrompt}</span>
+            <button
+              type="button"
+              className={styles.authFooterLink}
+              onClick={handleModeToggle}
+              disabled={loading}
+            >
+              {footerAction}
+            </button>
           </div>
-        </section>
+        </div>
       </div>
     </div>
   );
