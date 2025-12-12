@@ -3,6 +3,7 @@
 
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useUser } from "@/contexts/UserContext";
 import {
     Brain,
     CalendarClock,
@@ -103,6 +104,7 @@ const PIONEER_PRICING = {
 
 export function PricingPlansSection() {
     const router = useRouter();
+    const { user } = useUser();
     const [billingCycle, setBillingCycle] = useState<"monthly" | "annual">("monthly");
     const { price: voyagerPrice, cadence: voyagerCadence } = VOYAGER_PRICING[billingCycle];
     const { price: pioneerPrice, cadence: pioneerCadence } = PIONEER_PRICING[billingCycle];
@@ -110,7 +112,13 @@ export function PricingPlansSection() {
     const pioneerSavingsLabel = billingCycle === "annual" ? "Save Rp 747.000,-" : undefined;
 
     const handleUpgrade = (plan: "voyager" | "pioneer") => {
-        router.push(`/payment?plan=${plan}&cycle=${billingCycle}`);
+        const paymentUrl = `/payment?plan=${plan}&cycle=${billingCycle}`;
+        if (!user) {
+            // Redirect to login with return URL to complete purchase
+            router.push(`/login?returnTo=${encodeURIComponent(paymentUrl)}`);
+        } else {
+            router.push(paymentUrl);
+        }
     };
 
     return (

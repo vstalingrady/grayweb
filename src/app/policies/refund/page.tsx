@@ -33,10 +33,8 @@ export default function RefundPolicyPage() {
             <h2>Eligibility</h2>
             <BulletList
               items={[
-                "Refunds apply only to paid subscriptions purchased directly from alignment.id. Purchases made through third-party marketplaces must follow that provider’s rules.",
-                "Only the most recent billing cycle can be refunded. Historic invoices (older than 30 days) are not eligible.",
+                "Refunds apply to paid subscriptions purchased directly from alignment.id.",
                 "We require proof of purchase (the invoice ID or the email used at checkout).",
-                "Abuse of the Service, chargeback activity, or violations of the Terms of Service void refund eligibility.",
               ]}
             />
           </section>
@@ -45,11 +43,14 @@ export default function RefundPolicyPage() {
             <h2>Timeframes</h2>
             <BulletList
               items={[
-                "Monthly plans: request within 7 calendar days of the charge and with no more than reasonable use (for example, less than 200 AI messages).",
-                "Annual plans: request within 30 calendar days of the charge; we will pro-rate usage beyond the first month.",
-                "Add-ons such as workspace credit packs or custom integrations are non-refundable once provisioned.",
+                "Monthly plans: request within 14 calendar days of the charge for a full refund.",
+                "Annual plans: request within 14 calendar days of the charge for a full refund.",
               ]}
             />
+            <p>
+              Alignment uses Paddle as our payment processor. Our refund policy aligns with{" "}
+              <a href="https://www.paddle.com/legal/invoiced-consumer-terms-and-conditions">Paddle&apos;s Consumer Terms</a>.
+            </p>
           </section>
 
           <section>
