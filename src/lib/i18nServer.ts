@@ -3,9 +3,9 @@ import { DEFAULT_LOCALE, isSupportedLocale, translate, type Locale } from "@/lib
 
 const COOKIE_KEY = "gray_locale";
 
-export const getServerLocale = (): Locale => {
+export const getServerLocale = async (): Promise<Locale> => {
   try {
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
     const stored = cookieStore.get(COOKIE_KEY)?.value;
     return isSupportedLocale(stored) ? stored : DEFAULT_LOCALE;
   } catch {
@@ -13,8 +13,7 @@ export const getServerLocale = (): Locale => {
   }
 };
 
-export const tServer = (
+export const tServer = async (
   message: string,
   vars?: Record<string, string | number>
-): string => translate(message, getServerLocale(), vars);
-
+): Promise<string> => translate(message, await getServerLocale(), vars);
