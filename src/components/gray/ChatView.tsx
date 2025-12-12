@@ -1311,6 +1311,7 @@ const ThinkingBlock = ({
   thinkingStartTime?: number | null;
   isStreamingMessage?: boolean;
 }) => {
+  const { t } = useI18n();
   const [isExpanded, setIsExpanded] = useState(false);
   const [liveSeconds, setLiveSeconds] = useState(0);
 
@@ -1331,45 +1332,46 @@ const ThinkingBlock = ({
   }, [isActivelyThinking, thinkingStartTime]);
 
   // Format time display: "3.2 seconds" or "1:23.4" for longer durations
-  const formatTime = (seconds: number): string => {
-    if (seconds < 60) {
-      return `${seconds.toFixed(1)} second${seconds >= 2 || seconds < 1 ? "s" : ""}`;
-    }
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toFixed(1).padStart(4, "0")}`;
-  };
+	  const formatTime = (seconds: number): string => {
+	    if (seconds < 60) {
+	      const unitKey = seconds >= 2 || seconds < 1 ? "seconds" : "second";
+	      return `${seconds.toFixed(1)} ${t(unitKey)}`;
+	    }
+	    const mins = Math.floor(seconds / 60);
+	    const secs = seconds % 60;
+	    return `${mins}:${secs.toFixed(1).padStart(4, "0")}`;
+	  };
 
   const timeLabel = useMemo(() => {
-    // If actively thinking, show live timer
-    if (isActivelyThinking && thinkingStartTime) {
-      return `Thinking for ${formatTime(liveSeconds)}`;
-    }
-    // If we have a final duration, show it (even if still streaming content)
-    if (typeof reasoningSeconds === "number" && reasoningSeconds > 0) {
-      return `Thought for ${formatTime(reasoningSeconds)}`;
-    }
+	    // If actively thinking, show live timer
+	    if (isActivelyThinking && thinkingStartTime) {
+	      return t("Thinking for {time}", { time: formatTime(liveSeconds) });
+	    }
+	    // If we have a final duration, show it (even if still streaming content)
+	    if (typeof reasoningSeconds === "number" && reasoningSeconds > 0) {
+	      return t("Thought for {time}", { time: formatTime(reasoningSeconds) });
+	    }
 
-    // Only show "Thinking" if purely streaming and no reasoning time yet
-    if (isStreamingMessage) {
-      return "Thinking";
-    }
-    return null;
-  }, [isActivelyThinking, thinkingStartTime, liveSeconds, reasoningSeconds, isStreamingMessage]);
+	    // Only show "Thinking" if purely streaming and no reasoning time yet
+	    if (isStreamingMessage) {
+	      return t("Thinking");
+	    }
+	    return null;
+	  }, [isActivelyThinking, thinkingStartTime, liveSeconds, reasoningSeconds, isStreamingMessage, t]);
 
   return (
     <div className={styles.chatThinkingBlock} data-expanded={isExpanded ? "true" : "false"}>
       <button
         type="button"
-        className={styles.chatThinkingHeader}
-        onClick={() => setIsExpanded(!isExpanded)}
-        aria-expanded={isExpanded}
-        aria-label={isExpanded ? "Collapse reasoning" : "Expand reasoning"}
-      >
+	        className={styles.chatThinkingHeader}
+	        onClick={() => setIsExpanded(!isExpanded)}
+	        aria-expanded={isExpanded}
+	        aria-label={isExpanded ? t("Collapse reasoning") : t("Expand reasoning")}
+	      >
         <Brain size={14} className={styles.chatThinkingIcon} />
-        <span className={styles.chatThinkingLabel}>
-          {timeLabel || "Thinking"}
-        </span>
+	        <span className={styles.chatThinkingLabel}>
+	          {timeLabel || t("Thinking")}
+	        </span>
         <ChevronDown
           size={14}
           className={`${styles.chatThinkingChevron} ${isExpanded ? styles.chatThinkingChevronExpanded : ""}`}
@@ -1509,7 +1511,7 @@ const ChatMessagesList = memo(
             typeof message.createdAt === "number" && Number.isFinite(message.createdAt)
               ? new Date(message.createdAt).toISOString()
               : undefined;
-          const timestampLabel = formatMessageTimestamp(message.createdAt);
+	          const timestampLabel = formatMessageTimestamp(message.createdAt, t);
 
           if (shouldHideEmptyAssistantMessage) {
             return null;
@@ -1559,11 +1561,11 @@ const ChatMessagesList = memo(
                 <div className={styles.chatMessageAttachments}>
                   {message.attachments.map((attachment, index) => (
                     <div key={attachment.id || index} className={styles.chatMessageAttachment}>
-                      {attachment.mime_type?.startsWith("image/") ? (
-                        <img
-                          src={attachment.previewUrl || attachment.public_url}
-                          alt="Attachment"
-                        />
+	                      {attachment.mime_type?.startsWith("image/") ? (
+	                        <img
+	                          src={attachment.previewUrl || attachment.public_url}
+	                          alt={t("Attachment")}
+	                        />
                       ) : (
                         <div className={styles.chatMessageAttachmentFile}>
                           <span>{attachment.filename}</span>
@@ -1849,22 +1851,22 @@ const ChatMessagesList = memo(
                       </time>
                       {isAssistant && Array.isArray(message.variants) && message.variants.length > 1 ? (
                         <div className={styles.chatMessageVariantControls}>
-                          <button
-                            type="button"
-                            aria-label="Previous response"
-                            onClick={() => handleCycleAssistantVariant(message.id, "prev")}
-                          >
+	                          <button
+	                            type="button"
+	                            aria-label={t("Previous response")}
+	                            onClick={() => handleCycleAssistantVariant(message.id, "prev")}
+	                          >
                             <ChevronLeft size={14} />
                           </button>
                           <span className={styles.chatMessageVariantLabel}>
                             {(message.activeVariantIndex ?? message.variants.length - 1) + 1} /{" "}
                             {message.variants.length}
                           </span>
-                          <button
-                            type="button"
-                            aria-label="Next response"
-                            onClick={() => handleCycleAssistantVariant(message.id, "next")}
-                          >
+	                          <button
+	                            type="button"
+	                            aria-label={t("Next response")}
+	                            onClick={() => handleCycleAssistantVariant(message.id, "next")}
+	                          >
                             <ChevronRight size={14} />
                           </button>
                         </div>
@@ -1874,9 +1876,9 @@ const ChatMessagesList = memo(
                       <div className={styles.chatActionIconRow}>
                         {isMetadataAvailable ? (
                           <div className={styles.chatMetadataControl}>
-                            <button type="button" aria-label="Response details" tabIndex={0}>
-                              <SignalHigh size={15} />
-                            </button>
+	                            <button type="button" aria-label={t("Response details")} tabIndex={0}>
+	                              <SignalHigh size={15} />
+	                            </button>
                             <div className={styles.chatMetadataPopover} role="tooltip" aria-hidden="true">
                               {metadataRows.map((row) => (
                                 <div key={row.label}>
@@ -1887,48 +1889,48 @@ const ChatMessagesList = memo(
                             </div>
                           </div>
                         ) : null}
-                        <button
-                          type="button"
-                          aria-label="Copy message"
-                          onClick={() => handleCopyMessage(message.id, isAssistant ? fullText : rawContent)}
-                          disabled={!(isAssistant ? fullText.trim() : rawContent.trim())}
-                        >
+	                        <button
+	                          type="button"
+	                          aria-label={t("Copy message")}
+	                          onClick={() => handleCopyMessage(message.id, isAssistant ? fullText : rawContent)}
+	                          disabled={!(isAssistant ? fullText.trim() : rawContent.trim())}
+	                        >
                           {copiedMessageId === message.id ? <CheckCircle2 size={15} /> : <Copy size={15} />}
                         </button>
                         {isAssistant && (
-                          <button
-                            type="button"
-                            aria-label="Regenerate response"
-                            onClick={() => handleRegenerate(message.id)}
-                            disabled={isRegenerating || isResponding}
-                          >
+	                          <button
+	                            type="button"
+	                            aria-label={t("Regenerate response")}
+	                            onClick={() => handleRegenerate(message.id)}
+	                            disabled={isRegenerating || isResponding}
+	                          >
                             <RefreshCw size={15} className={isRegenerating ? styles.spin : undefined} />
                           </button>
                         )}
                         {!isAssistant && (
-                          <button
-                            type="button"
-                            aria-label="Edit message"
-                            onClick={() => startEditing(message.id, rawContent)}
-                          >
+	                          <button
+	                            type="button"
+	                            aria-label={t("Edit message")}
+	                            onClick={() => startEditing(message.id, rawContent)}
+	                          >
                             <Pencil size={15} />
                           </button>
                         )}
                         {!isAssistant && (
-                          <button
-                            type="button"
-                            aria-label="Retry message"
-                            onClick={() => handleRetryUserMessage(message.id)}
-                            disabled={!rawContent.trim()}
-                          >
+	                          <button
+	                            type="button"
+	                            aria-label={t("Retry message")}
+	                            onClick={() => handleRetryUserMessage(message.id)}
+	                            disabled={!rawContent.trim()}
+	                          >
                             <RefreshCw size={15} />
                           </button>
                         )}
-                        <button
-                          type="button"
-                          aria-label="Delete message"
-                          onClick={() => handleDeleteMessage(message.id)}
-                        >
+	                        <button
+	                          type="button"
+	                          aria-label={t("Delete message")}
+	                          onClick={() => handleDeleteMessage(message.id)}
+	                        >
                           <Trash2 size={15} />
                         </button>
                       </div>
@@ -1983,7 +1985,10 @@ const formatBackendTimingLabel = (
   return totalLabel;
 };
 
-const formatMessageTimestamp = (timestamp: number | undefined): string => {
+const formatMessageTimestamp = (
+  timestamp: number | undefined,
+  t: (message: string, vars?: Record<string, string | number>) => string
+): string => {
   if (typeof timestamp !== "number" || !Number.isFinite(timestamp)) {
     return "";
   }
@@ -2000,7 +2005,7 @@ const formatMessageTimestamp = (timestamp: number | undefined): string => {
     return timeLabel;
   }
   if (date >= startOfYesterday) {
-    return `Yesterday · ${timeLabel}`;
+    return `${t("Yesterday")} · ${timeLabel}`;
   }
   const dateLabel = date.toLocaleDateString(undefined, {
     month: "short",
@@ -2248,6 +2253,7 @@ export function GrayChatView({
   onContextUsageChange,
   hideThinkingIndicator = false,
 }: GrayChatViewProps) {
+  const { t } = useI18n();
   const {
     sessions,
     getSession,
@@ -3302,11 +3308,11 @@ export function GrayChatView({
     if (!targetSession && sessionId) {
       const nowTs = Date.now();
       const normalizedSessionConversationId = normalizeConversationIdValue(sessionId);
-      targetSession = ensureSession(sessionId, () => ({
-        id: sessionId,
-        title: "New Chat",
-        titleMode: "auto",
-        createdAt: nowTs,
+	      targetSession = ensureSession(sessionId, () => ({
+	        id: sessionId,
+	        title: t("New Chat"),
+	        titleMode: "auto",
+	        createdAt: nowTs,
         updatedAt: nowTs,
         messages: [],
         isResponding: false,
@@ -3762,8 +3768,8 @@ export function GrayChatView({
     return (
       <div className={styles.chatViewEmpty}>
         <div>
-          <h2>We could not find that chat.</h2>
-          <p>Select another conversation from the sidebar or start a new one.</p>
+          <h2>{t("We could not find that chat.")}</h2>
+          <p>{t("Select another conversation from the sidebar or start a new one.")}</p>
         </div>
       </div>
     );
@@ -3838,7 +3844,8 @@ export function GrayChatView({
         {pendingLocationRequestMessage ? (
           <div className={styles.chatLocationRequestBanner}>
             <p>
-              <strong>Gray needs your location</strong> to answer “{locationRequestSummary}”.
+              <strong>{t("Gray needs your location")}</strong>{" "}
+              {t("to answer “{summary}”.", { summary: locationRequestSummary })}
             </p>
             <div className={styles.chatLocationRequestButtons}>
               <button
@@ -3847,7 +3854,7 @@ export function GrayChatView({
                 onClick={requestLocationShare}
                 disabled={isRequestingLocation}
               >
-                {isRequestingLocation ? "Sharing location…" : "Share location"}
+                {isRequestingLocation ? t("Sharing location…") : t("Share location")}
               </button>
               <button
                 type="button"
@@ -3856,7 +3863,7 @@ export function GrayChatView({
                 onClick={skipLocationShare}
                 disabled={isRequestingLocation}
               >
-                Continue without location
+                {t("Continue without location")}
               </button>
             </div>
           </div>

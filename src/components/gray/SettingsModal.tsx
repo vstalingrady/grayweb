@@ -174,8 +174,9 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
               <span>{t(label)}</span>
               <button
                 type="button"
-                className={`${styles.settingsControl} ${disabled ? styles.settingsControlDisabled : ""
-                  }`}
+                className={`${styles.settingsControl} ${
+                  disabled ? styles.settingsControlDisabled : ""
+                }`}
                 aria-disabled={disabled ? "true" : "false"}
                 disabled={disabled}
               >
@@ -195,7 +196,6 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
               </button>
             </div>
           ))}
-
         </div>
 
         <button

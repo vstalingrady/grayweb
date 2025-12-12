@@ -152,6 +152,18 @@ npm run dev:full
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the application.
 
+## Deployment (Dev + Prod on one server)
+
+- `main` auto-deploys a staging stack on the same server using `docker-compose.dev.yml` (ports `3001/8001`, separate SQLite volume in `data-dev/`).
+- `prod` auto-deploys production using `docker-compose.prod.yml` (ports `3000/8000`, production volumes in `data/`).
+- Captcha (Turnstile) is automatically disabled on localhost and port `3001`.
+- Promote to production:
+  ```bash
+  git checkout prod
+  git merge main
+  git push origin prod
+  ```
+
 ## Auth experience
 
 - OAuth buttons call `supabase.auth.signInWithOAuth` for Google and Discord.

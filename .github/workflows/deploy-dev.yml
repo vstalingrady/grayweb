@@ -1,9 +1,9 @@
-name: Deploy to Production
+name: Deploy to Staging (Dev)
 
 on:
   push:
-    branches: [prod]
-  workflow_dispatch:  # Allow manual trigger
+    branches: [main]
+  workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
@@ -31,13 +31,13 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build and push Frontend
+      - name: Build and push Frontend (dev)
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./Dockerfile.frontend
           push: true
-          tags: ${{ env.FRONTEND_IMAGE }}:latest,${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
+          tags: ${{ env.FRONTEND_IMAGE }}:dev,${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: |
@@ -46,13 +46,13 @@ jobs:
             NEXT_PUBLIC_API_URL=${{ secrets.NEXT_PUBLIC_API_URL }}
             NEXT_PUBLIC_TURNSTILE_SITE_KEY=${{ secrets.NEXT_PUBLIC_TURNSTILE_SITE_KEY }}
 
-      - name: Build and push Backend
+      - name: Build and push Backend (dev)
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./Dockerfile.backend
           push: true
-          tags: ${{ env.BACKEND_IMAGE }}:latest,${{ env.BACKEND_IMAGE }}:${{ github.sha }}
+          tags: ${{ env.BACKEND_IMAGE }}:dev,${{ env.BACKEND_IMAGE }}:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -61,7 +61,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Deploy to server via SSH
+      - name: Deploy staging stack via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SERVER_HOST }}
@@ -69,17 +69,13 @@ jobs:
           key: ${{ secrets.SERVER_SSH_KEY }}
           script: |
             cd /home/ubuntu/gray
-            
-            # Login to GHCR
+
             echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-            
-            # Pull latest images
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml pull
-            
-            # Restart services with zero downtime
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --remove-orphans
-            
-            # Clean up old images
+
+            docker compose -p gray-dev -f docker-compose.yml -f docker-compose.dev.yml pull
+            docker compose -p gray-dev -f docker-compose.yml -f docker-compose.dev.yml up -d --remove-orphans
+
             docker image prune -f
-            
-            echo "✅ Deploy complete!"
+
+            echo "✅ Dev deploy complete!"
+

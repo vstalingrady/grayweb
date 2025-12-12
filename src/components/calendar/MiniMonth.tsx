@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 
 import styles from "./GrayDashboardCalendar.module.css";
+import { useI18n } from "@/contexts/I18nContext";
 
 type MiniMonthProps = {
   referenceDate: Date;
@@ -30,6 +31,7 @@ const isSameDay = (a: Date, b: Date) =>
   a.getDate() === b.getDate();
 
 export function MiniMonth({ referenceDate, selectedDate, onSelectDate }: MiniMonthProps) {
+  const { t } = useI18n();
   const grid = useMemo(() => {
     const firstVisible = startOfGrid(referenceDate);
     return Array.from({ length: 6 }, (_, weekIndex) =>
@@ -52,7 +54,7 @@ export function MiniMonth({ referenceDate, selectedDate, onSelectDate }: MiniMon
     <div className={styles.miniMonth}>
       <div className={styles.miniMonthWeekdays}>
         {WEEKDAY_LABELS.map((weekday) => (
-          <span key={weekday}>{weekday[0]}</span>
+          <span key={weekday}>{t(weekday).charAt(0)}</span>
         ))}
       </div>
       <div className={styles.miniMonthGrid}>
@@ -83,4 +85,3 @@ export function MiniMonth({ referenceDate, selectedDate, onSelectDate }: MiniMon
     </div>
   );
 }
-

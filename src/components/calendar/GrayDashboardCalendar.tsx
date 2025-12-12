@@ -26,6 +26,7 @@ import {
 } from "./types";
 import { createSeedCalendars, createSeedEvents } from "./calendarSeed";
 import type { DashboardHeaderProps } from "@/components/gray/DashboardHeader";
+import { useI18n } from "@/contexts/I18nContext";
 
 const HOURS = Array.from({ length: 24 }, (_, index) => index);
 const DEFAULT_HOUR_HEIGHT = 64;
@@ -150,6 +151,7 @@ export function GrayDashboardCalendar({
   onSelectedDateChange,
   onEventDelete,
 }: GrayDashboardCalendarProps) {
+  const { t } = useI18n();
   const hourHeight = hourHeightProp ?? DEFAULT_HOUR_HEIGHT;
   const [viewMode, setViewMode] = useState<CalendarViewMode>(viewModeLocked ?? "week");
   const initial = initialDate ? new Date(initialDate) : new Date();
@@ -396,7 +398,7 @@ export function GrayDashboardCalendar({
     updateViewMode(event.target.value as CalendarViewMode);
   };
 
-  const rangeNavigationLabel = viewMode === "week" ? "week" : "day";
+  const rangeNavigationLabel = viewMode === "week" ? t("Week") : t("Day");
   const shouldShowDashboardToggle = typeof onSelectDashboardTab === "function";
 
   useEffect(() => {
@@ -979,7 +981,7 @@ export function GrayDashboardCalendar({
   const headerProps: DashboardHeaderProps = {
     activeTab: dashboardTab ?? "calendar",
     onSelectTab: (tab) => onSelectDashboardTab?.(tab),
-    label: showSurfaceLabel ? "Calendar" : undefined,
+    label: showSurfaceLabel ? t("Calendar") : undefined,
     title: monthLabel,
     rangeLabel: showHeaderDates ? rangeLabel : undefined,
     onPrevMonth: () => handleMonthNavigate(-1),
@@ -990,8 +992,8 @@ export function GrayDashboardCalendar({
     viewMode,
     onViewModeChange: showViewSelect ? updateViewMode : undefined,
     viewModeOptions: [
-      { value: "week", label: "Week" },
-      { value: "day", label: "Day" },
+      { value: "week", label: t("Week") },
+      { value: "day", label: t("Day") },
     ],
     rangeNavigationLabel,
   };
@@ -1006,7 +1008,7 @@ export function GrayDashboardCalendar({
           aria-pressed={dashboardTab === "pulse"}
           onClick={() => onSelectDashboardTab?.("pulse")}
         >
-          Pulse
+          {t("Pulse")}
         </button>
         <button
           type="button"
@@ -1015,7 +1017,7 @@ export function GrayDashboardCalendar({
           aria-pressed={dashboardTab === "calendar"}
           onClick={() => onSelectDashboardTab?.("calendar")}
         >
-          Calendar
+          {t("Calendar")}
         </button>
       </div>
     </div>
@@ -1031,7 +1033,7 @@ export function GrayDashboardCalendar({
             {showSurfaceHeading && (
               <>
                 {showSurfaceLabel && (
-                  <span className={styles.calendarSurfaceLabel}>Calendar</span>
+                  <span className={styles.calendarSurfaceLabel}>{t("Calendar")}</span>
                 )}
                 <h2 className={styles.calendarSurfaceTitle}>{monthLabel}</h2>
                 {showHeaderDates && (
@@ -1048,14 +1050,14 @@ export function GrayDashboardCalendar({
                     <div className={styles.calendarSurfaceNavArrows}>
                       <button
                         type="button"
-                        aria-label="Previous month"
+                        aria-label={t("Previous month")}
                         onClick={() => handleMonthNavigate(-1)}
                       >
                         ‹
                       </button>
                       <button
                         type="button"
-                        aria-label="Next month"
+                        aria-label={t("Next month")}
                         onClick={() => handleMonthNavigate(1)}
                       >
                         ›
@@ -1064,14 +1066,14 @@ export function GrayDashboardCalendar({
                     <div className={styles.calendarSurfaceNavArrows}>
                       <button
                         type="button"
-                        aria-label={`Previous ${rangeNavigationLabel}`}
+                        aria-label={t("Previous {range}", { range: rangeNavigationLabel })}
                         onClick={() => handleNavigateRange(-1)}
                       >
                         ‹
                       </button>
                       <button
                         type="button"
-                        aria-label={`Next ${rangeNavigationLabel}`}
+                        aria-label={t("Next {range}", { range: rangeNavigationLabel })}
                         onClick={() => handleNavigateRange(1)}
                       >
                         ›
@@ -1085,7 +1087,7 @@ export function GrayDashboardCalendar({
                     className={styles.calendarSurfaceButton}
                     onClick={handleGoToday}
                   >
-                    Today
+                    {t("Today")}
                   </button>
                 )}
                 {showViewSelect && (
@@ -1094,8 +1096,8 @@ export function GrayDashboardCalendar({
                     value={viewMode}
                     onChange={handleViewModeChange}
                   >
-                    <option value="week">Week</option>
-                    <option value="day">Day</option>
+                    <option value="week">{t("Week")}</option>
+                    <option value="day">{t("Day")}</option>
                   </select>
                 )}
               </div>

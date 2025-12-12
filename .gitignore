@@ -45,6 +45,8 @@ venv/
 .env
 .env.production
 backend/logs/
+# Staging/dev media uploads
+backend/media_uploads-dev/
 # Local API client caches
 discovery_cache/
 .config/
@@ -52,6 +54,7 @@ discovery_cache/
 
 # Docker data directories
 /data/
+/data-dev/
 /redis_data/
 .ssh_deploy_key
 .ssh_deploy_key.pub

@@ -19,6 +19,7 @@ import {
   CalendarEventDisplayHint,
 } from "./types";
 import { Plus, X } from "lucide-react";
+import { useI18n } from "@/contexts/I18nContext";
 
 export type EventComposerPayload = {
   id?: string;
@@ -144,6 +145,7 @@ export function EventComposer({
   onDelete,
   anchorRect = null,
 }: EventComposerProps) {
+  const { t } = useI18n();
   const calendarFallbackId = useMemo(
     () => calendars[0]?.id ?? "default",
     [calendars]
@@ -151,6 +153,7 @@ export function EventComposer({
 
   const [state, dispatch] = useReducer(composerReducer, {
     ...DEFAULT_STATE,
+    title: t("New event"),
     calendarId: calendarFallbackId,
   });
   const customColorInputRef = useRef<HTMLInputElement | null>(null);
@@ -175,6 +178,7 @@ export function EventComposer({
         type: "reset",
         payload: {
           ...DEFAULT_STATE,
+          title: t("New event"),
           calendarId: calendarFallbackId,
           startTime: formatTimeInput(initialRange.start),
           endTime: formatTimeInput(initialRange.end),
@@ -188,11 +192,12 @@ export function EventComposer({
       type: "reset",
       payload: {
         ...DEFAULT_STATE,
+        title: t("New event"),
         calendarId: calendarFallbackId,
         details: "",
       },
     });
-  }, [activeEvent, calendarFallbackId, initialRange, isOpen]);
+  }, [activeEvent, calendarFallbackId, initialRange, isOpen, t]);
 
   useLayoutEffect(() => {
     if (typeof window === "undefined") {
@@ -281,7 +286,7 @@ export function EventComposer({
 
     onSubmit({
       id: activeEvent?.id,
-      title: state.title.trim() || "Untitled",
+      title: state.title.trim() || t("Untitled"),
       start,
       end: normalizedEnd,
       color: state.color,
@@ -375,14 +380,14 @@ export function EventComposer({
           <div>
             <h2 className={styles.composerHeaderTitle}>
               {activeEvent
-                ? `Edit ${ENTRY_TYPE_LABELS[state.entryType].toLowerCase()}`
-                : `Create ${ENTRY_TYPE_LABELS[state.entryType].toLowerCase()}`}
+                ? t("Edit {type}", { type: t(ENTRY_TYPE_LABELS[state.entryType]).toLowerCase() })
+                : t("Create {type}", { type: t(ENTRY_TYPE_LABELS[state.entryType]).toLowerCase() })}
             </h2>
           </div>
           <button
             type="button"
             onClick={onRequestClose}
-            aria-label="Close dialog"
+            aria-label={t("Close dialog")}
             className={styles.composerCloseButton}
           >
             <X size={18} />
@@ -392,20 +397,20 @@ export function EventComposer({
         <form ref={formRef} onSubmit={handleSubmit} className={styles.composerForm}>
 
           <label className={styles.composerTitleRow}>
-            <span className={styles.composerTitleLabel}>Title</span>
+            <span className={styles.composerTitleLabel}>{t("Title")}</span>
             <input
               type="text"
               value={state.title}
               onChange={(event) =>
                 dispatch({ type: "update", payload: { title: event.target.value } })
               }
-              placeholder="Add title"
+              placeholder={t("Add title")}
               className={styles.composerTitleInput}
             />
           </label>
 
           <label className={styles.composerField}>
-            <span>Type</span>
+            <span>{t("Type")}</span>
             <div className={styles.composerTypeSelectShell}>
               <select
                 className={styles.composerTypeSelect}
@@ -416,7 +421,7 @@ export function EventComposer({
               >
                 {ENTRY_TYPES.map((type) => (
                   <option key={type} value={type}>
-                    {ENTRY_TYPE_LABELS[type]}
+                    {t(ENTRY_TYPE_LABELS[type])}
                   </option>
                 ))}
               </select>
@@ -426,7 +431,7 @@ export function EventComposer({
           {!isReminder ? (
             <div className={styles.composerDualField}>
               <label className={styles.composerField}>
-                <span>Start</span>
+                <span>{t("Start")}</span>
                 <div className={styles.composerInputShell}>
                   <input
                     type="time"
@@ -440,7 +445,7 @@ export function EventComposer({
                 </div>
               </label>
               <label className={styles.composerField}>
-                <span>End</span>
+                <span>{t("End")}</span>
                 <div className={styles.composerInputShell}>
                   <input
                     type="time"
@@ -456,7 +461,7 @@ export function EventComposer({
             </div>
           ) : (
             <label className={styles.composerField}>
-              <span>Reminder time</span>
+              <span>{t("Reminder time")}</span>
               <div className={styles.composerInputShell}>
                 <input
                   type="time"
@@ -472,19 +477,19 @@ export function EventComposer({
           )}
 
           <label className={styles.composerField}>
-            <span>Details</span>
+            <span>{t("Details")}</span>
             <textarea
               value={state.details}
               onChange={(event) =>
                 dispatch({ type: "update", payload: { details: event.target.value } })
               }
-              placeholder="Add context, agenda, or notes"
+              placeholder={t("Add context, agenda, or notes")}
               rows={3}
             />
           </label>
 
           <div className={styles.composerField}>
-            <span>Color</span>
+            <span>{t("Color")}</span>
             <div className={styles.composerColors}>
               {COLOR_SWATCHES.map((swatch) => (
                 <button
@@ -494,7 +499,7 @@ export function EventComposer({
                   style={{ backgroundColor: swatch }}
                   data-active={state.color === swatch ? "true" : "false"}
                   onClick={() => handleSelectColor(swatch)}
-                  aria-label={`Select ${swatch} color`}
+                  aria-label={t("Select {color} color", { color: swatch })}
                 />
               ))}
               <button
@@ -504,7 +509,7 @@ export function EventComposer({
                   COLOR_SWATCHES.includes(state.color as (typeof COLOR_SWATCHES)[number]) ? "false" : "true"
                 }
                 onClick={handlePickCustomColor}
-                aria-label="Pick custom color"
+                aria-label={t("Pick custom color")}
               >
                 <Plus size={18} strokeWidth={2.5} aria-hidden="true" />
               </button>
@@ -522,10 +527,10 @@ export function EventComposer({
           <footer className={styles.composerFooter}>
             {activeEvent && onDelete ? (
               <button type="button" className={styles.composerDeleteButton} onClick={handleDelete}>
-                Delete
+                {t("Delete")}
               </button>
             ) : null}
-            <button type="submit">{activeEvent ? "Save changes" : "Add event"}</button>
+            <button type="submit">{activeEvent ? t("Save changes") : t("Add event")}</button>
           </footer>
         </form>
       </div>

@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { FormEvent, useEffect, useState, useRef } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { LoaderCircle } from "lucide-react";
 import { FaDiscord, FaGoogle } from "react-icons/fa6";
 import { Turnstile, type TurnstileInstance } from "@marsidev/react-turnstile";
@@ -49,10 +49,6 @@ const envRedirect = process.env.NEXT_PUBLIC_AUTH_REDIRECT?.trim();
 const envSiteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim();
 const FALLBACK_TURNSTILE_SITE_KEY = "0x4AAAAAACDfOE8EWig4fsrM";
 const envTurnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim();
-const turnstileSiteKey =
-  envTurnstileSiteKey && envTurnstileSiteKey.length > 0
-    ? envTurnstileSiteKey
-    : FALLBACK_TURNSTILE_SITE_KEY;
 const CALLBACK_PATH = "/callback";
 const SUPABASE_STORAGE_KEYS = getSupabaseAuthStorageKeys();
 const MIN_PASSWORD_LENGTH = 8;
@@ -256,6 +252,22 @@ export default function LoginForm({
 }: LoginFormProps) {
   const { t } = useI18n();
   const router = useRouter();
+  const shouldEnableCaptcha = useMemo(() => {
+    if (typeof window === "undefined") {
+      return true;
+    }
+    const { hostname, port } = window.location;
+    if (isLocalHostname(hostname) || port === "3001") {
+      return false;
+    }
+    return true;
+  }, []);
+  const turnstileSiteKey =
+    shouldEnableCaptcha
+      ? envTurnstileSiteKey && envTurnstileSiteKey.length > 0
+        ? envTurnstileSiteKey
+        : FALLBACK_TURNSTILE_SITE_KEY
+      : undefined;
   const pathname = usePathname();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

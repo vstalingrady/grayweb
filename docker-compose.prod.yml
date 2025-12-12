@@ -3,13 +3,13 @@
 
 services:
   frontend:
-    image: ghcr.io/${GITHUB_REPOSITORY}/gray-frontend:latest
+    image: ghcr.io/${GITHUB_REPOSITORY:-vstalingrady/gray}/gray-frontend:latest
     build:
       context: .
       dockerfile: Dockerfile.frontend
 
   backend:
-    image: ghcr.io/${GITHUB_REPOSITORY}/gray-backend:latest
+    image: ghcr.io/${GITHUB_REPOSITORY:-vstalingrady/gray}/gray-backend:latest
     build:
       context: .
       dockerfile: Dockerfile.backend
