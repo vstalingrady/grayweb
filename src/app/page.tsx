@@ -4,6 +4,7 @@ import GrayPageClient from "@/app/gray/GrayPageClient";
 import { hostFromHeaders, isGrayWorkspaceHost } from "@/lib/grayRouting";
 import { resolveTryGrayUrl } from "@/lib/grayCta";
 import MarketingLanding from "./components/MarketingLanding";
+import MarketingStyles from "./components/MarketingStyles";
 
 export default async function HomePage() {
   const requestHeaders = await headers();
@@ -27,5 +28,10 @@ export default async function HomePage() {
     );
   }
 
-  return <MarketingLanding tryGrayUrl={tryGrayUrl} />;
+  return (
+    <>
+      <MarketingStyles />
+      <MarketingLanding tryGrayUrl={tryGrayUrl} />
+    </>
+  );
 }

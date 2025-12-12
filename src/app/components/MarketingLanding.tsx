@@ -5,7 +5,6 @@ import Image from "next/image";
 import Navigation from "./Navigation";
 import HeroSection from "./HeroSection";
 import FooterBackground from "./FooterBackground";
-import MarketingStyles from "./MarketingStyles";
 import { useI18n } from "@/contexts/I18nContext";
 
 type MarketingLandingProps = {
@@ -26,7 +25,6 @@ export default function MarketingLanding({ tryGrayUrl }: MarketingLandingProps) 
     const toggleLanguage = () => setLocale(locale === "en" ? "id" : "en");
     return (
         <>
-            <MarketingStyles />
             <div className="page-root">
                 <Navigation />
                 <HeroSection />
