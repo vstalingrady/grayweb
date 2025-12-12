@@ -58,3 +58,8 @@ discovery_cache/
 /redis_data/
 .ssh_deploy_key
 .ssh_deploy_key.pub
+
+# Build artifacts
+backups/
+.npm-cache/
+*.tgz

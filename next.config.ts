@@ -47,7 +47,7 @@ const nextConfig: NextConfig = {
   experimental: {
     // Keep optimizePackageImports conservative; three.js/@react-three/fiber can
     // break when the optimizer rewrites their entrypoints.
-    optimizePackageImports: ['react-icons', 'recharts', 'framer-motion'],
+    optimizePackageImports: ['react-icons', 'recharts'],
   },
 
   // Production optimizations
