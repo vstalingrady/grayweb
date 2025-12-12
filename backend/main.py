@@ -1940,17 +1940,32 @@ async def _insert_general_conversation_message(
 
 
 async def _replace_general_conversation_history(user_id: int, history: List[Dict[str, Any]]) -> None:
+    """Replace general chat history atomically with safeguards against data loss.
+    
+    SAFETY: This function now:
+    1. Rejects empty payloads to prevent accidental data wipe
+    2. Uses a transaction so if insert fails, the delete is rolled back
+    """
+    # SAFEGUARD 1: Reject empty payloads to prevent accidental data loss
+    if not history:
+        app_logger.warning(
+            f"Refusing to replace general history with empty payload for user {user_id}",
+            extra={"event_type": "general_history_replace_rejected_empty", "user_id": user_id}
+        )
+        return
+    
     app_logger.info(f"Replacing general history for user {user_id}", extra={"event_type": "general_history_replace_start", "history_length": len(history)})
     user_data_id = await _ensure_user_data_record(user_id)
 
-    # Replace in SQLite
+    # SAFEGUARD 2: Use transaction for atomicity - if insert fails, delete is rolled back
     try:
-        # Delete existing
-        await database.execute(
-            general_chat_messages.delete().where(general_chat_messages.c.user_id == user_id)
-        )
-        # Insert new
-        if history:
+        async with database.transaction():
+            # Delete existing (will be rolled back if insert fails)
+            await database.execute(
+                general_chat_messages.delete().where(general_chat_messages.c.user_id == user_id)
+            )
+            
+            # Insert new messages
             effective_user_data_id = user_data_id if user_data_id is not None else user_id
             values_list = []
             for entry in history:
@@ -1971,9 +1986,15 @@ async def _replace_general_conversation_history(user_id: int, history: List[Dict
                 for i in range(0, len(values_list), chunk_size):
                     chunk = values_list[i:i + chunk_size]
                     await database.execute_many(query, chunk)
+                    
+        app_logger.info(
+            f"Successfully replaced general history for user {user_id}",
+            extra={"event_type": "general_history_replace_success", "message_count": len(history)}
+        )
     except Exception as error:
+        # Transaction will auto-rollback on exception, preserving original data
         app_logger.error(
-            "Error replacing general conversation history (SQLite)",
+            "Error replacing general conversation history (SQLite) - transaction rolled back, data preserved",
             exc_info=error,
             extra={
                 "event_type": "sqlite_history_replace_error",
@@ -1981,8 +2002,9 @@ async def _replace_general_conversation_history(user_id: int, history: List[Dict
                 "history_length": len(history) if history else 0,
             },
         )
+        raise  # Re-raise so caller knows the operation failed
 
-    # 3. Invalidate Redis cache for General conversation
+    # Invalidate Redis cache for General conversation
     try:
         from chat_cache import invalidate_conversation_cache
         import asyncio
