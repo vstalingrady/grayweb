@@ -573,6 +573,14 @@ if __name__ == "__main__":
         f"🚀 Server starting on http://localhost:{backend_port} (startup: {total_startup_time:.0f}ms)"
     )
 
+    # Enable hot-reload only for dev stacks by default.
+    # We treat port 8000 as "prod" (no reload/watchfiles), and other ports as dev.
+    reload_env = os.getenv("BACKEND_RELOAD")
+    if reload_env is None:
+        enable_reload = backend_port != 8000
+    else:
+        enable_reload = reload_env.strip().lower() in {"1", "true", "yes", "on"}
+
     # Start the FastAPI server
     uvicorn_log_level = logging.getLevelName(LOG.getEffectiveLevel()).lower()
 
@@ -580,7 +588,7 @@ if __name__ == "__main__":
         "backend.main:app",
         host=backend_host,
         port=backend_port,
-        reload=True,
+        reload=enable_reload,
         reload_excludes=[
             "*.db",
             "*.db-*",
