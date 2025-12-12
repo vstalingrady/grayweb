@@ -53,13 +53,6 @@ const formatContextLabel = (usage?: ContextUsageSummary | null) => {
 
 const DEFAULT_CONTEXT_LIMIT = 1_048_576;
 
-const TRAIT_PRESETS = [
-  { id: "openness", label: "Openness", value: 5 },
-  { id: "conscientiousness", label: "Conscientiousness", value: 2.5 },
-  { id: "extraversion", label: "Extraversion", value: 3 },
-  { id: "agreeableness", label: "Agreeableness", value: 3 },
-  { id: "neuroticism", label: "Neuroticism", value: 3 },
-] as const;
 
 export type WorkspaceBackgroundOption = {
   id: string;
@@ -139,8 +132,6 @@ export function PersonalizationPanel({
 }: PersonalizationPanelProps) {
   const { t } = useI18n();
   const { webSearchEnabled, setWebSearchEnabled } = useChatStore();
-  const primaryQuest = t("Ship the legendary operator cockpit.");
-  const blockages = t("Unclear swimlanes between motion + ops.");
 
   // Derived context usage display metadata from backend payload only.
   const contextProviderLabel = formatContextLabel(contextUsage);
@@ -166,27 +157,27 @@ export function PersonalizationPanel({
     ? hasFiniteLimit
       ? t("{count} total tokens", { count: formatNumber(contextLimit) })
       : t("Unlimited context (visualized against {count} tokens)", {
-          count: formatNumber(DEFAULT_CONTEXT_LIMIT),
-        })
+        count: formatNumber(DEFAULT_CONTEXT_LIMIT),
+      })
     : "";
   const contextFooterLabel = hasFiniteLimit
     ? t("{count} tokens left", { count: formatNumber(contextTokensRemaining) })
     : t("No cap active");
   const contextMeterValueText = hasFiniteLimit
     ? t("{used} of {limit} tokens used", {
-        used: formatNumber(contextTokensUsed),
-        limit: formatNumber(contextLimit),
-      })
+      used: formatNumber(contextTokensUsed),
+      limit: formatNumber(contextLimit),
+    })
     : t("{used} tokens used while limit is unlimited", {
-        used: formatNumber(contextTokensUsed),
-      });
+      used: formatNumber(contextTokensUsed),
+    });
   const contextMeterDescription = hasContextUsage ? contextMeterValueText : "";
   const contextFooterDescription = hasContextUsage ? contextFooterLabel : "";
   const contextMessagesLabel =
     hasContextUsage && contextUsage
       ? t("{count} messages", {
-          count: contextUsage.messageCount.toLocaleString(),
-        })
+        count: contextUsage.messageCount.toLocaleString(),
+      })
       : "";
   const contextTokensLabel = contextUsage
     ? `${contextTokensUsed.toLocaleString()}`
@@ -218,8 +209,6 @@ export function PersonalizationPanel({
     }
   };
 
-  const interests = useMemo(() => ["Systems", "Wellness"], []);
-  const traits = useMemo(() => TRAIT_PRESETS, []);
   const resolvedBackgroundOptions = useMemo(
     () => backgroundOptions,
     [backgroundOptions]
@@ -251,7 +240,6 @@ export function PersonalizationPanel({
   const [backgroundSaveState, setBackgroundSaveState] = useState<ApiStatus>({ tone: "idle" });
   const [compressState, setCompressState] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [compressMessage, setCompressMessage] = useState<string | null>(null);
-  const showAlignmentProfile = false; // Temporarily hide alignment profile card until updated.
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -655,70 +643,10 @@ export function PersonalizationPanel({
 
         <div className={styles.personalizationGrid}>
           <div className={styles.personalizationColumn}>
-            {showAlignmentProfile ? (
-              <section className={styles.personalizationCard}>
-                <div className={styles.personalizationCardHeader}>
-                  <div>
-                    <h3>{t("Your Alignment Profile")}</h3>
-                    <p>{t("Understand how Gray currently mirrors your orbit.")}</p>
-                  </div>
-                  <button type="button" className={styles.personalizationLink}>
-                    {t("Manage")}
-                  </button>
-                </div>
-
-                <div>
-                  <p className={styles.personalizationSectionLabel}>{t("Interests")}</p>
-                </div>
-                <div className={styles.personalizationChipRow}>
-                  {interests.map((interest) => (
-                    <span key={interest} className={styles.personalizationChip}>
-                      {t(interest)}
-                    </span>
-                  ))}
-                </div>
-
-                <div className={styles.personalizationTraitHeader}>
-                  <p className={styles.personalizationSectionLabel}>{t("Trait spectrum")}</p>
-                  <p className={styles.personalizationHint}>{t("Higher bar = stronger expression.")}</p>
-                </div>
-                <div className={styles.personalizationTraitList}>
-                  {traits.map((trait) => (
-                    <div key={trait.id} className={styles.personalizationTraitRow}>
-                      <div className={styles.personalizationTraitMeta}>
-                        <span>{t(trait.label)}</span>
-                        <span>{trait.value.toFixed(1)}</span>
-                      </div>
-                      <div className={styles.personalizationTraitBar}>
-                        <div
-                          className={styles.personalizationTraitValue}
-                          style={{ width: `${Math.min(100, Math.max(0, (trait.value / 5) * 100))}%` }}
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <div className={styles.personalizationFieldGroup}>
-                  <label htmlFor="primaryQuest">{t("Primary Quest")}</label>
-                  <div id="primaryQuest" className={styles.personalizationField}>
-                    {primaryQuest}
-                  </div>
-                </div>
-
-                <div className={styles.personalizationFieldGroup}>
-                  <label htmlFor="blockages">{t("Blockages")}</label>
-                  <div id="blockages" className={styles.personalizationField}>
-                    {blockages}
-                  </div>
-                </div>
-              </section>
-            ) : null}
-
             <section className={styles.personalizationCard}>
               <div className={styles.personalizationCardHeader}>
                 <div>
-                  <h3>{t("Advanced")}</h3>
+                  <h3>{t("Settings")}</h3>
                   <p>{t("Quick toggles for Gray's automations.")}</p>
                 </div>
               </div>

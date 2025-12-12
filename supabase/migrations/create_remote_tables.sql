@@ -93,44 +93,26 @@ CREATE TABLE IF NOT EXISTS public.proactivity_push_subscriptions (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS public.google_calendar_credentials (
-    id BIGSERIAL PRIMARY KEY,
-    user_id BIGINT UNIQUE REFERENCES public.users(id) ON DELETE CASCADE,
-    access_token TEXT NOT NULL,
-    refresh_token TEXT NOT NULL,
-    token_uri TEXT NOT NULL,
-    client_id TEXT NOT NULL,
-    client_secret TEXT NOT NULL,
-    scopes TEXT NOT NULL,
-    expires_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
 -- Create indexes
 CREATE INDEX IF NOT EXISTS idx_users_auth_user_id ON public.users(auth_user_id);
 CREATE INDEX IF NOT EXISTS idx_users_email ON public.users(email);
 CREATE INDEX IF NOT EXISTS idx_user_streaks_user_id ON public.user_streaks(user_id);
 CREATE INDEX IF NOT EXISTS idx_proactivity_push_user_id ON public.proactivity_push_subscriptions(user_id);
-CREATE INDEX IF NOT EXISTS idx_google_calendar_user_id ON public.google_calendar_credentials(user_id);
 
 -- Enable RLS
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_streaks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.proactivity_push_subscriptions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.google_calendar_credentials ENABLE ROW LEVEL SECURITY;
 
 -- Drop existing policies
 DROP POLICY IF EXISTS "users_service_role_full_access" ON public.users;
 DROP POLICY IF EXISTS "user_streaks_service_role_full_access" ON public.user_streaks;
 DROP POLICY IF EXISTS "proactivity_push_service_role_full_access" ON public.proactivity_push_subscriptions;
-DROP POLICY IF EXISTS "google_calendar_service_role_full_access" ON public.google_calendar_credentials;
 
 -- Create service role policies (backend full access)
 CREATE POLICY "users_service_role_full_access" ON public.users FOR ALL TO service_role USING (true) WITH CHECK (true);
 CREATE POLICY "user_streaks_service_role_full_access" ON public.user_streaks FOR ALL TO service_role USING (true) WITH CHECK (true);
 CREATE POLICY "proactivity_push_service_role_full_access" ON public.proactivity_push_subscriptions FOR ALL TO service_role USING (true) WITH CHECK (true);
-CREATE POLICY "google_calendar_service_role_full_access" ON public.google_calendar_credentials FOR ALL TO service_role USING (true) WITH CHECK (true);
 
 -- Create update trigger function
 CREATE OR REPLACE FUNCTION update_updated_at_column() RETURNS TRIGGER AS $$ 
@@ -144,11 +126,9 @@ $$ LANGUAGE plpgsql;
 DROP TRIGGER IF EXISTS update_users_updated_at ON public.users;
 DROP TRIGGER IF EXISTS update_user_streaks_updated_at ON public.user_streaks;
 DROP TRIGGER IF EXISTS update_proactivity_push_updated_at ON public.proactivity_push_subscriptions;
-DROP TRIGGER IF EXISTS update_google_calendar_updated_at ON public.google_calendar_credentials;
 
 CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON public.users FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_user_streaks_updated_at BEFORE UPDATE ON public.user_streaks FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_proactivity_push_updated_at BEFORE UPDATE ON public.proactivity_push_subscriptions FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-CREATE TRIGGER update_google_calendar_updated_at BEFORE UPDATE ON public.google_calendar_credentials FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 SELECT 'Remote database migration completed successfully!' AS status;

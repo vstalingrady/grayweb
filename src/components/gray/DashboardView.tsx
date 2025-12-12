@@ -1142,13 +1142,13 @@ export function GrayDashboardView({
                 <div>
 	                  <span className={styles.proactivityCustomEyebrow}>{t("Custom setup")}</span>
                 </div>
-                <button
-                  type="button"
-                  className={styles.proactivityCustomReset}
-                  onClick={handleCustomReset}
-                >
-                  Reset
-                </button>
+	                <button
+	                  type="button"
+	                  className={styles.proactivityCustomReset}
+	                  onClick={handleCustomReset}
+	                >
+	                  {t("Reset")}
+	                </button>
               </header>
               <div className={styles.proactivityCustomControls}>
                 <div className={styles.proactivityCustomField}>
@@ -1170,33 +1170,35 @@ export function GrayDashboardView({
                                 commitCustomTimeEdit(index, editingCustomTimeDraft);
                               }
                             }}
-                            aria-label={`Edit custom start time ${time}`}
-                          />
+	                            aria-label={t("Edit custom start time {time}", { time })}
+	                          />
                         ) : (
                           <button
                             type="button"
                             className={styles.proactivityTimeListButton}
                             onClick={() => handleCustomTimeEdit(index)}
                           >
-                            <span className={styles.proactivityTimeLabel}>{formatCustomTimeLabel(time)}</span>
-                          </button>
+	                            <span className={styles.proactivityTimeLabel}>
+	                              {t(formatCustomTimeLabel(time))}
+	                            </span>
+	                          </button>
                         )}
                         <div className={styles.proactivityTimeActions}>
                           <button
                             type="button"
                             className={styles.listItemActionButton}
                             onClick={() => handleCustomTimeEdit(index)}
-                            aria-label={`Edit custom start time ${time}`}
-                          >
+	                            aria-label={t("Edit custom start time {time}", { time })}
+	                          >
                             <Pencil size={12} />
                           </button>
                           <button
                             type="button"
                             className={styles.listItemActionButton}
                             onClick={() => handleCustomTimeRemove(index)}
-                            aria-label={`Remove custom start time ${time}`}
-                            disabled={customTimes.length <= 1}
-                          >
+	                            aria-label={t("Remove custom start time {time}", { time })}
+	                            disabled={customTimes.length <= 1}
+	                          >
                             <X size={12} />
                           </button>
                         </div>
@@ -1206,10 +1208,10 @@ export function GrayDashboardView({
                       type="button"
                       className={styles.proactivityTimeAdd}
                       onClick={handleCustomTimeAdd}
-                    >
-                      <Plus size={14} />
-                      <span>Add time</span>
-                    </button>
+	                    >
+	                      <Plus size={14} />
+	                      <span>{t("Add time")}</span>
+	                    </button>
                   </div>
                 </div>
               </div>
@@ -1225,13 +1227,13 @@ export function GrayDashboardView({
                 {modalRemoveLabel}
               </button>
             ) : null}
-            <button
-              type="button"
-              className={styles.proactivityModalDismiss}
-              onClick={handleCloseProactivityModal}
-            >
-              Done
-            </button>
+	            <button
+	              type="button"
+	              className={styles.proactivityModalDismiss}
+	              onClick={handleCloseProactivityModal}
+	            >
+	              {t("Done")}
+	            </button>
           </footer>
         </div>
       </div>
@@ -1252,18 +1254,18 @@ export function GrayDashboardView({
         .filter(Boolean)
         .join(" ")}
     >
-      <header className={styles.dashboardCardHeader}>
-        <span>Proactivity</span>
-      </header>
+	      <header className={styles.dashboardCardHeader}>
+	        <span>{t("Proactivity")}</span>
+	      </header>
       <div className={styles.dashboardCardBody}>
         {shouldShowNotificationBanner ? (
           <div className={styles.proactivityNotificationBanner}>
-            <p>{notificationBannerLabel}</p>
-            {notificationPermission !== "denied" ? (
-              <button type="button" onClick={handleNotificationEnable} className={styles.proactivityNotificationButton}>
-                Enable alerts
-              </button>
-            ) : null}
+	            <p>{notificationBannerLabel}</p>
+	            {notificationPermission !== "denied" ? (
+	              <button type="button" onClick={handleNotificationEnable} className={styles.proactivityNotificationButton}>
+	                {t("Enable alerts")}
+	              </button>
+	            ) : null}
           </div>
         ) : null}
         {displayProactivity ? (
@@ -1273,31 +1275,31 @@ export function GrayDashboardView({
                 <li key={`${label}-${index}`} className={styles.planListItem}>
                   <span className={styles.planCheckbox} aria-hidden="true">
                     {delivered ? <Check size={14} /> : <Square size={14} />}
-                  </span>
-                  <span className={styles.planLabelGroup}>
-                    <span className={styles.planLabel}>{label}</span>
-                  </span>
+	                  </span>
+	                  <span className={styles.planLabelGroup}>
+	                    <span className={styles.planLabel}>{t(label)}</span>
+	                  </span>
                   {canOpenProactivityModal || showModalRemoveButton ? (
                     <span className={styles.listItemActions}>
                       {canOpenProactivityModal ? (
                         <button
                           type="button"
-                          className={styles.listItemActionButton}
-                          onClick={handleOpenProactivityModal}
-                          aria-label="Edit proactivity schedule"
-                          disabled={!canOpenProactivityModal}
-                        >
+	                          className={styles.listItemActionButton}
+	                          onClick={handleOpenProactivityModal}
+	                          aria-label={t("Edit proactivity schedule")}
+	                          disabled={!canOpenProactivityModal}
+	                        >
                           <Pencil size={12} />
                         </button>
                       ) : null}
                       {showModalRemoveButton ? (
                         <button
                           type="button"
-                          className={styles.listItemActionButton}
-                          onClick={() => handleProactivityTimeRemove(index)}
-                          aria-label={`Remove proactivity time ${label}`}
-                          disabled={!showModalRemoveButton}
-                        >
+	                          className={styles.listItemActionButton}
+	                          onClick={() => handleProactivityTimeRemove(index)}
+	                          aria-label={t("Remove proactivity time {label}", { label })}
+	                          disabled={!showModalRemoveButton}
+	                        >
                           <X size={12} />
                         </button>
                       ) : null}
@@ -1305,17 +1307,17 @@ export function GrayDashboardView({
                   ) : null}
                 </li>
               ))
-            ) : (
-              <li className={styles.listEmptyMessage}>
-                <span>No schedule yet.</span>
-              </li>
-            )}
+	            ) : (
+	              <li className={styles.listEmptyMessage}>
+	                <span>{t("No schedule yet.")}</span>
+	              </li>
+	            )}
           </ul>
-        ) : (
-          <div className={styles.cardEmptyMessage}>
-            <span>Not configured</span>
-          </div>
-        )}
+	        ) : (
+	          <div className={styles.cardEmptyMessage}>
+	            <span>{t("Not configured")}</span>
+	          </div>
+	        )}
         <button
           type="button"
           className={`${styles.secondaryAction} ${styles.proactivitySetupButton}`}
@@ -1331,18 +1333,18 @@ export function GrayDashboardView({
 
   const proactivityCard = renderProactivityCard();
 
-  const plansCard = (
-    <article className={styles.dashboardCard}>
-      <header className={styles.dashboardCardHeader}>
-        <span>Plans</span>
-      </header>
+	  const plansCard = (
+	    <article className={styles.dashboardCard}>
+	      <header className={styles.dashboardCardHeader}>
+	        <span>{t("Plans")}</span>
+	      </header>
       <div className={styles.dashboardCardBody}>
         <ul className={styles.planList}>
           {showPlansList
-            ? visiblePlans.map((plan) => {
-              const isDerivedReminder = derivedReminderIds.has(plan.id);
-              const timeLabel = formatPlanTimeLabel(plan);
-              const tagLabel = isDerivedReminder ? "Reminder" : "Plan";
+	            ? visiblePlans.map((plan) => {
+	              const isDerivedReminder = derivedReminderIds.has(plan.id);
+	              const timeLabel = formatPlanTimeLabel(plan);
+	              const tagLabel = isDerivedReminder ? t("Reminder") : t("Plan");
               return (
                 <li key={plan.id} className={styles.planListItem}>
                   <div
@@ -1350,11 +1352,13 @@ export function GrayDashboardView({
                     data-completed={plan.completed ? "true" : "false"}
                     role="group"
                   >
-                    <button
-                      type="button"
-                      className={styles.planCheckboxButton}
-                      aria-label={plan.completed ? "Mark plan as incomplete" : "Mark plan as complete"}
-                      onClick={(event) => {
+	                    <button
+	                      type="button"
+	                      className={styles.planCheckboxButton}
+	                      aria-label={
+	                        plan.completed ? t("Mark plan as incomplete") : t("Mark plan as complete")
+	                      }
+	                      onClick={(event) => {
                         event.preventDefault();
                         event.stopPropagation();
                         handlePlanToggle(plan.id);
@@ -1384,14 +1388,14 @@ export function GrayDashboardView({
                         <button
                           type="button"
                           className={styles.listItemActionButton}
-                          onClick={(event) => {
-                            event.preventDefault();
-                            event.stopPropagation();
-                            setPlanEditorTarget(plan);
-                          }}
-                          aria-label={`Edit plan ${plan.label}`}
-                          disabled={!isCurrentPulseEditable}
-                        >
+	                          onClick={(event) => {
+	                            event.preventDefault();
+	                            event.stopPropagation();
+	                            setPlanEditorTarget(plan);
+	                          }}
+	                          aria-label={t("Edit plan {label}", { label: plan.label })}
+	                          disabled={!isCurrentPulseEditable}
+	                        >
                           <Pencil size={14} />
                         </button>
                       ) : null}
@@ -1399,14 +1403,14 @@ export function GrayDashboardView({
                         <button
                           type="button"
                           className={styles.listItemActionButton}
-                          onClick={(event) => {
-                            event.preventDefault();
-                            event.stopPropagation();
-                            handlePlanDelete(plan);
-                          }}
-                          aria-label={`Delete plan ${plan.label}`}
-                          disabled={!isCurrentPulseEditable}
-                        >
+	                          onClick={(event) => {
+	                            event.preventDefault();
+	                            event.stopPropagation();
+	                            handlePlanDelete(plan);
+	                          }}
+	                          aria-label={t("Delete plan {label}", { label: plan.label })}
+	                          disabled={!isCurrentPulseEditable}
+	                        >
                           <Trash2 size={14} />
                         </button>
                       ) : null}
@@ -1415,30 +1419,30 @@ export function GrayDashboardView({
                 </li>
               );
             })
-            : (
-              <li className={styles.listEmptyMessage}>
-                <span>No plans captured yet.</span>
-              </li>
-            )}
-        </ul>
+	            : (
+	              <li className={styles.listEmptyMessage}>
+	                <span>{t("No plans captured yet.")}</span>
+	              </li>
+	            )}
+	        </ul>
         <button
           type="button"
           className={styles.secondaryAction}
           disabled={!isCurrentPulseEditable}
-          data-disabled={!isCurrentPulseEditable ? "true" : "false"}
-          onClick={() => openModal("plan")}
-        >
-          Add plans
-        </button>
-      </div>
-    </article>
-  );
+	          data-disabled={!isCurrentPulseEditable ? "true" : "false"}
+	          onClick={() => openModal("plan")}
+	        >
+	          {t("Add plans")}
+	        </button>
+	      </div>
+	    </article>
+	  );
 
-  const habitsCard = (
-    <article className={styles.dashboardCard}>
-      <header className={styles.dashboardCardHeader}>
-        <span>Habits</span>
-      </header>
+	  const habitsCard = (
+	    <article className={styles.dashboardCard}>
+	      <header className={styles.dashboardCardHeader}>
+	        <span>{t("Habits")}</span>
+	      </header>
       <div className={styles.dashboardCardBody}>
         <ul className={`${styles.habitList} ${styles.dashboardHabitList}`}>
           {showHabitsList
@@ -1449,11 +1453,13 @@ export function GrayDashboardView({
                   data-completed={habit.completed ? "true" : "false"}
                   role="group"
                 >
-                  <button
-                    type="button"
-                    className={styles.planCheckboxButton}
-                    aria-label={habit.completed ? "Mark habit as incomplete" : "Mark habit as complete"}
-                    onClick={(event) => {
+	                  <button
+	                    type="button"
+	                    className={styles.planCheckboxButton}
+	                    aria-label={
+	                      habit.completed ? t("Mark habit as incomplete") : t("Mark habit as complete")
+	                    }
+	                    onClick={(event) => {
                       event.preventDefault();
                       event.stopPropagation();
                       handleHabitToggle(habit.id);
@@ -1478,14 +1484,14 @@ export function GrayDashboardView({
                         <button
                           type="button"
                           className={styles.listItemActionButton}
-                          onClick={(event) => {
-                            event.preventDefault();
-                            event.stopPropagation();
-                            handleHabitEdit(habit);
-                          }}
-                          aria-label={`Edit habit ${habit.label}`}
-                          disabled={!isCurrentPulseEditable}
-                        >
+	                          onClick={(event) => {
+	                            event.preventDefault();
+	                            event.stopPropagation();
+	                            handleHabitEdit(habit);
+	                          }}
+	                          aria-label={t("Edit habit {label}", { label: habit.label })}
+	                          disabled={!isCurrentPulseEditable}
+	                        >
                           <Pencil size={14} />
                         </button>
                       ) : null}
@@ -1493,14 +1499,14 @@ export function GrayDashboardView({
                         <button
                           type="button"
                           className={styles.listItemActionButton}
-                          onClick={(event) => {
-                            event.preventDefault();
-                            event.stopPropagation();
-                            handleHabitDelete(habit);
-                          }}
-                          aria-label={`Delete habit ${habit.label}`}
-                          disabled={!isCurrentPulseEditable}
-                        >
+	                          onClick={(event) => {
+	                            event.preventDefault();
+	                            event.stopPropagation();
+	                            handleHabitDelete(habit);
+	                          }}
+	                          aria-label={t("Delete habit {label}", { label: habit.label })}
+	                          disabled={!isCurrentPulseEditable}
+	                        >
                           <Trash2 size={14} />
                         </button>
                       ) : null}
@@ -1513,51 +1519,51 @@ export function GrayDashboardView({
                 </span>
               </li>
             ))
-            : (
-              <li className={styles.listEmptyMessage}>
-                <span>No habits tracked yet.</span>
-              </li>
-            )}
-        </ul>
+	            : (
+	              <li className={styles.listEmptyMessage}>
+	                <span>{t("No habits tracked yet.")}</span>
+	              </li>
+	            )}
+	        </ul>
         <button
           type="button"
           className={styles.secondaryAction}
           disabled={!isCurrentPulseEditable}
-          data-disabled={!isCurrentPulseEditable ? "true" : "false"}
-          onClick={() => openModal("habit")}
-        >
-          Add habits
-        </button>
-      </div>
-    </article>
-  );
-  const dashboardSections = useMemo<DashboardSectionSpec[]>(
-    () => [
-      {
-        id: "execution",
-        title: "Execution",
-        subtitle: "Plans and habits shaping today's pulse",
-        layout: "stacked",
-        cards: [
-          { id: "plans", element: plansCard },
-          { id: "habits", element: habitsCard },
-        ],
-      },
-    ],
-    [plansCard, habitsCard]
-  );
+	          data-disabled={!isCurrentPulseEditable ? "true" : "false"}
+	          onClick={() => openModal("habit")}
+	        >
+	          {t("Add habits")}
+	        </button>
+	      </div>
+	    </article>
+	  );
+	  const dashboardSections = useMemo<DashboardSectionSpec[]>(
+	    () => [
+	      {
+	        id: "execution",
+	        title: t("Execution"),
+	        subtitle: t("Plans and habits shaping today's pulse"),
+	        layout: "stacked",
+	        cards: [
+	          { id: "plans", element: plansCard },
+	          { id: "habits", element: habitsCard },
+	        ],
+	      },
+	    ],
+	    [plansCard, habitsCard, t]
+	  );
   const renderDashboardSections = useCallback(
     (variant: "default" | "compact" = "default") => {
       const sections =
         variant === "compact"
           ? [
             ...dashboardSections,
-            {
-              id: "compact-automation",
-              title: "Signals & Automation",
-              subtitle: "Reminders, notifications, and proactive nudges",
-              cards: [{ id: "proactivity", element: proactivityCard }],
-            },
+	            {
+	              id: "compact-automation",
+	              title: t("Signals & Automation"),
+	              subtitle: t("Reminders, notifications, and proactive nudges"),
+	              cards: [{ id: "proactivity", element: proactivityCard }],
+	            },
           ]
           : dashboardSections;
       return sections.map((section) => {
@@ -1579,7 +1585,7 @@ export function GrayDashboardView({
         );
       });
     },
-    [dashboardSections, proactivityCard]
+    [dashboardSections, proactivityCard, t]
   );
 
   const pulseMonthLabel = pulseMonthDate.toLocaleDateString(undefined, {
@@ -1715,10 +1721,10 @@ export function GrayDashboardView({
         onUpgradeClick={onUpgradeClick}
         showUpgradeButton={showUpgradeButton}
       />
-      <div className={styles.dashboardCompactNotice}>
-        <h3>Calendar works best on a wider screen</h3>
-        <p>Expand your window or rotate your device to manage events and view the full schedule.</p>
-      </div>
+	      <div className={styles.dashboardCompactNotice}>
+	        <h3>{t("Calendar works best on a wider screen")}</h3>
+	        <p>{t("Expand your window or rotate your device to manage events and view the full schedule.")}</p>
+	      </div>
     </>
   );
 

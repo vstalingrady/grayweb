@@ -2,6 +2,7 @@ import { Zap } from "lucide-react";
 import styles from "@/app/gray/GrayPageClient.module.css";
 import calendarStyles from "@/components/calendar/GrayDashboardCalendar.module.css";
 import { ViewModeSelect } from "./ViewModeSelect";
+import { useI18n } from "@/contexts/I18nContext";
 
 export type DashboardHeaderProps = {
   activeTab: "pulse" | "calendar";
@@ -53,6 +54,7 @@ export function DashboardHeader({
   onUpgradeClick,
   showUpgradeButton = false,
 }: DashboardHeaderProps) {
+  const { t } = useI18n();
   const headerClassName = [
     calendarStyles.calendarSurfaceHeader,
     className,
@@ -95,7 +97,7 @@ export function DashboardHeader({
                 aria-pressed={activeTab === "pulse"}
                 onClick={() => onSelectTab("pulse")}
               >
-                Pulse
+                {t("Pulse")}
               </button>
               <button
                 type="button"
@@ -104,7 +106,7 @@ export function DashboardHeader({
                 aria-pressed={activeTab === "calendar"}
                 onClick={() => onSelectTab("calendar")}
               >
-                Calendar
+                {t("Calendar")}
               </button>
             </div>
           )}
@@ -122,66 +124,72 @@ export function DashboardHeader({
         )}
       </div>
       <div className={calendarStyles.calendarSurfaceHeaderRight}>
-        {normalizedStreak > 0 ? (
-          <div className={styles.streakBadge} aria-label={`${normalizedStreak} day streak`}>
-            <Zap size={12} />
-            <span>{normalizedStreak}</span>
-          </div>
-        ) : null}
+	        {normalizedStreak > 0 ? (
+	          <div
+	            className={styles.streakBadge}
+	            aria-label={t("{count} day streak", { count: normalizedStreak })}
+	          >
+	            <Zap size={12} />
+	            <span>{normalizedStreak}</span>
+	          </div>
+	        ) : null}
         {shouldRenderControls && (
           <div className={calendarStyles.calendarSurfaceNav}>
             {showMonthNavigation && (
               <div className={calendarStyles.calendarSurfaceNavArrows}>
-                {onPrevMonth && (
-                  <button type="button" aria-label="Previous month" onClick={onPrevMonth}>
-                    ‹
-                  </button>
-                )}
-                {onNextMonth && (
-                  <button type="button" aria-label="Next month" onClick={onNextMonth}>
-                    ›
-                  </button>
-                )}
-              </div>
-            )}
+	                {onPrevMonth && (
+	                  <button type="button" aria-label={t("Previous month")} onClick={onPrevMonth}>
+	                    ‹
+	                  </button>
+	                )}
+	                {onNextMonth && (
+	                  <button type="button" aria-label={t("Next month")} onClick={onNextMonth}>
+	                    ›
+	                  </button>
+	                )}
+	              </div>
+	            )}
             {showRangeNavigation && (
               <div className={calendarStyles.calendarSurfaceNavArrows}>
                 {onPrevRange && (
-                  <button
-                    type="button"
-                    aria-label={`Previous ${rangeNavigationLabel}`}
-                    onClick={onPrevRange}
-                  >
-                    ‹
-                  </button>
+	                  <button
+	                    type="button"
+	                    aria-label={t("Previous {range}", { range: rangeNavigationLabel })}
+	                    onClick={onPrevRange}
+	                  >
+	                    ‹
+	                  </button>
                 )}
                 {onNextRange && (
-                  <button
-                    type="button"
-                    aria-label={`Next ${rangeNavigationLabel}`}
-                    onClick={onNextRange}
-                  >
-                    ›
-                  </button>
+	                  <button
+	                    type="button"
+	                    aria-label={t("Next {range}", { range: rangeNavigationLabel })}
+	                    onClick={onNextRange}
+	                  >
+	                    ›
+	                  </button>
                 )}
               </div>
             )}
             {showTodayButton && (
-              <button
-                type="button"
-                className={calendarStyles.calendarSurfaceButton}
-                onClick={onGoToday}
-              >
-                {todayButtonLabel}
-              </button>
-            )}
-            {showViewSelect && (
-              <ViewModeSelect
-                value={viewMode}
-                options={viewModeOptions}
-                onChange={handleViewModeChange}
-              />
-            )}
+	              <button
+	                type="button"
+	                className={calendarStyles.calendarSurfaceButton}
+	                onClick={onGoToday}
+	              >
+	                {t(todayButtonLabel)}
+	              </button>
+	            )}
+	            {showViewSelect && (
+	              <ViewModeSelect
+	                value={viewMode}
+	                options={viewModeOptions.map((option) => ({
+	                  ...option,
+	                  label: t(option.label),
+	                }))}
+	                onChange={handleViewModeChange}
+	              />
+	            )}
           </div>
         )}
       </div>

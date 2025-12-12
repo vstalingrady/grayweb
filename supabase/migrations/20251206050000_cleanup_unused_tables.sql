@@ -39,7 +39,6 @@ DROP TABLE IF EXISTS public.proactivity_push_subscriptions CASCADE;
 DROP TABLE IF EXISTS public.dashboard_pulses CASCADE;
 DROP TABLE IF EXISTS public.calendars CASCADE;
 DROP TABLE IF EXISTS public.calendar_events CASCADE;
-DROP TABLE IF EXISTS public.google_calendar_credentials CASCADE;
 
 -- Utility tables
 DROP TABLE IF EXISTS public.context_cache CASCADE;

@@ -13,10 +13,10 @@ type MarketingLandingProps = {
 };
 
 const socialLinks = [
-    { label: "X", href: "https://x.com/alignmentlab", logo: "/logos/xwhite.svg" },
-    { label: "YouTube", href: "https://youtube.com/@alignmentlab", logo: "/logos/youtubewhite.svg" },
-    { label: "Instagram", href: "https://instagram.com/alignmentlab", logo: "/logos/instagramwhite.svg" },
-    { label: "Discord", href: "https://discord.gg/alignment", logo: "/logos/discordwhite.svg" },
+    { label: "X", href: "https://x.com/alignmentid", logo: "/logos/xwhite.svg" },
+    { label: "YouTube", href: "https://youtube.com/@alignmentid", logo: "/logos/youtubewhite.svg" },
+    { label: "Instagram", href: "https://instagram.com/alignmentid", logo: "/logos/instagramwhite.svg" },
+    { label: "Discord", href: "https://discord.gg/sE4CSm4wWQ", logo: "/logos/discordwhite.svg" },
 ];
 
 export default function MarketingLanding({ tryGrayUrl }: MarketingLandingProps) {
