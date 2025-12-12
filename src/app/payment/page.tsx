@@ -41,25 +41,25 @@ const PIONEER_PRICING = {
 
 const PAYMENT_METHODS = [
     {
+        id: "danamon",
+        label: "Danamon",
+        logo: "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d3/Logo_Danamon_2018.svg/2560px-Logo_Danamon_2018.svg.png",
+        type: "bank_transfer",
+        bank: "danamon"
+    },
+    {
+        id: "cimb",
+        label: "CIMB Niaga",
+        logo: "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a8/Logo_CIMB_Niaga_2008.png/800px-Logo_CIMB_Niaga_2008.png",
+        type: "bank_transfer",
+        bank: "cimb"
+    },
+    {
         id: "qris",
         label: "GoPay Dynamic QRIS",
         logo: "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a2/Logo_QRIS.svg/1200px-Logo_QRIS.svg.png",
         type: "gopay",
         isQris: true
-    },
-    {
-        id: "gopay",
-        label: "GoPay",
-        logo: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/86/Gopay_logo.svg/2560px-Gopay_logo.svg.png",
-        type: "gopay",
-        isDeepLink: true
-    },
-    {
-        id: "bca",
-        label: "BCA",
-        logo: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5c/Bank_Central_Asia.svg/2560px-Bank_Central_Asia.svg.png",
-        type: "bank_transfer",
-        bank: "bca"
     },
     {
         id: "bni",
@@ -74,6 +74,13 @@ const PAYMENT_METHODS = [
         logo: "https://upload.wikimedia.org/wikipedia/commons/thumb/6/68/BANK_BRI_logo.svg/2560px-BANK_BRI_logo.svg.png",
         type: "bank_transfer",
         bank: "bri"
+    },
+    {
+        id: "gopay",
+        label: "GoPay",
+        logo: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/86/Gopay_logo.svg/2560px-Gopay_logo.svg.png",
+        type: "gopay",
+        isDeepLink: true
     },
     {
         id: "mandiri",
