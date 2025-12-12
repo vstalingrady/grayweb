@@ -45,7 +45,7 @@ export const VOYAGER_FEATURES: FeatureItem[] = [
     {
         label: "Model switcher",
         icon: Shuffle,
-        subtext: "Claude Haiku/Sonnet, Gemini 3 Pro, GPT 5.1, DeepSeek, Kimi K2",
+        subtext: "Claude Haiku/Sonnet, Gemini 3 Pro, GPT 5.2, DeepSeek, Kimi K2",
     },
     {
         label: "5x more message credits",
@@ -70,9 +70,9 @@ export const VOYAGER_FEATURES: FeatureItem[] = [
 
 export const PIONEER_FEATURES: FeatureItem[] = [
     {
-        label: "Claude Opus 4.5 access",
+        label: "Claude Opus 4.5 + GPT 5.2 Pro access",
         icon: Zap,
-        subtext: "Most capable Claude model",
+        subtext: "Most capable Claude + next-gen reasoning model",
     },
     {
         label: "25x more message credits",
@@ -124,13 +124,20 @@ export function PricingPlansSection() {
             </header>
 
             <div className={styles.billingControls}>
-                <div className={styles.billingToggle} role="group" aria-label="Billing cadence">
+                <div
+                    className={styles.billingToggle}
+                    role="group"
+                    aria-label="Billing cadence"
+                    data-cycle={billingCycle}
+                >
+                    <div className={styles.billingThumb} aria-hidden="true" />
                     {BILLING_CYCLES.map(({ id, label }) => (
                         <button
                             key={id}
                             type="button"
                             onClick={() => setBillingCycle(id as "monthly" | "annual")}
                             data-active={billingCycle === id}
+                            aria-pressed={billingCycle === id}
                         >
                             <span>{label}</span>
                         </button>

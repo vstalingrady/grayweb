@@ -12,33 +12,189 @@
 
 .mainGrid {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: clamp(1.25rem, 3vw, 2.5rem);
     width: 100%;
     height: 100%;
+    max-width: 100%;
+    margin: 0 auto;
+    padding: clamp(1rem, 3vw, 2.5rem);
+    box-sizing: border-box;
+    justify-content: center;
+    align-items: start;
 }
 
 /* .container removed */
 
-/* LEFT COLUMN: Inputs & Controls */
-.inputColumn {
+/* LEFT COLUMN: Summary (Voyager Card) */
+/* Wrapper only - no visual styles */
+.summaryColumn {
     padding: 1.5rem;
-    background: radial-gradient(circle at top right, rgba(255, 255, 255, 0.03), transparent 70%);
-    background-color: rgba(255, 255, 255, 0.01);
+    background: transparent;
     display: flex;
     flex-direction: column;
-    gap: 2rem;
-    overflow-y: auto;
+    align-items: center;
+    position: sticky;
+    top: clamp(1rem, 3vw, 2.5rem);
+    height: 100%;
+    max-height: calc(100vh - 2 * clamp(1rem, 3vw, 2.5rem));
+    overflow: hidden;
+    /* Starry background */
     position: relative;
 }
 
-/* RIGHT COLUMN: Summary & Features */
-.summaryColumn {
+.summaryColumn::before,
+.summaryColumn::after {
+    content: none;
+}
+
+/* Column-specific starfield removed; global background handles this. */
+
+/* RIGHT COLUMN: Inputs & Controls */
+/* Wrapper only - no visual styles */
+.inputColumn {
     padding: 1.5rem;
-    background: radial-gradient(circle at top right, rgba(255, 255, 255, 0.03), transparent 70%);
+    background: #09090b;
     display: flex;
     flex-direction: column;
+    gap: 2rem;
+    width: 100%;
+    align-items: center;
+    height: 100%;
+    max-height: calc(100vh - 2 * clamp(1rem, 3vw, 2.5rem));
     overflow-y: auto;
-    background-color: rgba(255, 255, 255, 0.01);
+}
+
+
+/* Common child width constraints handled by grid, but ensure max-width doesn't break it */
+.inputColumn>*,
+.summaryColumn>* {
+    width: 100%;
+    max-width: none;
+    position: relative;
+    z-index: 1;
+}
+
+.activePaymentMethodsCard {
+    background: rgba(12, 12, 12, 0.9);
+    border-radius: 20px;
+    padding: 1.5rem;
+    width: 100%;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.55);
+}
+
+.activePaymentMethodsTitle {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.9);
+    margin-bottom: 1.25rem;
+    letter-spacing: -0.01em;
+}
+
+.paymentGroups {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.paymentSelectWrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.paymentSelectLabel {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.paymentSelect {
+    width: 100%;
+    padding: 0.9rem 0.95rem;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(0, 0, 0, 0.6);
+    color: white;
+    font-size: 0.95rem;
+    outline: none;
+    appearance: none;
+    background-image:
+        linear-gradient(45deg, transparent 50%, rgba(255, 255, 255, 0.7) 50%),
+        linear-gradient(135deg, rgba(255, 255, 255, 0.7) 50%, transparent 50%);
+    background-position:
+        calc(100% - 18px) calc(1.1rem),
+        calc(100% - 12px) calc(1.1rem);
+    background-size: 6px 6px, 6px 6px;
+    background-repeat: no-repeat;
+}
+
+.paymentSelect:focus {
+    border-color: rgba(59, 130, 246, 0.8);
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
+}
+
+.paymentSelectHint {
+    font-size: 0.8rem;
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.paymentGroup {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.groupTitle {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #666;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin: 0 0 0.25rem 0.25rem;
+}
+
+/* Reset alignments for specific columns */
+.summaryColumn {
+    align-items: stretch;
+    /* Let children fill column width */
+}
+
+.inputColumn {
+    align-items: stretch;
+}
+
+.topRow {
+    position: fixed;
+    top: 0;
+    left: 0;
+    padding: clamp(0.75rem, 2vw, 1.5rem);
+    z-index: 100;
+}
+
+.dismiss {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem;
+    border-radius: 999px;
+    border: none;
+    background: transparent;
+    color: rgba(245, 245, 245, 0.9);
+    cursor: pointer;
+    transition: background 150ms ease, border-color 150ms ease, transform 150ms ease;
+    width: auto;
+}
+
+.dismiss:hover {
+    background: rgba(255, 255, 255, 0.04);
+    transform: translateY(-1px);
+}
+
+.dismiss span {
+    font-size: 0.9rem;
+    font-weight: 600;
 }
 
 .header {
@@ -59,46 +215,93 @@
     font-size: 0.95rem;
 }
 
-/* Billing Cycle Toggle - card style */
+/* Billing Cycle Toggle - segmented slider */
 .billingToggle {
+    position: relative;
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 1rem;
+    padding: 0.2rem;
+    border-radius: 12px;
+    border: 1.5px solid rgba(255, 255, 255, 0.15);
+    background: rgba(8, 8, 8, 0.9);
+    overflow: hidden;
+}
+
+.billingThumb {
+    position: absolute;
+    inset: 0.2rem;
+    width: calc(50% - 0.1rem);
+    border-radius: 10px;
+    background: linear-gradient(135deg, #fefefe, #dcdcdc);
+    box-shadow: 0 12px 26px rgba(0, 0, 0, 0.45);
+    transform: translateX(0%);
+    transition: transform 200ms ease;
+    pointer-events: none;
+}
+
+.billingToggle[data-cycle="annual"] .billingThumb {
+    transform: translateX(100%);
 }
 
 .billingToggle button {
+    position: relative;
+    z-index: 1;
     appearance: none;
-    border: 1.5px solid rgba(255, 255, 255, 0.15);
-    background: rgba(255, 255, 255, 0.02);
+    border: none;
+    background: transparent;
     color: rgba(255, 255, 255, 0.7);
     font-weight: 500;
     font-size: 0.9rem;
-    padding: 1rem 1.2rem;
-    border-radius: 12px;
+    padding: 0.9rem 1.1rem;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: color 150ms ease;
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: 0.5rem;
+    gap: 0.35rem;
     text-align: left;
 }
 
 .billingToggle button:hover {
-    background: rgba(255, 255, 255, 0.04);
-    border-color: rgba(255, 255, 255, 0.25);
+    color: rgba(255, 255, 255, 0.9);
 }
 
 .billingToggle button[data-active="true"] {
-    background: rgba(255, 255, 255, 0.06);
-    border-color: rgba(255, 255, 255, 0.5);
-    color: white;
+    color: #070707;
 }
 
-.billingToggle .saveBadge {
+.saveBadge {
     font-size: 0.75rem;
-    color: rgba(255, 255, 255, 0.7);
-    font-weight: 500;
+    color: rgba(0, 0, 0, 0.7);
+    font-weight: 600;
+    padding: 0.12rem 0.4rem;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.06);
+}
+
+.cycleHeader {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    font-weight: 600;
+}
+
+.cycleHeaderWithBadge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.cycleMeta {
+    font-size: 0.85rem;
+    opacity: 0.7;
+}
+
+.billingToggle button[data-active="true"] .cycleMeta {
+    opacity: 0.85;
+    color: rgba(0, 0, 0, 0.8);
 }
 
 /* Payment Methods */
@@ -111,36 +314,60 @@
     color: rgba(255, 255, 255, 0.4);
 }
 
+.paymentMethodLogo {
+    height: 24px;
+    width: auto;
+    object-fit: contain;
+    max-width: 80px;
+}
+
+.paymentMethodLabel {
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: #1a1a1a;
+}
+
 .paymentMethods {
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    /* Two columns */
     gap: 0.75rem;
 }
+
 
 .methodButton {
     display: flex;
     align-items: center;
     gap: 1rem;
-    padding: 1rem;
+    padding: 1.25rem 1rem;
     border-radius: 12px;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    color: white;
+    background: white;
+    /* White cards as seen in image */
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    color: #1a1a1a;
     cursor: pointer;
     text-align: left;
-    transition: all 0.2s;
+    transition: all 0.2s ease;
+    width: 100%;
+    min-height: 80px;
+    /* Ensure consistent height */
+    position: relative;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 .methodButton:hover {
-    background: rgba(255, 255, 255, 0.06);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    border-color: rgba(0, 0, 0, 0.12);
 }
 
 .methodButton[data-selected="true"] {
-    background: rgba(255, 255, 255, 0.08);
-    /* Neutral selection */
-    border-color: rgba(255, 255, 255, 0.4);
-    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1);
+    border-color: #3b82f6;
+    /* Blue selection border */
+    background: #f0f7ff;
+    box-shadow: 0 0 0 1px #3b82f6;
 }
+
 
 /* Summary Box in Right Column */
 .planSummaryHeader {
@@ -291,6 +518,10 @@
         overflow-y: auto;
     }
 
+    .topRow {
+        margin-bottom: 1rem;
+    }
+
     .container {
         width: 100%;
         height: auto;
@@ -337,9 +568,9 @@
     position: relative;
     overflow: hidden;
     width: 100%;
-    max-width: 400px;
-    margin: 0 auto;
-    /* Center in column if needed */
+    max-width: none;
+    margin: 0;
+    /* Fill the summary column */
 }
 
 /* We'll use the "muted" variant style as base for Voyager, or "primary" for Pioneer? 

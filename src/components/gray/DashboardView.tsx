@@ -1626,9 +1626,7 @@ export function GrayDashboardView({
           <div className={styles.calendarProactivityColumn}>{proactivityCard}</div>
         </div>
         <div className={`${calendarStyles.calendarBoard} ${styles.pulseBoard}`}>
-          <div className={calendarStyles.calendarGrid}>
-            <div className={styles.pulseBoardContent}>{renderDashboardSections()}</div>
-          </div>
+          <div className={styles.pulseBoardContent}>{renderDashboardSections()}</div>
         </div>
       </div>
     </>

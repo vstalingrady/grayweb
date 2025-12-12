@@ -1698,9 +1698,10 @@ class DashboardSummary(BaseModel):
 # --- Payment Models ---
 class PaymentRequest(BaseModel):
     plan_tier: str  # "voyager" or "pioneer"
-    payment_type: str = "gopay" # gopay, bank_transfer, credit_card
-    bank: Optional[str] = None # bca, bni, bri (required if payment_type is bank_transfer)
+    payment_type: str = "gopay" # gopay, bank_transfer, credit_card, echannel
+    bank: Optional[str] = None # bca, bni, bri, permata (required if payment_type is bank_transfer)
     token_id: Optional[str] = None # required if payment_type is credit_card
+    billing_cycle: Optional[str] = "monthly"  # "monthly" or "annual"
 
 class PaymentChargeResponse(BaseModel):
     order_id: str
@@ -1710,6 +1711,8 @@ class PaymentChargeResponse(BaseModel):
     deeplink_url: Optional[str] = None
     va_numbers: Optional[List[Dict[str, Any]]] = None
     redirect_url: Optional[str] = None # for 3DS
+    bill_key: Optional[str] = None # for Mandiri
+    biller_code: Optional[str] = None # for Mandiri
 
 
 class MidtransNotification(BaseModel):
@@ -5860,6 +5863,15 @@ CRITICAL: When the user asks to "set a plan" or create any plan/reminder/habit, 
 
                     run_system_prompt = effective_system_prompt
                     if search_enabled:
+                        # Track web search cost ($10/K = $0.01 per search)
+                        # We charge if the search capability is enabled and passed to the provider
+                        if user_id:
+                            try:
+                                tracker = UsageTracker(db)
+                                await tracker.track_cost(user_id, 0.01, "web_search")
+                            except Exception as e:
+                                api_logger.warning(f"Failed to track search cost: {e}")
+
                         # Explicitly tell the model about the search capability so it knows to use it (via the plugin)
                         run_system_prompt = (run_system_prompt or "") + "\n\nYou have access to Google Search. You must use it for current events, news, or factual queries where your knowledge might be outdated."
 
@@ -9551,18 +9563,19 @@ async def create_payment_charge(
     """
     Create a transaction with Midtrans Core API.
     """
-    # 1. Determine Amount & Item Details
+    # 1. Determine Amount & Item Details based on plan tier and billing cycle
+    is_annual = request.billing_cycle == "annual"
     if request.plan_tier == "voyager":
-        amount = 150000 # IDR
-        item_name = "Gray Voyager Plan"
+        amount = 777000 if is_annual else 77000  # IDR
+        item_name = f"Gray Voyager Plan ({'Annual' if is_annual else 'Monthly'})"
     elif request.plan_tier == "pioneer":
-        amount = 300000 # IDR
-        item_name = "Gray Pioneer Plan"
+        amount = 3777000 if is_annual else 377000  # IDR
+        item_name = f"Gray Pioneer Plan ({'Annual' if is_annual else 'Monthly'})"
     else:
         raise HTTPException(status_code=400, detail="Invalid plan tier")
 
     item_details = [{
-        "id": request.plan_tier,
+        "id": f"{request.plan_tier}_{request.billing_cycle}",
         "price": amount,
         "quantity": 1,
         "name": item_name
@@ -9587,10 +9600,22 @@ async def create_payment_charge(
         if not request.bank:
             raise HTTPException(status_code=400, detail="Bank is required for bank_transfer")
         bank_args = {"bank": request.bank}
+    elif request.payment_type == "permata":
+        # Permata is handled as bank_transfer internally
+        bank_args = {"bank": "permata"}
+        # Override payment_type for Midtrans API call
+        request.payment_type = "bank_transfer"
     elif request.payment_type == "credit_card":
         if not request.token_id:
              raise HTTPException(status_code=400, detail="Token ID is required for credit_card")
         token_id = request.token_id
+    elif request.payment_type in ["echannel", "gopay"]:
+        # No extra args required for these in the request payload
+        # bank_args and token_id remain None
+        pass
+    else:
+        # Unknown payment type
+        raise HTTPException(status_code=400, detail=f"Unsupported payment type: {request.payment_type}")
 
     # 5. Create Transaction in Database (Pending)
     try:
@@ -9601,6 +9626,7 @@ async def create_payment_charge(
             status="pending",
             payment_type=request.payment_type,
             plan_tier=request.plan_tier,
+            billing_cycle=request.billing_cycle,
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow()
         )
@@ -9642,12 +9668,17 @@ async def create_payment_charge(
             elif action["name"] == "deeplink-redirect":
                 deeplink_url = action["url"]
 
+    bill_key = response.get("bill_key")
+    biller_code = response.get("biller_code")
+
     return PaymentChargeResponse(
         order_id=order_id,
         status=response.get("transaction_status", "pending"),
         actions=actions,
         qr_code_url=qr_code_url,
         deeplink_url=deeplink_url,
+        bill_key=bill_key,
+        biller_code=biller_code,
         va_numbers=response.get("va_numbers"),
         redirect_url=redirect_url
     )
@@ -9718,15 +9749,25 @@ async def handle_payment_notification(notification: MidtransNotification):
             if transaction:
                 user_id = transaction["user_id"]
                 plan_tier = transaction["plan_tier"]
+                billing_cycle = transaction.get("billing_cycle", "monthly")
                 
-                # Update User Plan
+                # Calculate subscription expiry based on billing cycle
+                from dateutil.relativedelta import relativedelta
+                now = datetime.utcnow()
+                if billing_cycle == "annual":
+                    subscription_expires_at = now + relativedelta(years=1)
+                else:
+                    subscription_expires_at = now + relativedelta(months=1)
+                
+                # Update User Plan and Subscription Expiry
                 user_update = users.update().where(users.c.id == user_id).values(
                     plan_tier=plan_tier,
+                    subscription_expires_at=subscription_expires_at,
                     updated_at=datetime.utcnow()
                 )
                 await database.execute(user_update)
                 
-                app_logger.info(f" upgraded user {user_id} to {plan_tier} via order {notification.order_id}")
+                app_logger.info(f"Upgraded user {user_id} to {plan_tier} ({billing_cycle}) via order {notification.order_id}, expires {subscription_expires_at}")
                 
                 # Audit log successful payment
                 if audit:
@@ -9736,6 +9777,8 @@ async def handle_payment_notification(notification: MidtransNotification):
                         details={
                             "order_id": notification.order_id,
                             "plan_tier": plan_tier,
+                            "billing_cycle": billing_cycle,
+                            "subscription_expires_at": subscription_expires_at.isoformat(),
                             "gross_amount": notification.gross_amount
                         },
                         severity="info"

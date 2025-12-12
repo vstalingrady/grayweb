@@ -1622,7 +1622,7 @@ function GrayPageClientInner({
       });
   };
 
-  const toggleHabit = (id: string) => {
+  const toggleHabit = async (id: string) => {
     if (!user) {
       return;
     }
@@ -1665,7 +1665,56 @@ function GrayPageClientInner({
         }
         : habit
     );
+
+    // 1. Update local habits state (definitions)
     setHabits(updatedHabits);
+
+    // 2. Update Pulse Entries (Dashboard View source of truth)
+    // We must manually update this so that:
+    // a) The UI updates immediately
+    // b) The usePulse sync logic (which preserves existing pulse status) sees the new status
+    if (activePulse) {
+      const updatedPulseHabits = activePulse.habits.map((h) => {
+        if (h.id === id) {
+          const updatedH = updatedHabits.find((uh) => uh.id === id);
+          if (updatedH) {
+            return {
+              ...h,
+              completed: updatedH.completed,
+              streakLabel: updatedH.streakLabel,
+            };
+          }
+        }
+        return h;
+      });
+
+      const newActivePulse = { ...activePulse, habits: updatedPulseHabits };
+
+      setPulseEntries((prev) =>
+        prev.map((p) => (p.id === activePulse.id ? newActivePulse : p))
+      );
+
+      // 3. Persist to API
+      try {
+        await apiService.createOrUpdateDashboardPulse(user.id, {
+          date_key: newActivePulse.dateKey,
+          timestamp: newActivePulse.timestamp,
+          plans: newActivePulse.plans, // Use existing plans
+          habits: newActivePulse.habits.map((h) => ({
+            id: h.id,
+            label: h.label,
+            streak_label: h.streakLabel,
+            previous_label: h.previousLabel,
+            completed: h.completed,
+          })),
+          proactivity: newActivePulse.proactivity,
+          carry_forward: false,
+        });
+      } catch (err) {
+        console.error("Failed to save habit toggle to pulse:", err);
+        // Optional: Revert state on error?
+      }
+    }
   };
 
   const handleHabitModalSubmit = useCallback(

@@ -5636,7 +5636,7 @@ h1.greeting {
   flex-direction: column;
   gap: clamp(20px, 3vw, 32px);
   min-height: 0;
-  overflow-y: hidden;
+  overflow-y: auto;
   padding-right: clamp(16px, 2.5vw, 24px);
   flex: 1 1 auto;
 }
@@ -6164,7 +6164,8 @@ h1.greeting {
   display: flex;
   flex-direction: column;
   gap: 20px;
-  min-height: clamp(220px, 32vh, 300px);
+  min-height: 0;
+  /* Allow shrinking to fit container */
   height: 100%;
   overflow: hidden;
   box-shadow: none !important;
@@ -6253,9 +6254,7 @@ h1.greeting {
   overflow: hidden;
 }
 
-.dashboardHabitList {
-  max-height: none;
-}
+
 
 .sidebarProactivityCard {
   min-height: auto;
@@ -8222,6 +8221,8 @@ h1.greeting {
   scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
   max-height: 100%;
   width: 100%;
+  flex: 1;
+  min-height: 0;
   box-sizing: border-box;
 }
 
@@ -8443,7 +8444,7 @@ h1.greeting {
 
 .planItemButton:focus-within {
   outline: none;
-  box-shadow: 0 0 0 2px rgba(118, 139, 255, 0.35);
+  /* Removed box-shadow to prevent double focus ring */
   border-radius: 14px;
 }
 
@@ -8470,6 +8471,7 @@ h1.greeting {
 .planCheckboxButton:focus-visible {
   background: rgba(255, 255, 255, 0.06);
   color: rgba(255, 255, 255, 0.98);
+  outline: none;
 }
 
 .planItemButton[disabled] .planCheckboxButton {
@@ -8848,6 +8850,10 @@ h1.greeting {
   width: 100%;
 }
 
+.chatBarInputRow .chatBarRightGroup {
+  margin-right: -8px;
+}
+
 /* Bottom row: Controls - hidden on desktop, shown on mobile */
 .chatBarControlsRow {
   display: none;
@@ -8869,7 +8875,6 @@ h1.greeting {
     align-items: stretch;
     gap: 8px;
     padding: 14px 16px;
-    margin-top: 8px;
   }
 
   .chatBarControlsRow {

@@ -43,7 +43,10 @@ FALLBACK_PRICING: Dict[str, Dict[str, float]] = {
     "models/gemini-flash-lite-latest": {"prompt": 1e-07, "completion": 4e-07, "cached": 1e-08},
     
     # OpenAI GPT (Pioneer)
-    "openai/gpt-5.1-chat": {"prompt": 1.25e-06, "completion": 1e-05, "cached": 1.25e-07},
+    # Updated Dec 2025: $1.75/M input, $14/M output for GPT 5.2 chat + normal
+    "openai/gpt-5.2-chat": {"prompt": 1.75e-06, "completion": 1.4e-05, "cached": 1.75e-07},
+    "openai/gpt-5.2": {"prompt": 1.75e-06, "completion": 1.4e-05, "cached": 1.75e-07},
+    "openai/gpt-5.2-pro": {"prompt": 2.1e-05, "completion": 1.68e-04, "cached": 2.1e-06},
     
     # DeepSeek (Pioneer)
     "deepseek/deepseek-v3.2": {"prompt": 2.7e-07, "completion": 4e-07, "cached": 2.7e-08},
@@ -473,6 +476,34 @@ class UsageTracker:
                 "output_tokens": output_tokens,
                 "cached_tokens": cached_tokens,
                 "cost": cost,
+            },
+        )
+
+
+    async def track_cost(
+        self,
+        user_id: int,
+        cost: float,
+        description: str = "service_cost",
+    ):
+        """Track explicit cost (e.g., search queries) without token counting."""
+        query = """
+            UPDATE users 
+            SET monthly_cost_usage = COALESCE(monthly_cost_usage, 0) + :cost,
+                six_hour_cost_usage = COALESCE(six_hour_cost_usage, 0) + :cost
+            WHERE id = :id
+        """
+        await self.db.execute(
+            query=query,
+            values={"id": user_id, "cost": cost},
+        )
+
+        logger.debug(
+            f"Tracked explicit cost for user {user_id}: ${cost:.6f} ({description})",
+            extra={
+                "user_id": user_id,
+                "cost": cost,
+                "type": description,
             },
         )
 

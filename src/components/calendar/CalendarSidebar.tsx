@@ -61,7 +61,7 @@ export function CalendarSidebar({
     <aside className={sidebarClassName}>
       <header className={styles.calendarSidebarHeader}>
         <div>
-          <span className={styles.calendarSidebarEyebrow}>Calendar</span>
+
           <h2>{formatMonthLabel(monthDate)}</h2>
           {showSelectedDateLabel ? (
             <span className={styles.calendarSidebarSubhead}>

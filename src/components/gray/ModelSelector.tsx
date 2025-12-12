@@ -47,14 +47,15 @@ const PIONEER_GROUPS: ModelGroup[] = [
       { id: "google/gemini-2.5-flash", label: "Gemini 2.5 Flash", cost: "$$" },
     ],
   },
-  {
-    id: "openai",
-    label: "OpenAI",
-    iconPath: "/logos/whiteopenai.svg",
-    models: [
-      { id: "openai/gpt-5.1-chat", label: "GPT 5.1", cost: "$$$" },
-    ],
-  },
+	  {
+	    id: "openai",
+	    label: "OpenAI",
+	    iconPath: "/logos/whiteopenai.svg",
+	    models: [
+	      { id: "openai/gpt-5.2-chat", label: "GPT 5.2", cost: "$$$" },
+      { id: "openai/gpt-5.2-pro", label: "GPT 5.2 Pro", cost: "$$$$", tierRequired: "pioneer" },
+	    ],
+	  },
   {
     id: "deepseek",
     label: "DeepSeek",

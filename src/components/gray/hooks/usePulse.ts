@@ -234,8 +234,31 @@ export function usePulse(
     setPulseEntries((previous) => {
       const existingIndex = previous.findIndex((entry) => entry.dateKey === snapshotBase.dateKey);
       const stableId = existingIndex >= 0 ? previous[existingIndex].id : snapshotBase.id;
+
+      // Preserve completion status and streak info from existing pulse entry if available
+      // because snapshotBase is derived from 'currentHabits' which typically defaults to uncompleted
+      let mergedSnapshot = snapshotBase;
+      if (existingIndex >= 0) {
+        const currentEntry = previous[existingIndex];
+        mergedSnapshot = {
+          ...snapshotBase,
+          habits: snapshotBase.habits.map((h) => {
+            const match = currentEntry.habits.find((ch) => ch.id === h.id);
+            if (match) {
+              return {
+                ...h,
+                completed: match.completed,
+                streakLabel: match.streakLabel,
+                previousLabel: match.previousLabel,
+              };
+            }
+            return h;
+          }),
+        };
+      }
+
       const snapshot: PulseEntry = {
-        ...snapshotBase,
+        ...mergedSnapshot,
         id: stableId,
       };
 

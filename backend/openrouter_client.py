@@ -52,8 +52,9 @@ class OpenRouterService:
         "claude-3.5": "anthropic/claude-3.5-sonnet",
         "claude-3.5-sonnet": "anthropic/claude-3.5-sonnet",
         # OpenAI models (non-reasoning variants)
-        "gpt-5.1": "openai/gpt-5.1-chat",  # Default to chat variant
-        "gpt-5.1-chat": "openai/gpt-5.1-chat",
+        "gpt-5.2": "openai/gpt-5.2-chat",  # Default to chat variant
+        "gpt-5.2-chat": "openai/gpt-5.2-chat",
+        "gpt-5.2-pro": "openai/gpt-5.2-pro",
         "gpt-4o": "openai/gpt-4o",
         "gpt-4-turbo": "openai/gpt-4-turbo",
         "gpt-4o-mini": "openai/gpt-4o-mini",
@@ -82,7 +83,7 @@ class OpenRouterService:
     # Maps non-reasoning model ID -> reasoning model ID
     # NOTE: Only for models where reasoning requires a DIFFERENT model ID
     REASONING_MODEL_VARIANTS = {
-        "openai/gpt-5.1-chat": "openai/gpt-5.1",  # gpt-5.1 is the reasoning variant
+        "openai/gpt-5.2-chat": "openai/gpt-5.2",  # gpt-5.2 is the reasoning variant
         "moonshotai/kimi-k2-0905": "moonshotai/kimi-k2-thinking",  # kimi-k2-thinking is the reasoning variant
         # DeepSeek v3.2 uses the reasoning param, NOT a separate model
         # Grok models handle reasoning via the reasoning param
@@ -92,7 +93,7 @@ class OpenRouterService:
     # Reverse mapping: reasoning model -> non-reasoning model
     # Used to downgrade when reasoning_mode is False but user selected thinking variant
     REVERSE_REASONING_VARIANTS = {
-        "openai/gpt-5.1": "openai/gpt-5.1-chat",
+        "openai/gpt-5.2": "openai/gpt-5.2-chat",
         "moonshotai/kimi-k2-thinking": "moonshotai/kimi-k2-0905",
     }
 
@@ -100,7 +101,8 @@ class OpenRouterService:
     # These models don't need/support the reasoning param - they always reason
     ALWAYS_REASONING_MODELS = {
         "deepseek/deepseek-v3.2-speciale",  # Speciale variant always reasons
-        "openai/gpt-5.1",  # The reasoning variant of gpt-5.1
+        "openai/gpt-5.2",  # The reasoning variant of gpt-5.2
+        "openai/gpt-5.2-pro",
         "moonshotai/kimi-k2-thinking",  # Kimi thinking model always reasons
     }
 
@@ -120,8 +122,9 @@ class OpenRouterService:
         "anthropic/claude-haiku-4.5": 200_000,
         "anthropic/claude-3.5-sonnet": 200_000,
         # OpenAI models
-        "openai/gpt-5.1": 400_000,        # Reasoning variant - 400k
-        "openai/gpt-5.1-chat": 128_000,   # Chat variant - 128k
+        "openai/gpt-5.2": 400_000,        # Reasoning variant - 400k
+        "openai/gpt-5.2-pro": 400_000,
+        "openai/gpt-5.2-chat": 128_000,   # Chat variant - 128k
         "openai/gpt-4o": 128_000,
         "openai/gpt-4-turbo": 128_000,
         "openai/gpt-4o-mini": 128_000,
@@ -488,7 +491,7 @@ class OpenRouterService:
             raise RuntimeError("OpenRouter client is not configured (missing API key)")
 
         # Resolve model with reasoning mode to get the correct variant
-        # e.g., openai/gpt-5.1-chat -> openai/gpt-5.1 when reasoning_mode=True
+        # e.g., openai/gpt-5.2-chat -> openai/gpt-5.2 when reasoning_mode=True
         resolved_model = self._resolve_model(model, reasoning_mode=reasoning_mode)
         history_limit = self._history_window_for_model(resolved_model)
         messages = self._build_messages(conversation_history, message, history_limit)

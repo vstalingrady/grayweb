@@ -3,7 +3,7 @@
 import React, { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Script from "next/script";
-import { Check, CheckCircle, AlertCircle, Loader2, ArrowLeft, CreditCard, Landmark, Smartphone, ShieldCheck, Zap, Globe, Radio, Brain, Clock, Pin, Plus, CalendarClock, MessageSquare, Shuffle, Infinity as InfinityIcon, Headphones, FlaskConical, Database } from "lucide-react";
+import { CheckCircle, AlertCircle, Loader2, ArrowLeft, CreditCard, Landmark, Smartphone, ShieldCheck, Zap, Globe, Radio, Brain, Clock, Pin, Plus, CalendarClock, MessageSquare, Shuffle, Infinity as InfinityIcon, Headphones, FlaskConical, Database } from "lucide-react";
 import styles from "./payment.module.css";
 import pricingStyles from "../pricing/page.module.css";
 import { VOYAGER_FEATURES, PIONEER_FEATURES } from "../pricing/PricingPlansSection";
@@ -18,6 +18,8 @@ interface ChargeResponse {
     deeplink_url?: string;
     va_numbers?: Array<{ bank: string; va_number: string }>;
     redirect_url?: string;
+    bill_key?: string;
+    biller_code?: string;
 }
 
 declare global {
@@ -36,6 +38,58 @@ const PIONEER_PRICING = {
     annual: { price: "Rp 314.750,-", fullPrice: "Rp 3.777.000" }, // 3.777m / 12 ~ 314.75k
 } as const;
 
+
+const PAYMENT_METHODS = [
+    {
+        id: "qris",
+        label: "GoPay Dynamic QRIS",
+        logo: "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a2/Logo_QRIS.svg/1200px-Logo_QRIS.svg.png",
+        type: "gopay",
+        isQris: true
+    },
+    {
+        id: "gopay",
+        label: "GoPay",
+        logo: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/86/Gopay_logo.svg/2560px-Gopay_logo.svg.png",
+        type: "gopay",
+        isDeepLink: true
+    },
+    {
+        id: "bca",
+        label: "BCA",
+        logo: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5c/Bank_Central_Asia.svg/2560px-Bank_Central_Asia.svg.png",
+        type: "bank_transfer",
+        bank: "bca"
+    },
+    {
+        id: "bni",
+        label: "BNI",
+        logo: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5c/Bank_Negara_Indonesia_logo.svg/2560px-Bank_Negara_Indonesia_logo.svg.png",
+        type: "bank_transfer",
+        bank: "bni"
+    },
+    {
+        id: "bri",
+        label: "BRI",
+        logo: "https://upload.wikimedia.org/wikipedia/commons/thumb/6/68/BANK_BRI_logo.svg/2560px-BANK_BRI_logo.svg.png",
+        type: "bank_transfer",
+        bank: "bri"
+    },
+    {
+        id: "mandiri",
+        label: "Bank Mandiri",
+        logo: "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ad/Bank_Mandiri_logo_2016.svg/2560px-Bank_Mandiri_logo_2016.svg.png",
+        type: "echannel"
+    },
+    {
+        id: "permata",
+        label: "PermataBank",
+        logo: "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3a/Bank_Permata_Logo.svg/1200px-Bank_Permata_Logo.svg.png",
+        type: "bank_transfer",
+        bank: "permata"
+    }
+];
+
 function PaymentContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -44,18 +98,15 @@ function PaymentContent() {
 
     // State
     const [billingCycle, setBillingCycle] = useState<"monthly" | "annual">((cycleParam as "monthly" | "annual") || "monthly");
-    const [paymentMethod, setPaymentMethod] = useState<"gopay" | "bank_transfer" | "credit_card">("gopay");
-    const [selectedBank, setSelectedBank] = useState<"bca" | "bni" | "bri">("bca");
+    const [selectedMethodId, setSelectedMethodId] = useState<string>("gopay");
+
     const [status, setStatus] = useState<PaymentStatus>("idle");
     const [chargeData, setChargeData] = useState<ChargeResponse | null>(null);
     const [errorMessage, setErrorMessage] = useState("");
 
-    // Card Input State
-    const [cardNumber, setCardNumber] = useState("");
-    const [cardExpMonth, setCardExpMonth] = useState("");
-    const [cardExpYear, setCardExpYear] = useState("");
-    const [cardCVV, setCardCVV] = useState("");
-    const [isProcessingCard, setIsProcessingCard] = useState(false);
+    const walletMethods = PAYMENT_METHODS.filter((m) => ["gopay", "qris"].includes(m.id));
+    const virtualAccountMethods = PAYMENT_METHODS.filter((m) => !["gopay", "qris"].includes(m.id));
+
 
     // Derived Data
     const planName = planParam === "pioneer" ? "Gray Pioneer" : "Gray Voyager";
@@ -81,41 +132,17 @@ function PaymentContent() {
         try {
             let tokenId = null;
 
-            if (paymentMethod === "credit_card") {
-                setIsProcessingCard(true);
-                // Tokenize Card
-                tokenId = await new Promise<string>((resolve, reject) => {
-                    const cardData = {
-                        "card_number": cardNumber.replace(/\s/g, ""),
-                        "card_exp_month": cardExpMonth,
-                        "card_exp_year": cardExpYear,
-                        "card_cvv": cardCVV,
-                    };
-                    const options = {
-                        onSuccess: function (response: any) {
-                            resolve(response.token_id);
-                        },
-                        onFailure: function (response: any) {
-                            reject(new Error("Card tokenization failed: " + response.status_message));
-                        }
-                    };
 
-                    if (window.MidtransNew3ds) {
-                        window.MidtransNew3ds.getCardToken(cardData, options);
-                    } else {
-                        reject(new Error("Midtrans library not loaded."));
-                    }
-                });
-                setIsProcessingCard(false);
-            }
+            const selectedMethod = PAYMENT_METHODS.find(m => m.id === selectedMethodId);
+            if (!selectedMethod) throw new Error("Invalid payment method");
 
             const payload = {
                 plan_tier: planParam,
-                payment_type: paymentMethod,
-                bank: paymentMethod === "bank_transfer" ? selectedBank : undefined,
-                token_id: tokenId,
+                payment_type: selectedMethod.type,
+                bank: selectedMethod.bank, // undefined for non-bank_transfer
                 billing_cycle: billingCycle
             };
+
 
             const res = await fetch("/api/payment/charge", {
                 method: "POST",
@@ -136,7 +163,8 @@ function PaymentContent() {
             setStatus("success");
 
             // Handle 3DS Redirect for Credit Card
-            if (paymentMethod === "credit_card" && data.redirect_url) {
+            // Handle Redirects (3DS or other)
+            if (data.redirect_url) {
                 window.location.href = data.redirect_url;
             }
 
@@ -144,7 +172,6 @@ function PaymentContent() {
             console.error(err);
             setStatus("error");
             setErrorMessage(err.message || "An unexpected error occurred.");
-            setIsProcessingCard(false);
         }
     };
 
@@ -179,6 +206,10 @@ function PaymentContent() {
     if (status === "success" && chargeData) {
         return (
             <div className={styles.page}>
+                <div className={pricingStyles.starField} aria-hidden="true">
+                    <div className={pricingStyles.starLayer} />
+                    <div className={pricingStyles.starLayer} data-variant="dense" />
+                </div>
                 <div className={styles.container}>
                     <div className={styles.successContainer}>
                         <div style={{ padding: "1.5rem", background: "rgba(255, 255, 255, 0.1)", borderRadius: "50%" }}>
@@ -189,13 +220,13 @@ function PaymentContent() {
                             <p className={styles.subtitle}>Complete payment to activate.</p>
                         </div>
 
-                        {paymentMethod === "gopay" && chargeData.qr_code_url && (
+                        {chargeData.qr_code_url && (
                             <div style={{ background: "white", padding: "1rem", borderRadius: "16px" }}>
                                 <img src={chargeData.qr_code_url} alt="QRIS" style={{ width: "200px", height: "200px" }} />
                             </div>
                         )}
 
-                        {paymentMethod === "bank_transfer" && chargeData.va_numbers && (
+                        {chargeData.va_numbers && (
                             <div className={styles.summaryBox} style={{ width: "100%", maxWidth: "300px" }}>
                                 <div style={{ fontSize: "0.9rem", color: "rgba(255,255,255,0.6)" }}>VIRTUAL ACCOUNT NUMBER</div>
                                 <div style={{ fontSize: "2rem", fontFamily: "monospace", margin: "0.5rem 0", color: "white" }}>{chargeData.va_numbers[0].va_number}</div>
@@ -203,7 +234,20 @@ function PaymentContent() {
                             </div>
                         )}
 
-                        {paymentMethod === "gopay" && chargeData.deeplink_url && (
+                        {chargeData.bill_key && chargeData.biller_code && (
+                            <div className={styles.summaryBox} style={{ width: "100%", maxWidth: "300px" }}>
+                                <div style={{ marginBottom: "1rem" }}>
+                                    <div style={{ fontSize: "0.9rem", color: "rgba(255,255,255,0.6)" }}>BILLER CODE</div>
+                                    <div style={{ fontSize: "1.5rem", fontFamily: "monospace", color: "white" }}>{chargeData.biller_code}</div>
+                                </div>
+                                <div>
+                                    <div style={{ fontSize: "0.9rem", color: "rgba(255,255,255,0.6)" }}>BILL KEY</div>
+                                    <div style={{ fontSize: "1.5rem", fontFamily: "monospace", color: "white" }}>{chargeData.bill_key}</div>
+                                </div>
+                            </div>
+                        )}
+
+                        {chargeData.deeplink_url && (
                             <a href={chargeData.deeplink_url} target="_blank" rel="noreferrer" className={styles.payButton} style={{ textDecoration: "none", display: "inline-block", maxWidth: "300px" }}>
                                 Open Gojek App
                             </a>
@@ -214,15 +258,16 @@ function PaymentContent() {
                         </button>
                     </div>
                 </div>
-                <div className={styles.particleBackground}>
-                    <div className={styles.starLayer} />
-                </div>
             </div>
         );
     }
 
     return (
         <div className={styles.page}>
+            <div className={pricingStyles.starField} aria-hidden="true">
+                <div className={pricingStyles.starLayer} />
+                <div className={pricingStyles.starLayer} data-variant="dense" />
+            </div>
             <Script
                 id="midtrans-script"
                 src="https://api.midtrans.com/v2/assets/js/midtrans-new-3ds.min.js"
@@ -230,17 +275,20 @@ function PaymentContent() {
                 data-client-key={process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY}
             />
 
-            <button
-                onClick={() => router.back()}
-                className={styles.dismiss}
-            >
-                <ArrowLeft size={20} />
-            </button>
-
+            <div className={styles.topRow}>
+                <button
+                    type="button"
+                    onClick={() => router.back()}
+                    className={styles.dismiss}
+                    aria-label="Back"
+                >
+                    <ArrowLeft size={20} />
+                </button>
+            </div>
             <div className={styles.mainGrid}>
                 {/* LEFT COLUMN: Summary & Features - using exact pricing page styles */}
                 <div className={styles.summaryColumn}>
-                    <article className={pricingStyles.planCard} data-variant="highlighted">
+                    <article className={`${pricingStyles.planCard} ${styles.planCard}`} data-variant="highlighted">
                         <div className={pricingStyles.cardBody}>
                             <div className={pricingStyles.cardIntro}>
                                 <header className={pricingStyles.cardHeader}>
@@ -276,131 +324,77 @@ function PaymentContent() {
 
                     <div>
                         <h3 className={styles.sectionTitle}>Billing Cycle</h3>
-                        <div className={pricingStyles.billingToggle} role="group" aria-label="Billing cadence" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', width: '100%' }}>
+                        <div
+                            className={styles.billingToggle}
+                            role="group"
+                            aria-label="Billing cadence"
+                            data-cycle={billingCycle}
+                        >
+                            <div className={styles.billingThumb} aria-hidden="true" />
                             <button
                                 type="button"
                                 data-active={billingCycle === "monthly"}
+                                aria-pressed={billingCycle === "monthly"}
                                 onClick={() => setBillingCycle("monthly")}
-                                style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '0.5rem' }}
                             >
-                                <div style={{ fontWeight: 600 }}>Pay monthly</div>
-                                <div style={{ fontSize: '0.85rem', opacity: 0.7 }}>{pricingData.monthly.fullPrice} per month</div>
+                                <div className={styles.cycleHeader}>
+                                    <span>Pay monthly</span>
+                                </div>
+                                <div className={styles.cycleMeta}>{pricingData.monthly.fullPrice} per month</div>
                             </button>
                             <button
                                 type="button"
                                 data-active={billingCycle === "annual"}
+                                aria-pressed={billingCycle === "annual"}
                                 onClick={() => setBillingCycle("annual")}
-                                style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '0.5rem' }}
                             >
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 600 }}>
-                                    Pay yearly
-                                    <span style={{ fontSize: '0.7rem', opacity: 0.8 }}>Save 17%</span>
+                                <div className={styles.cycleHeader}>
+                                    <span className={styles.cycleHeaderWithBadge}>
+                                        Pay yearly
+                                        <span className={styles.saveBadge}>Save 17%</span>
+                                    </span>
                                 </div>
-                                <div style={{ fontSize: '0.85rem', opacity: 0.7 }}>{pricingData.annual.fullPrice} per year</div>
+                                <div className={styles.cycleMeta}>{pricingData.annual.fullPrice} per year</div>
                             </button>
                         </div>
                     </div>
 
-                    <div>
-                        <h3 className={styles.sectionTitle}>Payment Method</h3>
-                        <div className={styles.paymentMethods}>
-                            <button
-                                className={styles.methodButton}
-                                data-selected={paymentMethod === "gopay"}
-                                onClick={() => setPaymentMethod("gopay")}
-                            >
-                                <Smartphone size={24} />
-                                <div>
-                                    <div style={{ fontWeight: 600 }}>GoPay / QRIS</div>
-                                    <div style={{ fontSize: "0.8rem", opacity: 0.6 }}>Scan with any app</div>
-                                </div>
-                                {paymentMethod === "gopay" && <div style={{ marginLeft: "auto", width: 4, height: 4, borderRadius: "50%", background: "white" }} />}
-                            </button>
 
-                            <button
-                                className={styles.methodButton}
-                                data-selected={paymentMethod === "bank_transfer"}
-                                onClick={() => setPaymentMethod("bank_transfer")}
+                    <div className={styles.activePaymentMethodsCard}>
+                        <h3 className={styles.activePaymentMethodsTitle}>Active payment methods</h3>
+                        <div className={styles.paymentSelectWrapper}>
+                            <label htmlFor="payment-method" className={styles.paymentSelectLabel}>
+                                Choose a method
+                            </label>
+                            <select
+                                id="payment-method"
+                                className={styles.paymentSelect}
+                                value={selectedMethodId}
+                                onChange={(e) => setSelectedMethodId(e.target.value)}
                             >
-                                <Landmark size={24} />
-                                <div>
-                                    <div style={{ fontWeight: 600 }}>Bank Transfer</div>
-                                    <div style={{ fontSize: "0.8rem", opacity: 0.6 }}>Virtual Account</div>
-                                </div>
-                                {paymentMethod === "bank_transfer" && <div style={{ marginLeft: "auto", width: 4, height: 4, borderRadius: "50%", background: "white" }} />}
-                            </button>
-
-                            <button
-                                className={styles.methodButton}
-                                data-selected={paymentMethod === "credit_card"}
-                                onClick={() => setPaymentMethod("credit_card")}
-                            >
-                                <CreditCard size={24} />
-                                <div>
-                                    <div style={{ fontWeight: 600 }}>Credit Card</div>
-                                    <div style={{ fontSize: "0.8rem", opacity: 0.6 }}>Visa, Mastercard</div>
-                                </div>
-                                {paymentMethod === "credit_card" && <div style={{ marginLeft: "auto", width: 4, height: 4, borderRadius: "50%", background: "white" }} />}
-                            </button>
+                                <optgroup label="E‑Wallet & QRIS">
+                                    {walletMethods.map((method) => (
+                                        <option key={method.id} value={method.id}>
+                                            {method.label}
+                                        </option>
+                                    ))}
+                                </optgroup>
+                                <optgroup label="Virtual Accounts">
+                                    {virtualAccountMethods.map((method) => (
+                                        <option key={method.id} value={method.id}>
+                                            {method.label}
+                                        </option>
+                                    ))}
+                                </optgroup>
+                            </select>
+                            <div className={styles.paymentSelectHint}>
+                                You can change this later in checkout.
+                            </div>
                         </div>
                     </div>
 
-                    {
-                        paymentMethod === "bank_transfer" && (
-                            <div className={styles.bankList}>
-                                {(["bca", "bni", "bri"] as const).map(bank => (
-                                    <button
-                                        key={bank}
-                                        className={styles.bankButton}
-                                        data-active={selectedBank === bank}
-                                        onClick={() => setSelectedBank(bank)}
-                                    >
-                                        {bank}
-                                    </button>
-                                ))}
-                            </div>
-                        )
-                    }
 
-                    {
-                        paymentMethod === "credit_card" && (
-                            <div className={styles.cardForm}>
-                                <input
-                                    className={styles.input}
-                                    type="text"
-                                    placeholder="Card Number"
-                                    value={cardNumber}
-                                    onChange={e => setCardNumber(e.target.value)}
-                                />
-                                <div className={styles.expiryRow}>
-                                    <input
-                                        className={styles.input}
-                                        type="text"
-                                        placeholder="MM"
-                                        value={cardExpMonth}
-                                        onChange={e => setCardExpMonth(e.target.value)}
-                                        maxLength={2}
-                                    />
-                                    <input
-                                        className={styles.input}
-                                        type="text"
-                                        placeholder="YYYY"
-                                        value={cardExpYear}
-                                        onChange={e => setCardExpYear(e.target.value)}
-                                        maxLength={4}
-                                    />
-                                    <input
-                                        className={styles.input}
-                                        type="text"
-                                        placeholder="CVV"
-                                        value={cardCVV}
-                                        onChange={e => setCardCVV(e.target.value)}
-                                        maxLength={4}
-                                    />
-                                </div>
-                            </div>
-                        )
-                    }
+
 
                     <div className={styles.payButtonContainer}>
                         {status === "error" && (
@@ -412,9 +406,9 @@ function PaymentContent() {
                         <button
                             className={styles.payButton}
                             onClick={handlePayment}
-                            disabled={isProcessingCard || status === "loading"}
+                            disabled={status === "loading"}
                         >
-                            {isProcessingCard || status === "loading" ? (
+                            {status === "loading" ? (
                                 <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem" }}>
                                     <Loader2 size={20} className="animate-spin" /> Processing
                                 </span>

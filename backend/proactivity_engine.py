@@ -228,10 +228,21 @@ class ProactivityEngine:
         self,
         settings: Dict[str, Any],
         timezone: str,
+        *,
+        now_override: Optional[datetime] = None,
     ) -> Optional[Tuple[datetime, datetime]]:
         local_tz = self._resolve_timezone(timezone)
-        local_now = datetime.now(local_tz)
-        tolerance = timedelta(minutes=30)  # 30-minute window around scheduled time
+        if now_override is None:
+            local_now = datetime.now(local_tz)
+        else:
+            local_now = now_override
+            if local_now.tzinfo is None:
+                local_now = local_now.replace(tzinfo=local_tz)
+            else:
+                local_now = local_now.astimezone(local_tz)
+
+        # Allow a grace period after the scheduled time, but never send early.
+        tolerance_after = timedelta(minutes=30)
         for time_str in self._extract_times(settings):
             parts = time_str.split(":")
             if len(parts) < 2:
@@ -242,8 +253,8 @@ class ProactivityEngine:
             except (TypeError, ValueError):
                 continue
             target_time = local_now.replace(hour=target_hour, minute=target_minute, second=0, microsecond=0)
-            window_start = target_time - tolerance
-            window_end = target_time + tolerance
+            window_start = target_time
+            window_end = target_time + tolerance_after
             if window_start <= local_now <= window_end:
                 return window_start, window_end
         return None

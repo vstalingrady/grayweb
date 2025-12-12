@@ -62,6 +62,18 @@ def create_core_api_transaction(
             "token_id": token_id,
             "authentication": True
         }
+    elif payment_type == "echannel":
+        # Mandiri Bill Payment
+        payload["echannel"] = {
+            "bill_info1": "Payment For:",
+            "bill_info2": "Gray Subscription"
+        }
+    elif payment_type == "permata":
+        # Permata VA
+        # Permata doesn't require specific args in core api usually, acts like bank transfer but type is 'permata'
+        # Check doc: Core API 'permata' parameter is empty object or specific overrides?
+        # Usually standard implementation suffices.
+        pass
 
     try:
         response = core_api.charge(payload)

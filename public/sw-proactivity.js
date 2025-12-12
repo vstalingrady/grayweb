@@ -14,8 +14,15 @@ self.addEventListener("push", (event) => {
   const title = data.title || "Gray Check-in";
   const message = data.message || "How are things going right now?";
 
+  // Chrome on Android uses a generic monogram icon if icon/badge are missing.
+  // Default to our app icon, but allow backend to override.
+  const icon = data.icon || "/grayai.png";
+  const badge = data.badge || "/grayai.png";
+
   const options = {
     body: message,
+    icon,
+    badge,
     tag: data.tag || "gray-proactivity",
     requireInteraction: true,
     data,
@@ -46,4 +53,3 @@ self.addEventListener("notificationclick", (event) => {
       })
   );
 });
-
