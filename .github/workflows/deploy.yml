@@ -1,20 +1,60 @@
-name: Deploy
+name: CI and Deploy
 
 on:
   push:
     branches:
       - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
 
 jobs:
-  deploy:
+  ci:
     runs-on: ubuntu-latest
     steps:
-      - name: Pull latest code on server
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install frontend deps
+        run: npm ci
+
+      - name: Lint frontend
+        run: npm run lint
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install backend deps
+        run: pip install -r backend/requirements.txt
+
+      - name: Run backend tests
+        run: pytest backend/tests
+
+  deploy:
+    needs: ci
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-main
+      cancel-in-progress: false
+    steps:
+      - name: Deploy on server via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
+          script_stop: true
           script: |
-            cd /home/ubuntu/gray
-            git pull origin main
+            export REPO_DIR=/home/ubuntu/gray
+            cd "$REPO_DIR"
+            ./scripts/deploy.sh main
