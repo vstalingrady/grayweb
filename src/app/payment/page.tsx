@@ -169,7 +169,7 @@ function PaymentContent() {
             };
 
 
-            const res = await fetch("/api/payment/charge", {
+            const res = await fetch("/api/backend/api/payment/charge", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -179,8 +179,20 @@ function PaymentContent() {
             });
 
             if (!res.ok) {
-                const errData = await res.json();
-                throw new Error(errData.detail || "Payment initialization failed");
+                const contentType = res.headers.get("content-type") || "";
+                let detail = "Payment initialization failed";
+                try {
+                    if (contentType.includes("application/json")) {
+                        const errData = await res.json();
+                        detail = errData?.detail || errData?.message || detail;
+                    } else {
+                        const text = await res.text();
+                        if (text) detail = text;
+                    }
+                } catch {
+                    // ignore parse errors; use default detail
+                }
+                throw new Error(detail);
             }
 
             const data = await res.json();
