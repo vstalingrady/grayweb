@@ -581,7 +581,15 @@ if __name__ == "__main__":
         host=backend_host,
         port=backend_port,
         reload=True,
-        reload_excludes=["*.db", "*.sqlite", "*.sqlite3", "*.log"],
+        reload_excludes=[
+            "*.db",
+            "*.db-*",
+            "*.sqlite",
+            "*.sqlite-*",
+            "*.sqlite3",
+            "*.sqlite3-*",
+            "*.log",
+        ],
         log_level=uvicorn_log_level,
         access_log=False,
     )
