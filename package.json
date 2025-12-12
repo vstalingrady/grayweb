@@ -8,6 +8,7 @@
     "arq:worker:dev": "cd backend && ../.venv/bin/python3 dev_arq_worker.py",
     "backend:services": "concurrently \"npm run backend\" \"npm run arq:worker:dev\"",
     "dev": "next dev",
+    "dev:all": "concurrently \"npm run dev\" \"npm run backend:services\"",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
