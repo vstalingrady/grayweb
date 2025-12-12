@@ -161,14 +161,14 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
   git pull
   docker compose -f docker-compose.yml up -d --build --remove-orphans
   ```
-- Optional staging/dev stack on the same server (ports `3001/8001`, separate SQLite in `data-dev/`):
+- Optional staging/dev stack on the same server (default ports `3000/8000`, separate SQLite in `data-dev/`):
   ```bash
   cd /home/ubuntu/gray
   git checkout main
   git pull
   docker compose -p gray-dev -f docker-compose.yml -f docker-compose.dev.yml up -d --build --remove-orphans
   ```
-- Captcha (Turnstile) is automatically disabled on localhost and port `3001`.
+- Captcha (Turnstile) is automatically disabled on localhost and port `3000`.
 
 ## Auth experience
 

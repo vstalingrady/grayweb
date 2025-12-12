@@ -257,7 +257,7 @@ export default function LoginForm({
       return true;
     }
     const { hostname, port } = window.location;
-    if (isLocalHostname(hostname) || port === "3001") {
+    if (isLocalHostname(hostname) || port === "3000") {
       return false;
     }
     return true;

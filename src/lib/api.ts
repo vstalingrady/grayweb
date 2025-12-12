@@ -1,181 +1,8 @@
 import { getSupabaseClient } from './supabaseClient';
 
-const DEV_FALLBACK_API_URL = 'http://localhost:8000';
 const API_PROXY_PREFIX = '/api/backend';
 
-const isProxyDisabled = () =>
-  process.env.NEXT_PUBLIC_DISABLE_API_PROXY?.toLowerCase() === 'true';
-
-const shouldUseProxyBase = (candidateUrl?: string) => {
-  if (typeof window === 'undefined' || isProxyDisabled()) {
-    return false;
-  }
-
-  const trimmed = candidateUrl?.trim();
-  if (!trimmed || trimmed.length === 0) {
-    return true;
-  }
-
-  if (trimmed.startsWith('/')) {
-    return false;
-  }
-
-  const currentOrigin = window.location?.origin;
-  if (currentOrigin) {
-    try {
-      const candidateOrigin = new URL(trimmed, currentOrigin).origin;
-      if (candidateOrigin !== currentOrigin) {
-        return true;
-      }
-    } catch {
-      // Fall back to existing heuristics when the candidate URL is malformed.
-    }
-  }
-
-  const usesInsecureHttp = trimmed.toLowerCase().startsWith('http://');
-  const isSecureContext = window.location?.protocol === 'https:';
-
-  return Boolean(isSecureContext && usesInsecureHttp);
-};
-
-const stripTrailingSlashes = (value: string) => value.replace(/\/+$/, '');
-
-const LOCALHOST_HOSTNAMES = new Set(['localhost', '127.0.0.1', '0.0.0.0']);
-
-const isLocalLikeHostname = (hostname: string | null | undefined): boolean => {
-  if (!hostname) {
-    return false;
-  }
-  const normalized = hostname.toLowerCase();
-  if (LOCALHOST_HOSTNAMES.has(normalized)) {
-    return true;
-  }
-  return normalized.endsWith('.localhost');
-};
-
-const adaptEnvBaseUrlForClientHost = (value: string): string => {
-  if (typeof window === 'undefined') {
-    return value;
-  }
-
-  let parsed: URL | null = null;
-  try {
-    parsed = new URL(value, window.location.origin);
-  } catch {
-    return value;
-  }
-
-  const normalizedHost = parsed.hostname?.toLowerCase();
-  const clientHost = window.location.hostname?.toLowerCase();
-  if (normalizedHost && isLocalLikeHostname(normalizedHost) && clientHost && !isLocalLikeHostname(clientHost)) {
-    parsed.hostname = clientHost;
-    return stripTrailingSlashes(parsed.toString());
-  }
-
-  return value;
-};
-
-const enforceSecureBaseUrl = (value: string): string => {
-  const trimmed = stripTrailingSlashes(value);
-  if (!trimmed || trimmed.startsWith('/')) {
-    return trimmed;
-  }
-
-  const lower = trimmed.toLowerCase();
-  const isInsecureHttp = lower.startsWith('http://');
-  const isSecureContext = typeof window !== 'undefined' && window.location?.protocol === 'https:';
-
-  if (!isSecureContext || !isInsecureHttp) {
-    return trimmed;
-  }
-
-  let hostname: string | null = null;
-  try {
-    hostname = new URL(trimmed).hostname;
-  } catch {
-    hostname = null;
-  }
-
-  if (hostname && isLocalLikeHostname(hostname)) {
-    return trimmed;
-  }
-
-  if (!isProxyDisabled()) {
-    return API_PROXY_PREFIX;
-  }
-
-  return stripTrailingSlashes(trimmed.replace(/^http:\/\//i, 'https://'));
-};
-
-export const resolveApiBaseUrl = () => {
-  // Hardcoded override to prevent Mixed Content errors on the production domain.
-  // This ensures we always use the relative proxy path instead of trying to hit port 8000 directly.
-  if (typeof window !== 'undefined') {
-    if (window.location.hostname === 'gray.alignment.id' || window.location.protocol === 'https:') {
-      return API_PROXY_PREFIX;
-    }
-  }
-
-  const envUrl = process.env.NEXT_PUBLIC_API_URL?.trim();
-  if (envUrl) {
-    const adaptedUrl = adaptEnvBaseUrlForClientHost(envUrl);
-    let adaptedHostname: string | null = null;
-    try {
-      adaptedHostname = new URL(adaptedUrl, typeof window !== 'undefined' ? window.location.origin : undefined).hostname;
-    } catch {
-      adaptedHostname = null;
-    }
-    const isSecureContext = typeof window !== 'undefined' && window.location?.protocol === 'https:';
-    const usesInsecureHttp = adaptedUrl.toLowerCase().startsWith('http://');
-
-    // Force HTTPS or proxy for non-local hosts even during SSR to avoid mixed-content requests.
-    if (usesInsecureHttp && adaptedHostname && !isLocalLikeHostname(adaptedHostname)) {
-      if (!isProxyDisabled()) {
-        return API_PROXY_PREFIX;
-      }
-      return stripTrailingSlashes(adaptedUrl.replace(/^http:\/\//i, 'https://'));
-    }
-
-    // Avoid mixed-content fetches when the page is served over HTTPS.
-    if (isSecureContext && usesInsecureHttp) {
-      if (!isProxyDisabled()) {
-        return API_PROXY_PREFIX;
-      }
-      return stripTrailingSlashes(adaptedUrl.replace(/^http:\/\//i, 'https://'));
-    }
-
-    if (shouldUseProxyBase(adaptedUrl)) {
-      return API_PROXY_PREFIX;
-    }
-    return enforceSecureBaseUrl(adaptedUrl);
-  }
-
-  if (shouldUseProxyBase()) {
-    return API_PROXY_PREFIX;
-  }
-
-  if (typeof window !== 'undefined' && window.location) {
-    const { origin, hostname } = window.location;
-    if (hostname && hostname !== 'localhost' && hostname !== '127.0.0.1') {
-      return enforceSecureBaseUrl(origin);
-    }
-  }
-
-  const runtimeUrl =
-    process.env.NEXT_PUBLIC_SITE_URL ||
-    process.env.SITE_URL ||
-    process.env.NEXT_PUBLIC_VERCEL_URL ||
-    process.env.VERCEL_URL;
-
-  if (runtimeUrl && runtimeUrl.trim().length > 0) {
-    const normalized = runtimeUrl.startsWith('http') ? runtimeUrl : `https://${runtimeUrl}`;
-    return enforceSecureBaseUrl(normalized);
-  }
-
-  return enforceSecureBaseUrl(DEV_FALLBACK_API_URL);
-};
-
-const isDevEnv = () => process.env.NODE_ENV !== 'production';
+export const resolveApiBaseUrl = () => API_PROXY_PREFIX;
 
 const buildBodyPreview = (body: unknown): string | undefined => {
   if (!body) {
@@ -759,12 +586,8 @@ class ApiService {
         ? crypto.randomUUID()
         : Math.random().toString(36).slice(2);
 
-    // Enhanced logging configuration
-    // - Always log errors in development.
-    // - Only log verbose per-request start/success details when the explicit flag is enabled.
-    const logLevel = process.env.NODE_ENV === 'development' ? 'debug' : 'info';
+    // Logging configuration - only log when the explicit flag is enabled.
     const shouldLogVerbose = process.env.NEXT_PUBLIC_ENABLE_API_LOGGING === 'true';
-    const shouldLogErrors = isDevEnv() || shouldLogVerbose;
 
     const logData = {
       requestId,
@@ -779,7 +602,7 @@ class ApiService {
     };
 
     if (shouldLogVerbose) {
-      console.log(`[${logLevel.toUpperCase()}][ApiService.fetch:start]`, {
+      console.log(`[INFO][ApiService.fetch:start]`, {
         ...logData,
         eventType: 'api_request_start',
         performance_start: startTime,
@@ -840,7 +663,7 @@ class ApiService {
         const upstreamTimeoutStatuses = [520, 521, 522, 523, 524, 525, 526, 527, 598, 599];
         const isUpstreamTimeout = upstreamTimeoutStatuses.includes(response.status);
 
-        if (shouldLogErrors) {
+        if (shouldLogVerbose) {
           // Don't log 404s as errors, as they are often used for control flow (e.g. checking if user exists)
           if (response.status === 404) {
             console.debug(`[INFO][ApiService.fetch:response-404]`, {
@@ -852,8 +675,7 @@ class ApiService {
               timestamp: new Date().toISOString(),
             });
           } else if (isUpstreamTimeout) {
-            const logMethod = isDevEnv() ? console.warn : console.error;
-            logMethod(`[WARN][ApiService.fetch:upstream-timeout]`, {
+            console.warn(`[WARN][ApiService.fetch:upstream-timeout]`, {
               requestId,
               endpoint,
               url,
@@ -897,7 +719,7 @@ class ApiService {
       if (response.status === 204) {
         const responseTime = performance.now() - startTime;
         if (shouldLogVerbose) {
-          console.log(`[${logLevel.toUpperCase()}][ApiService.fetch:success]`, {
+          console.log(`[INFO][ApiService.fetch:success]`, {
             requestId,
             endpoint,
             status: response.status,
@@ -914,7 +736,7 @@ class ApiService {
       if (!contentType || !contentType.includes('application/json')) {
         const responseTime = performance.now() - startTime;
         if (shouldLogVerbose) {
-          console.log(`[${logLevel.toUpperCase()}][ApiService.fetch:success]`, {
+          console.log(`[INFO][ApiService.fetch:success]`, {
             requestId,
             endpoint,
             status: response.status,
@@ -931,7 +753,7 @@ class ApiService {
       const responseTime = performance.now() - startTime;
 
       if (shouldLogVerbose) {
-        console.log(`[${logLevel.toUpperCase()}][ApiService.fetch:success]`, {
+        console.log(`[INFO][ApiService.fetch:success]`, {
           requestId,
           endpoint,
           status: response.status,
@@ -949,7 +771,7 @@ class ApiService {
       const baseUrl = resolveApiBaseUrl();
 
       if (error instanceof ApiError && error.status === 404) {
-        if (shouldLogErrors) {
+        if (shouldLogVerbose) {
           console.debug(`[DEBUG][ApiService.fetch:404-error]`, {
             requestId,
             endpoint,
@@ -975,9 +797,8 @@ class ApiService {
         if (isNetworkFailure) {
           const friendlyMessage = `Unable to reach the API at ${baseUrl}. Verify that the backend service is running and accessible.`;
 
-          if (shouldLogErrors) {
-            const logMethod = isDevEnv() ? console.warn : console.error;
-            logMethod(`[WARN][ApiService.fetch:network-error]`, {
+          if (shouldLogVerbose) {
+            console.warn(`[WARN][ApiService.fetch:network-error]`, {
               requestId,
               endpoint,
               url,
@@ -996,9 +817,8 @@ class ApiService {
       }
 
       if (error instanceof ApiNetworkError) {
-        if (shouldLogErrors) {
-          const logMethod = isDevEnv() ? console.warn : console.error;
-          logMethod(`[WARN][ApiService.fetch:network-error-rethrow]`, {
+        if (shouldLogVerbose) {
+          console.warn(`[WARN][ApiService.fetch:network-error-rethrow]`, {
             requestId,
             endpoint,
             url,
@@ -1013,7 +833,7 @@ class ApiService {
       }
 
       // Unexpected error logging
-      if (shouldLogErrors) {
+      if (shouldLogVerbose) {
         const errorDetails = error instanceof Error ? {
           name: error.name,
           message: error.message,
@@ -1567,7 +1387,9 @@ class ApiService {
         ? crypto.randomUUID()
         : Math.random().toString(36).slice(2);
 
-    if (isDevEnv()) {
+    const shouldLogVerbose = process.env.NEXT_PUBLIC_ENABLE_API_LOGGING === 'true';
+
+    if (shouldLogVerbose) {
       // eslint-disable-next-line no-console
       console.debug('[ApiService.sendMessageStream:start]', {
         requestId,
@@ -1615,7 +1437,7 @@ class ApiService {
       } catch {
         // Best effort - non JSON payloads fall back to default message.
       }
-      if (isDevEnv()) {
+      if (shouldLogVerbose) {
         // eslint-disable-next-line no-console
         console.error('[ApiService.sendMessageStream:response-error]', {
           requestId,

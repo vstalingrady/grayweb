@@ -440,6 +440,7 @@
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 14px;
   background: rgba(8, 8, 8, 0.95);
+  overflow: hidden;
   transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
 }
 
@@ -452,6 +453,8 @@
 .authFieldInputWrapper .authFieldInput {
   border: none;
   border-radius: 0;
+  border-top-left-radius: 14px;
+  border-bottom-left-radius: 14px;
   padding: 0.95rem 1.05rem;
   background: transparent;
   box-shadow: none;
@@ -784,5 +787,9 @@
   .authContent {
     align-items: flex-start;
     overflow-y: auto;
+    background: #050505;
+    border-left: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 0 clamp(24px, 4vw, 36px) clamp(24px, 4vw, 36px) 0;
+    box-shadow: 0 40px 90px rgba(0, 0, 0, 0.6);
   }
 }
