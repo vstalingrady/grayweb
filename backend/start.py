@@ -560,17 +560,28 @@ if __name__ == "__main__":
         LOG.warning(f"Failed to seed workspace backgrounds: {e}")
 
     total_startup_time = (time.time() - startup_start_time) * 1000
-    LOG.info(f"🚀 Server starting on http://localhost:8000 (startup: {total_startup_time:.0f}ms)")
+
+    backend_host = os.getenv("BACKEND_HOST", "0.0.0.0")
+    backend_port_raw = os.getenv("BACKEND_PORT") or os.getenv("PORT") or "8000"
+    try:
+        backend_port = int(backend_port_raw)
+    except ValueError:
+        LOG.warning(f"Invalid BACKEND_PORT='{backend_port_raw}', defaulting to 8000")
+        backend_port = 8000
+
+    LOG.info(
+        f"🚀 Server starting on http://localhost:{backend_port} (startup: {total_startup_time:.0f}ms)"
+    )
 
     # Start the FastAPI server
     uvicorn_log_level = logging.getLevelName(LOG.getEffectiveLevel()).lower()
 
     uvicorn.run(
         "backend.main:app",
-        host="0.0.0.0",
-        port=8000,
+        host=backend_host,
+        port=backend_port,
         reload=True,
         reload_excludes=["*.db", "*.sqlite", "*.sqlite3", "*.log"],
         log_level=uvicorn_log_level,
-        access_log=False
+        access_log=False,
     )
