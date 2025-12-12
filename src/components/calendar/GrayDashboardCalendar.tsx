@@ -521,6 +521,9 @@ export function GrayDashboardCalendar({
     []
   );
 
+  const isGoogleCalendarEvent = (event: CalendarEvent) =>
+    typeof event.calendarId === "string" && event.calendarId.startsWith("google:");
+
   const handleEventClick = (
     event: CalendarEvent,
     anchorRect?: DOMRect | DOMRectReadOnly | null,
@@ -542,6 +545,9 @@ export function GrayDashboardCalendar({
     } else {
       // Single select and edit
       setSelectedEventIds(new Set([event.id]));
+      if (isGoogleCalendarEvent(event)) {
+        return;
+      }
       handleEditEvent(event, anchorRect);
     }
   };
@@ -745,7 +751,13 @@ export function GrayDashboardCalendar({
                         key={event.id}
                         event={event}
                         onClick={(_e, anchorRect, mouseEvent) => handleEventClick(event, anchorRect, mouseEvent)}
-                        draggableProps={viewMode === "week" ? getWeekDraggableProps(event) : undefined}
+                        draggableProps={
+                          isGoogleCalendarEvent(event)
+                            ? undefined
+                            : viewMode === "week"
+                              ? getWeekDraggableProps(event)
+                              : undefined
+                        }
                         isDragging={!!activeDrafts?.[event.id]}
                         isSelected={selectedEventIds.has(event.id)}
                         onDelete={handleDeleteEvent}
@@ -830,7 +842,13 @@ export function GrayDashboardCalendar({
                   key={event.id}
                   event={event}
                   onClick={(_e, anchorRect, mouseEvent) => handleEventClick(event, anchorRect, mouseEvent)}
-                  draggableProps={viewMode === "day" ? getDraggableProps(event) : undefined}
+                  draggableProps={
+                    isGoogleCalendarEvent(event)
+                      ? undefined
+                      : viewMode === "day"
+                        ? getDraggableProps(event)
+                        : undefined
+                  }
                   isDragging={!!activeDrafts?.[event.id]}
                   isSelected={selectedEventIds.has(event.id)}
                   onDelete={handleDeleteEvent}

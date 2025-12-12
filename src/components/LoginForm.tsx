@@ -9,6 +9,7 @@ import { Turnstile, type TurnstileInstance } from "@marsidev/react-turnstile";
 import ShaderBackground from "@/components/shaders/ShaderBackground";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { getSupabaseAuthStorageKeys } from "@/lib/supabaseStorage";
+import { useI18n } from "@/contexts/I18nContext";
 import {
   hostFromUrl,
   isLocalHostname,
@@ -253,6 +254,7 @@ export default function LoginForm({
   redirectTo,
   onSuccess,
 }: LoginFormProps) {
+  const { t } = useI18n();
   const router = useRouter();
   const pathname = usePathname();
   const [email, setEmail] = useState("");
@@ -261,9 +263,19 @@ export default function LoginForm({
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<MessageState>(
     deleted
-      ? { type: "success", text: "Your account has been permanently deleted. We've cleared your data, but you're always welcome back." }
+      ? {
+        type: "success",
+        text: t(
+          "Your account has been permanently deleted. We've cleared your data, but you're always welcome back."
+        ),
+      }
       : reconfirmDelete
-        ? { type: "success", text: "Please re-login to confirm the permanent deletion of your account. This final step helps us ensure your data is securely erased." }
+        ? {
+          type: "success",
+          text: t(
+            "Please re-login to confirm the permanent deletion of your account. This final step helps us ensure your data is securely erased."
+          ),
+        }
         : { type: "idle" }
   );
   const [authMode, setAuthMode] = useState<AuthMode>(initialMode);
@@ -309,9 +321,13 @@ export default function LoginForm({
         // Best-effort reset; ignore failures.
       }
       if (isTimeoutOrDuplicate) {
-        return "Captcha verification expired or was already used. Please complete the verification again to continue.";
+        return t(
+          "Captcha verification expired or was already used. Please complete the verification again to continue."
+        );
       }
-      return "Turnstile verification failed. Please complete the captcha check again to continue.";
+      return t(
+        "Turnstile verification failed. Please complete the captcha check again to continue."
+      );
     }
     return raw;
   };
@@ -358,7 +374,7 @@ export default function LoginForm({
     if (!supabase) {
       setMessage({
         type: "error",
-        text: "Supabase client is not configured. Check environment variables.",
+        text: t("Supabase client is not configured. Check environment variables."),
       });
       return;
     }
@@ -367,7 +383,7 @@ export default function LoginForm({
     if (turnstileSiteKey && !captchaToken) {
       setMessage({
         type: "error",
-        text: "Please complete the verification step before continuing.",
+        text: t("Please complete the verification step before continuing."),
       });
       return;
     }
@@ -471,7 +487,7 @@ export default function LoginForm({
     if (!trimmedEmail || !password) {
       setMessage({
         type: "error",
-        text: "Please enter both email and password to continue.",
+        text: t("Please enter both email and password to continue."),
       });
       return;
     }
@@ -480,7 +496,7 @@ export default function LoginForm({
     if (turnstileSiteKey && !captchaToken) {
       setMessage({
         type: "error",
-        text: "Please complete the verification step before continuing.",
+        text: t("Please complete the verification step before continuing."),
       });
       return;
     }
@@ -488,7 +504,9 @@ export default function LoginForm({
     if (authMode === "signup" && password.length < MIN_PASSWORD_LENGTH) {
       setMessage({
         type: "error",
-        text: `Password must be at least ${MIN_PASSWORD_LENGTH} characters long.`,
+        text: t("Password must be at least {min} characters long.", {
+          min: MIN_PASSWORD_LENGTH,
+        }),
       });
       return;
     }
@@ -500,7 +518,7 @@ export default function LoginForm({
     if (!supabase) {
       setMessage({
         type: "error",
-        text: "Supabase client is not configured. Check environment variables.",
+        text: t("Supabase client is not configured. Check environment variables."),
       });
       return;
     }
@@ -590,12 +608,14 @@ export default function LoginForm({
       setPassword("");
       setMessage({
         type: "success",
-        text: "Check your email to confirm your account. Once verified, return here to sign in.",
+        text: t(
+          "Check your email to confirm your account. Once verified, return here to sign in."
+        ),
       });
       setPendingEmailConfirmation(true);
     } catch (error) {
       const baseText =
-        authMode === "signin" ? "Unable to sign in." : "Unable to sign up.";
+        authMode === "signin" ? t("Unable to sign in.") : t("Unable to sign up.");
       const detail = handleCaptchaErrorReset(error);
       const text = detail || baseText;
       setMessage({ type: "error", text });
@@ -611,7 +631,9 @@ export default function LoginForm({
     if (!trimmedEmail) {
       setMessage({
         type: "error",
-        text: "Enter your account email above, then click “Resend verification email” again.",
+        text: t(
+          "Enter your account email above, then click “Resend verification email” again."
+        ),
       });
       return;
     }
@@ -619,7 +641,7 @@ export default function LoginForm({
     if (!supabase) {
       setMessage({
         type: "error",
-        text: "Supabase client is not configured. Check environment variables.",
+        text: t("Supabase client is not configured. Check environment variables."),
       });
       return;
     }
@@ -627,7 +649,7 @@ export default function LoginForm({
     if (turnstileSiteKey && !captchaToken) {
       setMessage({
         type: "error",
-        text: "Please complete the verification step before continuing.",
+        text: t("Please complete the verification step before continuing."),
       });
       return;
     }
@@ -651,12 +673,14 @@ export default function LoginForm({
 
       setMessage({
         type: "success",
-        text: "We’ve sent another confirmation email. It may take a minute to arrive; please also check your spam or promotions folder.",
+        text: t(
+          "We’ve sent another confirmation email. It may take a minute to arrive; please also check your spam or promotions folder."
+        ),
       });
       setPendingEmailConfirmation(true);
     } catch (error) {
       const detail = handleCaptchaErrorReset(error);
-      const baseText = "Unable to resend verification email.";
+      const baseText = t("Unable to resend verification email.");
       setMessage({
         type: "error",
         text: detail || baseText,
@@ -674,7 +698,9 @@ export default function LoginForm({
     if (!trimmedEmail) {
       setMessage({
         type: "error",
-        text: "Enter your account email above, then click “Forgot password?” again.",
+        text: t(
+          "Enter your account email above, then click “Forgot password?” again."
+        ),
       });
       return;
     }
@@ -682,7 +708,7 @@ export default function LoginForm({
     if (!supabase) {
       setMessage({
         type: "error",
-        text: "Supabase client is not configured. Check environment variables.",
+        text: t("Supabase client is not configured. Check environment variables."),
       });
       return;
     }
@@ -703,28 +729,28 @@ export default function LoginForm({
 
       setMessage({
         type: "success",
-        text: "Check your email for a password reset link.",
+        text: t("Check your email for a password reset link."),
       });
     } catch (error) {
       const text =
         error instanceof Error
           ? error.message
-          : "Unable to send password reset email.";
+          : t("Unable to send password reset email.");
       setMessage({ type: "error", text });
     } finally {
       setLoading(false);
     }
   };
   const isSignIn = authMode === "signin";
-  const heading = headerText ?? (isSignIn ? "Welcome back" : "Welcome");
+  const heading = headerText ?? (isSignIn ? t("Welcome back") : t("Welcome"));
   const subtitle = subtitleText ?? (isSignIn
-    ? "Accelerate your personal growth."
-    : "Create your account to start accelerating your personal growth.");
-  const submitLabel = isSignIn ? "Sign In" : "Create Account";
+    ? t("Accelerate your personal growth.")
+    : t("Create your account to start accelerating your personal growth."));
+  const submitLabel = isSignIn ? t("Sign In") : t("Create Account");
   const footerPrompt = isSignIn
-    ? "Don't have an account?"
-    : "Already have an account?";
-  const footerAction = isSignIn ? "Sign Up" : "Sign In";
+    ? t("Don't have an account?")
+    : t("Already have an account?");
+  const footerAction = isSignIn ? t("Sign Up") : t("Sign In");
 
   const handleModeToggle = () => {
     setAuthMode(isSignIn ? "signup" : "signin");
@@ -765,7 +791,7 @@ export default function LoginForm({
                   <div className={styles.authOrb}>
                     <Image
                       src="/grayaiwhitenotspinning.svg"
-                      alt="Gray emblem"
+                      alt={t("Gray emblem")}
                       width={180}
                       height={180}
                       priority
@@ -777,9 +803,9 @@ export default function LoginForm({
               </div>
             </div>
             <div className={styles.authMantra}>
-              <span className={styles.authMantraLine}>For the best in us.</span>
+              <span className={styles.authMantraLine}>{t("For the best in us.")}</span>
               <span className={`${styles.authMantraLine} ${styles.authMantraLineAlt}`}>
-                Maximize human potential.
+                {t("Maximize human potential.")}
               </span>
             </div>
           </ShaderBackground>
@@ -787,7 +813,7 @@ export default function LoginForm({
         <section className={styles.authContent}>
           <Image
             src="/alignmentlogo.svg"
-            alt="Alignment logo"
+            alt={t("Alignment logo")}
             width={140}
             height={36}
             priority
@@ -811,18 +837,18 @@ export default function LoginForm({
                   <span className={styles.authOauthIcon}>
                     <Icon size={18} />
                   </span>
-                  Continue with {label}
+                  {t("Continue with {provider}", { provider: label })}
                 </button>
               ))}
             </div>
 
-            <div className={styles.authDivider}>or continue with email</div>
+            <div className={styles.authDivider}>{t("or continue with email")}</div>
 
             <form className={styles.authForm} onSubmit={handleEmailAuth}>
               <div className={styles.authFields}>
                 <div className={styles.authField}>
                   <label className={styles.authFieldLabel} htmlFor="email">
-                    Email
+                    {t("Email")}
                   </label>
                   <input
                     id="email"
@@ -839,7 +865,7 @@ export default function LoginForm({
 
                 <div className={styles.authField}>
                   <label className={styles.authFieldLabel} htmlFor="password">
-                    Password
+                    {t("Password")}
                   </label>
                   <div className={styles.authFieldInputWrapper}>
                     <input
@@ -861,11 +887,11 @@ export default function LoginForm({
                       onClick={() => setShowPassword((value) => !value)}
                       aria-pressed={showPassword}
                       aria-label={
-                        showPassword ? "Hide password" : "Show password"
+                        showPassword ? t("Hide password") : t("Show password")
                       }
                       disabled={loading}
                     >
-                      {showPassword ? "Hide" : "Show"}
+                      {showPassword ? t("Hide") : t("Show")}
                     </button>
                   </div>
                 </div>
@@ -883,7 +909,7 @@ export default function LoginForm({
                   <span className={styles.authToggleTrack} aria-hidden>
                     <span className={styles.authToggleThumb} />
                   </span>
-                  <span className={styles.authRememberLabel}>Remember me</span>
+                  <span className={styles.authRememberLabel}>{t("Remember me")}</span>
                 </label>
                 <button
                   type="button"
@@ -891,7 +917,7 @@ export default function LoginForm({
                   onClick={handleForgotPassword}
                   disabled={loading}
                 >
-                  Forgot password?
+                  {t("Forgot password?")}
                 </button>
               </div>
 
@@ -917,7 +943,7 @@ export default function LoginForm({
                   onClick={handleResendVerification}
                   disabled={loading}
                 >
-                  Resend verification email
+                  {t("Resend verification email")}
                 </button>
               )}
 

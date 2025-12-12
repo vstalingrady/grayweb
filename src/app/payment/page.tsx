@@ -169,7 +169,7 @@ function PaymentContent() {
             };
 
 
-            const res = await fetch("/api/backend/api/payment/charge", {
+            const res = await fetch("/api/backend/payment/charge", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",

@@ -26,6 +26,11 @@ try:
 except ImportError:
     from security_utils import sanitize_for_logging
 
+try:
+    from backend.time_utils import utcnow, utcnow_aware
+except Exception:  # pragma: no cover
+    from time_utils import utcnow, utcnow_aware  # type: ignore
+
 # Context variables for request tracing
 request_id: ContextVar[Optional[str]] = ContextVar('request_id', default=None)
 user_id: ContextVar[Optional[str]] = ContextVar('user_id', default=None)
@@ -61,7 +66,7 @@ class StructuredFormatter(logging.Formatter):
         """Format log record as structured JSON."""
         message = sanitize_for_logging(record.getMessage())
         log_data = {
-            'timestamp': datetime.utcnow().isoformat() + 'Z',
+            'timestamp': utcnow_aware().isoformat().replace("+00:00", "Z"),
             'level': record.levelname,
             'logger': record.name,
             'message': message,
@@ -150,7 +155,7 @@ class RequestLoggingMiddleware:
             or path.startswith("/static/")
         )
 
-        start_time = datetime.utcnow()
+        start_time = utcnow()
 
         # Track response status
         response_status = [0]  # Use list for closure modification
@@ -163,12 +168,12 @@ class RequestLoggingMiddleware:
         try:
             await self.app(scope, receive, wrapped_send)
         except Exception as e:
-            duration = (datetime.utcnow() - start_time).total_seconds()
+            duration = (utcnow() - start_time).total_seconds()
             self.logger.error(f"{method} {path} -> ERROR ({duration*1000:.0f}ms): {str(e)}")
             raise
         finally:
             if not skip_logging:
-                duration = (datetime.utcnow() - start_time).total_seconds()
+                duration = (utcnow() - start_time).total_seconds()
                 status = response_status[0]
                 duration_str = f"{duration*1000:.0f}ms"
                 
@@ -309,10 +314,10 @@ def log_performance(logger: logging.Logger):
     """Decorator to log function performance."""
     def decorator(func):
         def wrapper(*args, **kwargs):
-            start_time = datetime.utcnow()
+            start_time = utcnow()
             try:
                 result = func(*args, **kwargs)
-                duration = (datetime.utcnow() - start_time).total_seconds()
+                duration = (utcnow() - start_time).total_seconds()
 
                 logger.debug(
                     f"Function {func.__name__} completed successfully",
@@ -325,7 +330,7 @@ def log_performance(logger: logging.Logger):
                 )
                 return result
             except Exception as e:
-                duration = (datetime.utcnow() - start_time).total_seconds()
+                duration = (utcnow() - start_time).total_seconds()
 
                 logger.error(
                     f"Function {func.__name__} failed: {str(e)}",

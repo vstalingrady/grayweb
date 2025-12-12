@@ -241,6 +241,7 @@ reminders = sqlalchemy.Table(
     sqlalchemy.Column("status", sqlalchemy.String, default="pending", index=True),
     sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
     sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
+    sqlalchemy.Column("delivered_at", sqlalchemy.DateTime, nullable=True),
 )
 
 # Calendar tables

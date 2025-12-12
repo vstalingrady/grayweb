@@ -400,7 +400,7 @@ class UsageTracker:
                 "is_unlimited": True,
             }
 
-        now = datetime.datetime.utcnow()
+        now = datetime.datetime.now(datetime.timezone.utc)
 
         current_monthly = usage_data["monthly_cost_usage"] or 0.0
         monthly_limit = limits["monthly_cost"]

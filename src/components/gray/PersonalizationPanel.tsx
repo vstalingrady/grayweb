@@ -7,6 +7,7 @@ import { X } from "lucide-react";
 import styles from "@/app/gray/GrayPageClient.module.css";
 import type { ContextUsageSummary } from "@/components/gray/types";
 import { useUser } from "@/contexts/UserContext";
+import { useI18n } from "@/contexts/I18nContext";
 import { useChatStore } from "@/components/gray/ChatProvider";
 import { apiService } from "@/lib/api";
 
@@ -136,9 +137,10 @@ export function PersonalizationPanel({
   backgroundsLoading = false,
   backgroundError = null,
 }: PersonalizationPanelProps) {
+  const { t } = useI18n();
   const { webSearchEnabled, setWebSearchEnabled } = useChatStore();
-  const [primaryQuest] = useState("Ship the legendary operator cockpit.");
-  const [blockages] = useState("Unclear swimlanes between motion + ops.");
+  const primaryQuest = t("Ship the legendary operator cockpit.");
+  const blockages = t("Unclear swimlanes between motion + ops.");
 
   // Derived context usage display metadata from backend payload only.
   const contextProviderLabel = formatContextLabel(contextUsage);
@@ -162,18 +164,30 @@ export function PersonalizationPanel({
   const contextPercentLabel = `${Math.round(contextPercent)}%`;
   const contextLimitLabel = hasContextUsage
     ? hasFiniteLimit
-      ? `${formatNumber(contextLimit)} total tokens`
-      : `Unlimited context (visualized against ${formatNumber(DEFAULT_CONTEXT_LIMIT)} tokens)`
+      ? t("{count} total tokens", { count: formatNumber(contextLimit) })
+      : t("Unlimited context (visualized against {count} tokens)", {
+          count: formatNumber(DEFAULT_CONTEXT_LIMIT),
+        })
     : "";
   const contextFooterLabel = hasFiniteLimit
-    ? `${formatNumber(contextTokensRemaining)} tokens left`
-    : "No cap active";
+    ? t("{count} tokens left", { count: formatNumber(contextTokensRemaining) })
+    : t("No cap active");
   const contextMeterValueText = hasFiniteLimit
-    ? `${formatNumber(contextTokensUsed)} of ${formatNumber(contextLimit)} tokens used`
-    : `${formatNumber(contextTokensUsed)} tokens used while limit is unlimited`;
+    ? t("{used} of {limit} tokens used", {
+        used: formatNumber(contextTokensUsed),
+        limit: formatNumber(contextLimit),
+      })
+    : t("{used} tokens used while limit is unlimited", {
+        used: formatNumber(contextTokensUsed),
+      });
   const contextMeterDescription = hasContextUsage ? contextMeterValueText : "";
   const contextFooterDescription = hasContextUsage ? contextFooterLabel : "";
-  const contextMessagesLabel = hasContextUsage && contextUsage ? `${contextUsage.messageCount.toLocaleString()} messages` : "";
+  const contextMessagesLabel =
+    hasContextUsage && contextUsage
+      ? t("{count} messages", {
+          count: contextUsage.messageCount.toLocaleString(),
+        })
+      : "";
   const contextTokensLabel = contextUsage
     ? `${contextTokensUsed.toLocaleString()}`
     : "0";
@@ -434,7 +448,7 @@ export function PersonalizationPanel({
 
     if (file.size > MAX_CUSTOM_INSTRUCTION_FILE_BYTES) {
       setCustomInstructionsFileName(null);
-      setCustomInstructionsFileError("Files must be smaller than 512 KB.");
+      setCustomInstructionsFileError(t("Files must be smaller than 512 KB."));
       return;
     }
 
@@ -448,7 +462,7 @@ export function PersonalizationPanel({
     };
     reader.onerror = () => {
       setCustomInstructionsFileName(null);
-      setCustomInstructionsFileError("Unable to read this file.");
+      setCustomInstructionsFileError(t("Unable to read this file."));
     };
     reader.readAsText(file);
   };
@@ -472,12 +486,16 @@ export function PersonalizationPanel({
 
     const normalizedType = (file.type || "").toLowerCase();
     if (!WORKSPACE_BACKGROUND_ALLOWED_MIMES.includes(normalizedType)) {
-      setNewBackgroundFileError("Only PNG, JPG, WebP, or AVIF images are supported.");
+      setNewBackgroundFileError(t("Only PNG, JPG, WebP, or AVIF images are supported."));
       return;
     }
 
     if (file.size > WORKSPACE_BACKGROUND_UPLOAD_BYTES) {
-      setNewBackgroundFileError(`Files must be smaller than ${WORKSPACE_BACKGROUND_UPLOAD_MB} MB.`);
+      setNewBackgroundFileError(
+        t("Files must be smaller than {mb} MB.", {
+          mb: WORKSPACE_BACKGROUND_UPLOAD_MB,
+        })
+      );
       return;
     }
 
@@ -491,7 +509,7 @@ export function PersonalizationPanel({
       return;
     }
     setAboutSaveState("saving");
-    setAboutSaveMessage("Saving...");
+    setAboutSaveMessage(t("Saving..."));
     try {
       await updateUserProfile({
         personalization_nickname: normalizedNickname || null,
@@ -506,10 +524,10 @@ export function PersonalizationPanel({
       profileAbout = normalizedAbout || null;
 
       setAboutSaveState("success");
-      setAboutSaveMessage("Saved");
+      setAboutSaveMessage(t("Saved"));
     } catch (error) {
       setAboutSaveState("error");
-      setAboutSaveMessage(error instanceof Error ? error.message : "Failed to save");
+      setAboutSaveMessage(error instanceof Error ? error.message : t("Failed to save"));
     }
   };
 
@@ -519,16 +537,16 @@ export function PersonalizationPanel({
       return;
     }
     setCustomSaveState("saving");
-    setCustomSaveMessage("Saving...");
+    setCustomSaveMessage(t("Saving..."));
     try {
       await updateUserProfile({
         personalization_custom_instructions: normalizedCustomInstructions || null,
       });
       setCustomSaveState("success");
-      setCustomSaveMessage("Saved");
+      setCustomSaveMessage(t("Saved"));
     } catch (error) {
       setCustomSaveState("error");
-      setCustomSaveMessage(error instanceof Error ? error.message : "Failed to save");
+      setCustomSaveMessage(error instanceof Error ? error.message : t("Failed to save"));
     }
   };
 
@@ -538,16 +556,16 @@ export function PersonalizationPanel({
       return;
     }
     setOverrideSaveState("saving");
-    setOverrideSaveMessage("Saving...");
+    setOverrideSaveMessage(t("Saving..."));
     try {
       await updateUserProfile({
         personalization_system_prompt_override: normalizedSystemPromptOverride || null,
       });
       setOverrideSaveState("success");
-      setOverrideSaveMessage("Saved");
+      setOverrideSaveMessage(t("Saved"));
     } catch (error) {
       setOverrideSaveState("error");
-      setOverrideSaveMessage(error instanceof Error ? error.message : "Failed to save");
+      setOverrideSaveMessage(error instanceof Error ? error.message : t("Failed to save"));
     }
   };
 
@@ -556,20 +574,20 @@ export function PersonalizationPanel({
     if (!onCreateBackground || !canSubmitNewBackground) {
       return;
     }
-    setBackgroundSaveState({ tone: "loading", message: "Saving..." });
+    setBackgroundSaveState({ tone: "loading", message: t("Saving...") });
     try {
       if (!newBackgroundFile) {
-        throw new Error("Please choose an image to upload.");
+        throw new Error(t("Please choose an image to upload."));
       }
       await onCreateBackground({
         assetFile: newBackgroundFile ?? undefined,
       });
-      setBackgroundSaveState({ tone: "success", message: "Background added" });
+      setBackgroundSaveState({ tone: "success", message: t("Background added") });
       resetBackgroundFileState();
     } catch (error) {
       setBackgroundSaveState({
         tone: "error",
-        message: error instanceof Error ? error.message : "Failed to add background",
+        message: error instanceof Error ? error.message : t("Failed to add background"),
       });
     }
   };
@@ -578,17 +596,17 @@ export function PersonalizationPanel({
     const conversationId = contextUsage?.conversationId;
     if (!conversationId) {
       setCompressState("error");
-      setCompressMessage("No active conversation to compress");
+      setCompressMessage(t("No active conversation to compress"));
       return;
     }
 
     setCompressState("loading");
-    setCompressMessage("Compressing...");
+    setCompressMessage(t("Compressing..."));
 
     try {
       const result = await apiService.compressConversation(conversationId);
       setCompressState("success");
-      setCompressMessage(result.message || "Conversation compressed successfully");
+      setCompressMessage(result.message || t("Conversation compressed successfully"));
 
       // Auto-clear success message after 3 seconds
       setTimeout(() => {
@@ -597,7 +615,7 @@ export function PersonalizationPanel({
       }, 3000);
     } catch (error) {
       setCompressState("error");
-      setCompressMessage(error instanceof Error ? error.message : "Failed to compress conversation");
+      setCompressMessage(error instanceof Error ? error.message : t("Failed to compress conversation"));
     }
   };
 
@@ -622,14 +640,14 @@ export function PersonalizationPanel({
       >
         <header className={styles.personalizationPanelHeader}>
           <div>
-            <p className={styles.personalizationEyebrow}>Personalization</p>
+            <p className={styles.personalizationEyebrow}>{t("Personalization")}</p>
             <h2 id="personalization-title">{viewerName}</h2>
           </div>
           <button
             type="button"
             className={styles.personalizationClose}
             onClick={onClose}
-            aria-label="Close personalization"
+            aria-label={t("Close personalization")}
           >
             <X size={18} />
           </button>
@@ -641,34 +659,34 @@ export function PersonalizationPanel({
               <section className={styles.personalizationCard}>
                 <div className={styles.personalizationCardHeader}>
                   <div>
-                    <h3>Your Alignment Profile</h3>
-                    <p>Understand how Gray currently mirrors your orbit.</p>
+                    <h3>{t("Your Alignment Profile")}</h3>
+                    <p>{t("Understand how Gray currently mirrors your orbit.")}</p>
                   </div>
                   <button type="button" className={styles.personalizationLink}>
-                    Manage
+                    {t("Manage")}
                   </button>
                 </div>
 
                 <div>
-                  <p className={styles.personalizationSectionLabel}>Interests</p>
+                  <p className={styles.personalizationSectionLabel}>{t("Interests")}</p>
                 </div>
                 <div className={styles.personalizationChipRow}>
                   {interests.map((interest) => (
                     <span key={interest} className={styles.personalizationChip}>
-                      {interest}
+                      {t(interest)}
                     </span>
                   ))}
                 </div>
 
                 <div className={styles.personalizationTraitHeader}>
-                  <p className={styles.personalizationSectionLabel}>Trait spectrum</p>
-                  <p className={styles.personalizationHint}>Higher bar = stronger expression.</p>
+                  <p className={styles.personalizationSectionLabel}>{t("Trait spectrum")}</p>
+                  <p className={styles.personalizationHint}>{t("Higher bar = stronger expression.")}</p>
                 </div>
                 <div className={styles.personalizationTraitList}>
                   {traits.map((trait) => (
                     <div key={trait.id} className={styles.personalizationTraitRow}>
                       <div className={styles.personalizationTraitMeta}>
-                        <span>{trait.label}</span>
+                        <span>{t(trait.label)}</span>
                         <span>{trait.value.toFixed(1)}</span>
                       </div>
                       <div className={styles.personalizationTraitBar}>
@@ -682,14 +700,14 @@ export function PersonalizationPanel({
                 </div>
 
                 <div className={styles.personalizationFieldGroup}>
-                  <label htmlFor="primaryQuest">Primary Quest</label>
+                  <label htmlFor="primaryQuest">{t("Primary Quest")}</label>
                   <div id="primaryQuest" className={styles.personalizationField}>
                     {primaryQuest}
                   </div>
                 </div>
 
                 <div className={styles.personalizationFieldGroup}>
-                  <label htmlFor="blockages">Blockages</label>
+                  <label htmlFor="blockages">{t("Blockages")}</label>
                   <div id="blockages" className={styles.personalizationField}>
                     {blockages}
                   </div>
@@ -700,8 +718,8 @@ export function PersonalizationPanel({
             <section className={styles.personalizationCard}>
               <div className={styles.personalizationCardHeader}>
                 <div>
-                  <h3>Advanced</h3>
-                  <p>Quick toggles for Gray&apos;s automations.</p>
+                  <h3>{t("Advanced")}</h3>
+                  <p>{t("Quick toggles for Gray's automations.")}</p>
                 </div>
               </div>
               <div className={styles.personalizationToggleList}>
@@ -713,8 +731,10 @@ export function PersonalizationPanel({
                   onClick={() => setWebSearchEnabled(!webSearchEnabled)}
                 >
                   <span>
-                    <span>Web search</span>
-                    <span className={styles.personalizationToggleHint}>Let Gray search for answers automatically.</span>
+                    <span>{t("Web search")}</span>
+                    <span className={styles.personalizationToggleHint}>
+                      {t("Let Gray search for answers automatically.")}
+                    </span>
                   </span>
                   <span className={styles.personalizationSwitch} data-active={webSearchEnabled ? "true" : "false"}>
                     <span className={styles.personalizationSlider} />
@@ -732,8 +752,10 @@ export function PersonalizationPanel({
                     onClick={handleCalendarToggle}
                   >
                     <span>
-                      <span>Show Calendar</span>
-                      <span className={styles.personalizationToggleHint}>Display the daily schedule view.</span>
+                      <span>{t("Show Calendar")}</span>
+                      <span className={styles.personalizationToggleHint}>
+                        {t("Display the daily schedule view.")}
+                      </span>
                     </span>
                     <span className={styles.personalizationSwitch} data-active={showCalendar ? "true" : "false"}>
                       <span className={styles.personalizationSlider} />
@@ -746,7 +768,7 @@ export function PersonalizationPanel({
             <section className={styles.personalizationCard}>
               <div className={styles.personalizationCardHeader}>
                 <div>
-                  <h3>Custom instructions</h3>
+                  <h3>{t("Custom instructions")}</h3>
                 </div>
               </div>
               <form className={styles.personalizationForm} onSubmit={handleCustomInstructionsSubmit}>
@@ -754,7 +776,7 @@ export function PersonalizationPanel({
                   className={styles.personalizationTextarea}
                   value={customInstructions}
                   onChange={handleCustomInstructionsChange}
-                  placeholder="Paste instructions here if you prefer to edit them manually."
+                  placeholder={t("Paste instructions here if you prefer to edit them manually.")}
                 />
                 <div className={styles.personalizationFormActions}>
                   {customSaveMessage ? (
@@ -771,7 +793,7 @@ export function PersonalizationPanel({
                     className={styles.personalizationFormButton}
                     disabled={!canSubmitCustomInstructions}
                   >
-                    {customSaveState === "saving" ? "Saving..." : "Save"}
+                    {customSaveState === "saving" ? t("Saving...") : t("Save")}
                   </button>
                 </div>
               </form>
@@ -781,14 +803,14 @@ export function PersonalizationPanel({
             <section className={`${styles.personalizationCard} ${styles.personalizationAboutCard}`}>
               <div className={styles.personalizationCardHeader}>
                 <div>
-                  <h3>About you</h3>
+                  <h3>{t("About you")}</h3>
                 </div>
               </div>
               <form className={styles.personalizationForm} onSubmit={handleAboutSubmit}>
                 <dl className={styles.personalizationAboutList}>
                   <div className={styles.personalizationAboutItem}>
                     <dt>
-                      <label htmlFor="personalization-nickname">Nickname</label>
+                      <label htmlFor="personalization-nickname">{t("Nickname")}</label>
                     </dt>
                     <dd>
                       <input
@@ -802,7 +824,7 @@ export function PersonalizationPanel({
                   </div>
                   <div className={styles.personalizationAboutItem}>
                     <dt>
-                      <label htmlFor="personalization-occupation">Occupation</label>
+                      <label htmlFor="personalization-occupation">{t("Occupation")}</label>
                     </dt>
                     <dd>
                       <input
@@ -816,7 +838,7 @@ export function PersonalizationPanel({
                   </div>
                   <div className={styles.personalizationAboutItem}>
                     <dt>
-                      <label htmlFor="personalization-about">More about you</label>
+                      <label htmlFor="personalization-about">{t("More about you")}</label>
                     </dt>
                     <dd>
                       <textarea
@@ -834,7 +856,7 @@ export function PersonalizationPanel({
                     className={styles.personalizationFormButton}
                     disabled={!canSubmitAbout}
                   >
-                    {aboutSaveState === "saving" ? "Saving..." : "Save"}
+                    {aboutSaveState === "saving" ? t("Saving...") : t("Save")}
                   </button>
                 </div>
               </form>
@@ -843,8 +865,8 @@ export function PersonalizationPanel({
             <section className={styles.personalizationCard}>
               <div className={styles.personalizationCardHeader}>
                 <div>
-                  <h3>Context usage</h3>
-                  <p>Track how much of your conversation context you&apos;ve used.</p>
+                  <h3>{t("Context usage")}</h3>
+                  <p>{t("Track how much of your conversation context you've used.")}</p>
                 </div>
                 <button
                   type="button"
@@ -852,7 +874,11 @@ export function PersonalizationPanel({
                   onClick={handleCompressConversation}
                   disabled={compressState === "loading" || !contextUsage?.conversationId}
                 >
-                  {compressState === "loading" ? "Compressing…" : compressState === "success" ? "Done" : "Compress"}
+                  {compressState === "loading"
+                    ? t("Compressing…")
+                    : compressState === "success"
+                      ? t("Done")
+                      : t("Compress")}
                 </button>
               </div>
               <div className={styles.personalizationContextUsage}>

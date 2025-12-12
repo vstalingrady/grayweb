@@ -690,6 +690,36 @@ export interface GoogleAuthResponse {
   state?: string;
 }
 
+export interface GoogleCalendarInfo {
+  id: string;
+  email: string;
+  summary: string;
+  description?: string | null;
+  timezone?: string | null;
+  primary?: boolean;
+}
+
+export interface GoogleCalendarEvent {
+  id: string;
+  summary: string;
+  description?: string | null;
+  start: {
+    dateTime?: string;
+    date?: string;
+    timeZone?: string;
+  };
+  end: {
+    dateTime?: string;
+    date?: string;
+    timeZone?: string;
+  };
+  location?: string | null;
+  visibility?: string | null;
+  transparency?: string | null;
+  color_id?: string | null;
+  reminders?: unknown;
+}
+
 export interface UserCreate {
   email: string;
   full_name: string;
@@ -1477,6 +1507,30 @@ class ApiService {
       method: 'POST',
       body: JSON.stringify(payload),
     });
+  }
+
+  async getGoogleCalendars(userId: number): Promise<GoogleCalendarInfo[]> {
+    return this.fetch<GoogleCalendarInfo[]>(`/users/${userId}/google-calendars`);
+  }
+
+  async getGoogleCalendarEvents(
+    userId: number,
+    calendarId: string,
+    options?: { timeMin?: string; timeMax?: string }
+  ): Promise<GoogleCalendarEvent[]> {
+    const params = new URLSearchParams();
+    if (options?.timeMin) {
+      params.set('time_min', options.timeMin);
+    }
+    if (options?.timeMax) {
+      params.set('time_max', options.timeMax);
+    }
+    const suffix = params.toString();
+    const encodedCalendarId = encodeURIComponent(calendarId);
+    const endpoint = suffix
+      ? `/users/${userId}/google-calendars/${encodedCalendarId}/events?${suffix}`
+      : `/users/${userId}/google-calendars/${encodedCalendarId}/events`;
+    return this.fetch<GoogleCalendarEvent[]>(endpoint);
   }
 
   async triggerProactivityForUser(userId: number): Promise<void> {

@@ -5,12 +5,14 @@ import { useEffect, useState } from "react";
 import { UsageStatus } from "@/lib/api";
 import { Clock, AlertTriangle } from "lucide-react";
 import styles from "@/app/gray/GrayPageClient.module.css";
+import { useI18n } from "@/contexts/I18nContext";
 
 interface UsageLimitBannerProps {
     usageStatus: UsageStatus;
 }
 
 export function UsageLimitBanner({ usageStatus }: UsageLimitBannerProps) {
+    const { t } = useI18n();
     const [timeLeft, setTimeLeft] = useState<string>("");
 
     const {
@@ -23,7 +25,7 @@ export function UsageLimitBanner({ usageStatus }: UsageLimitBannerProps) {
 
     const isLimitReached = is_monthly_limit_reached || is_six_hour_limit_reached;
     const resetTimeStr = is_monthly_limit_reached ? next_monthly_reset : next_six_hour_reset;
-    const limitType = is_monthly_limit_reached ? "Monthly" : "Burst";
+    const limitType = is_monthly_limit_reached ? t("Monthly") : t("Burst");
 
     useEffect(() => {
         if (!isLimitReached || !resetTimeStr) return;
@@ -63,11 +65,11 @@ export function UsageLimitBanner({ usageStatus }: UsageLimitBannerProps) {
                 <div className={styles.usageLimitHeader}>
                     <AlertTriangle size={16} className={styles.usageLimitIcon} />
                     <span className={styles.usageLimitTitle}>
-                        Limit Reached
+                        {t("Limit Reached")}
                     </span>
                 </div>
                 <p className={styles.usageLimitMessage}>
-                    {limitType} cap hit on <span className={styles.usageLimitTier}>{tier}</span>.
+                    {t("{limitType} cap hit on {tier}.", { limitType, tier })}
                 </p>
                 <div className={styles.usageLimitTimer}>
                     <Clock size={14} />

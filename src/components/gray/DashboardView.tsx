@@ -23,6 +23,7 @@ import { mapPlansToCalendarEvents, PLAN_EVENT_ID_PREFIX } from "./planCalendarUt
 import { formatPlanTimeLabel } from "./planUtils";
 import { requestNotificationPermission } from "@/lib/notificationUtils";
 import { useUser } from "@/contexts/UserContext";
+import { useI18n } from "@/contexts/I18nContext";
 
 const isSameDay = (a: Date, b: Date) =>
   a.getFullYear() === b.getFullYear() &&
@@ -362,6 +363,7 @@ export function GrayDashboardView({
   showUpgradeButton = false,
   isOverlay = false,
 }: GrayDashboardViewProps) {
+  const { t } = useI18n();
   const hasPulseData = Boolean(currentPulse && pulseEntries.length > 0);
   const displayPlans = useMemo(() => {
     const fallbackPlans = currentPulse?.plans ?? [];
@@ -394,13 +396,13 @@ export function GrayDashboardView({
       )
       .map<PlanItem>((event) => ({
         id: `task-${event.id}`,
-        label: event.title?.trim() || "Untitled task",
+        label: event.title?.trim() || t("Untitled task"),
         completed: false,
         deadline: event.end ? event.end.toISOString() : null,
         scheduleSlot: formatTimeSlotLabel(event.start, event.end),
         details: event.description ?? null,
       }));
-  }, [calendarEvents, pulseSelectedDate]);
+  }, [calendarEvents, pulseSelectedDate, t]);
 
   const displayHabits = hasPulseData ? currentPulse?.habits ?? [] : [];
   const derivedReminderPlans = reminderPlans ?? [];
@@ -660,19 +662,19 @@ export function GrayDashboardView({
     }
     return [];
   }, [activeProactivityTimes, formattedProactivityTimes, activeProactivityTime, proactivityDeliveryKeys, currentDate]);
-  const proactivityButtonLabel = displayProactivity ? "Configure" : "Setup";
+  const proactivityButtonLabel = displayProactivity ? t("Configure") : t("Setup");
   const canApplyCustom = customTimes.length > 0;
   const canOpenProactivityModal = Boolean(onProactivitySelect);
   const showModalRemoveButton = Boolean(
     onProactivityRemove && (displayProactivity ?? proactivityFallback)
   );
-  const modalRemoveLabel = displayProactivity ? "Remove proactivity" : "Skip for now";
+  const modalRemoveLabel = displayProactivity ? t("Remove proactivity") : t("Skip for now");
   const shouldShowNotificationBanner =
     notificationPermission !== "granted" && notificationPermission !== "unsupported";
   const notificationBannerLabel =
     notificationPermission === "denied"
-      ? "Desktop alerts are off. Allow notifications in your browser settings to get nudges."
-      : "Enable desktop alerts so Gray can nudge you when check-ins land.";
+      ? t("Desktop alerts are off. Allow notifications in your browser settings to get nudges.")
+      : t("Enable desktop alerts so Gray can nudge you when check-ins land.");
   const pulseEntriesByDate = useMemo(() => {
     const map = new Map<string, PulseEntry>();
     pulseEntries.forEach((entry) => {
@@ -1095,50 +1097,50 @@ export function GrayDashboardView({
         aria-labelledby="proactivityModalHeading"
       >
         <div className={styles.proactivityModal}>
-          <header className={styles.proactivityModalHeader}>
-            <div className={styles.proactivityModalHeading}>
-              <span className={styles.proactivityModalEyebrow} id="proactivityModalHeading">
-                Proactivity
-              </span>
-            </div>
-            <button
-              type="button"
-              className={styles.proactivityModalClose}
-              onClick={handleCloseProactivityModal}
-              aria-label="Close proactivity options"
-            >
-              <X size={16} />
-            </button>
-          </header>
+	          <header className={styles.proactivityModalHeader}>
+	            <div className={styles.proactivityModalHeading}>
+	              <span className={styles.proactivityModalEyebrow} id="proactivityModalHeading">
+	                {t("Proactivity")}
+	              </span>
+	            </div>
+	            <button
+	              type="button"
+	              className={styles.proactivityModalClose}
+	              onClick={handleCloseProactivityModal}
+	              aria-label={t("Close proactivity options")}
+	            >
+	              <X size={16} />
+	            </button>
+	          </header>
           <label
             id="proactivityPresetLabel"
-            htmlFor="proactivityPresetSelect"
-            className={styles.proactivityPresetLabel}
-          >
-            Preset cadence
-          </label>
+	            htmlFor="proactivityPresetSelect"
+	            className={styles.proactivityPresetLabel}
+	          >
+	            {t("Preset cadence")}
+	          </label>
           <div className={styles.proactivityPresetSelectWrapper}>
             <select
               id="proactivityPresetSelect"
               className={styles.proactivityPresetSelect}
-              value={selectedPresetId}
-              onChange={handlePresetSelectChange}
-            >
-              <option value="">Select a preset</option>
-              {PROACTIVITY_PRESETS.map((preset) => (
-                <option key={preset.id} value={preset.id}>
-                  {preset.title}
-                </option>
-              ))}
-              <option value={CUSTOM_PROACTIVITY_ID}>Custom</option>
-            </select>
+	              value={selectedPresetId}
+	              onChange={handlePresetSelectChange}
+	            >
+	              <option value="">{t("Select a preset")}</option>
+	              {PROACTIVITY_PRESETS.map((preset) => (
+	                <option key={preset.id} value={preset.id}>
+	                  {t(preset.title)}
+	                </option>
+	              ))}
+	              <option value={CUSTOM_PROACTIVITY_ID}>{t("Custom")}</option>
+	            </select>
             <ChevronDown size={14} className={styles.proactivityPresetSelectIcon} aria-hidden="true" />
           </div>
           {isCustomPresetSelected ? (
             <section className={styles.proactivityCustomSection}>
               <header className={styles.proactivityCustomHeader}>
                 <div>
-                  <span className={styles.proactivityCustomEyebrow}>Custom setup</span>
+	                  <span className={styles.proactivityCustomEyebrow}>{t("Custom setup")}</span>
                 </div>
                 <button
                   type="button"

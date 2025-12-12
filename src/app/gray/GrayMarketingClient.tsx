@@ -21,6 +21,7 @@ import Navigation from "@/app/components/Navigation";
 import FooterBackground from "@/app/components/FooterBackground";
 import PerformanceChart from "./components/PerformanceChart";
 import { DiagnosticModule } from "@/components/gray/DiagnosticModule";
+import { useI18n } from "@/contexts/I18nContext";
 
 const FeaturesGrid = dynamic(
   () => import("@/components/gray/FeaturesGrid").then((mod) => mod.FeaturesGrid),
@@ -37,8 +38,12 @@ type GrayMarketingClientProps = {
 export default function GrayMarketingClient({
   tryGrayUrl,
 }: GrayMarketingClientProps) {
+  const { t, locale, setLocale } = useI18n();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [showFinalCta, setShowFinalCta] = useState(false);
+  const languageLabel = locale === "id" ? t("Indonesian") : t("English");
+  const regionLabel = locale === "id" ? "Indonesia" : t("United States");
+  const toggleLanguage = () => setLocale(locale === "en" ? "id" : "en");
 
   useEffect(() => {
     // Defer the final CTA so the hero is the first thing rendered on mount.
@@ -63,7 +68,7 @@ export default function GrayMarketingClient({
                 transition={{ duration: 0.5 }}
                 className="text-5xl md:text-7xl font-bold tracking-tight mb-6 leading-[1.1]"
               >
-                Maximize human potential.
+                {t("Maximize human potential.")}
               </motion.h1>
 
               <motion.p
@@ -72,7 +77,9 @@ export default function GrayMarketingClient({
                 transition={{ duration: 0.5, delay: 0.1 }}
                 className="text-xl md:text-2xl text-zinc-400 mb-10 max-w-xl mx-auto lg:mx-0 leading-relaxed"
               >
-                Gray checks in throughout your day, remembers your patterns, and calls you out when you're avoiding the hard thing. For ambitious builders who need structure, not another to-do app.
+                {t(
+                  "Gray checks in throughout your day, remembers your patterns, and calls you out when you're avoiding the hard thing. For ambitious builders who need structure, not another to-do app."
+                )}
               </motion.p>
 
               <motion.div
@@ -85,7 +92,7 @@ export default function GrayMarketingClient({
                   href={tryGrayUrl}
                   className="w-full sm:w-auto px-8 py-4 bg-white text-black font-medium rounded-full hover:bg-zinc-200 transition-colors flex items-center justify-center gap-2 group"
                 >
-                  Start Free
+                  {t("Start Free")}
                   <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                 </Link>
               </motion.div>
@@ -109,21 +116,23 @@ export default function GrayMarketingClient({
       {showFinalCta && (
         <section className="py-32 px-4 md:px-6 text-center relative overflow-hidden bg-black">
           <div className="container mx-auto relative z-10">
-            <h2 className="text-4xl md:text-5xl font-bold mb-6 tracking-tight">Stop planning. Start building.</h2>
+            <h2 className="text-4xl md:text-5xl font-bold mb-6 tracking-tight">
+              {t("Stop planning. Start building.")}
+            </h2>
             <p className="text-xl text-zinc-400 mb-10 max-w-2xl mx-auto">
-              The best time to start was 2 years ago. The second best time is today.
+              {t("The best time to start was 2 years ago. The second best time is today.")}
             </p>
             <Link
               href={tryGrayUrl}
               className="inline-flex items-center justify-center px-10 py-5 bg-white text-black text-lg font-bold rounded-full hover:bg-zinc-200 transition-colors"
             >
-              Start Free—No Credit Card Required
+              {t("Start Free—No Credit Card Required")}
             </Link>
 
             <div className="mt-12 flex flex-wrap justify-center gap-8 text-sm text-zinc-500">
-              <span className="flex items-center gap-2"><Check className="w-4 h-4" /> Free tier forever</span>
-              <span className="flex items-center gap-2"><Check className="w-4 h-4" /> Cancel anytime</span>
-              <span className="flex items-center gap-2"><Check className="w-4 h-4" /> Your data stays private</span>
+              <span className="flex items-center gap-2"><Check className="w-4 h-4" /> {t("Free tier forever")}</span>
+              <span className="flex items-center gap-2"><Check className="w-4 h-4" /> {t("Cancel anytime")}</span>
+              <span className="flex items-center gap-2"><Check className="w-4 h-4" /> {t("Your data stays private")}</span>
             </div>
           </div>
         </section>
@@ -135,17 +144,17 @@ export default function GrayMarketingClient({
         <div className="site-footer__overlay">
           <div className="site-footer__grid">
             <div className="site-footer__column">
-              <p className="site-footer__column-title">Products</p>
+              <p className="site-footer__column-title">{t("Products")}</p>
               <a href={tryGrayUrl} className="site-footer__column-link" target="_blank" rel="noreferrer">
                 Gray
               </a>
             </div>
             <div className="site-footer__column">
-              <p className="site-footer__column-title">Research</p>
-              <span className="site-footer__column-note">Coming soon</span>
+              <p className="site-footer__column-title">{t("Research")}</p>
+              <span className="site-footer__column-note">{t("Coming soon")}</span>
             </div>
             <div className="site-footer__column">
-              <p className="site-footer__column-title">Contact</p>
+              <p className="site-footer__column-title">{t("Contact")}</p>
               <a href="mailto:hi@alignment.id" className="site-footer__column-link">
                 hi@alignment.id
               </a>
@@ -153,20 +162,20 @@ export default function GrayMarketingClient({
           </div>
           <div className="site-footer__grid site-footer__grid--secondary">
             <div className="site-footer__column site-footer__column-stack">
-              <p className="site-footer__column-title">Policies</p>
+              <p className="site-footer__column-title">{t("Policies")}</p>
               <a href="/policies/tos" className="site-footer__column-link">
-                Terms of Service
+                {t("Terms of Service")}
               </a>
               <a href="/policies/privacy" className="site-footer__column-link">
-                Privacy Policy
+                {t("Privacy Policy")}
               </a>
               <a href="/policies/refund" className="site-footer__column-link">
-                Refund Policy
+                {t("Refund Policy")}
               </a>
             </div>
             <div className="site-footer__column">
-              <p className="site-footer__column-title">Blog</p>
-              <span className="site-footer__column-note">Coming soon</span>
+              <p className="site-footer__column-title">{t("Blog")}</p>
+              <span className="site-footer__column-note">{t("Coming soon")}</span>
             </div>
           </div>
           <div className="site-footer__social-row">
@@ -208,10 +217,12 @@ export default function GrayMarketingClient({
                 <span className="sr-only">Discord</span>
               </a>
             </div>
-            <p className="site-footer__meta">© {new Date().getFullYear()} Alignment. All rights reserved.</p>
-            <button type="button" className="site-footer__language">
-              <span>English</span>
-              <span className="site-footer__language-region">United States</span>
+            <p className="site-footer__meta">
+              {t("© {year} Alignment. All rights reserved.", { year: new Date().getFullYear() })}
+            </p>
+            <button type="button" className="site-footer__language" onClick={toggleLanguage}>
+              <span>{languageLabel}</span>
+              <span className="site-footer__language-region">{regionLabel}</span>
             </button>
           </div>
         </div>

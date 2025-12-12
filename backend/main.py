@@ -7,16 +7,23 @@ from fastapi import FastAPI, HTTPException, Depends, status, File, Form, Query, 
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 from typing import Optional, List, Dict, Any, AsyncGenerator, Tuple, Union, Iterable, Set, Mapping
 import databases
 import sqlalchemy
 from datetime import datetime, timezone, date, timedelta
 from zoneinfo import ZoneInfo
+
+# Time helpers (avoid datetime.utcnow() deprecation)
+try:
+    from backend.time_utils import utcnow, utcnow_aware
+except Exception:  # When running with backend/ on sys.path directly (tests)
+    from time_utils import utcnow, utcnow_aware  # type: ignore
 import os
 import json
 import statistics
 from asyncio import TimeoutError, wait_for, sleep
+from contextlib import asynccontextmanager
 import re
 import time
 import hmac
@@ -1643,15 +1650,16 @@ class DashboardPulseProactivity(BaseModel):
 
 class DashboardPulseBase(BaseModel):
     date_key: str = Field(..., pattern=r"^\d{4}-\d{2}-\d{2}$")
-    timestamp: Optional[int] = None
+    timestamp: Optional[int] = Field(default=None, validate_default=True)
     plans: List[DashboardPulsePlanItem] = []
     habits: List[DashboardPulseHabitItem] = []
     proactivity: DashboardPulseProactivity
 
-    @validator("timestamp", pre=True, always=True)
+    @field_validator("timestamp", mode="before")
+    @classmethod
     def _validate_timestamp(cls, value):
         if value is None:
-            return int(datetime.utcnow().timestamp() * 1000)
+            return int(utcnow_aware().timestamp() * 1000)
         if isinstance(value, datetime):
             return int(value.replace(tzinfo=timezone.utc).timestamp() * 1000)
         if isinstance(value, (int, float)):
@@ -1903,7 +1911,7 @@ async def _insert_general_conversation_message(
     # Insert into SQLite
     try:
         effective_user_data_id = user_data_id if user_data_id is not None else user_id
-        now = datetime.utcnow()
+        now = utcnow()
         query = """
             INSERT INTO general_chat_messages (user_id, user_data_id, role, content, grounding_metadata, reminders, created_at)
             VALUES (:user_id, :user_data_id, :role, :content, :grounding_metadata, :reminders, :created_at)
@@ -1953,7 +1961,7 @@ async def _replace_general_conversation_history(user_id: int, history: List[Dict
                     "content": entry.get("text") or "",
                     "grounding_metadata": json.dumps(entry.get("grounding_metadata")) if entry.get("grounding_metadata") else None,
                     "reminders": json.dumps(entry.get("reminders")) if entry.get("reminders") else None,
-                    "created_at": datetime.utcnow(),
+                    "created_at": utcnow(),
                 })
 
             if values_list:
@@ -2029,8 +2037,8 @@ async def _ensure_user_data_record(user_identifier: int) -> Optional[int]:
         # Create new record
         insert_query = user_data.insert().values(
             user_identifier=user_identifier,
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow()
+            created_at=utcnow(),
+            updated_at=utcnow()
         )
         user_data_id = await database.execute(insert_query)
         
@@ -2273,9 +2281,9 @@ async def _maybe_enrich_actions_with_reminder_time(
     base_time: datetime
     match = re.search(r"ISO timestamp:\s*([0-9T:\.\-:+Z]+)", time_context or "")
     if match:
-        base_time = _ensure_datetime_value(match.group(1)) or datetime.utcnow()
+        base_time = _ensure_datetime_value(match.group(1)) or utcnow()
     else:
-        base_time = datetime.utcnow()
+        base_time = utcnow()
 
     normalized_message = (message or "").lower()
     relative_match = re.search(
@@ -2324,7 +2332,7 @@ async def _create_reminders_from_actions(
       { "operation": "created" | "rescheduled", "reminder": { ...row... } }
     """
     results: List[Dict[str, Any]] = []
-    now = datetime.utcnow()
+    now = utcnow()
 
     for action in actions:
         label = (action.get("label") or "Reminder").strip()
@@ -2350,8 +2358,11 @@ async def _create_reminders_from_actions(
         )
 
         if existing_reminder:
-            reminder_id = existing_reminder["id"]
-            plan_id = existing_reminder.get("entity_id")
+            # `databases` returns a Record, which supports dict-style access but
+            # not `.get()`. Normalize once for safe optional lookups.
+            existing_record = dict(existing_reminder)
+            reminder_id = existing_record["id"]
+            plan_id = existing_record.get("entity_id")
 
             # Ensure there is an associated plan row so the dashboard can reflect the reminder.
             if plan_id is None:
@@ -2465,7 +2476,20 @@ def _is_valid_uuid(val: Optional[Any]) -> bool:
 
 
 # FastAPI app
-app = FastAPI(title="User Profile API with AI Chat", version="1.0.0")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Centralized startup/shutdown without deprecated on_event hooks."""
+    await _connect_database()
+    await _run_basic_migrations()
+    await _initialize_proactivity_engine()
+    await _validate_gemini_api_key_on_startup()
+    try:
+        yield
+    finally:
+        await _disconnect_database()
+
+
+app = FastAPI(title="User Profile API with AI Chat", version="1.0.0", lifespan=lifespan)
 
 # Security Headers Middleware
 @app.middleware("http")
@@ -2564,7 +2588,6 @@ proactivity_realtime_broker = ProactivityRealtimeBroker()
 
 
 
-@app.on_event("startup")
 async def _connect_database():
     """Connect to the database on startup."""
     try:
@@ -2582,7 +2605,6 @@ async def _connect_database():
 
 
 
-@app.on_event("startup")
 async def _run_basic_migrations():
     """Ensure critical SQLite columns exist."""
     _ensure_sqlite_columns(
@@ -2603,11 +2625,11 @@ async def _run_basic_migrations():
             ("entity_id", "INTEGER", "NULL"),
             ("delivery_mode", "TEXT", "NULL"),
             ("metadata", "TEXT", "NULL"),
+            ("delivered_at", "TIMESTAMP", "NULL"),
         ]
     )
 
 
-@app.on_event("shutdown")
 async def _disconnect_database():
     """Disconnect from the database on shutdown."""
     try:
@@ -2643,7 +2665,6 @@ async def _disconnect_database():
             },
         )
 
-@app.on_event("startup")
 async def _initialize_proactivity_engine():
     """Initialize the hybrid proactivity engine + scheduler."""
     global proactivity_engine, proactivity_scheduler
@@ -2667,7 +2688,6 @@ async def _initialize_proactivity_engine():
         )
 
 
-@app.on_event("shutdown")
 async def _shutdown_proactivity_engine():
     """Stop the APScheduler + clean up."""
     global proactivity_scheduler
@@ -2686,7 +2706,6 @@ async def _shutdown_proactivity_engine():
         })
 
 
-@app.on_event("startup")
 async def _validate_gemini_api_key_on_startup():
     # Skip validation if not using Gemini or validation disabled
     if AI_PROVIDER != "gemini" or not VALIDATE_GEMINI_ON_STARTUP:
@@ -2749,11 +2768,11 @@ def generate_initials(full_name: str) -> str:
 
 def _timestamp_ms_to_datetime(timestamp_ms: Optional[int]) -> datetime:
     if timestamp_ms is None:
-        return datetime.utcnow()
+        return utcnow()
     try:
         normalized = datetime.fromtimestamp(int(timestamp_ms) / 1000, tz=timezone.utc)
     except (OSError, OverflowError, ValueError):
-        normalized = datetime.utcnow().replace(tzinfo=timezone.utc)
+        normalized = utcnow_aware()
     return normalized.replace(tzinfo=None)
 
 
@@ -2767,11 +2786,11 @@ def _datetime_to_ms(value: Optional[datetime]) -> int:
             try:
                 base = datetime.fromisoformat(candidate.replace("Z", "+00:00"))
             except ValueError:
-                base = datetime.utcnow()
+                base = utcnow()
         else:
-            base = datetime.utcnow()
+            base = utcnow()
     else:
-        base = datetime.utcnow()
+        base = utcnow()
     if base.tzinfo is None:
         aware = base.replace(tzinfo=timezone.utc)
     else:
@@ -3579,8 +3598,8 @@ async def _ensure_user_file_search_store(
                 user_id=user_id,
                 store_name=store.name,
                 display_name=store.display_name,
-                created_at=datetime.utcnow(),
-                updated_at=datetime.utcnow(),
+                created_at=utcnow(),
+                updated_at=utcnow(),
             )
         )
     except sqlalchemy.exc.IntegrityError:
@@ -3731,7 +3750,7 @@ async def _list_calendar_events(user_id: int, args: Dict[str, Any], db: database
         except ValueError:
             return {"error": "Invalid start_date format. Use ISO 8601."}
     else:
-        start_date = datetime.utcnow()
+        start_date = utcnow()
 
     if end_str:
         try:
@@ -3790,7 +3809,7 @@ async def _create_calendar_event(user_id: int, args: Dict[str, Any], db: databas
         start_time=start_time,
         end_time=end_time,
         calendar_id=calendar_id,
-        created_at=datetime.utcnow()
+        created_at=utcnow()
     )
     event_id = await db.execute(query)
     return {"status": "success", "event_id": event_id, "message": f"Event '{title}' created."}
@@ -3878,7 +3897,7 @@ async def _create_habit_tool(user_id: int, args: Dict[str, Any], db: databases.D
         streak_label=args.get("streak_label"),
     )
 
-    now = datetime.utcnow()
+    now = utcnow()
     base_values = {
         "user_id": user_id,
         "label": str(label),
@@ -3917,7 +3936,7 @@ async def _update_habit_tool(user_id: int, args: Dict[str, Any], db: databases.D
     if not updates:
         return {"status": "no_change", "message": "No updates provided."}
         
-    now = datetime.utcnow()
+    now = utcnow()
     
     updates["updated_at"] = now
     await db.execute(
@@ -3961,7 +3980,7 @@ async def _create_reminder_tool(
             detail="Invalid remind_at format, use ISO 8601.",
         )
     
-    now = datetime.utcnow()
+    now = utcnow()
     
     base_data = {
         "user_id": user_id,
@@ -4228,7 +4247,7 @@ async def _create_plan_tool(user_id: int, args: Dict[str, Any], db: databases.Da
         "description": args.get("description"),
     }
     
-    now = datetime.utcnow()
+    now = utcnow()
     plan_id = await db.execute(
         plans.insert().values(
             **base_values,
@@ -4266,7 +4285,7 @@ async def _update_plan_tool(user_id: int, args: Dict[str, Any], db: databases.Da
     if not existing:
         return {"error": "Plan not found or access denied."}
 
-    updates["updated_at"] = datetime.utcnow()
+    updates["updated_at"] = utcnow()
     query = plans.update().where(plans.c.id == plan_id).values(**updates)
     await db.execute(query)
     return {"status": "success", "message": "Plan updated."}
@@ -4333,7 +4352,7 @@ async def _complete_onboarding(
 
     updates: Dict[str, Any] = {
         "has_seen_general_chat": True,
-        "updated_at": datetime.utcnow(),
+        "updated_at": utcnow(),
     }
     if nickname is not None:
         updates["personalization_nickname"] = nickname
@@ -4406,7 +4425,7 @@ async def _complete_onboarding(
         if timezone:
             settings_payload["timezone"] = timezone
 
-        now = datetime.utcnow()
+        now = utcnow()
         try:
             existing = await db.fetch_one(
                 proactivity_settings.select().where(proactivity_settings.c.user_id == user_id)
@@ -5097,7 +5116,7 @@ async def get_or_create_user_streak(user_id: int, db: databases.Database) -> Use
                 updated_at=row["updated_at"],
             )
             
-        now = datetime.utcnow()
+        now = utcnow()
         insert_query = user_streaks.insert().values(
             user_id=user_id,
             current_streak=0,
@@ -5118,7 +5137,7 @@ async def get_or_create_user_streak(user_id: int, db: databases.Database) -> Use
         )
     except Exception as e:
         api_logger.error(f"Failed to get/create user streak for user {user_id}: {e}")
-        now = datetime.utcnow()
+        now = utcnow()
         # Return transient fallback
         return UserStreak(
             id=0,
@@ -5153,11 +5172,11 @@ async def update_user_streak(
         try:
             # Only use valid timezone strings
             user_tz = ZoneInfo(timezone_name)
-            today = datetime.utcnow().replace(tzinfo=timezone.utc).astimezone(user_tz).date()
+            today = utcnow_aware().astimezone(user_tz).date()
         except Exception:
-            today = datetime.utcnow().date()
+            today = utcnow().date()
     else:
-        today = datetime.utcnow().date()
+        today = utcnow().date()
 
     query = user_streaks.select().where(user_streaks.c.user_id == user_id)
     row = await db.fetch_one(query)
@@ -5167,14 +5186,17 @@ async def update_user_streak(
         await get_or_create_user_streak(user_id, db)
         row = await db.fetch_one(query)
         if not row:
-             api_logger.error(f"Failed to ensure streak record for user {user_id}")
-             # Return fake object to not crash
-             now = datetime.utcnow()
-             return {
-                 "id": 0, "user_id": user_id, "current_streak": 1, 
-                 "last_activity_date": today.isoformat(), 
-                 "created_at": now, "updated_at": now
-             }
+            api_logger.error(f"Failed to ensure streak record for user {user_id}")
+            # Return fake object to not crash
+            now = utcnow()
+            return {
+                "id": 0,
+                "user_id": user_id,
+                "current_streak": 1,
+                "last_activity_date": today.isoformat(),
+                "created_at": now,
+                "updated_at": now,
+            }
 
     last_activity_date_str = row["last_activity_date"]
     current_streak = row["current_streak"] or 0
@@ -5196,7 +5218,7 @@ async def update_user_streak(
     else:
         new_streak = 1
 
-    now_ts = datetime.utcnow()
+    now_ts = utcnow()
     # Update SQLite
     try:
         update_q = user_streaks.update().where(user_streaks.c.id == row["id"]).values(
@@ -5252,7 +5274,7 @@ async def get_admin_metrics(
         if not current_user:
             raise HTTPException(status_code=401, detail="Authentication required")
         require_admin(current_user)
-    now = datetime.utcnow()
+    now = utcnow()
     start_of_today = datetime.combine(now.date(), datetime.min.time())
 
     total_users = await db.fetch_val(
@@ -5322,7 +5344,7 @@ async def get_or_create_conversation(
     # Create new conversation
     import uuid
     new_id = str(uuid.uuid4())
-    now = datetime.utcnow()
+    now = utcnow()
     insert_query = user_chat_threads.insert().values(
         id=new_id,
         title=title or "New Conversation",
@@ -5388,7 +5410,7 @@ async def save_conversation_message(
           text=text,
           grounding_metadata=grounding_metadata,
           attachments=message.get("attachments"),
-          created_at=datetime.utcnow(),
+          created_at=utcnow(),
       )
       message_id = await database.execute(insert_query)
       
@@ -5396,7 +5418,7 @@ async def save_conversation_message(
       update_query = (
           user_chat_threads.update()
           .where(user_chat_threads.c.id == conversation_id)
-          .values(last_message_at=datetime.utcnow(), updated_at=datetime.utcnow())
+          .values(last_message_at=utcnow(), updated_at=utcnow())
       )
       await database.execute(update_query)
       _append_to_conversation_cache(
@@ -6938,7 +6960,7 @@ async def create_context_cache(
     current_user: Dict[str, Any] = Depends(get_current_user),
 ) -> ContextCache:
     require_same_user(user_id, current_user)
-    now = datetime.utcnow()
+    now = utcnow()
     query = context_cache.insert().values(
         user_id=user_id,
         conversation_id=payload.conversation_id,
@@ -7102,7 +7124,7 @@ async def upload_media(
   if STORAGE_BASE_URL:
       public_url = f"{STORAGE_BASE_URL.rstrip('/')}/{storage_name}"
 
-  now = datetime.utcnow()
+  now = utcnow()
   query = media_uploads.insert().values(
       user_id=user_id,
       filename=sanitized_name,
@@ -7149,7 +7171,7 @@ async def chat_endpoint(
     """Send a message to AI and get a response"""
     # Force the request user to the authenticated user to avoid mismatches from stale client state.
     chat_request.user_id = current_user["id"]
-    start_time = datetime.utcnow()
+    start_time = utcnow()
 
     # Set request context for logging
     correlation_id = str(uuid4())
@@ -7174,7 +7196,7 @@ async def chat_endpoint(
         session_title = _fallback_title_from_message(chat_request.message)
 
         # Create chat session
-        now = datetime.utcnow()
+        now = utcnow()
         chat_session_query = chat_sessions.insert().values(
             user_id=chat_request.user_id,
             title=session_title,
@@ -7443,7 +7465,7 @@ async def chat_stream(
 ):
     """Stream an AI response token-by-token using Server-Sent Events."""
     chat_request.user_id = current_user["id"]
-    start_time = datetime.utcnow()
+    start_time = utcnow()
 
     # Set request context for logging
     correlation_id = str(uuid4())
@@ -7824,7 +7846,7 @@ async def chat_stream(
         }
 
         # Log successful completion
-        total_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+        total_time = (utcnow() - start_time).total_seconds() * 1000
         api_logger.info("Chat request completed successfully", extra={
             "event_type": "chat_request_complete",
             "user_id": chat_request.user_id,
@@ -7837,7 +7859,7 @@ async def chat_stream(
         clear_request_context()
         return StreamingResponse(event_stream(), media_type="text/event-stream", headers=headers)
     except Exception as error:
-        total_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+        total_time = (utcnow() - start_time).total_seconds() * 1000
         error_msg = str(error)
         api_logger.error(
             f"Chat stream request failed: {error_msg}",
@@ -8387,7 +8409,7 @@ Summary:"""
 @limiter.limit("10/minute")
 async def create_user(request: Request, user: UserCreate, db: databases.Database = Depends(get_database)):
     initials = generate_initials(user.full_name)
-    now = datetime.utcnow()
+    now = utcnow()
     
     # Enforce plan tier logic: default to "scout", hardcode "pioneer" for specific user.
     # We ignore the incoming user.plan_tier to prevent clients from setting it.
@@ -8530,7 +8552,7 @@ async def update_user(
     if "full_name" in update_data:
         update_data["initials"] = generate_initials(update_data["full_name"])
 
-    update_data["updated_at"] = datetime.utcnow()
+    update_data["updated_at"] = utcnow()
 
     query = users.update().where(users.c.id == user_id).values(**update_data)
     await db.execute(query)
@@ -8682,7 +8704,7 @@ async def create_calendar(
     db: databases.Database = Depends(get_database)
 ):
     require_same_user(user_id, current_user)
-    now = datetime.utcnow()
+    now = utcnow()
     calendar_id = await db.execute(
         calendars.insert().values(
             user_id=user_id,
@@ -8717,7 +8739,7 @@ async def update_calendar(
     if not update_data:
         return existing
 
-    update_data["updated_at"] = datetime.utcnow()
+    update_data["updated_at"] = utcnow()
 
     await db.execute(
         calendars.update()
@@ -8757,7 +8779,7 @@ async def create_plan(
         "description": plan.description,
     }
 
-    now = datetime.utcnow()
+    now = utcnow()
     plan_id = await db.execute(
         plans.insert().values(
             **base_values,
@@ -8788,7 +8810,7 @@ async def update_plan(
         raise HTTPException(status_code=404, detail="Plan not found")
     if not update_data:
         return existing
-    update_data["updated_at"] = datetime.utcnow()
+    update_data["updated_at"] = utcnow()
     await db.execute(
         plans.update()
         .where((plans.c.id == plan_id) & (plans.c.user_id == user_id))
@@ -8848,7 +8870,7 @@ async def create_habit(
         "description": habit.description,
     }
 
-    now = datetime.utcnow()
+    now = utcnow()
     habit_id = await db.execute(
         habits.insert().values(
             **base_values,
@@ -8879,7 +8901,7 @@ async def update_habit(
         raise HTTPException(status_code=404, detail="Habit not found")
     if not update_data:
         return existing
-    update_data["updated_at"] = datetime.utcnow()
+    update_data["updated_at"] = utcnow()
     await db.execute(
         habits.update()
         .where((habits.c.id == habit_id) & (habits.c.user_id == user_id))
@@ -8958,7 +8980,7 @@ async def get_user_calendar_events(
 
     query = query.order_by(calendar_events.c.start_time)
     rows = await db.fetch_all(query)
-    now = datetime.utcnow()
+    now = utcnow()
     normalized = []
     for row in rows:
         record = dict(row)
@@ -9014,7 +9036,7 @@ async def list_user_reminders(
         
         # Self-healing for SQLite: Auto-DELETE stale pending reminders
         if status_filter == "pending" and rows:
-            now = datetime.utcnow()
+            now = utcnow()
             stale_threshold = now - timedelta(minutes=15)
             stale_ids = []
             filtered_rows = []
@@ -9068,7 +9090,7 @@ async def create_user_reminder(
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     require_same_user(user_id, current_user)
-    now = datetime.utcnow()
+    now = utcnow()
     values = {
         "user_id": user_id,
         "label": payload.label,
@@ -9133,7 +9155,7 @@ async def update_user_reminder(
     if not update_values:
         return _serialize_reminder_row(existing)
 
-    update_values["updated_at"] = datetime.utcnow()
+    update_values["updated_at"] = utcnow()
 
     await db.execute(
         reminders.update()
@@ -9242,7 +9264,7 @@ async def create_calendar_event(
     db: databases.Database = Depends(get_database)
 ):
     require_same_user(user_id, current_user)
-    now = datetime.utcnow()
+    now = utcnow()
     # Supabase-first create.
     # Fallback to local SQLite.
     event_id = await db.execute(
@@ -9397,7 +9419,7 @@ async def create_dashboard_pulse(
             habits_payload,
         )
 
-    now = datetime.utcnow()
+    now = utcnow()
 
     # Supabase-first implementation.
     # Fallback to local SQLite.
@@ -9453,7 +9475,7 @@ async def update_dashboard_pulse(
     existing: Any = None
     # Supabase-first lookup.
     # Local SQLite implementation
-    update_data["updated_at"] = datetime.utcnow()
+    update_data["updated_at"] = utcnow()
     await db.execute(
         dashboard_pulses.update()
         .where(dashboard_pulses.c.id == pulse_id)
@@ -9514,7 +9536,7 @@ async def get_dashboard_summary(
             continue
         pulse_items.append(DashboardPulse(**payload))
 
-    today_key = datetime.utcnow().strftime("%Y-%m-%d")
+    today_key = utcnow().strftime("%Y-%m-%d")
     today_entry = next((pulse for pulse in pulse_items if pulse.date_key == today_key), None)
     recent_entries = pulse_items[:7]
 
@@ -9557,6 +9579,7 @@ async def get_dashboard_summary(
 # --- Payment Endpoints ---
 
 @app.post("/api/payment/charge", response_model=PaymentChargeResponse)
+@app.post("/payment/charge", response_model=PaymentChargeResponse, include_in_schema=False)
 async def create_payment_charge(
     request: PaymentRequest,
     user: User = Depends(get_current_user)
@@ -9629,8 +9652,8 @@ async def create_payment_charge(
             payment_type=request.payment_type,
             plan_tier=request.plan_tier,
             billing_cycle=request.billing_cycle,
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow()
+            created_at=utcnow(),
+            updated_at=utcnow()
         )
         await database.execute(query)
     except Exception as e:
@@ -9687,6 +9710,7 @@ async def create_payment_charge(
 
 
 @app.post("/api/payment/notification")
+@app.post("/payment/notification", include_in_schema=False)
 async def handle_payment_notification(notification: MidtransNotification):
     """
     Handle Midtrans HTTP Notification (Webhook).
@@ -9738,7 +9762,7 @@ async def handle_payment_notification(notification: MidtransNotification):
             transactions.c.order_id == notification.order_id
         ).values(
             status=new_status,
-            updated_at=datetime.utcnow()
+            updated_at=utcnow()
         )
         await database.execute(query)
         
@@ -9755,7 +9779,7 @@ async def handle_payment_notification(notification: MidtransNotification):
                 
                 # Calculate subscription expiry based on billing cycle
                 from dateutil.relativedelta import relativedelta
-                now = datetime.utcnow()
+                now = utcnow()
                 if billing_cycle == "annual":
                     subscription_expires_at = now + relativedelta(years=1)
                 else:
@@ -9765,7 +9789,7 @@ async def handle_payment_notification(notification: MidtransNotification):
                 user_update = users.update().where(users.c.id == user_id).values(
                     plan_tier=plan_tier,
                     subscription_expires_at=subscription_expires_at,
-                    updated_at=datetime.utcnow()
+                    updated_at=utcnow()
                 )
                 await database.execute(user_update)
                 
@@ -9833,8 +9857,8 @@ async def get_user_proactivity(
             "total_tasks": result.total_tasks,
             "score": result.score,
             "notes": result.notes,
-            "created_at": result.created_at if result.created_at else datetime.utcnow(),
-            "updated_at": result.updated_at if result.updated_at else datetime.utcnow()
+            "created_at": result.created_at if result.created_at else utcnow(),
+            "updated_at": result.updated_at if result.updated_at else utcnow()
         })
 
     return formatted_results
@@ -9915,7 +9939,7 @@ async def subscribe_push_notifications(
             .values(
                 p256dh=subscription.p256dh,
                 auth=subscription.auth,
-                updated_at=datetime.utcnow(),
+                updated_at=utcnow(),
             )
         )
         return {"status": "updated"}
@@ -9927,8 +9951,8 @@ async def subscribe_push_notifications(
             endpoint=subscription.endpoint,
             p256dh=subscription.p256dh,
             auth=subscription.auth,
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow(),
+            created_at=utcnow(),
+            updated_at=utcnow(),
         )
     )
     return {"status": "created"}
@@ -10044,7 +10068,7 @@ async def update_proactivity_settings(
         # Ensure 'time' is consistent with the first 'times' entry for old clients
         updated_payload["time"] = updated_payload["times"][0] if updated_payload["times"] else None
     
-    now = datetime.utcnow()
+    now = utcnow()
     try:
         if existing_record:
             update_query = (
@@ -10134,7 +10158,7 @@ async def create_proactivity_log(
     score = min(100, (proactivity.tasks_completed / max(proactivity.total_tasks, 1)) * 100) if proactivity.total_tasks > 0 else 0
     query = proactivity_logs.insert().values(
         user_id=user_id,
-        activity_date=datetime.utcnow(),
+        activity_date=utcnow(),
         tasks_completed=proactivity.tasks_completed,
         total_tasks=proactivity.total_tasks,
         score=score,
@@ -10166,7 +10190,7 @@ async def list_proactivity_deliveries(
     which time slots have already fired.
     """
     require_same_user(user_id, current_user)
-    now = datetime.utcnow()
+    now = utcnow()
     since = now - timedelta(days=1)
 
     # Prefer Supabase for proactivity deliveries when available.
@@ -10242,7 +10266,7 @@ async def upsert_proactivity_push_subscription(
         update_query = (
             proactivity_push_subscriptions.update()
             .where(proactivity_push_subscriptions.c.id == existing["id"])
-            .values(p256dh=p256dh, auth=auth_key, updated_at=datetime.utcnow())
+            .values(p256dh=p256dh, auth=auth_key, updated_at=utcnow())
         )
         await db.execute(update_query)
     else:
@@ -10251,8 +10275,8 @@ async def upsert_proactivity_push_subscription(
             endpoint=endpoint,
             p256dh=p256dh,
             auth=auth_key,
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow(),
+            created_at=utcnow(),
+            updated_at=utcnow(),
         )
         await db.execute(insert_query)
 
@@ -10269,7 +10293,7 @@ async def daily_proactivity_checkin(
     require_same_user(user_id, current_user)
     from datetime import datetime, time
 
-    today = datetime.utcnow().date()
+    today = utcnow().date()
     
     from sqlalchemy import func
     existing_log_query = proactivity_logs.select().where(
@@ -10300,15 +10324,15 @@ async def daily_proactivity_checkin(
             "total_tasks": result.total_tasks,
             "score": result.score,
             "notes": result.notes,
-            "created_at": result.created_at if result.created_at else datetime.utcnow(),
-            "updated_at": datetime.utcnow()
+            "created_at": result.created_at if result.created_at else utcnow(),
+            "updated_at": utcnow()
         }
     else:
         # Create new log for today
         score = min(100, (checkin.tasks_completed / max(checkin.total_tasks, 1)) * 100) if checkin.total_tasks > 0 else 0
         query = proactivity_logs.insert().values(
             user_id=user_id,
-            activity_date=datetime.utcnow(),
+            activity_date=utcnow(),
             tasks_completed=checkin.tasks_completed,
             total_tasks=checkin.total_tasks,
             score=score,
@@ -10324,8 +10348,8 @@ async def daily_proactivity_checkin(
             "total_tasks": result.total_tasks,
             "score": result.score,
             "notes": result.notes,
-            "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow()
+            "created_at": utcnow(),
+            "updated_at": utcnow()
         }
 
 @app.get("/users/{user_id}/proactivity/streak", response_model=dict)
@@ -10426,7 +10450,7 @@ async def mark_proactivity_notification_read(
 
             updated = (
                 supabase.table("proactive_state")
-                .update({"read_at": datetime.utcnow().isoformat()})
+                .update({"read_at": utcnow().isoformat()})
                 .eq("id", notification_id)
                 .eq("user_id", user_id)
                 .execute()
@@ -10456,7 +10480,7 @@ async def mark_proactivity_notification_read(
     await db.execute(
         proactive_notifications.update()
         .where(proactive_notifications.c.id == notification_id)
-        .values(read_at=datetime.utcnow())
+        .values(read_at=utcnow())
     )
     updated = await db.fetch_one(select_query)
     return ProactivityNotification.model_validate(
@@ -10523,7 +10547,7 @@ async def update_proactivity_settings_route(
 ):
     require_same_user(user_id, current_user)
     payload = settings.model_dump(exclude_none=True)
-    now = datetime.utcnow()
+    now = utcnow()
 
     api_logger.debug(
         f"Saving proactivity settings for user {user_id}",
@@ -10672,8 +10696,8 @@ def map_google_credentials(record) -> GoogleCalendarCredentials:
         client_secret=None,
         scopes=scopes,
         expires_at=record_dict.get("expires_at"),
-        created_at=record_dict.get("created_at", datetime.utcnow()),
-        updated_at=record_dict.get("updated_at", datetime.utcnow()),
+        created_at=record_dict.get("created_at", utcnow()),
+        updated_at=record_dict.get("updated_at", utcnow()),
     )
 
 
@@ -10700,7 +10724,7 @@ async def persist_google_calendar_state(db: databases.Database, state_token: str
             nonce=state_payload.get("nonce"),
             redirect_uri=state_payload.get("redirect_uri"),
             expires_at=expires_at,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
     )
 
@@ -10723,7 +10747,7 @@ async def consume_google_calendar_state(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OAuth state already used")
 
     expires_at = record.get("expires_at")
-    if expires_at and expires_at < datetime.utcnow():
+    if expires_at and expires_at < utcnow():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OAuth state has expired")
 
     if record.get("user_id") != state_payload.get("user_id") or record.get("nonce") != state_payload.get("nonce"):
@@ -10737,27 +10761,36 @@ async def consume_google_calendar_state(
         google_calendar_states
         .update()
         .where(google_calendar_states.c.id == record["id"])
-        .values(consumed_at=datetime.utcnow())
+        .values(consumed_at=utcnow())
     )
 
 
 async def upsert_google_calendar_credentials(db: databases.Database, creds: GoogleCalendarCredentials) -> None:
-    payload = {
-        "user_id": creds.user_id,
-        "access_token": creds.access_token,
-        "refresh_token": encrypt_refresh_token(creds.refresh_token) if creds.refresh_token else None,
-        "token_uri": creds.token_uri,
-        "client_id": creds.client_id,
-        "client_secret": None,
-        "scopes": _serialize_scopes(creds.scopes),
-        "expires_at": creds.expires_at,
-        "created_at": creds.created_at,
-        "updated_at": datetime.utcnow(),
-    }
-
     existing = await db.fetch_one(
         google_calendar_credentials.select().where(google_calendar_credentials.c.user_id == creds.user_id)
     )
+
+    existing_refresh_token: Optional[str] = None
+    if existing:
+        existing_dict = dict(existing)
+        raw_refresh = existing_dict.get("refresh_token")
+        existing_refresh_token = decrypt_refresh_token(raw_refresh) if raw_refresh else None
+
+    refresh_token = creds.refresh_token or existing_refresh_token or ""
+
+    payload = {
+        "user_id": creds.user_id,
+        "access_token": creds.access_token,
+        "refresh_token": encrypt_refresh_token(refresh_token) if refresh_token else "",
+        "token_uri": creds.token_uri,
+        "client_id": creds.client_id,
+        # Client secret is always sourced from env; store placeholder to satisfy non-null schemas.
+        "client_secret": "",
+        "scopes": _serialize_scopes(creds.scopes),
+        "expires_at": creds.expires_at,
+        "created_at": creds.created_at,
+        "updated_at": utcnow(),
+    }
 
     if existing:
         await db.execute(
@@ -10822,7 +10855,7 @@ async def get_google_calendars(
     try:
         # Get user's Google Calendar credentials from database
         query = google_calendar_credentials.select().where(google_calendar_credentials.c.user_id == user_id)
-
+        stored_creds = await db.fetch_one(query)
         creds = map_google_credentials(stored_creds)
         service = await get_google_calendar_service(creds)
         calendars = await list_google_calendars(service)

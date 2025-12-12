@@ -213,26 +213,6 @@ class AIMessageGenerator:
         except Exception as error:
             raise RuntimeError(f"Gemini proactive message generation failed: {error}") from error
 
-    @staticmethod
-    def _resolve_timezone(timezone_str: str):
-        """
-        Resolve a timezone string to tzinfo.
-        Accepts IANA names (e.g., 'Asia/Jakarta') and fixed offsets like 'UTC+07:00'.
-        """
-        normalized = (timezone_str or "").strip()
-        if not normalized:
-            return timezone.utc
-        try:
-            return ZoneInfo(normalized)
-        except Exception:
-            match = re.match(r"^(?:UTC)?([+-])(\d{1,2})(?::?(\d{2}))?$", normalized, re.IGNORECASE)
-            if match:
-                sign = 1 if match.group(1) == "+" else -1
-                hours = int(match.group(2))
-                minutes = int(match.group(3) or "0")
-                return timezone(sign * timedelta(hours=hours, minutes=minutes))
-        return timezone.utc
-
         if isinstance(response, str):
             text = response
         else:
@@ -272,6 +252,26 @@ class AIMessageGenerator:
         cleaned = _strip_explicit_dates(cleaned)
 
         return label, cleaned
+
+    @staticmethod
+    def _resolve_timezone(timezone_str: str):
+        """
+        Resolve a timezone string to tzinfo.
+        Accepts IANA names (e.g., 'Asia/Jakarta') and fixed offsets like 'UTC+07:00'.
+        """
+        normalized = (timezone_str or "").strip()
+        if not normalized:
+            return timezone.utc
+        try:
+            return ZoneInfo(normalized)
+        except Exception:
+            match = re.match(r"^(?:UTC)?([+-])(\d{1,2})(?::?(\d{2}))?$", normalized, re.IGNORECASE)
+            if match:
+                sign = 1 if match.group(1) == "+" else -1
+                hours = int(match.group(2))
+                minutes = int(match.group(3) or "0")
+                return timezone(sign * timedelta(hours=hours, minutes=minutes))
+        return timezone.utc
 
     async def generate_habit_nudge(
         self,

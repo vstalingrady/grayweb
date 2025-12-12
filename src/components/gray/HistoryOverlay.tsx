@@ -6,6 +6,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import styles from "./HistoryOverlay.module.css";
 import { type SidebarHistorySection, type SidebarHistoryEntry } from "./types";
 import { formatDistanceToNow } from "date-fns";
+import { useI18n } from "@/contexts/I18nContext";
 
 type HistoryOverlayProps = {
     isOpen: boolean;
@@ -34,9 +35,10 @@ export function HistoryOverlay({
     onOpenEntry,
     onOpenEntryExternal,
     onRenameEntry,
-    onDeleteEntry,
-    onCreateNewChat,
+	onDeleteEntry,
+	onCreateNewChat,
 }: HistoryOverlayProps) {
+    const { t } = useI18n();
     const [query, setQuery] = useState("");
     const inputRef = useRef<HTMLInputElement>(null);
     const [activeIndex, setActiveIndex] = useState(0);
@@ -71,7 +73,7 @@ export function HistoryOverlay({
             items.push({
                 type: "action",
                 id: "create-new-chat",
-                label: "Create New Chat",
+                label: t("Create New Chat"),
             });
         }
 
@@ -117,7 +119,7 @@ export function HistoryOverlay({
         });
 
         return items;
-    }, [sections, query]);
+    }, [sections, query, t]);
 
     // Keyboard Navigation
     useEffect(() => {
@@ -176,7 +178,7 @@ export function HistoryOverlay({
                                 ref={inputRef}
                                 className={styles.searchInput}
                                 type="text"
-                                placeholder="Search..."
+                                placeholder={t("Search...")}
                                 value={query}
                                 onChange={(e) => {
                                     setQuery(e.target.value);
@@ -191,16 +193,16 @@ export function HistoryOverlay({
                         <div className={styles.scrollArea}>
                             {flatItems.length === 0 ? (
                                 <div style={{ padding: "20px", textAlign: "center", color: "rgba(255,255,255,0.4)" }}>
-                                    No results found.
+                                    {t("No results found.")}
                                 </div>
                             ) : (
                                 <>
                                     {/* Actions Section */}
                                     {flatItems.some(i => i.type === "action") && (
-                                        <div className={styles.section}>
-                                            <div className={styles.sectionHeader}>
-                                                <span className={styles.sectionTitle}>Actions</span>
-                                            </div>
+                                            <div className={styles.section}>
+                                                <div className={styles.sectionHeader}>
+                                                    <span className={styles.sectionTitle}>{t("Actions")}</span>
+                                                </div>
                                             {flatItems.filter(i => i.type === "action").map((item, idx) => {
                                                 // Find actual index in flatItems for active state
                                                 const realIndex = flatItems.indexOf(item);
@@ -262,36 +264,36 @@ export function HistoryOverlay({
                                                                 className={styles.actionButton}
                                                                 onClick={(e) => {
                                                                     e.stopPropagation();
-                                                                    onOpenEntryExternal(item.entry!);
-                                                                }}
-                                                                title="Open in new tab"
-                                                            >
-                                                                <ExternalLink size={14} />
-                                                            </div>
+                                                                onOpenEntryExternal(item.entry!);
+                                                            }}
+                                                            title={t("Open in new tab")}
+                                                        >
+                                                            <ExternalLink size={14} />
+                                                        </div>
                                                         )}
                                                         {onRenameEntry && (
                                                             <div
                                                                 className={styles.actionButton}
                                                                 onClick={(e) => {
                                                                     e.stopPropagation();
-                                                                    onRenameEntry(item.entry!);
-                                                                }}
-                                                                title="Rename"
-                                                            >
-                                                                <Pencil size={14} />
-                                                            </div>
+                                                                onRenameEntry(item.entry!);
+                                                            }}
+                                                            title={t("Rename")}
+                                                        >
+                                                            <Pencil size={14} />
+                                                        </div>
                                                         )}
                                                         {onDeleteEntry && (
                                                             <div
                                                                 className={styles.actionButton}
                                                                 onClick={(e) => {
                                                                     e.stopPropagation();
-                                                                    onDeleteEntry(item.entry!);
-                                                                }}
-                                                                title="Delete"
-                                                            >
-                                                                <Trash2 size={14} />
-                                                            </div>
+                                                                onDeleteEntry(item.entry!);
+                                                            }}
+                                                            title={t("Delete")}
+                                                        >
+                                                            <Trash2 size={14} />
+                                                        </div>
                                                         )}
                                                     </div>
                                                 </button>
@@ -306,11 +308,11 @@ export function HistoryOverlay({
                             <div className={styles.keyHint}>
                                 <span className={styles.key}>↑</span>
                                 <span className={styles.key}>↓</span>
-                                to navigate
+                                {t("to navigate")}
                             </div>
                             <div className={styles.keyHint}>
                                 <span className={styles.key}>↵</span>
-                                to select
+                                {t("to select")}
                             </div>
                         </div>
                     </motion.div>

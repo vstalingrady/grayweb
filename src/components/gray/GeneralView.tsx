@@ -6,6 +6,7 @@ import { AddPlanHabitModal } from "./AddPlanHabitModal";
 import type { CalendarEvent, CalendarInfo, PositionedEvent } from "@/components/calendar/types";
 import { type HabitItem, type PlanItem, type PlanUpdates } from "./types";
 import { mapPlansToCalendarEvents, PLAN_EVENT_ID_PREFIX } from "./planCalendarUtils";
+import { useI18n } from "@/contexts/I18nContext";
 
 const PANEL_HEIGHT =
   "clamp(360px, calc(100vh - (320px + var(--gray-chat-bar-clearance, 112px))), 820px)";
@@ -70,6 +71,7 @@ export function GrayGeneralView({
   hideCalendar = false,
   hidePlans = false,
 }: GrayGeneralViewProps) {
+  const { t } = useI18n();
   const [modalState, setModalState] = useState<{ isOpen: boolean; type: "plan" | "habit" | null }>({
     isOpen: false,
     type: null,
@@ -212,14 +214,14 @@ export function GrayGeneralView({
                   data-active={activeTab === "plans"}
                   onClick={() => onChangeTab("plans")}
                 >
-                  Plans
+                  {t("Plans")}
                 </button>
                 <button
                   type="button"
                   data-active={activeTab === "habits"}
                   onClick={() => onChangeTab("habits")}
                 >
-                  Habits
+                  {t("Habits")}
                 </button>
               </div>
               <div className={styles.planBody}>
@@ -236,7 +238,9 @@ export function GrayGeneralView({
                             <button
                               type="button"
                               className={styles.planCheckboxButton}
-                              aria-label={plan.completed ? "Mark plan as incomplete" : "Mark plan as complete"}
+                              aria-label={
+                                plan.completed ? t("Mark plan as incomplete") : t("Mark plan as complete")
+                              }
                               onClick={(event) => {
                                 event.preventDefault();
                                 event.stopPropagation();
@@ -260,7 +264,7 @@ export function GrayGeneralView({
                                 event.stopPropagation();
                                 setPlanEditorTarget(plan);
                               }}
-                              aria-label={`Edit plan ${plan.label}`}
+                              aria-label={t("Edit plan {label}", { label: plan.label })}
                               disabled={!onSavePlan}
                             >
                               <Pencil size={14} />
@@ -273,7 +277,7 @@ export function GrayGeneralView({
                                 event.stopPropagation();
                                 onDeletePlan(plan);
                               }}
-                              aria-label={`Delete plan ${plan.label}`}
+                              aria-label={t("Delete plan {label}", { label: plan.label })}
                             >
                               <Trash2 size={14} />
                             </button>
@@ -282,7 +286,7 @@ export function GrayGeneralView({
                       ))}
                     </ul>
                     <button type="button" className={styles.secondaryAction} onClick={() => openModal("plan")}>
-                      Add plans
+                      {t("Add plans")}
                     </button>
                   </>
                 ) : (
@@ -298,7 +302,9 @@ export function GrayGeneralView({
                             <button
                               type="button"
                               className={styles.planCheckboxButton}
-                              aria-label={habit.completed ? "Mark habit as incomplete" : "Mark habit as complete"}
+                              aria-label={
+                                habit.completed ? t("Mark habit as incomplete") : t("Mark habit as complete")
+                              }
                               onClick={(event) => {
                                 event.preventDefault();
                                 event.stopPropagation();
@@ -323,7 +329,7 @@ export function GrayGeneralView({
                                   event.stopPropagation();
                                   onEditHabit(habit);
                                 }}
-                                aria-label={`Edit habit ${habit.label}`}
+                                aria-label={t("Edit habit {label}", { label: habit.label })}
                               >
                                 <Pencil size={14} />
                               </button>
@@ -335,7 +341,7 @@ export function GrayGeneralView({
                                   event.stopPropagation();
                                   onDeleteHabit(habit);
                                 }}
-                                aria-label={`Delete habit ${habit.label}`}
+                                aria-label={t("Delete habit {label}", { label: habit.label })}
                               >
                                 <Trash2 size={14} />
                               </button>
@@ -349,7 +355,7 @@ export function GrayGeneralView({
                       ))}
                     </ul>
                     <button type="button" className={styles.secondaryAction} onClick={() => openModal("habit")}>
-                      Add habits
+                      {t("Add habits")}
                     </button>
                   </>
                 )}

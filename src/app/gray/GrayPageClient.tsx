@@ -2310,6 +2310,27 @@ function GrayPageClientInner({
     }
   }, [user]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const handleMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) {
+        return;
+      }
+      const payload = event.data as { type?: string } | null;
+      if (payload?.type === "google-calendar-connected") {
+        window.location.reload();
+      }
+    };
+
+    window.addEventListener("message", handleMessage);
+    return () => {
+      window.removeEventListener("message", handleMessage);
+    };
+  }, []);
+
   const handleChatSubmit = async (draft: string, controls: ChatDraftControls) => {
     const normalizedDraft = draft.trim();
     if (!normalizedDraft) {

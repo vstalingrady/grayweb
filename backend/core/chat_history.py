@@ -1,8 +1,13 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
+
+try:
+    from backend.time_utils import utcnow, utcnow_aware
+except Exception:  # pragma: no cover
+    from time_utils import utcnow, utcnow_aware  # type: ignore
 
 import databases
 import sqlalchemy
@@ -158,7 +163,7 @@ async def overwrite_thread_history(
     Updates both Supabase (when available) and local SQLite storage to ensure
     message deletions persist across cache expiry and page reloads.
     """
-    updated_at_iso = datetime.utcnow().isoformat() + "Z"
+    updated_at_iso = utcnow_aware().isoformat().replace("+00:00", "Z")
 
     # 1. Update Supabase if available
     # 1. Update Supabase if available (Auth only, no data tables)
@@ -179,7 +184,7 @@ async def overwrite_thread_history(
 
             # Insert the new history
             if normalized_history:
-                now = datetime.utcnow()
+                now = utcnow()
                 values_list = []
                 for entry in normalized_history:
                     values_list.append({
@@ -202,7 +207,7 @@ async def overwrite_thread_history(
             # Update thread timestamps
             update_query = user_chat_threads.update().where(
                 user_chat_threads.c.id == conversation_id
-            ).values(updated_at=datetime.utcnow(), last_message_at=datetime.utcnow())
+            ).values(updated_at=utcnow(), last_message_at=utcnow())
             await database.execute(update_query)
         except Exception as error:
             _handle_conversation_store_error(
@@ -254,7 +259,7 @@ async def apply_conversation_update(
             detail="No conversation fields provided",
         )
 
-    updated_at_iso = datetime.utcnow().isoformat() + "Z"
+    updated_at_iso = utcnow_aware().isoformat().replace("+00:00", "Z")
     storage_available = store_available()
     valid_conversation_id = _is_valid_uuid(conversation_id)
 
@@ -392,7 +397,7 @@ async def update_conversation_title(conversation_id: str, title: str) -> None:
     try:
         query = user_chat_threads.update().where(
             user_chat_threads.c.id == conversation_id
-        ).values(title=title, updated_at=datetime.utcnow())
+        ).values(title=title, updated_at=utcnow())
         await database.execute(query)
     except Exception as error:
         _handle_conversation_store_error("Error updating local conversation title", error)

@@ -6,6 +6,11 @@ import os
 from typing import Optional, Dict, Any
 import logging
 from datetime import datetime, timezone
+
+try:
+    from backend.time_utils import utcnow
+except Exception:  # pragma: no cover
+    from time_utils import utcnow  # type: ignore
 import time
 
 try:
@@ -475,7 +480,7 @@ async def get_current_user(
             await database.execute(
                 users.update()
                 .where(users.c.id == linked_user["id"])
-                .values(auth_user_id=auth_user_id, updated_at=datetime.utcnow())
+                .values(auth_user_id=auth_user_id, updated_at=utcnow())
             )
             user = await database.fetch_one(users.select().where(users.c.id == linked_user["id"]))
             logger.info(f"Linked auth_user_id {auth_user_id} to existing user {linked_user['id']}")
@@ -484,7 +489,7 @@ async def get_current_user(
     if not user:
         full_name = _derive_full_name(email, payload.get("user_metadata") or {})
         try:
-            now = datetime.utcnow()
+            now = utcnow()
             
             # Enforce plan tier logic
             assigned_plan_tier = "scout"

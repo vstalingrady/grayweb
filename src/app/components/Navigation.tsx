@@ -5,8 +5,10 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { resolveTryGrayUrl } from "@/lib/grayCta";
+import { useI18n } from "@/contexts/I18nContext";
 
 const Navigation = () => {
+  const { t } = useI18n();
   const containerRef = useRef<HTMLDivElement>(null);
   const drawerId = "mobile-navigation";
   const [menuOpen, setMenuOpen] = useState(false);
@@ -113,13 +115,13 @@ const Navigation = () => {
               aria-hidden
               priority
             />
-            <span className="sr-only">Open Gray workspace</span>
+            <span className="sr-only">{t("Open Gray workspace")}</span>
           </Link>
         </div>
         <button
           type="button"
           className="nav-menu-toggle"
-          aria-label="Toggle navigation"
+          aria-label={t("Toggle navigation")}
           aria-expanded={menuOpen}
           aria-controls={drawerId}
           onClick={toggleMenu}
@@ -173,7 +175,7 @@ const Navigation = () => {
               aria-hidden
               priority
             />
-            <span className="sr-only">Open Gray workspace</span>
+            <span className="sr-only">{t("Open Gray workspace")}</span>
           </Link>
         </div>
       </div>

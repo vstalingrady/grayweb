@@ -23,3 +23,6 @@ slowapi
 python-dateutil
 redis>=5.0.0
 arq>=0.26.0
+# Test/development dependencies
+pytest
+pytest-asyncio

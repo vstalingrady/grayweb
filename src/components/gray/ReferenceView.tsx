@@ -4,6 +4,7 @@ import React, { useState, useRef, useCallback } from "react";
 import { Search, Upload, FileText, LoaderCircle, X, CheckCircle2, AlertCircle } from "lucide-react";
 import { apiService } from "@/lib/api";
 import { useUser } from "@/contexts/UserContext";
+import { useI18n } from "@/contexts/I18nContext";
 
 interface UploadedDocument {
   id: number;
@@ -16,6 +17,7 @@ interface UploadedDocument {
 }
 
 export function ReferenceView() {
+  const { t } = useI18n();
   const { user } = useUser();
   const [searchQuery, setSearchQuery] = useState("");
   const [documents, setDocuments] = useState<UploadedDocument[]>([]);
@@ -76,7 +78,7 @@ export function ReferenceView() {
           ? {
             ...doc,
             status: 'error',
-            error: error instanceof Error ? error.message : 'Upload failed'
+            error: error instanceof Error ? error.message : t("Upload failed")
           }
           : doc
       ));
@@ -87,7 +89,7 @@ export function ReferenceView() {
         fileInputRef.current.value = '';
       }
     }
-  }, [user]);
+  }, [user, t]);
 
   const handleRemoveDocument = useCallback((docId: number) => {
     setDocuments(prev => prev.filter(doc => doc.id !== docId));
@@ -106,9 +108,9 @@ export function ReferenceView() {
   return (
     <div className="flex flex-col h-full w-full overflow-hidden">
       <header className="mb-6 px-8 pt-8 shrink-0 text-center">
-        <h1 className="text-3xl font-medium tracking-tight text-white">Reference</h1>
+        <h1 className="text-3xl font-medium tracking-tight text-white">{t("Reference")}</h1>
         <p className="text-sm text-zinc-500 mt-2">
-          Upload documents to build your knowledge base
+          {t("Upload documents to build your knowledge base")}
         </p>
       </header>
 
@@ -121,7 +123,7 @@ export function ReferenceView() {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search your knowledge base..."
+              placeholder={t("Search your knowledge base...")}
               className="flex-1 bg-transparent border-none outline-none text-zinc-200 placeholder:text-zinc-600 text-sm"
             />
           </div>
@@ -138,7 +140,7 @@ export function ReferenceView() {
             onClick={handleUploadClick}
             disabled={isUploading}
             className="w-12 h-12 rounded-full bg-[#0A0A0A] border border-white/10 flex items-center justify-center text-zinc-400 hover:text-zinc-200 hover:border-white/20 hover:bg-white/5 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-            title="Upload Files"
+            title={t("Upload Files")}
           >
             {isUploading ? (
               <LoaderCircle size={20} className="animate-spin" />
@@ -156,10 +158,10 @@ export function ReferenceView() {
                 <FileText size={32} className="text-zinc-600" />
               </div>
               <p className="text-zinc-400 text-sm">
-                {searchQuery ? 'No documents match your search' : 'No documents uploaded yet'}
+                {searchQuery ? t("No documents match your search") : t("No documents uploaded yet")}
               </p>
               <p className="text-zinc-600 text-xs mt-2">
-                Upload PDFs, text files, and more to get started
+                {t("Upload PDFs, text files, and more to get started")}
               </p>
             </div>
           ) : (
@@ -201,16 +203,16 @@ export function ReferenceView() {
                         {doc.created_at.toLocaleDateString()}
                       </span>
                       {doc.status === 'uploading' && (
-                        <span className="text-xs text-blue-400">Uploading...</span>
+                        <span className="text-xs text-blue-400">{t("Uploading...")}</span>
                       )}
                       {doc.status === 'processing' && (
-                        <span className="text-xs text-yellow-400">Processing...</span>
+                        <span className="text-xs text-yellow-400">{t("Processing...")}</span>
                       )}
                       {doc.status === 'ready' && (
-                        <span className="text-xs text-green-400">Ready</span>
+                        <span className="text-xs text-green-400">{t("Ready")}</span>
                       )}
                       {doc.status === 'error' && (
-                        <span className="text-xs text-red-400">{doc.error || 'Failed'}</span>
+                        <span className="text-xs text-red-400">{doc.error || t("Failed")}</span>
                       )}
                     </div>
                   </div>
@@ -219,7 +221,7 @@ export function ReferenceView() {
                   <button
                     onClick={() => handleRemoveDocument(doc.id)}
                     className="flex-shrink-0 p-2 rounded-lg hover:bg-white/10 transition-colors text-zinc-500 hover:text-zinc-200"
-                    title="Remove document"
+                    title={t("Remove document")}
                   >
                     <X size={16} />
                   </button>
@@ -233,7 +235,10 @@ export function ReferenceView() {
         {documents.length > 0 && (
           <div className="w-full max-w-2xl mx-auto mt-8 p-4 rounded-xl bg-white/5 border border-white/10">
             <p className="text-xs text-zinc-500 leading-relaxed">
-              <strong className="text-zinc-400">💡 Tip:</strong> Your uploaded documents are automatically indexed and can be referenced by Gray in conversations. Ask questions about your documents to get AI-powered insights!
+              <strong className="text-zinc-400">{t("💡 Tip:")}</strong>{" "}
+              {t(
+                "Your uploaded documents are automatically indexed and can be referenced by Gray in conversations. Ask questions about your documents to get AI-powered insights!"
+              )}
             </p>
           </div>
         )}

@@ -4,15 +4,18 @@
 import { useState } from "react";
 import styles from './DiagnosticModule.module.css';
 import { X, Check } from 'lucide-react';
+import { useI18n } from "@/contexts/I18nContext";
 
 export const DiagnosticModule = () => {
+    const { t } = useI18n();
     return (
         <section className={styles.moduleWrapper}>
             <div className={styles.introText}>
-                <h2>You're stuck between knowing and doing.</h2>
+                <h2>{t("You're stuck between knowing and doing.")}</h2>
                 <p>
-                    You know what you should do. You just can't seem to do it.
-                    Most people fail not because they're lazy, but because they lack the support system that makes success inevitable.
+                    {t(
+                      "You know what you should do. You just can't seem to do it. Most people fail not because they're lazy, but because they lack the support system that makes success inevitable."
+                    )}
                 </p>
             </div>
 
@@ -29,7 +32,7 @@ export const DiagnosticModule = () => {
                             <div className={styles.particle}></div>
                             <div className={styles.particle}></div>
                         </div>
-                        <div className={styles.visLabel}>ENTROPY</div>
+                        <div className={styles.visLabel}>{t("ENTROPY")}</div>
                     </div>
 
                     <div className={styles.panelContent}>
@@ -40,19 +43,19 @@ export const DiagnosticModule = () => {
                         <ul className={styles.problemList}>
                             <li>
                                 <span className={styles.bullet}></span>
-                                No external accountability
+                                {t("No external accountability")}
                             </li>
                             <li>
                                 <span className={styles.bullet}></span>
-                                No one to call out your patterns
+                                {t("No one to call out your patterns")}
                             </li>
                             <li>
                                 <span className={styles.bullet}></span>
-                                No structure to keep you on track
+                                {t("No structure to keep you on track")}
                             </li>
                             <li>
                                 <span className={styles.bullet}></span>
-                                No accountability partner who deeply understands your context
+                                {t("No accountability partner who deeply understands your context")}
                             </li>
                         </ul>
                     </div>
@@ -66,7 +69,7 @@ export const DiagnosticModule = () => {
                             <div className={styles.streamLine}></div>
                             <div className={styles.streamLine}></div>
                         </div>
-                        <div className={styles.visLabel} style={{ color: '#00FF94' }}>FLOW</div>
+                        <div className={styles.visLabel} style={{ color: '#00FF94' }}>{t("FLOW")}</div>
                     </div>
 
                     <div className={styles.panelContent}>
@@ -75,8 +78,9 @@ export const DiagnosticModule = () => {
                             The Solution
                         </h3>
                         <p className={styles.solutionText}>
-                            Gray gives you that system. An always-on accountability partner that notices when you slip,
-                            helps you get back on track, and pushes you to be your best self.
+                            {t(
+                              "Gray gives you that system. An always-on accountability partner that notices when you slip,\n                            helps you get back on track, and pushes you to be your best self."
+                            )}
                         </p>
                     </div>
                 </div>

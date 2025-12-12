@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field
 
 
 class ChatAttachment(BaseModel):
@@ -88,4 +88,3 @@ class MessageCreateRequest(BaseModel):
 
 class ConversationHistoryPayload(BaseModel):
     messages: List[Dict[str, Any]]
-

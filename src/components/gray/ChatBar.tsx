@@ -10,6 +10,7 @@ import {
   useEffect,
 } from "react";
 import TextareaAutosize from "react-textarea-autosize";
+import { useI18n } from "@/contexts/I18nContext";
 
 export type GrayChatBarProps = {
   value: string;
@@ -33,7 +34,7 @@ export function GrayChatBar({
   value,
   onChange,
   onSubmit,
-  placeholder = "Ask Gray",
+  placeholder,
   isSubmitDisabled,
   isSubmitting = false,
   onAddAttachment,
@@ -46,6 +47,8 @@ export function GrayChatBar({
   onPasteFiles,
   attachmentTray,
 }: GrayChatBarProps) {
+  const { t } = useI18n();
+  const resolvedPlaceholder = placeholder ?? t("Ask Gray");
   const computedDisabled =
     typeof isSubmitDisabled === "boolean" ? isSubmitDisabled : value.trim().length === 0;
 
@@ -112,7 +115,7 @@ export function GrayChatBar({
 
 
   const isStreaming = isSubmitting;
-  const actionLabel = isStreaming ? "Stop response" : "Send message";
+  const actionLabel = isStreaming ? t("Stop response") : t("Send message");
 
   // Track if textarea is expanded beyond single line
   const [isExpanded, setIsExpanded] = useState(false);
@@ -137,7 +140,7 @@ export function GrayChatBar({
             <button
               type="button"
               className={styles.chatIconButton}
-              aria-label="Upload a document"
+              aria-label={t("Upload a document")}
               onClick={onAddAttachment}
             >
               <Paperclip size={18} />
@@ -153,9 +156,9 @@ export function GrayChatBar({
             onPaste={handlePaste}
             onDrop={handleDrop}
             onHeightChange={handleHeightChange}
-            placeholder={placeholder}
+            placeholder={resolvedPlaceholder}
             className={styles.chatInput}
-            aria-label={placeholder}
+            aria-label={resolvedPlaceholder}
             minRows={1}
             maxRows={5}
             cacheMeasurements
@@ -201,7 +204,7 @@ export function GrayChatBar({
             <button
               type="button"
               className={styles.chatIconButton}
-              aria-label="Upload a document"
+              aria-label={t("Upload a document")}
               onClick={onAddAttachment}
             >
               <Paperclip size={18} />
@@ -230,4 +233,3 @@ export function GrayChatBar({
     </form>
   );
 }
-

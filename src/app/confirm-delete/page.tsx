@@ -4,8 +4,10 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { clearSupabaseAuthStorage } from "@/lib/supabaseStorage";
 import { clearAuthCookies } from "@/lib/auth/cookies";
+import { useI18n } from "@/contexts/I18nContext";
 
 export default function ConfirmDeletePage() {
+  const { t } = useI18n();
   const router = useRouter();
 
   useEffect(() => {
@@ -39,12 +41,14 @@ export default function ConfirmDeletePage() {
       }}
     >
       <div style={{ maxWidth: 520, width: "100%", textAlign: "center" }}>
-        <h1 style={{ fontSize: "1.8rem", fontWeight: 600, margin: "0 0 1rem 0" }}>Account Deleted</h1>
+        <h1 style={{ fontSize: "1.8rem", fontWeight: 600, margin: "0 0 1rem 0" }}>
+          {t("Account Deleted")}
+        </h1>
         <p style={{ fontSize: "1.1rem", marginTop: "0.75rem", color: "#6b7280" }}>
-          Your account and all associated data have been permanently deleted.
+          {t("Your account and all associated data have been permanently deleted.")}
         </p>
         <p style={{ fontSize: "0.9rem", marginTop: "1rem", color: "#4a4a4a" }}>
-          Redirecting to login page...
+          {t("Redirecting to login page...")}
         </p>
       </div>
     </main>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import styles from './IntroSequence.module.css';
+import { useI18n } from "@/contexts/I18nContext";
 
 interface IntroSequenceProps {
     onComplete: () => void;
@@ -13,11 +14,13 @@ export const INTRO_MESSAGES: string[] = [
 ];
 
 export const IntroSequence: React.FC<IntroSequenceProps> = ({ onComplete }) => {
+    const { t } = useI18n();
     const [step, setStep] = useState(0);
     const [isExiting, setIsExiting] = useState(false);
     const [isTransitioning, setIsTransitioning] = useState(false);
     const exitScheduledRef = useRef(false);
-    const hasMessages = INTRO_MESSAGES.length > 0;
+    const localizedMessages = INTRO_MESSAGES.map((message) => t(message));
+    const hasMessages = localizedMessages.length > 0;
 
     const handleNext = () => {
         if (exitScheduledRef.current) {
@@ -58,7 +61,7 @@ export const IntroSequence: React.FC<IntroSequenceProps> = ({ onComplete }) => {
                         <div className={styles.logoCore}>
                             <Image
                                 src="/grayaiwhitenotspinning.svg"
-                                alt="Gray logo"
+                                alt={t("Gray logo")}
                                 fill
                                 sizes="180px"
                                 priority
@@ -69,7 +72,7 @@ export const IntroSequence: React.FC<IntroSequenceProps> = ({ onComplete }) => {
                 </div>
                 {hasMessages && !isTransitioning ? (
                     <div key={step} className={styles.messageFadeIn}>
-                        {INTRO_MESSAGES[step].split('\n').map((line, i) => (
+                        {localizedMessages[step].split('\n').map((line, i) => (
                             <p key={i} className={styles.textLine}>
                                 {line || <br />}
                             </p>
@@ -77,7 +80,7 @@ export const IntroSequence: React.FC<IntroSequenceProps> = ({ onComplete }) => {
                     </div>
                 ) : null}
                 <div className={styles.hint}>
-                    Click or press Space to continue
+                    {t("Click or press Space to continue")}
                 </div>
             </div>
         </div>

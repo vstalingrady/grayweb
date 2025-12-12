@@ -7,8 +7,10 @@ import { LoaderCircle } from "lucide-react";
 import { useUser } from "@/contexts/UserContext";
 import styles from "./page.module.css";
 import LoginForm from "@/components/LoginForm";
+import { useI18n } from "@/contexts/I18nContext";
 
 export default function DeleteAccountPage() {
+  const { t } = useI18n();
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, loading, deleteUserAccount } = useUser();
@@ -36,13 +38,18 @@ export default function DeleteAccountPage() {
       // We are verified (came back from auth)
       // Check if we have a stored target
       if (storedTarget && storedTarget !== user.email) {
-        setError(`Account mismatch. You started deletion for ${storedTarget} but logged in as ${user.email}. Please log in as the correct user.`);
+        setError(
+          t(
+            "Account mismatch. You started deletion for {target} but logged in as {current}. Please log in as the correct user.",
+            { target: storedTarget, current: user.email }
+          )
+        );
         setStatus("error");
         // We do NOT set isAuthenticated(false) here, because we want renderBody to show the error message.
         // The handleDelete function will enforce the safety check.
       }
     }
-  }, [loading, user, searchParams]);
+  }, [loading, user, searchParams, t]);
 
 
   useEffect(() => {
@@ -100,13 +107,18 @@ export default function DeleteAccountPage() {
     // Safety check: Ensure the current user matches the stored target
     const storedTarget = window.sessionStorage.getItem("delete_account_target");
     if (storedTarget && storedTarget !== user.email) {
-      setError(`Account mismatch. You started deletion for ${storedTarget} but logged in as ${user.email}.`);
+      setError(
+        t(
+          "Account mismatch. You started deletion for {target} but logged in as {current}. Please log in as the correct user.",
+          { target: storedTarget, current: user.email }
+        )
+      );
       setStatus("error");
       return;
     }
 
     if (confirmationEmail !== user.email) {
-      setError("Email does not match.");
+      setError(t("Email does not match."));
       return;
     }
 
@@ -118,18 +130,19 @@ export default function DeleteAccountPage() {
       // Use window.location to ensure full state reset
       window.location.href = "/confirm-delete";
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to delete account.";
+      const message =
+        err instanceof Error ? err.message : t("Failed to delete account.");
       setError(message);
       setStatus("error");
     }
-  }, [deleteUserAccount, status, user, confirmationEmail]);
+  }, [deleteUserAccount, status, user, confirmationEmail, t]);
 
   const renderBody = () => {
     if (loading || !user) {
       return (
         <div className={styles["delete-account__card"]}>
           <LoaderCircle className={styles["delete-account__spinner"]} size={20} />
-          <p>Verifying your session...</p>
+          <p>{t("Verifying your session...")}</p>
         </div>
       );
     }
@@ -139,8 +152,8 @@ export default function DeleteAccountPage() {
         <div style={{ width: "100%", height: "100%" }}>
           <LoginForm
             initialMode="signin"
-            headerText="Delete Account"
-            subtitleText="Please log in again to confirm your identity."
+            headerText={t("Delete Account")}
+            subtitleText={t("Please log in again to confirm your identity.")}
             redirectTo="/delete-account?verified=true"
             onSuccess={() => setIsAuthenticated(true)}
           />
@@ -150,16 +163,19 @@ export default function DeleteAccountPage() {
 
     const description =
       status === "deleting"
-        ? "Deleting your workspace data..."
-        : "Identity verified. This action cannot be undone.";
+        ? t("Deleting your workspace data...")
+        : t("Identity verified. This action cannot be undone.");
 
     const isMatch = confirmationEmail === user.email;
 
     return (
       <div className={styles["delete-account__card"]}>
-        <h1>Final confirmation</h1>
+        <h1>{t("Final confirmation")}</h1>
         <p className={styles["delete-account__description"]}>
-          {description} To permanently delete your account, type your email <strong>{user.email}</strong> below.
+          {description}{" "}
+          {t("To permanently delete your account, type your email")}{" "}
+          <strong>{user.email}</strong>{" "}
+          {t("below.")}
         </p>
 
         <input
@@ -183,7 +199,7 @@ export default function DeleteAccountPage() {
             onClick={() => setIsAuthenticated(false)}
             disabled={status === "deleting"}
           >
-            Cancel
+            {t("Cancel")}
           </button>
           <button
             type="button"
@@ -191,7 +207,11 @@ export default function DeleteAccountPage() {
             disabled={status === "deleting" || !isMatch}
             onClick={handleDelete}
           >
-            {status === "deleting" ? "Deleting..." : status === "error" ? "Retry delete" : "Delete account"}
+            {status === "deleting"
+              ? t("Deleting...")
+              : status === "error"
+                ? t("Retry delete")
+                : t("Delete account")}
           </button>
         </div>
       </div>
@@ -206,8 +226,8 @@ export default function DeleteAccountPage() {
         // We can wrap it or just let it take over since this page is a full screen flow.
         <LoginForm
           initialMode="signin"
-          headerText="Delete Account"
-          subtitleText="Please log in again to confirm your identity."
+          headerText={t("Delete Account")}
+          subtitleText={t("Please log in again to confirm your identity.")}
           redirectTo="/delete-account?verified=true"
           onSuccess={() => setIsAuthenticated(true)}
         />

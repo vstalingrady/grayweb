@@ -34,7 +34,7 @@ async def connected_db():
 
 
 async def _create_test_user(db):
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     return await db.execute(
         main.users.insert().values(
             email=f"reminder-user-{now.timestamp()}@example.com",
@@ -52,7 +52,7 @@ def test_timezone_extraction_from_time_context():
         "Current local time: Monday 10:00 AM (timezone: Europe/Paris, UTC+01:00). ISO timestamp: 2025-01-01T09:00:00.000Z"
     )
     assert label == "Europe/Paris"
-    assert tzinfo.utcoffset(datetime.utcnow()) is not None
+    assert tzinfo.utcoffset(datetime.now(timezone.utc)) is not None
 
 
 @pytest.mark.asyncio
@@ -122,4 +122,3 @@ async def test_repeat_request_reschedules_existing_reminder(connected_db):
     plan_rows = await db.fetch_all(main.plans.select())
     assert len(plan_rows) == 1
     assert plan_rows[0]["deadline"] == second_action["time_iso"]
-

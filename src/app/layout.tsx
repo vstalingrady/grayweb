@@ -165,10 +165,29 @@ export default async function RootLayout({
       }, 100);
     })();
   `;
+  const themeInitScript = `
+    (function() {
+      try {
+        var stored = localStorage.getItem("gray_theme");
+        var mode =
+          stored === "light" || stored === "dark" || stored === "system"
+            ? stored
+            : "system";
+        var prefersLight = window.matchMedia("(prefers-color-scheme: light)").matches;
+        var shouldBeLight = mode === "light" || (mode === "system" && prefersLight);
+        document.documentElement.classList.toggle("light", shouldBeLight);
+      } catch (e) {}
+    })();
+  `;
   return (
-    <html lang="en" className={`${plusJakartaSans.variable} ${ibmPlexMono.variable}`}>
+    <html
+      lang="en"
+      suppressHydrationWarning
+      className={`${plusJakartaSans.variable} ${ibmPlexMono.variable}`}
+    >
       <head>
         <script dangerouslySetInnerHTML={{ __html: reactDevtoolsHotfix }} suppressHydrationWarning />
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} suppressHydrationWarning />
 
         {/* PWA Manifest */}
         <link rel="manifest" href="/manifest.json" />

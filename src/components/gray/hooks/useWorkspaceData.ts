@@ -1,11 +1,45 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { apiService, type Plan, type Habit, type Calendar, type Reminder } from "@/lib/api";
+import {
+  apiService,
+  type Plan,
+  type Habit,
+  type Calendar,
+  type Reminder,
+  type GoogleCalendarInfo,
+  type GoogleCalendarEvent as ApiGoogleCalendarEvent,
+} from "@/lib/api";
 import { sanitizeEventColor, DEFAULT_EVENT_COLOR, REMINDER_RETENTION_WINDOW_MS } from "@/app/gray/constants";
 import { type PlanItem, type HabitItem } from "@/components/gray/types";
 import type { CalendarEvent, CalendarInfo } from "@/components/calendar/types";
 
 // Custom event name for triggering reminder refresh from anywhere in the app
 export const REMINDERS_REFRESH_EVENT = "gray:reminders-refresh";
+
+const GOOGLE_CALENDAR_PREFIX = "google:";
+const GOOGLE_CALENDAR_COLOR_PALETTE = ["#4C6FFF", "#0AD5B0", "#F6A623", "#D075FF", "#E36D7D", "#CDD1D5"] as const;
+
+const hashStringToIndex = (value: string, modulo: number): number => {
+  let hash = 0;
+  for (let i = 0; i < value.length; i += 1) {
+    hash = (hash * 31 + value.charCodeAt(i)) % modulo;
+  }
+  return hash;
+};
+
+const resolveGoogleDate = (payload: ApiGoogleCalendarEvent["start"] | ApiGoogleCalendarEvent["end"] | null | undefined): Date | null => {
+  if (!payload) {
+    return null;
+  }
+  const raw = payload.dateTime ?? payload.date;
+  if (!raw) {
+    return null;
+  }
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+  return parsed;
+};
 
 const shouldIncludeCalendarReminder = (reminder: Reminder, nowMs: number): boolean => {
   if (reminder.status === "pending") {
@@ -144,6 +178,7 @@ export function useWorkspaceData(userId: number | null, variant: "general" | "da
             startDate: startWindow.toISOString(),
             endDate: endWindow.toISOString(),
           }),
+          apiService.getGoogleCalendars(userId),
           apiService.getUserPlans(userId),
           apiService.getUserHabits(userId),
           apiService.getUserReminders(userId, {
@@ -160,6 +195,7 @@ export function useWorkspaceData(userId: number | null, variant: "general" | "da
         const [
           calendarResult,
           eventResult,
+          googleCalendarsResult,
           planResult,
           habitResult,
           reminderResult,
@@ -171,6 +207,16 @@ export function useWorkspaceData(userId: number | null, variant: "general" | "da
 
         const eventResponse = eventResult.status === 'fulfilled' ? eventResult.value : [];
         if (eventResult.status === 'rejected') console.error('Failed to load events:', eventResult.reason);
+
+        const googleCalendarsResponse: GoogleCalendarInfo[] =
+          googleCalendarsResult.status === "fulfilled" ? googleCalendarsResult.value : [];
+        if (googleCalendarsResult.status === "rejected") {
+          // Avoid noisy logs for the common "not connected yet" case.
+          const status = (googleCalendarsResult.reason as { status?: number })?.status;
+          if (status && status !== 404) {
+            console.error("Failed to load Google calendars:", googleCalendarsResult.reason);
+          }
+        }
 
         const planResponse = planResult.status === 'fulfilled' ? planResult.value : [];
         if (planResult.status === 'rejected') console.error('Failed to load plans:', planResult.reason);
@@ -195,8 +241,21 @@ export function useWorkspaceData(userId: number | null, variant: "general" | "da
           }))
           : [];
 
+        const mappedGoogleCalendars: CalendarInfo[] = Array.isArray(googleCalendarsResponse)
+          ? googleCalendarsResponse.map((calendar) => {
+            const prefixedId = `${GOOGLE_CALENDAR_PREFIX}${calendar.id}`;
+            const colorIndex = hashStringToIndex(calendar.id, GOOGLE_CALENDAR_COLOR_PALETTE.length);
+            return {
+              id: prefixedId,
+              label: calendar.summary || calendar.email || "Google Calendar",
+              color: sanitizeEventColor(GOOGLE_CALENDAR_COLOR_PALETTE[colorIndex]),
+              isVisible: true,
+            };
+          })
+          : [];
+
         const calendarColorMap = new Map<string, string>(
-          mappedCalendars.map((calendar) => [calendar.id, calendar.color])
+          [...mappedCalendars, ...mappedGoogleCalendars].map((calendar) => [calendar.id, calendar.color])
         );
 
         const fallbackCalendarId = mappedCalendars[0]?.id ?? "default";
@@ -223,6 +282,54 @@ export function useWorkspaceData(userId: number | null, variant: "general" | "da
             };
           })
           : [];
+
+        const googleEventsResults = mappedGoogleCalendars.length > 0
+          ? await Promise.allSettled(
+            googleCalendarsResponse.map((calendar) =>
+              apiService.getGoogleCalendarEvents(userId, calendar.id, {
+                timeMin: startWindow.toISOString(),
+                timeMax: endWindow.toISOString(),
+              })
+            )
+          )
+          : [];
+
+        const mappedGoogleEvents: CalendarEvent[] = googleEventsResults.flatMap((result, index) => {
+          if (result.status !== "fulfilled") {
+            const status = (result.reason as { status?: number })?.status;
+            if (status && status !== 404) {
+              console.error("Failed to load Google events:", result.reason);
+            }
+            return [];
+          }
+
+          const sourceCalendar = googleCalendarsResponse[index];
+          const prefixedCalendarId = `${GOOGLE_CALENDAR_PREFIX}${sourceCalendar.id}`;
+          const color = sanitizeEventColor(
+            calendarColorMap.get(prefixedCalendarId) ?? fallbackEventColor
+          );
+
+          return (Array.isArray(result.value) ? result.value : [])
+            .map((event): CalendarEvent | null => {
+              const start = resolveGoogleDate(event.start);
+              const end = resolveGoogleDate(event.end) ?? start;
+              if (!start || !end) {
+                return null;
+              }
+
+              return {
+                id: `${prefixedCalendarId}:${event.id}`,
+                calendarId: prefixedCalendarId,
+                title: event.summary || "Untitled event",
+                start,
+                end,
+                color,
+                entryType: "event",
+                description: event.description ?? undefined,
+              };
+            })
+            .filter((event): event is CalendarEvent => Boolean(event));
+        });
 
         const nowMs = Date.now();
         const includedReminders: Reminder[] = Array.isArray(reminderResponse)
@@ -266,8 +373,8 @@ export function useWorkspaceData(userId: number | null, variant: "general" | "da
           }))
           : [];
 
-        setCalendarCalendars(mappedCalendars);
-        setCalendarEvents([...mappedEvents, ...reminderEvents]);
+        setCalendarCalendars([...mappedCalendars, ...mappedGoogleCalendars]);
+        setCalendarEvents([...mappedEvents, ...mappedGoogleEvents, ...reminderEvents]);
         setPlans(mappedPlans);
         setHabits(mappedHabits);
         setReminderPlans(

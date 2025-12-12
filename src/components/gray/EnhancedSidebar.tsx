@@ -15,6 +15,7 @@ import {
 import Skeleton from "react-loading-skeleton";
 import { SiDiscord } from "react-icons/si";
 import { useUser } from "@/contexts/UserContext";
+import { useI18n } from "@/contexts/I18nContext";
 import styles from "@/app/gray/GrayPageClient.module.css";
 import { type SidebarHistorySection, type SidebarNavItem, type SidebarNavKey, type SidebarHistoryEntry } from "./types";
 
@@ -65,6 +66,7 @@ function GrayEnhancedSidebarComponent({
   onUpgradePlan,
   onLogOut,
 }: GrayEnhancedSidebarProps) {
+  const { t } = useI18n();
   const { user } = useUser();
   const sidebarAvatarUrl = viewerAvatarUrl ?? user?.profile_picture_url ?? null;
   const [resolvedAvatarUrl, setResolvedAvatarUrl] = useState<string | null>(sidebarAvatarUrl);
@@ -164,25 +166,25 @@ function GrayEnhancedSidebarComponent({
         <button
           type="button"
           className={styles.sidebarRailLogo}
-          aria-label="Open Gray Alignment sidebar"
+          aria-label={t("Open Gray Alignment sidebar")}
           onClick={onExpand}
         >
           <Image
             src="/grayaiwhitenotspinning.svg"
-            alt="Gray Alignment emblem"
+            alt={t("Gray Alignment emblem")}
             width={24}
             height={24}
             priority
             className={styles.sidebarRailLogoImage}
           />
         </button>
-        <nav aria-label="Sidebar quick actions" className={styles.railNav}>
+        <nav aria-label={t("Sidebar quick actions")} className={styles.railNav}>
           <ul>
             {railItems.map((item) => (
               <li key={item.id}>
                 <button
                   type="button"
-                  aria-label={normalizeNavLabel(item)}
+                  aria-label={t(normalizeNavLabel(item))}
                   data-active={item.id === activeNav ? "true" : "false"}
                   onClick={() => onNavigate(item.id)}
                 >
@@ -196,7 +198,7 @@ function GrayEnhancedSidebarComponent({
           <button
             type="button"
             className={styles.sidebarRailAvatar}
-            aria-label={isExpanded ? "Collapse sidebar" : "Expand sidebar"}
+            aria-label={isExpanded ? t("Collapse sidebar") : t("Expand sidebar")}
             data-expanded={isExpanded ? "true" : "false"}
             onClick={() => {
               setIsProfileMenuOpen(false);
@@ -234,7 +236,7 @@ function GrayEnhancedSidebarComponent({
             <button
               type="button"
               className={styles.sidebarLogo}
-              aria-label="Collapse Gray Alignment sidebar"
+              aria-label={t("Collapse Gray Alignment sidebar")}
               onClick={() => {
                 setIsProfileMenuOpen(false);
                 onCollapse();
@@ -242,7 +244,7 @@ function GrayEnhancedSidebarComponent({
             >
               <Image
                 src="/grayaiwhitenotspinning.svg"
-                alt="Gray Alignment emblem"
+                alt={t("Gray Alignment emblem")}
                 width={28}
                 height={28}
                 priority
@@ -250,20 +252,20 @@ function GrayEnhancedSidebarComponent({
               />
             </button>
             <div className={styles.sidebarAnchored}>
-              <nav aria-label="Primary">
+              <nav aria-label={t("Primary")}>
                 <ul className={styles.sidebarNav}>
                   {navItems.map((item) => (
                     <li key={item.id} className={styles.sidebarNavItem} data-nav={item.id}>
                       <button
                         type="button"
                         data-active={item.id === activeNav ? "true" : "false"}
-                        aria-label={normalizeNavLabel(item)}
+                        aria-label={t(normalizeNavLabel(item))}
                         onClick={() => onNavigate(item.id)}
                       >
                         <span className={styles.navIcon}>
                           <item.icon size={18} />
                         </span>
-                        <span className={styles.navLabel}>{normalizeNavLabel(item)}</span>
+                        <span className={styles.navLabel}>{t(normalizeNavLabel(item))}</span>
                       </button>
                     </li>
                   ))}
@@ -272,13 +274,13 @@ function GrayEnhancedSidebarComponent({
             </div>
           </div>
           {historyNavItem && isExpanded ? (
-            <div className={styles.sidebarScroll} aria-label="Recent conversations">
+            <div className={styles.sidebarScroll} aria-label={t("Recent conversations")}>
               <div className={styles.sidebarHistorySection}>
                 <div className={styles.sidebarHistoryFixed}>
                   {historySections.length > 0 ? (
                     historySections.map((group) => (
                       <div key={group.id} className={styles.sidebarHistoryGroup}>
-                        <span className={styles.sidebarHistoryLabel}>{group.label}</span>
+                        <span className={styles.sidebarHistoryLabel}>{t(group.label)}</span>
                         <ul className={styles.sidebarHistoryList}>
                           {group.entries.map((entry) => {
                             const isActive = entry.id === activeChatId;
@@ -313,7 +315,7 @@ function GrayEnhancedSidebarComponent({
                       </div>
                     ))
                   ) : (
-                    <span className={styles.sidebarHistoryEmpty}>No conversations yet.</span>
+                    <span className={styles.sidebarHistoryEmpty}>{t("No conversations yet.")}</span>
                   )}
                 </div>
               </div>
@@ -326,13 +328,13 @@ function GrayEnhancedSidebarComponent({
                 className={styles.profileMenuWrapper}
                 data-expanded={isProfileMenuOpen ? "true" : "false"}
                 role="group"
-                aria-label="Profile actions"
+                aria-label={t("Profile actions")}
                 ref={profileControlsRef}
               >
                 <button
                   type="button"
                   className={styles.profileMenuButton}
-                  aria-label={isProfileMenuOpen ? "Collapse profile menu" : "Expand profile menu"}
+                  aria-label={isProfileMenuOpen ? t("Collapse profile menu") : t("Expand profile menu")}
                   aria-haspopup="menu"
                   aria-expanded={isProfileMenuOpen ? "true" : "false"}
                   onClick={handleProfileClick}
@@ -377,7 +379,7 @@ function GrayEnhancedSidebarComponent({
                             <span className={styles.profileMenuIcon}>
                               <Star size={16} />
                             </span>
-                            <span className={styles.profileMenuLabel}>Upgrade</span>
+                            <span className={styles.profileMenuLabel}>{t("Upgrade")}</span>
                           </span>
                         </button>
                         <span className={styles.profileMenuDivider} aria-hidden="true" />
@@ -393,7 +395,7 @@ function GrayEnhancedSidebarComponent({
                         <span className={styles.profileMenuIcon}>
                           <Sparkles size={16} />
                         </span>
-                        <span className={styles.profileMenuLabel}>Personalization</span>
+                        <span className={styles.profileMenuLabel}>{t("Personalization")}</span>
                       </span>
                     </button>
                     <button
@@ -406,7 +408,7 @@ function GrayEnhancedSidebarComponent({
                         <span className={styles.profileMenuIcon}>
                           <SettingsIcon size={16} />
                         </span>
-                        <span className={styles.profileMenuLabel}>Settings</span>
+                        <span className={styles.profileMenuLabel}>{t("Settings")}</span>
                       </span>
                     </button>
                     <button
@@ -419,7 +421,7 @@ function GrayEnhancedSidebarComponent({
                         <span className={styles.profileMenuIcon}>
                           <LifeBuoy size={16} />
                         </span>
-                        <span className={styles.profileMenuLabel}>Help</span>
+                        <span className={styles.profileMenuLabel}>{t("Help")}</span>
                       </span>
                     </button>
                     <button
@@ -432,7 +434,7 @@ function GrayEnhancedSidebarComponent({
                         <span className={styles.profileMenuIcon}>
                           <SiDiscord size={16} />
                         </span>
-                        <span className={styles.profileMenuLabel}>Community</span>
+                        <span className={styles.profileMenuLabel}>{t("Community")}</span>
                       </span>
                     </button>
                     <span className={styles.profileMenuDivider} aria-hidden="true" />
@@ -446,7 +448,7 @@ function GrayEnhancedSidebarComponent({
                         <span className={styles.profileMenuIcon}>
                           <LogOut size={16} />
                         </span>
-                        <span className={styles.profileMenuLabel}>Log out</span>
+                        <span className={styles.profileMenuLabel}>{t("Log out")}</span>
                       </span>
                     </button>
                   </div>
@@ -455,7 +457,7 @@ function GrayEnhancedSidebarComponent({
               <button
                 type="button"
                 className={styles.profileToggleButton}
-                aria-label={isExpanded ? "Collapse sidebar" : "Expand sidebar"}
+                aria-label={isExpanded ? t("Collapse sidebar") : t("Expand sidebar")}
                 data-expanded={isExpanded ? "true" : "false"}
                 onClick={handleSidebarToggle}
               >

@@ -54,6 +54,15 @@
   --gray-dashboard-max-width: 1360px;
 }
 
+html.light {
+  color-scheme: light;
+  scrollbar-color: rgba(0, 0, 0, 0.25) transparent;
+}
+
+html.light ::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+}
+
 *,
 *::before,
 *::after {

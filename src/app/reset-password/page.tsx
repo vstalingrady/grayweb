@@ -5,8 +5,10 @@ import { useRouter } from "next/navigation";
 import { LoaderCircle } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import styles from "@/components/LoginForm.module.css";
+import { useI18n } from "@/contexts/I18nContext";
 
 export default function ResetPasswordPage() {
+  const { t } = useI18n();
   const router = useRouter();
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -23,7 +25,7 @@ export default function ResetPasswordPage() {
     if (!supabase) {
       setMessage({
         type: "error",
-        text: "Supabase client is not configured. Check environment variables.",
+        text: t("Supabase client is not configured. Check environment variables."),
       });
       return;
     }
@@ -31,7 +33,7 @@ export default function ResetPasswordPage() {
     if (!password || !confirmPassword) {
       setMessage({
         type: "error",
-        text: "Enter and confirm your new password.",
+        text: t("Enter and confirm your new password."),
       });
       return;
     }
@@ -39,7 +41,7 @@ export default function ResetPasswordPage() {
     if (password !== confirmPassword) {
       setMessage({
         type: "error",
-        text: "Passwords do not match.",
+        text: t("Passwords do not match."),
       });
       return;
     }
@@ -47,7 +49,7 @@ export default function ResetPasswordPage() {
     if (password.length < 8) {
       setMessage({
         type: "error",
-        text: "Password must be at least 8 characters long.",
+        text: t("Password must be at least 8 characters long."),
       });
       return;
     }
@@ -65,7 +67,9 @@ export default function ResetPasswordPage() {
 
       setMessage({
         type: "success",
-        text: "Your password has been updated. You can now sign in with your new password.",
+        text: t(
+          "Your password has been updated. You can now sign in with your new password."
+        ),
       });
 
       setTimeout(() => {
@@ -73,7 +77,7 @@ export default function ResetPasswordPage() {
       }, 2000);
     } catch (error) {
       const text =
-        error instanceof Error ? error.message : "Unable to update password.";
+        error instanceof Error ? error.message : t("Unable to update password.");
       setMessage({
         type: "error",
         text,
@@ -104,9 +108,9 @@ export default function ResetPasswordPage() {
         <section className={styles.authContent} style={{ width: "100%" }}>
           <div className={styles.authPanel}>
             <header className={styles.authHeading}>
-              <h1 className={styles.authTitle}>Reset your password</h1>
+              <h1 className={styles.authTitle}>{t("Reset your password")}</h1>
               <p className={styles.authSubtitle}>
-                Choose a new password for your Gray account.
+                {t("Choose a new password for your Gray account.")}
               </p>
             </header>
 
@@ -114,7 +118,7 @@ export default function ResetPasswordPage() {
               <div className={styles.authFields}>
                 <div className={styles.authField}>
                   <label className={styles.authFieldLabel} htmlFor="password">
-                    New password
+                    {t("New password")}
                   </label>
                   <input
                     id="password"
@@ -131,7 +135,7 @@ export default function ResetPasswordPage() {
 
                 <div className={styles.authField}>
                   <label className={styles.authFieldLabel} htmlFor="confirmPassword">
-                    Confirm new password
+                    {t("Confirm new password")}
                   </label>
                   <input
                     id="confirmPassword"
@@ -157,7 +161,7 @@ export default function ResetPasswordPage() {
                 {loading ? (
                   <LoaderCircle size={18} className={styles.authSpinner} />
                 ) : (
-                  "Update password"
+                  t("Update password")
                 )}
               </button>
             </form>

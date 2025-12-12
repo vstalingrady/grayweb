@@ -12,6 +12,11 @@ import os
 from datetime import datetime, timedelta
 from typing import Any, Callable, Dict, Optional
 
+try:
+    from backend.time_utils import utcnow_aware
+except Exception:  # pragma: no cover
+    from time_utils import utcnow_aware  # type: ignore
+
 logger = logging.getLogger(__name__)
 
 # Check if arq is available
@@ -221,7 +226,7 @@ async def shutdown(ctx: Dict[str, Any]) -> None:
 async def dispatch_all_proactivity(ctx: Dict[str, Any]) -> None:
     """Cron job to dispatch all due proactive check-ins."""
     logger.info("Running scheduled proactivity dispatch...")
-    print(f"[arq] Running scheduled proactivity dispatch at {datetime.utcnow().isoformat()}Z")
+    print(f"[arq] Running scheduled proactivity dispatch at {utcnow_aware().isoformat().replace('+00:00', 'Z')}")
     try:
         engine = ctx.get("proactivity_engine")
         if engine:
@@ -253,4 +258,3 @@ if ARQ_AVAILABLE:
         max_jobs = 10
         job_timeout = 300  # 5 minutes max per job
         keep_result = 3600  # Keep results for 1 hour
-

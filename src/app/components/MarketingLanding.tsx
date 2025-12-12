@@ -1,9 +1,12 @@
+ "use client";
+
 import React from "react";
 import Image from "next/image";
 import Navigation from "./Navigation";
 import HeroSection from "./HeroSection";
 import FooterBackground from "./FooterBackground";
 import MarketingStyles from "./MarketingStyles";
+import { useI18n } from "@/contexts/I18nContext";
 
 type MarketingLandingProps = {
     tryGrayUrl: string;
@@ -17,6 +20,10 @@ const socialLinks = [
 ];
 
 export default function MarketingLanding({ tryGrayUrl }: MarketingLandingProps) {
+    const { t, locale, setLocale } = useI18n();
+    const languageLabel = locale === "id" ? t("Indonesian") : t("English");
+    const regionLabel = locale === "id" ? "Indonesia" : t("United States");
+    const toggleLanguage = () => setLocale(locale === "en" ? "id" : "en");
     return (
         <>
             <MarketingStyles />
@@ -28,17 +35,17 @@ export default function MarketingLanding({ tryGrayUrl }: MarketingLandingProps) 
                     <div className="site-footer__overlay">
                         <div className="site-footer__grid">
                             <div className="site-footer__column">
-                                <p className="site-footer__column-title">Products</p>
+                                <p className="site-footer__column-title">{t("Products")}</p>
                                 <a href={tryGrayUrl} className="site-footer__column-link" target="_blank" rel="noreferrer">
                                     Gray
                                 </a>
                             </div>
                             <div className="site-footer__column">
-                                <p className="site-footer__column-title">Research</p>
-                                <span className="site-footer__column-note">Coming soon</span>
+                                <p className="site-footer__column-title">{t("Research")}</p>
+                                <span className="site-footer__column-note">{t("Coming soon")}</span>
                             </div>
                             <div className="site-footer__column">
-                                <p className="site-footer__column-title">Contact</p>
+                                <p className="site-footer__column-title">{t("Contact")}</p>
                                 <a href="mailto:hi@alignment.id" className="site-footer__column-link">
                                     hi@alignment.id
                                 </a>
@@ -46,20 +53,20 @@ export default function MarketingLanding({ tryGrayUrl }: MarketingLandingProps) 
                         </div>
                         <div className="site-footer__grid site-footer__grid--secondary">
                             <div className="site-footer__column site-footer__column-stack">
-                                <p className="site-footer__column-title">Policies</p>
+                                <p className="site-footer__column-title">{t("Policies")}</p>
                                 <a href="/policies/tos" className="site-footer__column-link">
-                                    Terms of Service
+                                    {t("Terms of Service")}
                                 </a>
                                 <a href="/policies/privacy" className="site-footer__column-link">
-                                    Privacy Policy
+                                    {t("Privacy Policy")}
                                 </a>
                                 <a href="/policies/refund" className="site-footer__column-link">
-                                    Refund Policy
+                                    {t("Refund Policy")}
                                 </a>
                             </div>
                             <div className="site-footer__column">
-                                <p className="site-footer__column-title">Blog</p>
-                                <span className="site-footer__column-note">Coming soon</span>
+                                <p className="site-footer__column-title">{t("Blog")}</p>
+                                <span className="site-footer__column-note">{t("Coming soon")}</span>
                             </div>
                         </div>
                         <div className="site-footer__social-row">
@@ -77,10 +84,12 @@ export default function MarketingLanding({ tryGrayUrl }: MarketingLandingProps) 
                                     </a>
                                 ))}
                             </div>
-                            <p className="site-footer__meta">© {new Date().getFullYear()} Alignment. All rights reserved.</p>
-                            <button type="button" className="site-footer__language">
-                                <span>English</span>
-                                <span className="site-footer__language-region">United States</span>
+                            <p className="site-footer__meta">
+                                {t("© {year} Alignment. All rights reserved.", { year: new Date().getFullYear() })}
+                            </p>
+                            <button type="button" className="site-footer__language" onClick={toggleLanguage}>
+                                <span>{languageLabel}</span>
+                                <span className="site-footer__language-region">{regionLabel}</span>
                             </button>
                         </div>
                     </div>

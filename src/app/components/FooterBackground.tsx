@@ -3,8 +3,10 @@
 import Image from "next/image";
 import { useCallback } from "react";
 import type { MouseEvent } from "react";
+import { useI18n } from "@/contexts/I18nContext";
 
 const FooterBackground = () => {
+  const { t } = useI18n();
   const handleContextMenu = useCallback((event: MouseEvent<HTMLDivElement>) => {
     event.preventDefault();
   }, []);
@@ -14,7 +16,7 @@ const FooterBackground = () => {
       <picture className="site-footer__picture">
         <Image
           src="/astronaut.jpg"
-          alt="Astronaut floating above Earth"
+          alt={t("Astronaut floating above Earth")}
           fill
           sizes="100vw"
           priority={false}

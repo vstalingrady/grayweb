@@ -144,7 +144,7 @@ export function CalendarSidebar({
                   </button>
                 </li>
               ))}
-              {/* {onIntegrationAction ? (
+              {onIntegrationAction ? (
                 <li className={styles.calendarSidebarIntegration}>
                   <button
                     type="button"
@@ -154,7 +154,7 @@ export function CalendarSidebar({
                     {integrationActionLabel}
                   </button>
                 </li>
-              ) : null} */}
+              ) : null}
             </ul>
           </section>
         ) : null}

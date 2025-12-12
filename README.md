@@ -45,6 +45,15 @@ DATABASE_URL=sqlite:///./users.db
 GEMINI_API_KEY=your_gemini_api_key_here
 SUPABASE_URL=your_supabase_url_here
 SUPABASE_KEY=your_supabase_anon_key_here
+# Optional: Google Calendar integration
+GOOGLE_CLIENT_ID=your_google_oauth_client_id
+GOOGLE_CLIENT_SECRET=your_google_oauth_client_secret
+# Random string >=16 chars for signing OAuth state
+GOOGLE_STATE_SECRET=change_me_to_a_long_random_value
+# Fernet key for encrypting refresh tokens (generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")
+GOOGLE_TOKEN_ENCRYPTION_KEY=your_fernet_key
+# Optional override (defaults to localhost in dev, gray.alignment.id in prod)
+# GOOGLE_REDIRECT_URI=https://your-domain.com/api/auth/google-calendar/callback
 # Optional: comma separated list of frontend origins allowed to call the API
 # CORS_ALLOW_ORIGINS=https://your-frontend-domain.com,https://app.example.com
 # By default the API allows every origin for local development.

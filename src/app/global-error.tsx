@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { useI18n } from "@/contexts/I18nContext";
 
 export default function GlobalError({
   error,
@@ -9,6 +10,7 @@ export default function GlobalError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  const { t } = useI18n();
   useEffect(() => {
     // Optional: Log the error to an error reporting service
     console.error(error);
@@ -27,7 +29,7 @@ export default function GlobalError({
           backgroundColor: "black", 
           gap: "1rem" 
         }}>
-          <h2>Something went wrong!</h2>
+          <h2>{t("Something went wrong!")}</h2>
           <button 
             onClick={() => reset()} 
             style={{ 
@@ -40,7 +42,7 @@ export default function GlobalError({
               fontSize: "1rem"
             }}
           >
-            Try again
+            {t("Try again")}
           </button>
         </div>
       </body>

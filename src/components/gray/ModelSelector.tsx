@@ -5,6 +5,7 @@ import { Zap, Sparkles, Lock, ChevronUp, Rocket, Grid, ChevronRight, Check, Brai
 import Image from "next/image";
 import { useChatStore } from "@/components/gray/ChatProvider";
 import { useUser } from "@/contexts/UserContext";
+import { useI18n } from "@/contexts/I18nContext";
 import styles from "./ModelSelector.module.css";
 
 type ModelOption = {
@@ -94,6 +95,7 @@ type ModelSelectorProps = {
 };
 
 export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
+  const { t } = useI18n();
   const {
     modelTier, setModelTier, selectedModelId, setSelectedModelId,
     reasoningMode, setReasoningMode,
@@ -124,11 +126,16 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
         const IconComponent = () => (
           group?.iconPath ? <Image src={group.iconPath} alt={group.label} width={18} height={18} /> : <Grid size={18} />
         );
-        return { ...pioneerModel, icon: IconComponent, description: "Selected Model", tierRequired: "voyager" as const };
+        return {
+          ...pioneerModel,
+          icon: IconComponent,
+          description: t("Selected Model"),
+          tierRequired: "voyager" as const,
+        };
       }
     }
     return OPTIONS[0];
-  }, [modelTier, selectedModelId]);
+  }, [modelTier, selectedModelId, t]);
 
   const handleSelect = useCallback(
     (index: number) => {
@@ -201,7 +208,7 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
         onClick={() => setIsOpen(!isOpen)}
         aria-expanded={isOpen}
         aria-haspopup="menu"
-        aria-label="Select model"
+        aria-label={t("Select model")}
         type="button"
       >
         <span className={styles.triggerLabel}>
@@ -222,7 +229,7 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
               onClick={() => setShowAllModels(false)}
             >
               <ChevronRight size={16} style={{ transform: 'rotate(180deg)' }} />
-              Back
+              {t("Back")}
             </button>
             <div className={styles.pioneerList}>
               {PIONEER_GROUPS.map((group) => {
@@ -297,8 +304,8 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
                     <Settings size={18} />
                   </div>
                   <div className={styles.itemInfo}>
-                    <div className={styles.itemLabel}>Tools</div>
-                    <div className={styles.itemDescription}>Reasoning, Search & More</div>
+                    <div className={styles.itemLabel}>{t("Tools")}</div>
+                    <div className={styles.itemDescription}>{t("Reasoning, Search & More")}</div>
                   </div>
                   <ChevronRight
                     size={14}
@@ -319,10 +326,10 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
                         <Brain size={16} className={reasoningMode ? styles.glowIcon : ""} />
                       </div>
                       <div className={styles.itemInfo}>
-                        <div className={styles.itemLabel}>Reasoning</div>
+                        <div className={styles.itemLabel}>{t("Reasoning")}</div>
                         {modelTier === "pro" && (
                           <div className={styles.itemDescription}>
-                            {reasoningMode ? "High" : "Low"}
+                            {reasoningMode ? t("High") : t("Low")}
                           </div>
                         )}
                       </div>
@@ -342,7 +349,7 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
                         <Grid size={16} />
                       </div>
                       <div className={styles.itemInfo}>
-                        <div className={styles.itemLabel}>Web Search</div>
+                        <div className={styles.itemLabel}>{t("Web Search")}</div>
                       </div>
                       <div className={`${styles.toggle} ${webSearchEnabled ? styles.toggleOn : ""}`}>
                         <div className={styles.toggleKnob} />
@@ -360,7 +367,7 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
                         <Box size={16} />
                       </div>
                       <div className={styles.itemInfo}>
-                        <div className={styles.itemLabel}>Google Maps</div>
+                        <div className={styles.itemLabel}>{t("Google Maps")}</div>
                       </div>
                       <div className={`${styles.toggle} ${mapsEnabled ? styles.toggleOn : ""}`}>
                         <div className={styles.toggleKnob} />
@@ -377,7 +384,7 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
                         <Calendar size={16} />
                       </div>
                       <div className={styles.itemInfo}>
-                        <div className={styles.itemLabel}>Reminders & Plans</div>
+                        <div className={styles.itemLabel}>{t("Reminders & Plans")}</div>
                       </div>
                       <div className={`${styles.toggle} ${remindersEnabled ? styles.toggleOn : ""}`}>
                         <div className={styles.toggleKnob} />
@@ -409,9 +416,9 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
                     </div>
                     <div className={styles.itemInfo}>
                       <div className={styles.itemLabel}>
-                        {option.label}
+                        {t(option.label)}
                       </div>
-                      <div className={styles.itemDescription}>{option.description}</div>
+                      <div className={styles.itemDescription}>{t(option.description)}</div>
                     </div>
                     {isActive && <Check size={14} className={styles.checkIcon} />}
                   </button>
@@ -430,7 +437,7 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
                   </div>
                   <div className={styles.itemInfo}>
                     <div className={styles.itemLabel}>{activeOption.label}</div>
-                    <div className={styles.itemDescription}>Selected Model</div>
+                    <div className={styles.itemDescription}>{t("Selected Model")}</div>
                   </div>
                   <Check size={14} className={styles.checkIcon} />
                 </button>
@@ -444,14 +451,14 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
                     <div className={styles.upgradeHeader}>
                       <div className={styles.upgradeTitle}>
                         <Rocket size={16} className={styles.upgradeIcon} />
-                        <span>Upgrade</span>
+                        <span>{t("Upgrade")}</span>
                       </div>
                       <a href="/pricing" className={styles.upgradePill}>
-                        View Plans
+                        {t("View Plans")}
                       </a>
                     </div>
                     <div className={styles.upgradeBody}>
-                      Unlock extended capabilities and faster thoughts.
+                      {t("Unlock extended capabilities and faster thoughts.")}
                     </div>
                   </div>
                 </>
@@ -467,7 +474,7 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
                 disabled={currentLevel < TIER_LEVELS["voyager"]}
               >
                 <Box size={16} />
-                <span>All Models</span>
+                <span>{t("All Models")}</span>
                 {currentLevel < TIER_LEVELS["voyager"] ? (
                   <Lock size={14} className={styles.actionLock} />
                 ) : (

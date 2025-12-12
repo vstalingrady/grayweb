@@ -1,7 +1,12 @@
 import logging
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
+
+try:
+    from backend.time_utils import utcnow, utcnow_aware
+except Exception:  # pragma: no cover
+    from time_utils import utcnow, utcnow_aware  # type: ignore
 
 from fastapi import HTTPException, status
 
@@ -244,8 +249,8 @@ async def ensure_user_data_record(user_identifier: int) -> Optional[int]:
         # Create new record
         insert_query = user_data.insert().values(
             user_identifier=user_identifier,
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow(),
+            created_at=utcnow(),
+            updated_at=utcnow(),
         )
         user_data_id = await database.execute(insert_query)
 
@@ -316,7 +321,7 @@ async def get_or_create_conversation(
             )
 
         new_id = valid_id if valid_id else str(uuid4())
-        now = datetime.utcnow()
+        now = utcnow()
         insert_query = user_chat_threads.insert().values(
             id=new_id,
             title=title or "New Conversation",
@@ -375,7 +380,7 @@ async def save_conversation_message(
             grounding_metadata=grounding_metadata,
             attachments=message.get("attachments"),
             reminders=json.dumps(reminders_data) if reminders_data else None,
-            created_at=datetime.utcnow(),
+            created_at=utcnow(),
         )
         await database.execute(insert_query)
 
@@ -383,16 +388,15 @@ async def save_conversation_message(
             user_chat_threads.update()
             .where(user_chat_threads.c.id == conversation_id)
             .values(
-                last_message_at=datetime.utcnow(),
-                updated_at=datetime.utcnow(),
+                last_message_at=utcnow(),
+                updated_at=utcnow(),
             )
         )
         await database.execute(update_query)
 
         # Calculate timestamp for the cache (in milliseconds since epoch)
-        from datetime import timezone
-        now = datetime.utcnow()
-        timestamp_ms = int(now.replace(tzinfo=timezone.utc).timestamp() * 1000)
+        now_aware = utcnow_aware()
+        timestamp_ms = int(now_aware.timestamp() * 1000)
 
         append_to_conversation_cache(
             conversation_id,

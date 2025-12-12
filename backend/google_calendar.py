@@ -16,7 +16,12 @@ import google.oauth2.credentials
 import google_auth_oauthlib.flow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
+
+try:
+    from backend.time_utils import utcnow, utcnow_aware
+except Exception:  # pragma: no cover
+    from time_utils import utcnow, utcnow_aware  # type: ignore
 
 # Environment variables for Google Calendar
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
@@ -49,8 +54,7 @@ class GoogleCalendarCredentials(BaseModel):
     created_at: datetime
     updated_at: Optional[datetime] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class GoogleCalendarInfo(BaseModel):
     """Information about a Google Calendar."""
@@ -364,7 +368,7 @@ async def exchange_code_for_tokens(code: str, state: str, redirect_override: Opt
         flow.fetch_token(code=code)
 
         credentials = flow.credentials
-        expires_at = credentials.expiry or (datetime.utcnow() + timedelta(hours=1))
+        expires_at = credentials.expiry or (utcnow_aware() + timedelta(hours=1))
 
         return GoogleCalendarCredentials(
             user_id=user_id,
@@ -375,8 +379,8 @@ async def exchange_code_for_tokens(code: str, state: str, redirect_override: Opt
             client_secret=None,
             scopes=list(credentials.scopes or SCOPES),
             expires_at=expires_at,
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow(),
+            created_at=utcnow(),
+            updated_at=utcnow(),
         )
     except Exception as e:
         raise HTTPException(
@@ -418,10 +422,11 @@ async def get_google_calendar_service(credentials: GoogleCalendarCredentials) ->
 async def list_google_calendars(service: any) -> List[GoogleCalendarInfo]:
     """List user's Google Calendars."""
     try:
-        calendar_list = service.calendarList().list()
-        calendars = []
+        calendar_list = service.calendarList().list().execute()
+        calendars: List[GoogleCalendarInfo] = []
 
-        for calendar in calendar_list.get('items', []):
+        items = calendar_list.get("items", []) if isinstance(calendar_list, dict) else []
+        for calendar in items:
             calendars.append(GoogleCalendarInfo(
                 id=calendar.get('id', ''),
                 email=calendar.get('id', ''),
@@ -441,17 +446,21 @@ async def list_google_calendars(service: any) -> List[GoogleCalendarInfo]:
 async def list_google_events(service: any, calendar_id: str = 'primary', time_min: Optional[datetime] = None, time_max: Optional[datetime] = None) -> List[GoogleCalendarEvent]:
     """List events from a Google Calendar."""
     try:
-        # Build event list request
-        events_result = service.events().list(
-            calendarId=calendar_id,
-            timeMin=time_min.isoformat() if time_min else None,
-            timeMax=time_max.isoformat() if time_max else None,
-            singleEvents=True,
-            orderBy='startTime'
-        )
+        request_params: dict = {
+            "calendarId": calendar_id,
+            "singleEvents": True,
+            "orderBy": "startTime",
+        }
+        if time_min:
+            request_params["timeMin"] = time_min.isoformat()
+        if time_max:
+            request_params["timeMax"] = time_max.isoformat()
 
-        events = []
-        for event in events_result.get('items', []):
+        events_result = service.events().list(**request_params).execute()
+
+        events: List[GoogleCalendarEvent] = []
+        items = events_result.get("items", []) if isinstance(events_result, dict) else []
+        for event in items:
             events.append(GoogleCalendarEvent(
                 id=event.get('id', ''),
                 summary=event.get('summary', ''),

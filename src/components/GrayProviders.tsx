@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { UserProvider } from "@/contexts/UserContext";
 import { ChatProvider } from "@/components/gray/ChatProvider";
 import { ProactivityNotificationProvider } from "@/components/gray/ProactivityNotificationProvider";
+import { I18nProvider } from "@/contexts/I18nContext";
 
 type GrayProvidersProps = {
   viewerEmail?: string | null;
@@ -12,6 +13,70 @@ type GrayProvidersProps = {
 };
 
 export function GrayProviders({ viewerEmail, children }: GrayProvidersProps) {
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const storageKey = "gray_theme";
+    const media = window.matchMedia("(prefers-color-scheme: light)");
+
+    const applyPreferredTheme = () => {
+      let stored: string | null = null;
+      try {
+        stored = window.localStorage.getItem(storageKey);
+      } catch {
+        stored = null;
+      }
+
+      const mode =
+        stored === "light" || stored === "dark" || stored === "system"
+          ? stored
+          : "system";
+      const shouldBeLight = mode === "light" || (mode === "system" && media.matches);
+      document.documentElement.classList.toggle("light", shouldBeLight);
+    };
+
+    applyPreferredTheme();
+
+    const handleMediaChange = () => {
+      let stored: string | null = null;
+      try {
+        stored = window.localStorage.getItem(storageKey);
+      } catch {
+        stored = null;
+      }
+
+      if (!stored || stored === "system") {
+        applyPreferredTheme();
+      }
+    };
+
+    if (typeof media.addEventListener === "function") {
+      media.addEventListener("change", handleMediaChange);
+    } else if (typeof media.addListener === "function") {
+      media.addListener(handleMediaChange);
+    }
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === storageKey) {
+        applyPreferredTheme();
+      }
+    };
+
+    window.addEventListener("storage", handleStorage);
+
+    return () => {
+      if (typeof media.removeEventListener === "function") {
+        media.removeEventListener("change", handleMediaChange);
+      } else if (typeof media.removeListener === "function") {
+        media.removeListener(handleMediaChange);
+      }
+
+      window.removeEventListener("storage", handleStorage);
+    };
+  }, []);
+
   useEffect(() => {
     // Top half - intentional error (red)
     console.error(
@@ -55,10 +120,12 @@ export function GrayProviders({ viewerEmail, children }: GrayProvidersProps) {
   const effectiveEmail = shouldLoadUser ? viewerEmail : null;
 
   return (
-    <UserProvider userEmail={effectiveEmail ?? undefined}>
-      <ChatProvider>
-        <ProactivityNotificationProvider>{children}</ProactivityNotificationProvider>
-      </ChatProvider>
-    </UserProvider>
+    <I18nProvider>
+      <UserProvider userEmail={effectiveEmail ?? undefined}>
+        <ChatProvider>
+          <ProactivityNotificationProvider>{children}</ProactivityNotificationProvider>
+        </ChatProvider>
+      </UserProvider>
+    </I18nProvider>
   );
 }
