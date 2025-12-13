@@ -1458,59 +1458,30 @@ export function GrayDashboardView({
           <h2 className={styles.dashboardCardTitle}>{t("Proactivity")}</h2>
         </div>
         <div className={styles.dashboardCardBody}>
-          <div className={styles.proactivityBottom}>
-            <div className={styles.proactivityToggleRow}>
-              <span className={styles.proactivityStatusText}>
-                {t("Mode: {status}", { status: displayProactivity ? t("On") : t("Off") })}
-              </span>
-              <button
-                role="switch"
-                className={styles.dashboardToggle}
-                aria-checked={displayProactivity ? "true" : "false"}
-                aria-label={t("Toggle proactivity mode")}
-                onClick={() => {
-                  if (displayProactivity) {
-                    if (onProactivityRemove) onProactivityRemove();
-                  } else {
-                    if (onProactivitySelect) {
-                      const defaultPreset = PROACTIVITY_PRESETS[0];
-                      handleProactivityPresetSelect(defaultPreset);
-                    }
-                  }
-                }}
-              >
-                <span className={styles.dashboardToggleThumb} />
-              </button>
+          {proactivityScheduleEntries.length > 0 ? (
+            <ul className={styles.proactivityChecklist}>
+              {proactivityScheduleEntries.map(({ label, delivered }, index) => (
+                <li key={`${label}-${index}`} className={styles.proactivityChecklistItem}>
+                  <span className={styles.proactivityChecklistIcon} aria-hidden="true">
+                    {delivered ? <Check size={14} /> : <Square size={14} />}
+                  </span>
+                  <span className={styles.proactivityChecklistLabel}>{t(label)}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div className={styles.proactivityEmptyState}>
+              <span>{t("No check-ins scheduled")}</span>
             </div>
-            <div className={styles.proactivitySliderRow}>
-              <input
-                type="range"
-                min="0"
-                max="2"
-                step="1"
-                className={styles.proactivitySlider}
-                data-active={Boolean(displayProactivity).toString()}
-                value={
-                  !displayProactivity ? 0 :
-                    displayProactivity.id === 'proactivity-frequent' ? 2 :
-                      1
-                }
-                onChange={(e) => {
-                  const val = parseInt(e.target.value, 10);
-                  if (val === 0) {
-                    if (onProactivityRemove) onProactivityRemove();
-                  } else if (val === 1) {
-                    const preset = PROACTIVITY_PRESETS.find(p => p.id === 'proactivity-daily');
-                    if (preset) handleProactivityPresetSelect(preset);
-                  } else if (val === 2) {
-                    const preset = PROACTIVITY_PRESETS.find(p => p.id === 'proactivity-frequent');
-                    if (preset) handleProactivityPresetSelect(preset);
-                  }
-                }}
-                aria-label={t("Proactivity Intensity")}
-              />
-            </div>
-          </div>
+          )}
+          <button
+            type="button"
+            className={styles.proactivityConfigureLink}
+            onClick={handleOpenProactivityModal}
+            disabled={!canOpenProactivityModal}
+          >
+            {t("configure")}
+          </button>
         </div>
       </div>
 

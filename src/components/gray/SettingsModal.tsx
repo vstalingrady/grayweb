@@ -618,7 +618,7 @@ export function SettingsModal({
               <div className={styles.settingsSection}>
 
 
-                <div className={styles.settingsRow}>
+                <div className={styles.settingsDangerCard}>
                   <div className={styles.settingsLabelGroup}>
                     <span className={styles.settingsLabel}>{t("Delete account")}</span>
                     <span className={styles.deleteAccountHelper}>
@@ -701,16 +701,13 @@ export function SettingsModal({
                 <h2 className={styles.settingsPageTitle}>{t("Personalization")}</h2>
               </div>
 
-              <div className={styles.settingsSection}>
-                <h3 className={styles.settingsSectionTitle}>{t("Quick toggles")}</h3>
-                <p className={styles.settingsItemDescription} style={{ marginBottom: 12 }}>
-                  {t("Control Gray’s automations and workspace features.")}
-                </p>
+	              <div className={styles.settingsSection}>
+	                <h3 className={styles.settingsSectionTitle}>{t("Quick toggles")}</h3>
 
-                <div className={styles.settingsRow}>
-                  <div className={styles.settingsLabelGroup}>
-                    <span className={styles.settingsLabel}>{t("Web search")}</span>
-                    <span className={styles.settingsItemDescription}>
+	                <div className={styles.settingsRow}>
+	                  <div className={styles.settingsLabelGroup}>
+	                    <span className={styles.settingsLabel}>{t("Web search")}</span>
+	                    <span className={styles.settingsItemDescription}>
                       {t("Let Gray search for answers automatically.")}
                     </span>
                   </div>

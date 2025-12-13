@@ -1058,19 +1058,24 @@ def _should_enable_search(message: str) -> bool:
     Uses word boundary matching for specific keywords to avoid over-triggering.
     """
     import re
-    keywords = {
-        "search", "google", "find", "latest", "news", 
-        "weather", "who", "what", "when", "where"
-    }
     normalized = (message or "").lower()
     if not normalized:
         return False
-        
-    for kw in keywords:
-        if re.search(rf'\\b{re.escape(kw)}\\b', normalized):
-            return True
-            
-    return False
+
+    # Explicit request cues; keep conservative because enabling search can incur cost.
+    explicit_patterns = [
+        r"\bsearch\b",
+        r"\bgoogle\b",
+        r"\bweb\s*search\b",
+        r"\blook\s*up\b",
+        r"\blookup\b",
+        r"\bfind\s+on\s+the\s+web\b",
+    ]
+    if any(re.search(pattern, normalized) for pattern in explicit_patterns):
+        return True
+
+    # Live/recency-oriented queries.
+    return _should_use_web_search(message, model=None)
 
 
 def _split_env_list(value: Optional[str]) -> List[str]:
@@ -3649,7 +3654,7 @@ def _candidate_thought(candidate: Any) -> Optional[str]:
     return "\n".join(thoughts) if thoughts else None
 
 
-async def _should_use_web_search(message: str, model: Optional[str]) -> bool:
+def _should_use_web_search(message: str, model: Optional[str]) -> bool:
     """
     Use lightweight local heuristics to decide whether this message likely
     needs up-to-date information from the public web.
@@ -3664,6 +3669,7 @@ async def _should_use_web_search(message: str, model: Optional[str]) -> bool:
 
     # Obvious "live data" phrases – news, markets, prices, weather, etc.
     live_keywords = [
+        "news",
         "breaking news",
         "latest news",
         "recent news",

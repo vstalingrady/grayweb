@@ -2484,7 +2484,7 @@ function GrayPageClientInner({
                     showUnderline={false}
                     onAddAttachment={openAttachmentPicker}
                     onPasteFiles={handleAttachmentPaste}
-                    isSubmitDisabled={isUsageLimitReached}
+                    {...(isUsageLimitReached ? { isSubmitDisabled: true } : {})}
                   />
                 </div>
               ) : null}

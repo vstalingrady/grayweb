@@ -460,6 +460,7 @@ type ChatProviderProps = {
 export function ChatProvider({ children, workspaceContext }: ChatProviderProps) {
   const { user, waitForUser, updateUser, refreshUser } = useUser();
   const [defaultSystemPrompt, setDefaultSystemPrompt] = useState<string | null>(null);
+  const [, setShowIntro] = useState(false);
   const onboardingSeenRef = useRef(false);
   const onboardingKickoffRef = useRef(false);
   const hasLoadedFromStorageRef = useRef(false);
