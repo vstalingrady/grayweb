@@ -1878,7 +1878,7 @@ async def _load_general_conversation_history(user_id: int) -> List[Dict[str, Any
                 entry["grounding_metadata"] = _parse_json_field(row["grounding_metadata"]) if isinstance(row["grounding_metadata"], str) else row["grounding_metadata"]
             
             if row["created_at"]:
-                entry["timestamp"] = int(row["created_at"].replace(tzinfo=timezone.utc).timestamp() * 1000)
+                entry["timestamp"] = _datetime_to_ms(row["created_at"])
             
             # Include reminders if present (use try/except since older DB may not have column)
             try:
@@ -1918,20 +1918,32 @@ async def _insert_general_conversation_message(
     try:
         effective_user_data_id = user_data_id if user_data_id is not None else user_id
         now = utcnow()
-        query = """
-            INSERT INTO general_chat_messages (user_id, user_data_id, role, content, grounding_metadata, reminders, created_at)
-            VALUES (:user_id, :user_data_id, :role, :content, :grounding_metadata, :reminders, :created_at)
-        """
-        values = {
+        values: Dict[str, Any] = {
             "user_id": user_id,
             "user_data_id": effective_user_data_id,
             "role": role,
             "content": text,
-            "grounding_metadata": json.dumps(grounding_metadata) if grounding_metadata else None,
-            "reminders": json.dumps(reminders) if reminders else None,
-            "created_at": now.isoformat(),
+            "grounding_metadata": json.dumps(grounding_metadata)
+            if grounding_metadata
+            else None,
+            "created_at": now,
         }
-        result = await database.execute(query, values)
+        if attachments is not None:
+            values["attachments"] = json.dumps(attachments) if attachments else None
+        if reminders is not None:
+            values["reminders"] = json.dumps(reminders) if reminders else None
+
+        try:
+            result = await database.execute(general_chat_messages.insert().values(**values))
+        except Exception as insert_error:
+            # Retry without reminders for older DB schemas (pre-migration).
+            if "reminders" in values:
+                values.pop("reminders", None)
+                result = await database.execute(
+                    general_chat_messages.insert().values(**values)
+                )
+            else:
+                raise insert_error
         app_logger.info(
             f"Successfully saved general chat message for user {user_id}, role={role}, id={result}",
             extra={"event_type": "general_message_insert_success", "user_id": user_id, "role": role, "message_id": result}
@@ -2640,6 +2652,20 @@ async def _run_basic_migrations():
         [
             ("longest_streak", "INTEGER", "0"),
         ]
+    )
+    _ensure_sqlite_columns(
+        "user_chat_messages",
+        [
+            # Older local DBs did not include reminders; missing columns break SELECT *.
+            ("reminders", "TEXT", "NULL"),
+        ],
+    )
+    _ensure_sqlite_columns(
+        "general_chat_messages",
+        [
+            # Older local DBs did not include reminders; missing columns break SELECT *.
+            ("reminders", "TEXT", "NULL"),
+        ],
     )
     _ensure_sqlite_columns(
         "reminders",
@@ -7905,6 +7931,8 @@ async def chat_stream(
         clear_request_context()
         return StreamingResponse(error_stream(), status_code=500, media_type="text/event-stream")
 
+@app.post("/api/conversation/{conversation_id}/message")
+@limiter.limit("30/minute")
 async def create_conversation_message(
     request: Request,
     conversation_id: str,
@@ -7933,6 +7961,8 @@ async def create_conversation_message(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error saving message: {str(e)}")
 
+@app.get("/api/conversation/{conversation_id}")
+@limiter.limit("60/minute")
 async def get_conversation(
     request: Request,
     conversation_id: str,
@@ -7967,6 +7997,8 @@ async def get_conversation(
   except Exception as e:
     raise HTTPException(status_code=500, detail=f"Error fetching conversation: {str(e)}")
 
+@app.post("/api/conversation")
+@limiter.limit("30/minute")
 async def create_conversation(
     request: Request,
     payload: ConversationCreateRequest,
@@ -8170,6 +8202,8 @@ async def _apply_conversation_update(
     return await apply_conversation_update(conversation_id, payload, current_user)
 
 
+@app.patch("/api/conversation/{conversation_id}/metadata")
+@limiter.limit("30/minute")
 async def update_conversation(
     request: Request,
     conversation_id: str,
@@ -8180,6 +8214,8 @@ async def update_conversation(
     return await _apply_conversation_update(conversation_id, payload, current_user)
 
 
+@app.post("/api/conversation/{conversation_id}/metadata")
+@limiter.limit("30/minute")
 async def update_conversation_metadata(
     request: Request,
     conversation_id: str,
@@ -8189,6 +8225,8 @@ async def update_conversation_metadata(
     """Update metadata via POST for clients that cannot rely on PATCH."""
     return await _apply_conversation_update(conversation_id, payload, current_user)
 
+@app.get("/api/conversation/{conversation_id}/usage")
+@limiter.limit("60/minute")
 async def get_conversation_usage(
     request: Request,
     conversation_id: str,
@@ -8343,6 +8381,8 @@ async def get_conversation_usage(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching conversation usage: {str(e)}")
 
+@app.post("/api/conversation/{conversation_id}/compress")
+@limiter.limit("5/minute")
 async def compress_conversation(
     request: Request,
     conversation_id: str,
