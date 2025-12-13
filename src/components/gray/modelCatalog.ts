@@ -1,0 +1,76 @@
+export type CatalogModel = {
+  id: string;
+  label: string;
+  cost?: string;
+  tierRequired?: "voyager" | "pioneer";
+};
+
+export type ModelGroup = {
+  id: string;
+  label: string;
+  iconPath: string;
+  models: CatalogModel[];
+};
+
+export const GRAY_BRAND = {
+  label: "Gray",
+  iconPath: "/grayai.png",
+} as const;
+
+export const PIONEER_GROUPS: ModelGroup[] = [
+  {
+    id: "anthropic",
+    label: "Anthropic",
+    iconPath: "/logos/claude-color.svg",
+    models: [
+      { id: "anthropic/claude-haiku-4.5", label: "Claude Haiku 4.5", cost: "$$", tierRequired: "voyager" },
+      { id: "anthropic/claude-sonnet-4.5", label: "Claude Sonnet 4.5", cost: "$$$", tierRequired: "voyager" },
+      { id: "anthropic/claude-opus-4.5", label: "Claude Opus 4.5", cost: "$$$$", tierRequired: "pioneer" },
+    ],
+  },
+  {
+    id: "google",
+    label: "Google",
+    iconPath: "/logos/gemini-color.svg",
+    models: [
+      { id: "google/gemini-3-pro-preview", label: "Gemini 3 Pro Preview", cost: "$$$", tierRequired: "voyager" },
+      { id: "google/gemini-2.5-flash", label: "Gemini 2.5 Flash", cost: "$$", tierRequired: "voyager" },
+    ],
+  },
+  {
+    id: "openai",
+    label: "OpenAI",
+    iconPath: "/logos/whiteopenai.svg",
+    models: [
+      { id: "openai/gpt-5.2-chat", label: "GPT 5.2", cost: "$$$", tierRequired: "voyager" },
+      { id: "openai/gpt-5.2-pro", label: "GPT 5.2 Pro", cost: "$$$$", tierRequired: "pioneer" },
+    ],
+  },
+  {
+    id: "deepseek",
+    label: "DeepSeek",
+    iconPath: "/logos/deepseek-color.svg",
+    models: [
+      { id: "deepseek/deepseek-v3.2", label: "Deepseek V3.2", cost: "$", tierRequired: "voyager" },
+      { id: "deepseek/deepseek-v3.2-speciale", label: "Deepseek V3.2 Speciale", cost: "$", tierRequired: "voyager" },
+    ],
+  },
+  {
+    id: "x-ai",
+    label: "xAI",
+    iconPath: "/logos/whitegrok.svg",
+    models: [{ id: "x-ai/grok-4.1-fast", label: "Grok 4.1 Fast", cost: "$", tierRequired: "voyager" }],
+  },
+  {
+    id: "moonshot",
+    label: "Moonshot AI",
+    iconPath: "/logos/whitekimi.svg",
+    models: [{ id: "moonshotai/kimi-k2-thinking", label: "Kimi K2 Thinking", cost: "$$", tierRequired: "voyager" }],
+  },
+];
+
+export const ALL_PIONEER_MODEL_IDS: string[] = PIONEER_GROUPS.flatMap((group) => group.models.map((model) => model.id));
+
+export const RECOMMENDED_PIONEER_MODEL_IDS: string[] = PIONEER_GROUPS.flatMap((group) =>
+  group.models.filter((model) => (model.tierRequired ?? "voyager") === "voyager").map((model) => model.id)
+);
