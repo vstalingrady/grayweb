@@ -3036,9 +3036,10 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       modelTier,
       setModelTier,
       selectedModelId,
-      setSelectedModelId,
+      handleSetSelectedModelId,
       visibleModelIds,
       setVisibleModelIds,
+      pinSession,
     ]
   );
 
