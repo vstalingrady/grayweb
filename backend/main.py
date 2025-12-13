@@ -899,10 +899,16 @@ _ensure_sqlite_table("general_chat_messages", """
         role VARCHAR,
         content VARCHAR,
         grounding_metadata JSON,
+        reminders JSON,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY(user_id) REFERENCES users(id)
     )
 """)
+
+# Ensure reminders column exists for existing general_chat_messages tables
+_ensure_sqlite_columns("general_chat_messages", [
+    ("reminders", "JSON", None),
+])
 
 _ensure_sqlite_index("user_chat_messages", "ix_user_chat_messages_thread_id", "thread_id")
 
