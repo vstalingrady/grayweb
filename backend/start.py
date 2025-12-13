@@ -10,7 +10,11 @@ import uvicorn
 import logging
 
 # Ensure the repository root is on the Python path so `import backend` works.
-ROOT_DIR = Path(__file__).resolve().parent.parent
+# In local dev: start.py is at /path/to/gray/backend/start.py, so parent.parent = /path/to/gray
+# In Docker: start.py is at /app/start.py, so parent.parent = / which is wrong
+# Use WORKDIR env or detect based on parent being root
+_start_dir = Path(__file__).resolve().parent
+ROOT_DIR = _start_dir if _start_dir.parent == Path("/") else _start_dir.parent
 sys.path.insert(0, str(ROOT_DIR))
 
 
@@ -104,6 +108,7 @@ if __name__ == "__main__":
     DATABASE_URL = _select_database_url()
     db_type = "sqlite" if "sqlite" in DATABASE_URL else "postgresql"
     LOG.info(f"Using {db_type} database")
+    LOG.info(f"Database URL: {DATABASE_URL}")
 
     LOG.debug("Creating database tables...")
     engine = sqlalchemy.create_engine(DATABASE_URL.replace("sqlite:///", "sqlite:///"), echo=False)
