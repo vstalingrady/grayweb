@@ -5,8 +5,8 @@ import { Canvas, useFrame } from "@react-three/fiber";
 import type * as THREE from "three";
 import styles from "./DepthParticleBackground.module.css";
 
-const PARTICLE_COUNT = 1300;
-const SPHERE_RADIUS = 14.5;
+const PARTICLE_COUNT = 2500;
+const SPHERE_RADIUS = 30;
 const PARTICLE_RANDOMNESS = 2.8;
 const ROTATION_SPEED = 0.00045;
 
@@ -88,11 +88,11 @@ export function DepthParticleBackground() {
     <div className={styles.particleBackground} aria-hidden="true">
       <Canvas
         className={styles.particleCanvas}
-        camera={{ position: [0, 0, 26], fov: 46 }}
+        camera={{ position: [0, 0, 45], fov: 46 }}
         gl={{ antialias: true }}
       >
         <color attach="background" args={["#030205"]} />
-        <fog attach="fog" args={["#020205", 8, 35]} />
+        <fog attach="fog" args={["#020205", 8, 55]} />
         <ambientLight intensity={0.5} />
         <pointLight position={[10, 10, 15]} intensity={1.4} />
         <DepthParticles />
