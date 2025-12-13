@@ -3,6 +3,7 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import {
   ChevronLeft,
@@ -17,11 +18,15 @@ import {
   Trash2,
   Database,
   Bell,
+  Brain,
+  KeyRound,
+  Lock,
 } from "lucide-react";
 import styles from "@/app/gray/GrayPageClient.module.css";
 import { useI18n } from "@/contexts/I18nContext";
 import { useUser } from "@/contexts/UserContext";
 import { useChatStore } from "@/components/gray/ChatProvider";
+import { GRAY_BRAND, ALL_PIONEER_MODEL_IDS, PIONEER_GROUPS, RECOMMENDED_PIONEER_MODEL_IDS } from "@/components/gray/modelCatalog";
 import type { ContextUsageSummary } from "@/components/gray/types";
 import { clampPercent, getContextUsageUsedTokens, getContextUsageVisualizationLimit } from "@/components/gray/contextUsage";
 import { apiService } from "@/lib/api";
@@ -126,6 +131,8 @@ type SettingsSection =
   | "account"
   | "preferences"
   | "personalization"
+  | "models"
+  | "api_keys"
   | "data_controls"
   | "notifications";
 
@@ -134,6 +141,22 @@ const THEME_STORAGE_KEY = "gray_theme";
 const NOTIFICATIONS_STORAGE_PREFIX = "gray_notifications";
 const CONVERSATION_MEMORY_STORAGE_PREFIX = "gray_conversation_memory";
 const MODEL_IMPROVEMENT_STORAGE_PREFIX = "gray_model_improvement";
+const API_KEYS_STORAGE_PREFIX = "gray_api_keys";
+
+type ApiKeyProvider = {
+  id: string;
+  label: string;
+  helper: string;
+};
+
+const API_KEY_PROVIDERS: ApiKeyProvider[] = [
+  { id: "openai", label: "OpenAI", helper: "Used for OpenAI models" },
+  { id: "anthropic", label: "Anthropic", helper: "Used for Claude models" },
+  { id: "google", label: "Google", helper: "Used for Gemini models" },
+  { id: "deepseek", label: "DeepSeek", helper: "Used for DeepSeek models" },
+  { id: "x-ai", label: "xAI", helper: "Used for Grok models" },
+  { id: "moonshot", label: "Moonshot AI", helper: "Used for Kimi models" },
+];
 
 type NotificationPreferences = {
   device: boolean;
@@ -170,12 +193,14 @@ export function SettingsModal({
 }: SettingsModalProps) {
   const { t, locale: activeLocale, setLocale } = useI18n();
   const { user, updateUser } = useUser();
-  const { webSearchEnabled, setWebSearchEnabled } = useChatStore();
+  const { webSearchEnabled, setWebSearchEnabled, visibleModelIds, setVisibleModelIds, selectedModelId } = useChatStore();
   const router = useRouter();
   const resolveSection = (value: string): SettingsSection => {
     if (
       value === "preferences" ||
       value === "personalization" ||
+      value === "models" ||
+      value === "api_keys" ||
       value === "data_controls" ||
       value === "notifications"
     ) {
@@ -191,6 +216,7 @@ export function SettingsModal({
   const notificationsStorageKey = `${NOTIFICATIONS_STORAGE_PREFIX}:${user?.id ?? "anon"}`;
   const conversationMemoryStorageKey = `${CONVERSATION_MEMORY_STORAGE_PREFIX}:${user?.id ?? "anon"}`;
   const modelImprovementStorageKey = `${MODEL_IMPROVEMENT_STORAGE_PREFIX}:${user?.id ?? "anon"}`;
+  const apiKeysStorageKey = `${API_KEYS_STORAGE_PREFIX}:${user?.id ?? "anon"}`;
 
   const [notificationPreferences, setNotificationPreferences] = useState<NotificationPreferences>(
     DEFAULT_NOTIFICATION_PREFERENCES
@@ -203,6 +229,51 @@ export function SettingsModal({
   // Preferences State
   const [theme, setTheme] = useState<ThemeMode>(() => resolveInitialTheme());
   const [responseLanguage, setResponseLanguage] = useState("auto");
+  const [modelSearchQuery, setModelSearchQuery] = useState("");
+  const [modelsStatus, setModelsStatus] = useState<string | null>(null);
+  const [apiKeys, setApiKeys] = useState<Record<string, string>>({});
+  const [apiKeyDrafts, setApiKeyDrafts] = useState<Record<string, string>>({});
+  const [apiKeyVisibility, setApiKeyVisibility] = useState<Record<string, boolean>>({});
+  const [apiKeyStatus, setApiKeyStatus] = useState<string | null>(null);
+
+  const tierLevel = useMemo(() => {
+    const raw = (user?.plan_tier ?? "scout").toLowerCase();
+    if (raw === "pioneer") return 2;
+    if (raw === "voyager") return 1;
+    return 0;
+  }, [user?.plan_tier]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const raw = window.localStorage.getItem(apiKeysStorageKey);
+    if (!raw) {
+      setApiKeys({});
+      setApiKeyDrafts({});
+      return;
+    }
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      if (!parsed || typeof parsed !== "object") {
+        setApiKeys({});
+        setApiKeyDrafts({});
+        return;
+      }
+      const next: Record<string, string> = {};
+      for (const provider of API_KEY_PROVIDERS) {
+        const maybe = (parsed as Record<string, unknown>)[provider.id];
+        if (typeof maybe === "string" && maybe.trim().length > 0) {
+          next[provider.id] = maybe.trim();
+        }
+      }
+      setApiKeys(next);
+      setApiKeyDrafts(next);
+    } catch {
+      setApiKeys({});
+      setApiKeyDrafts({});
+    }
+  }, [apiKeysStorageKey]);
 
   // Load response language preference
   useEffect(() => {
@@ -516,17 +587,49 @@ export function SettingsModal({
     </button>
   );
 
-  const renderToggle = (checked: boolean, onChange: () => void, label?: string) => (
+  const renderToggle = (checked: boolean, onChange: () => void, label?: string, disabled = false) => (
     <button
       type="button"
       className={styles.settingsToggle}
       role="switch"
       aria-checked={checked ? "true" : "false"}
-      onClick={onChange}
+      aria-disabled={disabled ? "true" : "false"}
+      disabled={disabled}
+      onClick={() => {
+        if (disabled) return;
+        onChange();
+      }}
       aria-label={label}
     >
       <span className={styles.settingsToggleThumb} />
     </button>
+  );
+
+  const renderLogo = (src: string, alt: string, muted: boolean) => (
+    <span
+      aria-hidden="true"
+      style={{
+        width: 22,
+        height: 22,
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        borderRadius: 6,
+        overflow: "hidden",
+        flexShrink: 0,
+      }}
+    >
+      <Image
+        src={src}
+        alt={alt}
+        width={18}
+        height={18}
+        style={{
+          filter: "brightness(0.85) saturate(0.95)",
+          opacity: 0.9,
+        }}
+      />
+    </span>
   );
 
   return (
@@ -550,6 +653,8 @@ export function SettingsModal({
             {renderNavItem("account", t("Account"), UserCircle)}
             {renderNavItem("preferences", t("Preferences"), SettingsIcon)}
             {renderNavItem("personalization", t("Personalization"), Palette)}
+            {renderNavItem("models", t("Models"), Brain)}
+            {renderNavItem("api_keys", t("API Keys"), KeyRound)}
             {renderNavItem("data_controls", t("Data Controls"), Database)}
             {renderNavItem("notifications", t("Notifications"), Bell)}
           </div>
@@ -750,13 +855,13 @@ export function SettingsModal({
                 <h2 className={styles.settingsPageTitle}>{t("Personalization")}</h2>
               </div>
 
-	              <div className={styles.settingsSection}>
-	                <h3 className={styles.settingsSectionTitle}>{t("Quick toggles")}</h3>
+              <div className={styles.settingsSection}>
+                <h3 className={styles.settingsSectionTitle}>{t("Quick toggles")}</h3>
 
-	                <div className={styles.settingsRow}>
-	                  <div className={styles.settingsLabelGroup}>
-	                    <span className={styles.settingsLabel}>{t("Web search")}</span>
-	                    <span className={styles.settingsItemDescription}>
+                <div className={styles.settingsRow}>
+                  <div className={styles.settingsLabelGroup}>
+                    <span className={styles.settingsLabel}>{t("Web search")}</span>
+                    <span className={styles.settingsItemDescription}>
                       {t("Let Gray search for answers automatically.")}
                     </span>
                   </div>
@@ -854,6 +959,311 @@ export function SettingsModal({
                 </div>
               </div>
 
+            </>
+          )}
+
+          {activeSection === "models" && (
+            <>
+              <div className={styles.settingsPageHeader}>
+                <h2 className={styles.settingsPageTitle}>{t("Models")}</h2>
+              </div>
+
+              <div className={styles.settingsSection}>
+                <p className={styles.settingsItemDescription} style={{ marginTop: 0, marginBottom: 16 }}>
+                  {t("Choose which models appear in your model selector. This won't affect existing conversations.")}
+                </p>
+
+                {modelsStatus ? (
+                  <p className={styles.settingsItemDescription} style={{ marginTop: 0, marginBottom: 16 }}>
+                    {modelsStatus}
+                  </p>
+                ) : null}
+
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
+                  <button
+                    type="button"
+                    className={styles.settingsAction}
+                    onClick={() => {
+                      if (tierLevel < 1) {
+                        setModelsStatus(t("Upgrade to Voyager to customize models."));
+                        return;
+                      }
+                      const next = [...RECOMMENDED_PIONEER_MODEL_IDS];
+                      if (selectedModelId && ALL_PIONEER_MODEL_IDS.includes(selectedModelId) && !next.includes(selectedModelId)) {
+                        next.push(selectedModelId);
+                      }
+                      setVisibleModelIds(next.length === ALL_PIONEER_MODEL_IDS.length ? null : next);
+                      setModelsStatus(null);
+                    }}
+                  >
+                    {t("Select recommended")}
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.settingsAction}
+                    onClick={() => {
+                      if (tierLevel < 1) {
+                        setModelsStatus(t("Upgrade to Voyager to customize models."));
+                        return;
+                      }
+                      setVisibleModelIds(null);
+                      setModelsStatus(null);
+                    }}
+                  >
+                    {t("Show all")}
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.settingsAction}
+                    onClick={() => {
+                      if (tierLevel < 1) {
+                        setModelsStatus(t("Upgrade to Voyager to customize models."));
+                        return;
+                      }
+                      if (selectedModelId && ALL_PIONEER_MODEL_IDS.includes(selectedModelId)) {
+                        setVisibleModelIds([selectedModelId]);
+                      } else {
+                        setVisibleModelIds([]);
+                      }
+                      setModelsStatus(null);
+                    }}
+                  >
+                    {t("Unselect all")}
+                  </button>
+                </div>
+
+                <input
+                  className={styles.settingsInput}
+                  value={modelSearchQuery}
+                  onChange={(event) => setModelSearchQuery(event.target.value)}
+                  placeholder={t("Search models...")}
+                  aria-label={t("Search models")}
+                />
+              </div>
+
+              <div className={styles.settingsSection}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+                  {renderLogo(GRAY_BRAND.iconPath, GRAY_BRAND.label, false)}
+                  <h3 className={styles.settingsSectionTitle} style={{ margin: 0 }}>
+                    {t("Gray")}
+                  </h3>
+                </div>
+                <div className={styles.settingsRow}>
+                  <div className={styles.settingsLabelGroup}>
+                    <span className={styles.settingsLabel}>{t("Gray Lite")}</span>
+                    <span className={styles.settingsItemDescription}>{t("Gray Lite is always available.")}</span>
+                  </div>
+                </div>
+              </div>
+
+              {PIONEER_GROUPS.map((group) => {
+                const normalizedQuery = modelSearchQuery.trim().toLowerCase();
+                const visibleIds = visibleModelIds ?? ALL_PIONEER_MODEL_IDS;
+                const matchesGroup = !normalizedQuery || group.label.toLowerCase().includes(normalizedQuery);
+                const filteredModels = group.models.filter((model) => {
+                  if (!normalizedQuery) return true;
+                  const haystack = `${group.label} ${model.label} ${model.id}`.toLowerCase();
+                  return matchesGroup || haystack.includes(normalizedQuery);
+                });
+
+                if (filteredModels.length === 0) {
+                  return null;
+                }
+
+                return (
+                  <div key={group.id} className={styles.settingsSection}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+                      {renderLogo(group.iconPath, group.label, tierLevel < 1)}
+                      <h3 className={styles.settingsSectionTitle} style={{ margin: 0 }}>
+                        {group.label}
+                      </h3>
+                    </div>
+                    {filteredModels.map((model) => {
+                      const isSelected = selectedModelId === model.id;
+                      const isEnabled = visibleModelIds === null || visibleIds.includes(model.id);
+                      const requiredTier = model.tierRequired ?? "voyager";
+                      const requiredLevel = requiredTier === "pioneer" ? 2 : 1;
+                      const isTierLocked = tierLevel < requiredLevel;
+                      const isScoutLocked = tierLevel < 1;
+                      const isLocked = isScoutLocked || isTierLocked;
+                      const tierNote =
+                        requiredTier === "pioneer"
+                          ? t("Upgrade to Pioneer to access.")
+                          : t("Upgrade to Voyager to access.");
+
+                      return (
+                        <div key={model.id} className={styles.settingsRow} style={isLocked ? { opacity: 0.5, filter: "grayscale(1)" } : undefined}>
+                          <div className={styles.settingsLabelGroup}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                              {renderLogo(group.iconPath, group.label, false)}
+                              <span className={styles.settingsLabel}>{model.label}</span>
+                            </div>
+                            <span className={styles.settingsItemDescription}>
+                              {model.cost ? t("Cost: {cost}", { cost: model.cost }) : model.id}
+                              {isSelected ? ` • ${t("Selected")}` : ""}
+                              {isLocked ? ` • ${tierNote}` : ""}
+                            </span>
+                          </div>
+                          {isLocked ? (
+                            <div style={{ padding: "0 10px", opacity: 0.5 }}>
+                              <Lock size={16} />
+                            </div>
+                          ) : (
+                            renderToggle(
+                              isEnabled,
+                              () => {
+                                if (isSelected) {
+                                  setModelsStatus(t("You can't hide the currently selected model."));
+                                  return;
+                                }
+                                if (visibleModelIds === null) {
+                                  const next = ALL_PIONEER_MODEL_IDS.filter((id) => id !== model.id);
+                                  setVisibleModelIds(next);
+                                  setModelsStatus(null);
+                                  return;
+                                }
+                                if (isEnabled) {
+                                  setVisibleModelIds(visibleModelIds.filter((id) => id !== model.id));
+                                  setModelsStatus(null);
+                                  return;
+                                }
+                                const next = Array.from(new Set([...visibleModelIds, model.id]));
+                                setVisibleModelIds(next.length === ALL_PIONEER_MODEL_IDS.length ? null : next);
+                                setModelsStatus(null);
+                              },
+                              t("Toggle {model}", { model: model.label })
+                            )
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </>
+          )}
+
+          {activeSection === "api_keys" && (
+            <>
+              <div className={styles.settingsPageHeader}>
+                <h2 className={styles.settingsPageTitle}>{t("API Keys")}</h2>
+              </div>
+
+              <div className={styles.settingsSection}>
+                <p className={styles.settingsItemDescription} style={{ marginTop: 0 }}>
+                  {t("Bring your own API keys for select models. Keys are stored locally in your browser.")}
+                </p>
+              </div>
+
+              {tierLevel < 1 ? (
+                <div
+                  className={styles.settingsSection}
+                  style={{
+                    borderRadius: 16,
+                    padding: 24,
+                    border: "1px solid rgba(255, 255, 255, 0.08)",
+                    background:
+                      "radial-gradient(120% 120% at 50% 0%, rgba(255, 255, 255, 0.08), rgba(10, 10, 10, 0.9))",
+                  }}
+                >
+                  <h3 className={styles.settingsSectionTitle} style={{ marginBottom: 8 }}>
+                    {t("Voyager feature")}
+                  </h3>
+                  <p className={styles.settingsItemDescription} style={{ marginTop: 0, marginBottom: 16 }}>
+                    {t("Upgrade to Voyager to access this feature.")}
+                  </p>
+                  <button type="button" className={styles.settingsAction} onClick={() => router.push("/pricing")}>
+                    {t("Upgrade")}
+                  </button>
+                </div>
+              ) : (
+                <div className={styles.settingsSection}>
+                  {apiKeyStatus ? (
+                    <p className={styles.settingsItemDescription} style={{ marginTop: 0, marginBottom: 16 }}>
+                      {apiKeyStatus}
+                    </p>
+                  ) : null}
+
+                  {API_KEY_PROVIDERS.map((provider) => {
+                    const draft = apiKeyDrafts[provider.id] ?? "";
+                    const isVisible = Boolean(apiKeyVisibility[provider.id]);
+                    const isSaved = Boolean(apiKeys[provider.id]);
+                    return (
+                      <div key={provider.id} className={styles.settingsSection} style={{ marginBottom: 20 }}>
+                        <h3 className={styles.settingsSectionTitle} style={{ marginBottom: 10 }}>
+                          {provider.label}
+                        </h3>
+                        <p className={styles.settingsItemDescription} style={{ marginTop: 0, marginBottom: 10 }}>
+                          {t(provider.helper)}
+                          {isSaved ? ` • ${t("Saved")}` : ""}
+                        </p>
+                        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                          <input
+                            className={styles.settingsInput}
+                            style={{ flex: "1 1 360px" }}
+                            type={isVisible ? "text" : "password"}
+                            value={draft}
+                            onChange={(event) => {
+                              const next = event.target.value;
+                              setApiKeyDrafts((prev) => ({ ...prev, [provider.id]: next }));
+                              setApiKeyStatus(null);
+                            }}
+                            placeholder={t("Enter API key")}
+                            aria-label={t("{provider} API key", { provider: provider.label })}
+                            autoComplete="off"
+                            spellCheck={false}
+                          />
+                          <button
+                            type="button"
+                            className={styles.settingsAction}
+                            onClick={() =>
+                              setApiKeyVisibility((prev) => ({ ...prev, [provider.id]: !Boolean(prev[provider.id]) }))
+                            }
+                          >
+                            {isVisible ? t("Hide") : t("Show")}
+                          </button>
+                          <button
+                            type="button"
+                            className={styles.settingsAction}
+                            onClick={() => {
+                              const nextKey = draft.trim();
+                              const nextStored: Record<string, string> = { ...apiKeys };
+                              if (nextKey) {
+                                nextStored[provider.id] = nextKey;
+                              } else {
+                                delete nextStored[provider.id];
+                              }
+                              if (typeof window !== "undefined") {
+                                window.localStorage.setItem(apiKeysStorageKey, JSON.stringify(nextStored));
+                              }
+                              setApiKeys(nextStored);
+                              setApiKeyStatus(t("Saved."));
+                            }}
+                          >
+                            {t("Save")}
+                          </button>
+                          <button
+                            type="button"
+                            className={styles.settingsAction}
+                            onClick={() => {
+                              const nextStored: Record<string, string> = { ...apiKeys };
+                              delete nextStored[provider.id];
+                              if (typeof window !== "undefined") {
+                                window.localStorage.setItem(apiKeysStorageKey, JSON.stringify(nextStored));
+                              }
+                              setApiKeys(nextStored);
+                              setApiKeyDrafts((prev) => ({ ...prev, [provider.id]: "" }));
+                              setApiKeyStatus(t("Cleared."));
+                            }}
+                          >
+                            {t("Clear")}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </>
           )}
 
