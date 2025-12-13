@@ -10110,7 +10110,6 @@ async def create_payment_charge(
     Create a transaction with Midtrans Core API.
     """
     # 1. Determine Amount & Item Details based on plan tier and billing cycle
-    # TESTING MODE: All amounts set to 1 IDR
     is_annual = request.billing_cycle == "annual"
     if request.plan_tier == "voyager":
         amount = 1777000 if is_annual else 177000
