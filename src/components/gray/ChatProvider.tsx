@@ -31,7 +31,7 @@ import {
 import { buildLocalTimeContext } from "@/lib/timeContext";
 import { formatReminderDateLabel, formatReminderSlotLabel } from "./reminderTimeUtils";
 import { type QuestionnaireSession } from "@/lib/questionnaire";
-import { IntroSequence, INTRO_MESSAGES } from "./IntroSequence";
+
 import { compressImage } from "@/lib/imageCompression";
 import {
   ChatRole,
@@ -460,7 +460,6 @@ type ChatProviderProps = {
 export function ChatProvider({ children, workspaceContext }: ChatProviderProps) {
   const { user, waitForUser, updateUser, refreshUser } = useUser();
   const [defaultSystemPrompt, setDefaultSystemPrompt] = useState<string | null>(null);
-  const [showIntro, setShowIntro] = useState(false);
   const onboardingSeenRef = useRef(false);
   const onboardingKickoffRef = useRef(false);
   const hasLoadedFromStorageRef = useRef(false);
@@ -2723,22 +2722,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
     user?.personalization_about,
   ]);
 
-  const handleIntroComplete = useCallback(async () => {
-    if (!user?.id) {
-      setShowIntro(false);
-    } else {
-      setShowIntro(false);
 
-      // Kick off the AI onboarding flow by sending an empty message.
-      // The backend will detect the incomplete personalization profile
-      // and apply the onboarding prompt + tools.
-      try {
-        await sendGeneralMessage("");
-      } catch (error) {
-        console.error("Failed to trigger onboarding chat:", error);
-      }
-    }
-  }, [user?.id, sendGeneralMessage]);
 
   useEffect(() => {
     if (!user?.id || !generalSessionId) {
@@ -3096,7 +3080,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
   return (
     <ChatContext.Provider value={value}>
       {children}
-      {showIntro && <IntroSequence onComplete={handleIntroComplete} />}
+
     </ChatContext.Provider>
   );
 }
