@@ -116,7 +116,9 @@
 }
 
 .activePaymentMethodsCard {
-    background: transparent;
+    background: rgba(8, 8, 8, 0.6);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
     border-radius: 8px;
     padding: 1.1rem;
     width: 100%;
@@ -374,7 +376,9 @@
     padding: 0.2rem;
     border-radius: 12px;
     border: 1.5px solid rgba(255, 255, 255, 0.15);
-    background: rgba(8, 8, 8, 0.9);
+    background: rgba(8, 8, 8, 0.7);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
     overflow: hidden;
 }
 
