@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import {
   ChevronLeft,
   ChevronDown,
+  ChevronRight,
   Check,
   UserCircle,
   Settings as SettingsIcon,
@@ -132,7 +133,7 @@ type ThemeMode = "dark" | "light" | "system";
 const THEME_STORAGE_KEY = "gray_theme";
 const NOTIFICATIONS_STORAGE_PREFIX = "gray_notifications";
 const CONVERSATION_MEMORY_STORAGE_PREFIX = "gray_conversation_memory";
-const LINK_SHARING_STORAGE_PREFIX = "gray_link_sharing";
+const MODEL_IMPROVEMENT_STORAGE_PREFIX = "gray_model_improvement";
 
 type NotificationPreferences = {
   device: boolean;
@@ -189,7 +190,7 @@ export function SettingsModal({
 
   const notificationsStorageKey = `${NOTIFICATIONS_STORAGE_PREFIX}:${user?.id ?? "anon"}`;
   const conversationMemoryStorageKey = `${CONVERSATION_MEMORY_STORAGE_PREFIX}:${user?.id ?? "anon"}`;
-  const linkSharingStorageKey = `${LINK_SHARING_STORAGE_PREFIX}:${user?.id ?? "anon"}`;
+  const modelImprovementStorageKey = `${MODEL_IMPROVEMENT_STORAGE_PREFIX}:${user?.id ?? "anon"}`;
 
   const [notificationPreferences, setNotificationPreferences] = useState<NotificationPreferences>(
     DEFAULT_NOTIFICATION_PREFERENCES
@@ -197,8 +198,8 @@ export function SettingsModal({
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | "unsupported">(
     "unsupported"
   );
+  const [modelImprovementEnabled, setModelImprovementEnabled] = useState(false);
   const [conversationMemoryEnabled, setConversationMemoryEnabled] = useState(true);
-  const [linkSharingEnabled, setLinkSharingEnabled] = useState(false);
   // Preferences State
   const [theme, setTheme] = useState<ThemeMode>(() => resolveInitialTheme());
   const [responseLanguage, setResponseLanguage] = useState("auto");
@@ -311,10 +312,14 @@ export function SettingsModal({
       }
 
       try {
-        const storedLinks = window.localStorage.getItem(linkSharingStorageKey);
-        setLinkSharingEnabled(storedLinks === "1");
+        const storedModelImprovement = window.localStorage.getItem(modelImprovementStorageKey);
+        const resolvedValue =
+          typeof user?.improve_model_for_everyone === "boolean"
+            ? user.improve_model_for_everyone
+            : storedModelImprovement === "1";
+        setModelImprovementEnabled(resolvedValue);
       } catch {
-        setLinkSharingEnabled(false);
+        setModelImprovementEnabled(typeof user?.improve_model_for_everyone === "boolean" ? user.improve_model_for_everyone : false);
       }
     }
 
@@ -332,9 +337,9 @@ export function SettingsModal({
     };
   }, [
     conversationMemoryStorageKey,
+    modelImprovementStorageKey,
     notificationsStorageKey,
     isOpen,
-    linkSharingStorageKey,
     onClose,
   ]);
 
@@ -414,7 +419,7 @@ export function SettingsModal({
       window.localStorage.removeItem(THEME_STORAGE_KEY);
       window.localStorage.removeItem(notificationsStorageKey);
       window.localStorage.removeItem(conversationMemoryStorageKey);
-      window.localStorage.removeItem(linkSharingStorageKey);
+      window.localStorage.removeItem(modelImprovementStorageKey);
     } catch {
       // ignore storage failures
     }
@@ -548,6 +553,50 @@ export function SettingsModal({
             {renderNavItem("data_controls", t("Data Controls"), Database)}
             {renderNavItem("notifications", t("Notifications"), Bell)}
           </div>
+
+          {contextUsage?.conversationId ? (
+            <div className={styles.settingsSidebarFooter}>
+              <div className={styles.settingsSidebarFooterDivider} aria-hidden="true" />
+              <div className={styles.settingsSidebarContextHeader}>
+                <span className={styles.settingsSidebarContextTitle}>{t("Context")}</span>
+                <button
+                  type="button"
+                  className={styles.settingsSidebarContextAction}
+                  onClick={() => void handleCompressConversation()}
+                  disabled={contextActionState === "loading"}
+                >
+                  {contextActionState === "loading" ? t("Compressing...") : t("Compress")}
+                </button>
+              </div>
+              {(() => {
+                const usedTokens = Math.max(0, getContextUsageUsedTokens(contextUsage));
+                const visualizationLimit = getContextUsageVisualizationLimit(contextUsage);
+                const percentUsed =
+                  visualizationLimit > 0 ? clampPercent((usedTokens / visualizationLimit) * 100) : 0;
+                const widthPercent = percentUsed > 0 && percentUsed < 0.5 ? 0.5 : percentUsed;
+                const usedLabel = usedTokens.toLocaleString();
+                const limitLabel = visualizationLimit.toLocaleString();
+                const contextLimitLabel =
+                  typeof contextUsage.limit === "number" && contextUsage.limit > 0
+                    ? t("{used} of {limit} tokens used", { used: usedLabel, limit: limitLabel })
+                    : t("{used} tokens used (visualized against {limit})", { used: usedLabel, limit: limitLabel });
+
+                return (
+                  <>
+                    <div className={styles.settingsContextBar} aria-label={contextLimitLabel}>
+                      <div className={styles.settingsContextBarFill} style={{ width: `${widthPercent}%` }} />
+                    </div>
+                    <p className={styles.settingsSidebarContextMeta}>{contextLimitLabel}</p>
+                  </>
+                );
+              })()}
+              {contextActionMessage ? (
+                <p className={styles.settingsSidebarContextMeta} data-variant="muted">
+                  {contextActionMessage}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
         </aside>
 
         {/* Right Content */}
@@ -805,53 +854,6 @@ export function SettingsModal({
                 </div>
               </div>
 
-              {contextUsage?.conversationId ? (
-                <div className={styles.settingsSection}>
-                  <h3 className={styles.settingsSectionTitle}>{t("Context usage")}</h3>
-                  <p className={styles.settingsItemDescription} style={{ marginBottom: 12 }}>
-                    {t("Track how much of your conversation context you’ve used.")}
-                  </p>
-                  {(() => {
-                    const usedTokens = Math.max(0, getContextUsageUsedTokens(contextUsage));
-                    const visualizationLimit = getContextUsageVisualizationLimit(contextUsage);
-                    const percentUsed =
-                      visualizationLimit > 0 ? clampPercent((usedTokens / visualizationLimit) * 100) : 0;
-                    const widthPercent = percentUsed > 0 && percentUsed < 0.5 ? 0.5 : percentUsed;
-                    const usedLabel = usedTokens.toLocaleString();
-                    const limitLabel = visualizationLimit.toLocaleString();
-                    const contextLimitLabel =
-                      typeof contextUsage.limit === "number" && contextUsage.limit > 0
-                        ? t("{used} of {limit} tokens used", { used: usedLabel, limit: limitLabel })
-                        : t("{used} tokens used (visualized against {limit})", { used: usedLabel, limit: limitLabel });
-
-                    return (
-                      <>
-                        <div className={styles.settingsContextBar} aria-label={contextLimitLabel}>
-                          <div className={styles.settingsContextBarFill} style={{ width: `${widthPercent}%` }} />
-                        </div>
-                        <p className={styles.settingsItemDescription} style={{ marginTop: 10 }}>
-                          {contextLimitLabel}
-                        </p>
-                      </>
-                    );
-                  })()}
-                  {contextActionMessage ? (
-                    <p className={styles.settingsItemDescription} style={{ marginTop: 10 }}>
-                      {contextActionMessage}
-                    </p>
-                  ) : null}
-                  <div className={styles.settingsButtonGroup}>
-                    <button
-                      type="button"
-                      className={`${styles.settingsAction} ${styles.settingsPrimaryButton}`}
-                      onClick={() => void handleCompressConversation()}
-                      disabled={contextActionState === "loading"}
-                    >
-                      {contextActionState === "loading" ? t("Compressing...") : t("Compress conversation")}
-                    </button>
-                  </div>
-                </div>
-              ) : null}
             </>
           )}
 
@@ -862,6 +864,47 @@ export function SettingsModal({
               </div>
 
               <div className={styles.settingsSection}>
+                <div className={styles.settingsRow}>
+                  <div className={styles.settingsLabelGroup}>
+                    <span className={styles.settingsLabel}>{t("Improve the model for everyone")}</span>
+                  </div>
+                  <button
+                    type="button"
+                    className={styles.settingsRowLink}
+                    aria-pressed={modelImprovementEnabled}
+                    aria-label={t("Toggle Improve the model for everyone")}
+                    onClick={() => {
+                      const previous = modelImprovementEnabled;
+                      const next = !previous;
+                      setModelImprovementEnabled(next);
+                      if (typeof window !== "undefined") {
+                        try {
+                          window.localStorage.setItem(modelImprovementStorageKey, next ? "1" : "0");
+                        } catch {
+                          // ignore storage failures
+                        }
+                      }
+                      if (!user?.id) {
+                        return;
+                      }
+                      void updateUser({ improve_model_for_everyone: next }).catch((error) => {
+                        console.error("Failed to update model improvement preference:", error);
+                        setModelImprovementEnabled(previous);
+                        if (typeof window !== "undefined") {
+                          try {
+                            window.localStorage.setItem(modelImprovementStorageKey, previous ? "1" : "0");
+                          } catch {
+                            // ignore storage failures
+                          }
+                        }
+                      });
+                    }}
+                  >
+                    <span className={styles.settingsValue}>{modelImprovementEnabled ? t("On") : t("Off")}</span>
+                    <ChevronRight size={16} aria-hidden="true" />
+                  </button>
+                </div>
+
                 <div className={styles.settingsRow}>
                   <div className={styles.settingsLabelGroup}>
                     <span className={styles.settingsLabel}>{t("Conversation memory")}</span>
@@ -883,30 +926,6 @@ export function SettingsModal({
                       }
                     },
                     t("Toggle Conversation memory")
-                  )}
-                </div>
-
-                <div className={styles.settingsRow}>
-                  <div className={styles.settingsLabelGroup}>
-                    <span className={styles.settingsLabel}>{t("Allow chat link sharing")}</span>
-                    <span className={styles.settingsItemDescription}>
-                      {t("Allow sharing chats using only your chat link.")}
-                    </span>
-                  </div>
-                  {renderToggle(
-                    linkSharingEnabled,
-                    () => {
-                      const next = !linkSharingEnabled;
-                      setLinkSharingEnabled(next);
-                      if (typeof window !== "undefined") {
-                        try {
-                          window.localStorage.setItem(linkSharingStorageKey, next ? "1" : "0");
-                        } catch {
-                          // ignore storage failures
-                        }
-                      }
-                    },
-                    t("Toggle Link Sharing")
                   )}
                 </div>
               </div>

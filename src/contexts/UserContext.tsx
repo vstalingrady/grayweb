@@ -33,6 +33,7 @@ interface UserContextType {
     personalization_custom_instructions?: string | null;
     personalization_system_prompt_override?: string | null;
     maps_enabled?: boolean;
+    improve_model_for_everyone?: boolean;
     has_seen_general_chat?: boolean;
   }) => Promise<void>;
   refreshUser: () => Promise<void>;
@@ -125,6 +126,8 @@ const sanitizeCachedUser = (value: unknown): { user: User; timestamp: number } |
         ? raw.workspace_background_id
         : null,
     maps_enabled: typeof raw.maps_enabled === 'boolean' ? raw.maps_enabled : false,
+    improve_model_for_everyone:
+      typeof raw.improve_model_for_everyone === 'boolean' ? raw.improve_model_for_everyone : false,
     personalization_nickname:
       typeof raw.personalization_nickname === 'string' && raw.personalization_nickname.length > 0
         ? raw.personalization_nickname
@@ -556,6 +559,9 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
     }
     if (typeof userData.maps_enabled === 'boolean') {
       payload.maps_enabled = userData.maps_enabled;
+    }
+    if (typeof userData.improve_model_for_everyone === 'boolean') {
+      payload.improve_model_for_everyone = userData.improve_model_for_everyone;
     }
     if (typeof userData.has_seen_general_chat === 'boolean') {
       payload.has_seen_general_chat = userData.has_seen_general_chat;

@@ -868,6 +868,7 @@ _ensure_sqlite_columns("users", [
     ("subscription_expires_at", "DATETIME", None),
     ("has_seen_general_chat", "BOOLEAN", "0"),
     ("maps_enabled", "BOOLEAN", "0"),
+    ("improve_model_for_everyone", "BOOLEAN", "0"),
     ("daily_token_usage", "INTEGER", "0"),
     ("monthly_cost_usage", "REAL", "0"),
     ("weekly_cost_usage", "REAL", "0"),
@@ -884,6 +885,7 @@ _ensure_sqlite_columns("users", [
 ], backfill_nulls={
     "has_seen_general_chat": "0",
     "maps_enabled": "0",
+    "improve_model_for_everyone": "0",
     "daily_token_usage": "0",
     "monthly_cost_usage": "0",
     "weekly_cost_usage": "0",
@@ -1345,6 +1347,7 @@ class UserBase(BaseModel):
     plan_tier: Optional[str] = None
     workspace_background_id: Optional[str] = None
     maps_enabled: Optional[bool] = False
+    improve_model_for_everyone: Optional[bool] = False
     has_seen_general_chat: Optional[bool] = False
     personalization_nickname: Optional[str] = None
     personalization_occupation: Optional[str] = None
@@ -1369,6 +1372,7 @@ class UserUpdate(BaseModel):
     plan_tier: Optional[str] = None
     workspace_background_id: Optional[str] = None
     maps_enabled: Optional[bool] = None
+    improve_model_for_everyone: Optional[bool] = None
     has_seen_general_chat: Optional[bool] = None
     personalization_nickname: Optional[str] = None
     personalization_occupation: Optional[str] = None
@@ -10100,7 +10104,7 @@ async def get_dashboard_summary(
 @app.post("/payment/charge", response_model=PaymentChargeResponse, include_in_schema=False)
 async def create_payment_charge(
     request: PaymentRequest,
-    user: User = Depends(get_current_user)
+    user: Dict[str, Any] = Depends(get_current_user)
 ):
     """
     Create a transaction with Midtrans Core API.
@@ -10124,16 +10128,24 @@ async def create_payment_charge(
         "name": item_name
     }]
 
+    user_id = user.get("id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="User not found")
+
     # 2. Customer Details
+    full_name = (user.get("full_name") or "").strip()
+    first_name = full_name.split(" ")[0] if full_name else "User"
+    last_name = " ".join(full_name.split(" ")[1:]) if " " in full_name else ""
+    email = (user.get("email") or "").strip()
     customer_details = {
-        "first_name": user.full_name.split(" ")[0] if user.full_name else "User",
-        "last_name": " ".join(user.full_name.split(" ")[1:]) if user.full_name and " " in user.full_name else "",
-        "email": user.email,
+        "first_name": first_name,
+        "last_name": last_name,
+        "email": email,
         # "phone": "08123456789" # Optional, if collected
     }
 
     # 3. Generate Order ID
-    order_id = f"ORDER-{user.id}-{int(datetime.now().timestamp())}"
+    order_id = f"ORDER-{user_id}-{int(datetime.now().timestamp())}"
 
     # 4. Bank Transfer / Credit Card Args
     bank_args = None
@@ -10163,7 +10175,7 @@ async def create_payment_charge(
     # 5. Create Transaction in Database (Pending)
     try:
         query = transactions.insert().values(
-            user_id=user.id,
+            user_id=user_id,
             order_id=order_id,
             amount=amount,
             status="pending",

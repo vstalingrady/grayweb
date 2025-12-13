@@ -31,38 +31,38 @@ type FeatureItem = {
 
 const FREE_FEATURES: FeatureItem[] = [
     {
-        label: "Gray Lite only",
+        label: "Fast model",
         icon: Zap,
-        subtext: "Grok 4.1 Fast",
+        subtext: "Grok Fast",
     },
     { label: "Limited daily messages", icon: MessageSquare },
     { label: "14-day chat memory", icon: Pin },
-    { label: "Premade proactivity routines", icon: Clock },
-    { label: "Pulse only", icon: CalendarClock },
-    { label: "Discord community support", icon: Users },
+    { label: "Simple daily routines", icon: Clock },
+    { label: "Daily pulse", icon: CalendarClock },
+    { label: "Community support (Discord)", icon: Users },
 ];
 
 export const VOYAGER_FEATURES: FeatureItem[] = [
     {
-        label: "Model switcher",
+        label: "Choose your model",
         icon: Shuffle,
-        subtext: "Claude Haiku/Sonnet, Gemini 3 Pro, GPT 5.2, DeepSeek, Kimi K2",
+        subtext: "Claude, GPT, Gemini, DeepSeek, Kimi",
     },
     {
-        label: "5x more message credits",
+        label: "More messages",
         icon: MessageSquare,
     },
     {
-        label: "Full context memory",
+        label: "Longer memory",
         icon: Pin,
     },
     {
-        label: "Calendar-powered focus routines",
+        label: "Calendar + focus routines",
         icon: Clock,
     },
-    { label: "Reasoning mode toggle", icon: Brain },
+    { label: "Deep thinking mode", icon: Brain },
     {
-        label: "Google Calendar, Gmail, Notion integrations",
+        label: "Integrations (Google Calendar, Gmail, Notion)",
         icon: CalendarClock,
         subtext: "(coming soon)",
     },
@@ -71,19 +71,19 @@ export const VOYAGER_FEATURES: FeatureItem[] = [
 
 export const PIONEER_FEATURES: FeatureItem[] = [
     {
-        label: "Claude Opus 4.5 + GPT 5.2 Pro access",
+        label: "Top-tier models",
         icon: Zap,
-        subtext: "Most capable Claude + next-gen reasoning model",
+        subtext: "Claude Opus + GPT Pro",
     },
     {
-        label: "25x more message credits",
+        label: "Highest message limits",
         icon: MessageSquare,
-        subtext: "Heavy usage across all models",
+        subtext: "Built for heavy daily use",
     },
-    { label: "Expanded reasoning budget", icon: InfinityIcon },
-    { label: "Priority response during peaks", icon: Headphones },
-    { label: "Early access to experimental features", icon: FlaskConical },
-    { label: "Reference library (docs/files RAG)", icon: Database },
+    { label: "More deep thinking", icon: InfinityIcon },
+    { label: "Priority during busy times", icon: Headphones },
+    { label: "Early access", icon: FlaskConical },
+    { label: "Upload docs and ask questions", icon: Database },
     { label: "Everything in Voyager", icon: Plus, variant: "inherit" },
 ];
 
@@ -93,8 +93,8 @@ const BILLING_CYCLES = [
 ];
 
 const VOYAGER_PRICING = {
-    monthly: { price: "Rp 77.000,-", cadence: "month" },
-    annual: { price: "Rp 777.000,-", cadence: "year" },
+    monthly: { price: "Rp 177.000,-", cadence: "month" },
+    annual: { price: "Rp 1.777.000,-", cadence: "year" },
 } as const;
 
 const PIONEER_PRICING = {
@@ -150,10 +150,9 @@ export function PricingPlansSection() {
     return (
         <>
             <header className={styles.hero}>
-                <h1 className={styles.heroTitle}>Maximize your potential</h1>
+                <h1 className={styles.heroTitle}>A proactive support system for your goals</h1>
                 <p className={styles.heroSubhead}>
-                    Choose the plan that matches how often you rely on Gray. Pay monthly or save when you
-                    commit annually.
+                    Start free. Upgrade when you want more messages, longer memory, and integrations.
                 </p>
             </header>
 
@@ -190,7 +189,7 @@ export function PricingPlansSection() {
                         <div className={styles.cardIntro}>
                             <header className={styles.cardHeader}>
                                 <h2>Scout</h2>
-                                <p>Try Gray Pulse Lite with limited context and preset routines.</p>
+                                <p>Try Gray for free. Great for getting the feel without committing.</p>
                             </header>
                             <div className={styles.priceBlock}>
                                 <span className={styles.priceValue}>Free</span>
@@ -221,7 +220,7 @@ export function PricingPlansSection() {
                         <div className={styles.cardIntro}>
                             <header className={styles.cardHeader}>
                                 <h2>Voyager</h2>
-                                <p>Unlock model switching, integrations, and customizable automations.</p>
+                                <p>For real daily use: more messages, longer memory, and calendar routines.</p>
                             </header>
                             <div className={styles.priceHeader}>
                                 <div className={styles.priceBlock}>
@@ -262,7 +261,7 @@ export function PricingPlansSection() {
                         <div className={styles.cardIntro}>
                             <header className={styles.cardHeader}>
                                 <h2>Pioneer</h2>
-                                <p>Uncapped context, models, and proactive workflows for daily reliance.</p>
+                                <p>For heavy users: top limits, top models, and early access to new features.</p>
                             </header>
                             <div className={styles.priceHeader}>
                                 <div className={styles.priceBlock}>

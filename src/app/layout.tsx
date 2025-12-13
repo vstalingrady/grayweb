@@ -5,7 +5,6 @@ import ApiNetworkErrorHandler from "@/components/ApiNetworkErrorHandler";
 import { readServerSession } from "@/lib/auth/server";
 import { GrayProviders } from "@/components/GrayProviders";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
-import { Plus_Jakarta_Sans, IBM_Plex_Mono } from "next/font/google";
 
 const resolveMetadataBase = (): URL | undefined => {
   const candidate =
@@ -72,19 +71,6 @@ export const viewport = {
   viewportFit: 'cover',
   interactiveWidget: 'resizes-content',
 };
-
-const plusJakartaSans = Plus_Jakarta_Sans({
-  subsets: ["latin"],
-  variable: "--font-sans",
-  display: "swap",
-});
-
-const ibmPlexMono = IBM_Plex_Mono({
-  subsets: ["latin"],
-  weight: ["100", "200", "300", "400", "500", "600", "700"],
-  variable: "--font-mono",
-  display: "swap",
-});
 
 export default async function RootLayout({
   children,
@@ -180,10 +166,9 @@ export default async function RootLayout({
     })();
   `;
   return (
-    <html
+   <html
       lang="en"
       suppressHydrationWarning
-      className={`${plusJakartaSans.variable} ${ibmPlexMono.variable}`}
     >
       <head>
         <script dangerouslySetInnerHTML={{ __html: reactDevtoolsHotfix }} suppressHydrationWarning />

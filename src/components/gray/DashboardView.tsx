@@ -25,6 +25,19 @@ import { requestNotificationPermission } from "@/lib/notificationUtils";
 import { useUser } from "@/contexts/UserContext";
 import { useI18n } from "@/contexts/I18nContext";
 
+import {
+  CUSTOM_PROACTIVITY_ID,
+  DEFAULT_CUSTOM_SETTINGS,
+  DEFAULT_PROACTIVITY_TIME,
+  PROACTIVITY_PRESETS,
+  type ProactivityPreset,
+  dedupeTimes,
+  formatCustomTimeLabel,
+  type CustomSettingsState,
+  getProactivityTimes,
+} from "./proactivityUtils";
+import { ProactivitySettingsModal } from "./ProactivitySettingsModal";
+
 const isSameDay = (a: Date, b: Date) =>
   a.getFullYear() === b.getFullYear() &&
   a.getMonth() === b.getMonth() &&
@@ -93,195 +106,12 @@ const toDateKey = (date: Date) => {
   return `${year}-${month}-${day}`;
 };
 
-const DEFAULT_PROACTIVITY_TIME = "09:00";
-
-type ProactivityPreset = {
-  id: string;
-  title: string;
-  label: string;
-  cadence: string;
-  description: string;
-  summary: string;
-  defaultTime?: string;
-  defaultTimes?: string[];
-  recommendedFor: string;
-};
-
-const CUSTOM_PROACTIVITY_ID = "proactivity-custom";
-
-const PROACTIVITY_PRESETS: ProactivityPreset[] = [
-  {
-    id: "proactivity-frequent",
-    title: "Frequent",
-    label: "Check-ins",
-    cadence: "Frequent",
-    description: "Built for launch mode. Morning, midday, and evening nudges to keep momentum compounding.",
-    summary: "Three structured touchpoints each day with action follow-ups.",
-    recommendedFor: "Teams sprinting toward a release window or coordinating across time zones.",
-    defaultTime: "09:00",
-    defaultTimes: ["09:00", "14:00", "18:00"],
-  },
-  {
-    id: "proactivity-daily",
-    title: "Stay Close",
-    label: "Check-ins",
-    cadence: "Daily",
-    description: "One guided check-in every morning plus smart reminders when things drift.",
-    summary: "Daily rhythm that keeps work moving without overwhelming signal.",
-    recommendedFor: "Founders or leads who want a steady async cadence.",
-    defaultTime: "09:00",
-  },
-  {
-    id: "proactivity-manual",
-    title: "Manual Only",
-    label: "Check-ins",
-    cadence: "Manual",
-    description: "Gray stays quiet until you ask. All proactive nudges are paused.",
-    summary: "Full manual control with quick access to on-demand help.",
-    recommendedFor: "Exploration phases or when you need a temporary quiet period.",
-    defaultTime: "—",
-  },
-];
-
-type CustomSettingsState = {
-  times: string[];
-};
-
-const DEFAULT_CUSTOM_SETTINGS: CustomSettingsState = {
-  times: [DEFAULT_PROACTIVITY_TIME],
-};
-
 type DashboardSectionSpec = {
   id: string;
   title: string;
   subtitle: string;
   layout?: "stacked";
   cards: Array<{ id: string; element: ReactNode }>;
-};
-
-const formatCustomTimeLabel = (time: string) => {
-  if (!time || time === "—") {
-    return "Flexible";
-  }
-  const [rawHour, rawMinute] = time.split(":").map((value) => Number.parseInt(value, 10));
-  if (Number.isNaN(rawHour) || Number.isNaN(rawMinute)) {
-    return time;
-  }
-  const date = new Date();
-  date.setHours(rawHour, rawMinute, 0, 0);
-  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-};
-
-const normalizeTimeForInput = (value: string | null | undefined) => {
-  if (!value) {
-    return DEFAULT_PROACTIVITY_TIME;
-  }
-  const trimmed = value.trim();
-  const match = trimmed.match(/^(\d{1,2}):(\d{2})(?:\s*(AM|PM))?$/i);
-  if (!match) {
-    return trimmed.slice(0, 5);
-  }
-  let hours = Number.parseInt(match[1], 10);
-  const minutes = Number.parseInt(match[2], 10);
-  const period = match[3]?.toUpperCase();
-  if (period === "AM") {
-    if (hours === 12) {
-      hours = 0;
-    }
-  } else if (period === "PM") {
-    if (hours !== 12) {
-      hours += 12;
-    }
-  }
-  const clampedHours = Math.max(0, Math.min(23, hours));
-  const clampedMinutes = Math.max(0, Math.min(59, minutes));
-  return `${String(clampedHours).padStart(2, "0")}:${String(clampedMinutes).padStart(2, "0")}`;
-};
-
-type TimePickerPeriod = "AM" | "PM";
-
-const TIME_PICKER_HOURS = Array.from({ length: 12 }, (_, index) => String(index + 1).padStart(2, "0"));
-const TIME_PICKER_MINUTES = Array.from({ length: 60 }, (_, index) => String(index).padStart(2, "0"));
-const TIME_PICKER_PERIODS: TimePickerPeriod[] = ["AM", "PM"];
-const TIME_PICKER_SUGGESTIONS: { label: string; times: string[] }[] = [
-  { label: "Morning", times: ["06:30", "07:30", "09:00", "10:30"] },
-  { label: "Midday", times: ["11:30", "12:00", "13:00"] },
-  { label: "Afternoon", times: ["15:00", "16:00", "17:30"] },
-  { label: "Evening", times: ["18:00", "19:00", "20:30"] },
-];
-
-const toTimePickerParts = (value: string) => {
-  const normalized = normalizeTimeForInput(value);
-  const [rawHour, rawMinute] = normalized.split(":").map((part) => Number.parseInt(part, 10));
-  if (Number.isNaN(rawHour) || Number.isNaN(rawMinute)) {
-    return { hour: "09", minute: "00", period: "AM" as TimePickerPeriod };
-  }
-  const period: TimePickerPeriod = rawHour >= 12 ? "PM" : "AM";
-  let hour12 = rawHour % 12;
-  if (hour12 === 0) {
-    hour12 = 12;
-  }
-  return {
-    hour: String(hour12).padStart(2, "0"),
-    minute: String(rawMinute).padStart(2, "0"),
-    period,
-  };
-};
-
-const fromTimePickerParts = (hour: string, minute: string, period: TimePickerPeriod) => {
-  let hourNumber = Number.parseInt(hour, 10);
-  if (Number.isNaN(hourNumber) || hourNumber < 1 || hourNumber > 12) {
-    hourNumber = 12;
-  }
-  let resolvedHour = hourNumber % 12;
-  if (period === "PM") {
-    resolvedHour += 12;
-  }
-  const minuteNumber = Number.parseInt(minute, 10);
-  const resolvedMinute = Math.max(0, Math.min(59, Number.isNaN(minuteNumber) ? 0 : minuteNumber));
-  return `${String(resolvedHour).padStart(2, "0")}:${String(resolvedMinute).padStart(2, "0")}`;
-};
-
-const dedupeTimes = (times: string[]) =>
-  times
-    .map((value) => normalizeTimeForInput(value))
-    .filter((value, index, array) => array.indexOf(value) === index)
-    .sort();
-
-const findNextCustomTime = (existingTimes: string[]): string => {
-  const normalizedExisting = dedupeTimes(existingTimes);
-  const existingSet = new Set(normalizedExisting);
-  const base = normalizedExisting[normalizedExisting.length - 1] ?? DEFAULT_PROACTIVITY_TIME;
-  const [baseHour, baseMinute] = base.split(":").map((value) => Number.parseInt(value, 10));
-  const baseTotalMinutes =
-    (Number.isFinite(baseHour) && Number.isFinite(baseMinute) ? baseHour * 60 + baseMinute : 9 * 60) %
-    (24 * 60);
-  const stepMinutes = 90;
-
-  for (let index = 1; index <= Math.ceil((24 * 60) / stepMinutes); index += 1) {
-    const totalMinutes = (baseTotalMinutes + index * stepMinutes) % (24 * 60);
-    const hour = Math.floor(totalMinutes / 60);
-    const minute = totalMinutes % 60;
-    const candidate = `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
-    if (!existingSet.has(candidate)) {
-      return candidate;
-    }
-  }
-
-  return DEFAULT_PROACTIVITY_TIME;
-};
-
-const getProactivityTimes = (item: ProactivityItem | null | undefined) => {
-  if (!item) {
-    return [];
-  }
-  if (Array.isArray(item.times) && item.times.length > 0) {
-    return dedupeTimes(item.times);
-  }
-  if (item.time) {
-    return dedupeTimes([item.time]);
-  }
-  return [];
 };
 
 type GrayDashboardViewProps = {
@@ -632,15 +462,16 @@ export function GrayDashboardView({
     }
     return "";
   });
-  const customTimes = customSettings.times;
-  const [editingCustomTimeIndex, setEditingCustomTimeIndex] = useState<number | null>(null);
-  const [editingCustomTimeDraft, setEditingCustomTimeDraft] = useState<string>("");
+  /* Helper vars for modal UI */
+
   const formattedProactivityTimes = useMemo(
     () => activeProactivityTimes.map((time) => formatCustomTimeLabel(time)),
     [activeProactivityTimes]
   );
+
   const proactivityScheduleEntries = useMemo(() => {
     const todayKey = toDateKey(currentDate);
+    // Safe access to keySet, assumed to be part of props or overlapping context
     const keySet = proactivityDeliveryKeys;
     if (activeProactivityTimes.length > 0) {
       return activeProactivityTimes.map((time, index) => ({
@@ -659,7 +490,13 @@ export function GrayDashboardView({
       ];
     }
     return [];
-  }, [activeProactivityTimes, formattedProactivityTimes, activeProactivityTime, proactivityDeliveryKeys, currentDate]);
+  }, [
+    activeProactivityTimes,
+    formattedProactivityTimes,
+    activeProactivityTime,
+    proactivityDeliveryKeys,
+    currentDate,
+  ]);
   const proactivityButtonLabel = displayProactivity ? t("Configure") : t("Setup");
   const canApplyCustom = customTimes.length > 0;
   const canOpenProactivityModal = Boolean(onProactivitySelect);
@@ -753,113 +590,7 @@ export function GrayDashboardView({
     }
   }, [isProactivityModalOpen]);
 
-  const handleCustomReset = useCallback(() => {
-    setCustomSettings({
-      times:
-        activeProactivityTimes.length > 0
-          ? activeProactivityTimes
-          : [...DEFAULT_CUSTOM_SETTINGS.times],
-    });
-    setEditingCustomTimeIndex(null);
-    setEditingCustomTimeDraft("");
-  }, [activeProactivityTimes]);
-
-  const applyCustomProactivity = useCallback(
-    (nextTimes: string[]) => {
-      if (!onProactivitySelect) {
-        return;
-      }
-      const sortedTimes = dedupeTimes(nextTimes);
-      const firstTime = sortedTimes[0] ?? DEFAULT_PROACTIVITY_TIME;
-      const formattedTimes = sortedTimes.map((time) => formatCustomTimeLabel(time)).join(", ");
-      const descriptionParts = [`${sortedTimes.length} touchpoints`, formattedTimes];
-      onProactivitySelect({
-        id: CUSTOM_PROACTIVITY_ID,
-        label: "Custom plan",
-        description: descriptionParts.join(" • "),
-        cadence: "Custom",
-        time: firstTime,
-        times: sortedTimes,
-      });
-    },
-    [onProactivitySelect]
-  );
-
-  const handleCustomApply = useCallback(() => {
-    applyCustomProactivity(customTimes);
-    setIsProactivityModalOpen(false);
-    setEditingCustomTimeIndex(null);
-    setEditingCustomTimeDraft("");
-  }, [
-    applyCustomProactivity,
-    customTimes,
-  ]);
-
-  const handleCustomTimeChange = useCallback((value: string) => {
-    setEditingCustomTimeDraft(value);
-  }, []);
-
-  const commitCustomTimeEdit = useCallback(
-    (index: number, draftValue: string) => {
-      // Update local custom settings state.
-      setCustomSettings((prev) => {
-        const nextTimes = [...prev.times];
-        const previousValue = nextTimes[index] ?? DEFAULT_PROACTIVITY_TIME;
-        const normalized = normalizeTimeForInput(draftValue || previousValue);
-        nextTimes[index] = normalized;
-        return {
-          ...prev,
-          times: dedupeTimes(nextTimes),
-        };
-      });
-      setEditingCustomTimeIndex(null);
-      setEditingCustomTimeDraft("");
-      // Notify parent about the updated schedule using the latest customTimes snapshot.
-      const baseTimes = customTimes;
-      const previousValue = baseTimes[index] ?? DEFAULT_PROACTIVITY_TIME;
-      const normalized = normalizeTimeForInput(draftValue || previousValue);
-      const nextTimes = [...baseTimes];
-      nextTimes[index] = normalized;
-      const deduped = dedupeTimes(nextTimes);
-      applyCustomProactivity(deduped);
-    },
-    [applyCustomProactivity, customTimes]
-  );
-  const handleCustomTimeEdit = useCallback((index: number) => {
-    setEditingCustomTimeIndex(index);
-    setEditingCustomTimeDraft(customTimes[index] ?? DEFAULT_PROACTIVITY_TIME);
-  }, [customTimes]);
-
-  const handleCustomTimeAdd = useCallback(() => {
-    const nextTime = findNextCustomTime(customTimes);
-    setCustomSettings((prev) => ({
-      ...prev,
-      times: [...prev.times, nextTime],
-    }));
-    const nextTimes = [...customTimes, nextTime];
-    setEditingCustomTimeIndex(nextTimes.length - 1);
-    setEditingCustomTimeDraft(nextTime);
-    applyCustomProactivity(nextTimes);
-  }, [applyCustomProactivity, customTimes]);
-
-  const handleCustomTimeRemove = useCallback((index: number) => {
-    setCustomSettings((prev) => {
-      if (prev.times.length <= 1) {
-        return prev;
-      }
-      const nextTimes = prev.times.filter((_, currentIndex) => currentIndex !== index);
-      const finalTimes = nextTimes.length > 0 ? nextTimes : [...DEFAULT_CUSTOM_SETTINGS.times];
-      return {
-        ...prev,
-        times: finalTimes,
-      };
-    });
-    setEditingCustomTimeIndex(null);
-    setEditingCustomTimeDraft("");
-    const nextTimes = customTimes.filter((_, currentIndex) => currentIndex !== index);
-    const finalTimes = nextTimes.length > 0 ? nextTimes : [...DEFAULT_CUSTOM_SETTINGS.times];
-    applyCustomProactivity(finalTimes);
-  }, [applyCustomProactivity, customTimes]);
+  /* Removed custom time handlers as they are now in ProactivitySettingsModal */
 
   const handlePulseDateSelect = useCallback(
     (nextDate: Date) => {
@@ -930,48 +661,11 @@ export function GrayDashboardView({
     setIsProactivityModalOpen(true);
   }, [onProactivitySelect]);
 
-  const handleProactivityPresetSelect = useCallback(
-    (preset: ProactivityPreset) => {
-      if (!onProactivitySelect) {
-        return;
-      }
-      const presetTimes =
-        preset.defaultTimes && preset.defaultTimes.length > 0
-          ? dedupeTimes(preset.defaultTimes)
-          : dedupeTimes([preset.defaultTime ?? activeProactivityTime]);
-      const primaryTime = presetTimes[0] ?? DEFAULT_PROACTIVITY_TIME;
-      onProactivitySelect({
-        id: preset.id,
-        label: preset.label,
-        description: preset.description,
-        cadence: preset.cadence,
-        time: primaryTime,
-        times: presetTimes,
-      });
-    },
-    [activeProactivityTime, onProactivitySelect]
-  );
-
   const handleCloseProactivityModal = useCallback(() => {
     setIsProactivityModalOpen(false);
     setEditingCustomTimeIndex(null);
     setEditingCustomTimeDraft("");
   }, []);
-
-  const handlePresetSelectChange = useCallback(
-    (event: ChangeEvent<HTMLSelectElement>) => {
-      const nextPresetId = event.target.value;
-      setSelectedPresetId(nextPresetId);
-      if (!nextPresetId || nextPresetId === CUSTOM_PROACTIVITY_ID) {
-        return;
-      }
-      const preset = PROACTIVITY_PRESETS.find((option) => option.id === nextPresetId);
-      if (preset) {
-        handleProactivityPresetSelect(preset);
-      }
-    },
-    [handleProactivityPresetSelect]
-  );
 
   const handleModalProactivityRemove = useCallback(() => {
     if (!onProactivityRemove) {
@@ -1006,12 +700,23 @@ export function GrayDashboardView({
         return;
       }
 
-      applyCustomProactivity(nextTimes);
+      const sortedTimes = dedupeTimes(nextTimes);
+      const firstTime = sortedTimes[0] ?? DEFAULT_PROACTIVITY_TIME;
+      const formattedTimes = sortedTimes.map((time) => formatCustomTimeLabel(time)).join(", ");
+      const descriptionParts = [`${sortedTimes.length} touchpoints`, formattedTimes];
+
+      onProactivitySelect({
+        id: CUSTOM_PROACTIVITY_ID,
+        label: "Custom plan",
+        description: descriptionParts.join(" • "),
+        cadence: "Custom",
+        time: firstTime,
+        times: sortedTimes,
+      });
     },
     [
       activeProactivityTimes,
       activeProactivityTime,
-      applyCustomProactivity,
       handleModalProactivityRemove,
       onProactivitySelect,
     ]
@@ -1085,162 +790,17 @@ export function GrayDashboardView({
     setIsMounted(true);
   }, []);
 
-  const proactivityModalContent = !isProactivityModalOpen
-    ? null
-    : (
-      <div
-        className={styles.proactivityModalBackdrop}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="proactivityModalHeading"
-      >
-        <div className={styles.proactivityModal}>
-          <header className={styles.proactivityModalHeader}>
-            <div className={styles.proactivityModalHeading}>
-              <span className={styles.proactivityModalEyebrow} id="proactivityModalHeading">
-                {t("Proactivity")}
-              </span>
-            </div>
-            <button
-              type="button"
-              className={styles.proactivityModalClose}
-              onClick={handleCloseProactivityModal}
-              aria-label={t("Close proactivity options")}
-            >
-              <X size={16} />
-            </button>
-          </header>
-          <label
-            id="proactivityPresetLabel"
-            htmlFor="proactivityPresetSelect"
-            className={styles.proactivityPresetLabel}
-          >
-            {t("Preset cadence")}
-          </label>
-          <div className={styles.proactivityPresetSelectWrapper}>
-            <select
-              id="proactivityPresetSelect"
-              className={styles.proactivityPresetSelect}
-              value={selectedPresetId}
-              onChange={handlePresetSelectChange}
-            >
-              <option value="">{t("Select a preset")}</option>
-              {PROACTIVITY_PRESETS.map((preset) => (
-                <option key={preset.id} value={preset.id}>
-                  {t(preset.title)}
-                </option>
-              ))}
-              <option value={CUSTOM_PROACTIVITY_ID}>{t("Custom")}</option>
-            </select>
-            <ChevronDown size={14} className={styles.proactivityPresetSelectIcon} aria-hidden="true" />
-          </div>
-          {isCustomPresetSelected ? (
-            <section className={styles.proactivityCustomSection}>
-              <header className={styles.proactivityCustomHeader}>
-                <div>
-                  <span className={styles.proactivityCustomEyebrow}>{t("Custom setup")}</span>
-                </div>
-                <button
-                  type="button"
-                  className={styles.proactivityCustomReset}
-                  onClick={handleCustomReset}
-                >
-                  {t("Reset")}
-                </button>
-              </header>
-              <div className={styles.proactivityCustomControls}>
-                <div className={styles.proactivityCustomField}>
-                  <div className={styles.proactivityTimes}>
-                    {customTimes.map((time, index) => (
-                      <div key={`${time}-${index}`} className={styles.proactivityTimeListItem}>
-                        {editingCustomTimeIndex === index ? (
-                          <input
-                            type="time"
-                            value={editingCustomTimeDraft}
-                            onChange={(event) => handleCustomTimeChange(event.target.value)}
-                            className={styles.proactivityTimeInput}
-                            autoFocus
-                            step={300}
-                            onBlur={() => commitCustomTimeEdit(index, editingCustomTimeDraft)}
-                            onKeyDown={(event) => {
-                              if (event.key === "Enter" || event.key === "Escape") {
-                                event.preventDefault();
-                                commitCustomTimeEdit(index, editingCustomTimeDraft);
-                              }
-                            }}
-                            aria-label={t("Edit custom start time {time}", { time })}
-                          />
-                        ) : (
-                          <button
-                            type="button"
-                            className={styles.proactivityTimeListButton}
-                            onClick={() => handleCustomTimeEdit(index)}
-                          >
-                            <span className={styles.proactivityTimeLabel}>
-                              {t(formatCustomTimeLabel(time))}
-                            </span>
-                          </button>
-                        )}
-                        <div className={styles.proactivityTimeActions}>
-                          <button
-                            type="button"
-                            className={styles.listItemActionButton}
-                            onClick={() => handleCustomTimeEdit(index)}
-                            aria-label={t("Edit custom start time {time}", { time })}
-                          >
-                            <Pencil size={12} />
-                          </button>
-                          <button
-                            type="button"
-                            className={styles.listItemActionButton}
-                            onClick={() => handleCustomTimeRemove(index)}
-                            aria-label={t("Remove custom start time {time}", { time })}
-                            disabled={customTimes.length <= 1}
-                          >
-                            <X size={12} />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                    <button
-                      type="button"
-                      className={styles.proactivityTimeAdd}
-                      onClick={handleCustomTimeAdd}
-                    >
-                      <Plus size={14} />
-                      <span>{t("Add time")}</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </section>
-          ) : null}
-          <footer className={styles.proactivityModalFooter}>
-            {showModalRemoveButton ? (
-              <button
-                type="button"
-                className={styles.proactivityModalSecondary}
-                onClick={handleModalProactivityRemove}
-              >
-                {modalRemoveLabel}
-              </button>
-            ) : null}
-            <button
-              type="button"
-              className={styles.proactivityModalDismiss}
-              onClick={handleCloseProactivityModal}
-            >
-              {t("Done")}
-            </button>
-          </footer>
-        </div>
-      </div>
-    );
-
-  const proactivityModal =
-    isMounted && isProactivityModalOpen && typeof document !== "undefined"
-      ? createPortal(proactivityModalContent, document.body)
-      : null;
+  const proactivityModal = onProactivitySelect ? (
+    <ProactivitySettingsModal
+      isOpen={isProactivityModalOpen}
+      onClose={handleCloseProactivityModal}
+      activeProactivity={displayProactivity}
+      activeProactivityTimes={activeProactivityTimes}
+      onSelectProactivity={onProactivitySelect}
+      onRemoveProactivity={onProactivityRemove}
+      showRemoveButton={Boolean(onProactivityRemove && (displayProactivity ?? proactivityFallback))}
+    />
+  ) : null;
 
   const renderProactivityCard = (additionalClassName?: string) => (
     <article

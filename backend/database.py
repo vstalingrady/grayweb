@@ -74,6 +74,7 @@ users = sqlalchemy.Table(
     sqlalchemy.Column("initials", sqlalchemy.String),
     sqlalchemy.Column("workspace_background_id", sqlalchemy.String, nullable=True),
     sqlalchemy.Column("maps_enabled", sqlalchemy.Boolean, default=False),
+    sqlalchemy.Column("improve_model_for_everyone", sqlalchemy.Boolean, default=False),
     sqlalchemy.Column("personalization_nickname", sqlalchemy.String, nullable=True),
     sqlalchemy.Column("personalization_occupation", sqlalchemy.String, nullable=True),
     sqlalchemy.Column("personalization_about", sqlalchemy.String, nullable=True),

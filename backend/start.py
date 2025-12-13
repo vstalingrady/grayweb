@@ -120,6 +120,7 @@ if __name__ == "__main__":
         sqlalchemy.Column("role", sqlalchemy.String, default="user"),
         sqlalchemy.Column("plan_tier", sqlalchemy.String, nullable=True),
         sqlalchemy.Column("initials", sqlalchemy.String),
+        sqlalchemy.Column("improve_model_for_everyone", sqlalchemy.Boolean, default=False),
         sqlalchemy.Column("personalization_nickname", sqlalchemy.String, nullable=True),
         sqlalchemy.Column("personalization_occupation", sqlalchemy.String, nullable=True),
         sqlalchemy.Column("personalization_about", sqlalchemy.String, nullable=True),
@@ -506,6 +507,7 @@ if __name__ == "__main__":
     ensure_column("habits", "description", "VARCHAR")
     ensure_column("chat_sessions", "scope", "VARCHAR DEFAULT 'thread'")
     ensure_column("users", "subscription_expires_at", "DATETIME")
+    ensure_column("users", "improve_model_for_everyone", "BOOLEAN DEFAULT 0")
 
     migration_time = (time.time() - migration_start) * 1000
     if migrations_performed:

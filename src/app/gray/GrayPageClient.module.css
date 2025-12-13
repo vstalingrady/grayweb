@@ -2350,7 +2350,12 @@
 .sidebarHistoryLink:hover,
 .sidebarHistoryLink:focus-visible {
   color: rgba(255, 255, 255, 0.92);
-  background: rgba(255, 255, 255, 0.08);
+  background: linear-gradient(
+    to left,
+    rgba(255, 255, 255, 0.12),
+    rgba(255, 255, 255, 0.06) 55%,
+    rgba(255, 255, 255, 0) 100%
+  );
   outline: none;
 }
 
@@ -11311,6 +11316,67 @@ h1.greeting {
   opacity: 0.8;
 }
 
+.settingsSidebarFooter {
+  margin-top: auto;
+  padding: 0 12px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.settingsSidebarFooterDivider {
+  height: 1px;
+  width: 100%;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.settingsSidebarContextHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.settingsSidebarContextTitle {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: rgba(245, 245, 245, 0.9);
+}
+
+.settingsSidebarContextAction {
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(245, 245, 245, 0.85);
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+
+.settingsSidebarContextAction:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.14);
+  color: #fff;
+}
+
+.settingsSidebarContextAction:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.settingsSidebarContextMeta {
+  margin: 0;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  color: rgba(245, 245, 245, 0.65);
+}
+
+.settingsSidebarContextMeta[data-variant="muted"] {
+  color: rgba(245, 245, 245, 0.55);
+}
+
 .settingsContent {
   padding: 48px 64px;
   overflow-y: auto;
@@ -11404,6 +11470,27 @@ h1.greeting {
 .settingsValue {
   font-size: 0.8rem;
   color: #a1a1aa;
+}
+
+.settingsRowLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  background: transparent;
+  padding: 6px 0;
+  cursor: pointer;
+  color: #a1a1aa;
+}
+
+.settingsRowLink:hover {
+  color: #ededed;
+}
+
+.settingsRowLink:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.28);
+  outline-offset: 3px;
+  border-radius: 6px;
 }
 
 .settingsAction {

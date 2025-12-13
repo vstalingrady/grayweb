@@ -39,8 +39,8 @@ declare global {
 }
 
 const VOYAGER_PRICING = {
-    monthly: { price: "Rp 77.000,-", fullPrice: "Rp 77.000" },
-    annual: { price: "Rp 64.750,-", fullPrice: "Rp 777.000" }, // 777k / 12 ~ 64.75k
+    monthly: { price: "Rp 177.000,-", fullPrice: "Rp 177.000" },
+    annual: { price: "Rp 148.083,-", fullPrice: "Rp 1.777.000" }, // 1.777m / 12 ≈ 148.083k
 } as const;
 
 const PIONEER_PRICING = {

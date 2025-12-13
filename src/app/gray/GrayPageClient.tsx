@@ -51,7 +51,7 @@ import { DEFAULT_EVENT_COLOR } from "./constants";
 import { toDateKey, normalizeProactivityTimes, primaryProactivityTime, normalizeProactivityChannels } from "./utils";
 import { UsageLimitBanner } from "@/components/gray/UsageLimitBanner";
 // Type-only import
-import type { ChatDraftControls } from "@/components/gray/ChatDraftInput";
+import { GrayChatComposer } from "@/components/gray/ChatComposer";
 import {
   buildGeneralChatSession,
   buildReminderEventKey,
@@ -95,14 +95,6 @@ const SettingsModal = dynamic(
   () => import("@/components/gray/SettingsModal").then((mod) => mod.SettingsModal),
   { loading: () => null }
 );
-
-
-
-const ChatDraftInput = dynamic(
-  () => import("@/components/gray/ChatDraftInput").then((mod) => mod.ChatDraftInput),
-  { loading: () => null }
-);
-
 const AttachmentTray = dynamic(
   () => import("@/components/gray/AttachmentTray"),
   { loading: () => null }
@@ -236,6 +228,15 @@ function GrayPageClientInner({
 
   const derivedPlans = user ? [...plans, ...reminderPlans] : [];
   const derivedHabits = user ? habits : [];
+
+  const [threadComposerDraft, setThreadComposerDraft] = useState("");
+  const threadComposerControls = useMemo(
+    () => ({
+      clear: () => setThreadComposerDraft(""),
+      restore: (value: string) => setThreadComposerDraft(value),
+    }),
+    []
+  );
 
   const sendDashboardNotification = useCallback(async (title: string, body: string) => {
     if (typeof window === "undefined" || typeof Notification === "undefined") {
@@ -2126,93 +2127,104 @@ function GrayPageClientInner({
     };
   }, []);
 
-  const handleChatSubmit = async (draft: string, controls: ChatDraftControls) => {
-    const normalizedDraft = draft.trim();
-    if (!normalizedDraft) {
-      return;
-    }
-
-    // Check anonymous message limit before proceeding
-    if (isAnonymousUser && isAnonLimitReached()) {
-      setShowSignUpPrompt(true);
-      return;
-    }
-
-    // Increment anonymous message counter (will be ignored for authenticated users)
-    if (isAnonymousUser) {
-      const newCount = incrementAnonMessageCount();
-      setAnonMessageCount(newCount);
-    }
-
-    controls.clear();
-
-    try {
-      const isGeneralChatActive =
-        Boolean(currentChatId) &&
-        Boolean(generalSessionId) &&
-        currentChatId === generalSessionId;
-
-      const isGeneralSurface = activeNav === "general";
-      const shouldStartStandaloneThread =
-        !isGeneralSurface && (!currentChatId || isGeneralChatActive);
-
-      // console.log("[GrayPageClient] handleChatSubmit", {
-      //   isGeneralSurface,
-      //   currentChatId,
-      //   isGeneralChatActive,
-      //   shouldStartStandaloneThread,
-      //   draft: normalizedDraft.slice(0, 20)
-      // });
-
-      if (shouldStartStandaloneThread) {
-        // console.log("[GrayPageClient] Creating standalone thread...");
-        const session = await createThreadSession(normalizedDraft);
-        // console.log("[GrayPageClient] Thread created, sessionId:", session.id);
-
-        void markHasSeenGeneralChat();
-        setCurrentChatId(session.id);
-
-        if (supportsInlineChat) {
-          setManualViewMode("chat");
-          if (typeof window !== "undefined") {
-            // console.log("[GrayPageClient] Pushing state to history:", `/c/${session.id}`);
-            router.push(`/c/${session.id}`);
-          }
-        } else {
-          // console.log("[GrayPageClient] Routing to new thread:", session.id);
-          router.push(`/c/${session.id}`);
-        }
+  const handleChatSubmit = useCallback(
+    async (
+      draft: string,
+      controls: { clear: () => void; restore: (value: string) => void }
+    ) => {
+      const normalizedDraft = draft.trim();
+      if (!normalizedDraft) {
         return;
       }
 
-      // If not starting a standalone thread, we are sending to the general chat
-      // (or the current chat if it happens to be general? logic implies general here)
-      // console.log("[GrayPageClient] Sending general message...");
-      const sessionId = await sendGeneralMessage(normalizedDraft);
-      void markHasSeenGeneralChat();
-      setCurrentChatId(sessionId);
+      // Check anonymous message limit before proceeding
+      if (isAnonymousUser && isAnonLimitReached()) {
+        setShowSignUpPrompt(true);
+        return;
+      }
 
-      const generalId = generalSessionId ?? GENERAL_CHAT_SESSION_ID;
-      const isGeneralSession = sessionId === generalId;
+      // Increment anonymous message counter (will be ignored for authenticated users)
+      if (isAnonymousUser) {
+        const newCount = incrementAnonMessageCount();
+        setAnonMessageCount(newCount);
+      }
 
-      if (supportsInlineChat) {
-        setManualViewMode("chat");
-        if (!isGeneralSession && typeof window !== "undefined") {
-          // console.log("[GrayPageClient] Pushing state to history:", `/c/${sessionId}`);
+      controls.clear();
+
+      try {
+        const isGeneralChatActive =
+          Boolean(currentChatId) &&
+          Boolean(generalSessionId) &&
+          currentChatId === generalSessionId;
+
+        const isGeneralSurface = activeNav === "general";
+        const shouldStartStandaloneThread =
+          !isGeneralSurface && (!currentChatId || isGeneralChatActive);
+
+        if (shouldStartStandaloneThread) {
+          const session = await createThreadSession(normalizedDraft);
+
+          void markHasSeenGeneralChat();
+          setCurrentChatId(session.id);
+
+          if (supportsInlineChat) {
+            setManualViewMode("chat");
+            if (typeof window !== "undefined") {
+              router.push(`/c/${session.id}`);
+            }
+          } else {
+            router.push(`/c/${session.id}`);
+          }
+          return;
+        }
+
+        const sessionId = await sendGeneralMessage(normalizedDraft);
+        void markHasSeenGeneralChat();
+        setCurrentChatId(sessionId);
+
+        const generalId = generalSessionId ?? GENERAL_CHAT_SESSION_ID;
+        const isGeneralSession = sessionId === generalId;
+
+        if (supportsInlineChat) {
+          setManualViewMode("chat");
+          if (!isGeneralSession && typeof window !== "undefined") {
+            router.push(`/c/${sessionId}`);
+          }
+        } else if (isGeneralSession) {
+          router.push("/g");
+        } else if (activeChatId !== sessionId) {
           router.push(`/c/${sessionId}`);
         }
-      } else if (isGeneralSession) {
-        // console.log("[GrayPageClient] Routing to general chat");
-        router.push("/g");
-      } else if (activeChatId !== sessionId) {
-        // console.log("[GrayPageClient] Routing to existing chat:", sessionId);
-        router.push(`/c/${sessionId}`);
+      } catch (error) {
+        console.error("Failed to send general message:", error);
+        controls.restore(draft);
       }
-    } catch (error) {
-      console.error("Failed to send general message:", error);
-      controls.restore(draft);
-    }
-  };
+    },
+    [
+      activeChatId,
+      activeNav,
+      createThreadSession,
+      currentChatId,
+      generalSessionId,
+      isAnonymousUser,
+      markHasSeenGeneralChat,
+      router,
+      sendGeneralMessage,
+      supportsInlineChat,
+    ]
+  );
+
+  const handleThreadComposerSubmit = useCallback(
+    (event: React.FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      const trimmed = threadComposerDraft.trim();
+      if (!trimmed) {
+        return;
+      }
+      void handleChatSubmit(trimmed, threadComposerControls);
+    },
+    [handleChatSubmit, threadComposerControls, threadComposerDraft]
+  );
 
 
 
@@ -2478,9 +2490,10 @@ function GrayPageClientInner({
                   {isUsageLimitReached && usageStatus && (
                     <UsageLimitBanner usageStatus={usageStatus} />
                   )}
-                  <ChatDraftInput
-                    variant="composer"
-                    onSubmitMessage={handleChatSubmit}
+                  <GrayChatComposer
+                    value={threadComposerDraft}
+                    onChange={setThreadComposerDraft}
+                    onSubmit={handleThreadComposerSubmit}
                     showUnderline={false}
                     onAddAttachment={openAttachmentPicker}
                     onPasteFiles={handleAttachmentPaste}

@@ -1,28 +1,17 @@
-import { useEffect, useMemo, useState } from "react";
-import { CheckSquare, Square, Zap, Pencil, Trash2, ChevronLeft, ChevronRight, ChevronDown } from "lucide-react";
+import { useMemo, useState } from "react";
+import { CheckSquare, Square, Zap, Pencil, Trash2, ChevronLeft, ChevronRight, Check } from "lucide-react";
 import styles from "@/app/gray/GrayPageClient.module.css";
 import { AddPlanHabitModal } from "./AddPlanHabitModal";
 import { type HabitItem, type PlanItem, type PlanUpdates, type ProactivityItem } from "./types";
 import { useI18n } from "@/contexts/I18nContext";
 import { MiniMonth } from "@/components/calendar/MiniMonth";
+import {
+  getProactivityTimes,
+  formatCustomTimeLabel,
+} from "./proactivityUtils";
+import { ProactivitySettingsModal } from "./ProactivitySettingsModal";
 
-const DEFAULT_PROACTIVITY_TIME = "09:00";
-const FREQUENT_PROACTIVITY_TIMES = ["09:00", "12:00", "18:00"] as const;
-const DAILY_PROACTIVITY_TIME_PRESETS = ["06:00", "09:00", "12:00", "15:00", "18:00", "21:00"] as const;
-
-type ProactivityMode = "off" | "daily" | "frequent";
 type TasksTab = "plans" | "habits";
-
-const resolveProactivityMode = (proactivity: ProactivityItem | null): ProactivityMode => {
-  if (!proactivity) {
-    return "off";
-  }
-  const cadence = proactivity.cadence?.trim().toLowerCase();
-  if (cadence === "frequent") {
-    return "frequent";
-  }
-  return "daily";
-};
 
 type GrayGeneralViewProps = {
   greeting: string;
@@ -62,19 +51,7 @@ export function GrayGeneralView({
   hidePlans = false,
 }: GrayGeneralViewProps) {
   const { t } = useI18n();
-  const formatTimeLabel = useMemo(() => {
-    return (value: string) => {
-      const [hoursString, minutesString] = value.split(":");
-      const hours = Number.parseInt(hoursString ?? "", 10);
-      const minutes = Number.parseInt(minutesString ?? "", 10);
-      if (Number.isNaN(hours) || Number.isNaN(minutes)) {
-        return value;
-      }
-      const date = new Date();
-      date.setHours(hours, minutes, 0, 0);
-      return date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
-    };
-  }, []);
+
   const [calendarReferenceDate, setCalendarReferenceDate] = useState(() => {
     const base = new Date(currentDate);
     base.setDate(1);
@@ -91,8 +68,8 @@ export function GrayGeneralView({
     type: null,
   });
   const [planEditorTarget, setPlanEditorTarget] = useState<PlanItem | null>(null);
-  const proactivityMode = resolveProactivityMode(proactivity);
-  const [dailyTime, setDailyTime] = useState(() => proactivity?.time ?? DEFAULT_PROACTIVITY_TIME);
+
+  const [isProactivityModalOpen, setIsProactivityModalOpen] = useState(false);
   const [tasksTab, setTasksTab] = useState<TasksTab>("plans");
 
   const calendarMonthLabel = useMemo(
@@ -113,17 +90,6 @@ export function GrayGeneralView({
     });
   };
 
-  useEffect(() => {
-    if (proactivityMode !== "daily") {
-      return;
-    }
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setDailyTime((previous) => {
-      const next = proactivity?.time ?? DEFAULT_PROACTIVITY_TIME;
-      return previous === next ? previous : next;
-    });
-  }, [proactivity?.time, proactivityMode]);
-
   const openModal = (type: "plan" | "habit") => {
     setModalState({ isOpen: true, type });
   };
@@ -137,42 +103,12 @@ export function GrayGeneralView({
     await onRefreshData();
   };
 
-  const applyProactivity = (nextMode: ProactivityMode, overrideTime?: string) => {
-    if (nextMode === "off") {
-      onRemoveProactivity();
-      return;
-    }
+  const handleOpenProactivityModal = () => {
+    setIsProactivityModalOpen(true);
+  };
 
-    const base: ProactivityItem = proactivity ?? {
-      id: "proactivity-daily",
-      label: "Check-ins",
-      description: "Daily guided check-ins from Gray.",
-      cadence: "Daily",
-      time: DEFAULT_PROACTIVITY_TIME,
-      times: [DEFAULT_PROACTIVITY_TIME],
-      channels: ["assistant"],
-      timezone: null,
-    };
-
-    if (nextMode === "frequent") {
-      const nextTimes =
-        proactivity?.times && proactivity.times.length > 1 ? proactivity.times : [...FREQUENT_PROACTIVITY_TIMES];
-      onSelectProactivity({
-        ...base,
-        cadence: "Frequent",
-        time: nextTimes[0] ?? DEFAULT_PROACTIVITY_TIME,
-        times: nextTimes,
-      });
-      return;
-    }
-
-    const nextTime = overrideTime ?? dailyTime ?? DEFAULT_PROACTIVITY_TIME;
-    onSelectProactivity({
-      ...base,
-      cadence: "Daily",
-      time: nextTime,
-      times: [nextTime],
-    });
+  const handleCloseProactivityModal = () => {
+    setIsProactivityModalOpen(false);
   };
 
   const plansContent = (
@@ -342,31 +278,38 @@ export function GrayGeneralView({
     </article>
   );
 
-  const proactivityTimeLabels = useMemo(() => {
-    if (!proactivity) {
-      return [];
-    }
-    const times = (proactivity.times ?? []).length ? proactivity.times ?? [] : [proactivity.time];
-    return times.filter(Boolean).map((value) => formatTimeLabel(value));
-  }, [formatTimeLabel, proactivity]);
+  const activeProactivityTimes = useMemo(() => {
+    return getProactivityTimes(proactivity);
+  }, [proactivity]);
 
-  const proactivityTimesLabel = useMemo(() => {
-    if (!proactivity) {
-      return t("Turn on to schedule check-ins.");
-    }
-    if (proactivityTimeLabels.length === 0) {
-      return t("On");
-    }
-    return proactivityTimeLabels.join(" · ");
-  }, [proactivity, proactivityTimeLabels, t]);
+  const formattedProactivityTimes = useMemo(
+    () => activeProactivityTimes.map((time) => formatCustomTimeLabel(time)),
+    [activeProactivityTimes]
+  );
 
-  const dailyTimeOptions = useMemo(() => {
-    const presets = [...DAILY_PROACTIVITY_TIME_PRESETS] as string[];
-    if (dailyTime && !presets.includes(dailyTime)) {
-      presets.push(dailyTime);
+  // To match dashboard checklist UI perfectly, we need "delivered" status.
+  // However, GeneralView props might not have delivered keys. 
+  // We can default delivery status to false for General View or just list the times.
+  // The user requirement is: "checklist-style display for scheduled proactivity times".
+  // So a static checklist (checked/unchecked or just list) is fine.
+  // Dashboard view uses `delivered` to check/uncheck. 
+  // If we don't have that info, maybe always uncheck or check? 
+  // Or just use bullet points? The dashboard view uses Square/Check icons.
+  // Let's assume unchecked (Square) if we don't know the status.
+  // Or better, since this is "General" view, maybe it just shows the schedule?
+  // Let's assume unchecked (Square) for scheduled times.
+
+  const proactivityScheduleEntries = useMemo(() => {
+    if (activeProactivityTimes.length > 0) {
+      return activeProactivityTimes.map((time, index) => ({
+        time,
+        label: formattedProactivityTimes[index] ?? formatCustomTimeLabel(time),
+        delivered: false, // GeneralView doesn't seem to track delivery deliveryKeys prop.
+      }));
     }
-    return Array.from(new Set(presets)).sort();
-  }, [dailyTime]);
+    return [];
+  }, [activeProactivityTimes, formattedProactivityTimes]);
+
 
   const calendarCard = (
     <article className={`${styles.dashboardCard} ${styles.miniCalendarCard}`}>
@@ -419,76 +362,37 @@ export function GrayGeneralView({
   );
 
   const proactivityCard = (
-    <article className={styles.dashboardCard}>
+    <article className={`${styles.dashboardCard} ${styles.proactivityCard}`}>
       <header className={styles.dashboardCardHeader}>
-        <span>{t("Proactivity")}</span>
+        <div className={`${styles.dashboardCardIcon} ${styles.iconBlue}`}>
+          <Zap size={16} fill="white" />
+        </div>
+        <h2 className={styles.dashboardCardTitle}>{t("Proactivity")}</h2>
       </header>
       <div className={styles.dashboardCardBody}>
-        <div className={styles.proactivityControls}>
-          <div className={styles.proactivityModeSegment} role="radiogroup" aria-label={t("Proactivity cadence")}>
-            <button
-              type="button"
-              className={styles.proactivityModeOption}
-              role="radio"
-              aria-checked={proactivityMode === "off"}
-              data-active={proactivityMode === "off" ? "true" : "false"}
-              onClick={() => applyProactivity("off")}
-            >
-              {t("Off")}
-            </button>
-            <button
-              type="button"
-              className={styles.proactivityModeOption}
-              role="radio"
-              aria-checked={proactivityMode === "daily"}
-              data-active={proactivityMode === "daily" ? "true" : "false"}
-              onClick={() => applyProactivity("daily")}
-            >
-              {t("Daily")}
-            </button>
-            <button
-              type="button"
-              className={styles.proactivityModeOption}
-              role="radio"
-              aria-checked={proactivityMode === "frequent"}
-              data-active={proactivityMode === "frequent" ? "true" : "false"}
-              onClick={() => applyProactivity("frequent")}
-            >
-              {t("Frequent")}
-            </button>
+        {proactivityScheduleEntries.length > 0 ? (
+          <ul className={styles.proactivityChecklist}>
+            {proactivityScheduleEntries.map(({ label, delivered }, index) => (
+              <li key={`${label}-${index}`} className={styles.proactivityChecklistItem}>
+                <span className={styles.proactivityChecklistIcon} aria-hidden="true">
+                  {delivered ? <Check size={14} /> : <Square size={14} />}
+                </span>
+                <span className={styles.proactivityChecklistLabel}>{t(label)}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div className={styles.proactivityEmptyState}>
+            <span>{t("No check-ins scheduled")}</span>
           </div>
-        </div>
-        <div className={styles.proactivitySummary}>
-          {proactivityMode === "daily" ? (
-            <div className={styles.proactivityScheduleRow}>
-              <span className={styles.proactivityScheduleLabel}>{t("Time")}</span>
-              <div className={styles.proactivityTimePill}>
-                <select
-                  className={styles.proactivityTimeSelect}
-                  value={dailyTime}
-                  aria-label={t("Daily time")}
-                  onChange={(event) => {
-                    const nextTime = event.target.value;
-                    setDailyTime(nextTime);
-                    applyProactivity("daily", nextTime);
-                  }}
-                >
-                  {dailyTimeOptions.map((value) => (
-                    <option key={value} value={value}>
-                      {formatTimeLabel(value)}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown size={14} className={styles.proactivityTimeChevron} aria-hidden="true" />
-              </div>
-            </div>
-          ) : proactivityMode === "frequent" ? (
-            <div className={styles.proactivityScheduleRow}>
-              <span className={styles.proactivityScheduleLabel}>{t("Times")}</span>
-              <span className={styles.proactivityScheduleValue}>{proactivityTimesLabel}</span>
-            </div>
-          ) : null}
-        </div>
+        )}
+        <button
+          type="button"
+          className={styles.proactivityConfigureLink}
+          onClick={handleOpenProactivityModal}
+        >
+          {t("configure")}
+        </button>
       </div>
     </article>
   );
@@ -534,6 +438,17 @@ export function GrayGeneralView({
           }}
         />
       ) : null}
+
+      {isProactivityModalOpen && (
+        <ProactivitySettingsModal
+          isOpen={isProactivityModalOpen}
+          onClose={handleCloseProactivityModal}
+          activeProactivity={proactivity}
+          activeProactivityTimes={activeProactivityTimes}
+          onSelectProactivity={onSelectProactivity}
+          onRemoveProactivity={onRemoveProactivity}
+        />
+      )}
     </>
   );
 }

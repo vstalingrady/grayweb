@@ -75,6 +75,7 @@ export interface User {
   initials: string;
   workspace_background_id?: string | null;
   maps_enabled: boolean;
+  improve_model_for_everyone?: boolean;
   has_seen_general_chat?: boolean;
   personalization_nickname?: string | null;
   personalization_occupation?: string | null;
@@ -567,6 +568,7 @@ export interface UserUpdate {
   plan_tier?: string | null;
   workspace_background_id?: string | null;
   maps_enabled?: boolean;
+  improve_model_for_everyone?: boolean;
   has_seen_general_chat?: boolean;
   personalization_nickname?: string | null;
   personalization_occupation?: string | null;
