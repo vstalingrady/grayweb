@@ -35,8 +35,8 @@ export function HistoryOverlay({
     onOpenEntry,
     onOpenEntryExternal,
     onRenameEntry,
-	onDeleteEntry,
-	onCreateNewChat,
+    onDeleteEntry,
+    onCreateNewChat,
 }: HistoryOverlayProps) {
     const { t } = useI18n();
     const [query, setQuery] = useState("");
@@ -46,7 +46,9 @@ export function HistoryOverlay({
     // Reset query when opening
     useEffect(() => {
         if (isOpen) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect -- Intentional: reset state on open
             setQuery("");
+            // eslint-disable-next-line react-hooks/set-state-in-effect -- Intentional: reset state on open
             setActiveIndex(0);
             // Small timeout to ensure DOM is ready for focus
             setTimeout(() => inputRef.current?.focus(), 50);
@@ -199,10 +201,10 @@ export function HistoryOverlay({
                                 <>
                                     {/* Actions Section */}
                                     {flatItems.some(i => i.type === "action") && (
-                                            <div className={styles.section}>
-                                                <div className={styles.sectionHeader}>
-                                                    <span className={styles.sectionTitle}>{t("Actions")}</span>
-                                                </div>
+                                        <div className={styles.section}>
+                                            <div className={styles.sectionHeader}>
+                                                <span className={styles.sectionTitle}>{t("Actions")}</span>
+                                            </div>
                                             {flatItems.filter(i => i.type === "action").map((item, idx) => {
                                                 // Find actual index in flatItems for active state
                                                 const realIndex = flatItems.indexOf(item);
@@ -264,36 +266,36 @@ export function HistoryOverlay({
                                                                 className={styles.actionButton}
                                                                 onClick={(e) => {
                                                                     e.stopPropagation();
-                                                                onOpenEntryExternal(item.entry!);
-                                                            }}
-                                                            title={t("Open in new tab")}
-                                                        >
-                                                            <ExternalLink size={14} />
-                                                        </div>
+                                                                    onOpenEntryExternal(item.entry!);
+                                                                }}
+                                                                title={t("Open in new tab")}
+                                                            >
+                                                                <ExternalLink size={14} />
+                                                            </div>
                                                         )}
                                                         {onRenameEntry && (
                                                             <div
                                                                 className={styles.actionButton}
                                                                 onClick={(e) => {
                                                                     e.stopPropagation();
-                                                                onRenameEntry(item.entry!);
-                                                            }}
-                                                            title={t("Rename")}
-                                                        >
-                                                            <Pencil size={14} />
-                                                        </div>
+                                                                    onRenameEntry(item.entry!);
+                                                                }}
+                                                                title={t("Rename")}
+                                                            >
+                                                                <Pencil size={14} />
+                                                            </div>
                                                         )}
                                                         {onDeleteEntry && (
                                                             <div
                                                                 className={styles.actionButton}
                                                                 onClick={(e) => {
                                                                     e.stopPropagation();
-                                                                onDeleteEntry(item.entry!);
-                                                            }}
-                                                            title={t("Delete")}
-                                                        >
-                                                            <Trash2 size={14} />
-                                                        </div>
+                                                                    onDeleteEntry(item.entry!);
+                                                                }}
+                                                                title={t("Delete")}
+                                                            >
+                                                                <Trash2 size={14} />
+                                                            </div>
                                                         )}
                                                     </div>
                                                 </button>

@@ -107,7 +107,7 @@ export function ProactivityNotificationProvider({ children }: ProactivityNotific
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const handleProactivityMessage = useCallback(
-    (payload: any) => {
+    (payload: { session_id?: string; message?: string; delivery_key?: string }) => {
       // 1. Append to chat if we have a session ID
       const targetSessionId = payload.session_id || GENERAL_CHAT_SESSION_ID;
       if (targetSessionId && payload.message) {
@@ -137,7 +137,8 @@ export function ProactivityNotificationProvider({ children }: ProactivityNotific
     const getAuthToken = async (): Promise<string | null> => {
       const supabase = (await import('@/lib/supabaseClient')).getSupabaseClient();
       if (!supabase) return null;
-      const { data } = await supabase.auth.getSession();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data } = await (supabase.auth as any).getSession();
       return data.session?.access_token ?? null;
     };
 
@@ -158,14 +159,17 @@ export function ProactivityNotificationProvider({ children }: ProactivityNotific
                 userVisibleOnly: true,
                 applicationServerKey: urlBase64ToUint8Array(
                   process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "BNoW7-tQZ8XwYt7-tQZ8XwY"
-                ) as any,
+                ) as BufferSource,
               };
 
               let subscription: PushSubscription | null = null;
               try {
                 subscription = await registration.pushManager.subscribe(subscribeOptions);
-              } catch (err: any) {
-                if (err.name === 'InvalidStateError' || err.message?.includes('different applicationServerKey')) {
+              } catch (err: unknown) {
+                const isInvalidState = err instanceof Error && (
+                  err.name === 'InvalidStateError' || err.message?.includes('different applicationServerKey')
+                );
+                if (isInvalidState) {
                   console.log('[Proactivity] VAPID key changed, renewing subscription...');
                   const existing = await registration.pushManager.getSubscription();
                   if (existing) {
@@ -230,7 +234,8 @@ export function ProactivityNotificationProvider({ children }: ProactivityNotific
           // console.log("[Proactivity] Message received:", data);
           handleProactivityMessage(data);
 
-          // Track delivery to avoid re-showing          const key = data.delivery_key;
+          // Track delivery to avoid re-showing
+          const key = data.delivery_key;
           if (key) {
             setDeliveredKeys(prev => {
               const next = new Set(prev);

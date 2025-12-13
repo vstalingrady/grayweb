@@ -109,8 +109,9 @@ export const normalizeAssistantMessage = (
     if (role !== "assistant" && role !== "model") {
         return { content: content ?? "", reminders: [] };
     }
-    // Lazy import to avoid circular dependencies
-    const { extractGrayRemindersFromText } = require("./reminderUtils");
+    // Import synchronously from the module since it's already bundled
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { extractGrayRemindersFromText } = require("./reminderUtils") as { extractGrayRemindersFromText: (text: string) => { cleanText: string; reminders: import("./types").GrayReminderCreatedPayload[] } };
     const result = extractGrayRemindersFromText(content ?? "");
     return { content: result.cleanText, reminders: result.reminders };
 };

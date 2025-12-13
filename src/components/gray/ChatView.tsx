@@ -34,6 +34,7 @@ import {
   CalendarClock,
   ChevronDown,
   ChevronLeft,
+  Brain,
 } from "lucide-react";
 import ReactMarkdown, { type Components } from "react-markdown";
 // Type definition for code component
@@ -1361,7 +1362,7 @@ const ThinkingBlock = ({
       return t("Thinking");
     }
     return null;
-  }, [isActivelyThinking, thinkingStartTime, liveSeconds, reasoningSeconds, isStreamingMessage, t]);
+  }, [isActivelyThinking, thinkingStartTime, liveSeconds, reasoningSeconds, isStreamingMessage, t, formatTime]);
 
   return (
     <div className={styles.chatThinkingBlock} data-expanded={isExpanded ? "true" : "false"}>
@@ -1459,6 +1460,7 @@ const ChatMessagesList = memo(
         className={styles.chatMessages}
         data-streaming={shouldShowPendingStreamIndicator ? "true" : undefined}
       >
+        {/* eslint-disable-next-line react-hooks/rules-of-hooks -- Refs are intentionally accessed in render for edit mode */}
         {messages.map((message, messageIndex) => {
           const isUser = message.role === "user";
           const isAssistant = !isUser;
@@ -1571,7 +1573,6 @@ const ChatMessagesList = memo(
                         if (el) {
                           // Focus cursor at end on mount
                           if (document.activeElement !== el) {
-                            // eslint-disable-next-line react-compiler/react-compiler
                             el.setSelectionRange(el.value.length, el.value.length);
                             el.focus();
                           }
@@ -3690,7 +3691,7 @@ export function GrayChatView({
         }
         return <p {...rest}>{children}</p>;
       },
-      table: ({ children, node: _node, ...rest }: React.TableHTMLAttributes<HTMLTableElement> & { node?: any }) => (
+      table: ({ children, node: _node, ...rest }: React.TableHTMLAttributes<HTMLTableElement> & { node?: Element }) => (
         <div className={styles.chatTableWrapper}>
           <table {...rest}>{children}</table>
         </div>

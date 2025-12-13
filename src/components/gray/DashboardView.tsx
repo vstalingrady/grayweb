@@ -1097,58 +1097,58 @@ export function GrayDashboardView({
         aria-labelledby="proactivityModalHeading"
       >
         <div className={styles.proactivityModal}>
-	          <header className={styles.proactivityModalHeader}>
-	            <div className={styles.proactivityModalHeading}>
-	              <span className={styles.proactivityModalEyebrow} id="proactivityModalHeading">
-	                {t("Proactivity")}
-	              </span>
-	            </div>
-	            <button
-	              type="button"
-	              className={styles.proactivityModalClose}
-	              onClick={handleCloseProactivityModal}
-	              aria-label={t("Close proactivity options")}
-	            >
-	              <X size={16} />
-	            </button>
-	          </header>
+          <header className={styles.proactivityModalHeader}>
+            <div className={styles.proactivityModalHeading}>
+              <span className={styles.proactivityModalEyebrow} id="proactivityModalHeading">
+                {t("Proactivity")}
+              </span>
+            </div>
+            <button
+              type="button"
+              className={styles.proactivityModalClose}
+              onClick={handleCloseProactivityModal}
+              aria-label={t("Close proactivity options")}
+            >
+              <X size={16} />
+            </button>
+          </header>
           <label
             id="proactivityPresetLabel"
-	            htmlFor="proactivityPresetSelect"
-	            className={styles.proactivityPresetLabel}
-	          >
-	            {t("Preset cadence")}
-	          </label>
+            htmlFor="proactivityPresetSelect"
+            className={styles.proactivityPresetLabel}
+          >
+            {t("Preset cadence")}
+          </label>
           <div className={styles.proactivityPresetSelectWrapper}>
             <select
               id="proactivityPresetSelect"
               className={styles.proactivityPresetSelect}
-	              value={selectedPresetId}
-	              onChange={handlePresetSelectChange}
-	            >
-	              <option value="">{t("Select a preset")}</option>
-	              {PROACTIVITY_PRESETS.map((preset) => (
-	                <option key={preset.id} value={preset.id}>
-	                  {t(preset.title)}
-	                </option>
-	              ))}
-	              <option value={CUSTOM_PROACTIVITY_ID}>{t("Custom")}</option>
-	            </select>
+              value={selectedPresetId}
+              onChange={handlePresetSelectChange}
+            >
+              <option value="">{t("Select a preset")}</option>
+              {PROACTIVITY_PRESETS.map((preset) => (
+                <option key={preset.id} value={preset.id}>
+                  {t(preset.title)}
+                </option>
+              ))}
+              <option value={CUSTOM_PROACTIVITY_ID}>{t("Custom")}</option>
+            </select>
             <ChevronDown size={14} className={styles.proactivityPresetSelectIcon} aria-hidden="true" />
           </div>
           {isCustomPresetSelected ? (
             <section className={styles.proactivityCustomSection}>
               <header className={styles.proactivityCustomHeader}>
                 <div>
-	                  <span className={styles.proactivityCustomEyebrow}>{t("Custom setup")}</span>
+                  <span className={styles.proactivityCustomEyebrow}>{t("Custom setup")}</span>
                 </div>
-	                <button
-	                  type="button"
-	                  className={styles.proactivityCustomReset}
-	                  onClick={handleCustomReset}
-	                >
-	                  {t("Reset")}
-	                </button>
+                <button
+                  type="button"
+                  className={styles.proactivityCustomReset}
+                  onClick={handleCustomReset}
+                >
+                  {t("Reset")}
+                </button>
               </header>
               <div className={styles.proactivityCustomControls}>
                 <div className={styles.proactivityCustomField}>
@@ -1170,35 +1170,35 @@ export function GrayDashboardView({
                                 commitCustomTimeEdit(index, editingCustomTimeDraft);
                               }
                             }}
-	                            aria-label={t("Edit custom start time {time}", { time })}
-	                          />
+                            aria-label={t("Edit custom start time {time}", { time })}
+                          />
                         ) : (
                           <button
                             type="button"
                             className={styles.proactivityTimeListButton}
                             onClick={() => handleCustomTimeEdit(index)}
                           >
-	                            <span className={styles.proactivityTimeLabel}>
-	                              {t(formatCustomTimeLabel(time))}
-	                            </span>
-	                          </button>
+                            <span className={styles.proactivityTimeLabel}>
+                              {t(formatCustomTimeLabel(time))}
+                            </span>
+                          </button>
                         )}
                         <div className={styles.proactivityTimeActions}>
                           <button
                             type="button"
                             className={styles.listItemActionButton}
                             onClick={() => handleCustomTimeEdit(index)}
-	                            aria-label={t("Edit custom start time {time}", { time })}
-	                          >
+                            aria-label={t("Edit custom start time {time}", { time })}
+                          >
                             <Pencil size={12} />
                           </button>
                           <button
                             type="button"
                             className={styles.listItemActionButton}
                             onClick={() => handleCustomTimeRemove(index)}
-	                            aria-label={t("Remove custom start time {time}", { time })}
-	                            disabled={customTimes.length <= 1}
-	                          >
+                            aria-label={t("Remove custom start time {time}", { time })}
+                            disabled={customTimes.length <= 1}
+                          >
                             <X size={12} />
                           </button>
                         </div>
@@ -1208,10 +1208,10 @@ export function GrayDashboardView({
                       type="button"
                       className={styles.proactivityTimeAdd}
                       onClick={handleCustomTimeAdd}
-	                    >
-	                      <Plus size={14} />
-	                      <span>{t("Add time")}</span>
-	                    </button>
+                    >
+                      <Plus size={14} />
+                      <span>{t("Add time")}</span>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -1227,13 +1227,13 @@ export function GrayDashboardView({
                 {modalRemoveLabel}
               </button>
             ) : null}
-	            <button
-	              type="button"
-	              className={styles.proactivityModalDismiss}
-	              onClick={handleCloseProactivityModal}
-	            >
-	              {t("Done")}
-	            </button>
+            <button
+              type="button"
+              className={styles.proactivityModalDismiss}
+              onClick={handleCloseProactivityModal}
+            >
+              {t("Done")}
+            </button>
           </footer>
         </div>
       </div>
@@ -1254,18 +1254,18 @@ export function GrayDashboardView({
         .filter(Boolean)
         .join(" ")}
     >
-	      <header className={styles.dashboardCardHeader}>
-	        <span>{t("Proactivity")}</span>
-	      </header>
+      <header className={styles.dashboardCardHeader}>
+        <span>{t("Proactivity")}</span>
+      </header>
       <div className={styles.dashboardCardBody}>
         {shouldShowNotificationBanner ? (
           <div className={styles.proactivityNotificationBanner}>
-	            <p>{notificationBannerLabel}</p>
-	            {notificationPermission !== "denied" ? (
-	              <button type="button" onClick={handleNotificationEnable} className={styles.proactivityNotificationButton}>
-	                {t("Enable alerts")}
-	              </button>
-	            ) : null}
+            <p>{notificationBannerLabel}</p>
+            {notificationPermission !== "denied" ? (
+              <button type="button" onClick={handleNotificationEnable} className={styles.proactivityNotificationButton}>
+                {t("Enable alerts")}
+              </button>
+            ) : null}
           </div>
         ) : null}
         {displayProactivity ? (
@@ -1275,31 +1275,31 @@ export function GrayDashboardView({
                 <li key={`${label}-${index}`} className={styles.planListItem}>
                   <span className={styles.planCheckbox} aria-hidden="true">
                     {delivered ? <Check size={14} /> : <Square size={14} />}
-	                  </span>
-	                  <span className={styles.planLabelGroup}>
-	                    <span className={styles.planLabel}>{t(label)}</span>
-	                  </span>
+                  </span>
+                  <span className={styles.planLabelGroup}>
+                    <span className={styles.planLabel}>{t(label)}</span>
+                  </span>
                   {canOpenProactivityModal || showModalRemoveButton ? (
                     <span className={styles.listItemActions}>
                       {canOpenProactivityModal ? (
                         <button
                           type="button"
-	                          className={styles.listItemActionButton}
-	                          onClick={handleOpenProactivityModal}
-	                          aria-label={t("Edit proactivity schedule")}
-	                          disabled={!canOpenProactivityModal}
-	                        >
+                          className={styles.listItemActionButton}
+                          onClick={handleOpenProactivityModal}
+                          aria-label={t("Edit proactivity schedule")}
+                          disabled={!canOpenProactivityModal}
+                        >
                           <Pencil size={12} />
                         </button>
                       ) : null}
                       {showModalRemoveButton ? (
                         <button
                           type="button"
-	                          className={styles.listItemActionButton}
-	                          onClick={() => handleProactivityTimeRemove(index)}
-	                          aria-label={t("Remove proactivity time {label}", { label })}
-	                          disabled={!showModalRemoveButton}
-	                        >
+                          className={styles.listItemActionButton}
+                          onClick={() => handleProactivityTimeRemove(index)}
+                          aria-label={t("Remove proactivity time {label}", { label })}
+                          disabled={!showModalRemoveButton}
+                        >
                           <X size={12} />
                         </button>
                       ) : null}
@@ -1307,17 +1307,17 @@ export function GrayDashboardView({
                   ) : null}
                 </li>
               ))
-	            ) : (
-	              <li className={styles.listEmptyMessage}>
-	                <span>{t("No schedule yet.")}</span>
-	              </li>
-	            )}
+            ) : (
+              <li className={styles.listEmptyMessage}>
+                <span>{t("No schedule yet.")}</span>
+              </li>
+            )}
           </ul>
-	        ) : (
-	          <div className={styles.cardEmptyMessage}>
-	            <span>{t("Not configured")}</span>
-	          </div>
-	        )}
+        ) : (
+          <div className={styles.cardEmptyMessage}>
+            <span>{t("Not configured")}</span>
+          </div>
+        )}
         <button
           type="button"
           className={`${styles.secondaryAction} ${styles.proactivitySetupButton}`}
@@ -1333,18 +1333,18 @@ export function GrayDashboardView({
 
   const proactivityCard = renderProactivityCard();
 
-	  const plansCard = (
-	    <article className={styles.dashboardCard}>
-	      <header className={styles.dashboardCardHeader}>
-	        <span>{t("Plans")}</span>
-	      </header>
+  const plansCard = (
+    <article className={styles.dashboardCard}>
+      <header className={styles.dashboardCardHeader}>
+        <span>{t("Plans")}</span>
+      </header>
       <div className={styles.dashboardCardBody}>
         <ul className={styles.planList}>
           {showPlansList
-	            ? visiblePlans.map((plan) => {
-	              const isDerivedReminder = derivedReminderIds.has(plan.id);
-	              const timeLabel = formatPlanTimeLabel(plan);
-	              const tagLabel = isDerivedReminder ? t("Reminder") : t("Plan");
+            ? visiblePlans.map((plan) => {
+              const isDerivedReminder = derivedReminderIds.has(plan.id);
+              const timeLabel = formatPlanTimeLabel(plan);
+              const tagLabel = isDerivedReminder ? t("Reminder") : t("Plan");
               return (
                 <li key={plan.id} className={styles.planListItem}>
                   <div
@@ -1352,13 +1352,13 @@ export function GrayDashboardView({
                     data-completed={plan.completed ? "true" : "false"}
                     role="group"
                   >
-	                    <button
-	                      type="button"
-	                      className={styles.planCheckboxButton}
-	                      aria-label={
-	                        plan.completed ? t("Mark plan as incomplete") : t("Mark plan as complete")
-	                      }
-	                      onClick={(event) => {
+                    <button
+                      type="button"
+                      className={styles.planCheckboxButton}
+                      aria-label={
+                        plan.completed ? t("Mark plan as incomplete") : t("Mark plan as complete")
+                      }
+                      onClick={(event) => {
                         event.preventDefault();
                         event.stopPropagation();
                         handlePlanToggle(plan.id);
@@ -1388,14 +1388,14 @@ export function GrayDashboardView({
                         <button
                           type="button"
                           className={styles.listItemActionButton}
-	                          onClick={(event) => {
-	                            event.preventDefault();
-	                            event.stopPropagation();
-	                            setPlanEditorTarget(plan);
-	                          }}
-	                          aria-label={t("Edit plan {label}", { label: plan.label })}
-	                          disabled={!isCurrentPulseEditable}
-	                        >
+                          onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            setPlanEditorTarget(plan);
+                          }}
+                          aria-label={t("Edit plan {label}", { label: plan.label })}
+                          disabled={!isCurrentPulseEditable}
+                        >
                           <Pencil size={14} />
                         </button>
                       ) : null}
@@ -1403,14 +1403,14 @@ export function GrayDashboardView({
                         <button
                           type="button"
                           className={styles.listItemActionButton}
-	                          onClick={(event) => {
-	                            event.preventDefault();
-	                            event.stopPropagation();
-	                            handlePlanDelete(plan);
-	                          }}
-	                          aria-label={t("Delete plan {label}", { label: plan.label })}
-	                          disabled={!isCurrentPulseEditable}
-	                        >
+                          onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            handlePlanDelete(plan);
+                          }}
+                          aria-label={t("Delete plan {label}", { label: plan.label })}
+                          disabled={!isCurrentPulseEditable}
+                        >
                           <Trash2 size={14} />
                         </button>
                       ) : null}
@@ -1419,30 +1419,30 @@ export function GrayDashboardView({
                 </li>
               );
             })
-	            : (
-	              <li className={styles.listEmptyMessage}>
-	                <span>{t("No plans captured yet.")}</span>
-	              </li>
-	            )}
-	        </ul>
+            : (
+              <li className={styles.listEmptyMessage}>
+                <span>{t("No plans captured yet.")}</span>
+              </li>
+            )}
+        </ul>
         <button
           type="button"
           className={styles.secondaryAction}
           disabled={!isCurrentPulseEditable}
-	          data-disabled={!isCurrentPulseEditable ? "true" : "false"}
-	          onClick={() => openModal("plan")}
-	        >
-	          {t("Add plans")}
-	        </button>
-	      </div>
-	    </article>
-	  );
+          data-disabled={!isCurrentPulseEditable ? "true" : "false"}
+          onClick={() => openModal("plan")}
+        >
+          {t("Add plans")}
+        </button>
+      </div>
+    </article>
+  );
 
-	  const habitsCard = (
-	    <article className={styles.dashboardCard}>
-	      <header className={styles.dashboardCardHeader}>
-	        <span>{t("Habits")}</span>
-	      </header>
+  const habitsCard = (
+    <article className={styles.dashboardCard}>
+      <header className={styles.dashboardCardHeader}>
+        <span>{t("Habits")}</span>
+      </header>
       <div className={styles.dashboardCardBody}>
         <ul className={`${styles.habitList} ${styles.dashboardHabitList}`}>
           {showHabitsList
@@ -1453,13 +1453,13 @@ export function GrayDashboardView({
                   data-completed={habit.completed ? "true" : "false"}
                   role="group"
                 >
-	                  <button
-	                    type="button"
-	                    className={styles.planCheckboxButton}
-	                    aria-label={
-	                      habit.completed ? t("Mark habit as incomplete") : t("Mark habit as complete")
-	                    }
-	                    onClick={(event) => {
+                  <button
+                    type="button"
+                    className={styles.planCheckboxButton}
+                    aria-label={
+                      habit.completed ? t("Mark habit as incomplete") : t("Mark habit as complete")
+                    }
+                    onClick={(event) => {
                       event.preventDefault();
                       event.stopPropagation();
                       handleHabitToggle(habit.id);
@@ -1484,14 +1484,14 @@ export function GrayDashboardView({
                         <button
                           type="button"
                           className={styles.listItemActionButton}
-	                          onClick={(event) => {
-	                            event.preventDefault();
-	                            event.stopPropagation();
-	                            handleHabitEdit(habit);
-	                          }}
-	                          aria-label={t("Edit habit {label}", { label: habit.label })}
-	                          disabled={!isCurrentPulseEditable}
-	                        >
+                          onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            handleHabitEdit(habit);
+                          }}
+                          aria-label={t("Edit habit {label}", { label: habit.label })}
+                          disabled={!isCurrentPulseEditable}
+                        >
                           <Pencil size={14} />
                         </button>
                       ) : null}
@@ -1499,14 +1499,14 @@ export function GrayDashboardView({
                         <button
                           type="button"
                           className={styles.listItemActionButton}
-	                          onClick={(event) => {
-	                            event.preventDefault();
-	                            event.stopPropagation();
-	                            handleHabitDelete(habit);
-	                          }}
-	                          aria-label={t("Delete habit {label}", { label: habit.label })}
-	                          disabled={!isCurrentPulseEditable}
-	                        >
+                          onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            handleHabitDelete(habit);
+                          }}
+                          aria-label={t("Delete habit {label}", { label: habit.label })}
+                          disabled={!isCurrentPulseEditable}
+                        >
                           <Trash2 size={14} />
                         </button>
                       ) : null}
@@ -1519,58 +1519,58 @@ export function GrayDashboardView({
                 </span>
               </li>
             ))
-	            : (
-	              <li className={styles.listEmptyMessage}>
-	                <span>{t("No habits tracked yet.")}</span>
-	              </li>
-	            )}
-	        </ul>
+            : (
+              <li className={styles.listEmptyMessage}>
+                <span>{t("No habits tracked yet.")}</span>
+              </li>
+            )}
+        </ul>
         <button
           type="button"
           className={styles.secondaryAction}
           disabled={!isCurrentPulseEditable}
-	          data-disabled={!isCurrentPulseEditable ? "true" : "false"}
-	          onClick={() => openModal("habit")}
-	        >
-	          {t("Add habits")}
-	        </button>
-	      </div>
-	    </article>
-	  );
-	  const dashboardSections = useMemo<DashboardSectionSpec[]>(
-	    () => [
-	      {
-	        id: "execution",
-	        title: t("Execution"),
-	        subtitle: t("Plans and habits shaping today's pulse"),
-	        layout: "stacked",
-	        cards: [
-	          { id: "plans", element: plansCard },
-	          { id: "habits", element: habitsCard },
-	        ],
-	      },
-	    ],
-	    [plansCard, habitsCard, t]
-	  );
+          data-disabled={!isCurrentPulseEditable ? "true" : "false"}
+          onClick={() => openModal("habit")}
+        >
+          {t("Add habits")}
+        </button>
+      </div>
+    </article>
+  );
+  const dashboardSections = useMemo<DashboardSectionSpec[]>(
+    () => [
+      {
+        id: "execution",
+        title: t("Execution"),
+        subtitle: t("Plans and habits shaping today's pulse"),
+        layout: "stacked",
+        cards: [
+          { id: "plans", element: plansCard },
+          { id: "habits", element: habitsCard },
+        ],
+      },
+    ],
+    [plansCard, habitsCard, t]
+  );
   const renderDashboardSections = useCallback(
     (variant: "default" | "compact" = "default") => {
       const sections =
         variant === "compact"
           ? [
             ...dashboardSections,
-	            {
-	              id: "compact-automation",
-	              title: t("Signals & Automation"),
-	              subtitle: t("Reminders, notifications, and proactive nudges"),
-	              cards: [{ id: "proactivity", element: proactivityCard }],
-	            },
+            {
+              id: "compact-automation",
+              title: t("Signals & Automation"),
+              subtitle: t("Reminders, notifications, and proactive nudges"),
+              cards: [{ id: "proactivity", element: proactivityCard }],
+            },
           ]
           : dashboardSections;
       return sections.map((section) => {
         const gridClass =
           variant === "compact"
             ? styles.dashboardCompactGrid
-            : (section as any).layout === "stacked"
+            : (section as { layout?: string }).layout === "stacked"
               ? `${styles.dashboardGrid} ${styles.pulseGridStacked}`
               : styles.dashboardGrid;
         const showHeader = false; // Don't show section headers in pulse view
@@ -1721,10 +1721,10 @@ export function GrayDashboardView({
         onUpgradeClick={onUpgradeClick}
         showUpgradeButton={showUpgradeButton}
       />
-	      <div className={styles.dashboardCompactNotice}>
-	        <h3>{t("Calendar works best on a wider screen")}</h3>
-	        <p>{t("Expand your window or rotate your device to manage events and view the full schedule.")}</p>
-	      </div>
+      <div className={styles.dashboardCompactNotice}>
+        <h3>{t("Calendar works best on a wider screen")}</h3>
+        <p>{t("Expand your window or rotate your device to manage events and view the full schedule.")}</p>
+      </div>
     </>
   );
 

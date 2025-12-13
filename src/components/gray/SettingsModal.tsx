@@ -50,6 +50,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const [theme, setTheme] = useState<ThemeMode>("system");
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Intentional: initialize theme from localStorage on mount
     setTheme(resolveInitialTheme());
   }, []);
 
@@ -174,9 +175,8 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
               <span>{t(label)}</span>
               <button
                 type="button"
-                className={`${styles.settingsControl} ${
-                  disabled ? styles.settingsControlDisabled : ""
-                }`}
+                className={`${styles.settingsControl} ${disabled ? styles.settingsControlDisabled : ""
+                  }`}
                 aria-disabled={disabled ? "true" : "false"}
                 disabled={disabled}
               >

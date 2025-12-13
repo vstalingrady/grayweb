@@ -44,6 +44,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     try {
       const stored = window.localStorage.getItem(STORAGE_KEY);
       if (isSupportedLocale(stored)) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- Intentional: initialize locale from localStorage on mount
         setLocaleState(stored);
         return;
       }
@@ -52,6 +53,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     }
     const browserLocale = window.navigator.language?.toLowerCase() ?? "";
     if (browserLocale.startsWith("id")) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Intentional: initialize locale from browser on mount
       setLocaleState("id");
     }
   }, []);
