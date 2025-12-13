@@ -24,6 +24,7 @@ interface ChargeResponse {
 
 declare global {
     interface Window {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         MidtransNew3ds: any;
     }
 }
@@ -119,8 +120,8 @@ function PaymentContent() {
     const filteredActiveMethods =
         methodGroup === "va" && bankSearch.trim().length
             ? activeMethods.filter((method) =>
-                  method.label.toLowerCase().includes(bankSearch.trim().toLowerCase()),
-              )
+                method.label.toLowerCase().includes(bankSearch.trim().toLowerCase()),
+            )
             : activeMethods;
 
     useEffect(() => {
@@ -155,7 +156,7 @@ function PaymentContent() {
         setErrorMessage("");
 
         try {
-            let tokenId = null;
+
 
 
             const selectedMethod = PAYMENT_METHODS.find(m => m.id === selectedMethodId);
@@ -205,10 +206,16 @@ function PaymentContent() {
                 window.location.href = data.redirect_url;
             }
 
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error(err);
             setStatus("error");
-            setErrorMessage(err.message || "An unexpected error occurred.");
+            let msg = "An unexpected error occurred.";
+            if (err instanceof Error) {
+                msg = err.message;
+            } else if (typeof err === "string") {
+                msg = err;
+            }
+            setErrorMessage(msg);
         }
     };
 

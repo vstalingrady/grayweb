@@ -154,32 +154,50 @@ export function ProactivityNotificationProvider({ children }: ProactivityNotific
           .register("/sw-proactivity.js")
           .then(async (registration) => {
             try {
-              const subscription = await registration.pushManager.subscribe({
+              const subscribeOptions = {
                 userVisibleOnly: true,
                 applicationServerKey: urlBase64ToUint8Array(
                   process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "BNoW7-tQZ8XwYt7-tQZ8XwY"
                 ) as any,
-              });
+              };
 
-              // Send subscription to backend
-              const endpoint = subscription.endpoint;
-              const p256dh = subscription.getKey("p256dh");
-              const auth = subscription.getKey("auth");
+              let subscription: PushSubscription | null = null;
+              try {
+                subscription = await registration.pushManager.subscribe(subscribeOptions);
+              } catch (err: any) {
+                if (err.name === 'InvalidStateError' || err.message?.includes('different applicationServerKey')) {
+                  console.log('[Proactivity] VAPID key changed, renewing subscription...');
+                  const existing = await registration.pushManager.getSubscription();
+                  if (existing) {
+                    await existing.unsubscribe();
+                  }
+                  subscription = await registration.pushManager.subscribe(subscribeOptions);
+                } else {
+                  throw err;
+                }
+              }
 
-              if (p256dh && auth) {
-                const apiBase = resolveApiBaseUrl();
-                await fetch(`${apiBase}/users/${userId}/push/subscribe?token=${encodeURIComponent(token)}`, {
-                  method: "POST",
-                  headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": `Bearer ${token}`,
-                  },
-                  body: JSON.stringify({
-                    endpoint,
-                    p256dh: btoa(String.fromCharCode(...new Uint8Array(p256dh))),
-                    auth: btoa(String.fromCharCode(...new Uint8Array(auth))),
-                  }),
-                });
+              if (subscription) {
+                // Send subscription to backend
+                const endpoint = subscription.endpoint;
+                const p256dh = subscription.getKey("p256dh");
+                const auth = subscription.getKey("auth");
+
+                if (p256dh && auth) {
+                  const apiBase = resolveApiBaseUrl();
+                  await fetch(`${apiBase}/users/${userId}/push/subscribe?token=${encodeURIComponent(token)}`, {
+                    method: "POST",
+                    headers: {
+                      "Content-Type": "application/json",
+                      "Authorization": `Bearer ${token}`,
+                    },
+                    body: JSON.stringify({
+                      endpoint,
+                      p256dh: btoa(String.fromCharCode(...new Uint8Array(p256dh))),
+                      auth: btoa(String.fromCharCode(...new Uint8Array(auth))),
+                    }),
+                  });
+                }
               }
             } catch (err) {
               console.error("Failed to subscribe to push:", err);

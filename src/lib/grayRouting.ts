@@ -36,6 +36,11 @@ export const isGrayWorkspaceHost = (host?: string | null): boolean => {
     return true;
   }
 
+  // Allow localhost for development
+  if (isLocalHostname(normalized)) {
+    return true;
+  }
+
   return normalized.startsWith("gray.") || normalized === "gray";
 };
 
@@ -152,9 +157,9 @@ const resolvePreferredHost = (
 type HeadersLike =
   | Headers
   | {
-      get?: (name: string) => string | null | undefined;
-      [key: string]: unknown;
-    }
+    get?: (name: string) => string | null | undefined;
+    [key: string]: unknown;
+  }
   | Record<string, unknown>
   | null
   | undefined;

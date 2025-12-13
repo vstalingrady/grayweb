@@ -56,7 +56,7 @@ export default function PerformanceChart() {
 
       const lastValue = prevData[prevData.length - 1];
       const secondLastValue = prevData.length > 1 ? prevData[prevData.length - 2] : lastValue - 0.1;
-      let currentVelocity = lastValue - secondLastValue;
+      const currentVelocity = lastValue - secondLastValue;
 
       // Trend Logic:
       // Instead of changing direction every frame (too detailed),

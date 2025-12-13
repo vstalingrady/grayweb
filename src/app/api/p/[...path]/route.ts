@@ -1,0 +1,55 @@
+import { NextResponse } from 'next/server';
+
+// Hardcoded to fix regression from commit ce13ad44 where env var points to prod
+const PROXY_TARGET = 'http://localhost:8000';
+
+async function handleProxy(request: Request, { params }: { params: Promise<{ path: string[] }> }) {
+    const { path } = await params;
+    const pathString = path.join('/');
+    const url = new URL(request.url);
+    const searchParams = url.searchParams.toString();
+    const targetUrl = `${PROXY_TARGET}/${pathString}${searchParams ? `?${searchParams}` : ''}`;
+
+    console.log(`[Proxy] Forwarding ${request.method} ${url.pathname} to ${targetUrl}`);
+
+    try {
+        const headers = new Headers(request.headers);
+        headers.delete('host');
+        headers.delete('connection');
+        headers.delete('content-length');
+
+        let body: BodyInit | null | undefined;
+        if (request.method !== 'GET' && request.method !== 'HEAD') {
+            body = await request.blob();
+        }
+
+        const response = await fetch(targetUrl, {
+            method: request.method,
+            headers,
+            body,
+        });
+
+        const responseHeaders = new Headers(response.headers);
+
+        return new NextResponse(response.body, {
+            status: response.status,
+            statusText: response.statusText,
+            headers: responseHeaders,
+        });
+
+    } catch (error) {
+        console.error(`[Proxy] Error forwarding to ${targetUrl}:`, error);
+        return NextResponse.json(
+            { error: 'Internal Proxy Error', details: String(error) },
+            { status: 500 }
+        );
+    }
+}
+
+export async function GET(request: Request, props: { params: Promise<{ path: string[] }> }) { return handleProxy(request, props); }
+export async function POST(request: Request, props: { params: Promise<{ path: string[] }> }) { return handleProxy(request, props); }
+export async function PUT(request: Request, props: { params: Promise<{ path: string[] }> }) { return handleProxy(request, props); }
+export async function PATCH(request: Request, props: { params: Promise<{ path: string[] }> }) { return handleProxy(request, props); }
+export async function DELETE(request: Request, props: { params: Promise<{ path: string[] }> }) { return handleProxy(request, props); }
+export async function HEAD(request: Request, props: { params: Promise<{ path: string[] }> }) { return handleProxy(request, props); }
+export async function OPTIONS(request: Request, props: { params: Promise<{ path: string[] }> }) { return handleProxy(request, props); }

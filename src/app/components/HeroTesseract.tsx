@@ -10,11 +10,8 @@ const HeroTesseract = () => {
   useEffect(() => {
     if (!canvasRef.current) return;
 
-    let scene!: THREE.Scene;
-    let camera!: THREE.PerspectiveCamera;
-    let renderer!: THREE.WebGLRenderer;
-    let container!: THREE.Group;
-    let lines!: THREE.LineSegments;
+    // Variables declared closer to usage
+
     let angle4D = 0;
     const speed4D = 0.005;
     const speed3Dx = 0.005;
@@ -33,16 +30,16 @@ const HeroTesseract = () => {
       alpha: true,
       powerPreference: 'high-performance' // Optimize for performance
     });
-    renderer = rendererInstance;
+    const renderer = rendererInstance;
     renderer.setSize(canvas.clientWidth, canvas.clientHeight);
     renderer.setClearColor(0x000000, 1);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
     const sceneInstance = new THREE.Scene();
-    scene = sceneInstance;
+    const scene = sceneInstance;
     const aspect = canvas.clientWidth / canvas.clientHeight;
     const cameraInstance = new THREE.PerspectiveCamera(75, aspect, 0.1, 1000);
-    camera = cameraInstance;
+    const camera = cameraInstance;
 
     // Dynamic camera positioning based on aspect ratio
     const updateCameraPosition = () => {
@@ -55,7 +52,7 @@ const HeroTesseract = () => {
     updateCameraPosition();
 
     const containerInstance = new THREE.Group();
-    container = containerInstance;
+    const container = containerInstance;
     container.scale.set(1.0, 1.0, 1.0); // Optimized scale
     scene.add(container);
 
@@ -93,7 +90,7 @@ const HeroTesseract = () => {
       opacity: 1.0,
       linewidth: 2
     }));
-    lines = linesInstance;
+    const lines = linesInstance;
     container.add(lines);
 
     // Tech logo sprites disabled for a cleaner, non-spinning appearance

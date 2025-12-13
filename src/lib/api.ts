@@ -1,6 +1,6 @@
 import { getSupabaseClient } from './supabaseClient';
 
-const API_PROXY_PREFIX = '/api/backend';
+const API_PROXY_PREFIX = '/api/p';
 
 export const resolveApiBaseUrl = () => API_PROXY_PREFIX;
 
@@ -618,14 +618,16 @@ class ApiService {
     // Inject Supabase Auth Token
     const supabase = getSupabaseClient();
     if (supabase) {
-      const { data } = await supabase.auth.getSession();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data } = await (supabase.auth as any).getSession();
       const token = data.session?.access_token;
       // Ensure token is a valid JWT string (simple heuristic: non-empty, has 3 parts)
       if (typeof token === 'string' && token.length > 20 && token.split('.').length === 3) {
         headers.set('Authorization', `Bearer ${token}`);
       } else if (token) {
         console.warn('[ApiService] Invalid auth token detected. Clearing session.');
-        await supabase.auth.signOut().catch(() => { });
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (supabase.auth as any).signOut().catch(() => { });
       }
     }
 
@@ -1409,14 +1411,16 @@ class ApiService {
     // Inject Supabase Auth Token
     const supabase = getSupabaseClient();
     if (supabase) {
-      const { data } = await supabase.auth.getSession();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data } = await (supabase.auth as any).getSession();
       const token = data.session?.access_token;
       // Ensure token is a valid JWT string (simple heuristic: non-empty, has 3 parts)
       if (typeof token === 'string' && token.length > 20 && token.split('.').length === 3) {
         headers['Authorization'] = `Bearer ${token}`;
       } else if (token) {
         console.warn('[ApiService.stream] Invalid auth token detected. Clearing session.');
-        await supabase.auth.signOut().catch(() => { });
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (supabase.auth as any).signOut().catch(() => { });
       }
     }
 

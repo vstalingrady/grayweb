@@ -1,4 +1,4 @@
-import type { ChatMessage, GrayReminderCreatedPayload, ChatSession } from "./types";
+import type { ChatMessage, GrayReminderCreatedPayload, ChatSession, ConversationHistoryEntryPayload } from "./types";
 import type { User, Reminder } from "@/lib/api";
 import {
     GREETING_PATTERN,
@@ -335,10 +335,7 @@ export const toTimestamp = (value?: string | number | Date | null): number => {
 };
 
 // Conversation history payload builder
-type ConversationHistoryEntryPayload = {
-    role: "user" | "model";
-    text: string;
-};
+
 
 export const buildConversationHistoryPayload = (messages: ChatMessage[]) => {
     return messages

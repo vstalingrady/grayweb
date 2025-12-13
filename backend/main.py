@@ -954,7 +954,7 @@ GROK_TOOL_MODEL = os.getenv("GROK_TOOL_MODEL", "x-ai/grok-4.1-fast")
 GROK_DEFAULT_MODEL = os.getenv("GROK_DEFAULT_MODEL", OPENROUTER_SERVICE.lite_model if OPENROUTER_SERVICE else "x-ai/grok-4.1-fast")
 # GROQ_LITE_MODEL removed - using OpenRouter for lite tier
 # Hardcoded to x-ai/grok-4.1-fast - don't use env var for now
-OPENROUTER_LITE_MODEL = "x-ai/grok-4.1-fast"
+OPENROUTER_LITE_MODEL = os.getenv("OPENROUTER_LITE_MODEL", "x-ai/grok-4.1-fast")
 GEMINI_DEFAULT_MODEL = os.getenv("GEMINI_DEFAULT_MODEL", "models/gemini-flash-lite-latest")
 GEMINI_LIGHT_MODEL = os.getenv("GEMINI_LIGHT_MODEL", "models/gemini-flash-lite-latest")
 GEMINI_PRO_MODEL = os.getenv("GEMINI_PRO_MODEL", "models/gemini-3-pro-preview")
@@ -5561,17 +5561,15 @@ async def stream_ai_response(
     provider: Optional[str] = None
 
     # Respect explicit tier aliases first
-    if normalized_model in {"lite", "gray-lite"}:
+    if normalized_model in {"lite", "gray-lite", "pro", "gray-pro"}:
         # Lite tier routing: use OpenRouter with Grok 4.1 Fast
+        # We now route "Pro" requests here too, effectively removing the Pro tier logic.
         if OPENROUTER_SERVICE and OPENROUTER_SERVICE.available:
             provider = "openrouter"
             model = OPENROUTER_LITE_MODEL  # x-ai/grok-4.1-fast - always set for tier alias
         else:
             provider = "gemini"
             model = GEMINI_LIGHT_MODEL
-    elif normalized_model in {"pro", "gray-pro"}:
-        provider = "gemini"
-        model = GEMINI_PRO_MODEL  # Always set the actual model path for tier alias
     elif normalized_model == "pioneer":
         # Pioneer tier is a direct OpenRouter passthrough - model ID should be already set
         # If only "pioneer" was passed without a specific model, default to a premium model
@@ -5582,7 +5580,7 @@ async def stream_ai_response(
                 model = "anthropic/claude-sonnet-4.5"  # Default pioneer model
         else:
             provider = "gemini"
-            model = GEMINI_PRO_MODEL
+            model = GEMINI_LIGHT_MODEL # Fallback now uses Lite instead of Pro
     elif normalized_model.startswith("models/") or normalized_model.startswith("gemini"):
         provider = "gemini"
     elif normalized_model.startswith("openrouter") or "/" in normalized_model:

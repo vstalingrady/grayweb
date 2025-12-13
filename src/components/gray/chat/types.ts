@@ -44,6 +44,11 @@ export type ChatSession = {
     isGeneratingTitle?: boolean;
 };
 
+export type ConversationHistoryEntryPayload = {
+    role: "user" | "model";
+    text: string;
+};
+
 export type ChatContextValue = {
     sessions: ChatSession[];
     createThreadSession: (
@@ -111,7 +116,6 @@ export type ChatContextValue = {
     setContextCacheContent: (value: string) => void;
     webSearchEnabled: boolean;
     setWebSearchEnabled: (value: boolean) => void;
-    toggleWebSearchEnabled: () => void;
     remindersEnabled: boolean;
     toggleRemindersEnabled: () => void;
     fileSearchStores: { name: string; display_name?: string }[];
@@ -136,8 +140,8 @@ export type ChatContextValue = {
     loadConversationMessages: (sessionId: string) => Promise<void>;
     reasoningMode: boolean;
     setReasoningMode: (value: boolean) => void;
-    modelTier: "lite" | "pro";
-    setModelTier: (value: "lite" | "pro") => void;
+    modelTier: "lite" | "pro" | "pioneer";
+    setModelTier: (value: "lite" | "pro" | "pioneer") => void;
     questionnaireSession: QuestionnaireSession | null;
     startQuestionnaire: (mode: "quick" | "deep") => void;
     cancelQuestionnaire: () => void;

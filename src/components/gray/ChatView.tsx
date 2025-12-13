@@ -36,6 +36,7 @@ import {
 } from "lucide-react";
 import ReactMarkdown, { type Components } from "react-markdown";
 // Type definition for code component
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type CodeComponent = any;
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
@@ -77,6 +78,7 @@ import { useI18n } from "@/contexts/I18nContext";
 const LEGACY_REMINDER_SNIPPET_REGEX =
   /```[a-z0-9_-]*[\s\S]*?(gray[\s\S]{0,120}?(?:reminder|plan|habit))[\s\S]*?```/gi;
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const MARKDOWN_PLUGINS: any = [
   // Rely on explicit math markers and convert them into KaTeX-friendly
   // dollar fences so currency like `$20` stays untouched.
@@ -168,6 +170,7 @@ const hasCodeBlockDescendant = (node: ReactNode): boolean => {
   if (!isValidElement(node)) {
     return false;
   }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const props: any = node.props ?? {};
   if (props["data-code-block-root"]) {
     return true;
@@ -370,14 +373,15 @@ const MobileWelcomeScreen = memo(() => {
   return (
     <div className={styles.mobileWelcomeScreen}>
       <div className={styles.mobileWelcomeContent}>
-        <p className={styles.mobileWelcomeGreeting}>{greeting}</p>
         <div className={styles.mobileWelcomeLogo}>
           <img src="/grayaiwhitenotspinning.svg" alt="" />
         </div>
+        <p className={styles.mobileWelcomeGreeting}>{greeting}</p>
       </div>
     </div>
   );
 });
+MobileWelcomeScreen.displayName = "MobileWelcomeScreen";
 
 const deriveGroundingSourceHost = (site?: string | null, uri?: string | null) => {
   const normalizedSite = site?.trim();
@@ -1043,7 +1047,7 @@ const CODE_LIKE_PATTERN =
   /[{}()[\];<>]|=>|:=|const\s+|let\s+|var\s+|function\s+|class\s+|return\s+|if\s+|else\s+|for\s+|while\s+|async\s+|await\s+|def\s+|import\s+|from\s+|try\s+|catch\s+|#include|<\?php/;
 const LATEX_MATH_BLOCK_PATTERN = /^\s*(\$\$[\s\S]*\$\$|\\\[[\s\S]*\\\])\s*$/;
 
-const MarkdownCodeBlock: CodeComponent = ({ inline, className, children, ...props }: any) => {
+const MarkdownCodeBlock: CodeComponent = ({ inline, className, children, ...props }: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
   const isInline = Boolean(inline);
   const [copied, setCopied] = useState(false);
   const { t } = useI18n();
@@ -1148,13 +1152,13 @@ const MarkdownCodeBlock: CodeComponent = ({ inline, className, children, ...prop
     >
       <div className={`${styles.codeHeader} ${isCompactBlock ? styles.codeHeaderCompact : ""}`}>
         <span className={styles.codeLanguage}>{language}</span>
-	        <button
-	          className={styles.codeCopyButton}
-	          type="button"
-	          onClick={handleCopy}
-	          aria-label={t("Copy code")}
-	          data-copied={copied ? "true" : undefined}
-	        >
+        <button
+          className={styles.codeCopyButton}
+          type="button"
+          onClick={handleCopy}
+          aria-label={t("Copy code")}
+          data-copied={copied ? "true" : undefined}
+        >
           {copied ? <CheckCircle2 size={13} /> : <Copy size={13} />}
         </button>
       </div>
@@ -1321,8 +1325,7 @@ const ThinkingBlock = ({
       return;
     }
 
-    // Update immediately
-    setLiveSeconds((Date.now() - thinkingStartTime) / 1000);
+
 
     const interval = setInterval(() => {
       setLiveSeconds((Date.now() - thinkingStartTime) / 1000);
@@ -1332,46 +1335,46 @@ const ThinkingBlock = ({
   }, [isActivelyThinking, thinkingStartTime]);
 
   // Format time display: "3.2 seconds" or "1:23.4" for longer durations
-	  const formatTime = (seconds: number): string => {
-	    if (seconds < 60) {
-	      const unitKey = seconds >= 2 || seconds < 1 ? "seconds" : "second";
-	      return `${seconds.toFixed(1)} ${t(unitKey)}`;
-	    }
-	    const mins = Math.floor(seconds / 60);
-	    const secs = seconds % 60;
-	    return `${mins}:${secs.toFixed(1).padStart(4, "0")}`;
-	  };
+  const formatTime = (seconds: number): string => {
+    if (seconds < 60) {
+      const unitKey = seconds >= 2 || seconds < 1 ? "seconds" : "second";
+      return `${seconds.toFixed(1)} ${t(unitKey)}`;
+    }
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toFixed(1).padStart(4, "0")}`;
+  };
 
   const timeLabel = useMemo(() => {
-	    // If actively thinking, show live timer
-	    if (isActivelyThinking && thinkingStartTime) {
-	      return t("Thinking for {time}", { time: formatTime(liveSeconds) });
-	    }
-	    // If we have a final duration, show it (even if still streaming content)
-	    if (typeof reasoningSeconds === "number" && reasoningSeconds > 0) {
-	      return t("Thought for {time}", { time: formatTime(reasoningSeconds) });
-	    }
+    // If actively thinking, show live timer
+    if (isActivelyThinking && thinkingStartTime) {
+      return t("Thinking for {time}", { time: formatTime(liveSeconds) });
+    }
+    // If we have a final duration, show it (even if still streaming content)
+    if (typeof reasoningSeconds === "number" && reasoningSeconds > 0) {
+      return t("Thought for {time}", { time: formatTime(reasoningSeconds) });
+    }
 
-	    // Only show "Thinking" if purely streaming and no reasoning time yet
-	    if (isStreamingMessage) {
-	      return t("Thinking");
-	    }
-	    return null;
-	  }, [isActivelyThinking, thinkingStartTime, liveSeconds, reasoningSeconds, isStreamingMessage, t]);
+    // Only show "Thinking" if purely streaming and no reasoning time yet
+    if (isStreamingMessage) {
+      return t("Thinking");
+    }
+    return null;
+  }, [isActivelyThinking, thinkingStartTime, liveSeconds, reasoningSeconds, isStreamingMessage, t]);
 
   return (
     <div className={styles.chatThinkingBlock} data-expanded={isExpanded ? "true" : "false"}>
       <button
         type="button"
-	        className={styles.chatThinkingHeader}
-	        onClick={() => setIsExpanded(!isExpanded)}
-	        aria-expanded={isExpanded}
-	        aria-label={isExpanded ? t("Collapse reasoning") : t("Expand reasoning")}
-	      >
+        className={styles.chatThinkingHeader}
+        onClick={() => setIsExpanded(!isExpanded)}
+        aria-expanded={isExpanded}
+        aria-label={isExpanded ? t("Collapse reasoning") : t("Expand reasoning")}
+      >
         <Brain size={14} className={styles.chatThinkingIcon} />
-	        <span className={styles.chatThinkingLabel}>
-	          {timeLabel || t("Thinking")}
-	        </span>
+        <span className={styles.chatThinkingLabel}>
+          {timeLabel || t("Thinking")}
+        </span>
         <ChevronDown
           size={14}
           className={`${styles.chatThinkingChevron} ${isExpanded ? styles.chatThinkingChevronExpanded : ""}`}
@@ -1417,9 +1420,9 @@ const ChatMessagesList = memo(
     isResponding,
     isActivelyThinking,
     thinkingStartTime,
-	  }: ChatMessagesListProps) => {
-	    const { t } = useI18n();
-	    const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  }: ChatMessagesListProps) => {
+    const { t } = useI18n();
+    const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
     // Use ref instead of state to avoid re-rendering on every keystroke
     const editContentRef = useRef<string>("");
     const editTextareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -1464,15 +1467,16 @@ const ChatMessagesList = memo(
                 reasoningSeconds={reasoningSeconds}
                 toolLabel={
                   // Check the very last message in the list if it's an assistant message
-	                  messages.length > 0 && messages[messages.length - 1].role === "assistant"
-	                    ? extractCurrentToolStatus(messages[messages.length - 1].content, t)
-	                    : null
-	                }
+                  messages.length > 0 && messages[messages.length - 1].role === "assistant"
+                    ? extractCurrentToolStatus(messages[messages.length - 1].content, t)
+                    : null
+                }
               />
             </div>
           </div>
         )}
 
+        {/* eslint-disable-next-line react-compiler/react-compiler */}
         {[...messages].reverse().map((message, reverseIndex) => {
           const messageIndex = messages.length - 1 - reverseIndex;
           const isUser = message.role === "user";
@@ -1497,9 +1501,9 @@ const ChatMessagesList = memo(
           const isStreamingMessage = isAssistant && message.id === activeStreamingMessageId;
           const hasTextContent = Boolean(visibleAssistantText.trim());
           const assistantReminders = isAssistant && Array.isArray(message.reminders) ? message.reminders : [];
-	          const sourceCards = isAssistant && message.groundingMetadata
-	            ? buildGroundingSourceCards(message.groundingMetadata, t)
-	            : [];
+          const sourceCards = isAssistant && message.groundingMetadata
+            ? buildGroundingSourceCards(message.groundingMetadata, t)
+            : [];
           const showAssistantMarkdown = isAssistant && hasTextContent;
           const hasVisibleContent =
             hasThinkingContent || showAssistantMarkdown || assistantReminders.length > 0;
@@ -1511,7 +1515,7 @@ const ChatMessagesList = memo(
             typeof message.createdAt === "number" && Number.isFinite(message.createdAt)
               ? new Date(message.createdAt).toISOString()
               : undefined;
-	          const timestampLabel = formatMessageTimestamp(message.createdAt, t);
+          const timestampLabel = formatMessageTimestamp(message.createdAt, t);
 
           if (shouldHideEmptyAssistantMessage) {
             return null;
@@ -1524,18 +1528,18 @@ const ChatMessagesList = memo(
           const responseDurationLabel = isAssistant ? getResponseDurationLabel(messageIndex) : null;
           const tokenCount = isAssistant ? estimateTokenCount(rawContent) : null;
           const hasTokenEstimate = typeof tokenCount === "number" && Number.isFinite(tokenCount) && tokenCount > 0;
-	          const metadataTokenLabel = hasTokenEstimate
-	            ? t("{count} tokens", { count: tokenCount.toLocaleString() })
-	            : "—";
-	          const metadataRows: { label: string; value: string }[] = [];
-	          metadataRows.push({ label: t("Tokens"), value: metadataTokenLabel });
-	          if (responseDurationLabel) {
-	            metadataRows.push({ label: t("Duration"), value: responseDurationLabel });
-	          }
-	          const backendTimingLabel = formatBackendTimingLabel(message.backendTimings);
-	          if (backendTimingLabel) {
-	            metadataRows.push({ label: t("Backend"), value: backendTimingLabel });
-	          }
+          const metadataTokenLabel = hasTokenEstimate
+            ? t("{count} tokens", { count: tokenCount.toLocaleString() })
+            : "—";
+          const metadataRows: { label: string; value: string }[] = [];
+          metadataRows.push({ label: t("Tokens"), value: metadataTokenLabel });
+          if (responseDurationLabel) {
+            metadataRows.push({ label: t("Duration"), value: responseDurationLabel });
+          }
+          const backendTimingLabel = formatBackendTimingLabel(message.backendTimings);
+          if (backendTimingLabel) {
+            metadataRows.push({ label: t("Backend"), value: backendTimingLabel });
+          }
           const isMetadataAvailable = isAssistant && metadataRows.length > 0;
           const isLatestAssistantMessage = isAssistant && message.id === latestAssistantMessageId;
           const isRegenerating = regeneratingMessageId === message.id;
@@ -1561,11 +1565,11 @@ const ChatMessagesList = memo(
                 <div className={styles.chatMessageAttachments}>
                   {message.attachments.map((attachment, index) => (
                     <div key={attachment.id || index} className={styles.chatMessageAttachment}>
-	                      {attachment.mime_type?.startsWith("image/") ? (
-	                        <img
-	                          src={attachment.previewUrl || attachment.public_url}
-	                          alt={t("Attachment")}
-	                        />
+                      {attachment.mime_type?.startsWith("image/") ? (
+                        <img
+                          src={attachment.previewUrl || attachment.public_url}
+                          alt={t("Attachment")}
+                        />
                       ) : (
                         <div className={styles.chatMessageAttachmentFile}>
                           <span>{attachment.filename}</span>
@@ -1586,6 +1590,7 @@ const ChatMessagesList = memo(
                         if (el) {
                           // Focus cursor at end on mount
                           if (document.activeElement !== el) {
+                            // eslint-disable-next-line react-compiler/react-compiler
                             el.setSelectionRange(el.value.length, el.value.length);
                             el.focus();
                           }
@@ -1657,7 +1662,9 @@ const ChatMessagesList = memo(
                         const renderedSearchEntry =
                           typeof searchEntryPoint?.rendered_content === "string"
                             ? searchEntryPoint?.rendered_content
+                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
                             : typeof (searchEntryPoint as any)?.renderedContent === "string"
+                              // eslint-disable-next-line @typescript-eslint/no-explicit-any
                               ? (searchEntryPoint as any).renderedContent
                               : null;
                         const chunks =
@@ -1765,10 +1772,10 @@ const ChatMessagesList = memo(
                                             initials
                                           )}
                                         </div>
-	                                        <div className={styles.chatGroundingSourceCardContent}>
-	                                          <div className={styles.chatGroundingSourceCardTitle}>
-	                                            {source.title ?? t("Referenced source")}
-	                                          </div>
+                                        <div className={styles.chatGroundingSourceCardContent}>
+                                          <div className={styles.chatGroundingSourceCardTitle}>
+                                            {source.title ?? t("Referenced source")}
+                                          </div>
                                           {source.siteLabel ? (
                                             <div className={styles.chatGroundingSourceCardSite}>
                                               {source.siteLabel}
@@ -1805,9 +1812,9 @@ const ChatMessagesList = memo(
                             ) : null}
                             {mapSources.length > 0 ? (
                               <div className={styles.chatGroundingSources}>
-	                                {mapSources.map((maps, index) => {
-	                                  const label = maps.title ?? maps.placeId ?? t("Maps source");
-	                                  const href = maps.uri ?? maps.googleMapsUri ?? undefined;
+                                {mapSources.map((maps, index) => {
+                                  const label = maps.title ?? maps.placeId ?? t("Maps source");
+                                  const href = maps.uri ?? maps.googleMapsUri ?? undefined;
                                   return (
                                     <div key={`${message.id}-maps-source-${index}`} className={styles.chatGroundingSource}>
                                       {href ? (
@@ -1830,10 +1837,10 @@ const ChatMessagesList = memo(
                               </div>
                             ) : null}
                             {metadata?.google_maps_widget_context_token ? (
-	                              <div className={styles.chatGroundingWidget}>
-	                                <span>{t("Widget token:")}</span>
-	                                <code>{metadata?.google_maps_widget_context_token}</code>
-	                              </div>
+                              <div className={styles.chatGroundingWidget}>
+                                <span>{t("Widget token:")}</span>
+                                <code>{metadata?.google_maps_widget_context_token}</code>
+                              </div>
                             ) : null}
                           </div>
                         );
@@ -1851,22 +1858,22 @@ const ChatMessagesList = memo(
                       </time>
                       {isAssistant && Array.isArray(message.variants) && message.variants.length > 1 ? (
                         <div className={styles.chatMessageVariantControls}>
-	                          <button
-	                            type="button"
-	                            aria-label={t("Previous response")}
-	                            onClick={() => handleCycleAssistantVariant(message.id, "prev")}
-	                          >
+                          <button
+                            type="button"
+                            aria-label={t("Previous response")}
+                            onClick={() => handleCycleAssistantVariant(message.id, "prev")}
+                          >
                             <ChevronLeft size={14} />
                           </button>
                           <span className={styles.chatMessageVariantLabel}>
                             {(message.activeVariantIndex ?? message.variants.length - 1) + 1} /{" "}
                             {message.variants.length}
                           </span>
-	                          <button
-	                            type="button"
-	                            aria-label={t("Next response")}
-	                            onClick={() => handleCycleAssistantVariant(message.id, "next")}
-	                          >
+                          <button
+                            type="button"
+                            aria-label={t("Next response")}
+                            onClick={() => handleCycleAssistantVariant(message.id, "next")}
+                          >
                             <ChevronRight size={14} />
                           </button>
                         </div>
@@ -1876,9 +1883,9 @@ const ChatMessagesList = memo(
                       <div className={styles.chatActionIconRow}>
                         {isMetadataAvailable ? (
                           <div className={styles.chatMetadataControl}>
-	                            <button type="button" aria-label={t("Response details")} tabIndex={0}>
-	                              <SignalHigh size={15} />
-	                            </button>
+                            <button type="button" aria-label={t("Response details")} tabIndex={0}>
+                              <SignalHigh size={15} />
+                            </button>
                             <div className={styles.chatMetadataPopover} role="tooltip" aria-hidden="true">
                               {metadataRows.map((row) => (
                                 <div key={row.label}>
@@ -1889,48 +1896,48 @@ const ChatMessagesList = memo(
                             </div>
                           </div>
                         ) : null}
-	                        <button
-	                          type="button"
-	                          aria-label={t("Copy message")}
-	                          onClick={() => handleCopyMessage(message.id, isAssistant ? fullText : rawContent)}
-	                          disabled={!(isAssistant ? fullText.trim() : rawContent.trim())}
-	                        >
+                        <button
+                          type="button"
+                          aria-label={t("Copy message")}
+                          onClick={() => handleCopyMessage(message.id, isAssistant ? fullText : rawContent)}
+                          disabled={!(isAssistant ? fullText.trim() : rawContent.trim())}
+                        >
                           {copiedMessageId === message.id ? <CheckCircle2 size={15} /> : <Copy size={15} />}
                         </button>
                         {isAssistant && (
-	                          <button
-	                            type="button"
-	                            aria-label={t("Regenerate response")}
-	                            onClick={() => handleRegenerate(message.id)}
-	                            disabled={isRegenerating || isResponding}
-	                          >
+                          <button
+                            type="button"
+                            aria-label={t("Regenerate response")}
+                            onClick={() => handleRegenerate(message.id)}
+                            disabled={isRegenerating || isResponding}
+                          >
                             <RefreshCw size={15} className={isRegenerating ? styles.spin : undefined} />
                           </button>
                         )}
                         {!isAssistant && (
-	                          <button
-	                            type="button"
-	                            aria-label={t("Edit message")}
-	                            onClick={() => startEditing(message.id, rawContent)}
-	                          >
+                          <button
+                            type="button"
+                            aria-label={t("Edit message")}
+                            onClick={() => startEditing(message.id, rawContent)}
+                          >
                             <Pencil size={15} />
                           </button>
                         )}
                         {!isAssistant && (
-	                          <button
-	                            type="button"
-	                            aria-label={t("Retry message")}
-	                            onClick={() => handleRetryUserMessage(message.id)}
-	                            disabled={!rawContent.trim()}
-	                          >
+                          <button
+                            type="button"
+                            aria-label={t("Retry message")}
+                            onClick={() => handleRetryUserMessage(message.id)}
+                            disabled={!rawContent.trim()}
+                          >
                             <RefreshCw size={15} />
                           </button>
                         )}
-	                        <button
-	                          type="button"
-	                          aria-label={t("Delete message")}
-	                          onClick={() => handleDeleteMessage(message.id)}
-	                        >
+                        <button
+                          type="button"
+                          aria-label={t("Delete message")}
+                          onClick={() => handleDeleteMessage(message.id)}
+                        >
                           <Trash2 size={15} />
                         </button>
                       </div>
@@ -2415,12 +2422,12 @@ export function GrayChatView({
       if (!message.groundingMetadata) {
         return [];
       }
-	      const allSources = buildGroundingSourceCards(message.groundingMetadata, t);
-	      const searchSources = allSources.filter((source) => Boolean(source.href));
-	      return searchSources;
-	    }
-	    return [];
-	  }, [messages, t]);
+      const allSources = buildGroundingSourceCards(message.groundingMetadata, t);
+      const searchSources = allSources.filter((source) => Boolean(source.href));
+      return searchSources;
+    }
+    return [];
+  }, [messages, t]);
   const locationRequestSummary = pendingLocationRequestMessage
     ? pendingLocationRequestMessage.length > 120
       ? `${pendingLocationRequestMessage.slice(0, 120)}…`
@@ -3308,11 +3315,11 @@ export function GrayChatView({
     if (!targetSession && sessionId) {
       const nowTs = Date.now();
       const normalizedSessionConversationId = normalizeConversationIdValue(sessionId);
-	      targetSession = ensureSession(sessionId, () => ({
-	        id: sessionId,
-	        title: t("New Chat"),
-	        titleMode: "auto",
-	        createdAt: nowTs,
+      targetSession = ensureSession(sessionId, () => ({
+        id: sessionId,
+        title: t("New Chat"),
+        titleMode: "auto",
+        createdAt: nowTs,
         updatedAt: nowTs,
         messages: [],
         isResponding: false,

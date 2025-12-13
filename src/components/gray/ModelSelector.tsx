@@ -48,15 +48,15 @@ const PIONEER_GROUPS: ModelGroup[] = [
       { id: "google/gemini-2.5-flash", label: "Gemini 2.5 Flash", cost: "$$" },
     ],
   },
-	  {
-	    id: "openai",
-	    label: "OpenAI",
-	    iconPath: "/logos/whiteopenai.svg",
-	    models: [
-	      { id: "openai/gpt-5.2-chat", label: "GPT 5.2", cost: "$$$" },
+  {
+    id: "openai",
+    label: "OpenAI",
+    iconPath: "/logos/whiteopenai.svg",
+    models: [
+      { id: "openai/gpt-5.2-chat", label: "GPT 5.2", cost: "$$$" },
       { id: "openai/gpt-5.2-pro", label: "GPT 5.2 Pro", cost: "$$$$", tierRequired: "pioneer" },
-	    ],
-	  },
+    ],
+  },
   {
     id: "deepseek",
     label: "DeepSeek",
@@ -134,7 +134,11 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
         };
       }
     }
-    return OPTIONS[0];
+
+    // Find option matching current tier, otherwise default to lite
+    // Since "pro" is removed, this will naturally fallback to OPTIONS[0] (Lite) if state is arguably "pro"
+    // (though ChatProvider should catch that).
+    return OPTIONS.find(o => o.id === modelTier) ?? OPTIONS[0];
   }, [modelTier, selectedModelId, t]);
 
   const handleSelect = useCallback(

@@ -8,10 +8,16 @@ const rawProxyTarget =
 
 const normalizeProxyTarget = (value: string) => value.replace(/\/+$/, "");
 const proxyTarget = normalizeProxyTarget(rawProxyTarget);
+console.log('Proxy Target:', proxyTarget);
 
 const nextConfig: NextConfig = {
   // Enable standalone output for Docker builds
   output: 'standalone',
+  logging: {
+    fetches: {
+      fullUrl: true,
+    },
+  },
 
   transpilePackages: ['three', '@react-three/fiber', 'react-reconciler'],
 
@@ -73,18 +79,7 @@ const nextConfig: NextConfig = {
     ],
   },
 
-  async rewrites() {
-    return {
-      beforeFiles: [],
-      afterFiles: [
-        {
-          source: "/api/backend/:path*",
-          destination: `${proxyTarget}/:path*`,
-        },
-      ],
-      fallback: [],
-    };
-  },
+
 
   turbopack: {
     // Explicitly set the project root to avoid lockfile ambiguity warnings.
@@ -162,8 +157,8 @@ const nextConfig: NextConfig = {
               "form-action 'self'",
               // Objects: disabled
               "object-src 'none'",
-              // Upgrade insecure requests
-              "upgrade-insecure-requests",
+              // Upgrade insecure requests - only in production
+              ...(process.env.NODE_ENV === 'production' ? ["upgrade-insecure-requests"] : []),
             ].join('; '),
           },
           // Restrict browser features

@@ -76,6 +76,7 @@ if __name__ == "__main__":
     LOG.debug(f"Loading environment from {ROOT_DIR / '.env'}")
 
     load_dotenv(ROOT_DIR / ".env", override=False)
+    load_dotenv(ROOT_DIR / ".env.local", override=True)
 
 
 

@@ -3072,8 +3072,8 @@
   overflow-y: auto;
   /* scrollbar-width: none; */
   overflow-anchor: auto;
-  padding-bottom: 24px;
-  scroll-padding-bottom: 24px;
+  padding-bottom: 0;
+  scroll-padding-bottom: 0;
 }
 
 .chatViewport::-webkit-scrollbar {
@@ -4222,7 +4222,8 @@
   text-align: right;
   opacity: 0.35;
   user-select: none;
-  font-size: 0.78rem;
+  font-size: 0.82rem;
+  line-height: 1.6;
   color: rgba(255, 255, 255, 0.5);
 }
 
@@ -4544,6 +4545,12 @@
   width: 100%;
   max-width: min(var(--chat-column-max-width, 680px), 100%);
   margin: 0 auto clamp(4px, 1vh, 10px);
+  padding: 0;
+}
+
+.chatAttachmentTopTray:empty {
+  display: none;
+  margin: 0;
   padding: 0;
 }
 
@@ -8967,7 +8974,7 @@ h1.greeting {
   /* Scroll internally */
   padding: 0;
   /* Preserve bottom padding to push content above chat composer */
-  padding-bottom: 24px;
+  padding-bottom: 0;
   overscroll-behavior-y: contain;
   scroll-behavior: smooth;
   z-index: 0;
@@ -8996,7 +9003,7 @@ h1.greeting {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 12px;
+
   padding: 0;
   /* No bottom padding - skirt handles bottom spacing */
   padding-bottom: 0;

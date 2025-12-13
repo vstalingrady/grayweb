@@ -40,7 +40,8 @@ import {
   ChatSessionScope,
   ChatTitleMode,
   ChatContextValue,
-  GrayReminderCreatedPayload
+  GrayReminderCreatedPayload,
+  ConversationHistoryEntryPayload,
 } from "./chat/types";
 import {
   buildGeneralConversationId,
@@ -78,9 +79,11 @@ import {
   DUPLICATE_THREAD_WINDOW_MS,
   REMOTE_SESSION_MERGE_WINDOW_MS,
   REMINDER_POLL_MIN_INTERVAL,
-  REMINDER_POLL_SHORT_INTERVAL
+  REMINDER_POLL_SHORT_INTERVAL,
 } from "./chat/constants";
 import { REMINDERS_REFRESH_EVENT } from "./hooks/useWorkspaceData";
+
+const WORKSPACE_CONTEXT_COOLDOWN_MS = 600000; // 10 minutes
 
 declare global {
   interface Window {
@@ -183,6 +186,7 @@ const sendReminderNotification = (reminder: Reminder) => {
       badge: REMINDER_NOTIFICATION_ICON,
       tag: `gray-reminder-${reminder.id}`,
       requireInteraction: true,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
     notification.addEventListener("click", () => {
       if (typeof window !== "undefined" && window.focus) {
@@ -215,7 +219,7 @@ const makeMessage = (
     role,
     content,
     createdAt: now,
-    createdAt: now,
+
     groundingMetadata: metadata ?? undefined,
     attachments: attachments ?? undefined,
   };
@@ -756,7 +760,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
   const [fileSearchImportStatus, setFileSearchImportStatus] = useState<string | null>(null);
   const [fileSearchUploadInputRef] = useState<RefObject<HTMLInputElement | null>>({ current: null });
   const [reasoningMode, setReasoningMode] = useState(false);
-  const [modelTier, setModelTier] = useState<"lite" | "pro" | "pioneer">("pro");
+  const [modelTier, setModelTier] = useState<"lite" | "pro" | "pioneer">("lite");
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
   const lastAutoCachedWorkspaceRef = useRef<string | null>(null);
   const autoCacheInFlightRef = useRef(false);
@@ -769,8 +773,12 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
   useEffect(() => {
     if (typeof window !== "undefined") {
       const storedTier = localStorage.getItem("gray_model_tier");
-      if (storedTier && ["lite", "pro", "pioneer"].includes(storedTier)) {
-        setModelTier(storedTier as any);
+      if (storedTier && ["lite", "pioneer"].includes(storedTier)) {
+        setModelTier(storedTier as "lite" | "pioneer");
+      } else if (storedTier === "pro") {
+        // Migration: "Pro" is removed, force to "Lite"
+        setModelTier("lite");
+        localStorage.setItem("gray_model_tier", "lite");
       }
       const storedModelId = localStorage.getItem("gray_selected_model_id");
       if (storedModelId) {
@@ -1152,6 +1160,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
           const upload = await apiService.uploadMediaFile(processedFile);
           const previewUrl = file.type?.toLowerCase().startsWith("image/")
             ? URL.createObjectURL(file)
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             : (upload as any)?.publicUrl || (upload as any)?.url || null;
           uploads.push({ ...upload, previewUrl });
         }
@@ -2047,7 +2056,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       // In a real implementation, we would use the Python logic (evaluateSmartGoal, etc.)
       // and potentially call the LLM for "deep" mode.
 
-      let nextSession = { ...session };
+      const nextSession = { ...session };
       let responseText = "";
 
       if (session.phase === "foundation") {
@@ -2763,6 +2772,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
         // Soft-handle network/unavailable backend errors to avoid noisy logs
         const isNetworkish =
           isApiNetworkError(error) ||
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           (error instanceof Error && "status" in error && typeof (error as any).status === "number" && (error as any).status >= 500);
         if (isNetworkish) {
           if (process.env.NODE_ENV !== "production") {

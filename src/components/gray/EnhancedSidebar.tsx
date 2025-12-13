@@ -176,6 +176,7 @@ function GrayEnhancedSidebarComponent({
             height={24}
             priority
             className={styles.sidebarRailLogoImage}
+            style={{ width: '24px', height: 'auto' }}
           />
         </button>
         <nav aria-label={t("Sidebar quick actions")} className={styles.railNav}>
@@ -249,6 +250,7 @@ function GrayEnhancedSidebarComponent({
                 height={28}
                 priority
                 className={styles.sidebarLogoImage}
+                style={{ width: '28px', height: 'auto' }}
               />
             </button>
             <div className={styles.sidebarAnchored}>
