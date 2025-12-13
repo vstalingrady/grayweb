@@ -7,6 +7,8 @@ import { CheckCircle, AlertCircle, Loader2, ArrowLeft, CreditCard, Landmark, Sma
 import styles from "./payment.module.css";
 import pricingStyles from "../pricing/page.module.css";
 import { VOYAGER_FEATURES, PIONEER_FEATURES } from "../pricing/PricingPlansSection";
+import { DepthParticleBackground } from "@/components/backgrounds/DepthParticleBackground";
+import { getSupabaseClient } from "@/lib/supabaseClient";
 
 type PaymentStatus = "idle" | "loading" | "success" | "pending" | "error";
 
@@ -137,6 +139,7 @@ function PaymentContent() {
     // Derived Data
     const planName = planParam === "pioneer" ? "Gray Pioneer" : "Gray Voyager";
     const shortPlanName = planParam === "pioneer" ? "Pioneer" : "Voyager";
+    const planCardVariant = planParam === "pioneer" ? "primary" : "highlighted";
 
     // Fallback if pricing data is missing/invalid param
     const pricingData = (planParam === "pioneer" ? PIONEER_PRICING : VOYAGER_PRICING);
@@ -159,6 +162,24 @@ function PaymentContent() {
 
 
 
+            const supabase = getSupabaseClient();
+            if (!supabase) {
+                throw new Error("Authentication is not configured. Please refresh and try again.");
+            }
+
+            const { data: sessionData } = await supabase.auth.getSession();
+            const accessToken = sessionData.session?.access_token ?? null;
+            if (!accessToken) {
+                const returnTo =
+                    typeof window !== "undefined"
+                        ? `${window.location.pathname}${window.location.search}`
+                        : "/payment";
+                setStatus("error");
+                setErrorMessage("Please log in to continue.");
+                router.push(`/login?returnTo=${encodeURIComponent(returnTo)}`);
+                return;
+            }
+
             const selectedMethod = PAYMENT_METHODS.find(m => m.id === selectedMethodId);
             if (!selectedMethod) throw new Error("Invalid payment method");
 
@@ -170,25 +191,43 @@ function PaymentContent() {
             };
 
 
-            const res = await fetch("/api/backend/payment/charge", {
+            const res = await fetch("/api/p/api/payment/charge", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
-                    "Authorization": `Bearer ${localStorage.getItem("token") || ""}`
+                    "Authorization": `Bearer ${accessToken}`
                 },
                 body: JSON.stringify(payload)
             });
 
             if (!res.ok) {
+                if (res.status === 401 || res.status === 403) {
+                    const returnTo =
+                        typeof window !== "undefined"
+                            ? `${window.location.pathname}${window.location.search}`
+                            : "/payment";
+                    setStatus("error");
+                    setErrorMessage("Your session expired. Please log in again.");
+                    router.push(`/login?returnTo=${encodeURIComponent(returnTo)}`);
+                    return;
+                }
                 const contentType = res.headers.get("content-type") || "";
-                let detail = "Payment initialization failed";
+                let detail = `Payment initialization failed (HTTP ${res.status})`;
                 try {
                     if (contentType.includes("application/json")) {
                         const errData = await res.json();
                         detail = errData?.detail || errData?.message || detail;
                     } else {
                         const text = await res.text();
-                        if (text) detail = text;
+                        const trimmed = text.trim();
+                        if (trimmed) {
+                            // Avoid dumping full HTML error documents into the UI/console.
+                            if (contentType.includes("text/html") || trimmed.startsWith("<!DOCTYPE html")) {
+                                detail = `Payment initialization failed (HTTP ${res.status})`;
+                            } else {
+                                detail = trimmed;
+                            }
+                        }
                     }
                 } catch {
                     // ignore parse errors; use default detail
@@ -250,10 +289,7 @@ function PaymentContent() {
     if (status === "success" && chargeData) {
         return (
             <div className={styles.page}>
-                <div className={pricingStyles.starField} aria-hidden="true">
-                    <div className={pricingStyles.starLayer} />
-                    <div className={pricingStyles.starLayer} data-variant="dense" />
-                </div>
+                <DepthParticleBackground />
                 <div className={styles.container}>
                     <div className={styles.successContainer}>
                         <div style={{ padding: "1.5rem", background: "rgba(255, 255, 255, 0.1)", borderRadius: "50%" }}>
@@ -308,10 +344,7 @@ function PaymentContent() {
 
     return (
         <div className={styles.page}>
-            <div className={pricingStyles.starField} aria-hidden="true">
-                <div className={pricingStyles.starLayer} />
-                <div className={pricingStyles.starLayer} data-variant="dense" />
-            </div>
+            <DepthParticleBackground />
             <Script
                 id="midtrans-script"
                 src="https://api.midtrans.com/v2/assets/js/midtrans-new-3ds.min.js"
@@ -329,14 +362,14 @@ function PaymentContent() {
                     <ArrowLeft size={20} />
                 </button>
             </div>
-            <div className={styles.mainGrid}>
-                {/* LEFT COLUMN: Summary & Features - using exact pricing page styles */}
-                <div className={styles.summaryColumn}>
-                    <article className={`${pricingStyles.planCard} ${styles.planCard}`} data-variant="highlighted">
-                        <div className={pricingStyles.cardBody}>
-                            <div className={pricingStyles.cardIntro}>
-                                <header className={pricingStyles.cardHeader}>
-                                    <h2>{shortPlanName}</h2>
+	            <div className={styles.mainGrid}>
+	                {/* LEFT COLUMN: Summary & Features - using exact pricing page styles */}
+	                <div className={styles.summaryColumn}>
+	                    <article className={`${pricingStyles.planCard} ${styles.planCard}`} data-variant={planCardVariant}>
+	                        <div className={pricingStyles.cardBody}>
+	                            <div className={pricingStyles.cardIntro}>
+	                                <header className={pricingStyles.cardHeader}>
+	                                    <h2>{shortPlanName}</h2>
                                     <p>
                                         {planParam === "pioneer"
                                             ? "Uncapped context, models, and proactive workflows for daily reliance."

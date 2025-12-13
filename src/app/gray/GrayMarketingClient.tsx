@@ -1,32 +1,14 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import dynamic from "next/dynamic";
-import {
-  ArrowRight,
-  Brain,
-  MessageSquare,
-  Zap,
-  Layout,
-  Calendar,
-  Mail,
-  Clock,
-  Shield,
-  Menu,
-  Check
-} from "lucide-react";
+import { ArrowRight, Check } from "lucide-react";
 import { motion } from "framer-motion";
 import Navigation from "@/app/components/Navigation";
 import FooterBackground from "@/app/components/FooterBackground";
 import PerformanceChart from "./components/PerformanceChart";
 import { DiagnosticModule } from "@/components/gray/DiagnosticModule";
 import { useI18n } from "@/contexts/I18nContext";
-
-const FeaturesGrid = dynamic(
-  () => import("@/components/gray/FeaturesGrid").then((mod) => mod.FeaturesGrid),
-  { ssr: false }
-);
 
 type GrayMarketingClientProps = {
   tryGrayUrl: string;
@@ -38,12 +20,8 @@ type GrayMarketingClientProps = {
 export default function GrayMarketingClient({
   tryGrayUrl,
 }: GrayMarketingClientProps) {
-  const { t, locale, setLocale } = useI18n();
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const { t } = useI18n();
   const [showFinalCta, setShowFinalCta] = useState(false);
-  const languageLabel = locale === "id" ? t("Indonesian") : t("English");
-  const regionLabel = locale === "id" ? "Indonesia" : t("United States");
-  const toggleLanguage = () => setLocale(locale === "en" ? "id" : "en");
 
   useEffect(() => {
     // Defer the final CTA so the hero is the first thing rendered on mount.

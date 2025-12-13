@@ -1,6 +1,5 @@
 "use client";
 
-// Force HMR update
 import { usePathname, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -10,8 +9,6 @@ import { useUser } from "@/contexts/UserContext";
 import {
   apiService,
   isApiNetworkError,
-  type Reminder,
-  type User,
 } from "@/lib/api";
 import { requestNotificationPermission } from "@/lib/notificationUtils";
 import { formatDisplayName } from "@/lib/names";
@@ -25,10 +22,8 @@ import {
   type HabitUpdates,
   type ProactivityItem,
   type SidebarNavKey,
-  type SidebarNavItem,
   type SidebarHistorySection,
   type SidebarHistoryEntry,
-  type PulseEntry,
   type ContextUsageSummary,
 } from "@/components/gray/types";
 import type { CalendarEvent, CalendarInfo } from "@/components/calendar/types";
@@ -41,38 +36,26 @@ import {
 } from "@/components/gray/chat/constants";
 import {
   type ChatSession,
-  type GrayReminderCreatedPayload,
 } from "@/components/gray/chat/types";
 import {
   normalizeConversationIdValue,
-  buildGeneralConversationId,
 } from "@/components/gray/chat/utils";
 import { DEFAULT_HISTORY_SECTIONS } from "@/components/gray/historySeed";
-import {
-  type WorkspaceBackgroundOption,
-  type WorkspaceBackgroundDraft,
-  GREAT_WAVE_BACKGROUND,
-  SOLID_WHITE_BACKGROUND,
-  SOLID_BLACK_BACKGROUND,
-} from "@/components/gray/PersonalizationPanel";
 import { useProactivityNotifications } from "@/components/gray/ProactivityNotificationProvider";
 
 // New Imports for Refactoring
 import { useWorkspaceData } from "@/components/gray/hooks/useWorkspaceData";
 import { useProactivity } from "@/components/gray/hooks/useProactivity";
 import { usePulse } from "@/components/gray/hooks/usePulse";
-import { sanitizeEventColor, DEFAULT_EVENT_COLOR, REMINDER_RETENTION_WINDOW_MS } from "./constants";
+import { DEFAULT_EVENT_COLOR } from "./constants";
 import { toDateKey, normalizeProactivityTimes, primaryProactivityTime, normalizeProactivityChannels } from "./utils";
 import { UsageLimitBanner } from "@/components/gray/UsageLimitBanner";
 // Type-only import
 import type { ChatDraftControls } from "@/components/gray/ChatDraftInput";
 import {
   buildGeneralChatSession,
-  deriveReminderScheduleIso,
   buildReminderEventKey,
   buildCalendarEventFromReminder,
-  shouldIncludeCalendarReminder,
-  isGenericSessionTitle,
   derivePlanTierLabel,
   getSessionSeedFingerprint,
   getReadableSessionTitle,
@@ -82,7 +65,7 @@ import {
   greetingForDate,
   type PlanCarrierUser,
 } from "@/components/gray/utils/helperFunctions";
-import { SIDEBAR_EXPANDED_STORAGE_KEY, HISTORY_DUPLICATE_WINDOW_MS, REMINDER_PLAN_ID_PREFIX } from "@/components/gray/utils/constants";
+import { HISTORY_DUPLICATE_WINDOW_MS } from "@/components/gray/utils/constants";
 import { SIDEBAR_ITEMS, SIDEBAR_RAIL_ITEMS, NAVIGATION_ROUTES } from "@/components/gray/utils/sidebarConfig";
 
 // Lazy load all heavy components for better code splitting
@@ -98,11 +81,6 @@ const GrayWorkspaceHeader = dynamic(
 
 const GrayChatView = dynamic(
   () => import("@/components/gray/ChatView").then((mod) => mod.GrayChatView),
-  { loading: () => null }
-);
-
-const ModelSelector = dynamic(
-  () => import("@/components/gray/ModelSelector").then((mod) => mod.ModelSelector),
   { loading: () => null }
 );
 
@@ -128,11 +106,6 @@ const AddPlanHabitModal = dynamic(
   { loading: () => null }
 );
 
-const MobileSuggestionCards = dynamic(
-  () => import("@/components/gray/MobileSuggestionCards").then((mod) => mod.MobileSuggestionCards),
-  { loading: () => null }
-);
-
 const GrayDashboardView = dynamic(
   () => import("@/components/gray/DashboardView").then((mod) => mod.GrayDashboardView),
   { loading: () => null }
@@ -149,14 +122,6 @@ const GrayReferenceView = dynamic(
   { loading: () => null }
 );
 
-const PersonalizationPanel = dynamic(
-  () =>
-    import("@/components/gray/PersonalizationPanel").then((mod) => ({
-      default: mod.PersonalizationPanel,
-    })),
-  { loading: () => null }
-);
-
 const HistoryOverlay = dynamic(
   () => import("@/components/gray/HistoryOverlay").then((mod) => mod.HistoryOverlay),
   { loading: () => null }
@@ -169,8 +134,6 @@ type GrayPageClientProps = {
   activeNav?: SidebarNavKey;
   variant?: "general" | "dashboard" | "chat";
   activeChatId?: string | null;
-  initialChatTitle?: string;
-  initialChatModelId?: string;
 };
 
 function GrayPageClientInner({
@@ -178,17 +141,14 @@ function GrayPageClientInner({
   activeNav = "general",
   variant = "general",
   activeChatId = null,
-  initialChatTitle,
-  initialChatModelId,
 }: GrayPageClientProps) {
 
-  const { user, loading: userLoading, updateUser } = useUser();
+  const { user, loading: userLoading } = useUser();
   const usageStatus = user?.usage_status;
   const isUsageLimitReached = usageStatus?.is_monthly_limit_reached || usageStatus?.is_six_hour_limit_reached;
   const router = useRouter();
   const pathname = usePathname();
   const [now, setNow] = useState(() => new Date(initialTimestamp));
-  const [isWorkspaceBackgroundAllowed, setIsWorkspaceBackgroundAllowed] = useState(false);
 
   // Derived state for hooks
   const userId = typeof user?.id === "number" ? user.id : null;
@@ -237,17 +197,7 @@ function GrayPageClientInner({
     persistProactivitySettings
   } = useProactivity(userId, resolvedTimezone);
 
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-    const host = window.location.host.toLowerCase();
-    const allowedHosts = ["gray.localhost:3000", "gray.alignment.id", "alignment.id"];
-    const isAllowedHost = allowedHosts.includes(host) || host.endsWith(".alignment.id");
-    // Only allow custom backgrounds on explicit /gray subpaths, not on the root dashboard
-    const isWorkspacePath = pathname.startsWith("/gray");
-    setIsWorkspaceBackgroundAllowed(isAllowedHost && isWorkspacePath);
-  }, [pathname]);
+  void pathname;
 
   // Include reminderPlans in derivedPlans so they appear in the pulse
   const {
@@ -261,21 +211,21 @@ function GrayPageClientInner({
     updateSession,
     getSession,
     ensureSession,
-    appendMessage,
     markHasSeenGeneralChat,
     uploadAttachments,
     attachments,
     isAttachmentUploading,
     attachmentError,
     removeAttachment,
+    pinSession,
   } = useChatStore();
   const reminderEventKeysRef = useRef<Set<string>>(new Set());
   const supportsInlineChat = variant !== "chat";
-  const shouldShowDashboardChatBar = variant !== "dashboard";
   const [currentChatId, setCurrentChatId] = useState<string | null>(() => activeChatId ?? null);
   const [isCompactLayout, setIsCompactLayout] = useState(false);
   const ensureSessionRef = useRef(ensureSession);
   const { deliveredKeys: deliveredProactivityKeys } = useProactivityNotifications();
+  const lastDeletedChatIdStorageKey = "gray:lastDeletedChatId";
 
   const derivedPlans = user ? [...plans, ...reminderPlans] : [];
   const derivedHabits = user ? habits : [];
@@ -307,7 +257,6 @@ function GrayPageClientInner({
   const {
     pulseEntries,
     setPulseEntries,
-    activePulseId,
     setActivePulseId,
     activePulse,
     isActivePulseEditable
@@ -326,13 +275,31 @@ function GrayPageClientInner({
   }, []);
 
   useEffect(() => {
+    if (supportsInlineChat) {
+      return;
+    }
+    const chatId = activeChatId ?? null;
+    if (!chatId) {
+      return;
+    }
+    try {
+      const lastDeletedId = sessionStorage.getItem(lastDeletedChatIdStorageKey);
+      if (lastDeletedId && lastDeletedId === chatId) {
+        sessionStorage.removeItem(lastDeletedChatIdStorageKey);
+        router.replace("/");
+      }
+    } catch {
+      // Ignore storage errors (e.g. disabled cookies).
+    }
+  }, [activeChatId, lastDeletedChatIdStorageKey, router, supportsInlineChat]);
+
+  useEffect(() => {
     if (typeof window === "undefined") {
       return;
     }
 
     const handleResize = () => {
       const width = window.innerWidth || 0;
-      const hasCoarsePointer = window.matchMedia("(pointer: coarse)").matches;
       const shouldCollapseSidebar = width <= 768;
 
       setIsMobileViewport(shouldCollapseSidebar);
@@ -364,18 +331,12 @@ function GrayPageClientInner({
   }, [hasLoadedSidebarPref]);
 
   const [dashboardTab, setDashboardTab] = useState<"pulse" | "calendar">("pulse");
-  const [isPersonalizationOpen, setIsPersonalizationOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [settingsInitialSection, setSettingsInitialSection] = useState<
+    "account" | "preferences" | "personalization" | "data_controls"
+  >("account");
   const [contextUsageSummary, setContextUsageSummary] = useState<ContextUsageSummary | null>(null);
   const [calendarSelectedDate, setCalendarSelectedDate] = useState<Date>(() => new Date(initialTimestamp));
-  const [workspaceBackgrounds, setWorkspaceBackgrounds] = useState<WorkspaceBackgroundOption[]>([
-    SOLID_BLACK_BACKGROUND,
-    SOLID_WHITE_BACKGROUND,
-    GREAT_WAVE_BACKGROUND,
-  ]);
-  const [workspaceBackgroundId, setWorkspaceBackgroundId] = useState<string>(() =>
-    user?.workspace_background_id ?? SOLID_BLACK_BACKGROUND.id
-  );
 
   const [isHistoryOverlayOpen, setIsHistoryOverlayOpen] = useState(false);
 
@@ -391,23 +352,6 @@ function GrayPageClientInner({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-
-
-  useEffect(() => {
-    if (user?.workspace_background_id) {
-      setWorkspaceBackgroundId(user.workspace_background_id);
-    }
-  }, [user?.workspace_background_id]);
-
-  const [workspaceBackgroundsLoading, setWorkspaceBackgroundsLoading] = useState(false);
-  const [workspaceBackgroundsError, setWorkspaceBackgroundsError] = useState<string | null>(null);
-
-  const activeWorkspaceBackground = useMemo(() => {
-    const list = workspaceBackgrounds.length > 0 ? workspaceBackgrounds : [SOLID_BLACK_BACKGROUND];
-    return list.find((option) => option.id === workspaceBackgroundId) ?? list[0];
-  }, [workspaceBackgroundId, workspaceBackgrounds]);
-  const workspaceBackdropStyle =
-    activeWorkspaceBackground?.backdropStyle ?? SOLID_BLACK_BACKGROUND.backdropStyle;
 
   useEffect(() => {
     ensureSessionRef.current = ensureSession;
@@ -452,105 +396,9 @@ function GrayPageClientInner({
   // Dashboard appearance preferences (sidebar + background) are now per-session
   // only, so we no longer read from or write to localStorage here.
 
-  const loadWorkspaceBackgrounds = useCallback(async () => {
-    setWorkspaceBackgroundsLoading(true);
-    setWorkspaceBackgroundsError(null);
-    try {
-      const payload = await apiService.listWorkspaceBackgrounds();
-      const dynamicOptions: WorkspaceBackgroundOption[] = payload
-        .map((background) => ({
-          id: background.slug,
-          label: background.label,
-          description: background.description ?? null,
-          previewStyle: background.preview_css,
-          backdropStyle: background.backdrop_css,
-          source: "database" as const,
-        }))
-        .filter((option) => option.id !== GREAT_WAVE_BACKGROUND.id);
-      setWorkspaceBackgrounds([SOLID_BLACK_BACKGROUND, SOLID_WHITE_BACKGROUND, GREAT_WAVE_BACKGROUND, ...dynamicOptions]);
-    } catch (error) {
-      if (isApiNetworkError(error)) {
-        if (process.env.NODE_ENV !== "production") {
-          console.debug("Workspace backgrounds API unreachable; using built-in backgrounds only.", error);
-        }
-        setWorkspaceBackgroundsError(error instanceof Error ? error.message : "Workspace backgrounds API unreachable");
-      } else {
-        console.error("Failed to load workspace backgrounds:", error);
-        setWorkspaceBackgroundsError(error instanceof Error ? error.message : "Failed to load backgrounds");
-      }
-      setWorkspaceBackgrounds((current) => (current.length > 0 ? current : [SOLID_BLACK_BACKGROUND, SOLID_WHITE_BACKGROUND, GREAT_WAVE_BACKGROUND]));
-    } finally {
-      setWorkspaceBackgroundsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadWorkspaceBackgrounds().catch((error) => {
-      console.error("Unable to fetch workspace backgrounds:", error);
-    });
-  }, [loadWorkspaceBackgrounds]);
-
-  const deriveBackgroundLabel = useCallback((fileName?: string) => {
-    if (!fileName) {
-      return "Custom background";
-    }
-    const trimmed = fileName.trim();
-    if (!trimmed) {
-      return "Custom background";
-    }
-    const withoutExtension = trimmed.replace(/\.[^.]+$/, "");
-    const cleaned = withoutExtension
-      .replace(/[_-]+/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-    return cleaned.length > 0 ? cleaned : "Custom background";
-  }, []);
-
-  const handleSelectBackground = useCallback(async (backgroundId: string) => {
-    setWorkspaceBackgroundId(backgroundId);
-    if (userId) {
-      try {
-        await apiService.updateUser(userId, { workspace_background_id: backgroundId });
-      } catch (error) {
-        console.error("Failed to persist workspace background preference:", error);
-      }
-    }
-  }, [userId]);
-
-  const handleCreateWorkspaceBackground = useCallback(
-    async (draft: WorkspaceBackgroundDraft) => {
-      if (!draft.assetFile) {
-        throw new Error("Upload a workspace background image first.");
-      }
-
-      const asset = await apiService.uploadWorkspaceBackgroundAsset(draft.assetFile);
-      const assetUrl = asset.asset_path;
-      const backdropCss = `url('${assetUrl}') center / cover no-repeat`;
-      const previewCss =
-        `linear-gradient(135deg, rgba(7, 8, 15, 0.72), rgba(2, 4, 9, 0.93)), ${backdropCss}`;
-
-      const payload = {
-        label: deriveBackgroundLabel(draft.assetFile.name),
-        description: "Uploaded custom background",
-        preview_css: previewCss,
-        backdrop_css: backdropCss,
-      };
-      const created = await apiService.createWorkspaceBackground(payload);
-      await loadWorkspaceBackgrounds();
-      if (created?.slug) {
-        setWorkspaceBackgroundId(created.slug);
-        if (userId) {
-          apiService.updateUser(userId, { workspace_background_id: created.slug }).catch((err) => {
-            console.error("Failed to persist new background selection:", err);
-          });
-        }
-      }
-    },
-    [deriveBackgroundLabel, loadWorkspaceBackgrounds, userId]
-  );
-
   const handleTestProactivity = useCallback(
     async (proactivityId: string) => {
+      void proactivityId;
       if (!userId) {
         return;
       }
@@ -638,7 +486,6 @@ function GrayPageClientInner({
           proactivityDeliveryKeys={deliveredProactivityKeys}
           onReminderMove={handleReminderMove}
           streakCount={streakCount}
-          hideCalendar={isScout || !(user?.personalization_show_calendar ?? true)}
           onUpgradeClick={handleUpgradePlan}
           showUpgradeButton={shouldShowUpgradeButton}
         />
@@ -660,6 +507,7 @@ function GrayPageClientInner({
       <div className={styles.generalViewSection}>
         <GrayGeneralView
           greeting={greeting}
+          currentDate={now}
           plans={derivedPlans}
           habits={derivedHabits}
           proactivity={proactivity}
@@ -686,60 +534,6 @@ function GrayPageClientInner({
       setIsSidebarExpanded(false);
     }
   };
-
-  // Fetch context usage for general session when personalization is open
-  useEffect(() => {
-    if (!isPersonalizationOpen || !generalSessionId) {
-      return;
-    }
-
-    // Use the user-specific general conversation ID if applicable
-    const effectiveConversationId =
-      generalSessionId === GENERAL_CHAT_SESSION_ID && userId
-        ? buildGeneralConversationId(userId)
-        : generalSessionId;
-
-    if (!effectiveConversationId) {
-      return;
-    }
-
-    // Avoid refetching if we already have usage for this conversation
-    if (contextUsageSummary?.conversationId === effectiveConversationId) {
-      return;
-    }
-
-    let cancelled = false;
-
-    apiService
-      .getConversationUsage(effectiveConversationId)
-      .then((usage) => {
-        if (!usage || cancelled) {
-          return;
-        }
-        setContextUsageSummary({
-          conversationId: usage.conversationId,
-          messageCount: usage.messageCount,
-          conversationTokens: usage.conversationTokens,
-          workspaceTokens: 0,
-          totalTokens: usage.conversationTokens,
-          tokensRemaining:
-            usage.limit > 0
-              ? Math.max(0, usage.limit - usage.conversationTokens)
-              : 0,
-          limit: usage.limit,
-          provider: usage.provider,
-          modelName: usage.modelName ?? null,
-          modelLabel: usage.modelLabel ?? null,
-        });
-      })
-      .catch((err) => {
-        console.error("Failed to fetch general session usage", err);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [isPersonalizationOpen, generalSessionId, contextUsageSummary?.conversationId, userId]);
 
   const renderMainSurface = () => {
     if (viewMode === "chat") {
@@ -933,6 +727,21 @@ function GrayPageClientInner({
       }));
     }
 
+
+    const pinnedSessions: ChatSession[] = [];
+    const unpinnedSessions: ChatSession[] = [];
+
+    dedupedThreadSessions.forEach((session) => {
+      // Check for pinned in metadata
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const isPinned = !!(session.metadata as any)?.is_pinned;
+      if (isPinned) {
+        pinnedSessions.push(session);
+      } else {
+        unpinnedSessions.push(session);
+      }
+    });
+
     const currentYear = new Date().getFullYear();
     const groups = new Map<
       string,
@@ -944,7 +753,28 @@ function GrayPageClientInner({
       }
     >();
 
-    dedupedThreadSessions.forEach((session) => {
+    // 1. Pinned Group
+    if (pinnedSessions.length > 0) {
+      // Sort pinned by most recently updated
+      pinnedSessions.sort((a, b) => b.updatedAt - a.updatedAt);
+      const pinnedEntries = pinnedSessions.map((session) => ({
+        id: session.id,
+        title: getReadableSessionTitle(session),
+        href: `/c/${session.conversationId || session.id}`,
+        createdAt: session.updatedAt,
+        isGeneratingTitle: session.isGeneratingTitle,
+        isPinned: true,
+      }));
+      groups.set("pinned", {
+        id: "pinned",
+        label: "Pinned",
+        entries: pinnedEntries,
+        sortKey: 9999, // Ensure it stays on top
+      });
+    }
+
+    // 2. Regular Groups
+    unpinnedSessions.forEach((session) => {
       const date = new Date(session.updatedAt);
       const now = new Date();
       const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -1035,19 +865,6 @@ function GrayPageClientInner({
   const isDashboardView = viewMode === "dashboard";
   const isChatView = viewMode === "chat";
 
-  const sidebarActiveNav: SidebarNavKey =
-    activeNav === "threads"
-      ? "threads"
-      : viewMode === "chat"
-        ? currentChatId && generalSessionId && currentChatId === generalSessionId
-          ? "general"
-          : "history"
-        : viewMode === "history"
-          ? "history"
-          : viewMode === "dashboard"
-            ? "dashboard"
-            : "general";
-
   const handleNavigate = (navId: SidebarNavKey) => {
     if (navId === "search") {
       setIsSidebarExpanded(true);
@@ -1107,20 +924,9 @@ function GrayPageClientInner({
     return () => window.clearInterval(interval);
   }, [initialTimestamp]);
 
-  const handleOpenPersonalization = () => {
-    setIsPersonalizationOpen(true);
-  };
-
-  const handleClosePersonalization = () => {
-    setIsPersonalizationOpen(false);
-  };
-
   const handleOpenSettings = () => {
+    setSettingsInitialSection("account");
     setIsSettingsOpen(true);
-  };
-
-  const handleCloseSettings = () => {
-    setIsSettingsOpen(false);
   };
 
   const handleOpenHelp = () => {
@@ -1157,17 +963,6 @@ function GrayPageClientInner({
     }
     return sessions.find((session) => session.id === currentChatId) ?? null;
   }, [currentChatId, sessions]);
-
-  const isResponding = useMemo(() => {
-    if (currentChatSession) {
-      return Boolean(currentChatSession.isResponding);
-    }
-    if (generalSessionId) {
-      const generalSession = sessions.find((s) => s.id === generalSessionId);
-      return Boolean(generalSession?.isResponding);
-    }
-    return false;
-  }, [currentChatSession, generalSessionId, sessions]);
 
   const documentTitle = useMemo(() => {
     if (viewMode === "chat") {
@@ -2452,24 +2247,39 @@ function GrayPageClientInner({
     window.open(entry.href, "_blank", "noopener,noreferrer");
   };
 
-  const handleRenameHistoryEntry = (entry: SidebarHistoryEntry) => {
-    const nextTitle = window.prompt("Rename conversation", entry.title);
+  const handleRenameHistoryEntry = useCallback((id: string) => {
+    const session = sessions.find((s) => s.id === id);
+    if (!session) return;
+    const nextTitle = window.prompt("Rename conversation", session.title || "New Conversation");
     if (!nextTitle) {
       return;
     }
-    renameSession(entry.id, nextTitle);
-  };
+    renameSession(id, nextTitle);
+  }, [sessions, renameSession]);
 
-  const handleDeleteHistoryEntry = (entry: SidebarHistoryEntry) => {
+  const handleDeleteHistoryEntry = useCallback((id: string) => {
     const confirmed = window.confirm("Delete this conversation? This cannot be undone.");
     if (!confirmed) {
       return;
     }
-    deleteSession(entry.id);
-    if (currentChatId === entry.id) {
-      setCurrentChatId(null);
+    try {
+      sessionStorage.setItem(lastDeletedChatIdStorageKey, id);
+    } catch {
+      // Ignore
     }
-  };
+    deleteSession(id);
+    if (activeChatId === id) {
+      if (generalSessionId) {
+        router.push("/" + generalSessionId);
+      } else {
+        router.push("/");
+      }
+    }
+  }, [deleteSession, activeChatId, generalSessionId, router, sessions]);
+
+  const handlePinHistoryEntry = useCallback((id: string, pinned: boolean) => {
+    void pinSession(id, pinned);
+  }, [pinSession]);
 
   const greeting = `Good ${greetingForDate(now)}, ${viewerName}`;
   const hideChatThinkingIndicator = false;
@@ -2483,16 +2293,13 @@ function GrayPageClientInner({
       return (
         <div className={`${styles.greetingStack} hidden md:block`}>
           <h1 className={styles.greeting}>{greeting}</h1>
-          <p className={styles.greetingDate}>{workspaceDateLabel}</p>
         </div>
       );
     },
-    [greeting, shouldShowWorkspaceGreeting, workspaceDateLabel]
+    [greeting, shouldShowWorkspaceGreeting]
   );
   const dashboardTabAttr = isDashboardView ? dashboardTab : undefined;
 
-  const shouldShowWorkspaceBackground = isWorkspaceBackgroundAllowed && viewMode !== "chat";
-  const isFullPageChatLayout = variant === "chat" && activeNav === "general";
   const generalAttachmentsActive =
     viewMode === "general" && (attachments.length > 0 || isAttachmentUploading);
   const generalAttachmentsFlag = generalAttachmentsActive;
@@ -2514,7 +2321,6 @@ function GrayPageClientInner({
     <>
       <div
         className={styles.page}
-        data-workspace-background={Boolean(activeWorkspaceBackground && isWorkspaceBackgroundAllowed)}
         data-dashboard-tab={activeNav === "dashboard" ? dashboardTab : undefined}
         data-mobile-sidebar={effectiveIsMobileViewport ? "true" : "false"}
         data-sidebar-expanded={effectiveIsSidebarExpanded ? "true" : "false"}
@@ -2572,15 +2378,6 @@ function GrayPageClientInner({
           </div>
         )}
 
-        {activeWorkspaceBackground && isWorkspaceBackgroundAllowed && (
-          <div
-            className={styles.backdrop}
-            style={{
-              background: workspaceBackdropStyle,
-            }}
-          />
-        )}
-
         <div className={styles.shell}>
           <div
             className={styles.layout}
@@ -2605,11 +2402,13 @@ function GrayPageClientInner({
               historySections={historySections}
               onNavigate={handleMobileNavigate}
               activeChatId={activeChatId ?? generalSessionId}
-              onOpenPersonalization={handleOpenPersonalization}
               onOpenSettings={handleOpenSettings}
               onOpenHelp={handleOpenHelp}
               onUpgradePlan={handleUpgradePlan}
               onLogOut={handleLogOut}
+              onRenameHistoryEntry={handleRenameHistoryEntry}
+              onDeleteHistoryEntry={handleDeleteHistoryEntry}
+              onPinHistoryEntry={handlePinHistoryEntry}
             />
 
             {/* Mobile Sidebar Overlay */}
@@ -2679,33 +2478,12 @@ function GrayPageClientInner({
             }}
           />
         ) : null}
-        {isPersonalizationOpen && (
-          <PersonalizationPanel
-            viewerName={viewerName}
-            viewerRole={user?.role || "Operator"}
-            viewerPlan={viewerPlanLabel}
-            userId={userId}
-            profileNickname={user?.personalization_nickname ?? null}
-            profileOccupation={user?.personalization_occupation ?? null}
-            profileAbout={user?.personalization_about ?? null}
-            profileCustomInstructions={user?.personalization_custom_instructions ?? null}
-            contextUsage={contextUsageSummary}
-            backgroundOptions={workspaceBackgrounds}
-            selectedBackgroundId={workspaceBackgroundId}
-            onSelectBackground={handleSelectBackground}
-            onCreateBackground={handleCreateWorkspaceBackground}
-            backgroundsLoading={workspaceBackgroundsLoading}
-            backgroundError={workspaceBackgroundsError}
-            onClose={handleClosePersonalization}
-          />
-        )}
         {isSettingsOpen && (
           <SettingsModal
             isOpen={isSettingsOpen}
             onClose={() => setIsSettingsOpen(false)}
-            user={user}
-            updateUser={updateUser}
-            loadWorkspaceBackgrounds={loadWorkspaceBackgrounds}
+            initialSection={settingsInitialSection}
+            contextUsage={contextUsageSummary}
           />
         )}
 
@@ -2719,15 +2497,10 @@ function GrayPageClientInner({
           onRenameEntry={handleRenameHistoryEntry}
           onDeleteEntry={handleDeleteHistoryEntry}
           onCreateNewChat={() => {
-            const newId = getOrCreateGeneralSessionId();
+            getOrCreateGeneralSessionId();
             handleNavigate("general");
-            // If we are already on general, we might want to ensure a fresh session or just focus input?
-            // Since getOrCreate returns an ID, we probably want to navigate to it or just close overlay.
-            // If the intention is "New Chat", we likely want to reset the current general chat if generic?
-            // For now, simply close and ensuring general view is intuitive enough.
-            // Actually, the user likely wants to be dropped into a standard chat state.
-            setManualViewMode(null); // Ensure we aren't in some other mode
-            router.push("/"); // Go to home/dashboard/general
+            setManualViewMode(null);
+            router.push("/");
           }}
         />
       </div>

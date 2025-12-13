@@ -591,6 +591,7 @@ class ProactivityEngine:
 
         profile_summary, custom_instructions = await self._load_user_profile_context(user_id)
         chat_context = await self._load_recent_chat_context(user_id)
+        reminder_context = await self._load_reminder_context(user_id)
 
         try:
             cadence = (settings.get("cadence") or "").strip().lower()
@@ -608,6 +609,7 @@ class ProactivityEngine:
                 settings or {},
                 timezone,
                 reason=reason,
+                decision_context=reminder_context,
                 profile_context=profile_summary,
                 custom_instructions=custom_instructions,
                 chat_context=chat_context,
@@ -617,6 +619,65 @@ class ProactivityEngine:
         except Exception as exc:
             logger.error(f"AI generator failed for user {user_id}: {exc}", exc_info=True)
             return None
+
+    async def _load_reminder_context(self, user_id: int) -> Optional[Dict[str, Any]]:
+        """Load a small, structured reminder snapshot for proactive check-ins."""
+        await self._ensure_connection()
+        now_utc = datetime.now(dt_timezone.utc)
+
+        def _row_to_item(row: Any) -> Dict[str, Any]:
+            remind_at = row.get("remind_at")
+            if isinstance(remind_at, datetime):
+                remind_at_value: Optional[str] = remind_at.isoformat()
+            else:
+                remind_at_value = str(remind_at) if remind_at else None
+            return {
+                "id": row.get("id"),
+                "label": row.get("label"),
+                "description": row.get("description"),
+                "remind_at": remind_at_value,
+                "status": row.get("status"),
+            }
+
+        try:
+            upcoming_rows = await self.db.fetch_all(
+                """
+                SELECT id, label, description, remind_at, status
+                FROM reminders
+                WHERE user_id = :user_id
+                  AND status = 'pending'
+                  AND remind_at >= :now
+                ORDER BY remind_at ASC
+                LIMIT 5
+                """,
+                {"user_id": user_id, "now": now_utc},
+            )
+            overdue_rows = await self.db.fetch_all(
+                """
+                SELECT id, label, description, remind_at, status
+                FROM reminders
+                WHERE user_id = :user_id
+                  AND status = 'pending'
+                  AND remind_at < :now
+                ORDER BY remind_at DESC
+                LIMIT 3
+                """,
+                {"user_id": user_id, "now": now_utc},
+            )
+        except Exception as exc:
+            logger.debug(
+                "Failed to load reminders for proactivity context",
+                extra={"event_type": "proactivity_reminder_context_failure", "user_id": user_id, "error": str(exc)},
+            )
+            return None
+
+        upcoming = [_row_to_item(dict(row)) for row in upcoming_rows] if upcoming_rows else []
+        overdue = [_row_to_item(dict(row)) for row in overdue_rows] if overdue_rows else []
+
+        if not upcoming and not overdue:
+            return None
+
+        return {"upcoming_reminders": upcoming, "overdue_reminders": overdue}
 
     async def _load_user_profile_context(self, user_id: int) -> Tuple[Optional[str], Optional[str]]:
         """Pull saved personalization fields so proactive nudges can reference them."""

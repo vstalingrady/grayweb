@@ -1,12 +1,10 @@
-/* eslint-disable no-restricted-globals */
-
 self.addEventListener("push", (event) => {
   let data = {};
   try {
     if (event.data) {
       data = event.data.json();
     }
-  } catch (error) {
+  } catch {
     // Fallback: treat as text
     data = { title: "Gray Check-in", message: event.data.text() };
   }

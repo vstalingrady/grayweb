@@ -33,7 +33,7 @@ const nextConfig: NextConfig = {
   },
 
   // Webpack config (use --webpack flag to use webpack instead of turbopack)
-  webpack: (config, { isServer, dev, nextRuntime }) => {
+  webpack: (config, { dev }) => {
     // Enable persistent caching for faster rebuilds
     config.cache = {
       type: 'filesystem',

@@ -34,13 +34,29 @@ export function MiniMonth({ referenceDate, selectedDate, onSelectDate }: MiniMon
   const { t } = useI18n();
   const grid = useMemo(() => {
     const firstVisible = startOfGrid(referenceDate);
-    return Array.from({ length: 6 }, (_, weekIndex) =>
+    const weeks = Array.from({ length: 6 }, (_, weekIndex) =>
       Array.from({ length: 7 }, (_, dayIndex) => {
         const date = new Date(firstVisible);
         date.setDate(firstVisible.getDate() + weekIndex * 7 + dayIndex);
         return date;
       })
     );
+    const monthIndex = referenceDate.getMonth();
+    const year = referenceDate.getFullYear();
+
+    // Trim trailing weeks that don't contain any days in the target month.
+    while (weeks.length > 0) {
+      const lastWeek = weeks[weeks.length - 1];
+      const hasInMonthDay = lastWeek?.some(
+        (date) => date.getFullYear() === year && date.getMonth() === monthIndex
+      );
+      if (hasInMonthDay) {
+        break;
+      }
+      weeks.pop();
+    }
+
+    return weeks;
   }, [referenceDate]);
 
   const currentMonth = referenceDate.getMonth();
@@ -54,7 +70,7 @@ export function MiniMonth({ referenceDate, selectedDate, onSelectDate }: MiniMon
     <div className={styles.miniMonth}>
       <div className={styles.miniMonthWeekdays}>
         {WEEKDAY_LABELS.map((weekday) => (
-          <span key={weekday}>{t(weekday).charAt(0)}</span>
+          <span key={weekday}>{t(weekday).slice(0, 2)}</span>
         ))}
       </div>
       <div className={styles.miniMonthGrid}>

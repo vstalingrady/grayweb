@@ -1,19 +1,10 @@
 /* eslint-disable react-hooks/set-state-in-effect */
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { apiService, type DashboardPulse } from "@/lib/api";
 import { type PulseEntry, type PlanItem, type HabitItem, type ProactivityItem } from "@/components/gray/types";
 import { toDateKey } from "@/app/gray/utils"; // We'll need to extract utils too
 
 const MAX_PULSE_HISTORY = 30;
-const PROACTIVITY_SEED: ProactivityItem = {
-  id: "proactivity-1",
-  label: "Check-ins",
-  description: "Daily sync nudges for squad channels.",
-  cadence: "Daily",
-  time: "09:00",
-  times: ["09:00"],
-  channels: ["assistant"],
-};
 
 // Helper to normalize proactivity times (extracted from original file)
 const normalizeTimeValue = (value: string | null | undefined): string => {
@@ -229,7 +220,6 @@ export function usePulse(
     if (!userId) return;
 
     const snapshotBase = createPulseSnapshot(todayAnchor, currentPlans, currentHabits, proactivity);
-    let pulseChanged = false;
 
     setPulseEntries((previous) => {
       const existingIndex = previous.findIndex((entry) => entry.dateKey === snapshotBase.dateKey);
@@ -271,14 +261,12 @@ export function usePulse(
         ) {
           return previous;
         }
-        pulseChanged = true;
         return [
           { ...current, ...snapshot },
           ...previous.slice(1),
         ];
       }
 
-      pulseChanged = true;
       if (existingIndex > 0) {
         const without = previous.filter((_, index) => index !== existingIndex);
         return [snapshot, ...without].slice(0, MAX_PULSE_HISTORY);

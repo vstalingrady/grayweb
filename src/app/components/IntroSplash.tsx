@@ -13,7 +13,7 @@ type IntroSplashProps = {
  * Fullscreen intro that reuses the glowing Gray sequence and then routes into the app.
  * A short auto-delay ensures we never leave users stuck if they don't click.
  */
-export function IntroSplash({ redirectTo = "/g", autoDelayMs = 8000 }: IntroSplashProps) {
+export function IntroSplash({ redirectTo = "/login?redirect=/g", autoDelayMs = 8000 }: IntroSplashProps) {
   const router = useRouter();
   const [completed, setCompleted] = useState(false);
 

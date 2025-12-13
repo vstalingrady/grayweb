@@ -84,6 +84,7 @@ import {
 import { REMINDERS_REFRESH_EVENT } from "./hooks/useWorkspaceData";
 
 const WORKSPACE_CONTEXT_COOLDOWN_MS = 600000; // 10 minutes
+const CONVERSATION_MEMORY_STORAGE_PREFIX = "gray_conversation_memory";
 
 declare global {
   interface Window {
@@ -1583,6 +1584,33 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
     [queueConversationTitleSync, updateSession]
   );
 
+  const pinSession = useCallback(
+    async (sessionId: string, pinned: boolean) => {
+      const session = sessionsRef.current.find((s) => s.id === sessionId);
+      if (!session) return;
+
+      // 1. Update local state
+      const currentMeta = session.metadata || {};
+      updateSession(sessionId, {
+        metadata: { ...currentMeta, is_pinned: pinned },
+        updatedAt: Date.now(),
+      });
+
+      // 2. Persist to backend if associated with a conversation ID
+      const conversationId = normalizeConversationIdValue(session.conversationId);
+      if (conversationId) {
+        try {
+          await apiService.updateConversation(conversationId, {
+            metadata: { is_pinned: pinned },
+          });
+        } catch (err) {
+          console.error("Failed to pin session:", err);
+        }
+      }
+    },
+    [updateSession]
+  );
+
   const appendMessage = useCallback(
     (
       sessionId: string,
@@ -2246,6 +2274,18 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
               updateSession(generalSession.id, { isGeneratingTitle: true });
             }
 
+            const conversationMemoryEnabled = (() => {
+              if (typeof window === "undefined") {
+                return true;
+              }
+              const storageKey = `${CONVERSATION_MEMORY_STORAGE_PREFIX}:${streamingUserId ?? "anon"}`;
+              try {
+                return window.localStorage.getItem(storageKey) !== "0";
+              } catch {
+                return true;
+              }
+            })();
+
             for await (const event of apiService.sendMessageStream({
               message: trimmed,
               system_prompt: systemPromptForRequest,
@@ -2254,6 +2294,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
               conversation_id: requestConversationId ?? undefined,
               time_context: timeContext,
               timezone: resolveClientTimezone(),
+              conversation_memory_enabled: conversationMemoryEnabled,
               attachments: attachmentPayloads,
               context_cache_id: selectedContextCacheId ?? undefined,
               should_generate_title: shouldGenerateTitle,
@@ -2809,6 +2850,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       deleteMessage,
       updateSession,
       renameSession,
+      pinSession,
       applyAutoTitle,
       deleteSession,
       getSession,
@@ -3066,3 +3108,5 @@ export const useChatStore = () => {
   }
   return ctx;
 };
+
+export { GENERAL_CHAT_SESSION_ID };

@@ -291,6 +291,31 @@
 .railNav {
   display: flex;
   align-items: center;
+  justify-content: center;
+  align-self: stretch;
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
+}
+
+.railNav::-webkit-scrollbar {
+  width: 6px;
+}
+
+.railNav::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.railNav::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+}
+
+.railNav::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.22);
 }
 
 .railNav ul {
@@ -313,12 +338,18 @@
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: color 0.2s ease;
+  transition: color 0.2s ease, background 0.2s ease;
 }
 
 .railNav button[data-active="true"],
 .railNav button:hover {
   color: rgba(255, 255, 255, 0.95);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.railNav button:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.32);
+  outline-offset: 2px;
 }
 
 .sidebarRailFooter {
@@ -2186,7 +2217,118 @@
 }
 
 .sidebarHistoryList li {
-  padding-left: 0;
+  margin-bottom: 2px;
+  position: relative;
+  /* Ensure relative positioning for absolute children */
+}
+
+/* Hover Actions Trigger */
+/* Hover Actions Trigger */
+.sidebarHistoryActions {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  opacity: 0;
+  transition: opacity 0.1s ease, background 0.2s ease;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  /* Default: Very subtle / transparent background so text is visible */
+  background: linear-gradient(to right, transparent 0%, rgba(9, 9, 11, 0) 100%);
+  padding-left: 20px;
+  /* Give more space for the gradient start */
+  padding-right: 4px;
+  /* Ensure button isn't flushed against the scrollbar area */
+}
+
+/* Show actions on hover */
+.sidebarHistoryList li:hover .sidebarHistoryActions,
+.sidebarHistoryActions.isOpen {
+  opacity: 1;
+}
+
+/* Make gradient pronounced ONLY when hovering the actions specifically */
+.sidebarHistoryActions:hover,
+.sidebarHistoryActions.isOpen {
+  /* Stronger gradient to obscure text underneath when interacting */
+  background: linear-gradient(to right, transparent, rgba(9, 9, 11, 0.9) 30%, #09090b 60%);
+}
+
+.sidebarActionButton {
+  background: transparent;
+  border: none;
+  color: #a1a1aa;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.sidebarActionButton:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+/* Context Menu */
+.sidebarMenuPopover {
+  position: fixed;
+  /* Fixed to avoid clipping in overflow containers */
+  width: 160px;
+  background: #18181b;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.6), 0 0 10px rgba(0, 0, 0, 0.3);
+  z-index: 9999;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  animation: fadeIn 0.1s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.sidebarMenuItem {
+  background: transparent;
+  border: none;
+  color: #e4e4e7;
+  padding: 8px 10px;
+  text-align: left;
+  font-size: 0.85rem;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: background 0.1s;
+}
+
+.sidebarMenuItem:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.sidebarMenuItem.delete {
+  color: #f87171;
+}
+
+.sidebarMenuItem.delete:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: #fca5a5;
 }
 
 .sidebarHistoryLink {
@@ -2956,12 +3098,121 @@
   flex-direction: column;
   gap: clamp(18px, 3vh, 32px);
   align-items: stretch;
-  padding-bottom: 0;
+  padding-bottom: clamp(110px, 14vh, 150px);
   flex: 1;
 }
 
-.page[data-general-attachments="true"] .generalViewSection {
-  padding-bottom: clamp(24px, 5vh, 48px);
+.mainContent[data-view="general"]>.generalViewSection {
+  width: min(calc(var(--chat-column-max-width, 840px) + 40px), 100%);
+  max-width: min(calc(var(--chat-column-max-width, 840px) + 40px), 100%);
+  justify-content: center;
+}
+
+@media (min-width: 769px) {
+
+  /* The general composer is in-flow; avoid extra bottom padding that pushes the grid upward. */
+  .mainContent[data-view="general"]>.generalViewSection {
+    padding-bottom: 0;
+  }
+
+  .page[data-general-attachments="true"] .mainContent[data-view="general"]>.generalViewSection {
+    padding-bottom: 0;
+  }
+}
+
+.mainContent[data-view="general"] .dashboardCard {
+  padding: clamp(12px, 1.8vw, 18px);
+  gap: 12px;
+  height: auto;
+}
+
+.mainContent[data-view="general"] .dashboardGridItemProactivity>.dashboardCard {
+  height: 100%;
+}
+
+.mainContent[data-view="general"] .dashboardGridItemProactivity {
+  min-height: 220px;
+}
+
+.mainContent[data-view="general"] .dashboardCard,
+.mainContent[data-view="general"] .cardSurface {
+  border-radius: 18px;
+}
+
+.mainContent[data-view="general"] .dashboardSectionCard>* {
+  flex: none;
+}
+
+.mainContent[data-view="general"] .dashboardCardBody {
+  flex: none;
+}
+
+.mainContent[data-view="general"] .dashboardSectionCard {
+  height: 100%;
+  align-self: stretch;
+}
+
+/* Ensure the combined Plans/Habits tasks card fills its grid area so actions can sit at the bottom. */
+.mainContent[data-view="general"] .dashboardGridItemTasks.dashboardSectionCard>* {
+  flex: 1;
+  height: 100%;
+}
+
+.mainContent[data-view="general"] .dashboardGridItemTasks .dashboardCard {
+  height: 100%;
+}
+
+.mainContent[data-view="general"] .dashboardGridItemTasks .dashboardCardBody {
+  flex: 1;
+}
+
+.mainContent[data-view="general"] .dashboardSectionCard>.dashboardCard {
+  height: 100%;
+}
+
+.proactivitySummary {
+  font-size: 0.78rem;
+  color: rgba(235, 235, 235, 0.58);
+  letter-spacing: 0.02em;
+  text-align: left;
+  padding: 6px 0 0;
+}
+
+.mainContent[data-view="general"] .planList,
+.mainContent[data-view="general"] .habitList {
+  flex: none;
+  max-height: none;
+  overflow: visible;
+}
+
+.mainContent[data-view="general"] .planBody {
+  flex: none;
+}
+
+.mainContent[data-view="general"] .dashboardCardHeader {
+  font-size: 0.66rem;
+  letter-spacing: 0.22em;
+}
+
+.mainContent[data-view="general"] .dashboardGridItemProactivity .dashboardCardHeader {
+  margin-bottom: 10px;
+}
+
+.mainContent[data-view="general"] .dashboardGridItemProactivity .proactivityPresetSelect {
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-size: 0.78rem;
+}
+
+.mainContent[data-view="general"] .listEmptyMessage {
+  padding: 14px;
+  font-size: 0.78rem;
+}
+
+@media (max-width: 768px) {
+  .page[data-general-attachments="true"] .generalViewSection {
+    padding-bottom: clamp(140px, 18vh, 190px);
+  }
 }
 
 .page[data-compact="true"] .generalViewSection {
@@ -4533,7 +4784,7 @@
   align-items: center;
   gap: 0;
   padding: 0;
-  padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: env(safe-area-inset-bottom, 0px);
   background: transparent;
   z-index: 40;
   width: 100%;
@@ -4547,16 +4798,29 @@
 
 
 .chatAttachmentTopTray {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + clamp(4px, 1vh, 10px));
   width: 100%;
-  max-width: min(var(--chat-column-max-width, 680px), 100%);
-  margin: 0 auto clamp(4px, 1vh, 10px);
+  margin: 0;
   padding: 0;
+  display: flex;
+  justify-content: center;
+  pointer-events: auto;
 }
 
 .chatAttachmentTopTray:empty {
   display: none;
   margin: 0;
   padding: 0;
+}
+
+.chatAttachmentTopTray>* {
+  width: 100%;
+  max-width: min(var(--chat-column-max-width, 680px), 100%);
+  margin: 0 auto;
+  pointer-events: auto;
 }
 
 .chatComposerDock::before {
@@ -5493,12 +5757,182 @@ h1.greeting {
   color: rgba(210, 210, 210, 0.65);
 }
 
+/* Legacy dashboardGrid removed to favor new grid layout at bottom of file */
+/* 
 .dashboardGrid {
   display: grid;
   width: min(var(--chat-column-max-width, 680px), 100%);
   margin: clamp(12px, 2.2vw, 28px) auto 0;
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
   gap: clamp(12px, 2vw, 24px);
+}
+*/
+
+.dashboardGrid {
+  display: grid;
+  --dashboard-grid-gap: clamp(6px, 1vw, 10px);
+  width: 100%;
+  margin: 0;
+  /* 30/70 split */
+  grid-template-columns: minmax(0, 3fr) minmax(0, 7fr);
+  grid-template-areas:
+    "calendar tasks"
+    "proactivity tasks";
+  column-gap: var(--dashboard-grid-gap);
+  row-gap: var(--dashboard-grid-gap);
+  align-items: stretch;
+}
+
+@media (min-width: 769px) {
+
+  /* Center the dashboard cards between the workspace greeting and chat bar. */
+  .mainContent[data-view="general"] .dashboardGrid {
+    margin-top: auto;
+    margin-bottom: auto;
+  }
+}
+
+.dashboardGridItemCalendar {
+  grid-area: calendar;
+}
+
+.dashboardGridItemProactivity {
+  grid-area: proactivity;
+}
+
+.dashboardGridItemPlans {
+  grid-area: plans;
+}
+
+.dashboardGridItemHabits {
+  grid-area: habits;
+}
+
+.dashboardGridItemTasks {
+  grid-area: tasks;
+}
+
+.dashboardTasksToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  border-radius: 999px;
+  padding: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: #121212;
+}
+
+.dashboardTasksToggleButton {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.55);
+  cursor: pointer;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  transition: background 0.18s ease, color 0.18s ease;
+}
+
+.dashboardTasksToggleButton[data-active="true"] {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.dashboardTasksToggleButton:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.22);
+  outline-offset: 2px;
+}
+
+.miniCalendarHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 12px;
+}
+
+.miniCalendarMonthLabel {
+  font-size: 0.8rem;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  color: rgba(240, 240, 240, 0.82);
+  white-space: nowrap;
+}
+
+.miniCalendarHeaderControls {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.miniCalendarNavButton {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(245, 245, 245, 0.9);
+  cursor: pointer;
+}
+
+.miniCalendarNavButton:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.miniCalendarBody {
+  padding-top: 0;
+  gap: 12px;
+}
+
+.miniCalendarCard {
+  padding: clamp(20px, 2.6vw, 28px);
+  gap: 10px;
+}
+
+.dashboardCard.miniCalendarCard .dashboardCardHeader {
+  margin-bottom: 0;
+}
+
+.miniCalendarCard .dashboardCardBody {
+  gap: 10px;
+}
+
+.miniCalendarCompact {
+  --mini-month-gap: 8px;
+  --mini-month-week-gap: 3px;
+  --mini-month-day-gap: 1px;
+  --mini-month-cell-max: clamp(22px,
+      calc((100% - (6 * var(--mini-month-day-gap))) / 7),
+      34px);
+  --mini-month-day-font: 0.62rem;
+  --mini-month-weekday-font: 0.48rem;
+  --mini-month-weekday-letter-spacing: 0.22em;
+  --mini-month-cell-radius: 8px;
+}
+
+@media (max-width: 900px) {
+  .dashboardGrid {
+    width: min(var(--chat-column-max-width, 680px), 100%);
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "calendar"
+      "proactivity"
+      "tasks";
+  }
+
+  .miniCalendarCompact {
+    --mini-month-cell-max: clamp(20px,
+        calc((100% - (6 * var(--mini-month-day-gap))) / 7),
+        30px);
+  }
 }
 
 .dashboardSection {
@@ -6204,6 +6638,10 @@ h1.greeting {
   background: rgba(18, 18, 18, 0.6);
 }
 
+.dashboardCard.miniCalendarCard {
+  gap: 0;
+}
+
 .dashboardExecutionCard {
   /* Make Plans/Habits feel like primary cards on /d */
   border: 1px solid rgba(255, 255, 255, 0.08) !important;
@@ -6325,7 +6763,97 @@ h1.greeting {
 .proactivityControls {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 14px;
+  gap: 10px;
+}
+
+.proactivityModeSegment {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  padding: 6px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.proactivityModeOption {
+  flex: 1 1 0;
+  border: none;
+  border-radius: 12px;
+  padding: 10px 10px;
+  background: transparent;
+  color: rgba(235, 235, 235, 0.72);
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+}
+
+.proactivityModeOption[data-active="true"] {
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.proactivityScheduleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+}
+
+.proactivityScheduleLabel {
+  font-size: 0.68rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(230, 230, 230, 0.5);
+}
+
+.proactivityScheduleValue {
+  font-size: 0.8rem;
+  letter-spacing: 0.02em;
+  color: rgba(235, 235, 235, 0.72);
+  text-align: right;
+  white-space: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  max-width: 62%;
+}
+
+.proactivityScheduleValue::-webkit-scrollbar {
+  display: none;
+}
+
+.proactivityTimePill {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(10, 10, 14, 0.72);
+}
+
+.proactivityTimeSelect {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: rgba(240, 240, 240, 0.9);
+  font-size: 0.82rem;
+  letter-spacing: 0.02em;
+  padding: 0;
+  cursor: pointer;
+}
+
+.proactivityTimeSelect:focus-visible {
+  outline: none;
+}
+
+.proactivityTimeChevron {
+  color: rgba(220, 220, 220, 0.6);
+  pointer-events: none;
 }
 
 .proactivityControls label {
@@ -6396,6 +6924,24 @@ h1.greeting {
   outline: none;
   border-color: rgba(136, 186, 255, 0.7);
   box-shadow: 0 0 0 1px rgba(136, 186, 255, 0.4);
+}
+
+.proactivityTimeDropdown {
+  border: none;
+  background: transparent;
+  color: rgba(235, 235, 235, 0.58);
+  font-size: 0.78rem;
+  letter-spacing: 0.02em;
+  padding: 0;
+  cursor: pointer;
+  width: fit-content;
+  max-width: 100%;
+}
+
+.proactivityTimeDropdown:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.22);
+  outline-offset: 4px;
+  border-radius: 10px;
 }
 
 .proactivityModalBackdrop {
@@ -9135,7 +9681,19 @@ h1.greeting {
 
 
 .chatComposerSkirt {
-  display: none;
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: calc(12px + env(safe-area-inset-bottom, 0px));
+  background: var(--background, #0a0a0a);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.layout[data-view="chat"] .chatBarRounded {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
 }
 
 .generalChatComposer[data-has-attachments="true"] {
@@ -9368,10 +9926,10 @@ h1.greeting {
 
 .chatAttachmentRemoveBtn {
   position: absolute;
-  top: 0;
-  right: 0;
-  width: 14px;
-  height: 14px;
+  top: 6px;
+  right: 6px;
+  width: 26px;
+  height: 26px;
   background: rgba(0, 0, 0, 0.6);
   border: none;
   color: white;
@@ -9379,11 +9937,18 @@ h1.greeting {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  border-bottom-left-radius: 4px;
+  border-radius: 999px;
+  z-index: 2;
+  touch-action: manipulation;
 }
 
 .chatAttachmentRemoveBtn:hover {
   background: rgba(200, 50, 50, 0.9);
+}
+
+.chatAttachmentRemoveBtn:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.45);
+  outline-offset: 2px;
 }
 
 .chatAttachmentLoading {
@@ -10651,15 +11216,15 @@ h1.greeting {
 
 .settingsContainer {
   display: grid;
-  grid-template-columns: 240px 1fr;
-  height: clamp(500px, 85vh, 800px);
-  width: clamp(800px, 90vw, 1100px);
-  background: #09090b;
-  color: #ededed;
-  border-radius: 16px;
+  grid-template-columns: 260px 1fr;
+  height: clamp(600px, 92vh, 1200px);
+  width: clamp(900px, 95vw, 1600px);
+  background: #0a0a0a;
+  color: #f5f5f5;
+  border-radius: 20px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow:
-    0 24px 48px rgba(0, 0, 0, 0.5),
+    0 24px 48px rgba(0, 0, 0, 0.6),
     0 0 0 1px rgba(255, 255, 255, 0.05);
   overflow: hidden;
 }
@@ -10669,7 +11234,7 @@ h1.greeting {
   display: flex;
   flex-direction: column;
   gap: 24px;
-  background: #09090b;
+  background: #0a0a0a;
   height: 100%;
   overflow-y: auto;
   border-right: 1px solid rgba(255, 255, 255, 0.06);
@@ -10776,6 +11341,43 @@ h1.greeting {
   margin: 0 0 16px 0;
 }
 
+.settingsFormGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+@media (max-width: 720px) {
+  .settingsFormGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.settingsFormField {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.settingsFormLabel {
+  font-size: 0.8rem;
+  color: rgba(245, 245, 245, 0.8);
+  font-weight: 500;
+}
+
+.settingsContextBar {
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.settingsContextBarFill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.55));
+}
+
 .settingsRow {
   display: flex;
   justify-content: space-between;
@@ -10820,15 +11422,26 @@ h1.greeting {
   border-color: rgba(255, 255, 255, 0.2);
 }
 
+.settingsActionDanger {
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #f87171;
+}
+
+.settingsActionDanger:hover {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.6);
+  color: #fca5a5;
+}
+
 .settingsPrimaryButton {
-  background: #2dd4bf;
+  background: #ffffff;
   color: #000;
   border: none;
   font-weight: 600;
 }
 
 .settingsPrimaryButton:hover {
-  background: #14b8a6;
+  background: #e5e5e5;
   opacity: 1;
 }
 
@@ -10875,6 +11488,13 @@ h1.greeting {
   color: #a1a1aa;
 }
 
+.avatarLarge img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
 .settingsInput {
   background: transparent;
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -10890,8 +11510,8 @@ h1.greeting {
 }
 
 .settingsUpgradeCard {
-  background: rgba(45, 212, 191, 0.05);
-  border: 1px solid rgba(45, 212, 191, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   padding: 20px;
   border-radius: 10px;
   display: flex;
@@ -10900,13 +11520,13 @@ h1.greeting {
 }
 
 .settingsUpgradeText h4 {
-  color: #2dd4bf;
+  color: #ffffff;
   margin: 0 0 4px 0;
   font-size: 0.9rem;
 }
 
 .settingsUpgradeText p {
-  color: #a1a1aa;
+  color: #a3a3a3;
   margin: 0;
   font-size: 0.8rem;
 }
@@ -10914,7 +11534,7 @@ h1.greeting {
 @media (max-width: 768px) {
   .settingsOverlay {
     padding: 0;
-    background: #09090b;
+    background: #0a0a0a;
   }
 
   .settingsContainer {
@@ -10951,8 +11571,8 @@ h1.greeting {
 }
 
 .settingsToggle[aria-checked="true"] {
-  background: #2dd4bf;
-  border-color: #2dd4bf;
+  background: #ffffff;
+  border-color: #ffffff;
 }
 
 .settingsToggleThumb {
@@ -10960,7 +11580,7 @@ h1.greeting {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: #a1a1aa;
+  background: #a3a3a3;
   transition: transform 0.2s ease, background 0.2s ease;
   transform: translateX(0);
 }
@@ -10975,11 +11595,11 @@ h1.greeting {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 12px;
+  padding: 0;
   border-radius: 6px;
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #ededed;
+  color: #f5f5f5;
   font-size: 0.85rem;
   cursor: pointer;
   transition: all 0.2s;
@@ -10990,13 +11610,87 @@ h1.greeting {
   border-color: rgba(255, 255, 255, 0.2);
 }
 
+.settingsSelectTrigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  width: 100%;
+  border: none;
+  border-radius: inherit;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.settingsSelectValue {
+  flex: 1;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.settingsSelectChevron {
+  opacity: 0.65;
+  transition: transform 160ms ease, opacity 160ms ease;
+}
+
+.settingsSelectChevron[data-open="true"] {
+  transform: rotate(180deg);
+  opacity: 0.85;
+}
+
+.settingsSelectMenu {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  min-width: 220px;
+  padding: 6px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(10, 10, 12, 0.92);
+  box-shadow: 0 22px 46px rgba(0, 0, 0, 0.62);
+  backdrop-filter: blur(14px);
+  z-index: 200;
+}
+
+.settingsSelectOption {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 10px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: rgba(245, 245, 245, 0.86);
+  font-size: 0.85rem;
+  cursor: pointer;
+  text-align: left;
+  transition: background 140ms ease, color 140ms ease;
+}
+
+.settingsSelectOption:hover,
+.settingsSelectOption:focus-visible {
+  background: rgba(255, 255, 255, 0.07);
+  color: rgba(255, 255, 255, 0.95);
+  outline: none;
+}
+
+.settingsSelectOption[data-selected="true"] {
+  background: rgba(59, 130, 246, 0.16);
+  color: rgba(255, 255, 255, 0.96);
+}
+
 /* Helper text for settings items */
 .settingsItemDescription {
-  font-size: 0.75rem;
-  color: #71717a;
-  margin-top: 2px;
-  max-width: 400px;
-  line-height: 1.4;
+  font-size: 0.8rem;
+  color: #a3a3a3;
+  margin-top: 4px;
+  width: 100%;
+  max-width: none;
+  line-height: 1.5;
 }
 
 /* Personalization Settings specific styles */
@@ -11004,12 +11698,12 @@ h1.greeting {
 .settingsTextarea {
   background: transparent;
   border: 1px solid rgba(255, 255, 255, 0.1);
-  padding: 12px;
+  padding: 16px;
   border-radius: 8px;
   color: #fff;
   font-size: 0.9rem;
   width: 100%;
-  min-height: 100px;
+  min-height: 240px;
   resize: vertical;
   font-family: inherit;
   margin-top: 8px;
@@ -11033,7 +11727,7 @@ h1.greeting {
   border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: transparent;
-  color: #ededed;
+  color: #f5f5f5;
   font-size: 0.85rem;
   cursor: pointer;
   transition: all 0.2s;
@@ -11049,7 +11743,7 @@ h1.greeting {
 
 .settingsInputLabel {
   font-size: 0.9rem;
-  color: #ededed;
+  color: #f5f5f5;
   font-weight: 500;
   display: block;
   margin-bottom: 4px;
@@ -11110,28 +11804,28 @@ h1.greeting {
 }
 
 /* Dashboard Redesign Grid Layout */
-.dashboardGrid {
+/* Dashboard Redesign Grid Layout */
+.dashboardGridFinal {
   display: grid;
-  grid-template-columns: 1.1fr 1.1fr 0.9fr;
-  grid-template-rows: auto;
+  width: 100%;
+  grid-template-columns: 320px 1fr;
+  grid-template-rows: min-content min-content 1fr;
   grid-template-areas:
-    "header header header"
-    "plans habits proactivity";
-  gap: 16px;
+    "header header"
+    "proactivity plans"
+    "proactivity habits";
+  gap: 24px;
   padding: 24px 0;
-  max-width: 1200px;
+  max-width: 1400px;
   margin: 0 auto;
-  align-items: stretch;
+  align-items: start;
 }
 
 .dashboardHeaderArea {
   grid-area: header;
-  grid-column: 1 / -1;
-  /* Spans full width */
-  margin-bottom: 8px;
-  background: radial-gradient(circle at top left,
-      rgba(24, 24, 27, 0.95),
-      rgba(9, 9, 11, 0.96)) no-repeat;
+  justify-self: stretch;
+  width: auto;
+  background: #09090b;
   border: 1px solid rgba(255, 255, 255, 0.07);
   border-radius: 22px;
   padding: 24px;
@@ -11139,8 +11833,8 @@ h1.greeting {
   justify-content: space-between;
   align-items: flex-start;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.03),
-    0 18px 42px rgba(0, 0, 0, 0.55);
+    inset 0 1px 0 rgba(255, 255, 255, 0.025),
+    0 20px 46px rgba(0, 0, 0, 0.55);
 }
 
 .dashboardHeaderSide {
@@ -11151,14 +11845,14 @@ h1.greeting {
 }
 
 .dashboardGreeting {
-  font-size: 1.4rem;
+  font-size: 1.6rem;
   font-weight: 500;
   color: #ededed;
   margin: 0 0 8px 0;
 }
 
 .dashboardDate {
-  font-size: 0.8rem;
+  font-size: 0.85rem;
   font-weight: 500;
   color: #71717a;
   text-transform: uppercase;
@@ -11168,15 +11862,12 @@ h1.greeting {
 .dashboardCard {
   grid-area: auto;
   background: #09090b;
-  background: radial-gradient(circle at top left,
-      rgba(20, 20, 20, 0.94),
-      rgba(9, 9, 11, 0.96)) no-repeat;
   border: 1px solid rgba(255, 255, 255, 0.07);
   border-radius: 22px;
-  padding: 20px;
+  padding: 24px;
   display: flex;
   flex-direction: column;
-  height: 240px;
+  height: 100%;
   position: relative;
   overflow: hidden;
   box-shadow:
@@ -11186,14 +11877,18 @@ h1.greeting {
 
 .dashboardCardPlans {
   grid-area: plans;
+  min-height: 240px;
 }
 
 .dashboardCardHabits {
   grid-area: habits;
+  min-height: 240px;
 }
 
 .dashboardCardProactivity {
   grid-area: proactivity;
+  height: 100%;
+  min-height: 480px;
 }
 
 .dashboardCardHeader {
@@ -11201,27 +11896,29 @@ h1.greeting {
   flex-direction: row;
   align-items: center;
   gap: 14px;
-  margin-bottom: 20px;
+  margin-bottom: 24px;
 }
 
 .dashboardCardIcon {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
-  font-size: 1rem;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.7);
 }
 
 .iconBlue {
-  background: #3b82f6;
+  color: #60a5fa;
+  background: rgba(96, 165, 250, 0.1);
 }
 
 /* Kept for icons ONLY */
 .iconCyan {
-  background: #06b6d4;
+  color: #22d3ee;
+  background: rgba(34, 211, 238, 0.1);
 }
 
 .iconPurple {
@@ -11229,9 +11926,12 @@ h1.greeting {
 }
 
 .dashboardCardTitle {
-  font-size: 1.15rem;
-  font-weight: 500;
-  color: rgba(245, 245, 245, 0.9);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.5);
+  margin: 0;
 }
 
 /* Card Body Area */
@@ -11245,23 +11945,24 @@ h1.greeting {
 /* Neutral Buttons (No Blue) */
 .dashboardButtonNeutral {
   margin-top: auto;
-  /* Push to bottom */
-  width: 100%;
-  padding: 10px;
-  background: linear-gradient(90deg, #0ea5e9, #2563eb);
-  color: #fff;
-  border: none;
-  border-radius: 8px;
-  font-size: 0.85rem;
-  font-weight: 500;
-  cursor: pointer;
+  align-self: flex-start;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #a1a1aa;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  transition: background 0.2s;
+  padding: 10px 20px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.2s;
 }
 
 .dashboardButtonNeutral:hover {
-  filter: brightness(1.08);
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #fff;
 }
 
 /* Proactivity Toggle Area */
@@ -11269,14 +11970,16 @@ h1.greeting {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 0;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-  margin-top: auto;
+  width: 100%;
+  margin-bottom: 24px;
 }
 
 .proactivityStatusText {
-  font-size: 0.9rem;
   color: #a1a1aa;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
 }
 
 /* Toggle Switch (Reusing/Tweaking existing if needed, but defining specific for dashboard) */
@@ -11318,23 +12021,24 @@ h1.greeting {
   margin: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
 }
 
 .dashboardListItem {
   display: flex;
   align-items: center;
-  gap: 10px;
-  font-size: 0.9rem;
-  color: #ededed;
-  padding: 6px 0;
+  gap: 12px;
+  padding: 0;
+  min-height: 32px;
 }
 
 .dashboardListEmpty {
   color: #52525b;
-  font-size: 0.9rem;
-  font-style: italic;
-  margin-top: 12px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 20px 0;
 }
 
 .dashboardTaskLabel {
@@ -11342,7 +12046,7 @@ h1.greeting {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: #ededed;
+  color: #e4e4e7;
   text-decoration: none;
 }
 
@@ -11357,8 +12061,9 @@ h1.greeting {
 }
 
 @media (max-width: 900px) {
-  .dashboardGrid {
+  .dashboardGridFinal {
     grid-template-columns: 1fr;
+    grid-template-rows: auto;
     grid-template-areas:
       "header"
       "proactivity"
@@ -11375,4 +12080,78 @@ h1.greeting {
     height: auto;
     min-height: 210px;
   }
+}
+
+.proactivitySliderRow {
+  margin-top: 16px;
+  width: 100%;
+}
+
+.proactivitySlider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 48px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 24px;
+  outline: none;
+  padding: 4px;
+  cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  transition: all 0.2s;
+}
+
+.proactivitySlider:focus-visible {
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.1);
+}
+
+.proactivitySlider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 80px;
+  height: 40px;
+  border-radius: 20px;
+  background: #27272a;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.4);
+  cursor: grab;
+  transition: background 0.2s, transform 0.1s;
+}
+
+.proactivitySlider::-webkit-slider-thumb:active {
+  cursor: grabbing;
+  transform: scale(0.98);
+}
+
+.proactivitySlider::-moz-range-thumb {
+  width: 80px;
+  height: 40px;
+  border-radius: 20px;
+  background: #27272a;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.4);
+  cursor: grab;
+  transition: background 0.2s, transform 0.1s;
+}
+
+/* Active State Colors (JavaScript will likely toggle a class or we use attribute selectors if possible, but basic styles first) */
+.proactivitySlider[data-active="true"]::-webkit-slider-thumb {
+  background: #3b82f6;
+  /* Blue */
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.proactivitySlider[data-active="true"]::-moz-range-thumb {
+  background: #3b82f6;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+/* Ticks Visualization (Optional background-image trick) */
+.proactivitySlider {
+  background-image: linear-gradient(90deg,
+      transparent 49%,
+      rgba(255, 255, 255, 0.05) 49%,
+      rgba(255, 255, 255, 0.05) 51%,
+      transparent 51%);
+  background-size: 100% 100%;
 }

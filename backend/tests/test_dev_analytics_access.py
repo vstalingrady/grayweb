@@ -25,6 +25,13 @@ def test_is_localhost_request_accepts_localhost_host_header():
     assert _is_localhost_request(req) is True
 
 
+def test_is_localhost_request_accepts_wildcard_host_header():
+    from backend.main import _is_localhost_request
+
+    req = _make_request(client_host="10.0.0.5", host_header="0.0.0.0:3000")
+    assert _is_localhost_request(req) is True
+
+
 def test_is_localhost_request_accepts_subdomain_localhost():
     from backend.main import _is_localhost_request
 
@@ -37,6 +44,13 @@ def test_is_localhost_request_rejects_remote_host():
 
     req = _make_request(client_host="10.0.0.5", host_header="gray.alignment.id")
     assert _is_localhost_request(req) is False
+
+
+def test_is_localhost_request_accepts_private_client_with_service_host():
+    from backend.main import _is_localhost_request
+
+    req = _make_request(client_host="172.18.0.10", host_header="backend:8000")
+    assert _is_localhost_request(req) is True
 
 
 def test_dev_analytics_prod_token_gate():

@@ -142,7 +142,6 @@ const HeroTesseract = () => {
     function animate() {
       animationFrameId = requestAnimationFrame(animate);
       angle4D += speed4D * scrollFactor;
-      const time = performance.now() * 0.001;
 
       const projected = pts.map(v => {
         const rv = rotate4D(v, angle4D);

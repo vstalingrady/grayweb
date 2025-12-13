@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState, type MouseEvent, type ChangeEvent, type F
 import { X } from "lucide-react";
 import styles from "@/app/gray/GrayPageClient.module.css";
 import type { ContextUsageSummary } from "@/components/gray/types";
+import { clampPercent, getContextUsageUsedTokens, getContextUsageVisualizationLimit } from "@/components/gray/contextUsage";
 import { useUser } from "@/contexts/UserContext";
 import { useI18n } from "@/contexts/I18nContext";
 import { useChatStore } from "@/components/gray/ChatProvider";
@@ -50,8 +51,6 @@ const formatContextLabel = (usage?: ContextUsageSummary | null) => {
   const label = usage.modelLabel?.trim() || usage.modelName?.trim() || usage.provider?.trim();
   return label ?? null;
 };
-
-const DEFAULT_CONTEXT_LIMIT = 1_048_576;
 
 
 export type WorkspaceBackgroundOption = {
@@ -138,27 +137,22 @@ export function PersonalizationPanel({
 
   const hasContextUsage = Boolean(contextUsage);
   const contextLimit = typeof contextUsage?.limit === "number" ? contextUsage.limit : 0;
-  const contextTokensUsed =
-    typeof contextUsage?.conversationTokens === "number"
-      ? Math.max(0, contextUsage.conversationTokens)
-      : 0;
+  const contextTokensUsed = Math.max(0, getContextUsageUsedTokens(contextUsage));
 
   const hasFiniteLimit = contextLimit > 0;
   const contextTokensRemaining = hasFiniteLimit
     ? Math.max(0, contextLimit - contextTokensUsed)
     : 0;
-  const effectiveContextLimit = hasFiniteLimit ? contextLimit : DEFAULT_CONTEXT_LIMIT;
+  const effectiveContextLimit = hasFiniteLimit ? contextLimit : getContextUsageVisualizationLimit(contextUsage);
   const contextPercent =
     effectiveContextLimit > 0
-      ? Math.max(0, Math.min(100, (contextTokensUsed / effectiveContextLimit) * 100))
+      ? clampPercent((contextTokensUsed / effectiveContextLimit) * 100)
       : 0;
   const contextPercentLabel = `${Math.round(contextPercent)}%`;
   const contextLimitLabel = hasContextUsage
     ? hasFiniteLimit
       ? t("{count} total tokens", { count: formatNumber(contextLimit) })
-      : t("Unlimited context (visualized against {count} tokens)", {
-        count: formatNumber(DEFAULT_CONTEXT_LIMIT),
-      })
+      : t("Unlimited context (visualized against {count} tokens)", { count: formatNumber(effectiveContextLimit) })
     : "";
   const contextFooterLabel = hasFiniteLimit
     ? t("{count} tokens left", { count: formatNumber(contextTokensRemaining) })
@@ -185,20 +179,6 @@ export function PersonalizationPanel({
 
   const { user, updateUser: updateUserProfile } = useUser();
   const mapsEnabled = user?.maps_enabled ?? false;
-  const showCalendar = user?.personalization_show_calendar ?? true;
-
-  const normalizedViewerPlan = (viewerPlan || "pioneer").toLowerCase();
-  const effectiveViewerPlan = normalizedViewerPlan === "scout" ? "pioneer" : normalizedViewerPlan;
-  const isScout = effectiveViewerPlan === "scout";
-
-  const handleCalendarToggle = async () => {
-    if (!user?.id) return;
-    try {
-      await updateUserProfile({ personalization_show_calendar: !showCalendar });
-    } catch (e) {
-      console.error("Failed to toggle calendar", e);
-    }
-  };
 
   const handleMapsToggle = async () => {
     if (!user?.id) return;
@@ -671,25 +651,6 @@ export function PersonalizationPanel({
 
                 {/* Maps toggle temporarily hidden; feature remains wired but dormant in the UI. */}
 
-                {!isScout && (
-                  <button
-                    type="button"
-                    className={styles.personalizationToggle}
-                    data-active={showCalendar ? "true" : "false"}
-                    aria-pressed={showCalendar}
-                    onClick={handleCalendarToggle}
-                  >
-                    <span>
-                      <span>{t("Show Calendar")}</span>
-                      <span className={styles.personalizationToggleHint}>
-                        {t("Display the daily schedule view.")}
-                      </span>
-                    </span>
-                    <span className={styles.personalizationSwitch} data-active={showCalendar ? "true" : "false"}>
-                      <span className={styles.personalizationSlider} />
-                    </span>
-                  </button>
-                )}
               </div>
             </section>
 

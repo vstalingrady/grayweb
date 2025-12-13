@@ -32,7 +32,6 @@ interface UserContextType {
     personalization_about?: string | null;
     personalization_custom_instructions?: string | null;
     personalization_system_prompt_override?: string | null;
-    personalization_show_calendar?: boolean;
     maps_enabled?: boolean;
     has_seen_general_chat?: boolean;
   }) => Promise<void>;
@@ -148,8 +147,6 @@ const sanitizeCachedUser = (value: unknown): { user: User; timestamp: number } |
         raw.personalization_system_prompt_override.length > 0
         ? raw.personalization_system_prompt_override
         : null,
-    personalization_show_calendar:
-      typeof raw.personalization_show_calendar === 'boolean' ? raw.personalization_show_calendar : true,
     created_at:
       typeof raw.created_at === 'string' && raw.created_at.trim().length > 0
         ? raw.created_at
@@ -508,7 +505,6 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
     personalization_about?: string | null;
     personalization_custom_instructions?: string | null;
     personalization_system_prompt_override?: string | null;
-    personalization_show_calendar?: boolean;
     maps_enabled?: boolean;
     has_seen_general_chat?: boolean;
   }) => {
@@ -525,7 +521,6 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
       personalization_about?: string | null;
       personalization_custom_instructions?: string | null;
       personalization_system_prompt_override?: string | null;
-      personalization_show_calendar?: boolean;
       maps_enabled?: boolean;
       has_seen_general_chat?: boolean;
     } = {};
@@ -561,9 +556,6 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
     }
     if (typeof userData.maps_enabled === 'boolean') {
       payload.maps_enabled = userData.maps_enabled;
-    }
-    if (typeof userData.personalization_show_calendar === 'boolean') {
-      payload.personalization_show_calendar = userData.personalization_show_calendar;
     }
     if (typeof userData.has_seen_general_chat === 'boolean') {
       payload.has_seen_general_chat = userData.has_seen_general_chat;

@@ -47,6 +47,8 @@ export type ChatSession = {
 export type ConversationHistoryEntryPayload = {
     role: "user" | "model";
     text: string;
+    updated_at?: string;
+    metadata?: Record<string, unknown>;
 };
 
 export type ChatContextValue = {
@@ -73,6 +75,7 @@ export type ChatContextValue = {
     deleteMessage: (sessionId: string, messageId: string) => void;
     updateSession: (sessionId: string, partial: Partial<ChatSession>) => void;
     renameSession: (sessionId: string, title: string) => void;
+    pinSession: (sessionId: string, pinned: boolean) => Promise<void>;
     deleteSession: (sessionId: string) => void;
     getSession: (sessionId: string) => ChatSession | undefined;
     ensureSession: (sessionId: string, initializer: () => ChatSession) => ChatSession;

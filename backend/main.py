@@ -1,12 +1,13 @@
 import logging
 import math
 import socket
+import ipaddress
 import asyncio
 import sqlite3
 from fastapi import FastAPI, HTTPException, Depends, status, File, Form, Query, UploadFile, Response, Request, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 from typing import Optional, List, Dict, Any, AsyncGenerator, Tuple, Union, Iterable, Set, Mapping
 import databases
@@ -219,6 +220,8 @@ try:
         google_calendar_credentials,
         user_data,
         general_chat_messages,
+        user_chat_threads,
+        user_chat_messages,
         user_streaks,
         reminders,
     )
@@ -241,6 +244,8 @@ except ImportError:
         google_calendar_credentials,
         user_data,
         general_chat_messages,
+        user_chat_threads,
+        user_chat_messages,
         user_streaks,
         reminders,
     )
@@ -889,6 +894,7 @@ _ensure_sqlite_columns("user_data", [
     ("context", "JSON", None),
     ("metadata", "JSON", None),
     ("workspace_context", "TEXT", None),
+    ("long_term_memory", "TEXT", None),
 ])
 
 _ensure_sqlite_table("general_chat_messages", """
@@ -905,11 +911,30 @@ _ensure_sqlite_table("general_chat_messages", """
     )
 """)
 
+# Archive table for rolling memory compression (local-only).
+_ensure_sqlite_table("archived_chat_messages", """
+    CREATE TABLE archived_chat_messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        user_data_id INTEGER,
+        role TEXT NOT NULL,
+        content TEXT NOT NULL,
+        grounding_metadata JSON,
+        attachments JSON,
+        reminders JSON,
+        original_created_at DATETIME,
+        archived_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        compression_batch_id TEXT,
+        FOREIGN KEY(user_id) REFERENCES users(id)
+    )
+""")
+
 # Ensure reminders column exists for existing general_chat_messages tables
 _ensure_sqlite_columns("general_chat_messages", [
     ("reminders", "JSON", None),
 ])
 
+_ensure_sqlite_index("archived_chat_messages", "ix_archived_chat_messages_user_id", "user_id")
 _ensure_sqlite_index("user_chat_messages", "ix_user_chat_messages_thread_id", "thread_id")
 
 
@@ -2811,6 +2836,12 @@ async def get_database():
 
 
 def _is_localhost_request(request: Request) -> bool:
+    def _parse_ip(value: str) -> Optional[ipaddress.IPv4Address | ipaddress.IPv6Address]:
+        try:
+            return ipaddress.ip_address(value)
+        except ValueError:
+            return None
+
     try:
         client_host = (request.client.host or "").lower() if request.client else ""
     except Exception:
@@ -2821,14 +2852,29 @@ def _is_localhost_request(request: Request) -> bool:
     host_value = forwarded_host or host_header
     hostname = host_value.split(":")[0] if host_value else ""
 
-    if client_host in {"127.0.0.1", "::1", "localhost"}:
+    forwarded_for = (request.headers.get("x-forwarded-for") or "").split(",")[0].strip().lower()
+    real_ip = (request.headers.get("x-real-ip") or "").strip().lower()
+    effective_client_ip = _parse_ip(forwarded_for) or _parse_ip(real_ip) or _parse_ip(client_host)
+
+    if client_host in {"127.0.0.1", "::1", "localhost", "0.0.0.0"}:
         return True
 
-    if hostname in {"127.0.0.1", "localhost"}:
+    if hostname in {"127.0.0.1", "localhost", "0.0.0.0"}:
         return True
 
     if hostname.endswith(".localhost"):
         return True
+
+    hostname_ip = _parse_ip(hostname) if hostname else None
+    if hostname_ip is not None and (hostname_ip.is_loopback or hostname_ip.is_private or hostname_ip.is_link_local):
+        return True
+
+    if effective_client_ip is not None and (
+        effective_client_ip.is_loopback or effective_client_ip.is_private or effective_client_ip.is_link_local
+    ):
+        # Allow container/service-name hosts like "backend:8000" while rejecting public domains.
+        if not hostname or "." not in hostname:
+            return True
 
     return False
 
@@ -6091,20 +6137,19 @@ async def stream_ai_response(
         else:
 
             # Generate image descriptions for OpenRouter (non-vision models like DeepSeek)
-            if media_attachments:
-                api_logger.info(
-                    "Generating image descriptions for OpenRouter model",
-                    extra={"event_type": "ai_image_description_start", "provider": provider, "count": len(media_attachments)},
-                )
-                image_desc = await _generate_image_descriptions(media_attachments)
-                if image_desc:
-                    message = image_desc + message
-                    api_logger.info(
-                        f"Added image descriptions to message for OpenRouter",
-                        extra={"event_type": "ai_image_description_added", "count": len(media_attachments)},
-                    )
-            
-
+            # DISABLED: User requested direct model usage without Gemini fallback.
+            # if media_attachments:
+            #     api_logger.info(
+            #         "Generating image descriptions for OpenRouter model",
+            #         extra={"event_type": "ai_image_description_start", "provider": provider, "count": len(media_attachments)},
+            #     )
+            #     image_desc = await _generate_image_descriptions(media_attachments)
+            #     if image_desc:
+            #         message = image_desc + message
+            #         api_logger.info(
+            #             f"Added image descriptions to message for OpenRouter",
+            #             extra={"event_type": "ai_image_description_added", "count": len(media_attachments)},
+            #         )
             
             try:
                 t0_provider = time.perf_counter()
@@ -6260,6 +6305,7 @@ CRITICAL: When the user asks to "set a plan" or create any plan/reminder/habit, 
                         tool_choice="auto",
                         plugins=[{"id": "web", "max_results": 5}] if search_enabled else None,
                         reasoning_mode=reasoning_mode,
+                        attachments=media_attachments,
                     ):
                         if isinstance(chunk, dict):
                             # Handle native streaming tool calls
@@ -7496,6 +7542,38 @@ async def upload_media(
       public_url=public_url,
   )
 
+
+@app.get("/api/uploads/{upload_id}/file")
+@limiter.limit("30/minute")
+async def get_upload_file(
+    request: Request,
+    upload_id: int,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db: databases.Database = Depends(get_database),
+):
+    """Serve an uploaded file via same-origin cookies (works when STORAGE_BASE_URL is unset)."""
+    user_id = current_user["id"]
+    record = await db.fetch_one(
+        media_uploads.select().where(
+            (media_uploads.c.id == upload_id) & (media_uploads.c.user_id == user_id)
+        )
+    )
+    if not record:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Upload not found.")
+
+    storage_path = _resolve_storage_path_from_record(record["storage_path"])
+    if not storage_path.exists():
+        raise HTTPException(status_code=status.HTTP_410_GONE, detail="Upload no longer available.")
+
+    filename = record["filename"] or "upload"
+    mime_type = record["mime_type"] or "application/octet-stream"
+    return FileResponse(
+        path=str(storage_path),
+        media_type=mime_type,
+        filename=filename,
+        headers={"Cache-Control": "private, max-age=86400"},
+    )
+
 async def _background_file_search_upload(db: databases.Database, user_id: str, storage_path: Path, sanitized_name: str):
     """Helper to handle file search upload in background."""
     try:
@@ -8409,11 +8487,16 @@ async def delete_conversation(
 
         if _is_valid_uuid(conversation_id):
             try:
+                try:
+                    from backend.database import user_chat_threads as _user_chat_threads, user_chat_messages as _user_chat_messages  # type: ignore
+                except Exception:
+                    from database import user_chat_threads as _user_chat_threads, user_chat_messages as _user_chat_messages  # type: ignore
+
                 # Local SQLite deletion for threads
                 # Note: Delete messages first due to FK constraint if not cascaded, though SQLAlchemy usually handles it or SQLite pragma
                 # But to be safe:
-                await database.execute(user_chat_messages.delete().where(user_chat_messages.c.thread_id == conversation_id))
-                await database.execute(user_chat_threads.delete().where(user_chat_threads.c.id == conversation_id))
+                await database.execute(_user_chat_messages.delete().where(_user_chat_messages.c.thread_id == conversation_id))
+                await database.execute(_user_chat_threads.delete().where(_user_chat_threads.c.id == conversation_id))
                 
                 # Also try deleting from legacy Supabase if credentials exist, just to be clean (optional)
                 if supabase and _conversation_store_available():
@@ -8427,6 +8510,65 @@ async def delete_conversation(
         # When storage is unavailable or the ID is not a UUID, there is nothing to delete.
     except Exception as error:
         raise HTTPException(status_code=500, detail=f"Error deleting conversation: {str(error)}")
+
+
+@app.delete("/users/{user_id}/conversations", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit("5/minute")
+async def delete_all_conversations(
+    request: Request,
+    user_id: int,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    """Delete all conversations and messages for a user.
+    
+    This clears:
+    1. General chat history
+    2. All named conversation threads and their messages
+    """
+    try:
+        require_same_user(user_id, current_user)
+        
+        # 1. Delete General Chat History
+        await _delete_general_conversation_history(user_id)
+        
+        # 2. Delete All Named Threads (and their messages)
+        try:
+            try:
+                from backend.database import user_chat_threads as _user_chat_threads, user_chat_messages as _user_chat_messages
+            except Exception:
+                from database import user_chat_threads as _user_chat_threads, user_chat_messages as _user_chat_messages
+
+            # Find all threads provided by this user to delete their messages first
+            # We can use a subquery or just delete all messages linked to threads owned by this user
+            # SQLite doesn't always support complex delete-joins well, so we might need two steps
+            
+            # Step 2a: Get thread IDs
+            query = _user_chat_threads.select().where(_user_chat_threads.c.user_identifier == user_id)
+            rows = await database.fetch_all(query)
+            thread_ids = [str(row["id"]) for row in rows]
+            
+            if thread_ids:
+                # Step 2b: Delete messages for these threads
+                await database.execute(_user_chat_messages.delete().where(_user_chat_messages.c.thread_id.in_(thread_ids)))
+                
+                # Step 2c: Delete the threads themselves
+                await database.execute(_user_chat_threads.delete().where(_user_chat_threads.c.id.in_(thread_ids)))
+
+            # Also clean up Supabase if available
+            if supabase and _conversation_store_available():
+                try:
+                    # Supabase (Postgres) usually handles cascades, but explicit is safer
+                    # However, mass deletion might be blocked by RLS if not careful, but usually owner can delete
+                    # For simplicity, we can rely on loop or bulk delete
+                    supabase.table("user_chat_threads").delete().eq("user_identifier", user_id).execute()
+                except Exception:
+                    pass
+
+        except Exception as db_error:
+            app_logger.error(f"Error checking/deleting named threads: {db_error}")
+            
+    except Exception as error:
+        raise HTTPException(status_code=500, detail=f"Error deleting all conversations: {str(error)}")
 
 
 async def _overwrite_conversation_history_logic(

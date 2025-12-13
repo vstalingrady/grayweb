@@ -286,6 +286,45 @@ async def apply_conversation_update(
         if storage_available:
             supabase_user_data_id = await require_supabase_user_data_id(target_user_id)
 
+    # 1. Update Local SQLite (Always try to update local DB first)
+    if valid_conversation_id:
+        try:
+            # If metadata is present, we need to fetch existing metadata to merge it
+            metadata_update = getattr(payload, "metadata", None)
+            
+            values_to_update = {"updated_at": utcnow()}
+            if normalized_title:
+                values_to_update["title"] = normalized_title
+                
+            if metadata_update is not None:
+                 # Fetch existing to merge
+                select_query = user_chat_threads.select().where(
+                    user_chat_threads.c.id == conversation_id
+                )
+                existing = await database.fetch_one(select_query)
+                if existing:
+                    current_meta = dict(existing._mapping).get("metadata") or {}
+                    # Handle stringified JSON if necessary (SQLite sometimes returns dict, sometimes str depending on driver)
+                    if isinstance(current_meta, str):
+                        import json
+                        try:
+                            current_meta = json.loads(current_meta)
+                        except Exception:
+                            current_meta = {}
+                    
+                    # Merge
+                    merged = {**current_meta, **metadata_update}
+                    values_to_update["metadata"] = merged
+
+            # Only execute update if we have something to update
+            if len(values_to_update) > 1 or (metadata_update is not None):
+                query_update = user_chat_threads.update().where(
+                    user_chat_threads.c.id == conversation_id
+                ).values(**values_to_update)
+                await database.execute(query_update)
+        except Exception as error:
+             _handle_conversation_store_error("Error updating local SQLite conversation", error)
+
     if storage_available and valid_conversation_id:
         update_values: Dict[str, Any] = {"updated_at": updated_at_iso}
         if normalized_title is not None:
@@ -379,6 +418,7 @@ async def apply_conversation_update(
     }
 
     if not storage_available:
+        # Since we updated local SQLite above, we can return success-ish payload
         return fallback_payload
 
     if not valid_conversation_id:

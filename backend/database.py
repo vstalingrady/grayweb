@@ -126,6 +126,7 @@ user_data = sqlalchemy.Table(
     sqlalchemy.Column("context", sqlalchemy.JSON, default=[]),
     sqlalchemy.Column("metadata", sqlalchemy.JSON, default={}),
     sqlalchemy.Column("workspace_context", sqlalchemy.String, nullable=True),
+    sqlalchemy.Column("long_term_memory", sqlalchemy.Text, nullable=True),
     sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
     sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
 )
@@ -332,6 +333,22 @@ general_chat_messages = sqlalchemy.Table(
     sqlalchemy.Column("grounding_metadata", sqlalchemy.JSON, nullable=True),
     sqlalchemy.Column("reminders", sqlalchemy.JSON, nullable=True),
     sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
+)
+
+archived_chat_messages = sqlalchemy.Table(
+    "archived_chat_messages",
+    metadata,
+    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
+    sqlalchemy.Column("user_id", sqlalchemy.Integer, nullable=False, index=True),
+    sqlalchemy.Column("user_data_id", sqlalchemy.Integer, nullable=True),
+    sqlalchemy.Column("role", sqlalchemy.String, nullable=False),
+    sqlalchemy.Column("content", sqlalchemy.Text, nullable=False),
+    sqlalchemy.Column("grounding_metadata", sqlalchemy.JSON, nullable=True),
+    sqlalchemy.Column("attachments", sqlalchemy.JSON, nullable=True),
+    sqlalchemy.Column("reminders", sqlalchemy.JSON, nullable=True),
+    sqlalchemy.Column("original_created_at", sqlalchemy.DateTime, nullable=True),
+    sqlalchemy.Column("archived_at", sqlalchemy.DateTime, default=datetime.utcnow),
+    sqlalchemy.Column("compression_batch_id", sqlalchemy.String, nullable=True),
 )
 
 context_cache = sqlalchemy.Table(

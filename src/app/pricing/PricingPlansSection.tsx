@@ -102,14 +102,40 @@ const PIONEER_PRICING = {
     annual: { price: "Rp 3.777.000,-", cadence: "year" },
 } as const;
 
+function parseIdrDisplay(value: string): number {
+    const digits = value.replace(/[^\d]/g, "");
+    const amount = Number.parseInt(digits || "0", 10);
+    return Number.isFinite(amount) ? amount : 0;
+}
+
+function computeAnnualSavingsPercent(monthlyDisplay: string, annualDisplay: string): number | undefined {
+    const monthly = parseIdrDisplay(monthlyDisplay);
+    const annual = parseIdrDisplay(annualDisplay);
+    if (monthly <= 0 || annual <= 0) {
+        return undefined;
+    }
+    const annualFromMonthly = monthly * 12;
+    if (annualFromMonthly <= 0 || annualFromMonthly <= annual) {
+        return undefined;
+    }
+    const percent = Math.round(((annualFromMonthly - annual) / annualFromMonthly) * 100);
+    if (!Number.isFinite(percent) || percent <= 0) {
+        return undefined;
+    }
+    return percent;
+}
+
 export function PricingPlansSection() {
     const router = useRouter();
     const { user } = useUser();
     const [billingCycle, setBillingCycle] = useState<"monthly" | "annual">("monthly");
     const { price: voyagerPrice, cadence: voyagerCadence } = VOYAGER_PRICING[billingCycle];
     const { price: pioneerPrice, cadence: pioneerCadence } = PIONEER_PRICING[billingCycle];
-    const voyagerSavingsLabel = billingCycle === "annual" ? "Save Rp 147.000,-" : undefined;
-    const pioneerSavingsLabel = billingCycle === "annual" ? "Save Rp 747.000,-" : undefined;
+    const annualSavingsPercent = Math.max(
+        computeAnnualSavingsPercent(VOYAGER_PRICING.monthly.price, VOYAGER_PRICING.annual.price) ?? 0,
+        computeAnnualSavingsPercent(PIONEER_PRICING.monthly.price, PIONEER_PRICING.annual.price) ?? 0,
+    );
+    const annualSavingsLabel = annualSavingsPercent > 0 ? `Save ~${annualSavingsPercent}%` : undefined;
 
     const handleUpgrade = (plan: "voyager" | "pioneer") => {
         const paymentUrl = `/payment?plan=${plan}&cycle=${billingCycle}`;
@@ -147,7 +173,17 @@ export function PricingPlansSection() {
                             data-active={billingCycle === id}
                             aria-pressed={billingCycle === id}
                         >
-                            <span>{label}</span>
+                            <span className={styles.billingOption}>
+                                <span>{label}</span>
+                                {id === "annual" && annualSavingsLabel ? (
+                                    <>
+                                        <span className={styles.billingDot} aria-hidden="true">
+                                            ·
+                                        </span>
+                                        <span className={styles.billingSavings}>{annualSavingsLabel}</span>
+                                    </>
+                                ) : null}
+                            </span>
                         </button>
                     ))}
                 </div>
@@ -197,9 +233,6 @@ export function PricingPlansSection() {
                                     <span className={styles.priceValue}>{voyagerPrice}</span>
                                     <span className={styles.priceMeta}>/ {voyagerCadence}</span>
                                 </div>
-                                {voyagerSavingsLabel && (
-                                    <span className={styles.savingsInline}>{voyagerSavingsLabel}</span>
-                                )}
                             </div>
                         </div>
                         <ul className={styles.featureList}>
@@ -241,9 +274,6 @@ export function PricingPlansSection() {
                                     <span className={styles.priceValue}>{pioneerPrice}</span>
                                     <span className={styles.priceMeta}>/ {pioneerCadence}</span>
                                 </div>
-                                {pioneerSavingsLabel && (
-                                    <span className={styles.savingsInline}>{pioneerSavingsLabel}</span>
-                                )}
                             </div>
                         </div>
                         <ul className={styles.featureList}>

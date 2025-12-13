@@ -22,7 +22,6 @@ export type DashboardHeaderProps = {
   className?: string;
   todayButtonLabel?: string;
   streakCount?: number;
-  hideCalendar?: boolean;
   onUpgradeClick?: () => void;
   showUpgradeButton?: boolean;
 };
@@ -50,7 +49,6 @@ export function DashboardHeader({
   className,
   todayButtonLabel = "Today",
   streakCount = 0,
-  hideCalendar = false,
   onUpgradeClick,
   showUpgradeButton = false,
 }: DashboardHeaderProps) {
@@ -88,28 +86,26 @@ export function DashboardHeader({
     <header className={headerClassName}>
       <div className={calendarStyles.calendarSurfaceHeaderLeft}>
         <div className={calendarStyles.calendarSurfaceHeadingGroup}>
-          {!hideCalendar && (
-            <div className={calendarStyles.calendarSurfaceTabs}>
-              <button
-                type="button"
-                className={calendarStyles.calendarSurfaceTab}
-                data-active={activeTab === "pulse"}
-                aria-pressed={activeTab === "pulse"}
-                onClick={() => onSelectTab("pulse")}
-              >
-                {t("Pulse")}
-              </button>
-              <button
-                type="button"
-                className={calendarStyles.calendarSurfaceTab}
-                data-active={activeTab === "calendar"}
-                aria-pressed={activeTab === "calendar"}
-                onClick={() => onSelectTab("calendar")}
-              >
-                {t("Calendar")}
-              </button>
-            </div>
-          )}
+          <div className={calendarStyles.calendarSurfaceTabs}>
+            <button
+              type="button"
+              className={calendarStyles.calendarSurfaceTab}
+              data-active={activeTab === "pulse"}
+              aria-pressed={activeTab === "pulse"}
+              onClick={() => onSelectTab("pulse")}
+            >
+              {t("Pulse")}
+            </button>
+            <button
+              type="button"
+              className={calendarStyles.calendarSurfaceTab}
+              data-active={activeTab === "calendar"}
+              aria-pressed={activeTab === "calendar"}
+              onClick={() => onSelectTab("calendar")}
+            >
+              {t("Calendar")}
+            </button>
+          </div>
         </div>
         {(label || title || rangeLabel) && (
           <div>

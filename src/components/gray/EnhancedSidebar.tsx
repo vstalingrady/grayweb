@@ -6,12 +6,16 @@ import {
   ChevronsUp,
   ChevronsDown,
   UserRound,
-  Sparkles,
   Settings as SettingsIcon,
   LifeBuoy,
   LogOut,
   Star,
+  MoreHorizontal,
+  Pencil,
+  Pin,
+  Trash2,
 } from "lucide-react";
+import { createPortal } from "react-dom";
 import Skeleton from "react-loading-skeleton";
 import { SiDiscord } from "react-icons/si";
 import { useUser } from "@/contexts/UserContext";
@@ -34,38 +38,138 @@ type GrayEnhancedSidebarProps = {
   onToggle: () => void;
   onNavigate: (nav: SidebarNavKey) => void;
   activeChatId?: string | null;
-  onOpenPersonalization?: () => void;
   onOpenSettings?: () => void;
   onOpenHelp?: () => void;
   onUpgradePlan?: () => void;
   onLogOut?: () => void;
+  onRenameHistoryEntry?: (id: string) => void;
+  onDeleteHistoryEntry?: (id: string) => void;
+  onPinHistoryEntry?: (id: string, pinned: boolean) => void;
 };
 
 const normalizeNavLabel = (item: SidebarNavItem): string => {
   return item.label;
 };
 
-function GrayEnhancedSidebarComponent({
-  isExpanded,
-  viewerName,
-  viewerInitials,
-  viewerAvatarUrl = null,
-  viewerPlanLabel,
-  activeNav,
-  railItems,
-  navItems,
-  historySections,
-  onExpand,
-  onCollapse,
-  onToggle,
-  onNavigate,
-  activeChatId = null,
-  onOpenPersonalization,
-  onOpenSettings,
-  onOpenHelp,
-  onUpgradePlan,
-  onLogOut,
-}: GrayEnhancedSidebarProps) {
+const HistoryItemMenu = ({
+  entry,
+  onRename,
+  onDelete,
+  onPin,
+}: {
+  entry: SidebarHistoryEntry;
+  onRename?: (id: string) => void;
+  onDelete?: (id: string) => void;
+  onPin?: (id: string, pinned: boolean) => void;
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const [coords, setCoords] = useState({ top: 0, left: 0 });
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const close = () => setIsOpen(false);
+    window.addEventListener("click", close);
+    window.addEventListener("scroll", close, { capture: true });
+    return () => {
+      window.removeEventListener("click", close);
+      window.removeEventListener("scroll", close, { capture: true });
+    };
+  }, [isOpen]);
+
+  const toggle = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!triggerRef.current) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    // Position menu: to the right of the button, or slightly below.
+    setCoords({ top: rect.bottom + 2, left: rect.right - 150 });
+    setIsOpen(!isOpen);
+  };
+
+  return (
+    <>
+      <div
+        className={styles.sidebarHistoryActions}
+        style={{ opacity: isOpen ? 1 : undefined }}
+      >
+        <button ref={triggerRef} onClick={toggle} className={styles.sidebarActionButton}>
+          <MoreHorizontal size={14} />
+        </button>
+      </div>
+      {isOpen &&
+        createPortal(
+          <div
+            className={styles.sidebarMenuPopover}
+            style={{ top: coords.top, left: coords.left }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {onRename && (
+              <button
+                onClick={() => {
+                  onRename(entry.id);
+                  setIsOpen(false);
+                }}
+                className={styles.sidebarMenuItem}
+              >
+                <Pencil size={13} /> Rename
+              </button>
+            )}
+            {onPin && (
+              <button
+                onClick={() => {
+                  onPin(entry.id, !entry.isPinned);
+                  setIsOpen(false);
+                }}
+                className={styles.sidebarMenuItem}
+              >
+                <Pin size={13} fill={entry.isPinned ? "currentColor" : "none"} />{" "}
+                {entry.isPinned ? "Unpin" : "Pin"}
+              </button>
+            )}
+            <div style={{ height: 1, background: "rgba(255,255,255,0.08)", margin: "2px 0" }} />
+            {onDelete && (
+              <button
+                onClick={() => {
+                  onDelete(entry.id);
+                  setIsOpen(false);
+                }}
+                className={`${styles.sidebarMenuItem} ${styles.delete}`}
+              >
+                <Trash2 size={13} /> Delete
+              </button>
+            )}
+          </div>,
+          document.body
+        )}
+    </>
+  );
+};
+
+function GrayEnhancedSidebarComponent(props: GrayEnhancedSidebarProps) {
+  const {
+    isExpanded,
+    viewerName,
+    viewerInitials,
+    viewerAvatarUrl = null,
+    viewerPlanLabel,
+    activeNav,
+    railItems,
+    navItems,
+    historySections,
+    onExpand,
+    onCollapse,
+    onToggle,
+    onNavigate,
+    activeChatId = null,
+    onOpenSettings,
+    onOpenHelp,
+    onUpgradePlan,
+    onLogOut,
+    onRenameHistoryEntry,
+    onDeleteHistoryEntry,
+    onPinHistoryEntry,
+  } = props;
   const { t } = useI18n();
   const { user } = useUser();
   const sidebarAvatarUrl = viewerAvatarUrl ?? user?.profile_picture_url ?? null;
@@ -127,11 +231,6 @@ function GrayEnhancedSidebarComponent({
     setIsProfileMenuOpen(false);
     onToggle();
   }, [onToggle]);
-
-  const handleOpenPersonalization = useCallback(() => {
-    onOpenPersonalization?.();
-    setIsProfileMenuOpen(false);
-  }, [onOpenPersonalization]);
 
   const handleOpenSettings = useCallback(() => {
     onOpenSettings?.();
@@ -299,16 +398,31 @@ function GrayEnhancedSidebarComponent({
                                     />
                                   </div>
                                 ) : (
-                                  <Link
-                                    href={entry.href}
-                                    className={
-                                      isActive
-                                        ? `${styles.sidebarHistoryLink} ${styles.sidebarHistoryLinkActive}`
-                                        : styles.sidebarHistoryLink
-                                    }
-                                  >
-                                    {entry.title}
-                                  </Link>
+                                  <>
+                                    <Link
+                                      href={entry.href}
+                                      className={
+                                        isActive
+                                          ? `${styles.sidebarHistoryLink} ${styles.sidebarHistoryLinkActive}`
+                                          : styles.sidebarHistoryLink
+                                      }
+                                    >
+                                      {entry.isPinned && (
+                                        <Pin
+                                          size={10}
+                                          fill="currentColor"
+                                          style={{ marginRight: 6, opacity: 0.7, flexShrink: 0 }}
+                                        />
+                                      )}
+                                      {entry.title}
+                                    </Link>
+                                    <HistoryItemMenu
+                                      entry={entry}
+                                      onRename={onRenameHistoryEntry}
+                                      onDelete={onDeleteHistoryEntry}
+                                      onPin={onPinHistoryEntry}
+                                    />
+                                  </>
                                 )}
                               </li>
                             );
@@ -387,19 +501,6 @@ function GrayEnhancedSidebarComponent({
                         <span className={styles.profileMenuDivider} aria-hidden="true" />
                       </>
                     ) : null}
-                    <button
-                      type="button"
-                      className={styles.profileMenuItem}
-                      onClick={handleOpenPersonalization}
-                      role="menuitem"
-                    >
-                      <span className={styles.profileMenuItemContent}>
-                        <span className={styles.profileMenuIcon}>
-                          <Sparkles size={16} />
-                        </span>
-                        <span className={styles.profileMenuLabel}>{t("Personalization")}</span>
-                      </span>
-                    </button>
                     <button
                       type="button"
                       className={styles.profileMenuItem}

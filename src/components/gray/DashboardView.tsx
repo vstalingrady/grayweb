@@ -318,7 +318,6 @@ type GrayDashboardViewProps = {
   proactivityDeliveryKeys?: ReadonlySet<string>;
   onReminderMove?: (reminderId: number, range: { start: Date; end: Date }) => Promise<void> | void;
   streakCount?: number;
-  hideCalendar?: boolean;
   onUpgradeClick?: () => void;
   showUpgradeButton?: boolean;
   isOverlay?: boolean;
@@ -358,7 +357,6 @@ export function GrayDashboardView({
   proactivityDeliveryKeys,
   onReminderMove,
   streakCount = 0,
-  hideCalendar = false,
   onUpgradeClick,
   showUpgradeButton = false,
   isOverlay = false,
@@ -1426,7 +1424,7 @@ export function GrayDashboardView({
   );
   /* NEW DASHBOARD GRID */
   const dashboardGrid = (
-    <div className={styles.dashboardGrid}>
+    <div className={styles.dashboardGridFinal}>
       <div className={styles.dashboardHeaderArea}>
         <div>
           <h1 className={styles.dashboardGreeting}>{greetingForDate(currentDate)}, {user?.full_name?.split(" ")[0] || "there"}</h1>
@@ -1484,6 +1482,34 @@ export function GrayDashboardView({
                 <span className={styles.dashboardToggleThumb} />
               </button>
             </div>
+            <div className={styles.proactivitySliderRow}>
+              <input
+                type="range"
+                min="0"
+                max="2"
+                step="1"
+                className={styles.proactivitySlider}
+                data-active={Boolean(displayProactivity).toString()}
+                value={
+                  !displayProactivity ? 0 :
+                    displayProactivity.id === 'proactivity-frequent' ? 2 :
+                      1
+                }
+                onChange={(e) => {
+                  const val = parseInt(e.target.value, 10);
+                  if (val === 0) {
+                    if (onProactivityRemove) onProactivityRemove();
+                  } else if (val === 1) {
+                    const preset = PROACTIVITY_PRESETS.find(p => p.id === 'proactivity-daily');
+                    if (preset) handleProactivityPresetSelect(preset);
+                  } else if (val === 2) {
+                    const preset = PROACTIVITY_PRESETS.find(p => p.id === 'proactivity-frequent');
+                    if (preset) handleProactivityPresetSelect(preset);
+                  }
+                }}
+                aria-label={t("Proactivity Intensity")}
+              />
+            </div>
           </div>
         </div>
       </div>
@@ -1513,7 +1539,6 @@ export function GrayDashboardView({
         className={headerClassName}
         onUpgradeClick={onUpgradeClick}
         showUpgradeButton={showUpgradeButton}
-        hideCalendar={hideCalendar}
       />
       <div className={styles.dashboardViewScrollContainer}>
         {dashboardGrid}
@@ -1530,7 +1555,6 @@ export function GrayDashboardView({
         className={headerClassName}
         onUpgradeClick={onUpgradeClick}
         showUpgradeButton={showUpgradeButton}
-        hideCalendar={hideCalendar}
       />
       <div className={styles.dashboardCompact}>
         {dashboardGrid}

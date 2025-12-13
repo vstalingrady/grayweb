@@ -10,6 +10,36 @@
     overflow: hidden;
 }
 
+.particleBackground {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    overflow: hidden;
+}
+
+.starLayer {
+    position: absolute;
+    inset: -15%;
+    background-image:
+        radial-gradient(1px 1px at 20px 30px, rgba(255, 255, 255, 0.4), transparent 65%),
+        radial-gradient(1px 1px at 120px 80px, rgba(255, 255, 255, 0.25), transparent 55%),
+        radial-gradient(2px 2px at 60px 140px, rgba(255, 255, 255, 0.35), transparent 60%);
+    background-size: 180px 180px;
+    opacity: 0.35;
+    animation: drift 60s linear infinite;
+}
+
+@keyframes drift {
+    from {
+        transform: translate3d(0, 0, 0);
+    }
+
+    to {
+        transform: translate3d(-120px, -120px, 0);
+    }
+}
+
 .mainGrid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -80,16 +110,16 @@
 .activePaymentMethodsCard {
     background: transparent;
     border-radius: 8px;
-    padding: 1.5rem;
+    padding: 1.1rem;
     width: 100%;
     border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .activePaymentMethodsTitle {
-    font-size: 1.1rem;
+    font-size: 1rem;
     font-weight: 700;
     color: rgba(255, 255, 255, 0.9);
-    margin-bottom: 1.25rem;
+    margin-bottom: 0.9rem;
     letter-spacing: -0.01em;
 }
 
@@ -137,7 +167,7 @@
 }
 
 .paymentSelectHint {
-    font-size: 0.8rem;
+    font-size: 0.75rem;
     color: rgba(255, 255, 255, 0.5);
 }
 
@@ -146,7 +176,7 @@
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 0.5rem;
-    margin-bottom: 0.85rem;
+    margin-bottom: 0.7rem;
 }
 
 .methodGroupTabs button {
@@ -154,10 +184,10 @@
     border: 1px solid rgba(255, 255, 255, 0.15);
     background: transparent;
     color: rgba(255, 255, 255, 0.6);
-    padding: 0.9rem 1rem;
+    padding: 0.7rem 0.85rem;
     border-radius: 8px;
     font-weight: 600;
-    font-size: 0.9rem;
+    font-size: 0.82rem;
     text-align: left;
     cursor: pointer;
     transition: border-color 100ms ease, color 100ms ease;
@@ -178,12 +208,12 @@
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    padding: 0.75rem 0.85rem;
+    padding: 0.6rem 0.75rem;
     border-radius: 8px;
     border: 1px solid rgba(255, 255, 255, 0.15);
     background: transparent;
     color: rgba(255, 255, 255, 0.6);
-    margin-bottom: 0.9rem;
+    margin-bottom: 0.75rem;
 }
 
 .methodSearchInput {
@@ -192,7 +222,7 @@
     border: none;
     outline: none;
     color: white;
-    font-size: 0.95rem;
+    font-size: 0.9rem;
 }
 
 .methodSearchInput::placeholder {
@@ -202,7 +232,7 @@
 .methodGrid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-    gap: 0.75rem;
+    gap: 0.6rem;
 }
 
 .methodOption {
@@ -210,8 +240,8 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 0.65rem;
-    padding: 1.1rem 0.9rem;
+    gap: 0.55rem;
+    padding: 0.85rem 0.75rem;
     border-radius: 8px;
     background: transparent;
     border: 1px solid rgba(255, 255, 255, 0.15);
@@ -219,7 +249,7 @@
     cursor: pointer;
     text-align: center;
     transition: border-color 100ms ease;
-    min-height: 96px;
+    min-height: 78px;
 }
 
 .methodOption:hover {
@@ -232,7 +262,7 @@
 }
 
 .methodLogo {
-    height: 28px;
+    height: 24px;
     width: auto;
     object-fit: contain;
     max-width: 110px;
@@ -240,7 +270,7 @@
 }
 
 .methodLabel {
-    font-size: 0.9rem;
+    font-size: 0.82rem;
     font-weight: 600;
     color: rgba(255, 255, 255, 0.9);
 }
@@ -597,7 +627,7 @@
 .payButton:hover:not(:disabled) {
     background: #e5e5e5;
     transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(255, 255, 255, 0.15);
+    box-shadow: none;
 }
 
 .payButton:disabled {

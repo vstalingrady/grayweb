@@ -21,6 +21,7 @@ export type SidebarHistoryEntry = {
   href: string;
   createdAt: number;
   isGeneratingTitle?: boolean;
+  isPinned?: boolean;
 };
 
 export type SidebarHistorySection = {
@@ -111,6 +112,7 @@ export type ContextUsageSummary = {
   totalTokens: number;
   tokensRemaining: number;
   limit: number;
+  modelLimit?: number | null;
   provider: string;
   modelName: string | null;
   modelLabel: string | null;

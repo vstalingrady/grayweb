@@ -81,7 +81,6 @@ export interface User {
   personalization_about?: string | null;
   personalization_custom_instructions?: string | null;
   personalization_system_prompt_override?: string | null;
-  personalization_show_calendar?: boolean;
   created_at: string;
   updated_at: string;
   usage_status?: UsageStatus | null;
@@ -372,6 +371,7 @@ export interface ChatRequest {
   should_generate_title?: boolean;
   reasoning_mode?: boolean;
   reminders_enabled?: boolean;
+  conversation_memory_enabled?: boolean;
 }
 
 export interface ChatResponse {
@@ -409,6 +409,7 @@ export interface ConversationSummary {
 export interface ConversationUpdatePayload {
   title?: string;
   user_id?: number;
+  metadata?: Record<string, unknown>;
 }
 
 export interface ConversationUsage {
@@ -571,7 +572,6 @@ export interface UserUpdate {
   personalization_occupation?: string | null;
   personalization_about?: string | null;
   personalization_custom_instructions?: string | null;
-  personalization_show_calendar?: boolean;
   preferred_model?: string | null;
 }
 
@@ -1655,6 +1655,15 @@ class ApiService {
    */
   async deleteConversation(conversationId: string): Promise<void> {
     await this.fetch<void>(`/api/conversation/${encodeURIComponent(conversationId)}`, {
+      method: 'DELETE',
+    });
+  }
+
+  /**
+   * Delete all conversations and messages for the user.
+   */
+  async deleteAllConversations(userId: number): Promise<void> {
+    await this.fetch<void>(`/users/${userId}/conversations`, {
       method: 'DELETE',
     });
   }

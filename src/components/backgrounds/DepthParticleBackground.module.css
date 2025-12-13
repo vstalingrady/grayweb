@@ -1,0 +1,13 @@
+.particleBackground {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  opacity: 0.65;
+  pointer-events: none;
+}
+
+.particleCanvas {
+  width: 100%;
+  height: 100%;
+}
+

@@ -39,11 +39,32 @@ class FileSearchService:
         if chunking_config:
             config["chunking_config"] = chunking_config
 
-        return self._client.file_search_stores.upload_to_file_search_store(
-            file=str(resolved_path),
-            file_search_store_name=store_name,
-            config=config,
-        )
+        # Retry logic for transient 5xx errors
+        for attempt in range(3):
+            try:
+                return self._client.file_search_stores.upload_to_file_search_store(
+                    file=str(resolved_path),
+                    file_search_store_name=store_name,
+                    config=config,
+                )
+            except Exception as e:
+                # Check for 5xx server errors or internal errors
+                code = getattr(e, "code", None)
+                status_code = getattr(e, "status_code", None)
+                
+                is_server_error = (
+                    (isinstance(code, int) and code >= 500) or
+                    (isinstance(status_code, int) and status_code >= 500) or
+                    "Internal error" in str(e) or
+                    "INTERNAL" in str(e)
+                )
+
+                if is_server_error and attempt < 2:
+                    wait_time = 1.0 * (2 ** attempt)
+                    print(f"[FileSearch] Upload failed with {e}, retrying in {wait_time}s...")
+                    await asyncio.sleep(wait_time)
+                    continue
+                raise e
 
     async def import_file(
         self,

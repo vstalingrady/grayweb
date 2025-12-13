@@ -694,6 +694,7 @@ export default async function GroveApplication() {
               width={20}
               height={20}
               className="nav-cta__icon"
+              style={{ width: "auto", height: "auto" }}
               aria-hidden
             />
             <span className="sr-only">Open Gray workspace</span>

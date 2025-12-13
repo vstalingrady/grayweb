@@ -1,38 +1,152 @@
 "use client";
 
-import { useEffect, useState } from "react";
+/* eslint-disable react-hooks/set-state-in-effect */
+
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
   ChevronLeft,
   ChevronDown,
+  Check,
   UserCircle,
   Settings as SettingsIcon,
   Palette,
   Moon,
   Sun,
   Trash2,
-  Globe,
   Database,
-  Building2
+  Bell,
 } from "lucide-react";
 import styles from "@/app/gray/GrayPageClient.module.css";
 import { useI18n } from "@/contexts/I18nContext";
 import { useUser } from "@/contexts/UserContext";
 import { useChatStore } from "@/components/gray/ChatProvider";
+import type { ContextUsageSummary } from "@/components/gray/types";
+import { clampPercent, getContextUsageUsedTokens, getContextUsageVisualizationLimit } from "@/components/gray/contextUsage";
+import { apiService } from "@/lib/api";
+import type { Locale } from "@/lib/i18n";
+import { requestNotificationPermission } from "@/lib/notificationUtils";
+
+type SelectOption = { value: string; label: string };
+
+type SettingsSelectProps = {
+  value: string;
+  options: SelectOption[];
+  onChange: (value: string) => void;
+  icon?: React.ElementType;
+};
+
+function SettingsSelect({ value, options, onChange, icon: Icon }: SettingsSelectProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const activeLabel = useMemo(() => {
+    const match = options.find((option) => option.value === value);
+    return match?.label ?? value;
+  }, [options, value]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (containerRef.current && !containerRef.current.contains(target)) {
+        setIsOpen(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isOpen]);
+
+  return (
+    <div className={styles.settingsSelectButton} style={{ position: "relative" }} ref={containerRef}>
+      <button
+        type="button"
+        className={styles.settingsSelectTrigger}
+        onClick={() => setIsOpen((prev) => !prev)}
+        aria-haspopup="listbox"
+        aria-expanded={isOpen ? "true" : "false"}
+      >
+        {Icon ? <Icon size={14} /> : null}
+        <span className={styles.settingsSelectValue}>{activeLabel}</span>
+        <ChevronDown
+          size={14}
+          className={styles.settingsSelectChevron}
+          aria-hidden="true"
+          data-open={isOpen ? "true" : "false"}
+        />
+      </button>
+
+      {isOpen ? (
+        <div className={styles.settingsSelectMenu} role="listbox">
+          {options.map((option) => {
+            const selected = option.value === value;
+            return (
+              <button
+                key={option.value}
+                type="button"
+                role="option"
+                aria-selected={selected ? "true" : "false"}
+                className={styles.settingsSelectOption}
+                data-selected={selected ? "true" : "false"}
+                onClick={() => {
+                  onChange(option.value);
+                  setIsOpen(false);
+                }}
+              >
+                <span>{option.label}</span>
+                {selected ? <Check size={14} aria-hidden="true" /> : null}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 type SettingsModalProps = {
   isOpen: boolean;
   onClose: () => void;
+  initialSection?: SettingsSection;
+  contextUsage?: ContextUsageSummary | null;
 };
 
 type SettingsSection =
   | "account"
   | "preferences"
   | "personalization"
-  | "data_controls";
+  | "data_controls"
+  | "notifications";
 
 type ThemeMode = "dark" | "light" | "system";
 const THEME_STORAGE_KEY = "gray_theme";
+const NOTIFICATIONS_STORAGE_PREFIX = "gray_notifications";
+const CONVERSATION_MEMORY_STORAGE_PREFIX = "gray_conversation_memory";
+const LINK_SHARING_STORAGE_PREFIX = "gray_link_sharing";
+
+type NotificationPreferences = {
+  device: boolean;
+  tasks: boolean;
+  proactivity: boolean;
+  calendarEvents: boolean;
+};
+
+const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
+  device: false,
+  tasks: true,
+  proactivity: true,
+  calendarEvents: true,
+};
 
 const resolveInitialTheme = (): ThemeMode => {
   if (typeof window === "undefined") {
@@ -47,49 +161,161 @@ const resolveInitialTheme = (): ThemeMode => {
   return "system";
 };
 
-export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
-  const { t } = useI18n();
+export function SettingsModal({
+  isOpen,
+  onClose,
+  initialSection = "account",
+  contextUsage = null,
+}: SettingsModalProps) {
+  const { t, locale: activeLocale, setLocale } = useI18n();
   const { user, updateUser } = useUser();
   const { webSearchEnabled, setWebSearchEnabled } = useChatStore();
   const router = useRouter();
-  const [activeSection, setActiveSection] = useState<SettingsSection>("account");
+  const resolveSection = (value: string): SettingsSection => {
+    if (
+      value === "preferences" ||
+      value === "personalization" ||
+      value === "data_controls" ||
+      value === "notifications"
+    ) {
+      return value;
+    }
+    return "account";
+  };
 
+  const [activeSection, setActiveSection] = useState<SettingsSection>(() =>
+    resolveSection(initialSection)
+  );
+
+  const notificationsStorageKey = `${NOTIFICATIONS_STORAGE_PREFIX}:${user?.id ?? "anon"}`;
+  const conversationMemoryStorageKey = `${CONVERSATION_MEMORY_STORAGE_PREFIX}:${user?.id ?? "anon"}`;
+  const linkSharingStorageKey = `${LINK_SHARING_STORAGE_PREFIX}:${user?.id ?? "anon"}`;
+
+  const [notificationPreferences, setNotificationPreferences] = useState<NotificationPreferences>(
+    DEFAULT_NOTIFICATION_PREFERENCES
+  );
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | "unsupported">(
+    "unsupported"
+  );
+  const [conversationMemoryEnabled, setConversationMemoryEnabled] = useState(true);
+  const [linkSharingEnabled, setLinkSharingEnabled] = useState(false);
   // Preferences State
-  const [theme, setTheme] = useState<ThemeMode>("system");
-  const [autosuggestEnabled, setAutosuggestEnabled] = useState(true);
-  const [dataRetentionEnabled, setDataRetentionEnabled] = useState(true);
-  const [allowLinkSharing, setAllowLinkSharing] = useState(false);
+  const [theme, setTheme] = useState<ThemeMode>(() => resolveInitialTheme());
+  const [responseLanguage, setResponseLanguage] = useState("auto");
 
-  // Personalization State
-  const [bio, setBio] = useState("");
-  const [location, setLocation] = useState("Boulder, CO"); // Local only, no backend field
-  const [savedMemoriesEnabled, setSavedMemoriesEnabled] = useState(true); // Placeholder for now
+  // Load response language preference
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("gray_response_language");
+      if (stored) setResponseLanguage(stored);
+    }
+  }, []);
+
+  const handleResponseLanguageChange = (val: string) => {
+    setResponseLanguage(val);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("gray_response_language", val);
+    }
+  };
+
+  const handleAvatarFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] ?? null;
+    event.target.value = "";
+    if (!file) {
+      return;
+    }
+
+    if (!file.type?.startsWith("image/")) {
+      setAvatarUploadState("error");
+      setAvatarUploadError(t("Please choose an image file."));
+      return;
+    }
+
+    // Keep parity with backend MAX_MEDIA_UPLOAD_SIZE_BYTES (10MB).
+    if (file.size > 10 * 1024 * 1024) {
+      setAvatarUploadState("error");
+      setAvatarUploadError(t("Image is too large (max 10MB)."));
+      return;
+    }
+
+    setAvatarUploadState("uploading");
+    setAvatarUploadError(null);
+    try {
+      const upload = await apiService.uploadMediaFile(file);
+      const avatarUrl = upload.public_url ?? `/api/uploads/${upload.id}/file`;
+      await updateUser({ profile_picture_url: avatarUrl });
+      setAvatarUploadState("idle");
+    } catch (error) {
+      setAvatarUploadState("error");
+      setAvatarUploadError(error instanceof Error ? error.message : t("Failed to upload avatar."));
+    }
+  };
+
+  // Personalization State (mirrors legacy PersonalizationPanel fields)
+  const [nickname, setNickname] = useState("");
+  const [occupation, setOccupation] = useState("");
+  const [about, setAbout] = useState("");
   const [customInstructions, setCustomInstructions] = useState("");
-  const [showCalendar, setShowCalendar] = useState(true);
+
+  const [contextActionState, setContextActionState] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [contextActionMessage, setContextActionMessage] = useState<string | null>(null);
 
   const [aboutSaveState, setAboutSaveState] = useState<"idle" | "saving" | "success" | "error">("idle");
   const [customSaveState, setCustomSaveState] = useState<"idle" | "saving" | "success" | "error">("idle");
+  const [avatarUploadState, setAvatarUploadState] = useState<"idle" | "uploading" | "error">("idle");
+  const [avatarUploadError, setAvatarUploadError] = useState<string | null>(null);
+  const avatarFileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Sync state with user profile and chat store
   useEffect(() => {
     if (user) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setBio(user.personalization_about || "");
-      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setNickname(user.personalization_nickname || "");
+      setOccupation(user.personalization_occupation || "");
+      setAbout(user.personalization_about || "");
       setCustomInstructions(user.personalization_custom_instructions || "");
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setShowCalendar(user.personalization_show_calendar ?? true);
     }
   }, [user]);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setTheme(resolveInitialTheme());
-  }, []);
-
-  useEffect(() => {
     if (!isOpen) {
       return;
+    }
+
+    if (typeof window !== "undefined") {
+      try {
+        const storedPrefs = window.localStorage.getItem(notificationsStorageKey);
+        if (storedPrefs) {
+          const parsed = JSON.parse(storedPrefs) as Partial<NotificationPreferences>;
+          setNotificationPreferences({
+            ...DEFAULT_NOTIFICATION_PREFERENCES,
+            ...parsed,
+          });
+        } else {
+          setNotificationPreferences(DEFAULT_NOTIFICATION_PREFERENCES);
+        }
+      } catch {
+        setNotificationPreferences(DEFAULT_NOTIFICATION_PREFERENCES);
+      }
+
+      if (typeof Notification !== "undefined") {
+        setNotificationPermission(Notification.permission);
+      } else {
+        setNotificationPermission("unsupported");
+      }
+
+      try {
+        const storedMemory = window.localStorage.getItem(conversationMemoryStorageKey);
+        setConversationMemoryEnabled(storedMemory !== "0");
+      } catch {
+        setConversationMemoryEnabled(true);
+      }
+
+      try {
+        const storedLinks = window.localStorage.getItem(linkSharingStorageKey);
+        setLinkSharingEnabled(storedLinks === "1");
+      } catch {
+        setLinkSharingEnabled(false);
+      }
     }
 
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -104,7 +330,13 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
       document.removeEventListener("keydown", handleKeyDown);
       document.body.style.overflow = "unset";
     };
-  }, [isOpen, onClose]);
+  }, [
+    conversationMemoryStorageKey,
+    notificationsStorageKey,
+    isOpen,
+    linkSharingStorageKey,
+    onClose,
+  ]);
 
   useEffect(() => {
     if (aboutSaveState === "success") {
@@ -120,9 +352,73 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     }
   }, [customSaveState]);
 
+  useEffect(() => {
+    if (contextActionState === "success") {
+      const timer = setTimeout(() => {
+        setContextActionState("idle");
+        setContextActionMessage(null);
+      }, 2400);
+      return () => clearTimeout(timer);
+    }
+  }, [contextActionState]);
+
   const handleDeleteAccount = () => {
     onClose();
     router.push("/delete-account");
+  };
+
+  const setNotificationPreference = (
+    key: keyof NotificationPreferences,
+    value: boolean
+  ) => {
+    setNotificationPreferences((current) => {
+      const next = { ...current, [key]: value };
+      if (typeof window !== "undefined") {
+        try {
+          window.localStorage.setItem(notificationsStorageKey, JSON.stringify(next));
+        } catch {
+          // ignore storage failures
+        }
+      }
+      return next;
+    });
+  };
+
+  const handleToggleDeviceNotifications = async () => {
+    const wantsEnabled = !notificationPreferences.device;
+    if (!wantsEnabled) {
+      setNotificationPreference("device", false);
+      return;
+    }
+
+    const permission = await requestNotificationPermission();
+    if (!permission) {
+      setNotificationPermission("unsupported");
+      setNotificationPreference("device", false);
+      return;
+    }
+    setNotificationPermission(permission);
+    if (permission === "granted") {
+      setNotificationPreference("device", true);
+    } else {
+      setNotificationPreference("device", false);
+    }
+  };
+
+  const handleClearLocalCache = () => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    try {
+      window.localStorage.removeItem("gray_response_language");
+      window.localStorage.removeItem(THEME_STORAGE_KEY);
+      window.localStorage.removeItem(notificationsStorageKey);
+      window.localStorage.removeItem(conversationMemoryStorageKey);
+      window.localStorage.removeItem(linkSharingStorageKey);
+    } catch {
+      // ignore storage failures
+    }
+    window.location.reload();
   };
 
   const applyTheme = (nextTheme: ThemeMode) => {
@@ -140,25 +436,17 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     setTheme(nextTheme);
   };
 
-  const cycleTheme = () => {
-    const modes: ThemeMode[] = ["system", "dark", "light"];
-    const nextIndex = (modes.indexOf(theme) + 1) % modes.length;
-    applyTheme(modes[nextIndex]);
-  };
 
-  const getThemeLabel = (current: ThemeMode) => {
-    switch (current) {
-      case "system": return t("System (Dark)");
-      case "dark": return t("Dark");
-      case "light": return t("Light");
-    }
-  };
 
   const handleSaveBio = async () => {
     if (!user?.id) return;
     setAboutSaveState("saving");
     try {
-      await updateUser({ personalization_about: bio });
+      await updateUser({
+        personalization_nickname: nickname,
+        personalization_occupation: occupation,
+        personalization_about: about,
+      });
       setAboutSaveState("success");
     } catch (e) {
       console.error(e);
@@ -178,25 +466,28 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     }
   };
 
-  const handleClearBio = () => {
-    setBio("");
-  };
-
   const handleClearCustomInstructions = () => {
     setCustomInstructions("");
   };
 
-  const handleLocationToggle = async () => {
-    if (!user?.id) return;
-    // Optimistic update handled by UI re-render on user context change,
-    // but we trigger the update here.
-    await updateUser({ maps_enabled: !user.maps_enabled });
-  };
+  const handleCompressConversation = async () => {
+    const conversationId = contextUsage?.conversationId;
+    if (!conversationId) {
+      setContextActionState("error");
+      setContextActionMessage(t("No active conversation to compress"));
+      return;
+    }
 
-  const handleCalendarToggle = async () => {
-    if (!user?.id) return;
-    // Optimistic update handled by UI re-render on user context change
-    await updateUser({ personalization_show_calendar: !user.personalization_show_calendar });
+    setContextActionState("loading");
+    setContextActionMessage(t("Compressing..."));
+    try {
+      const result = await apiService.compressConversation(conversationId);
+      setContextActionState("success");
+      setContextActionMessage(result.message || t("Conversation compressed successfully"));
+    } catch (e) {
+      setContextActionState("error");
+      setContextActionMessage(e instanceof Error ? e.message : t("Failed to compress conversation"));
+    }
   };
 
   if (!isOpen) {
@@ -220,7 +511,6 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     </button>
   );
 
-  // Helper for toggle switch
   const renderToggle = (checked: boolean, onChange: () => void, label?: string) => (
     <button
       type="button"
@@ -256,6 +546,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
             {renderNavItem("preferences", t("Preferences"), SettingsIcon)}
             {renderNavItem("personalization", t("Personalization"), Palette)}
             {renderNavItem("data_controls", t("Data Controls"), Database)}
+            {renderNavItem("notifications", t("Notifications"), Bell)}
           </div>
         </aside>
 
@@ -269,33 +560,47 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 
               <div className={styles.userProfileCard}>
                 <div className={styles.avatarLarge}>
-                  <UserCircle size={40} />
+                  {user?.profile_picture_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={user.profile_picture_url} alt="" />
+                  ) : (
+                    <UserCircle size={40} />
+                  )}
                 </div>
                 <div>
                   <div className={styles.userName}>
                     {user?.full_name || "Gray User"}
                   </div>
+                  {user?.email ? (
+                    <div className={styles.settingsItemDescription} style={{ marginTop: 4 }}>
+                      {user.email}
+                    </div>
+                  ) : null}
                 </div>
                 <div className={styles.userProfileActions}>
-                  <button className={styles.settingsAction}>{t("Change avatar")}</button>
+                  <input
+                    ref={avatarFileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleAvatarFileChange}
+                    style={{ display: "none" }}
+                  />
+                  <button
+                    type="button"
+                    className={styles.settingsAction}
+                    onClick={() => avatarFileInputRef.current?.click()}
+                    disabled={avatarUploadState === "uploading"}
+                  >
+                    {avatarUploadState === "uploading" ? t("Uploading…") : t("Change avatar")}
+                  </button>
+                  <button className={styles.settingsAction} style={{ marginLeft: 8 }}>{t("Sign out")}</button>
                 </div>
               </div>
-
-              <div className={styles.settingsSection}>
-                <div className={styles.settingsRow}>
-                  <div className={styles.settingsLabelGroup}>
-                    <span className={styles.settingsLabel}>{t("Full Name")}</span>
-                    <span className={styles.settingsValue}>{user?.full_name || "Gray User"}</span>
-                  </div>
-                  <button className={styles.settingsAction}>{t("Change full name")}</button>
-                </div>
-                <div className={styles.settingsRow}>
-                  <div className={styles.settingsLabelGroup}>
-                    <span className={styles.settingsLabel}>{t("Email")}</span>
-                    <span className={styles.settingsValue}>{user?.email || "user@example.com"}</span>
-                  </div>
-                </div>
-              </div>
+              {avatarUploadError ? (
+                <p className={styles.settingsItemDescription} style={{ color: "#fca5a5", marginTop: 10 }}>
+                  {avatarUploadError}
+                </p>
+              ) : null}
 
               <div className={styles.settingsSection}>
                 <h3 className={styles.settingsSectionTitle}>{t("Your Subscription")}</h3>
@@ -311,15 +616,8 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
               </div>
 
               <div className={styles.settingsSection}>
-                <h3 className={styles.settingsSectionTitle}>{t("System")}</h3>
-                <div className={styles.settingsRow}>
-                  <span className={styles.settingsLabel}>{t("Support")}</span>
-                  <button className={styles.settingsAction}>{t("Contact")}</button>
-                </div>
-                <div className={styles.settingsRow}>
-                  <span className={styles.settingsLabel}>{t("You are signed in as")} {user?.email}</span>
-                  <button className={styles.settingsAction}>{t("Sign out")}</button>
-                </div>
+
+
                 <div className={styles.settingsRow}>
                   <div className={styles.settingsLabelGroup}>
                     <span className={styles.settingsLabel}>{t("Delete account")}</span>
@@ -328,10 +626,10 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                     </span>
                   </div>
                   <button
-                    className={styles.settingsAction}
+                    className={`${styles.settingsAction} ${styles.settingsActionDanger}`}
                     onClick={handleDeleteAccount}
                   >
-                    {t("Learn more")}
+                    {t("Delete")}
                   </button>
                 </div>
               </div>
@@ -350,14 +648,16 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                     <span className={styles.settingsLabel}>{t("Appearance")}</span>
                     <span className={styles.settingsItemDescription}>{t("How Gray looks on your device")}</span>
                   </div>
-                  <button
-                    className={styles.settingsSelectButton}
-                    onClick={cycleTheme}
-                  >
-                    {theme === "light" ? <Sun size={14} /> : <Moon size={14} />}
-                    <span>{getThemeLabel(theme)}</span>
-                    <ChevronDown size={14} style={{ opacity: 0.5 }} />
-                  </button>
+                  <SettingsSelect
+                    value={theme}
+                    onChange={(val) => applyTheme(val as ThemeMode)}
+                    icon={theme === "light" ? Sun : Moon}
+                    options={[
+                      { value: "system", label: t("System (Dark)") },
+                      { value: "dark", label: t("Dark") },
+                      { value: "light", label: t("Light") },
+                    ]}
+                  />
                 </div>
 
                 <div className={styles.settingsRow}>
@@ -365,10 +665,14 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                     <span className={styles.settingsLabel}>{t("Language")}</span>
                     <span className={styles.settingsItemDescription}>{t("The language used in the user interface")}</span>
                   </div>
-                  <button className={styles.settingsSelectButton}>
-                    <span>{t("Default")}</span>
-                    <ChevronDown size={14} style={{ opacity: 0.5 }} />
-                  </button>
+                  <SettingsSelect
+                    value={activeLocale}
+                    onChange={(val) => setLocale(val as Locale)}
+                    options={[
+                      { value: "en", label: "English" },
+                      { value: "id", label: "Bahasa Indonesia" },
+                    ]}
+                  />
                 </div>
 
                 <div className={styles.settingsRow}>
@@ -376,50 +680,17 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                     <span className={styles.settingsLabel}>{t("Preferred response language")}</span>
                     <span className={styles.settingsItemDescription}>{t("The language used for AI responses")}</span>
                   </div>
-                  <button className={styles.settingsSelectButton}>
-                    <span>{t("Automatic (detect input)")}</span>
-                    <ChevronDown size={14} style={{ opacity: 0.5 }} />
-                  </button>
+                  <SettingsSelect
+                    value={responseLanguage}
+                    onChange={handleResponseLanguageChange}
+                    options={[
+                      { value: "auto", label: t("Automatic (detect input)") },
+                      { value: "en", label: "English" },
+                      { value: "id", label: "Bahasa Indonesia" },
+                    ]}
+                  />
                 </div>
 
-                <div className={styles.settingsRow}>
-                  <div className={styles.settingsLabelGroup}>
-                    <span className={styles.settingsLabel}>{t("Autosuggest")}</span>
-                    <span className={styles.settingsItemDescription}>
-                      {t("Enable dropdown and tab-complete suggestions while typing a query")}
-                    </span>
-                  </div>
-                  {renderToggle(autosuggestEnabled, () => setAutosuggestEnabled(!autosuggestEnabled), t("Toggle Autosuggest"))}
-                </div>
-              </div>
-
-              <div className={styles.settingsSection}>
-                <h3 className={styles.settingsSectionTitle}>{t("Artificial Intelligence")}</h3>
-
-                <div className={styles.settingsRow}>
-                  <span className={styles.settingsLabel}>{t("Model")}</span>
-                  <button className={styles.settingsAction}>{t("Upgrade to choose")}</button>
-                </div>
-
-                <div className={styles.settingsRow}>
-                  <span className={styles.settingsLabel}>{t("Image generation model")}</span>
-                  <button className={styles.settingsAction}>{t("Upgrade to select")}</button>
-                </div>
-
-                <div className={styles.settingsRow}>
-                  <span className={styles.settingsLabel}>{t("Video generation model")}</span>
-                  <button className={styles.settingsAction}>{t("Upgrade to Max")}</button>
-                </div>
-
-                <div className={styles.settingsRow}>
-                  <div className={styles.settingsLabelGroup}>
-                    <span className={styles.settingsLabel}>{t("AI data retention")}</span>
-                    <span className={styles.settingsItemDescription}>
-                      {t("AI Data Retention allows Gray to use your searches to improve AI models. Turn this setting off if you wish to exclude your data from this process.")}
-                    </span>
-                  </div>
-                  {renderToggle(dataRetentionEnabled, () => setDataRetentionEnabled(!dataRetentionEnabled), t("Toggle AI data retention"))}
-                </div>
               </div>
             </>
           )}
@@ -431,9 +702,9 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
               </div>
 
               <div className={styles.settingsSection}>
-                <h3 className={styles.settingsSectionTitle}>{t("Settings")}</h3>
+                <h3 className={styles.settingsSectionTitle}>{t("Quick toggles")}</h3>
                 <p className={styles.settingsItemDescription} style={{ marginBottom: 12 }}>
-                  {t("Quick toggles for Gray's automations.")}
+                  {t("Control Gray’s automations and workspace features.")}
                 </p>
 
                 <div className={styles.settingsRow}>
@@ -446,34 +717,60 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                   {renderToggle(webSearchEnabled, () => setWebSearchEnabled(!webSearchEnabled), t("Toggle Web search"))}
                 </div>
 
+              </div>
+
+              <div className={styles.settingsSection}>
+                <h3 className={styles.settingsSectionTitle}>{t("Artificial Intelligence")}</h3>
+
                 <div className={styles.settingsRow}>
-                  <div className={styles.settingsLabelGroup}>
-                    <span className={styles.settingsLabel}>{t("Show Calendar")}</span>
-                    <span className={styles.settingsItemDescription}>
-                      {t("Display the daily schedule view.")}
-                    </span>
-                  </div>
-                  {renderToggle(showCalendar, handleCalendarToggle, t("Toggle Calendar"))}
+                  <span className={styles.settingsLabel}>{t("Model")}</span>
+                  <button className={styles.settingsAction}>{t("Upgrade to choose")}</button>
                 </div>
               </div>
 
               <div className={styles.settingsSection}>
-                <h3 className={styles.settingsSectionTitle}>{t("Introduce yourself")}</h3>
+                <h3 className={styles.settingsSectionTitle}>{t("About you")}</h3>
+                <div className={styles.settingsFormGrid}>
+                  <div className={styles.settingsFormField}>
+                    <label className={styles.settingsFormLabel} htmlFor="settings-nickname">
+                      {t("Nickname")}
+                    </label>
+                    <input
+                      id="settings-nickname"
+                      className={styles.settingsInput}
+                      value={nickname}
+                      onChange={(e) => setNickname(e.target.value)}
+                      placeholder={t("What should Gray call you?")}
+                    />
+                  </div>
+
+                  <div className={styles.settingsFormField}>
+                    <label className={styles.settingsFormLabel} htmlFor="settings-occupation">
+                      {t("Occupation")}
+                    </label>
+                    <input
+                      id="settings-occupation"
+                      className={styles.settingsInput}
+                      value={occupation}
+                      onChange={(e) => setOccupation(e.target.value)}
+                      placeholder={t("Role, industry, or focus")}
+                    />
+                  </div>
+                </div>
+
+                <label className={styles.settingsFormLabel} htmlFor="settings-about" style={{ marginTop: 12 }}>
+                  {t("About")}
+                </label>
                 <textarea
+                  id="settings-about"
                   className={styles.settingsTextarea}
-                  value={bio}
-                  onChange={(e) => setBio(e.target.value)}
-                  placeholder={t("I'm a software engineer who likes to play guitar and go hiking")}
+                  value={about}
+                  onChange={(e) => setAbout(e.target.value)}
+                  placeholder={t("Share anything that helps Gray personalize responses.")}
                 />
                 <div className={styles.settingsButtonGroup}>
                   <button
-                    className={styles.settingsSecondaryButton}
-                    onClick={handleClearBio}
-                  >
-                    <Trash2 size={14} />
-                    {t("Clear")}
-                  </button>
-                  <button
+                    type="button"
                     className={`${styles.settingsAction} ${styles.settingsPrimaryButton}`}
                     onClick={handleSaveBio}
                   >
@@ -493,6 +790,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                 />
                 <div className={styles.settingsButtonGroup}>
                   <button
+                    type="button"
                     className={styles.settingsSecondaryButton}
                     onClick={handleClearCustomInstructions}
                   >
@@ -500,6 +798,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                     {t("Clear")}
                   </button>
                   <button
+                    type="button"
                     className={`${styles.settingsAction} ${styles.settingsPrimaryButton}`}
                     onClick={handleSaveCustomInstructions}
                   >
@@ -509,99 +808,53 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                 </div>
               </div>
 
-              <div className={styles.settingsSection}>
-                <div className={`${styles.settingsRow} ${styles.settingsRowFlexStart}`}>
-                  <div className={styles.settingsLabelGroup}>
-                    <span className={styles.settingsLabel}>{t("Location")}</span>
-                    <span className={styles.settingsItemDescription}>
-                      {t("Enter a location or enable precise location to get more accurate weather and sports")}
-                    </span>
-                    <span className={styles.settingsItemDescription} style={{ color: "#71717a", marginTop: 4 }}>
-                      {t("You are not sharing your location")}
-                    </span>
+              {contextUsage?.conversationId ? (
+                <div className={styles.settingsSection}>
+                  <h3 className={styles.settingsSectionTitle}>{t("Context usage")}</h3>
+                  <p className={styles.settingsItemDescription} style={{ marginBottom: 12 }}>
+                    {t("Track how much of your conversation context you’ve used.")}
+                  </p>
+                  {(() => {
+                    const usedTokens = Math.max(0, getContextUsageUsedTokens(contextUsage));
+                    const visualizationLimit = getContextUsageVisualizationLimit(contextUsage);
+                    const percentUsed =
+                      visualizationLimit > 0 ? clampPercent((usedTokens / visualizationLimit) * 100) : 0;
+                    const widthPercent = percentUsed > 0 && percentUsed < 0.5 ? 0.5 : percentUsed;
+                    const usedLabel = usedTokens.toLocaleString();
+                    const limitLabel = visualizationLimit.toLocaleString();
+                    const contextLimitLabel =
+                      typeof contextUsage.limit === "number" && contextUsage.limit > 0
+                        ? t("{used} of {limit} tokens used", { used: usedLabel, limit: limitLabel })
+                        : t("{used} tokens used (visualized against {limit})", { used: usedLabel, limit: limitLabel });
+
+                    return (
+                      <>
+                        <div className={styles.settingsContextBar} aria-label={contextLimitLabel}>
+                          <div className={styles.settingsContextBarFill} style={{ width: `${widthPercent}%` }} />
+                        </div>
+                        <p className={styles.settingsItemDescription} style={{ marginTop: 10 }}>
+                          {contextLimitLabel}
+                        </p>
+                      </>
+                    );
+                  })()}
+                  {contextActionMessage ? (
+                    <p className={styles.settingsItemDescription} style={{ marginTop: 10 }}>
+                      {contextActionMessage}
+                    </p>
+                  ) : null}
+                  <div className={styles.settingsButtonGroup}>
+                    <button
+                      type="button"
+                      className={`${styles.settingsAction} ${styles.settingsPrimaryButton}`}
+                      onClick={() => void handleCompressConversation()}
+                      disabled={contextActionState === "loading"}
+                    >
+                      {contextActionState === "loading" ? t("Compressing...") : t("Compress conversation")}
+                    </button>
                   </div>
-                  {renderToggle(user?.maps_enabled ?? false, handleLocationToggle, t("Toggle Location"))}
                 </div>
-
-                <div className={styles.settingsFullWidthInput}>
-                  <input
-                    type="text"
-                    className={styles.settingsInput}
-                    value={location}
-                    onChange={(e) => setLocation(e.target.value)}
-                    placeholder={t("City, State, or Country")}
-                  />
-                </div>
-              </div>
-
-              <div className={styles.settingsSection}>
-                <h3 className={styles.settingsSectionTitle}>{t("Memory")}</h3>
-                <div className={styles.settingsRow}>
-                  <div className={styles.settingsLabelGroup}>
-                    <span className={styles.settingsLabel}>{t("Reference saved memories")}</span>
-                    <span className={styles.settingsItemDescription}>
-                      {t("Let Gray save and use memories when answering. Incognito searches are never stored.")}
-                    </span>
-                  </div>
-                  {renderToggle(savedMemoriesEnabled, () => setSavedMemoriesEnabled(!savedMemoriesEnabled), t("Toggle Saved Memories"))}
-                </div>
-
-                <div className={styles.settingsRow}>
-                  <span className={styles.settingsLabel}>{t("Edit your saved memories")}</span>
-                  <button className={styles.settingsAction}>
-                    {t("Manage")}
-                    <ChevronLeft size={12} className={styles.settingsActionChevron} />
-                  </button>
-                </div>
-              </div>
-
-              <div className={styles.settingsSection}>
-                <h3 className={styles.settingsSectionTitle}>{t("Shopping")}</h3>
-                <div className={styles.settingsRow}>
-                  <span className={styles.settingsLabel}>{t("Virtual try on avatar")}</span>
-                  <button className={styles.settingsAction}>
-                    {t("Manage")}
-                    <ChevronLeft size={12} className={styles.settingsActionChevron} />
-                  </button>
-                </div>
-              </div>
-
-              <div className={styles.settingsSection}>
-                <h3 className={styles.settingsSectionTitle}>{t("Watchlists")}</h3>
-                <p className={`${styles.settingsItemDescription} ${styles.settingsDescriptionMargin}`}>{t("Manage your watchlists")}</p>
-
-                <div className={styles.settingsRow}>
-                  <div className={styles.settingsFlexRow}>
-                    <div className={styles.watchlistIcon}>
-                      <Globe size={18} />
-                    </div>
-                    <div className={styles.settingsItemMeta}>
-                      <span className={styles.settingsItemTitle}>{t("Sports")}</span>
-                      <span className={styles.settingsItemSubtitle}>{t("Event updates, breaking news, and live scores")}</span>
-                    </div>
-                  </div>
-                  <button className={styles.settingsAction}>
-                    {t("Manage")}
-                    <ChevronLeft size={12} className={styles.settingsActionChevron} />
-                  </button>
-                </div>
-
-                <div className={styles.settingsRow}>
-                  <div className={styles.settingsFlexRow}>
-                    <div className={styles.watchlistIcon}>
-                      <Building2 size={18} />
-                    </div>
-                    <div className={styles.settingsItemMeta}>
-                      <span className={styles.settingsItemTitle}>{t("Finance")}</span>
-                      <span className={styles.settingsItemSubtitle}>{t("Set your watchlist for daily updates and summaries")}</span>
-                    </div>
-                  </div>
-                  <button className={styles.settingsAction}>
-                    {t("Manage")}
-                    <ChevronLeft size={12} className={styles.settingsActionChevron} />
-                  </button>
-                </div>
-              </div>
+              ) : null}
             </>
           )}
 
@@ -614,22 +867,26 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
               <div className={styles.settingsSection}>
                 <div className={styles.settingsRow}>
                   <div className={styles.settingsLabelGroup}>
-                    <span className={styles.settingsLabel}>{t("Improve the Model")}</span>
+                    <span className={styles.settingsLabel}>{t("Conversation memory")}</span>
                     <span className={styles.settingsItemDescription}>
-                      {t("By allowing your data to be used for training our models, you help enhance your own experience and improve the quality of the model for all users. We take measures to ensure your privacy is protected throughout the process.")}
+                      {t("Allow Gray to remember details from your previous conversations.")}
                     </span>
                   </div>
-                  {renderToggle(dataRetentionEnabled, () => setDataRetentionEnabled(!dataRetentionEnabled), t("Toggle AI data retention"))}
-                </div>
-
-                <div className={styles.settingsRow}>
-                  <div className={styles.settingsLabelGroup}>
-                    <span className={styles.settingsLabel}>{t("Personalize Grok with your conversation history")} <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 10, background: "#EDEDED", color: "#000", fontWeight: 600, marginLeft: 6 }}>beta</span></span>
-                    <span className={styles.settingsItemDescription}>
-                      {t("Allow Grok to remember details from your previous conversations. You can delete individual conversations to forget the associated details. Private chats are never stored.")}
-                    </span>
-                  </div>
-                  {renderToggle(webSearchEnabled, () => setWebSearchEnabled(!webSearchEnabled), t("Toggle Conversation History"))}
+                  {renderToggle(
+                    conversationMemoryEnabled,
+                    () => {
+                      const next = !conversationMemoryEnabled;
+                      setConversationMemoryEnabled(next);
+                      if (typeof window !== "undefined") {
+                        try {
+                          window.localStorage.setItem(conversationMemoryStorageKey, next ? "1" : "0");
+                        } catch {
+                          // ignore storage failures
+                        }
+                      }
+                    },
+                    t("Toggle Conversation memory")
+                  )}
                 </div>
 
                 <div className={styles.settingsRow}>
@@ -639,74 +896,37 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                       {t("Allow sharing chats using only your chat link.")}
                     </span>
                   </div>
-                  {renderToggle(allowLinkSharing, () => setAllowLinkSharing(!allowLinkSharing), t("Toggle Link Sharing"))}
+                  {renderToggle(
+                    linkSharingEnabled,
+                    () => {
+                      const next = !linkSharingEnabled;
+                      setLinkSharingEnabled(next);
+                      if (typeof window !== "undefined") {
+                        try {
+                          window.localStorage.setItem(linkSharingStorageKey, next ? "1" : "0");
+                        } catch {
+                          // ignore storage failures
+                        }
+                      }
+                    },
+                    t("Toggle Link Sharing")
+                  )}
                 </div>
               </div>
 
               <div className={styles.settingsSection}>
-                <h3 className={styles.settingsSectionTitle}>{t("Storage Usage")}</h3>
-                <div style={{ padding: "16px 0" }}>
-                  {/* Mock progress bar */}
-                  <div style={{ height: 6, background: "rgba(255,255,255,0.1)", borderRadius: 3, width: "100%", overflow: "hidden" }}>
-                    <div style={{ height: "100%", background: "#4B5563", width: "1%" }} />
-                  </div>
-                  <p className={styles.settingsItemDescription} style={{ marginTop: 8 }}>
-                    {t("4.88 MB used of 1.07 GB")}
-                  </p>
-                </div>
-
                 <div className={styles.settingsRow}>
                   <div className={styles.settingsLabelGroup}>
-                    <span className={styles.settingsLabel}>{t("See Files and Assets")}</span>
+                    <span className={styles.settingsLabel}>{t("Clear local cache")}</span>
                     <span className={styles.settingsItemDescription}>
-                      {t("See all the files and assets you have uploaded to Grok. You can also delete them here.")}
+                      {t("Reset local preferences and cached state on this device.")}
                     </span>
                   </div>
-                  <button className={styles.settingsAction}>{t("Manage")}</button>
+                  <button className={styles.settingsAction} onClick={handleClearLocalCache}>
+                    {t("Clear")}
+                  </button>
                 </div>
 
-                <div className={styles.settingsRow}>
-                  <div className={styles.settingsLabelGroup}>
-                    <span className={styles.settingsLabel}>{t("See Shared Links")}</span>
-                    <span className={styles.settingsItemDescription}>
-                      {t("See all the shared links you have created. You can also delete them and revoke access here.")}
-                    </span>
-                  </div>
-                  <button className={styles.settingsAction}>{t("Manage")}</button>
-                </div>
-
-                <div className={styles.settingsRow}>
-                  <div className={styles.settingsLabelGroup}>
-                    <span className={styles.settingsLabel}>{t("See Deleted Conversations")}</span>
-                    <span className={styles.settingsItemDescription}>
-                      {t("View and restore conversations that you have deleted. Deleted conversations are permanently removed after 30 days.")}
-                    </span>
-                  </div>
-                  <button className={styles.settingsAction}>{t("Manage")}</button>
-                </div>
-
-                <div className={styles.settingsRow}>
-                  <div className={styles.settingsLabelGroup}>
-                    <span className={styles.settingsLabel}>{t("Clear Cache")}</span>
-                    <span className={styles.settingsItemDescription}>
-                      {t("Clear the local cache and application state on your device.")}
-                    </span>
-                  </div>
-                  <button className={styles.settingsAction}>{t("Clear")}</button>
-                </div>
-
-                <div className={styles.settingsRow}>
-                  <div className={styles.settingsLabelGroup}>
-                    <span className={styles.settingsLabel}>{t("Export Account Data")}</span>
-                    <span className={styles.settingsItemDescription}>
-                      {t("You can download all data associated with your account below. This data includes everything stored in all xAI products.")}
-                    </span>
-                  </div>
-                  <button className={styles.settingsAction}>{t("Export")}</button>
-                </div>
-              </div>
-
-              <div className={styles.settingsSection}>
                 <div className={styles.settingsRow}>
                   <div className={styles.settingsLabelGroup}>
                     <span className={styles.settingsLabel}>{t("Delete All Conversations")}</span>
@@ -714,31 +934,112 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                       {t("Delete all of your conversation data.")}
                     </span>
                   </div>
-                  <button className={styles.settingsAction}>{t("Delete")}</button>
-                </div>
+                  <button
+                    className={styles.settingsAction}
+                    onClick={async () => {
+                      if (!user?.id) return;
+                      if (!confirm(t("Are you sure you want to delete ALL conversations? This cannot be undone."))) {
+                        return;
+                      }
 
-                <div className={styles.settingsRow}>
-                  <div className={styles.settingsLabelGroup}>
-                    <span className={styles.settingsLabel}>{t("Delete Account")}</span>
-                    <span className={styles.settingsItemDescription}>
-                      {t("Permanently delete your account and associated data from the xAI platform. Deletions are immediate and cannot be undone.")}
-                    </span>
-                  </div>
-                  <button className={styles.settingsAction}>{t("Delete")}</button>
+                      try {
+                        await apiService.deleteAllConversations(user.id);
+                        window.location.reload();
+                      } catch (error) {
+                        console.error("Failed to delete all conversations:", error);
+                        alert(t("Failed to delete conversations. Please try again."));
+                      }
+                    }}
+                  >
+                    {t("Delete")}
+                  </button>
                 </div>
               </div>
             </>
           )}
 
-          {activeSection !== "account" && activeSection !== "preferences" && activeSection !== "personalization" && (
-            <div className={styles.settingsPageHeader}>
-              <h2 className={styles.settingsPageTitle}>
-                {activeSection.charAt(0).toUpperCase() + activeSection.slice(1)}
-              </h2>
-              <p className={styles.comingSoonText}>
-                Settings for {activeSection} are coming soon.
-              </p>
-            </div>
+          {activeSection === "notifications" && (
+            <>
+              <div className={styles.settingsPageHeader}>
+                <h2 className={styles.settingsPageTitle}>{t("Notifications")}</h2>
+              </div>
+
+              <div className={styles.settingsSection}>
+                <h3 className={styles.settingsSectionTitle}>{t("Device notifications")}</h3>
+
+                <div className={styles.settingsRow}>
+                  <div className={styles.settingsLabelGroup}>
+                    <span className={styles.settingsLabel}>{t("Desktop & mobile")}</span>
+                    <span className={styles.settingsItemDescription}>
+                      {notificationPermission === "unsupported"
+                        ? t("Notifications are not supported on this device.")
+                        : notificationPermission === "denied"
+                          ? t("Notifications are blocked in your browser settings.")
+                          : t("Show notifications on this device.")}
+                    </span>
+                  </div>
+                  {renderToggle(
+                    notificationPreferences.device && notificationPermission === "granted",
+                    () => void handleToggleDeviceNotifications(),
+                    t("Toggle device notifications")
+                  )}
+                </div>
+              </div>
+
+              <div className={styles.settingsSection}>
+                <h3 className={styles.settingsSectionTitle}>{t("What to notify")}</h3>
+
+                <div className={styles.settingsRow}>
+                  <div className={styles.settingsLabelGroup}>
+                    <span className={styles.settingsLabel}>{t("Tasks")}</span>
+                    <span className={styles.settingsItemDescription}>
+                      {t("Reminders and updates about your tasks.")}
+                    </span>
+                  </div>
+                  {renderToggle(
+                    notificationPreferences.tasks,
+                    () => setNotificationPreference("tasks", !notificationPreferences.tasks),
+                    t("Toggle task notifications")
+                  )}
+                </div>
+
+                <div className={styles.settingsRow}>
+                  <div className={styles.settingsLabelGroup}>
+                    <span className={styles.settingsLabel}>{t("Proactivity")}</span>
+                    <span className={styles.settingsItemDescription}>
+                      {t("Daily check-ins and proactive summaries.")}
+                    </span>
+                  </div>
+                  {renderToggle(
+                    notificationPreferences.proactivity,
+                    () =>
+                      setNotificationPreference(
+                        "proactivity",
+                        !notificationPreferences.proactivity
+                      ),
+                    t("Toggle proactivity notifications")
+                  )}
+                </div>
+
+                <div className={styles.settingsRow}>
+                  <div className={styles.settingsLabelGroup}>
+                    <span className={styles.settingsLabel}>{t("Calendar events")}</span>
+                    <span className={styles.settingsItemDescription}>
+                      {t("Upcoming event reminders and changes.")}
+                    </span>
+                  </div>
+                  {renderToggle(
+                    notificationPreferences.calendarEvents,
+                    () =>
+                      setNotificationPreference(
+                        "calendarEvents",
+                        !notificationPreferences.calendarEvents
+                      ),
+                    t("Toggle calendar event notifications")
+                  )}
+                </div>
+              </div>
+            </>
           )}
         </main>
       </div>

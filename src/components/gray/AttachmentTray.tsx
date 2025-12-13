@@ -45,6 +45,8 @@ const AttachmentTray = ({
               type="button"
               className={styles.chatAttachmentRemoveBtn}
               onClick={() => onRemoveAttachment(attachment.id)}
+              aria-label={t("Remove attachment")}
+              title={t("Remove attachment")}
             >
               <X size={12} />
             </button>

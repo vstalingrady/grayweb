@@ -175,43 +175,45 @@
 .miniMonth {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: var(--mini-month-gap, 14px);
 }
 
 .miniMonthWeekdays {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 2px;
-  font-size: 0.54rem;
-  letter-spacing: 0.24em;
+  grid-template-columns: repeat(7, var(--mini-month-cell-max, 32px));
+  gap: var(--mini-month-day-gap, 2px);
+  font-size: var(--mini-month-weekday-font, 0.54rem);
+  letter-spacing: var(--mini-month-weekday-letter-spacing, 0.24em);
   text-transform: uppercase;
   color: rgba(220, 220, 220, 0.42);
   text-align: center;
+  justify-content: center;
 }
 
 .miniMonthGrid {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--mini-month-week-gap, 4px);
 }
 
 .miniMonthRow {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 2px;
+  grid-template-columns: repeat(7, var(--mini-month-cell-max, 32px));
+  gap: var(--mini-month-day-gap, 2px);
   justify-items: center;
+  justify-content: center;
 }
 
 .miniMonthCell {
-  width: 100%;
-  max-width: 32px;
+  width: var(--mini-month-cell-max, 32px);
+  max-width: var(--mini-month-cell-max, 32px);
   aspect-ratio: 1;
   height: auto;
-  border-radius: 999px;
+  border-radius: var(--mini-month-cell-radius, 999px);
   border: 1px solid transparent;
   background: transparent;
   color: rgba(235, 235, 235, 0.72);
-  font-size: 0.7rem;
+  font-size: var(--mini-month-day-font, 0.7rem);
   letter-spacing: 0.04em;
   display: inline-flex;
   align-items: center;

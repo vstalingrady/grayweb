@@ -1,6 +1,4 @@
-const CACHE_NAME = 'gray-cache-v1';
-
-self.addEventListener('install', (event) => {
+self.addEventListener('install', () => {
     self.skipWaiting();
 });
 
@@ -22,7 +20,7 @@ self.addEventListener('fetch', (event) => {
         (async () => {
             try {
                 return await fetch(event.request);
-            } catch (error) {
+            } catch {
                 // On network errors, fall back to a generic response instead of throwing
                 return new Response('Network error while fetching resource.', {
                     status: 502,

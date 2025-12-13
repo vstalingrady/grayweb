@@ -3722,6 +3722,7 @@ export function GrayChatView({
       totalTokens: conversationContextStats.totalTokens,
       tokensRemaining: conversationContextStats.tokensRemaining,
       limit: conversationContextStats.limit,
+      modelLimit: conversationContextStats.modelLimit,
       provider: conversationContextStats.provider,
       modelName: conversationContextStats.modelName,
       modelLabel: conversationContextStats.modelLabel,

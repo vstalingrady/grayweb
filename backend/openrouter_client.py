@@ -235,8 +235,9 @@ class OpenRouterService:
         conversation_history: Optional[List[Dict[str, Any]]],
         message: str,
         history_limit: int,
+        attachments: Optional[List[Any]] = None,
     ) -> List[Dict[str, Any]]:
-        """Build messages array from conversation history and current message."""
+        """Build messages array from conversation history, current message, and attachments."""
         history = conversation_history or []
         recent_history = history[-history_limit:] if history_limit > 0 else history
         payload: List[Dict[str, Any]] = []
@@ -274,7 +275,42 @@ class OpenRouterService:
             payload.append({"role": openrouter_role, "content": text})
         
         trimmed_message = _trim(message)
-        if trimmed_message:
+        
+        # If we have attachments, we need to construct a multipart message
+        if attachments:
+            import base64
+            
+            content_parts: List[Dict[str, Any]] = []
+            
+            # Add images first (common practice for VLM context)
+            for attachment in attachments:
+                # We expect attachment to be a GeminiAttachment-like object with .data and .mime_type
+                if hasattr(attachment, "data") and hasattr(attachment, "mime_type"):
+                    mime_type = attachment.mime_type
+                    # Only support images for now via standard image_url
+                    if mime_type.startswith("image/"):
+                        b64_data = base64.b64encode(attachment.data).decode("utf-8")
+                        content_parts.append({
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:{mime_type};base64,{b64_data}"
+                            }
+                        })
+                    # TODO: add text/pdf support if OpenRouter models support it generically or via text injection
+            
+            # Add text message last
+            if trimmed_message:
+                content_parts.append({
+                    "type": "text",
+                    "text": trimmed_message
+                })
+            
+            if content_parts:
+                payload.append({"role": "user", "content": content_parts})
+            elif trimmed_message: # Fallback if no valid attachments processed
+                 payload.append({"role": "user", "content": trimmed_message})
+
+        elif trimmed_message:
             payload.append({"role": "user", "content": trimmed_message})
         
         return payload
@@ -465,6 +501,7 @@ class OpenRouterService:
         tool_choice: Optional[str] = "auto",
         plugins: Optional[List[Dict[str, Any]]] = None,
         reasoning_mode: bool = False,
+        attachments: Optional[List[Any]] = None,
     ) -> AsyncIterator[str | Dict[str, Any]]:
         """Stream response chunks from OpenRouter.
         
@@ -481,7 +518,8 @@ class OpenRouterService:
             f"history_len={len(conversation_history or [])}, "
             f"message_len={len(message or '')}, "
             f"workspace_ctx_len={len(workspace_context or '')}, "
-            f"time_ctx_len={len(time_context or '')}"
+            f"time_ctx_len={len(time_context or '')}, "
+            f"attachments_len={len(attachments or [])}"
         )
         if system_prompt:
             # Log first 200 chars of system prompt to see what's being used
@@ -494,7 +532,7 @@ class OpenRouterService:
         # e.g., openai/gpt-5.2-chat -> openai/gpt-5.2 when reasoning_mode=True
         resolved_model = self._resolve_model(model, reasoning_mode=reasoning_mode)
         history_limit = self._history_window_for_model(resolved_model)
-        messages = self._build_messages(conversation_history, message, history_limit)
+        messages = self._build_messages(conversation_history, message, history_limit, attachments=attachments)
         
         if not messages:
             messages = [{"role": "user", "content": message}]

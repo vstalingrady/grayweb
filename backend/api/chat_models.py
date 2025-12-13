@@ -21,6 +21,7 @@ class ConversationCreateRequest(BaseModel):
 class ConversationUpdateRequest(BaseModel):
     title: Optional[str] = None
     user_id: Optional[int] = None
+    metadata: Optional[Dict[str, Any]] = None
 
 
 class ChatRequest(BaseModel):
@@ -45,6 +46,7 @@ class ChatRequest(BaseModel):
     reasoning_mode: bool = False
     reminders_enabled: bool = False
     timezone: Optional[str] = None
+    conversation_memory_enabled: bool = True
 
 
 class ChatResponse(BaseModel):

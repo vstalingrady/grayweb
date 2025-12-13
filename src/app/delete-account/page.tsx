@@ -66,30 +66,6 @@ export default function DeleteAccountPage() {
   useEffect(() => {
     const verifiedParam = searchParams?.get("verified");
     if (verifiedParam === "true") {
-      // Check for mismatch before approving authentication
-      const storedTarget = window.sessionStorage.getItem("delete_account_target");
-
-      // We need user to be loaded to compare. 
-      // If user is loading, we wait. This effect depends on searchParams only in original code.
-      // But we need to wait for user to verify.
-
-      // The logic is split. Let's combine or be careful.
-      // If I set isAuthenticated(true) here, the renderBody will show.
-      // If I wait for the other effect to check mismatch, I might flash the UI.
-
-      // Better to coordinate. 
-      // But purely functional:
-      // If verified=true, we WANT to set authenticated.
-      // But if there is a mismatch, we want to BLOCK.
-
-      // Let's modify this effect to only clean URL, and let the mismatch logic handle the auth state?
-      // Or just set authenticated here, and let the mismatch logic immediately unset it and show error?
-      // React state updates are batched usually checking mismatch might happen in next render cycle or same.
-
-      // If I let this run, it sets IsAuthenticated(true).
-      // Then my new effect runs, checks user vs stored, and sets Error + IsAuthenticated(false).
-      // That seems acceptable.
-
       setIsAuthenticated(true);
 
       // Clean up URL
