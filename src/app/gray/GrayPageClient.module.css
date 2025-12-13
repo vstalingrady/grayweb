@@ -5556,6 +5556,8 @@ h1.greeting {
 
 .pulseGridStacked {
   grid-template-columns: 1fr;
+  max-width: 480px;
+  margin: 0 auto;
 }
 
 .pulseGridStacked>* {
