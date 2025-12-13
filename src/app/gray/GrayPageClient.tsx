@@ -67,6 +67,13 @@ import {
 } from "@/components/gray/utils/helperFunctions";
 import { HISTORY_DUPLICATE_WINDOW_MS } from "@/components/gray/utils/constants";
 import { SIDEBAR_ITEMS, SIDEBAR_RAIL_ITEMS, NAVIGATION_ROUTES } from "@/components/gray/utils/sidebarConfig";
+import {
+  isAnonLimitReached,
+  incrementAnonMessageCount,
+  getAnonMessageCount,
+  ANON_MESSAGE_LIMIT_VALUE,
+} from "@/lib/anonymousSession";
+import { SignUpPromptModal } from "@/components/gray/SignUpPromptModal";
 
 // Lazy load all heavy components for better code splitting
 const GrayEnhancedSidebar = dynamic(
@@ -339,6 +346,11 @@ function GrayPageClientInner({
   const [calendarSelectedDate, setCalendarSelectedDate] = useState<Date>(() => new Date(initialTimestamp));
 
   const [isHistoryOverlayOpen, setIsHistoryOverlayOpen] = useState(false);
+
+  // Anonymous user state for limiting messages before sign-up
+  const isAnonymousUser = !user?.id && !userLoading;
+  const [showSignUpPrompt, setShowSignUpPrompt] = useState(false);
+  const [anonMessageCount, setAnonMessageCount] = useState(() => getAnonMessageCount());
 
 
   useEffect(() => {
@@ -2119,6 +2131,19 @@ function GrayPageClientInner({
     if (!normalizedDraft) {
       return;
     }
+
+    // Check anonymous message limit before proceeding
+    if (isAnonymousUser && isAnonLimitReached()) {
+      setShowSignUpPrompt(true);
+      return;
+    }
+
+    // Increment anonymous message counter (will be ignored for authenticated users)
+    if (isAnonymousUser) {
+      const newCount = incrementAnonMessageCount();
+      setAnonMessageCount(newCount);
+    }
+
     controls.clear();
 
     try {
@@ -2484,6 +2509,15 @@ function GrayPageClientInner({
             onClose={() => setIsSettingsOpen(false)}
             initialSection={settingsInitialSection}
             contextUsage={contextUsageSummary}
+          />
+        )}
+
+        {showSignUpPrompt && (
+          <SignUpPromptModal
+            isOpen={showSignUpPrompt}
+            onClose={() => setShowSignUpPrompt(false)}
+            messagesUsed={anonMessageCount}
+            messageLimit={ANON_MESSAGE_LIMIT_VALUE}
           />
         )}
 

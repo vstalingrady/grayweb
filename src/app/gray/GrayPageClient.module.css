@@ -12155,3 +12155,108 @@ h1.greeting {
       transparent 51%);
   background-size: 100% 100%;
 }
+/* -------------------------------------------------------------------------- */
+/*                           Sign Up Prompt Modal                             */
+/* -------------------------------------------------------------------------- */
+
+.signUpPromptOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.2s ease-out;
+  padding: 24px;
+}
+
+.signUpPromptContainer {
+  position: relative;
+  max-width: 420px;
+  width: 100%;
+  background: #0a0a0a;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  padding: 40px 32px;
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.6);
+}
+
+.signUpPromptClose {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: transparent;
+  border: none;
+  color: #71717a;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 8px;
+  transition: all 0.2s;
+}
+
+.signUpPromptClose:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+}
+
+.signUpPromptContent {
+  text-align: center;
+}
+
+.signUpPromptTitle {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #fff;
+  margin: 0 0 12px 0;
+}
+
+.signUpPromptDescription {
+  font-size: 0.9rem;
+  color: #a1a1aa;
+  margin: 0 0 28px 0;
+  line-height: 1.5;
+}
+
+.signUpPromptActions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.signUpPromptPrimaryButton {
+  width: 100%;
+  padding: 14px 24px;
+  border-radius: 12px;
+  border: none;
+  background: #fff;
+  color: #000;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.signUpPromptPrimaryButton:hover {
+  background: #e5e5e5;
+  transform: translateY(-1px);
+}
+
+.signUpPromptSecondaryButton {
+  width: 100%;
+  padding: 12px 24px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: transparent;
+  color: #a1a1aa;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.signUpPromptSecondaryButton:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.25);
+  color: #fff;
+}
