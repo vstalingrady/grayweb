@@ -8,6 +8,11 @@ def _make_request():
 
 def test_delete_conversation_uuid_does_not_require_global_tables(monkeypatch):
     import backend.main as main
+    from backend.core.rate_limit import limiter
+
+    # Disable rate limiter to bypass starlette.requests.Request type check
+    # Use setattr to set enabled=False (works whether attr exists or not)
+    limiter.enabled = False
 
     conversation_id = "edb20263-c75c-4961-ab3d-a801461dc9a8"
     current_user = {"id": 1}
