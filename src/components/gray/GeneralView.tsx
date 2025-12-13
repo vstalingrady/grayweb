@@ -364,9 +364,6 @@ export function GrayGeneralView({
   const proactivityCard = (
     <article className={`${styles.dashboardCard} ${styles.proactivityCard}`}>
       <header className={styles.dashboardCardHeader}>
-        <div className={`${styles.dashboardCardIcon} ${styles.iconBlue}`}>
-          <Zap size={16} fill="white" />
-        </div>
         <h2 className={styles.dashboardCardTitle}>{t("Proactivity")}</h2>
       </header>
       <div className={styles.dashboardCardBody}>
@@ -388,7 +385,7 @@ export function GrayGeneralView({
         )}
         <button
           type="button"
-          className={styles.proactivityConfigureLink}
+          className={styles.secondaryAction}
           onClick={handleOpenProactivityModal}
         >
           {t("configure")}

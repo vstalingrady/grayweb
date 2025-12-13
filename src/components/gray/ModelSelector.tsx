@@ -7,6 +7,7 @@ import { useChatStore } from "@/components/gray/ChatProvider";
 import { useUser } from "@/contexts/UserContext";
 import { useI18n } from "@/contexts/I18nContext";
 import styles from "./ModelSelector.module.css";
+import { PIONEER_GROUPS } from "./modelCatalog";
 
 type ModelOption = {
   id: string;
@@ -19,69 +20,6 @@ type ModelOption = {
 // Base model option - Lite is available to all tiers
 const OPTIONS: ModelOption[] = [
   { id: "lite", label: "Gray Lite", description: "Quick responses", icon: Zap, tierRequired: "scout" },
-];
-
-type ModelGroup = {
-  id: string;
-  label: string;
-  iconPath: string;
-  models: { id: string; label: string; cost?: string; tierRequired?: "voyager" | "pioneer" }[];
-};
-
-const PIONEER_GROUPS: ModelGroup[] = [
-  {
-    id: "anthropic",
-    label: "Anthropic",
-    iconPath: "/logos/claude-color.svg",
-    models: [
-      { id: "anthropic/claude-haiku-4.5", label: "Claude Haiku 4.5", cost: "$$" },
-      { id: "anthropic/claude-sonnet-4.5", label: "Claude Sonnet 4.5", cost: "$$$" },
-      { id: "anthropic/claude-opus-4.5", label: "Claude Opus 4.5", cost: "$$$$", tierRequired: "pioneer" },
-    ],
-  },
-  {
-    id: "google",
-    label: "Google",
-    iconPath: "/logos/gemini-color.svg",
-    models: [
-      { id: "google/gemini-3-pro-preview", label: "Gemini 3 Pro Preview", cost: "$$$" },
-      { id: "google/gemini-2.5-flash", label: "Gemini 2.5 Flash", cost: "$$" },
-    ],
-  },
-  {
-    id: "openai",
-    label: "OpenAI",
-    iconPath: "/logos/whiteopenai.svg",
-    models: [
-      { id: "openai/gpt-5.2-chat", label: "GPT 5.2", cost: "$$$" },
-      { id: "openai/gpt-5.2-pro", label: "GPT 5.2 Pro", cost: "$$$$", tierRequired: "pioneer" },
-    ],
-  },
-  {
-    id: "deepseek",
-    label: "DeepSeek",
-    iconPath: "/logos/deepseek-color.svg",
-    models: [
-      { id: "deepseek/deepseek-v3.2", label: "Deepseek V3.2", cost: "$" },
-      { id: "deepseek/deepseek-v3.2-speciale", label: "Deepseek V3.2 Speciale", cost: "$" },
-    ],
-  },
-  {
-    id: "x-ai",
-    label: "xAI",
-    iconPath: "/logos/whitegrok.svg",
-    models: [
-      { id: "x-ai/grok-4.1-fast", label: "Grok 4.1 Fast", cost: "$" },
-    ],
-  },
-  {
-    id: "moonshot",
-    label: "Moonshot AI",
-    iconPath: "/logos/whitekimi.svg",
-    models: [
-      { id: "moonshotai/kimi-k2-thinking", label: "Kimi K2 Thinking", cost: "$$" },
-    ],
-  },
 ];
 
 const TIER_LEVELS: Record<string, number> = {
@@ -101,7 +39,8 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
     reasoningMode, setReasoningMode,
     webSearchEnabled, toggleWebSearchEnabled,
     mapsEnabled, toggleMapsEnabled,
-    remindersEnabled, toggleRemindersEnabled
+    remindersEnabled, toggleRemindersEnabled,
+    visibleModelIds,
   } = useChatStore();
   const { user } = useUser();
   const [isOpen, setIsOpen] = useState(false);
@@ -114,6 +53,16 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
   const planTierRaw = (user?.plan_tier || "pioneer").toLowerCase();
   const currentTier = planTierRaw === "scout" ? "pioneer" : planTierRaw;
   const currentLevel = TIER_LEVELS[currentTier] ?? 0;
+
+  const filteredPioneerGroups = useMemo(() => {
+    const isVisible = (modelId: string) =>
+      visibleModelIds === null || visibleModelIds.includes(modelId) || modelId === selectedModelId;
+
+    return PIONEER_GROUPS.map((group) => ({
+      ...group,
+      models: group.models.filter((model) => isVisible(model.id)),
+    })).filter((group) => group.models.length > 0);
+  }, [selectedModelId, visibleModelIds]);
 
   const activeOption = useMemo(() => {
     if (modelTier === "pioneer" && selectedModelId) {
@@ -234,12 +183,12 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
             >
               <ChevronRight size={16} style={{ transform: 'rotate(180deg)' }} />
               {t("Back")}
-            </button>
-            <div className={styles.pioneerList}>
-              {PIONEER_GROUPS.map((group) => {
-                const isExpanded = expandedGroupId === group.id;
-                return (
-                  <div key={group.id} className={styles.groupContainer}>
+	            </button>
+	            <div className={styles.pioneerList}>
+	              {filteredPioneerGroups.map((group) => {
+	                const isExpanded = expandedGroupId === group.id;
+	                return (
+	                  <div key={group.id} className={styles.groupContainer}>
                     <button
                       className={`${styles.menuItem} ${isExpanded ? styles.menuItemExpanded : ""}`}
                       onClick={() => handleGroupToggle(group.id)}

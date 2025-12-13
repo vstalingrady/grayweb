@@ -1012,9 +1012,6 @@ export function GrayDashboardView({
       {/* Proactivity Card */}
       <div className={`${styles.dashboardCard} ${styles.dashboardCardProactivity}`}>
         <div className={styles.dashboardCardHeader}>
-          <div className={`${styles.dashboardCardIcon} ${styles.iconBlue}`}>
-            <Zap size={16} fill="white" />
-          </div>
           <h2 className={styles.dashboardCardTitle}>{t("Proactivity")}</h2>
         </div>
         <div className={styles.dashboardCardBody}>
@@ -1036,7 +1033,7 @@ export function GrayDashboardView({
           )}
           <button
             type="button"
-            className={styles.proactivityConfigureLink}
+            className={styles.dashboardButtonNeutral}
             onClick={handleOpenProactivityModal}
             disabled={!canOpenProactivityModal}
           >

@@ -147,8 +147,10 @@ export type ChatContextValue = {
     setReasoningMode: (value: boolean) => void;
     modelTier: "lite" | "pro" | "pioneer";
     setModelTier: (value: "lite" | "pro" | "pioneer") => void;
-    selectedModelId: string;
-    setSelectedModelId: (id: string) => void;
+    selectedModelId: string | null;
+    setSelectedModelId: (id: string | null) => void;
+    visibleModelIds: string[] | null;
+    setVisibleModelIds: (ids: string[] | null) => void;
     questionnaireSession: QuestionnaireSession | null;
     startQuestionnaire: (mode: "quick" | "deep") => void;
     cancelQuestionnaire: () => void;

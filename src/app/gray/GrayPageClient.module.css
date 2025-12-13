@@ -2350,12 +2350,10 @@
 .sidebarHistoryLink:hover,
 .sidebarHistoryLink:focus-visible {
   color: rgba(255, 255, 255, 0.92);
-  background: linear-gradient(
-    to left,
-    rgba(255, 255, 255, 0.12),
-    rgba(255, 255, 255, 0.06) 55%,
-    rgba(255, 255, 255, 0) 100%
-  );
+  background: linear-gradient(to left,
+      rgba(255, 255, 255, 0.12),
+      rgba(255, 255, 255, 0.06) 55%,
+      rgba(255, 255, 255, 0) 100%);
   outline: none;
 }
 
@@ -3167,7 +3165,8 @@
   height: 100%;
 }
 
-.mainContent[data-view="general"] .dashboardGridItemTasks .dashboardCardBody {
+.mainContent[data-view="general"] .dashboardGridItemTasks .dashboardCardBody,
+.mainContent[data-view="general"] .dashboardGridItemProactivity .dashboardCardBody {
   flex: 1;
 }
 
@@ -4839,6 +4838,12 @@
   pointer-events: auto;
 }
 
+/* Make the composer feel flush with the bottom edge */
+.chatComposerDock .chatBarRounded {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
 
 .chatComposerDock .generalChatBarRow {
   /* Allow max-width to be inherited from chatBarRow */
@@ -5881,15 +5886,14 @@ h1.greeting {
   align-items: center;
   justify-content: center;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.04);
+  border: none;
+  background: transparent;
   color: rgba(245, 245, 245, 0.9);
   cursor: pointer;
 }
 
 .miniCalendarNavButton:hover {
   background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.18);
 }
 
 .miniCalendarBody {
@@ -8893,7 +8897,7 @@ h1.greeting {
   padding: 14px 18px;
   border-radius: 18px;
   border: none;
-  background: rgba(12, 12, 14, 0.82);
+  background: rgba(12, 12, 12, 0.82);
   transition: background 0.2s ease;
   width: 100%;
   min-width: 0;
@@ -8901,49 +8905,9 @@ h1.greeting {
 }
 
 .proactivityCard {
-  border: none !important;
-  background: transparent !important;
-  box-shadow: none !important;
-  border-radius: 0 !important;
-  padding: 0 !important;
-  gap: 0;
-}
-
-.proactivityCard {
-  border: none !important;
-  background: transparent !important;
-  box-shadow: none !important;
   display: flex;
   flex-direction: column;
   height: 100%;
-  /* Ensure full height to push button down */
-}
-
-.proactivityCard .dashboardCardHeader {
-  padding: 0;
-  margin: 0;
-  margin-bottom: 12px;
-  flex-shrink: 0;
-}
-
-.proactivityCard .dashboardCardBody {
-  gap: 10px;
-  padding: 0;
-  min-height: 0;
-  justify-content: flex-start;
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  /* Take remaining height */
-  overflow: hidden;
-  /* Contain scrolling children */
-}
-
-.proactivityCard .secondaryAction {
-  margin-top: auto;
-  /* Push to bottom */
-  flex-shrink: 0;
-  width: 100%;
 }
 
 .proactivityCard .planList {
@@ -8998,7 +8962,7 @@ h1.greeting {
   padding: 12px 16px;
   border-radius: 14px;
   border: 1px dashed rgba(255, 255, 255, 0.18);
-  background: rgba(12, 12, 14, 0.82);
+  background: rgba(12, 12, 12, 0.82);
   color: rgba(235, 235, 235, 0.86);
   font-size: 0.78rem;
   letter-spacing: 0.04em;
@@ -11630,7 +11594,7 @@ h1.greeting {
   flex-wrap: wrap;
 }
 
-.settingsDangerCard > button {
+.settingsDangerCard>button {
   margin-left: auto;
 }
 
@@ -11928,7 +11892,7 @@ h1.greeting {
   grid-area: header;
   justify-self: stretch;
   width: auto;
-  background: #09090b;
+  background: #090909;
   border: 1px solid rgba(255, 255, 255, 0.07);
   border-radius: 22px;
   padding: 24px;
@@ -11957,14 +11921,14 @@ h1.greeting {
 .dashboardDate {
   font-size: 0.85rem;
   font-weight: 500;
-  color: #71717a;
+  color: #717171;
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
 
 .dashboardCard {
   grid-area: auto;
-  background: #09090b;
+  background: #090909;
   border: 1px solid rgba(255, 255, 255, 0.07);
   border-radius: 22px;
   padding: 24px;
@@ -12049,23 +12013,43 @@ h1.greeting {
 .dashboardButtonNeutral {
   margin-top: auto;
   align-self: flex-start;
+  appearance: none;
+  -webkit-appearance: none;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #a1a1aa;
-  font-size: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 0.68rem;
   font-weight: 600;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.2em;
   text-transform: uppercase;
   padding: 10px 20px;
-  border-radius: 999px;
+  border-radius: 16px;
   cursor: pointer;
-  transition: all 0.2s;
+  box-shadow: none;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease,
+    border-color 0.2s ease,
+    transform 0.2s ease;
 }
 
 .dashboardButtonNeutral:hover {
   background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.25);
   color: #fff;
+  transform: translateY(-1px);
+}
+
+.dashboardButtonNeutral:disabled,
+.dashboardButtonNeutral[data-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.6;
+  transform: none;
+  border-color: rgba(255, 255, 255, 0.15);
 }
 
 /* Proactivity Toggle Area */
@@ -12282,7 +12266,7 @@ h1.greeting {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #52525b;
+  color: #525252;
 }
 
 .proactivityChecklistItem .proactivityChecklistIcon svg {
@@ -12299,7 +12283,7 @@ h1.greeting {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #52525b;
+  color: #525252;
   font-size: 0.85rem;
   padding: 24px 0;
 }

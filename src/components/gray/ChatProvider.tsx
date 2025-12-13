@@ -68,6 +68,7 @@ import {
   isTitleDerivedFromMessage,
 } from "./chat/utils";
 import { extractGrayRemindersFromText, buildReminderConfirmationText, buildReminderKey, coerceReminderPayload } from "./chat/reminderUtils";
+import { ALL_PIONEER_MODEL_IDS } from "./modelCatalog";
 import {
   GENERAL_CHAT_SESSION_ID,
   GENERAL_CONVERSATION_PREFIX,
@@ -85,6 +86,7 @@ import { REMINDERS_REFRESH_EVENT } from "./hooks/useWorkspaceData";
 
 const WORKSPACE_CONTEXT_COOLDOWN_MS = 600000; // 10 minutes
 const CONVERSATION_MEMORY_STORAGE_PREFIX = "gray_conversation_memory";
+const VISIBLE_MODEL_IDS_STORAGE_PREFIX = "gray_visible_model_ids";
 
 declare global {
   interface Window {
@@ -763,6 +765,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
   const [reasoningMode, setReasoningMode] = useState(false);
   const [modelTier, setModelTier] = useState<"lite" | "pro" | "pioneer">("lite");
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
+  const [visibleModelIds, setVisibleModelIds] = useState<string[] | null>(null);
   const lastAutoCachedWorkspaceRef = useRef<string | null>(null);
   const autoCacheInFlightRef = useRef(false);
   // Track profile hash to only send full profile when it changes
@@ -787,6 +790,44 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       }
     }
   }, []);
+
+  // Restore visible models per user (or anon)
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const key = `${VISIBLE_MODEL_IDS_STORAGE_PREFIX}:${user?.id ?? "anon"}`;
+    const raw = window.localStorage.getItem(key);
+    if (!raw) {
+      setVisibleModelIds(null);
+      return;
+    }
+    try {
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) {
+        setVisibleModelIds(null);
+        return;
+      }
+      const allowed = new Set(ALL_PIONEER_MODEL_IDS);
+      const sanitized = parsed.filter((value): value is string => typeof value === "string" && allowed.has(value));
+      setVisibleModelIds(sanitized.length === ALL_PIONEER_MODEL_IDS.length ? null : sanitized);
+    } catch {
+      setVisibleModelIds(null);
+    }
+  }, [user?.id]);
+
+  // Persist visible models preference
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const key = `${VISIBLE_MODEL_IDS_STORAGE_PREFIX}:${user?.id ?? "anon"}`;
+    if (visibleModelIds === null) {
+      window.localStorage.removeItem(key);
+      return;
+    }
+    window.localStorage.setItem(key, JSON.stringify(visibleModelIds));
+  }, [user?.id, visibleModelIds]);
 
   // Persist model selection changes
   useEffect(() => {
@@ -2912,6 +2953,8 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       setModelTier,
       selectedModelId,
       setSelectedModelId: handleSetSelectedModelId,
+      visibleModelIds,
+      setVisibleModelIds,
       questionnaireSession,
       startQuestionnaire,
       cancelQuestionnaire,
@@ -2994,6 +3037,8 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       setModelTier,
       selectedModelId,
       setSelectedModelId,
+      visibleModelIds,
+      setVisibleModelIds,
     ]
   );
 
