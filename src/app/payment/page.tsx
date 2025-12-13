@@ -12,8 +12,8 @@ import { VOYAGER_FEATURES, PIONEER_FEATURES } from "../pricing/PricingPlansSecti
 import { getSupabaseClient } from "@/lib/supabaseClient";
 
 // Dynamically import the 3D background with SSR disabled
-const DepthParticleBackground = dynamic(
-    () => import("@/components/backgrounds/DepthParticleBackground").then(mod => mod.DepthParticleBackground),
+const ParticleSphere = dynamic(
+    () => import("@/components/backgrounds/ParticleSphere").then(mod => mod.ParticleSphere),
     { ssr: false }
 );
 
@@ -268,7 +268,7 @@ function PaymentContent() {
     if (!planParam) {
         return (
             <div className={styles.page}>
-                <DepthParticleBackground />
+                <ParticleSphere />
                 <div
                     className={styles.container}
                     style={{
@@ -306,8 +306,8 @@ function PaymentContent() {
                         <h2>{shortPlanName}</h2>
                         <p>
                             {planParam === "pioneer"
-                                ? "Uncapped context, models, and proactive workflows for daily reliance."
-                                : "Unlock model switching, integrations, and customizable automations."}
+                                ? "For heavy users: top limits, top models, and early access to new features."
+                                : "For real daily use: more messages, longer memory, and calendar routines."}
                         </p>
                     </header>
                     <div className={pricingStyles.priceBlock}>
@@ -334,7 +334,7 @@ function PaymentContent() {
     if (status === "success" && chargeData) {
         return (
             <div className={styles.page}>
-                <DepthParticleBackground />
+                <ParticleSphere />
                 <div className={styles.topRow}>
                     <button
                         type="button"
@@ -428,7 +428,7 @@ function PaymentContent() {
 
     return (
         <div className={styles.page}>
-            <DepthParticleBackground />
+            <ParticleSphere />
             <Script
                 id="midtrans-script"
                 src="https://api.midtrans.com/v2/assets/js/midtrans-new-3ds.min.js"
