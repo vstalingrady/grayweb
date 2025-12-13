@@ -3,11 +3,11 @@
     inset: 0;
     width: 100vw;
     height: 100vh;
-    background: #09090b;
     color: #f5f5f5;
     font-family: var(--font-sans, "Plus Jakarta Sans", system-ui, -apple-system, BlinkMacSystemFont, sans-serif);
     z-index: 50;
-    overflow: hidden;
+    overflow-x: hidden;
+    overflow-y: auto;
 }
 
 .particleBackground {
@@ -51,12 +51,22 @@
     padding: clamp(1rem, 3vw, 2.5rem);
     box-sizing: border-box;
     justify-content: center;
-    align-items: start;
+    align-items: stretch;
     position: relative;
     z-index: 1;
 }
 
-/* .container removed */
+.container {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: clamp(1rem, 3vw, 2.5rem);
+    box-sizing: border-box;
+}
 
 /* LEFT COLUMN: Summary (Voyager Card) */
 /* Wrapper only - no visual styles */
@@ -68,8 +78,7 @@
     align-items: center;
     position: sticky;
     top: clamp(1rem, 3vw, 2.5rem);
-    height: 100%;
-    max-height: calc(100vh - 2 * clamp(1rem, 3vw, 2.5rem));
+    min-height: 0;
     overflow: hidden;
     /* Starry background */
     position: relative;
@@ -92,9 +101,8 @@
     gap: 2rem;
     width: 100%;
     align-items: center;
-    height: 100%;
-    max-height: calc(100vh - 2 * clamp(1rem, 3vw, 2.5rem));
-    overflow-y: auto;
+    min-height: 0;
+    overflow: visible;
 }
 
 
@@ -652,6 +660,189 @@
     /* Take full width if successful */
 }
 
+.successPanel {
+    width: min(390px, 100%);
+    border-radius: 18px;
+    padding: 0.95rem;
+    background: rgba(12, 12, 12, 0.78);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+}
+
+.successHeader {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 0.75rem;
+}
+
+.successIcon {
+    width: 34px;
+    height: 34px;
+    border-radius: 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.95);
+}
+
+.successTitle {
+    margin: 0;
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.98);
+    letter-spacing: -0.01em;
+}
+
+.successSubtitle {
+    margin-top: 0.25rem;
+    font-size: 0.88rem;
+}
+
+.successBody {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+.qrCard {
+    background: #ffffff;
+    border-radius: 16px;
+    padding: 0.9rem;
+    width: min(260px, 100%);
+    height: auto;
+    aspect-ratio: 1 / 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.qrImage {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+}
+
+.successDetails {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+    min-width: 0;
+}
+
+.successQrWrap {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+}
+
+.successSteps {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    color: rgba(255, 255, 255, 0.78);
+    font-size: 0.95rem;
+    line-height: 1.45;
+}
+
+.successStep {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+}
+
+.successStepNumber {
+    width: 22px;
+    height: 22px;
+    flex: 0 0 auto;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.9);
+    margin-top: 1px;
+}
+
+.successMetaBox {
+    width: 100%;
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(0, 0, 0, 0.35);
+    padding: 12px 14px;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 6px;
+}
+
+.successMetaLabel {
+    font-size: 0.72rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.successMetaValue {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-size: 1.05rem;
+    color: rgba(255, 255, 255, 0.92);
+    word-break: break-word;
+}
+
+.successActions {
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 2px;
+}
+
+.successPrimaryAction {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.85rem 1.1rem;
+    border-radius: 12px;
+    background: #ffffff;
+    color: #000;
+    text-decoration: none;
+    font-weight: 700;
+    font-size: 0.95rem;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    cursor: pointer;
+    transition: transform 160ms ease, box-shadow 160ms ease;
+}
+
+.successPrimaryAction:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.25);
+}
+
+.successSecondaryAction {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.85rem 1.1rem;
+    border-radius: 12px;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.92);
+    font-weight: 650;
+    font-size: 0.95rem;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    cursor: pointer;
+    transition: background 160ms ease, border-color 160ms ease;
+}
+
+.successSecondaryAction:hover {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.26);
+}
+
 /* Responsive */
 @media (max-width: 900px) {
     .page {
@@ -699,6 +890,10 @@
                    No, let's keep it simple: Inputs first. */
         border-right: none;
         border-top: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .qrCard {
+        width: min(280px, 100%);
     }
 }
 

@@ -3,10 +3,11 @@
 import React, { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Script from "next/script";
-import { CheckCircle, AlertCircle, Loader2, ArrowLeft, CreditCard, Landmark, Smartphone, ShieldCheck, Zap, Globe, Radio, Brain, Clock, Pin, Plus, CalendarClock, MessageSquare, Shuffle, Infinity as InfinityIcon, Headphones, FlaskConical, Database, Search } from "lucide-react";
+import { CheckCircle, AlertCircle, Loader2, ArrowLeft, Search } from "lucide-react";
 import styles from "./payment.module.css";
 import pricingStyles from "../pricing/page.module.css";
 import { VOYAGER_FEATURES, PIONEER_FEATURES } from "../pricing/PricingPlansSection";
+import { DepthParticleBackground } from "@/components/backgrounds/DepthParticleBackground";
 
 import { getSupabaseClient } from "@/lib/supabaseClient";
 
@@ -137,7 +138,7 @@ function PaymentContent() {
 
 
     // Derived Data
-    const planName = planParam === "pioneer" ? "Gray Pioneer" : "Gray Voyager";
+    const planName = planParam === "pioneer" ? "Gray Pioneer" : "Gray Voyager"; // eslint-disable-line @typescript-eslint/no-unused-vars
     const shortPlanName = planParam === "pioneer" ? "Pioneer" : "Voyager";
     const planCardVariant = planParam === "pioneer" ? "primary" : "highlighted";
 
@@ -150,7 +151,7 @@ function PaymentContent() {
     const features = planParam === "pioneer" ? PIONEER_FEATURES : VOYAGER_FEATURES;
 
     // Calculate precise amount for API
-    const amountForApi = planParam === "pioneer"
+    const amountForApi = planParam === "pioneer" // eslint-disable-line @typescript-eslint/no-unused-vars
         ? (billingCycle === "annual" ? 3777000 : 377000)
         : (billingCycle === "annual" ? 777000 : 77000);
 
@@ -326,7 +327,7 @@ function PaymentContent() {
     if (status === "success" && chargeData) {
         return (
             <div className={styles.page}>
-
+                <DepthParticleBackground />
                 <div className={styles.topRow}>
                     <button
                         type="button"
@@ -348,7 +349,7 @@ function PaymentContent() {
                                 </span>
                                 <div>
                                     <h2 className={styles.successTitle}>Order Created</h2>
-                                    <p className={styles.subtitle}>Complete payment to activate.</p>
+                                    <p className={`${styles.subtitle} ${styles.successSubtitle}`}>Complete payment to activate.</p>
                                 </div>
                             </div>
 
@@ -413,17 +414,13 @@ function PaymentContent() {
                         </div>
                     </div>
                 </div>
-
-                <div className={styles.particleBackground}>
-                    <div className={styles.starLayer} />
-                </div>
             </div>
         );
     }
 
     return (
         <div className={styles.page}>
-
+            <DepthParticleBackground />
             <Script
                 id="midtrans-script"
                 src="https://api.midtrans.com/v2/assets/js/midtrans-new-3ds.min.js"
@@ -587,10 +584,6 @@ function PaymentContent() {
                     </div>
                 </div >
 
-            </div>
-
-            <div className={styles.particleBackground}>
-                <div className={styles.starLayer} />
             </div>
         </div >
     );
