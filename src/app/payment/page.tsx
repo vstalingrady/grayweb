@@ -7,7 +7,7 @@ import { CheckCircle, AlertCircle, Loader2, ArrowLeft, CreditCard, Landmark, Sma
 import styles from "./payment.module.css";
 import pricingStyles from "../pricing/page.module.css";
 import { VOYAGER_FEATURES, PIONEER_FEATURES } from "../pricing/PricingPlansSection";
-import { DepthParticleBackground } from "@/components/backgrounds/DepthParticleBackground";
+
 import { getSupabaseClient } from "@/lib/supabaseClient";
 
 type PaymentStatus = "idle" | "loading" | "success" | "pending" | "error";
@@ -278,7 +278,11 @@ function PaymentContent() {
                     <AlertCircle size={48} color="#ef4444" style={{ marginBottom: "1rem" }} />
                     <h2 className={styles.title}>Invalid Request</h2>
                     <p className={styles.subtitle}>No plan selected.</p>
-                    <button onClick={() => router.back()} className={styles.payButton} style={{ marginTop: "2rem" }}>
+                    <button
+                        onClick={() => router.back()}
+                        className={styles.payButton}
+                        style={{ marginTop: "2rem", width: "min(360px, 100%)" }}
+                    >
                         Go Back
                     </button>
                 </div>
@@ -286,57 +290,132 @@ function PaymentContent() {
         );
     }
 
+    const planCard = (
+        <article className={`${pricingStyles.planCard} ${styles.planCard}`} data-variant={planCardVariant}>
+            <div className={pricingStyles.cardBody}>
+                <div className={pricingStyles.cardIntro}>
+                    <header className={pricingStyles.cardHeader}>
+                        <h2>{shortPlanName}</h2>
+                        <p>
+                            {planParam === "pioneer"
+                                ? "Uncapped context, models, and proactive workflows for daily reliance."
+                                : "Unlock model switching, integrations, and customizable automations."}
+                        </p>
+                    </header>
+                    <div className={pricingStyles.priceBlock}>
+                        <span className={pricingStyles.priceValue}>{currentPriceDisplay}</span>
+                        <span className={pricingStyles.priceMeta}>/ {billingCycle === "annual" ? "month" : "month"}</span>
+                    </div>
+                </div>
+
+                <ul className={pricingStyles.featureList}>
+                    {features.map(({ label, icon: Icon, variant, subtext }) => (
+                        <li key={label} data-variant={variant}>
+                            <Icon size={16} />
+                            <span className={variant === "inherit" ? pricingStyles.featureLabelInherit : pricingStyles.featureLabel}>
+                                {label}
+                                {subtext && <span className={pricingStyles.featureSubtext}>{subtext}</span>}
+                            </span>
+                        </li>
+                    ))}
+                </ul>
+            </div>
+        </article>
+    );
+
     if (status === "success" && chargeData) {
         return (
             <div className={styles.page}>
-                <DepthParticleBackground />
-                <div className={styles.container}>
-                    <div className={styles.successContainer}>
-                        <div style={{ padding: "1.5rem", background: "rgba(255, 255, 255, 0.1)", borderRadius: "50%" }}>
-                            <CheckCircle size={48} color="white" />
-                        </div>
-                        <div>
-                            <h2 style={{ fontSize: "1.75rem", fontWeight: 700, color: "white" }}>Order Created</h2>
-                            <p className={styles.subtitle}>Complete payment to activate.</p>
-                        </div>
 
-                        {chargeData.qr_code_url && (
-                            <div style={{ background: "white", padding: "1rem", borderRadius: "16px" }}>
-                                <img src={chargeData.qr_code_url} alt="QRIS" style={{ width: "200px", height: "200px" }} />
-                            </div>
-                        )}
+                <div className={styles.topRow}>
+                    <button
+                        type="button"
+                        onClick={() => router.back()}
+                        className={styles.dismiss}
+                        aria-label="Back"
+                    >
+                        <ArrowLeft size={20} />
+                    </button>
+                </div>
 
-                        {chargeData.va_numbers && (
-                            <div className={styles.summaryBox} style={{ width: "100%", maxWidth: "300px" }}>
-                                <div style={{ fontSize: "0.9rem", color: "rgba(255,255,255,0.6)" }}>VIRTUAL ACCOUNT NUMBER</div>
-                                <div style={{ fontSize: "2rem", fontFamily: "monospace", margin: "0.5rem 0", color: "white" }}>{chargeData.va_numbers[0].va_number}</div>
-                                <div style={{ fontSize: "0.9rem", color: "#ffff" }}>Bank {chargeData.va_numbers[0].bank.toUpperCase()}</div>
-                            </div>
-                        )}
-
-                        {chargeData.bill_key && chargeData.biller_code && (
-                            <div className={styles.summaryBox} style={{ width: "100%", maxWidth: "300px" }}>
-                                <div style={{ marginBottom: "1rem" }}>
-                                    <div style={{ fontSize: "0.9rem", color: "rgba(255,255,255,0.6)" }}>BILLER CODE</div>
-                                    <div style={{ fontSize: "1.5rem", fontFamily: "monospace", color: "white" }}>{chargeData.biller_code}</div>
-                                </div>
+                <div className={styles.mainGrid}>
+                    <div className={styles.summaryColumn}>{planCard}</div>
+                    <div className={styles.inputColumn}>
+                        <div className={styles.successPanel}>
+                            <div className={styles.successHeader}>
+                                <span className={styles.successIcon} aria-hidden="true">
+                                    <CheckCircle size={22} />
+                                </span>
                                 <div>
-                                    <div style={{ fontSize: "0.9rem", color: "rgba(255,255,255,0.6)" }}>BILL KEY</div>
-                                    <div style={{ fontSize: "1.5rem", fontFamily: "monospace", color: "white" }}>{chargeData.bill_key}</div>
+                                    <h2 className={styles.successTitle}>Order Created</h2>
+                                    <p className={styles.subtitle}>Complete payment to activate.</p>
                                 </div>
                             </div>
-                        )}
 
-                        {chargeData.deeplink_url && (
-                            <a href={chargeData.deeplink_url} target="_blank" rel="noreferrer" className={styles.payButton} style={{ textDecoration: "none", display: "inline-block", maxWidth: "300px" }}>
-                                Open Gojek App
-                            </a>
-                        )}
+                            <div className={styles.successBody}>
+                                <div className={styles.successDetails}>
+                                    <div className={styles.successSteps}>
+                                        <div className={styles.successStep}>
+                                            <span className={styles.successStepNumber}>1</span>
+                                            <span>Scan the QR code in Gojek/GoPay.</span>
+                                        </div>
+                                        <div className={styles.successStep}>
+                                            <span className={styles.successStepNumber}>2</span>
+                                            <span>Confirm payment to activate your plan.</span>
+                                        </div>
+                                    </div>
 
-                        <button onClick={() => router.push("/dashboard")} className={styles.methodButton} style={{ justifyContent: "center", width: "100%", maxWidth: "300px" }}>
-                            Return to Dashboard
-                        </button>
+                                    {chargeData.va_numbers ? (
+                                        <div className={styles.successMetaBox}>
+                                            <div className={styles.successMetaLabel}>VIRTUAL ACCOUNT NUMBER</div>
+                                            <div className={styles.successMetaValue}>{chargeData.va_numbers[0].va_number}</div>
+                                            <div className={styles.successMetaLabel}>BANK</div>
+                                            <div className={styles.successMetaValue}>{chargeData.va_numbers[0].bank.toUpperCase()}</div>
+                                        </div>
+                                    ) : null}
+
+                                    {chargeData.bill_key && chargeData.biller_code ? (
+                                        <div className={styles.successMetaBox}>
+                                            <div className={styles.successMetaLabel}>BILLER CODE</div>
+                                            <div className={styles.successMetaValue}>{chargeData.biller_code}</div>
+                                            <div className={styles.successMetaLabel}>BILL KEY</div>
+                                            <div className={styles.successMetaValue}>{chargeData.bill_key}</div>
+                                        </div>
+                                    ) : null}
+                                </div>
+
+                                {chargeData.qr_code_url ? (
+                                    <div className={styles.successQrWrap}>
+                                        <div className={styles.qrCard}>
+                                            <img src={chargeData.qr_code_url} alt="QRIS" className={styles.qrImage} />
+                                        </div>
+                                    </div>
+                                ) : null}
+                            </div>
+                        </div>
+
+                        <div className={styles.payButtonContainer} aria-hidden="true">
+                            <button type="button" className={styles.payButton} disabled>
+                                Subscribe for {fullPriceDisplay}
+                            </button>
+                            <div
+                                style={{
+                                    marginTop: "1rem",
+                                    display: "flex",
+                                    justifyContent: "center",
+                                    gap: "0.5rem",
+                                    color: "rgba(255,255,255,0.3)",
+                                    fontSize: "0.8rem",
+                                }}
+                            >
+                                Powered by Midtrans • Secure 256-bit SSL Header
+                            </div>
+                        </div>
                     </div>
+                </div>
+
+                <div className={styles.particleBackground}>
+                    <div className={styles.starLayer} />
                 </div>
             </div>
         );
@@ -344,7 +423,7 @@ function PaymentContent() {
 
     return (
         <div className={styles.page}>
-            <DepthParticleBackground />
+
             <Script
                 id="midtrans-script"
                 src="https://api.midtrans.com/v2/assets/js/midtrans-new-3ds.min.js"
@@ -362,39 +441,10 @@ function PaymentContent() {
                     <ArrowLeft size={20} />
                 </button>
             </div>
-	            <div className={styles.mainGrid}>
-	                {/* LEFT COLUMN: Summary & Features - using exact pricing page styles */}
-	                <div className={styles.summaryColumn}>
-	                    <article className={`${pricingStyles.planCard} ${styles.planCard}`} data-variant={planCardVariant}>
-	                        <div className={pricingStyles.cardBody}>
-	                            <div className={pricingStyles.cardIntro}>
-	                                <header className={pricingStyles.cardHeader}>
-	                                    <h2>{shortPlanName}</h2>
-                                    <p>
-                                        {planParam === "pioneer"
-                                            ? "Uncapped context, models, and proactive workflows for daily reliance."
-                                            : "Unlock model switching, integrations, and customizable automations."}
-                                    </p>
-                                </header>
-                                <div className={pricingStyles.priceBlock}>
-                                    <span className={pricingStyles.priceValue}>{currentPriceDisplay}</span>
-                                    <span className={pricingStyles.priceMeta}>/ {billingCycle === "annual" ? "month" : "month"}</span>
-                                </div>
-                            </div>
-
-                            <ul className={pricingStyles.featureList}>
-                                {features.map(({ label, icon: Icon, variant, subtext }) => (
-                                    <li key={label} data-variant={variant}>
-                                        <Icon size={16} />
-                                        <span className={variant === "inherit" ? pricingStyles.featureLabelInherit : pricingStyles.featureLabel}>
-                                            {label}
-                                            {subtext && <span className={pricingStyles.featureSubtext}>{subtext}</span>}
-                                        </span>
-                                    </li>
-                                ))}
-                            </ul>
-                        </div>
-                    </article>
+            <div className={styles.mainGrid}>
+                {/* LEFT COLUMN: Summary & Features - using exact pricing page styles */}
+                <div className={styles.summaryColumn}>
+                    {planCard}
                 </div>
 
                 <div className={styles.inputColumn}>
