@@ -17,22 +17,17 @@ import {
   type RefObject,
 } from "react";
 import {
-  LoaderCircle,
-  RefreshCw,
+  Maximize2,
+  Minimize2,
+  Pause,
+  Play,
+  RotateCcw,
+  Square,
+  Repeat,
   Copy,
-  CheckCircle2,
-  Trash2,
-  SignalHigh,
-  CalendarClock,
-  Globe,
-  ChevronLeft,
-  ChevronRight,
-  ChevronDown,
   Pencil,
-  X,
-  Check,
-  Sparkles,
-  Brain,
+  Trash2,
+  RefreshCw,
 } from "lucide-react";
 import ReactMarkdown, { type Components } from "react-markdown";
 // Type definition for code component
@@ -1458,27 +1453,7 @@ const ChatMessagesList = memo(
         className={styles.chatMessages}
         data-streaming={shouldShowPendingStreamIndicator ? "true" : undefined}
       >
-        <div ref={scrollAnchorRef} style={{ order: -1 }} />
-
-        {shouldShowPendingStreamIndicator && (
-          <div className={styles.chatMessage} data-role="assistant" style={{ order: -1 }}>
-            <div className={styles.chatAssistantBlock}>
-              <GrayStreamingSpinner
-                reasoningSeconds={reasoningSeconds}
-                toolLabel={
-                  // Check the very last message in the list if it's an assistant message
-                  messages.length > 0 && messages[messages.length - 1].role === "assistant"
-                    ? extractCurrentToolStatus(messages[messages.length - 1].content, t)
-                    : null
-                }
-              />
-            </div>
-          </div>
-        )}
-
-        {/* eslint-disable-next-line react-compiler/react-compiler */}
-        {[...messages].reverse().map((message, reverseIndex) => {
-          const messageIndex = messages.length - 1 - reverseIndex;
+        {messages.map((message, messageIndex) => {
           const isUser = message.role === "user";
           const isAssistant = !isUser;
           const quickReplies: string[] = [];
@@ -1957,6 +1932,24 @@ const ChatMessagesList = memo(
             </div>
           );
         })}
+
+        {shouldShowPendingStreamIndicator && (
+          <div className={styles.chatMessage} data-role="assistant">
+            <div className={styles.chatAssistantBlock}>
+              <GrayStreamingSpinner
+                reasoningSeconds={reasoningSeconds}
+                toolLabel={
+                  // Check the very last message in the list if it's an assistant message
+                  messages.length > 0 && messages[messages.length - 1].role === "assistant"
+                    ? extractCurrentToolStatus(messages[messages.length - 1].content, t)
+                    : null
+                }
+              />
+            </div>
+          </div>
+        )}
+
+        <div ref={scrollAnchorRef} />
       </div>
     );
   }
@@ -2252,7 +2245,7 @@ const estimateTokenCount = (content: string | null | undefined): number => {
   return Math.max(lengthBased, wordBased);
 };
 
-import { ModelSelector } from "./ModelSelector";
+
 
 export function GrayChatView({
   sessionId,
@@ -2281,17 +2274,9 @@ export function GrayChatView({
     uploadAttachments,
     removeAttachment,
     clearAttachments,
-    mapsEnabled,
-    mapsWidgetEnabled,
-    mapsLatitude,
-    mapsLongitude,
-    setMapsEnabled,
-    setMapsWidgetEnabled,
-    setMapsLatitude,
-    setMapsLongitude,
     mapPayload,
     pendingLocationRequestMessage,
-    isRequestingLocation,
+    isHandlingLocationRequest: isRequestingLocation,
     requestLocationShare,
     skipLocationShare,
     contextCaches,
@@ -2440,7 +2425,6 @@ export function GrayChatView({
       attachments={attachments}
       isUploading={isAttachmentUploading}
       error={attachmentError}
-      onAddAttachment={openAttachmentPicker}
       onRemoveAttachment={removeAttachment}
     />
   ) : null;
@@ -2449,7 +2433,6 @@ export function GrayChatView({
       attachments={attachments}
       isUploading={isAttachmentUploading}
       error={attachmentError}
-      onAddAttachment={openAttachmentPicker}
       onRemoveAttachment={removeAttachment}
     />
   ) : null;
@@ -3689,10 +3672,10 @@ export function GrayChatView({
       code: MarkdownCodeBlock,
       // Render <pre> as a fragment so our custom code renderer controls layout.
       // Use full props to avoid narrowing issues with react-markdown's types.
-      pre: (props: any) => <>{props.children}</>,
+      pre: (props: React.HTMLAttributes<HTMLPreElement>) => <>{props.children}</>,
       // Avoid invalid HTML like <p><div>…</div></p> when a code block
       // appears where a paragraph would normally be rendered.
-      p: ({ children, ...rest }: any) => {
+      p: ({ children, ...rest }: React.HTMLAttributes<HTMLParagraphElement>) => {
         const hasBlockCodeChild = Children.toArray(children).some((child) =>
           hasCodeBlockDescendant(child as ReactNode)
         );
@@ -3701,7 +3684,7 @@ export function GrayChatView({
         }
         return <p {...rest}>{children}</p>;
       },
-      table: ({ children, node: _node, ...rest }: any) => (
+      table: ({ children, node: _node, ...rest }: React.TableHTMLAttributes<HTMLTableElement> & { node?: any }) => (
         <div className={styles.chatTableWrapper}>
           <table {...rest}>{children}</table>
         </div>

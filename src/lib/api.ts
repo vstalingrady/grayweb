@@ -286,6 +286,7 @@ export interface MediaUpload {
   size: number;
   created_at: string;
   previewUrl?: string;
+  public_url?: string;
 }
 
 export interface ChatAttachmentRequest {

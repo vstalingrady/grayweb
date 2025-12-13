@@ -104,6 +104,8 @@ export type ChatContextValue = {
     // Deprecated properties kept for compatibility if needed, but effectively unused
     pendingLocationRequestMessage: string | null;
     isHandlingLocationRequest: boolean;
+    requestLocationShare: () => void;
+    skipLocationShare: () => void;
     contextCaches: ContextCache[];
     contextCacheLabel: string;
     contextCacheContent: string;
@@ -142,6 +144,8 @@ export type ChatContextValue = {
     setReasoningMode: (value: boolean) => void;
     modelTier: "lite" | "pro" | "pioneer";
     setModelTier: (value: "lite" | "pro" | "pioneer") => void;
+    selectedModelId: string;
+    setSelectedModelId: (id: string) => void;
     questionnaireSession: QuestionnaireSession | null;
     startQuestionnaire: (mode: "quick" | "deep") => void;
     cancelQuestionnaire: () => void;
