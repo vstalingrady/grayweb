@@ -1,9 +1,8 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   apiService,
-  type Plan,
-  type Habit,
   type Calendar,
+  type CalendarEvent as ApiCalendarEvent,
   type Reminder,
   type GoogleCalendarInfo,
   type GoogleCalendarEvent as ApiGoogleCalendarEvent,
@@ -157,10 +156,11 @@ export function useWorkspaceData(userId: number | null, variant: "general" | "da
   }, [refreshReminders]);
 
   useEffect(() => {
-    if (variant === "chat" || userId === null) {
+    if (userId === null) {
       return;
     }
 
+    const shouldLoadCalendarData = variant === "dashboard";
     let isMounted = true;
     setLoading(true);
 
@@ -173,12 +173,18 @@ export function useWorkspaceData(userId: number | null, variant: "general" | "da
         endWindow.setMonth(now.getMonth() + 12);
 
         const results = await Promise.allSettled([
-          apiService.getUserCalendars(userId),
-          apiService.getUserCalendarEvents(userId, {
-            startDate: startWindow.toISOString(),
-            endDate: endWindow.toISOString(),
-          }),
-          apiService.getGoogleCalendars(userId),
+          shouldLoadCalendarData
+            ? apiService.getUserCalendars(userId)
+            : Promise.resolve<Calendar[]>([]),
+          shouldLoadCalendarData
+            ? apiService.getUserCalendarEvents(userId, {
+              startDate: startWindow.toISOString(),
+              endDate: endWindow.toISOString(),
+            })
+            : Promise.resolve<ApiCalendarEvent[]>([]),
+          shouldLoadCalendarData
+            ? apiService.getGoogleCalendars(userId)
+            : Promise.resolve<GoogleCalendarInfo[]>([]),
           apiService.getUserPlans(userId),
           apiService.getUserHabits(userId),
           apiService.getUserReminders(userId, {

@@ -1334,258 +1334,163 @@ export function GrayDashboardView({
   const proactivityCard = renderProactivityCard();
 
   const plansCard = (
-    <article className={styles.dashboardCard}>
-      <header className={styles.dashboardCardHeader}>
-        <span>{t("Plans")}</span>
-      </header>
+    <div className={`${styles.dashboardCard} ${styles.dashboardCardPlans}`}>
+      <div className={styles.dashboardCardHeader}>
+        <div className={`${styles.dashboardCardIcon} ${styles.iconBlue}`}>
+          <Square size={16} />
+        </div>
+        <h2 className={styles.dashboardCardTitle}>{t("Plans")}</h2>
+      </div>
       <div className={styles.dashboardCardBody}>
-        <ul className={styles.planList}>
-          {showPlansList
-            ? visiblePlans.map((plan) => {
-              const isDerivedReminder = derivedReminderIds.has(plan.id);
-              const timeLabel = formatPlanTimeLabel(plan);
-              const tagLabel = isDerivedReminder ? t("Reminder") : t("Plan");
-              return (
-                <li key={plan.id} className={styles.planListItem}>
-                  <div
-                    className={styles.planItemButton}
-                    data-completed={plan.completed ? "true" : "false"}
-                    role="group"
-                  >
-                    <button
-                      type="button"
-                      className={styles.planCheckboxButton}
-                      aria-label={
-                        plan.completed ? t("Mark plan as incomplete") : t("Mark plan as complete")
-                      }
-                      onClick={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        handlePlanToggle(plan.id);
-                      }}
-                      disabled={!isCurrentPulseEditable}
-                    >
-                      <span className={styles.planCheckbox} aria-hidden="true">
-                        {plan.completed ? <Check size={14} /> : <Square size={14} />}
-                      </span>
-                    </button>
-                    <span className={styles.planLabelGroup}>
-                      <span className={styles.planLabel}>{plan.label}</span>
-                      {!isDerivedReminder && plan.details ? (
-                        <span className={styles.planDetails}>{plan.details}</span>
-                      ) : null}
-                      {timeLabel ? (
-                        <span className={styles.planTime}>
-                          <time dateTime={plan.deadline ?? undefined}>{timeLabel}</time>
-                        </span>
-                      ) : null}
-                      <span className={styles.planDerivedTag}>{tagLabel}</span>
-                    </span>
-                  </div>
-                  {canManagePlans ? (
-                    <span className={styles.listItemActions}>
-                      {onSavePlan ? (
-                        <button
-                          type="button"
-                          className={styles.listItemActionButton}
-                          onClick={(event) => {
-                            event.preventDefault();
-                            event.stopPropagation();
-                            setPlanEditorTarget(plan);
-                          }}
-                          aria-label={t("Edit plan {label}", { label: plan.label })}
-                          disabled={!isCurrentPulseEditable}
-                        >
-                          <Pencil size={14} />
-                        </button>
-                      ) : null}
-                      {onDeletePlan ? (
-                        <button
-                          type="button"
-                          className={styles.listItemActionButton}
-                          onClick={(event) => {
-                            event.preventDefault();
-                            event.stopPropagation();
-                            handlePlanDelete(plan);
-                          }}
-                          aria-label={t("Delete plan {label}", { label: plan.label })}
-                          disabled={!isCurrentPulseEditable}
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      ) : null}
-                    </span>
-                  ) : null}
-                </li>
-              );
-            })
-            : (
-              <li className={styles.listEmptyMessage}>
-                <span>{t("No plans captured yet.")}</span>
+        {showPlansList ? (
+          <ul className={styles.dashboardList}>
+            {visiblePlans.map(plan => (
+              <li key={plan.id} className={styles.dashboardListItem}>
+                <button
+                  className={styles.planCheckboxButton}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    handlePlanToggle(plan.id);
+                  }}
+                >
+                  {plan.completed ? <Check size={14} /> : <Square size={14} color="#52525b" />}
+                </button>
+                <span
+                  className={styles.dashboardTaskLabel}
+                  data-completed={plan.completed ? "true" : "false"}
+                >
+                  {plan.label}
+                </span>
+                {/* Actions (Edit/Delete) could go here but kept simple for now per redesign focus on layout */}
               </li>
-            )}
-        </ul>
+            ))}
+          </ul>
+        ) : (
+          <div className={styles.dashboardListEmpty}>{t("No active plans")}</div>
+        )}
         <button
-          type="button"
-          className={styles.secondaryAction}
-          disabled={!isCurrentPulseEditable}
-          data-disabled={!isCurrentPulseEditable ? "true" : "false"}
+          className={styles.dashboardButtonNeutral}
           onClick={() => openModal("plan")}
         >
           {t("Add plans")}
         </button>
       </div>
-    </article>
+    </div>
   );
 
   const habitsCard = (
-    <article className={styles.dashboardCard}>
-      <header className={styles.dashboardCardHeader}>
-        <span>{t("Habits")}</span>
-      </header>
+    <div className={`${styles.dashboardCard} ${styles.dashboardCardHabits}`}>
+      <div className={styles.dashboardCardHeader}>
+        <div className={`${styles.dashboardCardIcon} ${styles.iconCyan}`}>
+          <Check size={16} />
+        </div>
+        <h2 className={styles.dashboardCardTitle}>{t("Habits")}</h2>
+      </div>
       <div className={styles.dashboardCardBody}>
-        <ul className={`${styles.habitList} ${styles.dashboardHabitList}`}>
-          {showHabitsList
-            ? visibleHabits.map((habit) => (
-              <li key={habit.id} className={styles.habitListItem}>
-                <div
-                  className={styles.planItemButton}
-                  data-completed={habit.completed ? "true" : "false"}
-                  role="group"
+        {showHabitsList ? (
+          <ul className={styles.dashboardList}>
+            {visibleHabits.map(habit => (
+              <li key={habit.id} className={styles.dashboardListItem}>
+                <button
+                  className={styles.planCheckboxButton}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    handleHabitToggle(habit.id);
+                  }}
                 >
-                  <button
-                    type="button"
-                    className={styles.planCheckboxButton}
-                    aria-label={
-                      habit.completed ? t("Mark habit as incomplete") : t("Mark habit as complete")
-                    }
-                    onClick={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      handleHabitToggle(habit.id);
-                    }}
-                    disabled={!isCurrentPulseEditable || !onToggleHabit}
-                  >
-                    <span className={styles.planCheckbox} aria-hidden="true">
-                      {habit.completed ? <Check size={14} /> : <Square size={14} />}
-                    </span>
-                  </button>
-                  <span className={styles.habitContent}>
-                    <span className={styles.habitLabel}>{habit.label}</span>
-                    {habit.details ? (
-                      <span className={styles.habitDetails}>{habit.details}</span>
-                    ) : null}
-                  </span>
-                </div>
-                <span className={styles.habitRightSection}>
-                  {canManageHabits ? (
-                    <span className={styles.listItemActions}>
-                      {onEditHabit ? (
-                        <button
-                          type="button"
-                          className={styles.listItemActionButton}
-                          onClick={(event) => {
-                            event.preventDefault();
-                            event.stopPropagation();
-                            handleHabitEdit(habit);
-                          }}
-                          aria-label={t("Edit habit {label}", { label: habit.label })}
-                          disabled={!isCurrentPulseEditable}
-                        >
-                          <Pencil size={14} />
-                        </button>
-                      ) : null}
-                      {onDeleteHabit ? (
-                        <button
-                          type="button"
-                          className={styles.listItemActionButton}
-                          onClick={(event) => {
-                            event.preventDefault();
-                            event.stopPropagation();
-                            handleHabitDelete(habit);
-                          }}
-                          aria-label={t("Delete habit {label}", { label: habit.label })}
-                          disabled={!isCurrentPulseEditable}
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      ) : null}
-                    </span>
-                  ) : null}
-                  <span className={styles.habitStreak}>
-                    <Zap size={12} aria-hidden="true" />
-                    <span>{habit.streakLabel}</span>
-                  </span>
+                  {habit.completed ? <Check size={14} /> : <Square size={14} color="#52525b" />}
+                </button>
+                <span
+                  className={styles.dashboardTaskLabel}
+                  data-completed={habit.completed ? "true" : "false"}
+                >
+                  {habit.label}
                 </span>
+                {/* Actions (Edit/Delete) omitted for standard view per redesign */}
               </li>
-            ))
-            : (
-              <li className={styles.listEmptyMessage}>
-                <span>{t("No habits tracked yet.")}</span>
-              </li>
-            )}
-        </ul>
+            ))}
+          </ul>
+        ) : (
+          <div className={styles.dashboardListEmpty}>{t("No active habits")}</div>
+        )}
         <button
-          type="button"
-          className={styles.secondaryAction}
-          disabled={!isCurrentPulseEditable}
-          data-disabled={!isCurrentPulseEditable ? "true" : "false"}
+          className={styles.dashboardButtonNeutral}
           onClick={() => openModal("habit")}
         >
           {t("Add habits")}
         </button>
       </div>
-    </article>
+    </div>
   );
-  const dashboardSections = useMemo<DashboardSectionSpec[]>(
-    () => [
-      {
-        id: "execution",
-        title: t("Execution"),
-        subtitle: t("Plans and habits shaping today's pulse"),
-        layout: "stacked",
-        cards: [
-          { id: "plans", element: plansCard },
-          { id: "habits", element: habitsCard },
-        ],
-      },
-    ],
-    [plansCard, habitsCard, t]
-  );
-  const renderDashboardSections = useCallback(
-    (variant: "default" | "compact" = "default") => {
-      const sections =
-        variant === "compact"
-          ? [
-            ...dashboardSections,
-            {
-              id: "compact-automation",
-              title: t("Signals & Automation"),
-              subtitle: t("Reminders, notifications, and proactive nudges"),
-              cards: [{ id: "proactivity", element: proactivityCard }],
-            },
-          ]
-          : dashboardSections;
-      return sections.map((section) => {
-        const gridClass =
-          variant === "compact"
-            ? styles.dashboardCompactGrid
-            : (section as { layout?: string }).layout === "stacked"
-              ? `${styles.dashboardGrid} ${styles.pulseGridStacked}`
-              : styles.dashboardGrid;
-        const showHeader = false; // Don't show section headers in pulse view
-        return (
-          <div key={section.id} className={gridClass}>
-            {section.cards.map(({ id, element }) => (
-              <div key={`${section.id}-${id}`} className={styles.dashboardSectionCard}>
-                {element}
-              </div>
-            ))}
+  /* NEW DASHBOARD GRID */
+  const dashboardGrid = (
+    <div className={styles.dashboardGrid}>
+      <div className={styles.dashboardHeaderArea}>
+        <div>
+          <h1 className={styles.dashboardGreeting}>{greetingForDate(currentDate)}, {user?.full_name?.split(" ")[0] || "there"}</h1>
+          <div className={styles.dashboardDate}>
+            {currentDate.toLocaleDateString(undefined, {
+              weekday: "long",
+              month: "long",
+              day: "numeric",
+            })}
           </div>
-        );
-      });
-    },
-    [dashboardSections, proactivityCard, t]
+        </div>
+        <div className={styles.dashboardHeaderSide}>
+          {streakCount > 0 ? (
+            <div
+              className={styles.streakBadge}
+              aria-label={t("{count} day streak", { count: streakCount })}
+            >
+              <Zap size={12} />
+              <span>{streakCount}</span>
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+      {/* Proactivity Card */}
+      <div className={`${styles.dashboardCard} ${styles.dashboardCardProactivity}`}>
+        <div className={styles.dashboardCardHeader}>
+          <div className={`${styles.dashboardCardIcon} ${styles.iconBlue}`}>
+            <Zap size={16} fill="white" />
+          </div>
+          <h2 className={styles.dashboardCardTitle}>{t("Proactivity")}</h2>
+        </div>
+        <div className={styles.dashboardCardBody}>
+          <div className={styles.proactivityBottom}>
+            <div className={styles.proactivityToggleRow}>
+              <span className={styles.proactivityStatusText}>
+                {t("Mode: {status}", { status: displayProactivity ? t("On") : t("Off") })}
+              </span>
+              <button
+                role="switch"
+                className={styles.dashboardToggle}
+                aria-checked={displayProactivity ? "true" : "false"}
+                aria-label={t("Toggle proactivity mode")}
+                onClick={() => {
+                  if (displayProactivity) {
+                    if (onProactivityRemove) onProactivityRemove();
+                  } else {
+                    if (onProactivitySelect) {
+                      const defaultPreset = PROACTIVITY_PRESETS[0];
+                      handleProactivityPresetSelect(defaultPreset);
+                    }
+                  }
+                }}
+              >
+                <span className={styles.dashboardToggleThumb} />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {plansCard}
+      {habitsCard}
+    </div>
   );
 
   const pulseMonthLabel = pulseMonthDate.toLocaleDateString(undefined, {
@@ -1610,32 +1515,8 @@ export function GrayDashboardView({
         showUpgradeButton={showUpgradeButton}
         hideCalendar={hideCalendar}
       />
-      <div
-        className={calendarStyles.calendarSurfaceBody}
-        data-has-sidebar="true"
-      >
-        <div className={styles.calendarSidebarColumn}>
-          <div className={calendarStyles.calendarSidebarPanel}>
-            <CalendarSidebar
-              monthDate={pulseMonthDate}
-              selectedDate={pulseSelectedDate}
-              onSelectDate={handlePulseDateSelect}
-              onNavigateMonth={handlePulseMonthNavigate}
-              calendars={calendars}
-              onToggleCalendar={handleCalendarVisibilityToggle}
-              showSelectedDateLabel={false}
-              showMonthNavigation
-              className={calendarStyles.calendarSidebarIntegrated}
-              showCalendarList={false}
-              showCreateAction={false}
-              onIntegrationAction={onIntegrationAction}
-            />
-          </div>
-          <div className={styles.calendarProactivityColumn}>{proactivityCard}</div>
-        </div>
-        <div className={`${calendarStyles.calendarBoard} ${styles.pulseBoard}`}>
-          <div className={styles.pulseBoardContent}>{renderDashboardSections()}</div>
-        </div>
+      <div className={styles.dashboardViewScrollContainer}>
+        {dashboardGrid}
       </div>
     </>
   );
@@ -1652,8 +1533,7 @@ export function GrayDashboardView({
         hideCalendar={hideCalendar}
       />
       <div className={styles.dashboardCompact}>
-
-        {renderDashboardSections("compact")}
+        {dashboardGrid}
       </div>
     </>
   );

@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 // Icons used directly in this component's JSX
-import { Menu, Zap, MessageCircle, LayoutDashboard } from "lucide-react";
+import { Menu, Zap, MessageCircle } from "lucide-react";
 import { useUser } from "@/contexts/UserContext";
 import {
   apiService,
@@ -314,7 +314,6 @@ function GrayPageClientInner({
   } = usePulse(userId, todayAnchor, nowDateKey, derivedPlans, derivedHabits, proactivity, sendDashboardNotification);
 
   const [habitEditorTarget, setHabitEditorTarget] = useState<HabitItem | null>(null);
-  const [planTab, setPlanTab] = useState<"plans" | "habits">("plans");
 
   const [isSidebarExpanded, setIsSidebarExpanded] = useState<boolean>(false);
   const [hasLoadedSidebarPref, setHasLoadedSidebarPref] = useState(false);
@@ -660,31 +659,20 @@ function GrayPageClientInner({
     return (
       <div className={styles.generalViewSection}>
         <GrayGeneralView
-          hideCalendar={isScout || !(user?.personalization_show_calendar ?? true)}
           greeting={greeting}
-          dateLabel={workspaceDateLabel}
-          calendarEvents={derivedEvents}
           plans={derivedPlans}
           habits={derivedHabits}
-          activeTab={planTab}
-          onChangeTab={setPlanTab}
+          proactivity={proactivity}
+          onSelectProactivity={selectProactivityPreset}
+          onRemoveProactivity={removeProactivity}
           onTogglePlan={togglePlan}
           onToggleHabit={toggleHabit}
           onSavePlan={savePlan}
           onDeletePlan={deletePlan}
-          currentDate={now}
-          calendars={derivedCalendars}
-          onCalendarsChange={handleCalendarsChange}
-          onCalendarEventsChange={handleEventsChange}
-          calendarSelectedDate={calendarSelectedDate}
-          onCalendarSelectedDateChange={setCalendarSelectedDate}
-          isCompactLayout={isCompactLayout}
           onEditHabit={editHabit}
           onDeleteHabit={deleteHabit}
           onRefreshData={refreshPlansAndHabits}
           showGreeting={false}
-          userId={user?.id ?? null}
-          onReminderMove={handleReminderMove}
           hidePlans={effectiveIsMobileViewport}
         />
       </div>
@@ -1073,7 +1061,7 @@ function GrayPageClientInner({
 
     if (navId === "dashboard") {
       setManualViewMode(null);
-      router.push("/d");
+      router.push("/");
       return;
     }
 
@@ -2545,7 +2533,7 @@ function GrayPageClientInner({
                 </button>
 
                 <div className={styles.mobileHeaderRight}>
-                  {streakCount > 0 && (
+                  {streakCount > 0 && activeNav !== "dashboard" && (
                     <button
                       className={styles.mobileMenuButton}
                       onClick={() => setIsStreakValueVisible((prev) => !prev)}
@@ -2578,17 +2566,7 @@ function GrayPageClientInner({
                 <span className={styles.mobileToggleIcon}>
                   <MessageCircle size={16} />
                 </span>
-                <span>Main</span>
-              </button>
-              <button
-                className={styles.mobileToggleOption}
-                data-active={activeNav === "dashboard" ? "true" : "false"}
-                onClick={() => handleMobileNavigate("dashboard")}
-              >
-                <span className={styles.mobileToggleIcon}>
-                  <LayoutDashboard size={16} />
-                </span>
-                <span>Dashboard</span>
+                <span>Chat</span>
               </button>
             </div>
           </div>

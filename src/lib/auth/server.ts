@@ -10,6 +10,10 @@ type SignedSession = {
   exp: number;
 };
 
+type SessionCookieOptions = {
+  domain?: string;
+};
+
 const SESSION_COOKIE_NAME = "gray-auth-session";
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30;
 
@@ -69,12 +73,12 @@ const verifyPayload = (raw: string | undefined | null): SignedSession | null => 
   }
 };
 
-export const buildSessionCookie = (email: string) => {
+export const buildSessionCookie = (email: string, options?: SessionCookieOptions) => {
   const exp = Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS;
   const value = signPayload({ email, exp });
   const isProd = process.env.NODE_ENV === "production";
 
-  return {
+  const base = {
     name: SESSION_COOKIE_NAME,
     value,
     httpOnly: true,
@@ -83,11 +87,15 @@ export const buildSessionCookie = (email: string) => {
     path: "/",
     maxAge: SESSION_TTL_SECONDS,
   };
+  if (options?.domain) {
+    return { ...base, domain: options.domain };
+  }
+  return base;
 };
 
-export const clearSessionCookie = () => {
+export const clearSessionCookie = (options?: SessionCookieOptions) => {
   const isProd = process.env.NODE_ENV === "production";
-  return {
+  const base = {
     name: SESSION_COOKIE_NAME,
     value: "",
     httpOnly: true,
@@ -96,6 +104,10 @@ export const clearSessionCookie = () => {
     path: "/",
     maxAge: 0,
   };
+  if (options?.domain) {
+    return { ...base, domain: options.domain };
+  }
+  return base;
 };
 
 export const readServerSession = async (): Promise<ServerSession | null> => {

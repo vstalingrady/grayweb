@@ -1,25 +1,14 @@
 import { redirect } from "next/navigation";
-import GrayPageClient from "@/app/gray/GrayPageClient";
 import { readServerSession } from "@/lib/auth/server";
 
-const DEFAULT_REDIRECT = "/login?redirect=/d";
+const DEFAULT_REDIRECT = "/login?redirect=/";
 
 export default async function DashboardPage() {
-    const session = await readServerSession();
+  const session = await readServerSession();
 
-    if (!session) {
-        redirect(DEFAULT_REDIRECT);
-    }
+  if (!session) {
+    redirect(DEFAULT_REDIRECT);
+  }
 
-    // Seed the client clock from the request time so hydration matches.
-    // eslint-disable-next-line react-hooks/purity
-    const initialTimestamp = Date.now();
-
-    return (
-        <GrayPageClient
-            initialTimestamp={initialTimestamp}
-            activeNav="dashboard"
-            variant="dashboard"
-        />
-    );
+  redirect("/");
 }

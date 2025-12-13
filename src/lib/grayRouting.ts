@@ -210,10 +210,7 @@ export const resolveWorkspaceHost = (
   }
 
   if (isLocalHostname(hostOnly)) {
-    if (normalized === "localhost" || normalized === "127.0.0.1") {
-      return normalized;
-    }
-    return "localhost";
+    return normalized;
   }
 
   if (normalized === "alignment.id" || normalized.endsWith(".alignment.id")) {

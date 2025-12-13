@@ -2426,8 +2426,10 @@ export function GrayChatView({
       : pendingLocationRequestMessage
     : "";
   const showIntro = Boolean(introContent) && (!session || messages.length === 0);
-  const showAttachmentTray = session?.scope === "general";
-  const topAttachmentTray = showAttachmentTray ? (
+  const shouldShowAttachmentTray =
+    session?.scope === "general" &&
+    (attachments.length > 0 || isAttachmentUploading || Boolean(attachmentError));
+  const topAttachmentTray = shouldShowAttachmentTray ? (
     <AttachmentTray
       attachments={attachments}
       isUploading={isAttachmentUploading}
@@ -2435,7 +2437,7 @@ export function GrayChatView({
       onRemoveAttachment={removeAttachment}
     />
   ) : null;
-  const attachmentTrayNode = showAttachmentTray ? (
+  const attachmentTrayNode = shouldShowAttachmentTray ? (
     <AttachmentTray
       attachments={attachments}
       isUploading={isAttachmentUploading}

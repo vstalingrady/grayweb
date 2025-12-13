@@ -119,6 +119,27 @@ const noStoreHeaders = { "cache-control": "no-store" };
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+const resolveCookieDomain = (request: NextRequest): string | undefined => {
+  const configured = (process.env.AUTH_COOKIE_DOMAIN ?? process.env.COOKIE_DOMAIN ?? "").trim();
+  if (configured) {
+    return configured;
+  }
+
+  const forwardedHost = request.headers.get("x-forwarded-host") ?? null;
+  const hostHeader = request.headers.get("host") ?? null;
+  const rawHost = (forwardedHost ?? hostHeader ?? request.nextUrl.host ?? "").split(",")[0]?.trim();
+  const hostname = rawHost.split(":")[0]?.toLowerCase() ?? "";
+  if (!hostname) {
+    return undefined;
+  }
+
+  if (hostname === "alignment.id" || hostname.endsWith(".alignment.id")) {
+    return ".alignment.id";
+  }
+
+  return undefined;
+};
+
 export async function POST(request: NextRequest) {
   const body = (await request.json().catch(() => null)) as { accessToken?: string } | null;
   const accessToken = typeof body?.accessToken === "string" ? body.accessToken.trim() : "";
@@ -133,12 +154,12 @@ export async function POST(request: NextRequest) {
   }
 
   const response = NextResponse.json({ ok: true }, { status: 200, headers: noStoreHeaders });
-  response.cookies.set(buildSessionCookie(email));
+  response.cookies.set(buildSessionCookie(email, { domain: resolveCookieDomain(request) }));
   return response;
 }
 
-export async function DELETE() {
+export async function DELETE(request: NextRequest) {
   const response = NextResponse.json({ ok: true }, { headers: noStoreHeaders });
-  response.cookies.set(clearSessionCookie());
+  response.cookies.set(clearSessionCookie({ domain: resolveCookieDomain(request) }));
   return response;
 }

@@ -138,11 +138,21 @@ async def load_thread_history(conversation_id: str, user_id: int) -> List[Dict[s
             }
             # Include timestamp so frontend displays the actual message time
             if row["created_at"]:
-                from datetime import timezone
                 created_at = row["created_at"]
-                if created_at.tzinfo is None:
-                    created_at = created_at.replace(tzinfo=timezone.utc)
-                entry["timestamp"] = int(created_at.timestamp() * 1000)
+                try:
+                    if isinstance(created_at, str):
+                        created_at = datetime.fromisoformat(
+                            created_at.replace("Z", "+00:00")
+                        )
+                    if isinstance(created_at, datetime):
+                        if created_at.tzinfo is None:
+                            created_at = created_at.replace(tzinfo=timezone.utc)
+                        else:
+                            created_at = created_at.astimezone(timezone.utc)
+                        entry["timestamp"] = int(created_at.timestamp() * 1000)
+                except Exception:
+                    # If parsing fails, omit timestamp rather than dropping history.
+                    pass
             messages.append(entry)
         cache_conversation_history(conversation_id, user_id, messages)
         return messages

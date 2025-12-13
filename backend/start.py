@@ -275,6 +275,7 @@ if __name__ == "__main__":
         sqlalchemy.Column("text", sqlalchemy.String, nullable=False),
         sqlalchemy.Column("grounding_metadata", sqlalchemy.JSON, nullable=True),
         sqlalchemy.Column("attachments", sqlalchemy.JSON, nullable=True),
+        sqlalchemy.Column("reminders", sqlalchemy.JSON, nullable=True),
         sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=sqlalchemy.func.now()),
     )
     proactivity_settings = sqlalchemy.Table(
@@ -451,6 +452,7 @@ if __name__ == "__main__":
         sqlalchemy.Column("content", sqlalchemy.Text, nullable=False),
         sqlalchemy.Column("grounding_metadata", sqlalchemy.JSON, nullable=True),
         sqlalchemy.Column("attachments", sqlalchemy.JSON, nullable=True),
+        sqlalchemy.Column("reminders", sqlalchemy.JSON, nullable=True),
         sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=sqlalchemy.func.now()),
     )
 

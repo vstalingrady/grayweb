@@ -14,6 +14,10 @@ async function handleProxy(request: Request, { params }: { params: Promise<{ pat
 
     try {
         const headers = new Headers(request.headers);
+        // Preserve the original host for downstream localhost-only/dev-only gating.
+        // (We still remove the Host header since it must match the target origin.)
+        headers.set('x-forwarded-host', url.host);
+        headers.set('x-forwarded-proto', url.protocol.replace(':', ''));
         headers.delete('host');
         headers.delete('connection');
         headers.delete('content-length');

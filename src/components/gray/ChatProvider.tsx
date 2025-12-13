@@ -2126,6 +2126,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
 
       const trimmed = content.trim();
       const generalSession = ensureGeneralSession();
+
       // Prevent overlapping general streams (e.g., onboarding auto-trigger + manual submit).
       if (!trimmed && generalSession.isResponding) {
         return generalSession.id;

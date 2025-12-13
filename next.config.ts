@@ -92,6 +92,10 @@ const nextConfig: NextConfig = {
   // Security: Hide server technology
   poweredByHeader: false,
 
+  async rewrites() {
+    return [];
+  },
+
   async headers() {
     return [
       {

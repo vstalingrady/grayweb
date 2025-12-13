@@ -8,6 +8,7 @@ import {
   useCallback,
   useState,
   useEffect,
+  useRef,
 } from "react";
 import TextareaAutosize from "react-textarea-autosize";
 import { useI18n } from "@/contexts/I18nContext";
@@ -120,10 +121,24 @@ export function GrayChatBar({
   // Track if textarea is expanded beyond single line
   const [isExpanded, setIsExpanded] = useState(false);
 
-  const handleHeightChange = useCallback((height: number) => {
-    // Single line is roughly 24-28px, multi-line is taller
-    setIsExpanded(height > 36);
-  }, []);
+  const singleLineHeightRef = useRef<number | null>(null);
+
+  const handleHeightChange = useCallback(
+    (height: number) => {
+      // TextareaAutosize height can vary slightly by route/font rendering.
+      // Use a calibrated single-line baseline instead of a hardcoded threshold
+      // so we don't incorrectly enter the "expanded" layout (the “forehead”).
+      if (value.trim().length === 0 || singleLineHeightRef.current === null) {
+        singleLineHeightRef.current = height;
+        setIsExpanded(false);
+        return;
+      }
+
+      const baseline = singleLineHeightRef.current;
+      setIsExpanded(height > baseline + 12);
+    },
+    [value]
+  );
 
   return (
     <form className={styles.chatBarRounded} onSubmit={onSubmit} data-expanded={isExpanded} data-has-attachments={attachmentTray ? "true" : "false"}>

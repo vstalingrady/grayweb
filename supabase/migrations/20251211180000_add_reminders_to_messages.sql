@@ -3,7 +3,9 @@
 -- Purpose: Persist reminder/plan/habit card data with messages so they survive page reloads
 
 -- Add reminders column to general_chat_messages table
-ALTER TABLE general_chat_messages ADD COLUMN reminders JSON DEFAULT NULL;
+ALTER TABLE IF EXISTS public.general_chat_messages
+  ADD COLUMN IF NOT EXISTS reminders JSON DEFAULT NULL;
 
 -- Add reminders column to user_chat_messages table  
-ALTER TABLE user_chat_messages ADD COLUMN reminders JSON DEFAULT NULL;
+ALTER TABLE IF EXISTS public.user_chat_messages
+  ADD COLUMN IF NOT EXISTS reminders JSON DEFAULT NULL;
