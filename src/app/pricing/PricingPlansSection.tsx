@@ -174,14 +174,9 @@ export function PricingPlansSection() {
                             aria-pressed={billingCycle === id}
                         >
                             <span className={styles.billingOption}>
-                                <span>{label}</span>
+                                <span className={styles.billingLabel}>{label}</span>
                                 {id === "annual" && annualSavingsLabel ? (
-                                    <>
-                                        <span className={styles.billingDot} aria-hidden="true">
-                                            ·
-                                        </span>
-                                        <span className={styles.billingSavings}>{annualSavingsLabel}</span>
-                                    </>
+                                    <span className={styles.billingSavings}>{annualSavingsLabel}</span>
                                 ) : null}
                             </span>
                         </button>

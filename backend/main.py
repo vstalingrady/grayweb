@@ -939,6 +939,11 @@ _ensure_sqlite_columns("general_chat_messages", [
 _ensure_sqlite_index("archived_chat_messages", "ix_archived_chat_messages_user_id", "user_id")
 _ensure_sqlite_index("user_chat_messages", "ix_user_chat_messages_thread_id", "thread_id")
 
+# Ensure transactions table has billing_cycle column (added for payment billing cycle tracking)
+_ensure_sqlite_columns("transactions", [
+    ("billing_cycle", "VARCHAR", None),
+])
+
 
 # database and metadata imported from backend.database
 
