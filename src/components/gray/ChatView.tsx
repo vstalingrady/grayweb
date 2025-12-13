@@ -28,6 +28,12 @@ import {
   Pencil,
   Trash2,
   RefreshCw,
+  SignalHigh,
+  CheckCircle2,
+  ChevronRight,
+  CalendarClock,
+  ChevronDown,
+  ChevronLeft,
 } from "lucide-react";
 import ReactMarkdown, { type Components } from "react-markdown";
 // Type definition for code component
