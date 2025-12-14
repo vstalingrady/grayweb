@@ -8660,7 +8660,8 @@ async def delete_all_conversations(
     2. All named conversation threads and their messages
     """
     try:
-        require_same_user(user_id, current_user)
+        # Force the user_id to be the authenticated user's ID to prevent cross-account deletion
+        user_id = current_user["id"]
 
         # 1. Delete General Chat History
         await _delete_general_conversation_history(user_id, db=db)
