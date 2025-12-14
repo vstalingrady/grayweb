@@ -2,13 +2,15 @@ import {
     Gem,
     MessageSquarePlus,
     History,
-    FileText
+    FileText,
+    Calendar
 } from "lucide-react";
 import type { SidebarNavItem, SidebarNavKey } from "@/components/gray/types";
 
 export const SIDEBAR_ITEMS: SidebarNavItem[] = [
     { id: "general", label: "General", icon: Gem },
     { id: "threads", label: "Chat", icon: MessageSquarePlus },
+    { id: "calendar", label: "Calendar", icon: Calendar },
     { id: "reference", label: "Reference", icon: FileText },
     { id: "history", label: "History", icon: History },
 ];
@@ -22,4 +24,5 @@ export const NAVIGATION_ROUTES: Partial<Record<SidebarNavKey, string>> = {
     threads: "/",
     reference: "/reference",
     history: "/history",
+    calendar: "/cal",
 };
