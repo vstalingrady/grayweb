@@ -2759,20 +2759,16 @@ export function GrayChatView({
       setIsActivelyThinking(false);
       setThinkingStartTime(null);
       setReasoningSeconds(null);
-      const resolvedUser = await resolveChatUser();
-      if (!resolvedUser) {
-        const fallback = buildAssistantReply(prompt);
-        appendMessage(targetSessionId, "assistant", fallback);
-        updateSession(targetSessionId, { isResponding: false, pendingAutoStream: false });
-        return fallback;
-      }
 
-      const useWorkspaceContext = shouldIncludeWorkspaceContext(prompt, workspaceContext);
-      const contextPayload = useWorkspaceContext ? workspaceContext ?? undefined : undefined;
+      // --- OPTIMISTIC UI UPDATE START ---
+      // Creates the placeholder immediately so the spinner appears instantly,
+      // without waiting for user resolution or other async checks.
       let assistantMessageId: string | null = existingAssistantId ?? null;
       let streamingMessageId: string | null = assistantMessageId ?? null;
       let previousVariants: string[] = [];
       let isRegeneration = false;
+
+      // Check regeneration state
       if (existingAssistantId && session && session.id === targetSessionId) {
         const existingAssistant = session.messages.find(
           (message) => message.id === existingAssistantId && message.role === "assistant"
@@ -2789,6 +2785,60 @@ export function GrayChatView({
           }
         }
       }
+
+      // If regenerating, clear existing content immediately
+      if (isRegeneration && existingAssistantId) {
+        updateMessage(targetSessionId, existingAssistantId, {
+          content: "",
+          groundingMetadata: undefined,
+        });
+      }
+
+      // If NOT regenerating, create the placeholder message now
+      if (!assistantMessageId) {
+        const placeholderAssistant = appendMessage(targetSessionId, "assistant", "");
+        assistantMessageId = (placeholderAssistant as ChatSessionMessage | null)?.id ?? null;
+        streamingMessageId = assistantMessageId;
+      }
+
+      // Set streaming ID immediately for UI feedback
+      if (streamingMessageId) {
+        setActiveStreamingMessageId(streamingMessageId);
+      }
+
+      // Show skeleton loader in sidebar while title is being generated
+      const requestTitleHint = shouldRequestAutoTitleForSession(session);
+      if (requestTitleHint) {
+        updateSession(targetSessionId, { isGeneratingTitle: true });
+      }
+      // --- OPTIMISTIC UI UPDATE END ---
+
+      const resolvedUser = await resolveChatUser();
+      if (!resolvedUser) {
+        const fallback = buildAssistantReply(prompt);
+        // Update existing placeholder instead of appending new one
+        if (assistantMessageId) {
+          const baseVariants = previousVariants.length > 0 ? previousVariants : [];
+          const nextVariants = fallback ? [...baseVariants, fallback] : baseVariants;
+          const nextActiveIndex = nextVariants.length > 0 ? nextVariants.length - 1 : undefined;
+
+          updateMessage(targetSessionId, assistantMessageId, {
+            content: fallback,
+            variants: nextVariants,
+            activeVariantIndex: nextActiveIndex,
+          });
+        } else {
+          // Should rarely happen given optimistic creation
+          appendMessage(targetSessionId, "assistant", fallback);
+        }
+        updateSession(targetSessionId, { isResponding: false, pendingAutoStream: false });
+        setActiveStreamingMessageId(null);
+        return fallback;
+      }
+
+      const useWorkspaceContext = shouldIncludeWorkspaceContext(prompt, workspaceContext);
+      const contextPayload = useWorkspaceContext ? workspaceContext ?? undefined : undefined;
+
       let accumulated = "";
       let capturedReminders: unknown[] = [];
       const isGeneralSession = session?.scope === "general";
@@ -2803,32 +2853,11 @@ export function GrayChatView({
       }
       let didReceiveToken = false;
       const streamingUserId = resolvedUser.id;
-      const requestTitleHint = shouldRequestAutoTitleForSession(session);
       const abortController = new AbortController();
       streamAbortControllerRef.current = abortController;
       const shouldUseWebSearch = webSearchEnabled;
       const shouldAttachToConversation = !isRegeneration;
-      // If we are regenerating an existing assistant message (not just filling a
-      // blank placeholder), clear its content immediately so the previous text
-      // disappears while the new reply streams.
-      if (isRegeneration && existingAssistantId) {
-        updateMessage(targetSessionId, existingAssistantId, {
-          content: "",
-          groundingMetadata: undefined,
-        });
-      }
-      if (!assistantMessageId) {
-        const placeholderAssistant = appendMessage(targetSessionId, "assistant", "");
-        assistantMessageId = (placeholderAssistant as ChatSessionMessage | null)?.id ?? null;
-        streamingMessageId = assistantMessageId;
-      }
-      if (streamingMessageId) {
-        setActiveStreamingMessageId(streamingMessageId);
-      }
-      // Show skeleton loader in sidebar while title is being generated
-      if (requestTitleHint) {
-        updateSession(targetSessionId, { isGeneratingTitle: true });
-      }
+
       try {
         let localThinkingStartTime: number | null = null;
         const timeContext = buildLocalTimeContext();
@@ -2879,17 +2908,9 @@ export function GrayChatView({
               setIsActivelyThinking(false);
             }
 
-            if (!assistantMessageId) {
-              const assistantMessage = appendMessage(targetSessionId, "assistant", accumulated);
-              assistantMessageId = (assistantMessage as { id: string } | null)?.id ?? null;
-              streamingMessageId = assistantMessageId;
-              if (streamingMessageId) {
-                setActiveStreamingMessageId(streamingMessageId);
-              }
-            } else if (assistantMessageId) {
-              updateMessage(targetSessionId, assistantMessageId, { content: accumulated });
-            }
+            // We guaranteed assistantMessageId exists above
             if (assistantMessageId) {
+              updateMessage(targetSessionId, assistantMessageId, { content: accumulated });
               updateSession(targetSessionId, { isResponding: true, pendingAutoStream: false });
             }
             continue;
@@ -2940,27 +2961,8 @@ export function GrayChatView({
 
             const nextVariants = finalContent ? [...baseVariants, finalContent] : baseVariants;
             const nextActiveIndex = nextVariants.length > 0 ? nextVariants.length - 1 : undefined;
-            if (!assistantMessageId) {
-              const assistantMessage = appendMessage(
-                targetSessionId,
-                "assistant",
-                finalContent,
-                undefined,
-                metadata
-              );
-              assistantMessageId = (assistantMessage as ChatSessionMessage | null)?.id ?? null;
-              streamingMessageId = assistantMessageId;
-              if (assistantMessageId) {
-                updateMessage(targetSessionId, assistantMessageId, {
-                  reminders: finalReminders,
-                  variants: nextVariants,
-                  activeVariantIndex: nextActiveIndex,
-                });
-              }
-              if (streamingMessageId) {
-                setActiveStreamingMessageId(streamingMessageId);
-              }
-            } else if (assistantMessageId) {
+
+            if (assistantMessageId) {
               updateMessage(targetSessionId, assistantMessageId, {
                 content: finalContent,
                 groundingMetadata: metadata,
@@ -2986,24 +2988,19 @@ export function GrayChatView({
           }
         }
 
-        if (!assistantMessageId) {
-          const normalized = normalizeAssistantContent(accumulated, prompt);
-          const assistantMessage = appendMessage(targetSessionId, "assistant", normalized);
-          assistantMessageId = (assistantMessage as { id: string } | null)?.id ?? null;
-          accumulated = normalized;
-          const baseVariants = previousVariants.length > 0 ? previousVariants : [];
-          const nextVariants = normalized ? [...baseVariants, normalized] : baseVariants;
-          const nextActiveIndex = nextVariants.length > 0 ? nextVariants.length - 1 : undefined;
-          if (assistantMessageId) {
-            updateMessage(targetSessionId, assistantMessageId, {
-              variants: nextVariants,
-              activeVariantIndex: nextActiveIndex,
-            });
-          }
-          if (!didReceiveToken && assistantMessageId && !streamingMessageId) {
-            streamingMessageId = assistantMessageId;
-            setActiveStreamingMessageId(assistantMessageId);
-          }
+        // If stream ends without "end" event (e.g. simple close)
+        const normalized = normalizeAssistantContent(accumulated, prompt);
+        accumulated = normalized;
+        const baseVariants = previousVariants.length > 0 ? previousVariants : [];
+        const nextVariants = normalized ? [...baseVariants, normalized] : baseVariants;
+        const nextActiveIndex = nextVariants.length > 0 ? nextVariants.length - 1 : undefined;
+
+        if (assistantMessageId) {
+          updateMessage(targetSessionId, assistantMessageId, {
+            content: accumulated,
+            variants: nextVariants,
+            activeVariantIndex: nextActiveIndex,
+          });
         }
         updateSession(targetSessionId, {
           conversationId: shouldAttachToConversation
@@ -3048,6 +3045,7 @@ export function GrayChatView({
           const baseVariants = previousVariants.length > 0 ? previousVariants : [];
           const nextVariants = finalResponse ? [...baseVariants, finalResponse] : baseVariants;
           const nextActiveIndex = nextVariants.length > 0 ? nextVariants.length - 1 : undefined;
+
           if (assistantMessageId) {
             updateMessage(targetSessionId, assistantMessageId, {
               content: finalResponse,
@@ -3057,6 +3055,7 @@ export function GrayChatView({
               id: fallbackResponse.message_id ? String(fallbackResponse.message_id) : undefined,
             });
           } else {
+            // Should rarely happen if optimistic creation worked
             const assistantMessage = appendMessage(
               targetSessionId,
               "assistant",
@@ -3069,11 +3068,8 @@ export function GrayChatView({
                 activeVariantIndex: nextActiveIndex,
               });
             }
-            if (!didReceiveToken && assistantMessageId && !streamingMessageId) {
-              streamingMessageId = assistantMessageId;
-              setActiveStreamingMessageId(assistantMessageId);
-            }
           }
+
           updateSession(targetSessionId, {
             conversationId: shouldAttachToConversation
               ? streamedConversationId ?? undefined
@@ -3089,6 +3085,7 @@ export function GrayChatView({
           const baseVariants = previousVariants.length > 0 ? previousVariants : [];
           const nextVariants = fallback ? [...baseVariants, fallback] : baseVariants;
           const nextActiveIndex = nextVariants.length > 0 ? nextVariants.length - 1 : undefined;
+
           if (assistantMessageId) {
             updateMessage(targetSessionId, assistantMessageId, {
               content: fallback,
@@ -3103,10 +3100,6 @@ export function GrayChatView({
                 variants: nextVariants,
                 activeVariantIndex: nextActiveIndex,
               });
-            }
-            if (!didReceiveToken && assistantMessageId && !streamingMessageId) {
-              streamingMessageId = assistantMessageId;
-              setActiveStreamingMessageId(assistantMessageId);
             }
           }
           updateSession(targetSessionId, { isResponding: false, pendingAutoStream: false });
@@ -3797,8 +3790,13 @@ export function GrayChatView({
   const isStreaming = isResponding || Boolean(activeStreamingMessageId);
   const isSendDisabled = !composerHasContent && !isStreaming;
 
+  // Check if the currently streaming message is actually present in the visible list.
+  // If so, the list item itself will render the spinner/content, so we shouldn't
+  // show the fallback "pending" indicator at the bottom.
+  const isStreamingMessageInList = Boolean(activeStreamingMessageId && messages.some((m) => m.id === activeStreamingMessageId));
+
   const shouldShowPendingStreamIndicator =
-    !hideThinkingIndicator && (isResponding || sessionPendingAutoStream);
+    !hideThinkingIndicator && (isResponding || sessionPendingAutoStream) && !isStreamingMessageInList;
 
   const showFirstMessageSpinner =
     (isResponding || sessionPendingAutoStream) &&

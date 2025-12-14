@@ -1950,6 +1950,9 @@ async def _load_general_conversation_history(user_id: int) -> List[Dict[str, Any
             
             if row["created_at"]:
                 entry["timestamp"] = _datetime_to_ms(row["created_at"])
+            else:
+                entry["timestamp"] = 0
+
             
             # Include reminders if present (use try/except since older DB may not have column)
             try:

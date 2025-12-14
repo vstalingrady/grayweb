@@ -137,6 +137,8 @@ async def load_thread_history(conversation_id: str, user_id: int) -> List[Dict[s
                 "attachments": row["attachments"],
             }
             # Include timestamp so frontend displays the actual message time
+            # We default to 0 (epoch) if missing so the frontend doesn't fall back to "now"
+            timestamp_ms = 0
             if row["created_at"]:
                 created_at = row["created_at"]
                 try:
@@ -149,10 +151,14 @@ async def load_thread_history(conversation_id: str, user_id: int) -> List[Dict[s
                             created_at = created_at.replace(tzinfo=timezone.utc)
                         else:
                             created_at = created_at.astimezone(timezone.utc)
-                        entry["timestamp"] = int(created_at.timestamp() * 1000)
+                        timestamp_ms = int(created_at.timestamp() * 1000)
                 except Exception:
-                    # If parsing fails, omit timestamp rather than dropping history.
-                    pass
+                    # If parsing fails, ensure we still send a stable (though wrong) time
+                    # using 0 means it will show as "Dec 31, 1969" or similar, which is better
+                    # for debugging than "Just now" on every reload.
+                    timestamp_ms = 0
+            
+            entry["timestamp"] = timestamp_ms if timestamp_ms > 0 else 0
             messages.append(entry)
         cache_conversation_history(conversation_id, user_id, messages)
         return messages

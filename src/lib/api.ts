@@ -277,6 +277,7 @@ export interface ChatMessage {
   text: string;
   grounding_metadata?: GroundingMetadata | null;
   groundingMetadata?: GroundingMetadata | null;
+  timestamp?: number;
 }
 
 export interface MediaUpload {
