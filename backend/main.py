@@ -1439,7 +1439,14 @@ def _serialize_user_row(row: Mapping[str, Any]) -> Dict[str, Any]:
     user_dict = dict(row)
     if user_dict.get("auth_user_id") is not None:
         user_dict["auth_user_id"] = str(user_dict["auth_user_id"])
-    return user_dict
+    
+    # Parse JSON fields that SQLite might return as strings
+    if isinstance(user_dict.get("visible_model_ids"), str):
+        try:
+            import json
+            user_dict["visible_model_ids"] = json.loads(user_dict["visible_model_ids"])
+        except Exception:
+            pass  # Let validation fail naturally if JSON is invalid
 
 class ChatSessionBase(BaseModel):
     title: str
