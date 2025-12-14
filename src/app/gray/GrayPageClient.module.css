@@ -4339,7 +4339,6 @@
   border-radius: 14px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(5, 5, 5, 0.94);
-  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.38);
   margin: clamp(8px, 1.6vh, 14px) 0;
   overflow: hidden;
   font-family: var(--font-mono,
@@ -4394,21 +4393,33 @@
 }
 
 .codeSurface {
-  padding: 12px 0;
+  padding: 12px 14px;
   display: flex;
   flex-direction: column;
   gap: 4px;
   background: rgba(8, 8, 8, 0.65);
+  align-items: flex-start;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
 }
 
 .codeSurfaceCompact {
-  padding: 6px 0;
+  padding: 6px 12px;
   background: rgba(8, 8, 8, 0.4);
+  align-items: flex-start;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
 }
 
 .codeSurfaceMini {
   padding: 0;
   background: transparent;
+  align-items: flex-start;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
 }
 
 .codeBlockCompact {
@@ -4463,6 +4474,8 @@
   padding: 0;
   font-size: 0.92rem;
   line-height: 1.6;
+  width: fit-content;
+  min-width: 100%;
 }
 
 .codeLineCompact {
@@ -4488,7 +4501,7 @@
 }
 
 .codeLineContent {
-  flex: 1;
+  flex: 0 0 auto;
   white-space: pre;
   font-family: inherit;
   font-size: 0.82rem;
