@@ -11947,6 +11947,10 @@ h1.greeting {
   color: #a1a1aa;
 }
 
+.monoText {
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace);
+}
+
 .settingsRowFlexStart {
   align-items: flex-start;
 }

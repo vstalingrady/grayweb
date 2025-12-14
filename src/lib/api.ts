@@ -495,7 +495,17 @@ export type ChatStreamRemindersEvent = {
   reminders: unknown[];
 };
 
-export type ChatStreamEvent = ChatStreamTokenEvent | ChatStreamEndEvent | ChatStreamErrorEvent | ChatStreamRemindersEvent;
+export type ChatStreamUsageEvent = {
+  type: 'usage';
+  usage: {
+    completion_tokens: number;
+    prompt_tokens: number;
+    total_tokens: number;
+    total_cost?: number; // OpenRouter specific
+  };
+};
+
+export type ChatStreamEvent = ChatStreamTokenEvent | ChatStreamEndEvent | ChatStreamErrorEvent | ChatStreamRemindersEvent | ChatStreamUsageEvent;
 
 type StreamPayload = {
   delta?: string;
@@ -1578,6 +1588,17 @@ class ApiService {
           return {
             type: 'reminders',
             reminders,
+          };
+        }
+        return null;
+      }
+
+      if (eventType === 'usage') {
+        const usage = (payload as any).usage;
+        if (usage) {
+          return {
+            type: 'usage',
+            usage,
           };
         }
         return null;

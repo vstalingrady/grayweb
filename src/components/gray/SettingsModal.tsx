@@ -1321,7 +1321,11 @@ export function SettingsModal({
                               <span className={styles.settingsLabel}>{model.label}</span>
                             </div>
                             <span className={styles.settingsItemDescription}>
-                              {model.cost ? t("Cost: {cost}", { cost: model.cost }) : model.id}
+                              {model.cost ? (
+                                <span className={styles.monoText}>{model.cost}</span>
+                              ) : (
+                                model.id
+                              )}
                               {isSelected ? ` • ${t("Selected")}` : ""}
                               {isLocked ? ` • ${tierNote}` : ""}
                             </span>

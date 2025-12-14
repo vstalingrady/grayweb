@@ -2916,6 +2916,21 @@ export function GrayChatView({
             continue;
           }
 
+          if (event.type === "usage") {
+            // Received precise usage stats from the backend.
+            // Update local state immediately to reflect accurate token count.
+            setConversationUsage((prev) => {
+              if (!prev) return null;
+              return {
+                ...prev,
+                conversationTokens: event.usage.total_tokens,
+                // We keep messageCount as is, or technically it should be +1 (the current response)
+                // but usually the backend usage includes the current response if it's "total_tokens".
+              };
+            });
+            continue;
+          }
+
           if (event.type === "reminders") {
             if (Array.isArray(event.reminders) && event.reminders.length > 0) {
               capturedReminders = event.reminders;
@@ -3648,9 +3663,15 @@ export function GrayChatView({
     // Always use the actual session message count as the source of truth
     const messageCount = session?.messages.length ?? 0;
 
-    // Prefer backend-accurate token usage; otherwise estimate from all session messages.
+    // Prefer backend-accurate token usage ONLY if it is fresh (message counts match).
+    // Otherwise, use our local estimate so the user sees immediate feedback while typing/streaming.
+    const backendMessageCount = conversationUsage?.messageCount ?? -1;
+    const isBackendFresh = backendMessageCount === messageCount;
+
     const conversationTokens =
-      typeof conversationUsage?.conversationTokens === "number" && conversationUsage.conversationTokens >= 0
+      isBackendFresh &&
+        typeof conversationUsage?.conversationTokens === "number" &&
+        conversationUsage.conversationTokens >= 0
         ? conversationUsage.conversationTokens
         : fallbackConversationTokens;
 

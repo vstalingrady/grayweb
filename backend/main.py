@@ -6363,7 +6363,7 @@ CRITICAL: When the user asks to "set a plan" or create any plan/reminder/habit, 
                         run_system_prompt,
                         time_context,
                         model,
-                        include_usage=False,
+                        include_usage=True,
                         response_format=response_format,
                         tools=tool_list,
                         tool_choice="auto",
@@ -6373,6 +6373,11 @@ CRITICAL: When the user asks to "set a plan" or create any plan/reminder/habit, 
                         history_token_budget=history_token_budget,
                     ):
                         if isinstance(chunk, dict):
+                            # Handle usage statistics
+                            if "usage" in chunk:
+                                yield ("usage", chunk["usage"])
+                                continue
+                                
                             # Handle native streaming tool calls
                             if "tool_calls" in chunk:
                                 for tc in chunk["tool_calls"]:
