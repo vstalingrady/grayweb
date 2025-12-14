@@ -46,6 +46,15 @@ except Exception:  # pragma: no cover
     from core.rate_limit import limiter  # type: ignore
 
 
+# Lazy import helper for backend_main to avoid circular dependency and Docker compatibility
+def _get_backend_main():
+    try:
+        from backend import main as backend_main
+    except ImportError:
+        import main as backend_main  # type: ignore
+    return backend_main
+
+
 router = APIRouter()
 
 
@@ -61,8 +70,7 @@ async def chat_starter_route(
     payload: ChatStarterRequest,
     current_user: Dict[str, Any] = Depends(get_current_user),
 ) -> ChatStarterResponse:
-    from backend import main as backend_main  # Lazy import to avoid circular dependency
-
+    backend_main = _get_backend_main()
     return await backend_main.generate_chat_starter(request, payload, current_user)
 
 
@@ -73,8 +81,7 @@ async def chat_title_route(
     payload: ChatTitleRequest,
     current_user: Dict[str, Any] = Depends(get_current_user),
 ) -> ChatTitleResponse:
-    from backend import main as backend_main
-
+    backend_main = _get_backend_main()
     return await backend_main.create_chat_title(request, payload, current_user)
 
 
@@ -87,8 +94,7 @@ async def chat_route(
     current_user: Dict[str, Any] = Depends(get_current_user),
     db: databases.Database = Depends(_get_db),
 ) -> ChatResponse:
-    from backend import main as backend_main
-
+    backend_main = _get_backend_main()
     return await backend_main.chat_endpoint(
         request,
         chat_request,
@@ -107,8 +113,7 @@ async def chat_stream_route(
     current_user: Dict[str, Any] = Depends(get_current_user),
     db: databases.Database = Depends(_get_db),
 ):
-    from backend import main as backend_main
-
+    backend_main = _get_backend_main()
     return await backend_main.chat_stream(
         request,
         chat_request,
@@ -126,8 +131,7 @@ async def create_conversation_message_route(
     payload: MessageCreateRequest,
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
-    from backend import main as backend_main
-
+    backend_main = _get_backend_main()
     return await backend_main.create_conversation_message(
         request,
         conversation_id,
@@ -143,8 +147,7 @@ async def get_conversation_route(
     conversation_id: str,
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
-    from backend import main as backend_main
-
+    backend_main = _get_backend_main()
     return await backend_main.get_conversation(
         request,
         conversation_id,
@@ -159,8 +162,7 @@ async def create_conversation_route(
     payload: ConversationCreateRequest,
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
-    from backend import main as backend_main
-
+    backend_main = _get_backend_main()
     return await backend_main.create_conversation(request, payload, current_user)
 
 
@@ -171,8 +173,7 @@ async def delete_conversation_route(
     conversation_id: str,
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
-    from backend import main as backend_main
-
+    backend_main = _get_backend_main()
     return await backend_main.delete_conversation(
         request,
         conversation_id,
@@ -188,8 +189,7 @@ async def overwrite_conversation_history_route(
     payload: ConversationHistoryPayload,
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
-    from backend import main as backend_main
-
+    backend_main = _get_backend_main()
     return await backend_main.overwrite_conversation_history(
         request,
         conversation_id,
@@ -206,8 +206,7 @@ async def update_conversation_route(
     payload: ConversationUpdateRequest,
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
-    from backend import main as backend_main
-
+    backend_main = _get_backend_main()
     return await backend_main.update_conversation(
         request,
         conversation_id,
@@ -224,8 +223,7 @@ async def update_conversation_metadata_route(
     payload: ConversationUpdateRequest,
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
-    from backend import main as backend_main
-
+    backend_main = _get_backend_main()
     return await backend_main.update_conversation_metadata(
         request,
         conversation_id,
@@ -241,8 +239,7 @@ async def get_conversation_usage_route(
     conversation_id: str,
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
-    from backend import main as backend_main
-
+    backend_main = _get_backend_main()
     return await backend_main.get_conversation_usage(
         request,
         conversation_id,
@@ -257,8 +254,7 @@ async def compress_conversation_route(
     conversation_id: str,
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
-    from backend import main as backend_main
-
+    backend_main = _get_backend_main()
     return await backend_main.compress_conversation(
         request,
         conversation_id,
