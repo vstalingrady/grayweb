@@ -577,7 +577,7 @@ def require_same_user(user_id: int, current_user: Dict[str, Any]):
     Raises:
         HTTPException: If user attempts to access another user's data
     """
-    if current_user["id"] != user_id:
+    if str(current_user["id"]) != str(user_id):
         logger.warning(
             f"User {current_user['id']} attempted to access user {user_id}'s data"
         )

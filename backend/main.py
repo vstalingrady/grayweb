@@ -9152,6 +9152,8 @@ async def get_user(
     db: databases.Database = Depends(get_database)
 ):
     # Verify user can only access their own data
+    # Force authenticated ID
+    user_id = current_user["id"]
     require_same_user(user_id, current_user)
     
     query = users.select().where(users.c.id == user_id)
@@ -9178,6 +9180,7 @@ async def update_user(
     db: databases.Database = Depends(get_database)
 ):
     # Verify user can only update their own data
+    user_id = current_user["id"]
     require_same_user(user_id, current_user)
     
     # Get current user
@@ -9240,6 +9243,7 @@ async def delete_user_account(
     current_user: Dict[str, Any] = Depends(get_current_user),
     db: databases.Database = Depends(get_database)
 ):
+    user_id = current_user["id"]
     require_same_user(user_id, current_user)
     existing = await db.fetch_one(users.select().where(users.c.id == user_id))
     if not existing:
@@ -9336,6 +9340,7 @@ async def get_user_calendars(
     current_user: Dict[str, Any] = Depends(get_current_user),
     db: databases.Database = Depends(get_database)
 ):
+    user_id = current_user["id"]
     require_same_user(user_id, current_user)
     query = calendars.select().where(calendars.c.user_id == user_id).order_by(calendars.c.created_at.desc())
     return await db.fetch_all(query)
@@ -9347,6 +9352,7 @@ async def create_chat_session(
     db: databases.Database = Depends(get_database),
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
+    user_id = current_user["id"]
     require_same_user(user_id, current_user)
     query = chat_sessions.insert().values(
         user_id=user_id,
@@ -9365,6 +9371,7 @@ async def create_calendar(
     current_user: Dict[str, Any] = Depends(get_current_user),
     db: databases.Database = Depends(get_database)
 ):
+    user_id = current_user["id"]
     require_same_user(user_id, current_user)
     now = utcnow()
     calendar_id = await db.execute(
@@ -9388,6 +9395,7 @@ async def update_calendar(
     current_user: Dict[str, Any] = Depends(get_current_user),
     db: databases.Database = Depends(get_database)
 ):
+    user_id = current_user["id"]
     require_same_user(user_id, current_user)
     existing = await db.fetch_one(
         calendars.select().where(
@@ -9418,6 +9426,7 @@ async def get_user_plans(
     db: databases.Database = Depends(get_database),
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
+    user_id = current_user["id"]
     require_same_user(user_id, current_user)
     query = plans.select().where(plans.c.user_id == user_id).order_by(plans.c.created_at)
     if limit:
@@ -9431,6 +9440,7 @@ async def create_plan(
     current_user: Dict[str, Any] = Depends(get_current_user),
     db: databases.Database = Depends(get_database)
 ):
+    user_id = current_user["id"]
     require_same_user(user_id, current_user)
     base_values = {
         "user_id": user_id,
@@ -9460,6 +9470,7 @@ async def update_plan(
     db: databases.Database = Depends(get_database),
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
+    user_id = current_user["id"]
     require_same_user(user_id, current_user)
     update_data = plan_update.dict(exclude_unset=True)
 
@@ -9488,6 +9499,7 @@ async def delete_plan(
     db: databases.Database = Depends(get_database),
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
+    user_id = current_user["id"]
     require_same_user(user_id, current_user)
     
     query = plans.select().where(
@@ -9509,6 +9521,7 @@ async def get_habits(
     limit: Optional[int] = Query(None, gt=0),
     db: databases.Database = Depends(get_database)
 ):
+    user_id = current_user["id"]
     require_same_user(user_id, current_user)
     query = habits.select().where(habits.c.user_id == user_id).order_by(habits.c.created_at)
     if limit:
@@ -9523,6 +9536,7 @@ async def create_habit(
     current_user: Dict[str, Any] = Depends(get_current_user),
     db: databases.Database = Depends(get_database)
 ):
+    user_id = current_user["id"]
     require_same_user(user_id, current_user)
     base_values = {
         "user_id": user_id,
@@ -9551,6 +9565,7 @@ async def update_habit(
     current_user: Dict[str, Any] = Depends(get_current_user),
     db: databases.Database = Depends(get_database)
 ):
+    user_id = current_user["id"]
     require_same_user(user_id, current_user)
     update_data = habit_update.dict(exclude_unset=True)
 
@@ -9579,6 +9594,7 @@ async def delete_habit(
     current_user: Dict[str, Any] = Depends(get_current_user),
     db: databases.Database = Depends(get_database)
 ):
+    user_id = current_user["id"]
     require_same_user(user_id, current_user)
     query = habits.select().where(
         (habits.c.id == habit_id) & (habits.c.user_id == user_id)
@@ -9598,6 +9614,7 @@ async def get_user_streak(
     current_user: Dict[str, Any] = Depends(get_current_user),
     db: databases.Database = Depends(get_database)
 ):
+    user_id = current_user["id"]
     require_same_user(user_id, current_user)
     streak = await get_or_create_user_streak(user_id, db)
     return streak
@@ -9608,6 +9625,7 @@ async def touch_user_streak(
     current_user: Dict[str, Any] = Depends(get_current_user),
     db: databases.Database = Depends(get_database)
 ):
+    user_id = current_user["id"]
     require_same_user(user_id, current_user)
     return await update_user_streak(user_id, db)
 
@@ -9621,6 +9639,7 @@ async def get_user_calendar_events(
     db: databases.Database = Depends(get_database)
 
 ):
+    user_id = current_user["id"]
     require_same_user(user_id, current_user)
     
     # Use local SQLite.
@@ -9674,6 +9693,7 @@ async def list_user_reminders(
     db: databases.Database = Depends(get_database),
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
+    user_id = current_user["id"]
     require_same_user(user_id, current_user)
     try:
         query = reminders.select().where(reminders.c.user_id == user_id)
@@ -9751,6 +9771,7 @@ async def create_user_reminder(
     db: databases.Database = Depends(get_database),
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
+    user_id = current_user["id"]
     require_same_user(user_id, current_user)
     now = utcnow()
     values = {
@@ -9788,6 +9809,7 @@ async def update_user_reminder(
     db: databases.Database = Depends(get_database),
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
+    user_id = current_user["id"]
     require_same_user(user_id, current_user)
     update_values: Dict[str, Any] = {}
     if payload.label is not None:
@@ -9845,6 +9867,7 @@ async def delete_user_reminder(
     db: databases.Database = Depends(get_database),
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
+    user_id = current_user["id"]
     require_same_user(user_id, current_user)
     api_logger.info(f"DELETE reminder request: user_id={user_id}, reminder_id={reminder_id}")
     existing = await db.fetch_one(
@@ -9926,6 +9949,7 @@ async def create_calendar_event(
     current_user: Dict[str, Any] = Depends(get_current_user),
     db: databases.Database = Depends(get_database)
 ):
+    user_id = current_user["id"]
     require_same_user(user_id, current_user)
     now = utcnow()
     # Supabase-first create.
@@ -9953,6 +9977,7 @@ async def update_calendar_event(
     db: databases.Database = Depends(get_database),
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
+    user_id = current_user["id"]
     require_same_user(user_id, current_user)
     update_data = event_update.dict(exclude_unset=True)
 
@@ -9994,6 +10019,7 @@ async def delete_calendar_event(
     db: databases.Database = Depends(get_database),
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
+    user_id = current_user["id"]
     require_same_user(user_id, current_user)
     existing = await db.fetch_one(
         calendar_events.select().where(
@@ -10019,6 +10045,7 @@ async def list_dashboard_pulses(
     db: databases.Database = Depends(get_database),
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
+    user_id = current_user["id"]
     require_same_user(user_id, current_user)
     safe_limit = max(1, min(limit, MAX_DASHBOARD_PULSE_HISTORY))
 
@@ -10049,6 +10076,7 @@ async def get_dashboard_pulse(
     db: databases.Database = Depends(get_database),
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
+    user_id = current_user["id"]
     require_same_user(user_id, current_user)
     if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date_key):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid date key; expected YYYY-MM-DD")
@@ -10067,6 +10095,7 @@ async def create_dashboard_pulse(
     current_user: Dict[str, Any] = Depends(get_current_user),
     db: databases.Database = Depends(get_database),
 ):
+    user_id = current_user["id"]
     require_same_user(user_id, current_user)
     timestamp_dt = _timestamp_ms_to_datetime(pulse.timestamp)
     plans_payload = _normalize_plan_items([item.dict() for item in pulse.plans])
@@ -10134,6 +10163,7 @@ async def update_dashboard_pulse(
     db: databases.Database = Depends(get_database),
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
+    user_id = current_user["id"]
     require_same_user(user_id, current_user)
     existing: Any = None
     # Supabase-first lookup.
@@ -10158,6 +10188,7 @@ async def delete_dashboard_pulse(
     db: databases.Database = Depends(get_database),
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
+    user_id = current_user["id"]
     require_same_user(user_id, current_user)
     # Supabase-first delete.
     existing = await db.fetch_one(
