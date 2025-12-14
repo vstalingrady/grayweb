@@ -5,12 +5,12 @@ from pathlib import Path
 from dotenv import load_dotenv
 from datetime import datetime
 
-# Load environment variables
-# In Docker: __file__ is /app/database.py, parent=/app, parent.parent=/
-# In local: __file__ is /path/to/gray/backend/database.py
-_file_dir = Path(__file__).resolve().parent
-_in_docker = _file_dir.parent == Path("/")
-ROOT_DIR = _file_dir if _in_docker else _file_dir.parent
+# Use centralized environment detection
+try:
+    from backend.env_utils import ROOT_DIR
+except ImportError:
+    from env_utils import ROOT_DIR
+
 load_dotenv(ROOT_DIR / ".env")
 
 

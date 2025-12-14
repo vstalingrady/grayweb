@@ -9,18 +9,14 @@ import sqlalchemy
 import uvicorn
 import logging
 
-# Ensure the repository root is on the Python path so `import backend` works.
-# In local dev: start.py is at /path/to/gray/backend/start.py, so parent.parent = /path/to/gray
-# In Docker: start.py is at /app/start.py, so parent.parent = / which is wrong
-# Use WORKDIR env or detect based on parent being root
-_start_dir = Path(__file__).resolve().parent
-_in_docker = _start_dir.parent == Path("/")
-ROOT_DIR = _start_dir if _in_docker else _start_dir.parent
-sys.path.insert(0, str(ROOT_DIR))
+# Use centralized environment detection
+try:
+    from backend.env_utils import ROOT_DIR, UVICORN_APP_MODULE
+except ImportError:
+    from env_utils import ROOT_DIR, UVICORN_APP_MODULE
 
-# In Docker, files are copied directly to /app/ (not /app/backend/), 
-# so we use "main:app" instead of "backend.main:app"
-UVICORN_APP_MODULE = "main:app" if _in_docker else "backend.main:app"
+# Ensure the repository root is on the Python path so `import backend` works.
+sys.path.insert(0, str(ROOT_DIR))
 
 
 def _configure_logging() -> logging.Logger:
