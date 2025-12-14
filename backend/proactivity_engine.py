@@ -99,6 +99,14 @@ class ProactivityEngine:
         self.realtime_broker = realtime_broker
         self.ai_generator = ai_generator
         self._user_data_cache: Dict[int, int] = {}
+        # Per-user locks to prevent concurrent dispatch from multiple sources
+        self._user_dispatch_locks: Dict[int, asyncio.Lock] = {}
+
+    def _get_user_lock(self, user_id: int) -> asyncio.Lock:
+        """Get or create a lock for a specific user to prevent concurrent dispatches."""
+        if user_id not in self._user_dispatch_locks:
+            self._user_dispatch_locks[user_id] = asyncio.Lock()
+        return self._user_dispatch_locks[user_id]
 
     async def _ensure_connection(self) -> None:
         """Make sure we can talk to the database even if other code disconnected it."""
@@ -171,6 +179,22 @@ class ProactivityEngine:
         force: bool = False,
         user_settings: Optional[ProactivityUserSettings] = None,
     ) -> Optional[Dict[str, Any]]:
+        # Use per-user lock to prevent concurrent dispatch from multiple sources
+        # (e.g., realtime SSE connection + cron job firing at similar times)
+        async with self._get_user_lock(user_id):
+            return await self._dispatch_user_if_due_impl(
+                user_id, source=source, force=force, user_settings=user_settings
+            )
+
+    async def _dispatch_user_if_due_impl(
+        self,
+        user_id: int,
+        *,
+        source: str,
+        force: bool = False,
+        user_settings: Optional[ProactivityUserSettings] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Internal implementation - must be called with user lock held."""
         await self._ensure_connection()
         
         if user_settings:
