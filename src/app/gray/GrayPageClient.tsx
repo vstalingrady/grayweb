@@ -308,6 +308,8 @@ function GrayPageClientInner({
       return;
     }
 
+    const sidebarPrefKey = "gray:sidebarExpanded";
+
     const handleResize = () => {
       const width = window.innerWidth || 0;
       const shouldCollapseSidebar = width <= 768;
@@ -319,7 +321,16 @@ function GrayPageClientInner({
           return false;
         }
         if (!hasLoadedSidebarPref) {
-          return true;
+          // On first load for desktop, read from localStorage
+          try {
+            const stored = localStorage.getItem(sidebarPrefKey);
+            if (stored !== null) {
+              return stored === "true";
+            }
+          } catch {
+            // localStorage may be unavailable
+          }
+          return true; // Default to expanded on desktop
         }
         return previous;
       });
@@ -339,6 +350,18 @@ function GrayPageClientInner({
       window.removeEventListener("orientationchange", handleResize);
     };
   }, [hasLoadedSidebarPref]);
+
+  // Persist sidebar preference to localStorage when it changes (desktop only)
+  useEffect(() => {
+    if (typeof window === "undefined" || isMobileViewport || !hasLoadedSidebarPref) {
+      return;
+    }
+    try {
+      localStorage.setItem("gray:sidebarExpanded", isSidebarExpanded ? "true" : "false");
+    } catch {
+      // localStorage may be unavailable
+    }
+  }, [isSidebarExpanded, isMobileViewport, hasLoadedSidebarPref]);
 
   const [dashboardTab, setDashboardTab] = useState<"pulse" | "calendar">(() => initialDashboardTab);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -580,6 +603,17 @@ function GrayPageClientInner({
           data-view={viewMode}
           data-compact={isCompactLayout ? "true" : "false"}
         >
+          {/* Welcome overlay for the main "/" (threads) surface */}
+          {pathname === "/" && activeNav === "threads" ? (
+            <div className={styles.mobileWelcomeScreen} aria-hidden="true">
+              <div className={styles.mobileWelcomeContent}>
+                <div className={styles.mobileWelcomeLogo}>
+                  <img src="/grayaiwhitenotspinning.svg" alt="" />
+                </div>
+                <p className={styles.mobileWelcomeGreeting}>Ready when you are.</p>
+              </div>
+            </div>
+          ) : null}
           {!shouldHideDesktopWorkspaceChrome ? (
             <GrayWorkspaceHeader
               streakCount={streakCount}
@@ -649,6 +683,28 @@ function GrayPageClientInner({
     user?.profile_picture_url && user.profile_picture_url.trim().length > 0
       ? user.profile_picture_url
       : null;
+
+  const viewerAvatarColor = useMemo(() => {
+    const palette = [
+      "#2563eb",
+      "#7c3aed",
+      "#db2777",
+      "#dc2626",
+      "#ea580c",
+      "#d97706",
+      "#16a34a",
+      "#059669",
+      "#0891b2",
+      "#4f46e5",
+    ] as const;
+
+    const seed = user?.id ?? user?.email ?? user?.full_name ?? viewerName ?? "gray";
+    let hash = 0;
+    for (let index = 0; index < seed.length; index += 1) {
+      hash = (hash * 31 + seed.charCodeAt(index)) >>> 0;
+    }
+    return palette[hash % palette.length];
+  }, [user?.email, user?.full_name, user?.id, viewerName]);
 
   const viewerPlanLabel = useMemo(() => {
     const planCarrier = (user ?? null) as PlanCarrierUser | null;
@@ -2259,8 +2315,6 @@ function GrayPageClientInner({
     }
   }, [currentChatId, generalSessionId, manualViewMode, sessions, supportsInlineChat]);
 
-  const [isStreakValueVisible, setIsStreakValueVisible] = useState(false);
-
   const handleOpenHistoryEntry = (entry: SidebarHistoryEntry) => {
     if (!entry.href || entry.href === "#") {
       return;
@@ -2368,52 +2422,55 @@ function GrayPageClientInner({
         {/* Mobile Header - only rendered after hydration to avoid SSR/CSR mismatch */}
         {isMounted && (
           <div className={styles.mobileHeader}>
-            {!effectiveIsSidebarExpanded && (
-              <>
-                <button
-                  className={styles.mobileMenuButton}
-                  onClick={() => setIsSidebarExpanded(!isSidebarExpanded)}
-                >
-                  <Menu size={24} />
-                </button>
-
-                <div className={styles.mobileHeaderRight}>
-                  {streakCount > 0 && activeNav !== "dashboard" && (
-                    <button
-                      className={styles.mobileMenuButton}
-                      onClick={() => setIsStreakValueVisible((prev) => !prev)}
-                      aria-label="Toggle streak count"
-                    >
-                      {isStreakValueVisible ? (
-                        <span style={{ fontSize: "0.9rem", fontWeight: 600 }}>{streakCount}</span>
-                      ) : (
-                        <Zap size={24} />
-                      )}
-                    </button>
-                  )}
-                  {isScout && (
-                    <button className={styles.upgradePill} onClick={handleUpgradePlan}>
-                      <Zap size={14} />
-                      <span>Upgrade</span>
-                    </button>
-                  )}
-                </div>
-              </>
-            )}
+            <div className={styles.mobileHeaderLeft}>
+              {!effectiveIsSidebarExpanded ? (
+                <>
+                  <button
+                    className={styles.mobileMenuButton}
+                    onClick={() => setIsSidebarExpanded(!isSidebarExpanded)}
+                  >
+                    <Menu size={24} />
+                  </button>
+                </>
+              ) : null}
+            </div>
 
             {/* Mobile View Toggle - Always Visible */}
-            <div className={styles.mobileToggle}>
-              <button
-                className={styles.mobileToggleOption}
-                data-active={activeNav === "threads" || activeNav === "general" ? "true" : "false"}
-                onClick={() => handleMobileNavigate("threads")}
-              >
-                <span className={styles.mobileToggleIcon}>
-                  <MessageCircle size={16} />
-                </span>
-                <span>Chat</span>
-              </button>
+            <div className={styles.mobileHeaderToggle}>
+              <div className={styles.mobileToggle}>
+                <button
+                  className={styles.mobileToggleOption}
+                  data-active={activeNav === "threads" ? "true" : "false"}
+                  onClick={() => handleMobileNavigate("threads")}
+                >
+                  <span className={styles.mobileToggleIcon}>
+                    <MessageCircle size={16} />
+                  </span>
+                  <span>Chat</span>
+                </button>
+                <button
+                  className={styles.mobileToggleOption}
+                  data-active={activeNav === "general" ? "true" : "false"}
+                  onClick={() => handleMobileNavigate("general")}
+                >
+                  <span className={styles.mobileToggleIcon}>
+                    <Zap size={16} />
+                  </span>
+                  <span>Pulse</span>
+                </button>
+              </div>
             </div>
+
+            {!effectiveIsSidebarExpanded ? (
+              <div className={styles.mobileHeaderRight}>
+                {streakCount > 0 && activeNav !== "dashboard" && (
+                  <div className={styles.streakBadge} aria-label={`Streak ${streakCount}`}>
+                    <Zap size={14} />
+                    <span>{streakCount}</span>
+                  </div>
+                )}
+              </div>
+            ) : null}
           </div>
         )}
 
@@ -2435,6 +2492,7 @@ function GrayPageClientInner({
               viewerName={viewerName}
               viewerInitials={viewerInitials}
               viewerAvatarUrl={viewerAvatarUrl}
+              viewerAvatarColor={viewerAvatarColor}
               viewerPlanLabel={viewerPlanLabel}
               navItems={filteredSidebarItems}
               railItems={filteredRailItems}

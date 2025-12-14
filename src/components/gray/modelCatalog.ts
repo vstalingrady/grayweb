@@ -71,6 +71,10 @@ export const PIONEER_GROUPS: ModelGroup[] = [
 
 export const ALL_PIONEER_MODEL_IDS: string[] = PIONEER_GROUPS.flatMap((group) => group.models.map((model) => model.id));
 
+export const PIONEER_ONLY_MODEL_IDS: string[] = PIONEER_GROUPS.flatMap((group) =>
+  group.models.filter((model) => model.tierRequired === "pioneer").map((model) => model.id)
+);
+
 export const RECOMMENDED_PIONEER_MODEL_IDS: string[] = PIONEER_GROUPS.flatMap((group) =>
   group.models.filter((model) => (model.tierRequired ?? "voyager") === "voyager").map((model) => model.id)
 );

@@ -164,11 +164,11 @@ LIMITS = {
         "monthly_cost": 1.00,
         "six_hour_cost": 0.023,
     },
-    # Voyager: $17/month global, Rp77k Indonesia
-    # ~328 messages per 6-hour, ~14,250 per month (5x Scout)
+    # Voyager: Rp177k/month Indonesia
+    # ~459 messages per 6-hour, ~19,950 per month (7x Scout)
     "voyager": {
-        "monthly_cost": 5.00,
-        "six_hour_cost": 0.115,
+        "monthly_cost": 7.00,
+        "six_hour_cost": 0.161,
     },
     # Pioneer: $37/month global, Rp377k Indonesia
     # ~1,600 messages per 6-hour, ~71,400 per month (25x Scout)

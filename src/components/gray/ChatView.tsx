@@ -3797,8 +3797,8 @@ export function GrayChatView({
       </div>
       <div className={styles.chatViewport} ref={chatViewportRef}>
         <div className={styles.chatFade} aria-hidden="true" />
-        {/* Mobile welcome screen - only for general chat scope when empty */}
-        {session?.scope === "general" && messages.length === 0 && (
+        {/* Welcome screen - show on empty chats, but not on /g (general chat session) */}
+        {messages.length === 0 && sessionId && sessionId !== GENERAL_CHAT_SESSION_ID && (
           <MobileWelcomeScreen />
         )}
         {topAttachmentTray}

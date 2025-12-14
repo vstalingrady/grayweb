@@ -21,7 +21,7 @@ export default function PricingClient({ storeId, voyagerVariantId, pioneerVarian
   const { user } = useUser();
 
   const handleDismiss = useCallback(() => {
-    router.push("/gray");
+    router.push("/");
   }, [router]);
 
   return (

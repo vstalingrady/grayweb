@@ -159,7 +159,7 @@ function PaymentContent() {
     // Calculate precise amount for API
     const amountForApi = planParam === "pioneer" // eslint-disable-line @typescript-eslint/no-unused-vars
         ? (billingCycle === "annual" ? 3777000 : 377000)
-        : (billingCycle === "annual" ? 777000 : 77000);
+        : (billingCycle === "annual" ? 1777000 : 177000);
 
     const handlePayment = async () => {
         setStatus("loading");

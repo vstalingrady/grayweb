@@ -188,6 +188,11 @@ except ImportError:
         ProactivitySchedulerManager,
     )
 
+try:
+    from backend.model_access import coerce_model_for_tier
+except ImportError:
+    from model_access import coerce_model_for_tier
+
 # Authentication module
 try:
     from backend.auth import get_current_user, get_current_user_optional, require_same_user, require_admin, invalidate_user_cache
@@ -1276,6 +1281,7 @@ chat_sessions = sqlalchemy.Table(
     sqlalchemy.Column("scope", sqlalchemy.String, default="thread"),
     sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
     sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
+    extend_existing=True,
 )
 
 
@@ -1294,6 +1300,7 @@ plans = sqlalchemy.Table(
     sqlalchemy.Column("description", sqlalchemy.String, nullable=True),
     sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
     sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
+    extend_existing=True,
 )
 
 habits = sqlalchemy.Table(
@@ -1307,6 +1314,7 @@ habits = sqlalchemy.Table(
     sqlalchemy.Column("description", sqlalchemy.String, nullable=True),
     sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
     sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
+    extend_existing=True,
 )
 
 
@@ -1341,6 +1349,7 @@ google_calendar_states = sqlalchemy.Table(
     sqlalchemy.Column("expires_at", sqlalchemy.DateTime, nullable=True),
     sqlalchemy.Column("consumed_at", sqlalchemy.DateTime, nullable=True),
     sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
+    extend_existing=True,
 )
 
 # Pydantic models
@@ -7717,6 +7726,19 @@ async def chat_endpoint(
             api_logger.info(f"Disabling reasoning mode for user {chat_request.user_id} (tier: {normalized_tier})")
             effective_reasoning_mode = False
 
+        effective_model, model_coerced = coerce_model_for_tier(chat_request.model, normalized_tier)
+        if model_coerced:
+            api_logger.info(
+                "Coerced requested model for user tier",
+                extra={
+                    "event_type": "model_coerced",
+                    "user_id": chat_request.user_id,
+                    "plan_tier": normalized_tier,
+                    "requested_model": chat_request.model,
+                    "effective_model": effective_model,
+                },
+            )
+
         # Generate AI response
         ai_response, grounding_metadata = await generate_ai_response(
             chat_request.message,
@@ -7724,7 +7746,7 @@ async def chat_endpoint(
             chat_request.context,
             chat_request.system_prompt,
             chat_request.time_context,
-            chat_request.model,
+            effective_model,
             chat_request.attachments,
             chat_request.user_id,
             db,
@@ -8117,6 +8139,19 @@ async def chat_stream(
         # user_record was already fetched above
         plan_tier = user_plan_tier
         normalized_tier = (plan_tier or "scout").lower()
+
+        effective_model, model_coerced = coerce_model_for_tier(effective_model, normalized_tier)
+        if model_coerced:
+            api_logger.info(
+                "Coerced requested model for user tier",
+                extra={
+                    "event_type": "model_coerced",
+                    "user_id": chat_request.user_id,
+                    "plan_tier": normalized_tier,
+                    "requested_model": chat_request.model,
+                    "effective_model": effective_model,
+                },
+            )
 
         effective_reasoning_mode = chat_request.reasoning_mode
         if effective_reasoning_mode and normalized_tier not in ("voyager", "pioneer"):
@@ -8741,7 +8776,7 @@ async def get_conversation_usage(
 
         # Extract user_id from conversation to lookup tier
         user_id = None  # Initialize to avoid UnboundLocalError
-        user_tier = "pioneer"  # Default everyone to Pioneer privileges
+        user_tier = "scout"  # Default to safest tier when unknown
         try:
             # Case 1: General conversation (format: "general:123")
             if conversation_id.startswith("general:"):
@@ -8790,7 +8825,7 @@ async def get_conversation_usage(
             "pioneer": 2_000_000,   # 2M tokens (varies by model - Grok 4.1 Fast has 2M)
         }
         
-        tier_context_limit = TIER_CONTEXT_LIMITS.get(user_tier, TIER_CONTEXT_LIMITS["pioneer"])
+        tier_context_limit = TIER_CONTEXT_LIMITS.get(user_tier, TIER_CONTEXT_LIMITS["scout"])
         
         # Get provider info from environment
         provider = os.getenv("AI_PROVIDER", "openrouter")

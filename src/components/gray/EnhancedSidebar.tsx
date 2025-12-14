@@ -5,11 +5,9 @@ import {
   ChevronsRight,
   ChevronsUp,
   ChevronsDown,
-  UserRound,
   Settings as SettingsIcon,
   LifeBuoy,
   LogOut,
-  Star,
   MoreHorizontal,
   Pencil,
   Pin,
@@ -21,6 +19,7 @@ import { SiDiscord } from "react-icons/si";
 import { useUser } from "@/contexts/UserContext";
 import { useI18n } from "@/contexts/I18nContext";
 import styles from "@/app/gray/GrayPageClient.module.css";
+import { DepthParticleBackgroundInset } from "@/components/backgrounds/DepthParticleBackground";
 import { type SidebarHistorySection, type SidebarNavItem, type SidebarNavKey, type SidebarHistoryEntry } from "./types";
 
 type GrayEnhancedSidebarProps = {
@@ -28,6 +27,7 @@ type GrayEnhancedSidebarProps = {
   viewerName: string;
   viewerInitials: string;
   viewerAvatarUrl?: string | null;
+  viewerAvatarColor?: string;
   viewerPlanLabel: string;
   activeNav: SidebarNavKey;
   railItems: SidebarNavItem[];
@@ -152,6 +152,7 @@ function GrayEnhancedSidebarComponent(props: GrayEnhancedSidebarProps) {
     viewerName,
     viewerInitials,
     viewerAvatarUrl = null,
+    viewerAvatarColor,
     viewerPlanLabel,
     activeNav,
     railItems,
@@ -308,6 +309,7 @@ function GrayEnhancedSidebarComponent(props: GrayEnhancedSidebarProps) {
             <span
               className={styles.sidebarRailAvatarImage}
               data-has-image={showImage ? "true" : "false"}
+              style={!showImage && viewerAvatarColor ? { backgroundColor: viewerAvatarColor } : undefined}
             >
               {showImage ? (
                 <>
@@ -320,7 +322,7 @@ function GrayEnhancedSidebarComponent(props: GrayEnhancedSidebarProps) {
                   />
                 </>
               ) : (
-                viewerInitials
+                null
               )}
             </span>
             <span className={styles.sidebarRailAvatarIcon} aria-hidden="true">
@@ -460,6 +462,7 @@ function GrayEnhancedSidebarComponent(props: GrayEnhancedSidebarProps) {
                       className={styles.profileAvatar}
                       aria-hidden="true"
                       data-has-image={showImage ? "true" : "false"}
+                      style={!showImage && viewerAvatarColor ? { backgroundColor: viewerAvatarColor } : undefined}
                     >
                       {showImage ? (
                         <>
@@ -472,7 +475,7 @@ function GrayEnhancedSidebarComponent(props: GrayEnhancedSidebarProps) {
                           />
                         </>
                       ) : (
-                        <UserRound size={22} />
+                        null
                       )}
                     </span>
                     <span className={styles.profileDetails}>
@@ -491,12 +494,14 @@ function GrayEnhancedSidebarComponent(props: GrayEnhancedSidebarProps) {
                           onClick={handleUpgradePlan}
                           role="menuitem"
                         >
-                          <span className={styles.profileMenuItemContent}>
-                            <span className={styles.profileMenuIcon}>
-                              <Star size={16} />
-                            </span>
-                            <span className={styles.profileMenuLabel}>{t("Upgrade")}</span>
-                          </span>
+                          <div className={styles.profileMenuUpgradeCard}>
+                            <div className={styles.profileMenuUpgradeBackground} aria-hidden="true">
+                              <DepthParticleBackgroundInset />
+                            </div>
+                            <span className={styles.profileMenuUpgradeTitle}>{t("Upgrade")}</span>
+                            <span className={styles.profileMenuUpgradeSubtext}>{t("Unlock more messages")}</span>
+                            <span className={styles.profileMenuUpgradePill}>{t("View Plans")}</span>
+                          </div>
                         </button>
                         <span className={styles.profileMenuDivider} aria-hidden="true" />
                       </>

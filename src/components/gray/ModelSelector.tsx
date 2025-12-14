@@ -50,8 +50,8 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
   const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const planTierRaw = (user?.plan_tier || "pioneer").toLowerCase();
-  const currentTier = planTierRaw === "scout" ? "pioneer" : planTierRaw;
+  const planTierRaw = (user?.plan_tier || "scout").toLowerCase();
+  const currentTier = planTierRaw;
   const currentLevel = TIER_LEVELS[currentTier] ?? 0;
 
   const filteredPioneerGroups = useMemo(() => {
@@ -397,39 +397,40 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
               )}
 
 
-              {/* Divider moved inside conditional or strict check to avoid doubling */}
-              {nextTier && (
-                <>
-                  <div className={styles.comfyUpgradeCard}>
-                    <div className={styles.upgradeHeader}>
-                      <div className={styles.upgradeTitle}>
-                        <Rocket size={16} className={styles.upgradeIcon} />
-                        <span>{t("Upgrade")}</span>
-                      </div>
-                      <a href="/pricing" className={styles.upgradePill}>
-                        {t("View Plans")}
-                      </a>
-                    </div>
-                    <div className={styles.upgradeBody}>
-                      {t("Unlock extended capabilities and faster thoughts.")}
-                    </div>
-                  </div>
-                </>
-              )}
-
               <div className={styles.divider} />
 
               {/* All Models */}
+              {/*
+                Scout users can see the affordance but should not be able to expand the list.
+                Clicking routes to pricing, matching the locked "upgrade" UX.
+              */}
               <button
                 className={`${styles.actionItem} ${currentLevel < TIER_LEVELS["voyager"] ? styles.menuItemLocked : ''}`}
                 type="button"
-                onClick={toggleAllModels}
-                disabled={currentLevel < TIER_LEVELS["voyager"]}
+                onClick={(event) => {
+                  if (currentLevel < TIER_LEVELS["voyager"]) {
+                    event.stopPropagation();
+                    if (typeof window !== "undefined") {
+                      window.location.href = "/pricing";
+                    }
+                    return;
+                  }
+                  toggleAllModels(event);
+                }}
               >
                 <Box size={16} />
                 <span>{t("All Models")}</span>
                 {currentLevel < TIER_LEVELS["voyager"] ? (
-                  <Lock size={14} className={styles.actionLock} />
+                  <span className={styles.actionUpgradeRight}>
+                    <a
+                      href="/pricing"
+                      className={styles.upgradePill}
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      <span>{t("Upgrade")}</span>
+                      <Lock size={14} className={styles.upgradePillIcon} />
+                    </a>
+                  </span>
                 ) : (
                   <ChevronRight size={14} className={styles.actionArrow} />
                 )}

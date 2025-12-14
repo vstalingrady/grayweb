@@ -470,6 +470,14 @@
     padding: 2.25rem 1.5rem;
   }
 
+  .billingSavings {
+    color: rgba(255, 255, 255, 0.55);
+  }
+
+  .billingToggle button[data-active="true"] .billingSavings {
+    color: rgba(7, 7, 7, 0.6);
+  }
+
   .billingToggle button {
     padding: 0.45rem 1rem;
   }

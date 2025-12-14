@@ -85,7 +85,25 @@ function DepthParticles() {
 
 export function DepthParticleBackground() {
   return (
-    <div className={styles.particleBackground} aria-hidden="true">
+    <div className={styles.particleBackgroundFixed} aria-hidden="true">
+      <Canvas
+        className={styles.particleCanvas}
+        camera={{ position: [0, 0, 45], fov: 46 }}
+        gl={{ antialias: true }}
+      >
+        <color attach="background" args={["#030205"]} />
+        <fog attach="fog" args={["#020205", 8, 55]} />
+        <ambientLight intensity={0.5} />
+        <pointLight position={[10, 10, 15]} intensity={1.4} />
+        <DepthParticles />
+      </Canvas>
+    </div>
+  );
+}
+
+export function DepthParticleBackgroundInset() {
+  return (
+    <div className={styles.particleBackgroundInset} aria-hidden="true">
       <Canvas
         className={styles.particleCanvas}
         camera={{ position: [0, 0, 45], fov: 46 }}

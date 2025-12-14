@@ -277,6 +277,10 @@
   border-radius: 99px;
   text-decoration: none;
   transition: transform 0.1s;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
 }
 
 .upgradePill:hover {
@@ -375,6 +379,21 @@
 .actionLock {
   margin-left: auto;
   opacity: 0.3;
+}
+
+.actionUpgradeRight {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.actionUpgradeRight .actionLock {
+  margin-left: 0;
+}
+
+.upgradePillIcon {
+  opacity: 0.6;
 }
 
 /* Pioneer List Grouping */

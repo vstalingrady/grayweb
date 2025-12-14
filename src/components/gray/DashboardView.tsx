@@ -360,8 +360,7 @@ export function GrayDashboardView({
   }, [isChatBarVisible, panelMaxHeightPx]);
 
   const { user } = useUser();
-  const planTierRaw = (user?.plan_tier || "pioneer").toLowerCase();
-  const planTier = planTierRaw === "scout" ? "pioneer" : planTierRaw;
+  const planTier = (user?.plan_tier || "scout").toLowerCase();
   const isScout = planTier === "scout";
 
   useLayoutEffect(() => {

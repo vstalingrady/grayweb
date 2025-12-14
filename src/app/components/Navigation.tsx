@@ -13,7 +13,7 @@ const Navigation = () => {
   const drawerId = "mobile-navigation";
   const [menuOpen, setMenuOpen] = useState(false);
   const [tryGrayUrl, setTryGrayUrl] = useState(() => resolveTryGrayUrl());
-  const grayHref = "/gray";
+  const grayHref = "/";
 
   const navLinks = [
     { href: grayHref, label: "GRAY" },

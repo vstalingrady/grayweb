@@ -136,35 +136,39 @@ export function useProactivity(userId: number | null, resolvedTimezone: string) 
     };
   }, [userId]);
 
-  const persistProactivitySettings = useCallback(
-    async (next: ProactivityItem | null) => {
-      if (!userId) {
-        console.warn("Cannot persist proactivity settings: userId not available");
-        return;
+  const persistProactivitySettings = useCallback(async (next: ProactivityItem | null) => {
+    if (!userId) {
+      console.warn("Cannot persist proactivity settings: userId not available");
+      return;
+    }
+    const payload = buildProactivitySettingsPayload(next, resolvedTimezone);
+    try {
+      const response = await apiService.updateProactivitySettings(userId, payload);
+
+      // Patch: ensure we preserve the ID if the backend dropped it or reset it,
+      // preventing the UI from falling back to "Select a preset"
+      if (response && payload.id && response.id !== payload.id) {
+        response.id = payload.id;
       }
-      const payload = buildProactivitySettingsPayload(next, resolvedTimezone);
-      try {
-        const response = await apiService.updateProactivitySettings(userId, payload);
-        const normalized = mapSettingsToProactivity(response);
-        setProactivity((previous) => {
-          if (normalized === null) {
-            return previous === null ? previous : null;
-          }
-          if (areProactivityItemsEqual(previous, normalized)) {
-            return previous;
-          }
-          return normalized;
-        });
-      } catch (error) {
-        console.error("Failed to save proactivity settings:", error);
-      }
-    },
-    [userId, resolvedTimezone]
-  );
+
+      const normalized = mapSettingsToProactivity(response);
+      setProactivity((previous) => {
+        if (normalized === null) {
+          return previous === null ? previous : null;
+        }
+        if (areProactivityItemsEqual(previous, normalized)) {
+          return previous;
+        }
+        return normalized;
+      });
+    } catch (error) {
+      console.error("Failed to save proactivity settings:", error);
+    }
+  }, [userId, resolvedTimezone]);
 
   return {
     proactivity,
     setProactivity,
-    persistProactivitySettings
+    persistProactivitySettings,
   };
 }

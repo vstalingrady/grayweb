@@ -68,7 +68,7 @@ import {
   isTitleDerivedFromMessage,
 } from "./chat/utils";
 import { extractGrayRemindersFromText, buildReminderConfirmationText, buildReminderKey, coerceReminderPayload } from "./chat/reminderUtils";
-import { ALL_PIONEER_MODEL_IDS } from "./modelCatalog";
+import { ALL_PIONEER_MODEL_IDS, PIONEER_ONLY_MODEL_IDS } from "./modelCatalog";
 import {
   GENERAL_CHAT_SESSION_ID,
   GENERAL_CONVERSATION_PREFIX,
@@ -790,6 +790,32 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       }
     }
   }, []);
+
+  // Enforce plan-tier model access on the client to avoid stale localStorage
+  // keeping a user on a higher-tier model after downgrade.
+  useEffect(() => {
+    const normalizedTier = (user?.plan_tier ?? "scout").toLowerCase();
+
+    if (normalizedTier === "scout") {
+      if (modelTier !== "lite") {
+        setModelTier("lite");
+      }
+      if (selectedModelId) {
+        setSelectedModelId(null);
+      }
+      if (reasoningMode) {
+        setReasoningMode(false);
+      }
+      return;
+    }
+
+    if (normalizedTier === "voyager") {
+      if (selectedModelId && PIONEER_ONLY_MODEL_IDS.includes(selectedModelId)) {
+        setSelectedModelId(null);
+        setModelTier("lite");
+      }
+    }
+  }, [modelTier, reasoningMode, selectedModelId, user?.plan_tier]);
 
   // Restore visible models per user (or anon)
   useEffect(() => {

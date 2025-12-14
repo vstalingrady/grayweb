@@ -78,7 +78,7 @@ export const normalizeWorkspaceRedirect = (
   }
 
   if (path === "/gray") {
-    return GENERAL_PREFIX;
+    return "/";
   }
 
   if (
@@ -87,16 +87,13 @@ export const normalizeWorkspaceRedirect = (
     path.startsWith("/gray#")
   ) {
     const remainder = path.slice("/gray".length);
-    if (!remainder || remainder === "/") {
-      return GENERAL_PREFIX;
+    if (!remainder) {
+      return "/";
     }
     if (remainder.startsWith("/")) {
-      return `${GENERAL_PREFIX}${remainder}`;
+      return remainder;
     }
-    if (remainder.startsWith("?") || remainder.startsWith("#")) {
-      return `${GENERAL_PREFIX}${remainder}`;
-    }
-    return `${GENERAL_PREFIX}/${remainder}`;
+    return `/${remainder}`;
   }
 
   return path;

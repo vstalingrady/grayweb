@@ -8,7 +8,7 @@ import {
     Brain,
     CalendarClock,
     Clock,
-    Database,
+    Crown,
     FlaskConical,
     Headphones,
     Infinity as InfinityIcon,
@@ -46,10 +46,10 @@ export const VOYAGER_FEATURES: FeatureItem[] = [
     {
         label: "Choose your model",
         icon: Shuffle,
-        subtext: "Claude, GPT, Gemini, DeepSeek, Kimi",
+        subtext: "Claude Sonnet 4.5, GPT 5.2, Gemini 3 Pro, DeepSeek V3.2, Kimi K2 Thinking",
     },
     {
-        label: "More messages",
+        label: "6x more messages",
         icon: MessageSquare,
     },
     {
@@ -72,18 +72,17 @@ export const VOYAGER_FEATURES: FeatureItem[] = [
 export const PIONEER_FEATURES: FeatureItem[] = [
     {
         label: "Top-tier models",
-        icon: Zap,
-        subtext: "Claude Opus + GPT Pro",
+        icon: Crown,
+        subtext: "Claude Opus 4.5, GPT 5.2 Pro",
     },
     {
-        label: "Highest message limits",
+        label: "15x more messages",
         icon: MessageSquare,
         subtext: "Built for heavy daily use",
     },
     { label: "More deep thinking", icon: InfinityIcon },
     { label: "Priority during busy times", icon: Headphones },
     { label: "Early access", icon: FlaskConical },
-    { label: "Upload docs and ask questions", icon: Database },
     { label: "Everything in Voyager", icon: Plus, variant: "inherit" },
 ];
 

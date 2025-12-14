@@ -21,6 +21,7 @@ import {
   Brain,
   KeyRound,
   Lock,
+  Pencil,
 } from "lucide-react";
 import styles from "@/app/gray/GrayPageClient.module.css";
 import { useI18n } from "@/contexts/I18nContext";
@@ -235,6 +236,25 @@ export function SettingsModal({
   const [apiKeyDrafts, setApiKeyDrafts] = useState<Record<string, string>>({});
   const [apiKeyVisibility, setApiKeyVisibility] = useState<Record<string, boolean>>({});
   const [apiKeyStatus, setApiKeyStatus] = useState<string | null>(null);
+
+  // Mobile View State
+  const [isMobile, setIsMobile] = useState(false);
+  const [mobileView, setMobileView] = useState<"root" | "detail">("root");
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.matchMedia("(max-width: 768px)").matches);
+    };
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
+
+  useEffect(() => {
+    if (isOpen) {
+      setMobileView("root");
+    }
+  }, [isOpen]);
 
   const tierLevel = useMemo(() => {
     const raw = (user?.plan_tier ?? "scout").toLowerCase();
@@ -634,78 +654,272 @@ export function SettingsModal({
 
   return (
     <div className={styles.settingsOverlay} role="dialog" aria-modal="true">
-      <div className={styles.settingsContainer}>
-        {/* Left Sidebar */}
-        <aside className={styles.settingsSidebar}>
-          <div className={styles.settingsSidebarHeader}>
-            <button
-              type="button"
-              className={styles.settingsSidebarBack}
-              onClick={onClose}
-            >
-              <ChevronLeft size={16} />
-              {t("Back")}
-            </button>
-          </div>
+      <div className={styles.settingsContainer} data-mobile-view={mobileView}>
+        {/* Mobile Root View */}
+        {isMobile && mobileView === "root" && (
+          <div className={styles.mobileSettingsRoot}>
+            <header className={styles.mobileSettingsHeader}>
+              <button className={styles.mobileSettingsBack} onClick={onClose}>
+                <ChevronLeft size={20} />
+              </button>
+              <h2 className={styles.mobileSettingsTitle}>{t("Settings")}</h2>
+              <div style={{ width: 36 }} /> {/* Spacer */}
+            </header>
 
-          <div className={styles.settingsNavGroup}>
-            <div className={styles.settingsNavLabel}>{t("Account")}</div>
-            {renderNavItem("account", t("Account"), UserCircle)}
-            {renderNavItem("preferences", t("Preferences"), SettingsIcon)}
-            {renderNavItem("personalization", t("Personalization"), Palette)}
-            {renderNavItem("models", t("Models"), Brain)}
-            {renderNavItem("api_keys", t("API Keys"), KeyRound)}
-            {renderNavItem("data_controls", t("Data Controls"), Database)}
-            {renderNavItem("notifications", t("Notifications"), Bell)}
-          </div>
-
-          {contextUsage?.conversationId ? (
-            <div className={styles.settingsSidebarFooter}>
-              <div className={styles.settingsSidebarFooterDivider} aria-hidden="true" />
-              <div className={styles.settingsSidebarContextHeader}>
-                <span className={styles.settingsSidebarContextTitle}>{t("Context")}</span>
+            <div className={styles.mobileProfileSection}>
+              <div className={styles.mobileProfileAvatar}>
+                {user?.profile_picture_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={user.profile_picture_url} alt="" />
+                ) : (
+                  <UserCircle size={48} />
+                )}
                 <button
-                  type="button"
-                  className={styles.settingsSidebarContextAction}
-                  onClick={() => void handleCompressConversation()}
-                  disabled={contextActionState === "loading"}
+                  className={styles.mobileProfileEditButton}
+                  onClick={() => {
+                    setActiveSection("account");
+                    setMobileView("detail");
+                  }}
                 >
-                  {contextActionState === "loading" ? t("Compressing...") : t("Compress")}
+                  <Pencil size={14} />
                 </button>
               </div>
-              {(() => {
-                const usedTokens = Math.max(0, getContextUsageUsedTokens(contextUsage));
-                const visualizationLimit = getContextUsageVisualizationLimit(contextUsage);
-                const percentUsed =
-                  visualizationLimit > 0 ? clampPercent((usedTokens / visualizationLimit) * 100) : 0;
-                const widthPercent = percentUsed > 0 && percentUsed < 0.5 ? 0.5 : percentUsed;
-                const usedLabel = usedTokens.toLocaleString();
-                const limitLabel = visualizationLimit.toLocaleString();
-                const contextLimitLabel =
-                  typeof contextUsage.limit === "number" && contextUsage.limit > 0
-                    ? t("{used} of {limit} tokens used", { used: usedLabel, limit: limitLabel })
-                    : t("{used} tokens used (visualized against {limit})", { used: usedLabel, limit: limitLabel });
-
-                return (
-                  <>
-                    <div className={styles.settingsContextBar} aria-label={contextLimitLabel}>
-                      <div className={styles.settingsContextBarFill} style={{ width: `${widthPercent}%` }} />
-                    </div>
-                    <p className={styles.settingsSidebarContextMeta}>{contextLimitLabel}</p>
-                  </>
-                );
-              })()}
-              {contextActionMessage ? (
-                <p className={styles.settingsSidebarContextMeta} data-variant="muted">
-                  {contextActionMessage}
-                </p>
+              <h3 className={styles.mobileProfileName}>{user?.full_name || "Gray User"}</h3>
+              {user?.personalization_nickname ? (
+                <span className={styles.mobileProfileHandle}>@{user.personalization_nickname}</span>
               ) : null}
+              <button
+                className={styles.railNav}
+                style={{ width: "auto", height: 32, padding: "0 16px", borderRadius: 16, background: "#1c1c1e", fontSize: "0.9rem", color: "#fff" }}
+                onClick={() => {
+                  setActiveSection("account");
+                  setMobileView("detail");
+                }}
+              >
+                {t("Edit profile")}
+              </button>
             </div>
-          ) : null}
-        </aside>
+
+            <div className={styles.mobileGroupLabel}>{t("My Gray")}</div>
+            <div className={styles.mobileGroup}>
+              <button
+                className={styles.mobileGroupItem}
+                onClick={() => {
+                  setActiveSection("personalization");
+                  setMobileView("detail");
+                }}
+              >
+                <Palette className={styles.mobileGroupItemIcon} size={20} />
+                <span className={styles.mobileGroupItemLabel}>{t("Personalization")}</span>
+                <ChevronRight className={styles.mobileGroupItemArrow} size={16} />
+              </button>
+              <button
+                className={styles.mobileGroupItem}
+                onClick={() => {
+                  setActiveSection("api_keys");
+                  setMobileView("detail");
+                }}
+              >
+                <KeyRound className={styles.mobileGroupItemIcon} size={20} />
+                <span className={styles.mobileGroupItemLabel}>{t("Apps & connectors")}</span>
+                <ChevronRight className={styles.mobileGroupItemArrow} size={16} />
+              </button>
+            </div>
+
+            <div className={styles.mobileGroupLabel}>{t("Account")}</div>
+            <div className={styles.mobileGroup}>
+              <div className={styles.mobileGroupItem}>
+                <Database className={styles.mobileGroupItemIcon} size={20} />
+                <div style={{ flex: 1 }}>
+                  <span className={styles.mobileGroupItemLabel} style={{ display: "block" }}>{t("Workspace")}</span>
+                  <span className={styles.mobileGroupItemValue} style={{ fontSize: "0.85rem", color: "#888" }}>Personal</span>
+                </div>
+              </div>
+              <button
+                className={styles.mobileGroupItem}
+                onClick={() => {
+                  // Navigate to pro/pricing? For now just account section
+                  setActiveSection("account");
+                  setMobileView("detail");
+                }}
+              >
+                <div className={styles.mobileGroupItemIcon} style={{ width: 20, height: 20, borderRadius: "50%", border: "1px solid #fff", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <span style={{ fontSize: 10, fontWeight: "bold" }}>+</span>
+                </div>
+                <span className={styles.mobileGroupItemLabel}>{t("Upgrade to Pro")}</span>
+                <ChevronRight className={styles.mobileGroupItemArrow} size={16} />
+              </button>
+              <div className={styles.mobileGroupItem}>
+                <UserCircle className={styles.mobileGroupItemIcon} size={20} />
+                <div style={{ flex: 1 }}>
+                  <span className={styles.mobileGroupItemLabel} style={{ display: "block" }}>{t("Email")}</span>
+                  <span className={`${styles.mobileGroupItemMono} ${styles.mobileMonoText}`}>{user?.email}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className={styles.mobileGroupLabel}>{t("Appearance")}</div>
+            <div className={styles.mobileGroup} style={{ background: "transparent", margin: "0 16px 24px" }}>
+              <div className={styles.mobileThemeGrid}>
+                <button
+                  className={styles.mobileThemeOption}
+                  data-active={theme === "system"}
+                  onClick={() => applyTheme("system")}
+                >
+                  <div className={styles.mobileThemePreview}>
+                    <div style={{ width: "50%", height: "50%", background: "#444", borderRadius: "50%" }} />
+                  </div>
+                  <span style={{ fontSize: "0.8rem" }}>System</span>
+                </button>
+                <button
+                  className={styles.mobileThemeOption}
+                  data-active={theme === "dark"}
+                  onClick={() => applyTheme("dark")}
+                >
+                  <div className={styles.mobileThemePreview} style={{ background: "#000" }}>
+                    <Moon size={16} color="#fff" />
+                  </div>
+                  <span style={{ fontSize: "0.8rem" }}>Dark</span>
+                </button>
+                <button
+                  className={styles.mobileThemeOption}
+                  data-active={theme === "light"}
+                  onClick={() => applyTheme("light")}
+                >
+                  <div className={styles.mobileThemePreview} style={{ background: "#eee" }}>
+                    <Sun size={16} color="#000" />
+                  </div>
+                  <span style={{ fontSize: "0.8rem" }}>Light</span>
+                </button>
+              </div>
+            </div>
+
+            <div className={styles.mobileGroupLabel}>{t("Data & Information")}</div>
+            <div className={styles.mobileGroup}>
+              <button
+                className={styles.mobileGroupItem}
+                onClick={() => {
+                  setActiveSection("notifications");
+                  setMobileView("detail");
+                }}
+              >
+                <Bell className={styles.mobileGroupItemIcon} size={20} />
+                <span className={styles.mobileGroupItemLabel}>{t("Notifications")}</span>
+                <ChevronRight className={styles.mobileGroupItemArrow} size={16} />
+              </button>
+              <button
+                className={styles.mobileGroupItem}
+                onClick={() => {
+                  setActiveSection("data_controls");
+                  setMobileView("detail");
+                }}
+              >
+                <Database className={styles.mobileGroupItemIcon} size={20} />
+                <span className={styles.mobileGroupItemLabel}>{t("Data controls")}</span>
+                <ChevronRight className={styles.mobileGroupItemArrow} size={16} />
+              </button>
+            </div>
+
+          </div>
+        )}
+
+        {/* Left Sidebar (Desktop Only) */}
+        {!isMobile && (
+          <aside className={styles.settingsSidebar}>
+            <div className={styles.settingsSidebarHeader}>
+              <button
+                type="button"
+                className={styles.settingsSidebarBack}
+                onClick={onClose}
+              >
+                <ChevronLeft size={16} />
+                {t("Back")}
+              </button>
+            </div>
+
+            <div className={styles.settingsNavGroup}>
+              <div className={styles.settingsNavLabel}>{t("Account")}</div>
+              {renderNavItem("account", t("Account"), UserCircle)}
+              {renderNavItem("preferences", t("Preferences"), SettingsIcon)}
+              {renderNavItem("personalization", t("Personalization"), Palette)}
+              {renderNavItem("models", t("Models"), Brain)}
+              {renderNavItem("api_keys", t("API Keys"), KeyRound)}
+              {renderNavItem("data_controls", t("Data Controls"), Database)}
+              {renderNavItem("notifications", t("Notifications"), Bell)}
+            </div>
+
+            {contextUsage?.conversationId ? (
+              <div className={styles.settingsSidebarFooter}>
+                <div className={styles.settingsSidebarFooterDivider} aria-hidden="true" />
+                <div className={styles.settingsSidebarContextHeader}>
+                  <span className={styles.settingsSidebarContextTitle}>{t("Context")}</span>
+                  <button
+                    type="button"
+                    className={styles.settingsSidebarContextAction}
+                    onClick={() => void handleCompressConversation()}
+                    disabled={contextActionState === "loading"}
+                  >
+                    {contextActionState === "loading" ? t("Compressing...") : t("Compress")}
+                  </button>
+                </div>
+                {(() => {
+                  const usedTokens = Math.max(0, getContextUsageUsedTokens(contextUsage));
+                  const visualizationLimit = getContextUsageVisualizationLimit(contextUsage);
+                  const percentUsed =
+                    visualizationLimit > 0 ? clampPercent((usedTokens / visualizationLimit) * 100) : 0;
+                  const widthPercent = percentUsed > 0 && percentUsed < 0.5 ? 0.5 : percentUsed;
+                  const usedLabel = usedTokens.toLocaleString();
+                  const limitLabel = visualizationLimit.toLocaleString();
+                  const contextLimitLabel =
+                    typeof contextUsage.limit === "number" && contextUsage.limit > 0
+                      ? t("{used} of {limit} tokens used", { used: usedLabel, limit: limitLabel })
+                      : t("{used} tokens used (visualized against {limit})", { used: usedLabel, limit: limitLabel });
+
+                  return (
+                    <>
+                      <div className={styles.settingsContextBar} aria-label={contextLimitLabel}>
+                        <div className={styles.settingsContextBarFill} style={{ width: `${widthPercent}%` }} />
+                      </div>
+                      <p className={styles.settingsSidebarContextMeta}>{contextLimitLabel}</p>
+                    </>
+                  );
+                })()}
+                {contextActionMessage ? (
+                  <p className={styles.settingsSidebarContextMeta} data-variant="muted">
+                    {contextActionMessage}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+          </aside>
+        )}
+
+
 
         {/* Right Content */}
         <main className={styles.settingsContent}>
+          {/* Mobile Detail Header */}
+          {isMobile && mobileView === "detail" && (
+            <div className={styles.mobileSettingsHeader} style={{ marginBottom: 0 }}>
+              <button
+                className={styles.mobileSettingsBack}
+                onClick={() => setMobileView("root")}
+              >
+                <ChevronLeft size={20} />
+              </button>
+              <h2 className={styles.mobileSettingsTitle}>
+                {activeSection === "account" ? t("Account") :
+                  activeSection === "preferences" ? t("Preferences") :
+                    activeSection === "personalization" ? t("Personalization") :
+                      activeSection === "models" ? t("Models") :
+                        activeSection === "api_keys" ? t("API Keys") :
+                          activeSection === "data_controls" ? t("Data Controls") :
+                            activeSection === "notifications" ? t("Notifications") : ""}
+              </h2>
+              <div style={{ width: 36 }} />
+            </div>
+          )}
+
           {activeSection === "account" && (
             <>
               <div className={styles.settingsPageHeader}>
@@ -760,7 +974,7 @@ export function SettingsModal({
                 <h3 className={styles.settingsSectionTitle}>{t("Your Subscription")}</h3>
                 <div className={styles.settingsUpgradeCard}>
                   <div className={styles.settingsUpgradeText}>
-                    <h4>Upgrade to Pro</h4>
+                    <h4>Supercharge your experience</h4>
                     <p>Unlock everything Gray has to offer.</p>
                   </div>
                   <button className={`${styles.settingsAction} ${styles.settingsPrimaryButton}`}>
