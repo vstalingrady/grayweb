@@ -4939,7 +4939,7 @@ async def _complete_onboarding(
                         },
                     )
 
-    return {"status": "success", "message": "Onboarding completed."}
+    return {"status": "success"}
 
 async def _execute_function_call(
     function_call: types.FunctionCall,
