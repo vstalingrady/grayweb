@@ -260,7 +260,8 @@ async def apply_conversation_update(
     available, falling back to a best-effort acknowledgement when storage
     is disabled or the ID is not a UUID.
     """
-    from backend.core.conversation_store import _conversation_store_available as store_available
+    # Use the already-imported _conversation_store_available from top-level imports
+    store_available = _conversation_store_available
 
     normalized_title = normalize_conversation_title(payload)
     if normalized_title is None and getattr(payload, "user_id", None) is None:

@@ -9,12 +9,28 @@ logger = logging.getLogger("backend.payment_utils")
 
 load_dotenv()
 
+# Determine environment: "production" or "sandbox"
+# MIDTRANS_IS_PRODUCTION=true uses production keys, otherwise sandbox
+is_production = os.getenv("MIDTRANS_IS_PRODUCTION", "false").lower() == "true"
+
+if is_production:
+    # Production keys
+    server_key = os.getenv("MIDTRANS_SERVER_KEY", "")
+    client_key = os.getenv("MIDTRANS_CLIENT_KEY", "")
+    logger.info("Midtrans initialized in PRODUCTION mode")
+else:
+    # Sandbox keys (with fallback to production keys if sandbox not set)
+    server_key = os.getenv("MIDTRANS_SANDBOX_SERVER_KEY", os.getenv("MIDTRANS_SERVER_KEY", ""))
+    client_key = os.getenv("MIDTRANS_SANDBOX_CLIENT_KEY", os.getenv("MIDTRANS_CLIENT_KEY", ""))
+    logger.info("Midtrans initialized in SANDBOX mode")
+
 # Initialize Core API Client
 core_api = midtransclient.CoreApi(
-    is_production=os.getenv("MIDTRANS_IS_PRODUCTION", "false").lower() == "true",
-    server_key=os.getenv("MIDTRANS_SERVER_KEY", ""),
-    client_key=os.getenv("MIDTRANS_CLIENT_KEY", "")
+    is_production=is_production,
+    server_key=server_key,
+    client_key=client_key
 )
+
 
 def create_core_api_transaction(
     order_id: str,
