@@ -33,6 +33,7 @@ import { clampPercent, getContextUsageUsedTokens, getContextUsageVisualizationLi
 import { apiService } from "@/lib/api";
 import type { Locale } from "@/lib/i18n";
 import { requestNotificationPermission } from "@/lib/notificationUtils";
+import { clearGrayLocalCache } from "@/lib/localCache";
 
 type SelectOption = { value: string; label: string };
 
@@ -194,7 +195,14 @@ export function SettingsModal({
 }: SettingsModalProps) {
   const { t, locale: activeLocale, setLocale } = useI18n();
   const { user, updateUser } = useUser();
-  const { webSearchEnabled, setWebSearchEnabled, visibleModelIds, setVisibleModelIds, selectedModelId } = useChatStore();
+  const {
+    webSearchEnabled,
+    setWebSearchEnabled,
+    visibleModelIds,
+    setVisibleModelIds,
+    selectedModelId,
+    clearAllConversations,
+  } = useChatStore();
   const router = useRouter();
   const resolveSection = (value: string): SettingsSection => {
     if (
@@ -236,6 +244,8 @@ export function SettingsModal({
   const [apiKeyDrafts, setApiKeyDrafts] = useState<Record<string, string>>({});
   const [apiKeyVisibility, setApiKeyVisibility] = useState<Record<string, boolean>>({});
   const [apiKeyStatus, setApiKeyStatus] = useState<string | null>(null);
+  const [isDeletingAllConversations, setIsDeletingAllConversations] = useState(false);
+  const [isClearingLocalCache, setIsClearingLocalCache] = useState(false);
 
   // Mobile View State
   const [isMobile, setIsMobile] = useState(false);
@@ -502,18 +512,11 @@ export function SettingsModal({
   };
 
   const handleClearLocalCache = () => {
-    if (typeof window === "undefined") {
+    if (typeof window === "undefined" || isClearingLocalCache) {
       return;
     }
-    try {
-      window.localStorage.removeItem("gray_response_language");
-      window.localStorage.removeItem(THEME_STORAGE_KEY);
-      window.localStorage.removeItem(notificationsStorageKey);
-      window.localStorage.removeItem(conversationMemoryStorageKey);
-      window.localStorage.removeItem(modelImprovementStorageKey);
-    } catch {
-      // ignore storage failures
-    }
+    setIsClearingLocalCache(true);
+    clearGrayLocalCache();
     window.location.reload();
   };
 
@@ -848,21 +851,21 @@ export function SettingsModal({
               {renderNavItem("notifications", t("Notifications"), Bell)}
             </div>
 
-            {contextUsage?.conversationId ? (
-              <div className={styles.settingsSidebarFooter}>
-                <div className={styles.settingsSidebarFooterDivider} aria-hidden="true" />
-                <div className={styles.settingsSidebarContextHeader}>
-                  <span className={styles.settingsSidebarContextTitle}>{t("Context")}</span>
-                  <button
-                    type="button"
-                    className={styles.settingsSidebarContextAction}
-                    onClick={() => void handleCompressConversation()}
-                    disabled={contextActionState === "loading"}
-                  >
-                    {contextActionState === "loading" ? t("Compressing...") : t("Compress")}
-                  </button>
-                </div>
-                {(() => {
+            <div className={styles.settingsSidebarFooter}>
+              <div className={styles.settingsSidebarFooterDivider} aria-hidden="true" />
+              <div className={styles.settingsSidebarContextHeader}>
+                <span className={styles.settingsSidebarContextTitle}>{t("Context")}</span>
+                <button
+                  type="button"
+                  className={styles.settingsSidebarContextAction}
+                  onClick={() => void handleCompressConversation()}
+                  disabled={contextActionState === "loading" || !contextUsage?.conversationId}
+                >
+                  {contextActionState === "loading" ? t("Compressing...") : t("Compress")}
+                </button>
+              </div>
+              {contextUsage?.conversationId ? (
+                (() => {
                   const usedTokens = Math.max(0, getContextUsageUsedTokens(contextUsage));
                   const visualizationLimit = getContextUsageVisualizationLimit(contextUsage);
                   const percentUsed =
@@ -883,14 +886,18 @@ export function SettingsModal({
                       <p className={styles.settingsSidebarContextMeta}>{contextLimitLabel}</p>
                     </>
                   );
-                })()}
-                {contextActionMessage ? (
-                  <p className={styles.settingsSidebarContextMeta} data-variant="muted">
-                    {contextActionMessage}
-                  </p>
-                ) : null}
-              </div>
-            ) : null}
+                })()
+              ) : (
+                <p className={styles.settingsSidebarContextMeta} data-variant="muted">
+                  {t("Open a conversation to see context usage.")}
+                </p>
+              )}
+              {contextActionMessage ? (
+                <p className={styles.settingsSidebarContextMeta} data-variant="muted">
+                  {contextActionMessage}
+                </p>
+              ) : null}
+            </div>
           </aside>
         )}
 
@@ -1562,7 +1569,7 @@ export function SettingsModal({
                       {t("Reset local preferences and cached state on this device.")}
                     </span>
                   </div>
-                  <button className={styles.settingsAction} onClick={handleClearLocalCache}>
+                  <button className={styles.settingsAction} type="button" onClick={handleClearLocalCache}>
                     {t("Clear")}
                   </button>
                 </div>
@@ -1576,22 +1583,28 @@ export function SettingsModal({
                   </div>
                   <button
                     className={styles.settingsAction}
+                    type="button"
+                    disabled={isDeletingAllConversations}
                     onClick={async () => {
-                      if (!user?.id) return;
                       if (!confirm(t("Are you sure you want to delete ALL conversations? This cannot be undone."))) {
                         return;
                       }
 
+                      setIsDeletingAllConversations(true);
                       try {
-                        await apiService.deleteAllConversations(user.id);
-                        window.location.reload();
+                        if (user?.id) {
+                          await apiService.deleteAllConversations(user.id);
+                        }
+                        clearAllConversations();
                       } catch (error) {
                         console.error("Failed to delete all conversations:", error);
                         alert(t("Failed to delete conversations. Please try again."));
+                      } finally {
+                        setIsDeletingAllConversations(false);
                       }
                     }}
                   >
-                    {t("Delete")}
+                    {isDeletingAllConversations ? t("Deleting…") : t("Delete")}
                   </button>
                 </div>
               </div>
