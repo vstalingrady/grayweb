@@ -8113,7 +8113,7 @@ async def chat_stream(
         # onboarding tools (e.g., `complete_onboarding`) so the model can
         # actually persist profile data once it has all required fields.
         if is_onboarding:
-            tool_list = list(ONBOARDING_TOOLS)
+            tool_list = list(ONBOARDING_TOOLS) + list(PLAN_TOOLS)
 
         raw_message = (effective_message or "").strip()
         wants_onboarding = (
@@ -8125,7 +8125,7 @@ async def chat_stream(
         if force_onboarding_mode or (user_record and wants_onboarding and needs_personalization):
             # Always use onboarding prompt and tools in onboarding mode
             effective_system_prompt = ONBOARDING_SYSTEM_PROMPT
-            tool_list = list(ONBOARDING_TOOLS)
+            tool_list = list(ONBOARDING_TOOLS) + list(PLAN_TOOLS)
             
             # Force a capable model for onboarding tools (already handled by stream_ai_response based on tools)
             # effective_model = "models/gemini-flash-latest"
