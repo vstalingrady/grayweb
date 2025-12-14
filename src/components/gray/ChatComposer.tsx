@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useState } from "react";
+import { type ReactNode } from "react";
 import { GrayChatBar, type GrayChatBarProps } from "./ChatBar";
 import styles from "@/app/gray/GrayPageClient.module.css";
 import { useUser } from "@/contexts/UserContext";
@@ -18,8 +18,7 @@ const GrayChatComposerBase = ({
   ...rest
 }: GrayChatComposerProps) => {
   const { user } = useUser();
-  const { reasoningMode, setReasoningMode, modelTier } = useChatStore();
-  const [searchEnabled, setSearchEnabled] = useState(true);
+  const { reasoningMode, setReasoningMode, modelTier, webSearchEnabled, toggleWebSearchEnabled } = useChatStore();
 
   const planTier = (user?.plan_tier || "scout").toLowerCase();
   const isReasoningLocked = planTier === "scout" || modelTier === "lite";
@@ -36,8 +35,8 @@ const GrayChatComposerBase = ({
           isReasoningEnabled={reasoningMode}
           onToggleReasoning={() => setReasoningMode(!reasoningMode)}
           isReasoningLocked={isReasoningLocked}
-          isSearchEnabled={searchEnabled}
-          onToggleSearch={() => setSearchEnabled(!searchEnabled)}
+          isSearchEnabled={webSearchEnabled}
+          onToggleSearch={toggleWebSearchEnabled}
           modelSelector={<ModelSelector />}
           onPasteFiles={rest.onPasteFiles}
           attachmentTray={attachmentTray}

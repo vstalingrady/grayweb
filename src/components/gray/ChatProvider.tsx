@@ -766,12 +766,50 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
   const [modelTier, setModelTier] = useState<"lite" | "pro" | "pioneer">("lite");
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
   const [visibleModelIds, setVisibleModelIds] = useState<string[] | null>(null);
+  const visibleModelIdsHydratedRef = useRef(false);
+  const lastPersistedVisibleModelIdsRef = useRef<string | null>(null);
   const lastAutoCachedWorkspaceRef = useRef<string | null>(null);
   const autoCacheInFlightRef = useRef(false);
   // Track profile hash to only send full profile when it changes
   const lastSentProfileHashRef = useRef<string>("");
   // Track when reasoning mode starts to calculate reasoning duration
   const reasoningStartTimeRef = useRef<number | null>(null);
+
+  const normalizeVisibleModelIds = useCallback((value: unknown): string[] | null => {
+    if (value === null || value === undefined) {
+      return null;
+    }
+    if (!Array.isArray(value)) {
+      return null;
+    }
+    const allowed = new Set(ALL_PIONEER_MODEL_IDS);
+    const sanitized = value
+      .filter((candidate): candidate is string => typeof candidate === "string" && allowed.has(candidate))
+      .filter((candidate, index, self) => self.indexOf(candidate) === index);
+    return sanitized.length === 0
+      ? []
+      : sanitized.length === ALL_PIONEER_MODEL_IDS.length
+        ? null
+        : sanitized;
+  }, []);
+
+  const areVisibleModelIdsEqual = useCallback((left: string[] | null, right: string[] | null): boolean => {
+    if (left === null && right === null) {
+      return true;
+    }
+    if (left === null || right === null) {
+      return false;
+    }
+    if (left.length !== right.length) {
+      return false;
+    }
+    for (let index = 0; index < left.length; index += 1) {
+      if (left[index] !== right[index]) {
+        return false;
+      }
+    }
+    return true;
+  }, []);
 
   // Restore model selection from local storage
   useEffect(() => {
@@ -822,25 +860,27 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
     if (typeof window === "undefined") {
       return;
     }
+    if (user && "visible_model_ids" in user) {
+      setVisibleModelIds(normalizeVisibleModelIds((user as { visible_model_ids?: unknown }).visible_model_ids));
+      visibleModelIdsHydratedRef.current = true;
+      return;
+    }
     const key = `${VISIBLE_MODEL_IDS_STORAGE_PREFIX}:${user?.id ?? "anon"}`;
     const raw = window.localStorage.getItem(key);
     if (!raw) {
       setVisibleModelIds(null);
+      visibleModelIdsHydratedRef.current = true;
       return;
     }
     try {
       const parsed = JSON.parse(raw);
-      if (!Array.isArray(parsed)) {
-        setVisibleModelIds(null);
-        return;
-      }
-      const allowed = new Set(ALL_PIONEER_MODEL_IDS);
-      const sanitized = parsed.filter((value): value is string => typeof value === "string" && allowed.has(value));
-      setVisibleModelIds(sanitized.length === ALL_PIONEER_MODEL_IDS.length ? null : sanitized);
+      setVisibleModelIds(normalizeVisibleModelIds(parsed));
+      visibleModelIdsHydratedRef.current = true;
     } catch {
       setVisibleModelIds(null);
+      visibleModelIdsHydratedRef.current = true;
     }
-  }, [user?.id]);
+  }, [normalizeVisibleModelIds, user]);
 
   // Persist visible models preference
   useEffect(() => {
@@ -854,6 +894,36 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
     }
     window.localStorage.setItem(key, JSON.stringify(visibleModelIds));
   }, [user?.id, visibleModelIds]);
+
+  // Persist visible models preference to the backend (so it survives browser resets / multi-device).
+  useEffect(() => {
+    if (!user || typeof updateUser !== "function") {
+      lastPersistedVisibleModelIdsRef.current = null;
+      return;
+    }
+    if (!("visible_model_ids" in user)) {
+      return;
+    }
+    if (!visibleModelIdsHydratedRef.current) {
+      return;
+    }
+
+    const normalizedFromUser = normalizeVisibleModelIds((user as { visible_model_ids?: unknown }).visible_model_ids);
+    if (areVisibleModelIdsEqual(normalizedFromUser, visibleModelIds)) {
+      return;
+    }
+
+    const serialized =
+      visibleModelIds === null ? "all" : JSON.stringify(visibleModelIds);
+    if (lastPersistedVisibleModelIdsRef.current === serialized) {
+      return;
+    }
+    lastPersistedVisibleModelIdsRef.current = serialized;
+
+    void updateUser({ visible_model_ids: visibleModelIds }).catch((error) => {
+      console.error("Failed to persist visible models preference:", error);
+    });
+  }, [areVisibleModelIdsEqual, normalizeVisibleModelIds, updateUser, user, visibleModelIds]);
 
   // Persist model selection changes
   useEffect(() => {

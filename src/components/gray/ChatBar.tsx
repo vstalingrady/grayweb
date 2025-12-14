@@ -1,7 +1,8 @@
 "use client";
 
 import styles from "@/app/gray/GrayPageClient.module.css";
-import { Paperclip, ArrowUpRight, Globe, Brain, Plus } from "lucide-react";
+import Image from "next/image";
+import { Paperclip, ArrowUpRight } from "lucide-react";
 import {
   type ClipboardEvent as ReactClipboardEvent,
   type FormEvent,
@@ -117,6 +118,7 @@ export function GrayChatBar({
 
   const isStreaming = isSubmitting;
   const actionLabel = isStreaming ? t("Stop response") : t("Send message");
+  const isWebSearchInFlight = Boolean(isSubmitting && isSearchEnabled);
 
   // Track if textarea is expanded beyond single line
   const [isExpanded, setIsExpanded] = useState(false);
@@ -201,6 +203,16 @@ export function GrayChatBar({
 
         {/* Right group - visible on desktop only */}
         <div className={`${styles.chatBarRightGroup} ${styles.hideOnMobile}`}>
+          {isWebSearchInFlight ? (
+            <Image
+              src="/grayaiwhitenotspinning.svg"
+              alt=""
+              aria-hidden="true"
+              width={18}
+              height={18}
+              className={styles.chatSearchSpinner}
+            />
+          ) : null}
           <div className={styles.chatModelSelectorDirect}>
             {modelSelector}
           </div>
@@ -235,6 +247,16 @@ export function GrayChatBar({
           ) : null}
         </div>
         <div className={styles.chatBarRightGroup}>
+          {isWebSearchInFlight ? (
+            <Image
+              src="/grayaiwhitenotspinning.svg"
+              alt=""
+              aria-hidden="true"
+              width={18}
+              height={18}
+              className={styles.chatSearchSpinner}
+            />
+          ) : null}
           <div className={styles.chatModelSelectorDirect}>
             {modelSelector}
           </div>

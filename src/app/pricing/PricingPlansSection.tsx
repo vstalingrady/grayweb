@@ -4,6 +4,7 @@
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useUser } from "@/contexts/UserContext";
+import { useI18n } from "@/contexts/I18nContext";
 import {
     Brain,
     CalendarClock,
@@ -22,66 +23,77 @@ import type { LucideIcon } from "lucide-react";
 import styles from "./page.module.css";
 
 type FeatureItem = {
+    id: string;
     label: string;
     icon: LucideIcon;
     variant?: "inherit";
     subtext?: string;
+    subtextParens?: boolean;
 };
 
 const FREE_FEATURES: FeatureItem[] = [
     {
+        id: "fast_model",
         label: "Fast model",
         icon: Zap,
         subtext: "Grok 4.1 Fast",
     },
-    { label: "Limited daily messages", icon: MessageSquare },
-    { label: "65,536 token memory", icon: Pin },
-    { label: "Plans, habits, and reminders", icon: Clock },
-    { label: "Daily pulse", icon: CalendarClock },
-    { label: "Discord community support", icon: Users },
+    { id: "limited_messages", label: "Limited daily messages", icon: MessageSquare },
+    { id: "token_memory", label: "65,536 token memory", icon: Pin },
+    { id: "plans_habits_reminders", label: "Plans, habits, and reminders", icon: Clock },
+    { id: "daily_pulse", label: "Daily pulse", icon: CalendarClock },
+    { id: "discord_support", label: "Discord community support", icon: Users },
 ];
 
 export const VOYAGER_FEATURES: FeatureItem[] = [
     {
+        id: "choose_model",
         label: "Choose your model",
         icon: Shuffle,
         subtext: "Claude Sonnet 4.5, GPT 5.2, Gemini 3 Pro, DeepSeek V3.2, Kimi K2 Thinking",
     },
     {
+        id: "more_messages",
         label: "6x more messages",
         icon: MessageSquare,
     },
     {
+        id: "longer_memory",
         label: "Longer memory",
         icon: Pin,
     },
     {
+        id: "calendar_access",
         label: "Calendar access",
         icon: Clock,
     },
-    { label: "Reasoning mode", icon: Brain },
+    { id: "reasoning_mode", label: "Reasoning mode", icon: Brain },
     {
+        id: "integrations",
         label: "Google Calendar, Gmail, Notion integrations",
         icon: CalendarClock,
-        subtext: "(coming soon)",
+        subtext: "Coming soon",
+        subtextParens: true,
     },
-    { label: "Everything in Scout", icon: Plus, variant: "inherit" },
+    { id: "everything_in_scout", label: "Everything in Scout", icon: Plus, variant: "inherit" },
 ];
 
 export const PIONEER_FEATURES: FeatureItem[] = [
     {
+        id: "top_tier_models",
         label: "Top-tier models",
         icon: Crown,
         subtext: "Claude Opus 4.5, GPT 5.2 Pro",
     },
     {
+        id: "more_messages",
         label: "15x more messages",
         icon: MessageSquare,
         subtext: "Built for heavy daily use",
     },
-    { label: "Priority during busy times", icon: Headphones },
-    { label: "Early access", icon: FlaskConical },
-    { label: "Everything in Voyager", icon: Plus, variant: "inherit" },
+    { id: "priority", label: "Priority during busy times", icon: Headphones },
+    { id: "early_access", label: "Early access", icon: FlaskConical },
+    { id: "everything_in_voyager", label: "Everything in Voyager", icon: Plus, variant: "inherit" },
 ];
 
 const BILLING_CYCLES = [
@@ -138,6 +150,7 @@ function computeAnnualSavingsPercent(monthlyDisplay: string, annualDisplay: stri
 export function PricingPlansSection() {
     const router = useRouter();
     const { user } = useUser();
+    const { t } = useI18n();
     const [billingCycle, setBillingCycle] = useState<"monthly" | "annual">("monthly");
     const [isIndonesia, setIsIndonesia] = useState<boolean | null>(null);
 
@@ -158,7 +171,8 @@ export function PricingPlansSection() {
         computeAnnualSavingsPercent(VOYAGER_PRICING.monthly.idr.price, VOYAGER_PRICING.annual.idr.price) ?? 0,
         computeAnnualSavingsPercent(PIONEER_PRICING.monthly.idr.price, PIONEER_PRICING.annual.idr.price) ?? 0,
     );
-    const annualSavingsLabel = annualSavingsPercent > 0 ? `Save ~${annualSavingsPercent}%` : undefined;
+    const annualSavingsLabel =
+        annualSavingsPercent > 0 ? t("Save ~{percent}%", { percent: annualSavingsPercent }) : undefined;
 
     const handleUpgrade = (plan: "voyager" | "pioneer") => {
         // Block international users until Paddle is ready
@@ -178,9 +192,9 @@ export function PricingPlansSection() {
     return (
         <>
             <header className={styles.hero}>
-                <h1 className={styles.heroTitle}>A proactive support system for your goals</h1>
+                <h1 className={styles.heroTitle}>{t("A proactive support system for your goals")}</h1>
                 <p className={styles.heroSubhead}>
-                    Start free. Upgrade when you want more messages, longer memory, and integrations.
+                    {t("Start free. Upgrade when you want more messages, longer memory, and integrations.")}
                 </p>
             </header>
 
@@ -188,7 +202,7 @@ export function PricingPlansSection() {
                 <div
                     className={styles.billingToggle}
                     role="group"
-                    aria-label="Billing cadence"
+                    aria-label={t("Billing cadence")}
                     data-cycle={billingCycle}
                 >
                     <div className={styles.billingThumb} aria-hidden="true" />
@@ -201,7 +215,7 @@ export function PricingPlansSection() {
                             aria-pressed={billingCycle === id}
                         >
                             <span className={styles.billingOption}>
-                                <span className={styles.billingLabel}>{label}</span>
+                                <span className={styles.billingLabel}>{t(label)}</span>
                                 {id === "annual" && annualSavingsLabel ? (
                                     <span className={styles.billingSavings}>{annualSavingsLabel}</span>
                                 ) : null}
@@ -216,21 +230,21 @@ export function PricingPlansSection() {
                     <div className={styles.cardBody}>
                         <div className={styles.cardIntro}>
                             <header className={styles.cardHeader}>
-                                <h2>Scout</h2>
-                                <p>Try Gray for free. Great for getting the feel without committing.</p>
+                                <h2>{t("Scout")}</h2>
+                                <p>{t("Try Gray for free. Great for getting the feel without committing.")}</p>
                             </header>
                             <div className={styles.priceBlock}>
-                                <span className={styles.priceValue}>Free</span>
-                                <span className={styles.priceMeta}>/ forever</span>
+                                <span className={styles.priceValue}>{t("Free")}</span>
+                                <span className={styles.priceMeta}>{t("/ forever")}</span>
                             </div>
                         </div>
                         <ul className={styles.featureList}>
-                            {FREE_FEATURES.map(({ label, icon: Icon, subtext }) => (
-                                <li key={label}>
+                            {FREE_FEATURES.map(({ id, label, icon: Icon, subtext }) => (
+                                <li key={id}>
                                     <Icon size={16} aria-hidden="true" />
                                     <span className={styles.featureLabel}>
-                                        {label}
-                                        {subtext ? <span className={styles.featureSubtext}>{subtext}</span> : null}
+                                        {t(label)}
+                                        {subtext ? <span className={styles.featureSubtext}>{t(subtext)}</span> : null}
                                     </span>
                                 </li>
                             ))}
@@ -238,7 +252,7 @@ export function PricingPlansSection() {
                     </div>
                     <div className={styles.cardFooter}>
                         <button type="button" className={styles.planButton} disabled>
-                            Current Plan
+                            {t("Current Plan")}
                         </button>
                     </div>
                 </article>
@@ -247,27 +261,31 @@ export function PricingPlansSection() {
                     <div className={styles.cardBody}>
                         <div className={styles.cardIntro}>
                             <header className={styles.cardHeader}>
-                                <h2>Voyager</h2>
-                                <p>For real daily use: more messages, longer memory, and calendar routines.</p>
+                                <h2>{t("Voyager")}</h2>
+                                <p>{t("For real daily use: more messages, longer memory, and calendar routines.")}</p>
                             </header>
                             <div className={styles.priceHeader}>
                                 <div className={styles.priceBlock}>
                                     <span className={styles.priceValue}>{voyagerPrice}</span>
-                                    <span className={styles.priceMeta}>/ {voyagerCadence}</span>
+                                    <span className={styles.priceMeta}>/ {t(voyagerCadence)}</span>
                                 </div>
                             </div>
                         </div>
                         <ul className={styles.featureList}>
-                            {VOYAGER_FEATURES.map(({ label, icon: Icon, variant, subtext }) => (
-                                <li key={label} data-variant={variant ?? undefined}>
+                            {VOYAGER_FEATURES.map(({ id, label, icon: Icon, variant, subtext, subtextParens }) => (
+                                <li key={id} data-variant={variant ?? undefined}>
                                     <Icon size={16} aria-hidden="true" />
                                     <span
                                         className={
                                             variant === "inherit" ? `${styles.featureLabel} ${styles.featureLabelInherit}` : styles.featureLabel
                                         }
                                     >
-                                        {label}
-                                        {subtext ? <span className={styles.featureSubtext}>{subtext}</span> : null}
+                                        {t(label)}
+                                        {subtext ? (
+                                            <span className={styles.featureSubtext}>
+                                                {subtextParens ? `(${t(subtext)})` : t(subtext)}
+                                            </span>
+                                        ) : null}
                                     </span>
                                 </li>
                             ))}
@@ -280,7 +298,7 @@ export function PricingPlansSection() {
                             onClick={() => handleUpgrade("voyager")}
                             disabled={isIndonesia === false}
                         >
-                            {isIndonesia === false ? "Coming Soon" : "Upgrade"}
+                            {isIndonesia === false ? t("Coming soon") : t("Upgrade")}
                         </button>
                     </div>
                 </article>
@@ -289,27 +307,27 @@ export function PricingPlansSection() {
                     <div className={styles.cardBody}>
                         <div className={styles.cardIntro}>
                             <header className={styles.cardHeader}>
-                                <h2>Pioneer</h2>
-                                <p>For heavy users: top limits, top models, and early access to new features.</p>
+                                <h2>{t("Pioneer")}</h2>
+                                <p>{t("For heavy users: top limits, top models, and early access to new features.")}</p>
                             </header>
                             <div className={styles.priceHeader}>
                                 <div className={styles.priceBlock}>
                                     <span className={styles.priceValue}>{pioneerPrice}</span>
-                                    <span className={styles.priceMeta}>/ {pioneerCadence}</span>
+                                    <span className={styles.priceMeta}>/ {t(pioneerCadence)}</span>
                                 </div>
                             </div>
                         </div>
                         <ul className={styles.featureList}>
-                            {PIONEER_FEATURES.map(({ label, icon: Icon, variant, subtext }) => (
-                                <li key={label} data-variant={variant ?? undefined}>
+                            {PIONEER_FEATURES.map(({ id, label, icon: Icon, variant, subtext }) => (
+                                <li key={id} data-variant={variant ?? undefined}>
                                     <Icon size={16} aria-hidden="true" />
                                     <span
                                         className={
                                             variant === "inherit" ? `${styles.featureLabel} ${styles.featureLabelInherit}` : styles.featureLabel
                                         }
                                     >
-                                        {label}
-                                        {subtext ? <span className={styles.featureSubtext}>{subtext}</span> : null}
+                                        {t(label)}
+                                        {subtext ? <span className={styles.featureSubtext}>{t(subtext)}</span> : null}
                                     </span>
                                 </li>
                             ))}
@@ -322,13 +340,13 @@ export function PricingPlansSection() {
                             onClick={() => handleUpgrade("pioneer")}
                             disabled={isIndonesia === false}
                         >
-                            {isIndonesia === false ? "Coming Soon" : "Upgrade"}
+                            {isIndonesia === false ? t("Coming soon") : t("Upgrade")}
                         </button>
                     </div>
                 </article>
             </section>
             <p className={styles.disclaimer}>
-                *Usage limits apply. Prices shown don't include applicable tax.
+                {t("*Usage limits apply. Prices shown don't include applicable tax.")}
             </p>
         </>
     );

@@ -1208,6 +1208,20 @@
   /* Align with input text roughly */
 }
 
+.chatSearchSpinner {
+  width: 18px;
+  height: 18px;
+  animation: graySpin 1s linear infinite;
+  flex-shrink: 0;
+  opacity: 0.9;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chatSearchSpinner {
+    animation: none;
+  }
+}
+
 .chatBarRounded[data-expanded="true"] .chatBarLeftGroup,
 .chatBarRounded[data-expanded="true"] .chatBarRightGroup {
   align-items: flex-end;
@@ -2948,8 +2962,7 @@
   padding-right: max(env(safe-area-inset-right, 0px), 0px);
   row-gap: 0;
   overflow-y: auto;
-  overflow-x: visible;
-  scrollbar-gutter: stable both-edges;
+  overflow-x: hidden;
   scroll-padding-bottom: calc(var(--chat-composer-overlap, clamp(10px, 2vh, 18px)) + clamp(12px, 2vh, 20px));
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
@@ -9653,7 +9666,6 @@ h1.greeting {
   overscroll-behavior-y: contain;
   scroll-behavior: smooth;
   z-index: 0;
-  scrollbar-gutter: stable both-edges;
 }
 
 .chatBarRow {

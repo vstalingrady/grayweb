@@ -34,6 +34,7 @@ interface UserContextType {
     personalization_system_prompt_override?: string | null;
     maps_enabled?: boolean;
     improve_model_for_everyone?: boolean;
+    visible_model_ids?: string[] | null;
     has_seen_general_chat?: boolean;
   }) => Promise<void>;
   refreshUser: () => Promise<void>;
@@ -509,6 +510,8 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
     personalization_custom_instructions?: string | null;
     personalization_system_prompt_override?: string | null;
     maps_enabled?: boolean;
+    improve_model_for_everyone?: boolean;
+    visible_model_ids?: string[] | null;
     has_seen_general_chat?: boolean;
   }) => {
     if (!user) throw new Error('No user logged in');
@@ -525,6 +528,8 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
       personalization_custom_instructions?: string | null;
       personalization_system_prompt_override?: string | null;
       maps_enabled?: boolean;
+      improve_model_for_everyone?: boolean;
+      visible_model_ids?: string[] | null;
       has_seen_general_chat?: boolean;
     } = {};
 
@@ -559,6 +564,9 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
     }
     if (typeof userData.maps_enabled === 'boolean') {
       payload.maps_enabled = userData.maps_enabled;
+    }
+    if (Object.prototype.hasOwnProperty.call(userData, 'visible_model_ids')) {
+      payload.visible_model_ids = userData.visible_model_ids ?? null;
     }
     if (typeof userData.improve_model_for_everyone === 'boolean') {
       payload.improve_model_for_everyone = userData.improve_model_for_everyone;

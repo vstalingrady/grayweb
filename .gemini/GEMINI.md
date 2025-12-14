@@ -43,3 +43,7 @@ npm run lint && npm run build && python -m pytest backend/tests -v
 1. Run full verification script
 2. Commit with descriptive message
 3. Do NOT push until CI passes locally
+
+ssh to production: ~/.ssh/ssh-key-2025-08-25.key 
+ubuntu@168.110.203.180
+home/ubuntu/gray

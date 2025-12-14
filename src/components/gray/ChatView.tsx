@@ -67,7 +67,7 @@ import {
   type GrayReminderCreatedPayload,
   type GrayReminderEntityType,
 } from "./chat/types";
-import { GENERAL_CHAT_SESSION_ID } from "./chat/constants";
+import { GENERAL_CHAT_SESSION_ID, REMINDER_CODE_BLOCK_REGEX } from "./chat/constants";
 import {
   buildReminderConfirmationText,
   coerceReminderPayload,
@@ -76,9 +76,6 @@ import {
 import { formatReminderDisplayLabels } from "./reminderTimeUtils";
 import AttachmentTray from "./AttachmentTray";
 import { useI18n } from "@/contexts/I18nContext";
-
-const LEGACY_REMINDER_SNIPPET_REGEX =
-  /```[a-z0-9_-]*[\s\S]*?(gray[\s\S]{0,120}?(?:reminder|plan|habit))[\s\S]*?```/gi;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const MARKDOWN_PLUGINS: any = [
@@ -1472,7 +1469,7 @@ const ChatMessagesList = memo(
           const assistantTextCandidate = isAssistant ? aiText : rawContent;
           const sanitizedAssistantTextCandidate = stripGrayTitleMarkers(assistantTextCandidate);
           const assistantTextAfterRemovals = isAssistant
-            ? sanitizedAssistantTextCandidate.replace(LEGACY_REMINDER_SNIPPET_REGEX, "").trim()
+            ? sanitizedAssistantTextCandidate.replace(REMINDER_CODE_BLOCK_REGEX, "").trim()
             : sanitizedAssistantTextCandidate;
           const visibleAssistantText = isAssistant
             ? normalizeAssistantMath(assistantTextAfterRemovals) ?? ""
@@ -1597,6 +1594,11 @@ const ChatMessagesList = memo(
                   </div>
                 ) : (
                   <>
+                    {isAwaitingStreamContent && (
+                      <GrayStreamingSpinner
+                        toolLabel={extractCurrentToolStatus(rawContent, t)}
+                      />
+                    )}
 
                     {assistantReminders.length > 0 ? (
                       <div className={styles.reminderCardList}>
@@ -3333,6 +3335,7 @@ export function GrayChatView({
       }));
     }
     if (!targetSession) {
+      console.error("[handleSubmit] Failed to resolve targetSession", { sessionId, sessionExists: !!session });
       isSubmittingRef.current = false;
       return;
     }
@@ -3368,7 +3371,7 @@ export function GrayChatView({
       content,
       tempUserMessageId,
       undefined,
-      selectedAttachments.length > 0 ? [...selectedAttachments] : undefined
+      attachments.length > 0 ? [...attachments] : undefined
     );
     setDraft("");
     if (replyTimeout.current !== null) {

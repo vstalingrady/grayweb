@@ -160,7 +160,9 @@ class OpenRouterService:
         }
         self._lite_model = os.getenv("OPENROUTER_LITE_MODEL", "x-ai/grok-4.1-fast")
         self._default_model = os.getenv("OPENROUTER_DEFAULT_MODEL", self.MODEL_MAPPINGS["default"])
-        self._max_tokens = _int_env("OPENROUTER_MAX_TOKENS", 4096)
+        # OpenRouter/provider-side caps still apply; this is just a default output budget.
+        # Keep it extremely high so responses aren't artificially cut short by our defaults.
+        self._max_tokens = _int_env("OPENROUTER_MAX_TOKENS", 131072)
         # Keep a small window for the free/lite path, but widen it for Pioneer-grade models
         # so onboarding context is not dropped mid-flow.
         self._max_history_lite = _int_env("OPENROUTER_MAX_HISTORY_MESSAGES", 10)
@@ -453,6 +455,8 @@ class OpenRouterService:
                 "sort": "price",  # Prioritize cheapest provider
                 "allow_fallbacks": True,
             },
+            # Explicitly set output budget; some providers default to short completions.
+            "max_tokens": self._max_tokens,
         }
 
         # Request usage stats (OpenRouter uses stream_options for this)
@@ -580,6 +584,8 @@ class OpenRouterService:
             "model": resolved_model,
             "messages": messages,
             "temperature": self._temperature,
+            # Explicitly set output budget; some providers default to short completions.
+            "max_tokens": self._max_tokens,
             "stream": True,  # Enable streaming
             # OpenRouter optimizations: https://openrouter.ai/docs/provider-routing
             "provider": provider_preferences,

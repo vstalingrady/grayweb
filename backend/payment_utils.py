@@ -103,7 +103,7 @@ def verify_notification_signature(order_id: str, status_code: str, gross_amount:
     Verify the signature key from a Midtrans notification.
     Signature = SHA512(order_id + status_code + gross_amount + server_key)
     """
-    server_key = os.getenv("MIDTRANS_SERVER_KEY", "")
+    # Use the global server_key which is already configured for sandbox/prod
     
     # Ensure gross_amount is a string without .00 if it's an integer amount, 
     # but Midtrans sends it as a string usually. 

@@ -7674,8 +7674,9 @@ async def chat_endpoint(
     """Send a message to AI and get a response"""
     """Send a message to AI and get a response"""
     # Force the request user to the authenticated user to avoid mismatches from stale client state.
-    if str(chat_request.user_id) != str(current_user["id"]):
-        raise HTTPException(status_code=403, detail="User ID mismatch")
+    # We overwrite it instead of raising 403 to be more potentially resilient to frontend glitches,
+    # as long as the action is performed as the authenticated user.
+    chat_request.user_id = current_user["id"]
     
     # Use authenticated ID for consistency
     authenticated_user_id = current_user["id"]

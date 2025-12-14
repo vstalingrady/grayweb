@@ -86,6 +86,7 @@ export interface User {
   updated_at: string;
   usage_status?: UsageStatus | null;
   preferred_model?: string | null;
+  visible_model_ids?: string[] | null;
 }
 
 export interface ChatSession {
@@ -575,6 +576,7 @@ export interface UserUpdate {
   personalization_about?: string | null;
   personalization_custom_instructions?: string | null;
   preferred_model?: string | null;
+  visible_model_ids?: string[] | null;
 }
 
 class ApiService {

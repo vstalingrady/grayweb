@@ -9,6 +9,7 @@ import { X } from "lucide-react";
 import styles from "./page.module.css";
 import { PricingPlansSection } from "./PricingPlansSection";
 import { useUser } from "@/contexts/UserContext";
+import { useI18n } from "@/contexts/I18nContext";
 
 const ParticleSphere = dynamic(
   () => import("@/components/backgrounds/ParticleSphere").then((mod) => mod.ParticleSphere),
@@ -24,6 +25,7 @@ interface PricingClientProps {
 export default function PricingClient({ storeId, voyagerVariantId, pioneerVariantId }: PricingClientProps) {
   const router = useRouter();
   const { user } = useUser();
+  const { t } = useI18n();
 
   const handleDismiss = useCallback(() => {
     router.push("/");
@@ -38,7 +40,7 @@ export default function PricingClient({ storeId, voyagerVariantId, pioneerVarian
             type="button"
             className={styles.dismiss}
             onClick={handleDismiss}
-            aria-label="Tutup halaman harga"
+            aria-label={t("Close pricing page")}
           >
             <X size={20} />
           </button>
