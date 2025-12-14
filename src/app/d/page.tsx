@@ -1,14 +1,37 @@
-import { redirect } from "next/navigation";
+import type { Metadata } from "next";
+import { headers } from "next/headers";
+import { notFound, redirect } from "next/navigation";
+import { GrayPageClient } from "@/app/gray/GrayPageClient";
+import { hostFromHeaders, isGrayWorkspaceHost } from "@/lib/grayRouting";
 import { readServerSession } from "@/lib/auth/server";
 
-const DEFAULT_REDIRECT = "/login?redirect=/";
+export const metadata: Metadata = {
+  title: "Calendar",
+};
 
-export default async function DashboardPage() {
+export default async function CalendarPage() {
   const session = await readServerSession();
 
   if (!session) {
-    redirect(DEFAULT_REDIRECT);
+    redirect("/login?redirect=/d");
   }
 
-  redirect("/");
+  const requestHeaders = await headers();
+  const host = hostFromHeaders(requestHeaders);
+  if (!isGrayWorkspaceHost(host)) {
+    notFound();
+  }
+
+  // Seed the client clock from the request time so hydration matches.
+  // eslint-disable-next-line react-hooks/purity
+  const initialTimestamp = Date.now();
+
+  return (
+    <GrayPageClient
+      initialTimestamp={initialTimestamp}
+      activeNav="dashboard"
+      variant="dashboard"
+      initialDashboardTab="calendar"
+    />
+  );
 }

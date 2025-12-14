@@ -133,6 +133,7 @@ type GrayPageClientProps = {
   activeNav?: SidebarNavKey;
   variant?: "general" | "dashboard" | "chat";
   activeChatId?: string | null;
+  initialDashboardTab?: "pulse" | "calendar";
 };
 
 function GrayPageClientInner({
@@ -140,6 +141,7 @@ function GrayPageClientInner({
   activeNav = "general",
   variant = "general",
   activeChatId = null,
+  initialDashboardTab = "pulse",
 }: GrayPageClientProps) {
 
   const { user, loading: userLoading } = useUser();
@@ -338,7 +340,7 @@ function GrayPageClientInner({
     };
   }, [hasLoadedSidebarPref]);
 
-  const [dashboardTab, setDashboardTab] = useState<"pulse" | "calendar">("pulse");
+  const [dashboardTab, setDashboardTab] = useState<"pulse" | "calendar">(() => initialDashboardTab);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [settingsInitialSection, setSettingsInitialSection] = useState<
     "account" | "preferences" | "personalization" | "data_controls"
@@ -2557,6 +2559,6 @@ function GrayPageClientInner({
 
 export const GrayPageClient = dynamic(() => Promise.resolve(GrayPageClientInner), {
   ssr: false,
-});
+}) as typeof GrayPageClientInner;
 
 export default GrayPageClient;
