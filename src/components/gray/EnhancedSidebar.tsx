@@ -19,7 +19,6 @@ import { SiDiscord } from "react-icons/si";
 import { useUser } from "@/contexts/UserContext";
 import { useI18n } from "@/contexts/I18nContext";
 import styles from "@/app/gray/GrayPageClient.module.css";
-import { DepthParticleBackground } from "@/components/backgrounds/DepthParticleBackground";
 import { type SidebarHistorySection, type SidebarNavItem, type SidebarNavKey, type SidebarHistoryEntry } from "./types";
 
 type GrayEnhancedSidebarProps = {
@@ -494,14 +493,11 @@ function GrayEnhancedSidebarComponent(props: GrayEnhancedSidebarProps) {
                           onClick={handleUpgradePlan}
                           role="menuitem"
                         >
-                          <div className={styles.profileMenuUpgradeCard}>
-                            <div className={styles.profileMenuUpgradeBackground} aria-hidden="true">
-                              <DepthParticleBackground variant="inset" />
-                            </div>
+                          <span className={styles.profileMenuUpgradeCard}>
                             <span className={styles.profileMenuUpgradeTitle}>{t("Upgrade")}</span>
                             <span className={styles.profileMenuUpgradeSubtext}>{t("Unlock more messages")}</span>
                             <span className={styles.profileMenuUpgradePill}>{t("View Plans")}</span>
-                          </div>
+                          </span>
                         </button>
                         <span className={styles.profileMenuDivider} aria-hidden="true" />
                       </>

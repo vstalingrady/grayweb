@@ -561,14 +561,6 @@
     0 18px 30px rgba(0, 0, 0, 0.35);
 }
 
-.profileMenuUpgradeBackground {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  opacity: 0.85;
-}
-
 .profileMenuUpgradeCard::before {
   content: "";
   position: absolute;
@@ -577,14 +569,14 @@
   background:
     radial-gradient(140% 100% at 50% 0%, rgba(255, 255, 255, 0.12), transparent 55%),
     linear-gradient(180deg, rgba(0, 0, 0, 0.05), rgba(0, 0, 0, 0.55));
-  opacity: 0.6;
+  opacity: 0.65;
   pointer-events: none;
-  z-index: 1;
+  z-index: 0;
 }
 
-.profileMenuUpgradeCard> :not(.profileMenuUpgradeBackground) {
+.profileMenuUpgradeCard>* {
   position: relative;
-  z-index: 2;
+  z-index: 1;
 }
 
 .profileMenuUpgrade:hover .profileMenuUpgradeCard,
@@ -12025,6 +12017,7 @@ h1.greeting {
   padding: 24px;
   display: flex;
   flex-direction: column;
+  gap: 0;
   height: 100%;
   position: relative;
   overflow: hidden;

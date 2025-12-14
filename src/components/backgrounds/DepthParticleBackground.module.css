@@ -1,19 +1,9 @@
-.particleBackgroundFixed,
-.particleBackgroundInset {
+.particleBackground {
+  position: fixed;
   inset: 0;
   z-index: 0;
   opacity: 0.65;
   pointer-events: none;
-}
-
-.particleBackgroundFixed {
-  position: fixed;
-}
-
-.particleBackgroundInset {
-  position: absolute;
-  border-radius: inherit;
-  overflow: hidden;
 }
 
 .particleCanvas {
