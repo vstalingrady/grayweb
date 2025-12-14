@@ -8503,7 +8503,9 @@ async def create_conversation(
         raise HTTPException(status_code=500, detail=f"Error creating conversation: {str(e)}")
 
 
-async def _delete_general_conversation_history(user_id: int) -> None:
+async def _delete_general_conversation_history(
+    user_id: int, db: "databases.Database | None" = None
+) -> None:
     # 1. Delete from Supabase
     if _conversation_store_available():
         try:
@@ -8514,7 +8516,7 @@ async def _delete_general_conversation_history(user_id: int) -> None:
     # 2. Delete from SQLite
     try:
         query = general_chat_messages.delete().where(general_chat_messages.c.user_id == user_id)
-        await database.execute(query)
+        await (db or database).execute(query)
     except Exception as error:
         app_logger.error(
             "Error deleting general conversation history (SQLite)",
@@ -8575,6 +8577,7 @@ async def delete_all_conversations(
     request: Request,
     user_id: int,
     current_user: Dict[str, Any] = Depends(get_current_user),
+    db: databases.Database = Depends(get_database),
 ):
     """Delete all conversations and messages for a user.
     
@@ -8584,46 +8587,53 @@ async def delete_all_conversations(
     """
     try:
         require_same_user(user_id, current_user)
-        
+
         # 1. Delete General Chat History
-        await _delete_general_conversation_history(user_id)
-        
+        await _delete_general_conversation_history(user_id, db=db)
+        _invalidate_conversation_cache(f"general:{user_id}")
+
         # 2. Delete All Named Threads (and their messages)
         try:
             try:
-                from backend.database import user_chat_threads as _user_chat_threads, user_chat_messages as _user_chat_messages
+                from backend.database import (
+                    user_chat_threads as _user_chat_threads,
+                    user_chat_messages as _user_chat_messages,
+                )
             except Exception:
                 from database import user_chat_threads as _user_chat_threads, user_chat_messages as _user_chat_messages
 
-            # Find all threads provided by this user to delete their messages first
-            # We can use a subquery or just delete all messages linked to threads owned by this user
-            # SQLite doesn't always support complex delete-joins well, so we might need two steps
-            
             # Step 2a: Get thread IDs
             query = _user_chat_threads.select().where(_user_chat_threads.c.user_identifier == user_id)
-            rows = await database.fetch_all(query)
+            rows = await db.fetch_all(query)
             thread_ids = [str(row["id"]) for row in rows]
-            
+
             if thread_ids:
                 # Step 2b: Delete messages for these threads
-                await database.execute(_user_chat_messages.delete().where(_user_chat_messages.c.thread_id.in_(thread_ids)))
-                
-                # Step 2c: Delete the threads themselves
-                await database.execute(_user_chat_threads.delete().where(_user_chat_threads.c.id.in_(thread_ids)))
+                await db.execute(_user_chat_messages.delete().where(_user_chat_messages.c.thread_id.in_(thread_ids)))
 
-            # Also clean up Supabase if available
+                # Step 2c: Delete the threads themselves
+                await db.execute(_user_chat_threads.delete().where(_user_chat_threads.c.id.in_(thread_ids)))
+
+                for thread_id in thread_ids:
+                    _invalidate_conversation_cache(thread_id)
+
+            # Also clean up Supabase if available (best effort)
             if supabase and _conversation_store_available():
                 try:
-                    # Supabase (Postgres) usually handles cascades, but explicit is safer
-                    # However, mass deletion might be blocked by RLS if not careful, but usually owner can delete
-                    # For simplicity, we can rely on loop or bulk delete
+                    if thread_ids:
+                        try:
+                            supabase.table("user_chat_messages").delete().in_("thread_id", thread_ids).execute()
+                        except Exception:
+                            pass
                     supabase.table("user_chat_threads").delete().eq("user_identifier", user_id).execute()
                 except Exception:
                     pass
 
         except Exception as db_error:
             app_logger.error(f"Error checking/deleting named threads: {db_error}")
-            
+
+    except HTTPException:
+        raise
     except Exception as error:
         raise HTTPException(status_code=500, detail=f"Error deleting all conversations: {str(error)}")
 

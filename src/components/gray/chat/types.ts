@@ -77,6 +77,7 @@ export type ChatContextValue = {
     renameSession: (sessionId: string, title: string) => void;
     pinSession: (sessionId: string, pinned: boolean) => Promise<void>;
     deleteSession: (sessionId: string) => void;
+    clearAllConversations: () => void;
     getSession: (sessionId: string) => ChatSession | undefined;
     ensureSession: (sessionId: string, initializer: () => ChatSession) => ChatSession;
     generalSessionId: string | null;

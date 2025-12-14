@@ -135,7 +135,9 @@ export function GrayChatBar({
       }
 
       const baseline = singleLineHeightRef.current;
-      setIsExpanded(height > baseline + 12);
+      // Use a larger threshold (~1.3 line heights) to ensure expansion only triggers
+      // when the user has actually reached a new line, not just wrapped text
+      setIsExpanded(height > baseline + 20);
     },
     [value]
   );

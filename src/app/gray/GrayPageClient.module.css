@@ -691,6 +691,11 @@
   padding: clamp(16px, 4vw, 28px);
 }
 
+:global(body):has(.personalizationOverlay) .dashboardGridItemProactivity,
+:global(body):has(.personalizationOverlay) .dashboardCardProactivity {
+  visibility: hidden;
+}
+
 .personalizationPanel {
   width: min(480px, 92vw);
   max-height: calc(100vh - 40px);

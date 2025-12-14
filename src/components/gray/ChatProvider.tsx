@@ -1793,6 +1793,29 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
     [persistSessions, resetAutoStreamState]
   );
 
+  const clearAllConversations = useCallback(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const keys = buildSessionStorageKeyCandidates(user?.id, user?.email);
+        keys.forEach((key) => window.localStorage.removeItem(key));
+      } catch {
+        // ignore storage failures
+      }
+    }
+
+    resetAutoStreamState();
+    pendingTitleSyncRef.current = new Map();
+    pendingThreadSeedsRef.current = new Map();
+    setRemoteConversationsLoaded(false);
+
+    setSessions(() => {
+      const emptyGeneral = createEmptyGeneralSession(undefined, generalConversationIdRef.current);
+      const ordered = normalizeSessionsList([emptyGeneral]);
+      persistSessions(ordered);
+      return ordered;
+    });
+  }, [persistSessions, resetAutoStreamState, user?.email, user?.id]);
+
   const ensureGeneralSession = useCallback((): ChatSession => {
     const existing = sessionsRef.current.find((session) => session.scope === "general");
     if (existing) {
@@ -2905,6 +2928,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       pinSession,
       applyAutoTitle,
       deleteSession,
+      clearAllConversations,
       getSession,
       ensureSession,
       generalSessionId,
@@ -2988,6 +3012,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
     [
       appendMessage,
       createThreadSession,
+      clearAllConversations,
       deleteSession,
       generalSessionId,
       getSession,
