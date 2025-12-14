@@ -382,7 +382,23 @@ async def save_conversation_message(
             reminders=json.dumps(reminders_data) if reminders_data else None,
             created_at=utcnow(),
         )
-        await database.execute(insert_query)
+        try:
+             await database.execute(insert_query)
+        except Exception:
+             # Retry without reminders for older DB schemas
+             if reminders_data:
+                 query_without_reminders = user_chat_messages.insert().values(
+                     thread_id=conversation_id,
+                     role=role,
+                     text=text,
+                     grounding_metadata=grounding_metadata,
+                     attachments=message.get("attachments"),
+                     reminders=None,
+                     created_at=utcnow(),
+                 )
+                 await database.execute(query_without_reminders)
+             else:
+                 raise
 
         update_query = (
             user_chat_threads.update()

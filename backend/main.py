@@ -1389,6 +1389,7 @@ class UserBase(BaseModel):
     weekly_cost_usage: Optional[float] = 0.0
     six_hour_cost_usage: Optional[float] = 0.0
     preferred_model: Optional[str] = None
+    visible_model_ids: Optional[List[str]] = None
 
 class UserCreate(UserBase):
     pass
@@ -1409,6 +1410,7 @@ class UserUpdate(BaseModel):
     personalization_system_prompt_override: Optional[str] = None
     personalization_show_calendar: Optional[bool] = None
     preferred_model: Optional[str] = None
+    visible_model_ids: Optional[List[str]] = None
 
 class UsageStatus(BaseModel):
     tier: str
@@ -2716,6 +2718,22 @@ async def _connect_database():
 
 async def _run_basic_migrations():
     """Ensure critical SQLite columns exist."""
+    _ensure_sqlite_columns(
+        "users",
+        [
+            ("visible_model_ids", "TEXT", "NULL"),
+        ],
+    )
+    if DATABASE_URL.startswith("postgres"):
+        try:
+            await database.execute(
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS visible_model_ids JSONB"
+            )
+        except Exception as exc:  # pragma: no cover - best effort migration
+            app_logger.warning(
+                "Postgres migration failed",
+                extra={"event_type": "postgres_migration_error", "table": "users", "error": str(exc)},
+            )
     _ensure_sqlite_columns(
         "user_streaks",
         [
@@ -7739,7 +7757,16 @@ async def chat_endpoint(
             and last_history_entry.get("role") in {"user", "assistant", "model"}
             and (last_history_entry.get("text") or "") == chat_request.message
         )
-        if should_persist_user:
+        if is_general_conversation:
+             # General chat messages are not handled by save_conversation_message
+             # We must manually insert them using the general chat persistence logic
+             if should_persist_user:
+                 await _insert_general_conversation_message(
+                     user_id=chat_request.user_id,
+                     role="user",
+                     text=chat_request.message
+                 )
+        elif should_persist_user:
             await save_conversation_message(conversation_id, user_message_payload, user_id=chat_request.user_id)
 
         # Enforce tier restrictions
@@ -7800,7 +7827,18 @@ async def chat_endpoint(
         }
         if grounding_metadata:
             assistant_message_payload["grounding_metadata"] = grounding_metadata
-        assistant_message_id = await save_conversation_message(conversation_id, assistant_message_payload, user_id=chat_request.user_id)
+        assistant_message_id = None
+        if is_general_conversation:
+            # General Chat persistence
+            assistant_message_id = await _insert_general_conversation_message(
+                 user_id=chat_request.user_id,
+                 role="model",
+                 text=ai_response,
+                 grounding_metadata=grounding_metadata
+            )
+        else:
+             # Regular thread persistence
+             assistant_message_id = await save_conversation_message(conversation_id, assistant_message_payload, user_id=chat_request.user_id)
 
         # Generate title inline so it's returned with the response.
         # This adds ~100-300ms latency but only on first message of new conversations.
@@ -8050,8 +8088,9 @@ async def chat_stream(
             # but the core "be thoughtful, detailed, engaging" persona should always be present.
             # Check if the client prompt already contains the base (to avoid duplication).
             client_prompt = chat_request.system_prompt.strip()
-            base_signature = "You are Gray"  # Unique prefix from DEFAULT_SYSTEM_PROMPT
-            if client_prompt.startswith(base_signature):
+            # DEFAULT_SYSTEM_PROMPT now starts with "You are Gray", so we check for that signature.
+            base_signature = "You are Gray"
+            if base_signature in client_prompt:
                 # Client already sent the full prompt, use as-is
                 effective_system_prompt = client_prompt
             else:
@@ -9144,6 +9183,29 @@ async def update_user(
     update_data = user_update.dict(exclude_unset=True)
     if "full_name" in update_data:
         update_data["initials"] = generate_initials(update_data["full_name"])
+
+    if "visible_model_ids" in update_data:
+        raw_visible_model_ids = update_data.get("visible_model_ids")
+        if raw_visible_model_ids is None:
+            update_data["visible_model_ids"] = None
+        elif isinstance(raw_visible_model_ids, list):
+            sanitized: List[str] = []
+            seen: Set[str] = set()
+            for value in raw_visible_model_ids:
+                if not isinstance(value, str):
+                    continue
+                candidate = value.strip()
+                if not candidate or len(candidate) > 128:
+                    continue
+                if candidate in seen:
+                    continue
+                seen.add(candidate)
+                sanitized.append(candidate)
+                if len(sanitized) >= 500:
+                    break
+            update_data["visible_model_ids"] = sanitized
+        else:
+            update_data.pop("visible_model_ids", None)
 
     update_data["updated_at"] = utcnow()
 
