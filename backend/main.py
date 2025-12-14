@@ -4792,23 +4792,16 @@ async def _complete_onboarding(
     # Accept multiple synonyms for the user's self-description so different
     # onboarding prompts / tool schemas still map correctly.
     about = clean(args.get("about") or args.get("about_you") or args.get("blurb"))
-    core_blocker = clean(args.get("core_blocker"))
 
     # If the tool was invoked with no meaningful fields at all (e.g. a
     # malformed or empty arguments object), ignore it instead of marking
     # onboarding complete with a blank profile.
-    if not any([nickname, occupation, about, core_blocker]):
+    if not any([nickname, occupation, about]):
         api_logger.warning(
             "complete_onboarding called without core fields; ignoring",
             extra={"event_type": "onboarding_tool_ignored", "user_id": user_id},
         )
         return {"status": "ignored", "message": "Onboarding tool called without any profile details."}
-
-    about_parts: List[str] = []
-    if about:
-        about_parts.append(about)
-    if core_blocker:
-        about_parts.append(f"Core blocker: {core_blocker}")
 
     updates: Dict[str, Any] = {
         "has_seen_general_chat": True,
@@ -4818,8 +4811,8 @@ async def _complete_onboarding(
         updates["personalization_nickname"] = nickname
     if occupation is not None:
         updates["personalization_occupation"] = occupation
-    if about_parts:
-        updates["personalization_about"] = "\n\n".join(about_parts)
+    if about is not None:
+        updates["personalization_about"] = about
 
     await db.execute(users.update().where(users.c.id == user_id).values(**updates))
 
