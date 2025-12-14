@@ -9871,7 +9871,8 @@ async def list_user_conversations(
     limit: int = Query(100, ge=1, le=500),
     db: databases.Database = Depends(get_database),
 ):
-    require_same_user(user_id, current_user)
+    # Force the user_id to be the authenticated user's ID to prevent cross-account leakage
+    user_id = current_user["id"]
     
     # Query local SQLite database for chat threads
     try:
