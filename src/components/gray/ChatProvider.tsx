@@ -1833,29 +1833,34 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
   const deleteSession = useCallback(
     (sessionId: string) => {
       const target = sessionsRef.current.find((session) => session.id === sessionId);
-      if (!target || target.scope === "general") {
+      // Skip general sessions
+      if (target?.scope === "general") {
         return;
       }
 
-      // Clear any pending auto-stream for this session so deletion never triggers regeneration.
-      resetAutoStreamState(sessionId);
+      // For local sessions, do optimistic UI removal
+      if (target) {
+        // Clear any pending auto-stream for this session so deletion never triggers regeneration.
+        resetAutoStreamState(sessionId);
 
-      // Optimistically remove locally so it disappears from history & context immediately.
-      setSessions((prev) => {
-        const next = prev.filter((session) => session.id !== sessionId);
-        const ordered = normalizeSessionsList(next);
-        persistSessions(ordered);
-        return ordered;
-      });
+        // Optimistically remove locally so it disappears from history & context immediately.
+        setSessions((prev) => {
+          const next = prev.filter((session) => session.id !== sessionId);
+          const ordered = normalizeSessionsList(next);
+          persistSessions(ordered);
+          return ordered;
+        });
+      }
 
       // Best-effort server-side delete so the conversation is removed from backend context too.
-      const normalizedConversationId = normalizeConversationIdValue(target.conversationId ?? target.id);
+      // Use target.conversationId if available, otherwise fallback to sessionId for old chats.
+      const normalizedConversationId = normalizeConversationIdValue(target?.conversationId ?? sessionId);
       if (normalizedConversationId) {
         void (async () => {
           try {
             await apiService.deleteConversation(normalizedConversationId);
           } catch (error) {
-            console.error("Failed to delete remote conversation; local session already removed:", error);
+            console.error("Failed to delete remote conversation:", error);
           }
         })();
       }

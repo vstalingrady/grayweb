@@ -29,7 +29,7 @@ export default async function CalendarPage() {
   return (
     <GrayPageClient
       initialTimestamp={initialTimestamp}
-      activeNav="dashboard"
+      activeNav="calendar"
       variant="dashboard"
       initialDashboardTab="calendar"
     />
