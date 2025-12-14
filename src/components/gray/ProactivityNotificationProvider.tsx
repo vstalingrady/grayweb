@@ -16,6 +16,7 @@ import { GENERAL_CHAT_SESSION_ID } from "./chat/constants";
 import { resolveApiBaseUrl, type ProactivityNotification } from "@/lib/api";
 import { requestNotificationPermission } from "@/lib/notificationUtils";
 import { useI18n } from "@/contexts/I18nContext";
+import { useNotificationPreferences } from "@/contexts/NotificationPreferencesContext";
 
 type ProactivityNotificationContextValue = {
   deliveredKeys: ReadonlySet<string>;
@@ -103,6 +104,7 @@ export function ProactivityNotificationProvider({ children }: ProactivityNotific
   const { user } = useUser();
   const userId = typeof user?.id === "number" ? user.id : null;
   const { appendMessage, generalSessionId, ensureSession } = useChatStore();
+  const { notificationPreferences } = useNotificationPreferences();
   const [deliveredKeys, setDeliveredKeys] = useState<Set<string>>(new Set());
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -114,8 +116,8 @@ export function ProactivityNotificationProvider({ children }: ProactivityNotific
         appendMessage(targetSessionId, "assistant", payload.message);
       }
 
-      // 2. Show browser notification if enabled
-      if (Notification.permission === "granted") {
+      // 2. Show browser notification if enabled and proactivity notifications are on
+      if (notificationPreferences.device && notificationPreferences.proactivity && Notification.permission === "granted") {
         new Notification("Gray", {
           body: payload.message || t("New message from Gray"),
           icon: "/grayai.png",
@@ -127,7 +129,7 @@ export function ProactivityNotificationProvider({ children }: ProactivityNotific
       // 3. Show in-app toast
       setToastMessage(payload.message || t("New message"));
     },
-    [appendMessage, t]
+    [appendMessage, t, notificationPreferences.device, notificationPreferences.proactivity]
   );
 
   useEffect(() => {
