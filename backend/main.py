@@ -4,6 +4,7 @@ import socket
 import ipaddress
 import asyncio
 import sqlite3
+from dateutil import parser as date_parser
 from fastapi import FastAPI, HTTPException, Depends, status, File, Form, Query, UploadFile, Response, Request, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -3246,8 +3247,10 @@ def _datetime_to_ms(value: Optional[datetime]) -> int:
         candidate = value.strip()
         if candidate:
             try:
-                base = datetime.fromisoformat(candidate.replace("Z", "+00:00"))
-            except ValueError:
+                # Use dateutil for robust parsing of various formats (ISO, space-separated, etc.)
+                base = date_parser.parse(candidate)
+            except (ValueError, TypeError):
+                # Fallback to current time if parsing fails completely
                 base = utcnow()
         else:
             base = utcnow()
