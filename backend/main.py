@@ -309,7 +309,11 @@ try:
 except ImportError:
     from database import transactions
 
-ROOT_DIR = Path(__file__).resolve().parent.parent
+# In Docker: __file__ is /app/main.py, parent=/app, parent.parent=/
+# In local: __file__ is /path/to/gray/backend/main.py
+_main_file_dir = Path(__file__).resolve().parent
+_main_in_docker = _main_file_dir.parent == Path("/")
+ROOT_DIR = _main_file_dir if _main_in_docker else _main_file_dir.parent
 load_dotenv(ROOT_DIR / ".env")
 
 SUPABASE_POOLER_HOST = os.getenv("SUPABASE_POOLER_HOST", "aws-1-ap-south-1.pooler.supabase.com")

@@ -17,6 +17,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy backend code
 COPY backend/ ./
 
+# Copy system prompts (needed by ai_message_generator.py)
+RUN mkdir -p /app/public
+COPY public/system-prompts.json /app/public/system-prompts.json
+
 # Create data directory for SQLite
 RUN mkdir -p /app/data
 

@@ -6,7 +6,11 @@ from dotenv import load_dotenv
 from datetime import datetime
 
 # Load environment variables
-ROOT_DIR = Path(__file__).resolve().parent.parent
+# In Docker: __file__ is /app/database.py, parent=/app, parent.parent=/
+# In local: __file__ is /path/to/gray/backend/database.py
+_file_dir = Path(__file__).resolve().parent
+_in_docker = _file_dir.parent == Path("/")
+ROOT_DIR = _file_dir if _in_docker else _file_dir.parent
 load_dotenv(ROOT_DIR / ".env")
 
 

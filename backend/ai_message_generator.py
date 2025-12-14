@@ -40,7 +40,11 @@ class AIMessageGenerator:
         # the main chat experience. Falls back to a local default if the
         # config file is missing.
         try:
-            root_dir = Path(__file__).resolve().parent.parent
+            # In Docker: __file__ is /app/ai_message_generator.py, parent=/app, parent.parent=/
+            # In local: __file__ is /path/to/gray/backend/ai_message_generator.py
+            _file_dir = Path(__file__).resolve().parent
+            _in_docker = _file_dir.parent == Path("/")
+            root_dir = _file_dir if _in_docker else _file_dir.parent
             prompts_path = root_dir / "public" / "system-prompts.json"
             raw = prompts_path.read_text(encoding="utf-8")
             self.prompts = json.loads(raw)
@@ -285,7 +289,10 @@ class AIMessageGenerator:
         """
         # Template-based message loaded from system-prompts.json when available
         try:
-            root_dir = Path(__file__).resolve().parent.parent
+            # In Docker: __file__ is /app/ai_message_generator.py, parent=/app, parent.parent=/
+            _file_dir = Path(__file__).resolve().parent
+            _in_docker = _file_dir.parent == Path("/")
+            root_dir = _file_dir if _in_docker else _file_dir.parent
             prompts_path = root_dir / "public" / "system-prompts.json"
             raw = prompts_path.read_text(encoding="utf-8")
             data = json.loads(raw)
