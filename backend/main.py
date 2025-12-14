@@ -231,6 +231,8 @@ try:
         user_chat_messages,
         user_streaks,
         reminders,
+        plans,
+        habits,
     )
 except ImportError:
     from database import (
@@ -256,6 +258,8 @@ except ImportError:
         user_chat_messages,
         user_streaks,
         reminders,
+        plans,
+        habits,
     )
 
 try:
@@ -1290,7 +1294,7 @@ DEFAULT_DASHBOARD_PROACTIVITY = {
 chat_sessions = sqlalchemy.Table(
     "chat_sessions",
     metadata,
-    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True, index=True),
+    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
     sqlalchemy.Column("user_id", sqlalchemy.ForeignKey("users.id")),
     sqlalchemy.Column("title", sqlalchemy.String),
     sqlalchemy.Column("scope", sqlalchemy.String, default="thread"),
@@ -1306,7 +1310,7 @@ chat_sessions = sqlalchemy.Table(
 plans = sqlalchemy.Table(
     "plans",
     metadata,
-    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True, index=True),
+    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
     sqlalchemy.Column("user_id", sqlalchemy.ForeignKey("users.id")),
     sqlalchemy.Column("label", sqlalchemy.String),
     sqlalchemy.Column("completed", sqlalchemy.Boolean, default=False),
@@ -1314,6 +1318,7 @@ plans = sqlalchemy.Table(
     sqlalchemy.Column("schedule_slot", sqlalchemy.String, nullable=True),
     sqlalchemy.Column("description", sqlalchemy.String, nullable=True),
     sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
+    sqlalchemy.Column("color", sqlalchemy.String, nullable=True),
     sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
     extend_existing=True,
 )
@@ -1321,7 +1326,7 @@ plans = sqlalchemy.Table(
 habits = sqlalchemy.Table(
     "habits",
     metadata,
-    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True, index=True),
+    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
     sqlalchemy.Column("user_id", sqlalchemy.ForeignKey("users.id")),
     sqlalchemy.Column("label", sqlalchemy.String),
     sqlalchemy.Column("streak_label", sqlalchemy.String),
@@ -1356,7 +1361,7 @@ DEFAULT_WORKSPACE_BACKGROUNDS: List[Dict[str, Any]] = []
 google_calendar_states = sqlalchemy.Table(
     "google_calendar_states",
     metadata,
-    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True, index=True),
+    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
     sqlalchemy.Column("state_token", sqlalchemy.String, unique=True, nullable=False),
     sqlalchemy.Column("user_id", sqlalchemy.ForeignKey("users.id")),
     sqlalchemy.Column("nonce", sqlalchemy.String, nullable=False),
@@ -11714,6 +11719,103 @@ async def trigger_proactivity_for_user(
         raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
 
 
-if __name__ == "__main__":
+# Calendar Routes (Restored)
+@app.get("/users/{user_id}/calendar_events", response_model=List[CalendarEvent])
+async def get_user_calendar_events(
+    user_id: int,
+    calendar_id: Optional[int] = None,
+    db: databases.Database = Depends(get_database),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    user_id = current_user["id"]
+    require_same_user(user_id, current_user)
+    query = calendar_events.select().where(calendar_events.c.user_id == user_id)
+    if calendar_id:
+        query = query.where(calendar_events.c.calendar_id == calendar_id)
+    
+    # Order by start time
+    query = query.order_by(calendar_events.c.start_time)
+    
+    return await db.fetch_all(query)
+
+@app.post("/users/{user_id}/calendar_events", response_model=CalendarEvent, status_code=status.HTTP_201_CREATED)
+async def create_user_calendar_event(
+    user_id: int,
+    event: CalendarEventCreate,
+    db: databases.Database = Depends(get_database),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    user_id = current_user["id"]
+    require_same_user(user_id, current_user)
+    
+    values = {
+        "user_id": user_id,
+        "calendar_id": event.calendar_id,
+        "title": event.title,
+        "description": event.description,
+        "start_time": event.start_time,
+        "end_time": event.end_time,
+        "color": event.color,
+        "created_at": utcnow(),
+    }
+    
+    event_id = await db.execute(calendar_events.insert().values(**values))
+    query = calendar_events.select().where(calendar_events.c.id == event_id)
+    return await db.fetch_one(query)
+
+@app.patch("/users/{user_id}/calendar_events/{event_id}", response_model=CalendarEvent)
+async def update_user_calendar_event(
+    user_id: int,
+    event_id: int,
+    event_update: CalendarEventUpdate,
+    db: databases.Database = Depends(get_database),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    user_id = current_user["id"]
+    require_same_user(user_id, current_user)
+    
+    query = calendar_events.select().where(
+        (calendar_events.c.id == event_id) & (calendar_events.c.user_id == user_id)
+    )
+    existing = await db.fetch_one(query)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Event not found")
+        
+    values = event_update.dict(exclude_unset=True)
+    if not values:
+        return existing
+        
+    await db.execute(
+        calendar_events.update()
+        .where((calendar_events.c.id == event_id) & (calendar_events.c.user_id == user_id))
+        .values(**values)
+    )
+    
+    return await db.fetch_one(query)
+
+@app.delete("/users/{user_id}/calendar_events/{event_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_user_calendar_event(
+    user_id: int,
+    event_id: int,
+    db: databases.Database = Depends(get_database),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    user_id = current_user["id"]
+    require_same_user(user_id, current_user)
+    
+    query = calendar_events.select().where(
+        (calendar_events.c.id == event_id) & (calendar_events.c.user_id == user_id)
+    )
+    existing = await db.fetch_one(query)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Event not found")
+        
+    await db.execute(
+        calendar_events.delete()
+        .where((calendar_events.c.id == event_id) & (calendar_events.c.user_id == user_id))
+    )
+    return None
+
+
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000, access_log=False)

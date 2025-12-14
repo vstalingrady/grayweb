@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 import pytest_asyncio
+import sqlalchemy
 
 # Ensure backend module is importable
 ROOT = Path(__file__).resolve().parents[2]
@@ -26,6 +27,16 @@ import main  # noqa: E402
 async def connected_db():
     if not main.database.is_connected:
         await main.database.connect()
+    
+    # Ensure tables exist using sync engine for metadata.create_all
+    db_url = str(main.database.url)
+    if "+aiosqlite" in db_url:
+        db_url = db_url.replace("+aiosqlite", "")
+    
+    engine = sqlalchemy.create_engine(db_url)
+    main.metadata.drop_all(engine)
+    main.metadata.create_all(engine)
+
     # Ensure a clean slate for each test.
     for table in (main.reminders, main.plans, main.habits, main.users):
         await main.database.execute(table.delete())
