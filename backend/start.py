@@ -14,8 +14,13 @@ import logging
 # In Docker: start.py is at /app/start.py, so parent.parent = / which is wrong
 # Use WORKDIR env or detect based on parent being root
 _start_dir = Path(__file__).resolve().parent
-ROOT_DIR = _start_dir if _start_dir.parent == Path("/") else _start_dir.parent
+_in_docker = _start_dir.parent == Path("/")
+ROOT_DIR = _start_dir if _in_docker else _start_dir.parent
 sys.path.insert(0, str(ROOT_DIR))
+
+# In Docker, files are copied directly to /app/ (not /app/backend/), 
+# so we use "main:app" instead of "backend.main:app"
+UVICORN_APP_MODULE = "main:app" if _in_docker else "backend.main:app"
 
 
 def _configure_logging() -> logging.Logger:
@@ -595,7 +600,7 @@ if __name__ == "__main__":
     uvicorn_log_level = logging.getLevelName(LOG.getEffectiveLevel()).lower()
 
     uvicorn.run(
-        "backend.main:app",
+        UVICORN_APP_MODULE,
         host=backend_host,
         port=backend_port,
         reload=enable_reload,
