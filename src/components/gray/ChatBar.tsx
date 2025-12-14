@@ -120,24 +120,29 @@ export function GrayChatBar({
 
   // Track if textarea is expanded beyond single line
   const [isExpanded, setIsExpanded] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
-  const singleLineHeightRef = useRef<number | null>(null);
-
+  // Only expand when there are actual newlines (user pressed Enter)
+  // This avoids premature expansion from text wrapping
   const handleHeightChange = useCallback(
-    (height: number) => {
-      // TextareaAutosize height can vary slightly by route/font rendering.
-      // Use a calibrated single-line baseline instead of a hardcoded threshold
-      // so we don't incorrectly enter the "expanded" layout (the “forehead”).
-      if (value.trim().length === 0 || singleLineHeightRef.current === null) {
-        singleLineHeightRef.current = height;
-        setIsExpanded(false);
+    (_height: number, meta: { rowHeight: number }) => {
+      // Check for explicit newlines in the content
+      const hasExplicitNewlines = value.includes('\n');
+
+      if (hasExplicitNewlines) {
+        setIsExpanded(true);
         return;
       }
 
-      const baseline = singleLineHeightRef.current;
-      // Use a larger threshold (~1.3 line heights) to ensure expansion only triggers
-      // when the user has actually reached a new line, not just wrapped text
-      setIsExpanded(height > baseline + 20);
+      // Also check if the textarea has actually grown beyond ~1.5 lines
+      // based on its scrollHeight vs the row height
+      const textarea = textareaRef.current;
+      if (textarea && meta.rowHeight > 0) {
+        const visualLines = textarea.scrollHeight / meta.rowHeight;
+        setIsExpanded(visualLines > 1.8);
+      } else {
+        setIsExpanded(false);
+      }
     },
     [value]
   );
@@ -167,6 +172,7 @@ export function GrayChatBar({
 
         <div className={styles.chatInputWrapper}>
           <TextareaAutosize
+            ref={textareaRef}
             value={value}
             onChange={(event) => onChange(event.target.value)}
             onKeyDown={handleKeyDown}
