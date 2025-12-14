@@ -301,13 +301,6 @@ class ProactivityEngine:
 
     async def _last_notification_timestamp(self, user_id: int) -> Optional[datetime]:
         """Return the timestamp of the most recent proactive notification."""
-        # Prefer Supabase for duplicate detection when available.
-        # Use local SQLite exclusively.
-        await self._ensure_connection()
-
-
-
-        # Fallback to local SQLite if Supabase is unavailable.
         await self._ensure_connection()
         query = """
             SELECT sent_at FROM proactive_notifications
@@ -812,11 +805,6 @@ class ProactivityEngine:
         return text
 
     async def _get_user_recent_activity(self, user_id: int) -> Optional[Dict[str, Any]]:
-        # Use local SQLite exclusively.
-        await self._ensure_connection()
-
-
-        # Fallback to local SQLite.
         await self._ensure_connection()
         query = """
             SELECT tasks_completed, total_tasks, score, notes
