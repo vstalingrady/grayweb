@@ -846,7 +846,8 @@ export function SettingsModal({
               {renderNavItem("preferences", t("Preferences"), SettingsIcon)}
               {renderNavItem("personalization", t("Personalization"), Palette)}
               {renderNavItem("models", t("Models"), Brain)}
-              {renderNavItem("api_keys", t("API Keys"), KeyRound)}
+              {/* Hidden until backend integration complete */}
+              {/* {renderNavItem("api_keys", t("API Keys"), KeyRound)} */}
               {renderNavItem("data_controls", t("Data Controls"), Database)}
               {renderNavItem("notifications", t("Notifications"), Bell)}
             </div>

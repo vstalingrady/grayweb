@@ -38,7 +38,7 @@ export default function PricingClient({ storeId, voyagerVariantId, pioneerVarian
             type="button"
             className={styles.dismiss}
             onClick={handleDismiss}
-            aria-label="Close pricing page"
+            aria-label="Tutup halaman harga"
           >
             <X size={20} />
           </button>
