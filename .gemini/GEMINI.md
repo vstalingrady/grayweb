@@ -4,28 +4,70 @@
 
 Run these verification steps in order before deploying:
 
+## GitHub Workflow & Checks
+
+We use GitHub Actions for CI/CD. To check the status of builds directly from your terminal:
+
+1. **Install GitHub CLI** (if not already installed)
+
+   ```bash
+   # Ubuntu/Debian/PopOS
+   (type -p curl >/dev/null || (sudo apt update && sudo apt install curl -y)) && \
+   curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg && \
+   sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg && \
+   echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null && \
+   sudo apt update && \
+   sudo apt install gh -y
+   ```
+
+2. **Authenticate**
+
+   ```bash
+   gh auth login
+   # Select GitHub.com -> SSH -> Upload key -> Title: [MachineName]
+   ```
+
+3. **Check Workflow Status**
+
+   ```bash
+   # List recent runs
+   gh run list
+
+   # View logs for a specific run (replace ID)
+   gh run view <RUN_ID> --log-failed
+   ```
+
+   or check on the web: [https://github.com/vstalingrady/gray/actions](https://github.com/vstalingrady/gray/actions)
+
 ### 1. Lint Check
+
 ```bash
 npm run lint
 ```
+
 - Must exit with code 0
 - Must have 0 errors (warnings are acceptable)
 
 ### 2. TypeScript Build
+
 ```bash
 npm run build
 ```
+
 - Must complete without errors
 - Verifies all TypeScript compiles correctly
 
 ### 3. Backend Tests
+
 ```bash
 python -m pytest backend/tests -v
 ```
+
 - All tests must pass
 - Verifies database schema, proactivity engine, reminders
 
 ### 4. Full Verification (One Command)
+
 ```bash
 npm run lint && npm run build && python -m pytest backend/tests -v
 ```
@@ -44,6 +86,6 @@ npm run lint && npm run build && python -m pytest backend/tests -v
 2. Commit with descriptive message
 3. Do NOT push until CI passes locally
 
-ssh to production: ~/.ssh/ssh-key-2025-08-25.key 
+ssh to production: ~/.ssh/ssh-key-2025-08-25.key
 ubuntu@168.110.203.180
 home/ubuntu/gray

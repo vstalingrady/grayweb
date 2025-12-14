@@ -37,7 +37,7 @@ jobs:
         run: pip install -r backend/requirements.txt
 
       - name: Run backend tests
-        run: pytest backend/tests
+        run: python -m pytest backend/tests
 
   deploy:
     needs: ci
