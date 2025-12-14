@@ -2327,7 +2327,7 @@ export function GrayChatView({
   // Use sessions state directly for reactivity - getSession uses a ref which doesn't trigger re-renders
   const session = useMemo(() => {
     if (!sessionId) return undefined;
-    return sessions.find((s) => s.id === sessionId);
+    return sessions.find((s) => s.id === sessionId || s.conversationId === sessionId);
   }, [sessionId, sessions]);
   const sessionExists = Boolean(session);
 
