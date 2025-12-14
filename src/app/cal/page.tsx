@@ -13,7 +13,7 @@ export default async function CalendarPage() {
   const session = await readServerSession();
 
   if (!session) {
-    redirect("/login?redirect=/d");
+    redirect("/login?redirect=/cal");
   }
 
   const requestHeaders = await headers();
