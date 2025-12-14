@@ -11600,6 +11600,11 @@ h1.greeting {
   color: #fff;
 }
 
+.userEmail {
+  font-family: var(--font-mono, "IBM Plex Mono", SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace);
+  letter-spacing: 0.02em;
+}
+
 .userProfileActions {
   margin-left: auto;
 }

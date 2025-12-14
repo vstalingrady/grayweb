@@ -152,12 +152,12 @@ type ApiKeyProvider = {
 };
 
 const API_KEY_PROVIDERS: ApiKeyProvider[] = [
-  { id: "openai", label: "OpenAI", helper: "Used for OpenAI models" },
-  { id: "anthropic", label: "Anthropic", helper: "Used for Claude models" },
-  { id: "google", label: "Google", helper: "Used for Gemini models" },
-  { id: "deepseek", label: "DeepSeek", helper: "Used for DeepSeek models" },
-  { id: "x-ai", label: "xAI", helper: "Used for Grok models" },
-  { id: "moonshot", label: "Moonshot AI", helper: "Used for Kimi models" },
+  { id: "openrouter", label: "OpenRouter", helper: "Routes to all models. Get key at openrouter.ai" },
+  { id: "anthropic", label: "Anthropic", helper: "Direct API for Claude models" },
+  { id: "openai", label: "OpenAI", helper: "Direct API for GPT models" },
+  { id: "google", label: "Google", helper: "Direct API for Gemini models" },
+  { id: "deepseek", label: "DeepSeek", helper: "Direct API for DeepSeek models" },
+  { id: "x-ai", label: "xAI", helper: "Direct API for Grok models" },
 ];
 
 type NotificationPreferences = {
@@ -947,7 +947,7 @@ export function SettingsModal({
                     {user?.full_name || "Gray User"}
                   </div>
                   {user?.email ? (
-                    <div className={styles.settingsItemDescription} style={{ marginTop: 4 }}>
+                    <div className={`${styles.settingsItemDescription} ${styles.userEmail}`}>
                       {user.email}
                     </div>
                   ) : null}

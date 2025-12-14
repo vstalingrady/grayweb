@@ -47,6 +47,9 @@ class ChatRequest(BaseModel):
     reminders_enabled: bool = False
     timezone: Optional[str] = None
     conversation_memory_enabled: bool = True
+    # Bring-your-own-key: map of provider id -> API key
+    # e.g. {"openrouter": "sk-or-...", "anthropic": "sk-ant-..."}
+    user_api_keys: Optional[Dict[str, str]] = None
 
 
 class ChatResponse(BaseModel):
