@@ -2276,7 +2276,8 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
             personalization_nickname: answers.name || null,
             personalization_occupation: answers.focus || null,
             personalization_about: aboutParts.length > 0 ? aboutParts.join('\n\n') : null,
-            personalization_custom_instructions: answers.support || null,
+            // NOTE: Do NOT save custom_instructions from onboarding - this should only be set
+            // manually by the user in Settings. The AI should not auto-generate response guidelines.
             has_seen_general_chat: true, // Mark as seen so we don't trigger again
           };
 
