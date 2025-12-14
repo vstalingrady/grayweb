@@ -7672,8 +7672,14 @@ async def chat_endpoint(
     db: databases.Database = Depends(get_database)
 ):
     """Send a message to AI and get a response"""
+    """Send a message to AI and get a response"""
     # Force the request user to the authenticated user to avoid mismatches from stale client state.
-    chat_request.user_id = current_user["id"]
+    if str(chat_request.user_id) != str(current_user["id"]):
+        raise HTTPException(status_code=403, detail="User ID mismatch")
+    
+    # Use authenticated ID for consistency
+    authenticated_user_id = current_user["id"]
+    chat_request.user_id = authenticated_user_id
     start_time = utcnow()
 
     # Set request context for logging
@@ -7762,7 +7768,7 @@ async def chat_endpoint(
              # We must manually insert them using the general chat persistence logic
              if should_persist_user:
                  await _insert_general_conversation_message(
-                     user_id=chat_request.user_id,
+                     user_id=authenticated_user_id,
                      role="user",
                      text=chat_request.message
                  )
@@ -7831,14 +7837,14 @@ async def chat_endpoint(
         if is_general_conversation:
             # General Chat persistence
             assistant_message_id = await _insert_general_conversation_message(
-                 user_id=chat_request.user_id,
+                 user_id=authenticated_user_id,
                  role="model",
                  text=ai_response,
                  grounding_metadata=grounding_metadata
             )
         else:
              # Regular thread persistence
-             assistant_message_id = await save_conversation_message(conversation_id, assistant_message_payload, user_id=chat_request.user_id)
+             assistant_message_id = await save_conversation_message(conversation_id, assistant_message_payload, user_id=authenticated_user_id)
 
         # Generate title inline so it's returned with the response.
         # This adds ~100-300ms latency but only on first message of new conversations.
