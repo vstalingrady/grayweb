@@ -177,7 +177,7 @@ SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET")  # Legacy, optional
 # JWKS cache (public keys from Supabase)
 _jwks_cache: Optional[Dict[str, Any]] = None
 _jwks_cache_time: float = 0
-_JWKS_CACHE_TTL = 3600.0  # 1 hour - public keys change rarely
+_JWKS_CACHE_TTL = 600.0  # 10 minutes - aligns with Supabase usage
 
 def _get_jwks_url() -> Optional[str]:
     """Get the JWKS URL for the Supabase project."""
