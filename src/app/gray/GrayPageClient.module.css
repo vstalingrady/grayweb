@@ -8924,7 +8924,7 @@ h1.greeting {
 }
 
 .proactivityCard .planList {
-  gap: 6px;
+  gap: 2px;
   padding: 0;
   max-height: none;
   flex: 1;
