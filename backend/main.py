@@ -5177,7 +5177,6 @@ async def _execute_tools_with_gemini_flash(
                 # Check if onboarding was completed
                 if tool_name == "complete_onboarding":
                     onboarding_completed = True
-                    break  # Don't continue after onboarding
                 
                 # Build contents for next iteration
                 tool_contents = _build_function_call_contents(function_call, tool_result)
