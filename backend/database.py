@@ -367,3 +367,35 @@ context_cache = sqlalchemy.Table(
     sqlalchemy.Column("content", sqlalchemy.String, nullable=False),
     sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
 )
+
+# Plans and Habits tables
+plans = sqlalchemy.Table(
+    "plans",
+    metadata,
+    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
+    sqlalchemy.Column("user_id", sqlalchemy.Integer, nullable=False, index=True),
+    sqlalchemy.Column("label", sqlalchemy.String, nullable=False),
+    sqlalchemy.Column("completed", sqlalchemy.Boolean, default=False),
+    sqlalchemy.Column("deadline", sqlalchemy.String, nullable=True),
+    sqlalchemy.Column("schedule_slot", sqlalchemy.String, nullable=True),
+    sqlalchemy.Column("description", sqlalchemy.String, nullable=True),
+    sqlalchemy.Column("color", sqlalchemy.String, nullable=True),
+    sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
+    sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
+)
+
+habits = sqlalchemy.Table(
+    "habits",
+    metadata,
+    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
+    sqlalchemy.Column("user_id", sqlalchemy.Integer, nullable=False, index=True),
+    sqlalchemy.Column("label", sqlalchemy.String, nullable=False),
+    sqlalchemy.Column("completed", sqlalchemy.Boolean, default=False),
+    sqlalchemy.Column("streak_id", sqlalchemy.String, nullable=True),
+    sqlalchemy.Column("streak_label", sqlalchemy.String, nullable=True),
+    sqlalchemy.Column("previous_label", sqlalchemy.String, nullable=True),
+    sqlalchemy.Column("description", sqlalchemy.String, nullable=True),
+    sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
+    sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
+)
+
