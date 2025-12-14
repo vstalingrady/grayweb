@@ -83,27 +83,18 @@ function DepthParticles() {
   );
 }
 
-export function DepthParticleBackground() {
-  return (
-    <div className={styles.particleBackgroundFixed} aria-hidden="true">
-      <Canvas
-        className={styles.particleCanvas}
-        camera={{ position: [0, 0, 45], fov: 46 }}
-        gl={{ antialias: true }}
-      >
-        <color attach="background" args={["#030205"]} />
-        <fog attach="fog" args={["#020205", 8, 55]} />
-        <ambientLight intensity={0.5} />
-        <pointLight position={[10, 10, 15]} intensity={1.4} />
-        <DepthParticles />
-      </Canvas>
-    </div>
-  );
-}
+type DepthParticleBackgroundVariant = "fixed" | "inset";
 
-export function DepthParticleBackgroundInset() {
+type DepthParticleBackgroundProps = {
+  variant?: DepthParticleBackgroundVariant;
+};
+
+export function DepthParticleBackground({ variant = "fixed" }: DepthParticleBackgroundProps = {}) {
+  const backgroundClassName =
+    variant === "inset" ? styles.particleBackgroundInset : styles.particleBackgroundFixed;
+
   return (
-    <div className={styles.particleBackgroundInset} aria-hidden="true">
+    <div className={backgroundClassName} aria-hidden="true">
       <Canvas
         className={styles.particleCanvas}
         camera={{ position: [0, 0, 45], fov: 46 }}
