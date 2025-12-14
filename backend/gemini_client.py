@@ -7,6 +7,11 @@ from typing import Any, AsyncIterator, Dict, List, Optional
 from google import genai
 from google.genai import types
 
+try:
+    from backend.token_utils import trim_history_by_token_budget
+except Exception:  # pragma: no cover - fallback when running backend/ directly
+    from token_utils import trim_history_by_token_budget  # type: ignore
+
 
 def _parse_float_env(name: str) -> Optional[float]:
     try:
@@ -199,11 +204,16 @@ class GeminiService:
         message: str,
         attachments: Optional[List[GeminiAttachment]] = None,
         extra_contents: Optional[List[types.Content]] = None,
+        *,
+        history_token_budget: Optional[int] = None,
     ) -> List[types.Content]:
         contents: List[types.Content] = []
 
         history = conversation_history or []
-        recent_history = history[-self.max_history :] if self.max_history > 0 else history
+        if history_token_budget is not None and history_token_budget > 0:
+            recent_history = trim_history_by_token_budget(history, history_token_budget)
+        else:
+            recent_history = history[-self.max_history :] if self.max_history > 0 else history
         for entry in recent_history:
             prepared = self._content_from_entry(entry)
             if prepared:
@@ -285,6 +295,8 @@ class GeminiService:
         tools: Optional[List[types.Tool]] = None,
         tool_config: Optional[types.ToolConfig] = None,
         reasoning_mode: bool = False,
+        *,
+        history_token_budget: Optional[int] = None,
     ) -> types.GenerateContentResponse:
         if not self.available or not self._client:
             raise RuntimeError("Gemini client is not configured")
@@ -294,7 +306,13 @@ class GeminiService:
         effective_tools = tools
         effective_tool_config = tool_config
 
-        contents = self._build_contents(conversation_history, message, attachments, extra_contents)
+        contents = self._build_contents(
+            conversation_history,
+            message,
+            attachments,
+            extra_contents,
+            history_token_budget=history_token_budget,
+        )
         config = self._build_config(
             system_prompt,
             workspace_context,
@@ -329,6 +347,8 @@ class GeminiService:
         tools: Optional[List[types.Tool]] = None,
         tool_config: Optional[types.ToolConfig] = None,
         reasoning_mode: bool = False,
+        *,
+        history_token_budget: Optional[int] = None,
         ) -> AsyncIterator[types.GenerateContentResponse]:
         if not self.available or not self._client:
             raise RuntimeError("Gemini client is not configured")
@@ -338,7 +358,13 @@ class GeminiService:
         effective_tools = tools
         effective_tool_config = tool_config
 
-        contents = self._build_contents(conversation_history, message, attachments, extra_contents)
+        contents = self._build_contents(
+            conversation_history,
+            message,
+            attachments,
+            extra_contents,
+            history_token_budget=history_token_budget,
+        )
         config = self._build_config(
             system_prompt,
             workspace_context,

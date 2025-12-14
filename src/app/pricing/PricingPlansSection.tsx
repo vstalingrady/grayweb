@@ -1,7 +1,7 @@
 /* eslint-disable react/no-unescaped-entities */
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useUser } from "@/contexts/UserContext";
 import {
@@ -11,7 +11,6 @@ import {
     Crown,
     FlaskConical,
     Headphones,
-    Infinity as InfinityIcon,
     MessageSquare,
     Pin,
     Plus,
@@ -33,13 +32,13 @@ const FREE_FEATURES: FeatureItem[] = [
     {
         label: "Fast model",
         icon: Zap,
-        subtext: "Grok Fast",
+        subtext: "Grok 4.1 Fast",
     },
     { label: "Limited daily messages", icon: MessageSquare },
-    { label: "14-day chat memory", icon: Pin },
-    { label: "Simple daily routines", icon: Clock },
+    { label: "65,536 token memory", icon: Pin },
+    { label: "Plans, habits, and reminders", icon: Clock },
     { label: "Daily pulse", icon: CalendarClock },
-    { label: "Community support (Discord)", icon: Users },
+    { label: "Discord community support", icon: Users },
 ];
 
 export const VOYAGER_FEATURES: FeatureItem[] = [
@@ -57,12 +56,12 @@ export const VOYAGER_FEATURES: FeatureItem[] = [
         icon: Pin,
     },
     {
-        label: "Calendar + focus routines",
+        label: "Calendar access",
         icon: Clock,
     },
-    { label: "Deep thinking mode", icon: Brain },
+    { label: "Reasoning mode", icon: Brain },
     {
-        label: "Integrations (Google Calendar, Gmail, Notion)",
+        label: "Google Calendar, Gmail, Notion integrations",
         icon: CalendarClock,
         subtext: "(coming soon)",
     },
@@ -80,7 +79,6 @@ export const PIONEER_FEATURES: FeatureItem[] = [
         icon: MessageSquare,
         subtext: "Built for heavy daily use",
     },
-    { label: "More deep thinking", icon: InfinityIcon },
     { label: "Priority during busy times", icon: Headphones },
     { label: "Early access", icon: FlaskConical },
     { label: "Everything in Voyager", icon: Plus, variant: "inherit" },
@@ -91,14 +89,27 @@ const BILLING_CYCLES = [
     { id: "annual", label: "Annual" },
 ];
 
+// Dual pricing: Indonesia (IDR) and International (USD)
 const VOYAGER_PRICING = {
-    monthly: { price: "Rp 177.000,-", cadence: "month" },
-    annual: { price: "Rp 1.777.000,-", cadence: "year" },
+    monthly: {
+        idr: { price: "Rp 177.000,-", cadence: "month" },
+        usd: { price: "$17", cadence: "month" }
+    },
+    annual: {
+        idr: { price: "Rp 1.777.000,-", cadence: "year" },
+        usd: { price: "$177", cadence: "year" }
+    },
 } as const;
 
 const PIONEER_PRICING = {
-    monthly: { price: "Rp 377.000,-", cadence: "month" },
-    annual: { price: "Rp 3.777.000,-", cadence: "year" },
+    monthly: {
+        idr: { price: "Rp 377.000,-", cadence: "month" },
+        usd: { price: "$37", cadence: "month" }
+    },
+    annual: {
+        idr: { price: "Rp 3.777.000,-", cadence: "year" },
+        usd: { price: "$377", cadence: "year" }
+    },
 } as const;
 
 function parseIdrDisplay(value: string): number {
@@ -128,15 +139,32 @@ export function PricingPlansSection() {
     const router = useRouter();
     const { user } = useUser();
     const [billingCycle, setBillingCycle] = useState<"monthly" | "annual">("monthly");
-    const { price: voyagerPrice, cadence: voyagerCadence } = VOYAGER_PRICING[billingCycle];
-    const { price: pioneerPrice, cadence: pioneerCadence } = PIONEER_PRICING[billingCycle];
+    const [isIndonesia, setIsIndonesia] = useState<boolean | null>(null);
+
+    // Fetch geo data on mount
+    useEffect(() => {
+        fetch("/api/geo")
+            .then(res => res.json())
+            .then(data => setIsIndonesia(data.isIndonesia ?? true))
+            .catch(() => setIsIndonesia(true)); // Default to Indonesia on error
+    }, []);
+
+    // Determine currency based on region (default to IDR during loading)
+    const currency = isIndonesia === false ? "usd" : "idr";
+
+    const { price: voyagerPrice, cadence: voyagerCadence } = VOYAGER_PRICING[billingCycle][currency];
+    const { price: pioneerPrice, cadence: pioneerCadence } = PIONEER_PRICING[billingCycle][currency];
     const annualSavingsPercent = Math.max(
-        computeAnnualSavingsPercent(VOYAGER_PRICING.monthly.price, VOYAGER_PRICING.annual.price) ?? 0,
-        computeAnnualSavingsPercent(PIONEER_PRICING.monthly.price, PIONEER_PRICING.annual.price) ?? 0,
+        computeAnnualSavingsPercent(VOYAGER_PRICING.monthly.idr.price, VOYAGER_PRICING.annual.idr.price) ?? 0,
+        computeAnnualSavingsPercent(PIONEER_PRICING.monthly.idr.price, PIONEER_PRICING.annual.idr.price) ?? 0,
     );
     const annualSavingsLabel = annualSavingsPercent > 0 ? `Save ~${annualSavingsPercent}%` : undefined;
 
     const handleUpgrade = (plan: "voyager" | "pioneer") => {
+        // Block international users until Paddle is ready
+        if (isIndonesia === false) {
+            return; // Button is disabled for international users
+        }
         const paymentUrl = `/payment?plan=${plan}&cycle=${billingCycle}`;
         if (!user) {
             // Redirect to login with return URL to complete purchase
@@ -145,6 +173,7 @@ export function PricingPlansSection() {
             router.push(paymentUrl);
         }
     };
+
 
     return (
         <>
@@ -249,8 +278,9 @@ export function PricingPlansSection() {
                             type="button"
                             className={`${styles.planButton} ${styles.planButtonOutline}`}
                             onClick={() => handleUpgrade("voyager")}
+                            disabled={isIndonesia === false}
                         >
-                            Upgrade
+                            {isIndonesia === false ? "Coming Soon" : "Upgrade"}
                         </button>
                     </div>
                 </article>
@@ -290,8 +320,9 @@ export function PricingPlansSection() {
                             type="button"
                             className={`${styles.planButton} ${styles.planButtonPrimary}`}
                             onClick={() => handleUpgrade("pioneer")}
+                            disabled={isIndonesia === false}
                         >
-                            Upgrade
+                            {isIndonesia === false ? "Coming Soon" : "Upgrade"}
                         </button>
                     </div>
                 </article>

@@ -2553,6 +2553,13 @@ export function GrayChatView({
   }, [session?.id]);
 
   useEffect(() => {
+    // Safety: if the UI is no longer streaming, never keep the submit lock held.
+    if (!session?.isResponding && !activeStreamingMessageId) {
+      isSubmittingRef.current = false;
+    }
+  }, [activeStreamingMessageId, session?.id, session?.isResponding]);
+
+  useEffect(() => {
     if (isHistoryLoading) {
       setActiveStreamingMessageId(null);
     }
@@ -3273,6 +3280,7 @@ export function GrayChatView({
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    const nextPrompt = draft.trim();
     console.log('[handleSubmit] called', {
       sessionId,
       sessionExists: !!session,
@@ -3280,9 +3288,10 @@ export function GrayChatView({
       isResponding: session?.isResponding,
       activeStreamingMessageId,
       isSubmittingRef: isSubmittingRef.current,
-      draft: draft.trim().substring(0, 50),
+      draft: nextPrompt.substring(0, 50),
     });
-    // If a stream is in progress, treat submit as "cancel".
+    // If a stream is in progress, allow a submit with content to interrupt + send in one step.
+    // If there is no content, treat submit as "cancel".
     if (session?.isResponding || activeStreamingMessageId) {
       console.log('[handleSubmit] CANCELING stream - isResponding or activeStreamingMessageId present');
       const controller = streamAbortControllerRef.current;
@@ -3293,9 +3302,12 @@ export function GrayChatView({
       if (session) {
         updateSession(session.id, { isResponding: false, pendingAutoStream: false });
       }
-      setActiveStreamingMessageId((previous) => (previous ? null : previous));
+      setActiveStreamingMessageId(null);
       isSubmittingRef.current = false;
-      return;
+
+      if (!nextPrompt) {
+        return;
+      }
     }
     if (isSubmittingRef.current) {
       console.log('[handleSubmit] BLOCKED by isSubmittingRef');
@@ -3324,7 +3336,7 @@ export function GrayChatView({
       isSubmittingRef.current = false;
       return;
     }
-    const content = draft.trim();
+    const content = nextPrompt;
     if (!content) {
       isSubmittingRef.current = false;
       return;

@@ -205,7 +205,8 @@
   font-size: 0.72rem;
   font-weight: 600;
   white-space: nowrap;
-  color: rgba(255, 255, 255, 0.7);
+  color: currentColor;
+  opacity: 0.4;
   line-height: 1.1;
 }
 
@@ -214,7 +215,7 @@
 }
 
 .billingToggle button[data-active="true"] .billingSavings {
-  color: currentColor;
+  opacity: 0.4;
 }
 
 .planGrid {

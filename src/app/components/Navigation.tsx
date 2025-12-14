@@ -112,7 +112,6 @@ const Navigation = () => {
               width={20}
               height={20}
               className="nav-cta__icon"
-              style={{ width: "auto", height: "auto" }}
               aria-hidden
               priority
             />
@@ -167,16 +166,15 @@ const Navigation = () => {
             target="_blank"
             rel="noreferrer"
           >
-	            <Image
-	              src="/grayaiwhitenotspinning.svg"
-	              alt=""
-	              width={20}
-	              height={20}
-	              className="nav-cta__icon"
-	              style={{ width: "auto", height: "auto" }}
-	              aria-hidden
-	              priority
-	            />
+            <Image
+              src="/grayaiwhitenotspinning.svg"
+              alt=""
+              width={20}
+              height={20}
+              className="nav-cta__icon"
+              aria-hidden
+              priority
+            />
             <span className="sr-only">{t("Open Gray workspace")}</span>
           </Link>
         </div>

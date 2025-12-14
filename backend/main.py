@@ -405,6 +405,20 @@ AI_PROVIDER = (os.getenv("AI_PROVIDER") or "openrouter").strip().lower()
 LITE_TIER_PROVIDER = (os.getenv("LITE_TIER_PROVIDER") or "openrouter").strip().lower()
 OPENROUTER_FALLBACK_MODEL = os.getenv("OPENROUTER_FALLBACK_MODEL", "anthropic/claude-sonnet-4.5")
 
+# Conversation memory/context limits (tokens) by plan tier.
+# "64,000 token memory" refers to tokens of conversation history included as context.
+TIER_CONVERSATION_TOKEN_LIMITS: Dict[str, int] = {
+    "scout": 65_536,
+    "voyager": 2_000_000,
+    "pioneer": 2_000_000,
+}
+
+
+def tier_conversation_token_limit(plan_tier: Optional[str]) -> int:
+    normalized = (plan_tier or "scout").strip().lower()
+    return TIER_CONVERSATION_TOKEN_LIMITS.get(normalized, TIER_CONVERSATION_TOKEN_LIMITS["scout"])
+
+
 GEMINI_SERVICE = GeminiService()
 OPENROUTER_SERVICE = OpenRouterService()
 # GROQ_SERVICE removed - using OpenRouter for all models
@@ -5084,6 +5098,7 @@ async def _execute_tools_with_gemini_flash(
     user_id: int,
     db: databases.Database,
     user_timezone: Optional[str] = None,
+    history_token_budget: Optional[int] = None,
 ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], bool]:
     """Execute tools using Gemini Flash for speed, return results for hybrid flow.
     
@@ -5114,6 +5129,7 @@ async def _execute_tools_with_gemini_flash(
             time_context,
             GEMINI_FLASH_MODEL,
             tools=tool_list,
+            history_token_budget=history_token_budget,
         )
         
         # Loop to handle tool execution (max 3 iterations)
@@ -5169,6 +5185,7 @@ async def _execute_tools_with_gemini_flash(
                     GEMINI_FLASH_MODEL,
                     extra_contents=extra_contents,
                     tools=tool_list,
+                    history_token_budget=history_token_budget,
                 )
                 
             except Exception as tool_error:
@@ -5916,9 +5933,12 @@ async def stream_ai_response(
     reasoning_mode: bool = False,
     reminders_enabled: bool = False,
     tools: Optional[List[types.Tool]] = None,
+    plan_tier: Optional[str] = None,
 ) -> AsyncGenerator[Tuple[str, Any], None]:
     """Yield token chunks using the configured AI provider."""
 
+    conversation_history = _normalize_conversation_history(conversation_history)
+    history_token_budget = tier_conversation_token_limit(plan_tier)
 
     # Determine whether this turn is part of a reminder/plan/habit flow.
     # Look at the current message plus a short window of recent history so
@@ -5926,9 +5946,8 @@ async def stream_ai_response(
     intent_window_text = (message or "") or ""
     if conversation_history:
         try:
-            normalized_history = _normalize_conversation_history(conversation_history)
             # Only look at the last few turns to avoid over-triggering.
-            for entry in normalized_history[-4:]:
+            for entry in conversation_history[-4:]:
                 text = entry.get("text") or ""
                 if text:
                     intent_window_text += f"\n{text}"
@@ -6249,6 +6268,7 @@ CRITICAL: When the user asks to "set a plan" or create any plan/reminder/habit, 
                         user_id,
                         db,
                         user_timezone,
+                        history_token_budget=history_token_budget,
                     )
                     
                     # Emit tool cards (reminders, plans, habits) to frontend
@@ -6337,6 +6357,7 @@ CRITICAL: When the user asks to "set a plan" or create any plan/reminder/habit, 
                         plugins=[{"id": "web", "max_results": 5}] if search_enabled else None,
                         reasoning_mode=reasoning_mode,
                         attachments=media_attachments,
+                        history_token_budget=history_token_budget,
                     ):
                         if isinstance(chunk, dict):
                             # Handle native streaming tool calls
@@ -6670,6 +6691,7 @@ CRITICAL: When the user asks to "set a plan" or create any plan/reminder/habit, 
                     tools=tool_list,
                     tool_config=effective_tool_config,
                     reasoning_mode=reasoning_mode,
+                    history_token_budget=history_token_budget,
                 ):
                     if chunk.usage_metadata:
                         final_usage = chunk.usage_metadata
@@ -6916,6 +6938,7 @@ async def generate_ai_response(
     should_generate_title: bool = False,
     reasoning_mode: bool = False,
     tools: Optional[List[types.Tool]] = None,
+    plan_tier: Optional[str] = None,
 ) -> Tuple[str, Optional[Dict[str, Any]]]:
     """Generate a structured response using the configured AI provider."""
     # Check usage limits if user context is available
@@ -6936,6 +6959,7 @@ async def generate_ai_response(
             return limit_msg, None
 
     conversation_history = _normalize_conversation_history(conversation_history)
+    history_token_budget = tier_conversation_token_limit(plan_tier)
     if not (message or "").strip() and not conversation_history and not (attachments or []):
         message = "Let's get started."
 
@@ -7114,6 +7138,7 @@ async def generate_ai_response(
                     model,
                     include_usage=False,
                     response_format=response_format,
+                    history_token_budget=history_token_budget,
                 )
                 if response_format:
                     text, structured_reminders = _materialize_structured_reminders(response_text)
@@ -7188,6 +7213,7 @@ async def generate_ai_response(
                 tools=tool_list,
                 tool_config=effective_tool_config,
                 reasoning_mode=reasoning_mode,
+                history_token_budget=history_token_budget,
             )
 
             # Track usage
@@ -7242,6 +7268,7 @@ async def generate_ai_response(
                     tools=tool_list,
                     tool_config=effective_tool_config,
                     reasoning_mode=reasoning_mode,
+                    history_token_budget=history_token_budget,
                 )
                 
                 # Track usage for follow-up generation
@@ -7763,6 +7790,7 @@ async def chat_endpoint(
             reasoning_mode=effective_reasoning_mode,
             tools=tool_list,
             user_timezone=chat_request.timezone,
+            plan_tier=normalized_tier,
         )
 
         # Save AI response (including grounding metadata for downstream UI)
@@ -8195,6 +8223,7 @@ async def chat_stream(
                     reasoning_mode=effective_reasoning_mode,
                     reminders_enabled=chat_request.reminders_enabled,
                     tools=tool_list,
+                    plan_tier=normalized_tier,
                 ):
                     if kind == "delta":
                         if not payload:
@@ -8777,7 +8806,7 @@ async def get_conversation_usage(
                 "conversation_id": conversation_id,
                 "message_count": 0,
                 "conversation_tokens": 0,
-                "limit": 65_536, # Scout limit
+                "limit": tier_conversation_token_limit("scout"),
                 "provider": os.getenv("AI_PROVIDER", "openrouter"),
                 "model_name": os.getenv("AI_MODEL_NAME", None),
                 "model_label": os.getenv("AI_MODEL_NAME", None),
@@ -8827,15 +8856,7 @@ async def get_conversation_usage(
         except Exception as tier_error:
             app_logger.warning(f"Could not determine user tier for conversation {conversation_id}: {tier_error}")
 
-        # Set context limits by tier
-        # Note: Pioneer models may have lower limits based on specific model (e.g., Deepseek=256k)
-        TIER_CONTEXT_LIMITS = {
-            "scout": 65_536,        # 64k tokens
-            "voyager": 2_000_000,   # 2M tokens (Gemini Pro context)
-            "pioneer": 2_000_000,   # 2M tokens (varies by model - Grok 4.1 Fast has 2M)
-        }
-        
-        tier_context_limit = TIER_CONTEXT_LIMITS.get(user_tier, TIER_CONTEXT_LIMITS["scout"])
+        tier_context_limit = tier_conversation_token_limit(user_tier)
         
         # Get provider info from environment
         provider = os.getenv("AI_PROVIDER", "openrouter")
@@ -10490,6 +10511,61 @@ async def get_user_from_query_token(
     return None
 
 
+async def _upsert_push_subscription(
+    db: databases.Database,
+    user_id: int,
+    subscription: PushSubscriptionCreate,
+) -> Dict[str, str]:
+    existing = await db.fetch_one(
+        proactivity_push_subscriptions.select().where(
+            proactivity_push_subscriptions.c.endpoint == subscription.endpoint
+        )
+    )
+
+    now = utcnow()
+    if existing:
+        await db.execute(
+            proactivity_push_subscriptions.update()
+            .where(proactivity_push_subscriptions.c.id == existing.id)
+            .values(
+                p256dh=subscription.p256dh,
+                auth=subscription.auth,
+                updated_at=now,
+            )
+        )
+        return {"status": "updated"}
+
+    try:
+        await db.execute(
+            proactivity_push_subscriptions.insert().values(
+                user_id=user_id,
+                endpoint=subscription.endpoint,
+                p256dh=subscription.p256dh,
+                auth=subscription.auth,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        return {"status": "created"}
+    except (sqlite3.IntegrityError, sqlalchemy.exc.IntegrityError) as exc:
+        # Browsers may call subscribe multiple times concurrently; treat unique violations as an update.
+        message = str(exc).lower()
+        if "unique" not in message and "duplicate" not in message:
+            raise
+
+        await db.execute(
+            proactivity_push_subscriptions.update()
+            .where(proactivity_push_subscriptions.c.endpoint == subscription.endpoint)
+            .values(
+                user_id=user_id,
+                p256dh=subscription.p256dh,
+                auth=subscription.auth,
+                updated_at=now,
+            )
+        )
+        return {"status": "updated"}
+
+
 @app.post("/users/{user_id}/push/subscribe", status_code=status.HTTP_201_CREATED)
 @limiter.limit("30/minute")
 async def subscribe_push_notifications(
@@ -10503,38 +10579,7 @@ async def subscribe_push_notifications(
     if not current_user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
     require_same_user(user_id, current_user)
-    # Check if subscription already exists
-    existing = await db.fetch_one(
-        proactivity_push_subscriptions.select().where(
-            proactivity_push_subscriptions.c.endpoint == subscription.endpoint
-        )
-    )
-    
-    if existing:
-        # Update keys if needed, or just return success
-        await db.execute(
-            proactivity_push_subscriptions.update()
-            .where(proactivity_push_subscriptions.c.id == existing.id)
-            .values(
-                p256dh=subscription.p256dh,
-                auth=subscription.auth,
-                updated_at=utcnow(),
-            )
-        )
-        return {"status": "updated"}
-
-    # Create new subscription
-    await db.execute(
-        proactivity_push_subscriptions.insert().values(
-            user_id=user_id,
-            endpoint=subscription.endpoint,
-            p256dh=subscription.p256dh,
-            auth=subscription.auth,
-            created_at=utcnow(),
-            updated_at=utcnow(),
-        )
-    )
-    return {"status": "created"}
+    return await _upsert_push_subscription(db=db, user_id=user_id, subscription=subscription)
 
 
 @app.get("/users/{user_id}/proactivity/stream")

@@ -6,10 +6,10 @@ import * as THREE from "three"
 import styles from "./DepthParticleBackground.module.css"
 
 const PARTICLE_COUNT = 1500
-const PARTICLE_SIZE_MIN = 0.005
-const PARTICLE_SIZE_MAX = 0.010
-const SPHERE_RADIUS = 9
-const POSITION_RANDOMNESS = 4
+const PARTICLE_SIZE_MIN = 0.012
+const PARTICLE_SIZE_MAX = 0.024
+const SPHERE_RADIUS = 12
+const POSITION_RANDOMNESS = 5.5
 const ROTATION_SPEED_X = 0.0
 const ROTATION_SPEED_Y = 0.0005
 const PARTICLE_OPACITY = 1
@@ -79,9 +79,14 @@ function Particles() {
 
 export function ParticleSphere() {
     return (
-        <div className={styles.particleBackground} aria-hidden="true">
+        <div
+            className={styles.particleBackground}
+            style={{ position: "fixed", inset: 0, zIndex: 0, opacity: 0.65, pointerEvents: "none" }}
+            aria-hidden="true"
+        >
             <Canvas
                 className={styles.particleCanvas}
+                style={{ width: "100vw", height: "100vh" }}
                 camera={{ position: [0, 0, 20], fov: 50 }}
                 gl={{ antialias: true }}
             >

@@ -6,6 +6,11 @@ import os
 import httpx
 from typing import Any, AsyncIterator, Dict, List, Optional
 
+try:
+    from backend.token_utils import trim_history_by_token_budget
+except Exception:  # pragma: no cover - fallback when running backend/ directly
+    from token_utils import trim_history_by_token_budget  # type: ignore
+
 
 def _int_env(name: str, default: int) -> int:
     value = os.getenv(name)
@@ -236,10 +241,15 @@ class OpenRouterService:
         message: str,
         history_limit: int,
         attachments: Optional[List[Any]] = None,
+        *,
+        history_token_budget: Optional[int] = None,
     ) -> List[Dict[str, Any]]:
         """Build messages array from conversation history, current message, and attachments."""
         history = conversation_history or []
-        recent_history = history[-history_limit:] if history_limit > 0 else history
+        if history_token_budget is not None and history_token_budget > 0:
+            recent_history = trim_history_by_token_budget(history, history_token_budget)
+        else:
+            recent_history = history[-history_limit:] if history_limit > 0 else history
         payload: List[Dict[str, Any]] = []
         
         for entry in recent_history:
@@ -414,6 +424,8 @@ class OpenRouterService:
         tools: Optional[List[Any]] = None,
         tool_choice: Optional[str] = "auto",
         plugins: Optional[List[Dict[str, Any]]] = None,
+        *,
+        history_token_budget: Optional[int] = None,
     ) -> str:
         """Generate a complete response from OpenRouter."""
         if not self.available:
@@ -421,7 +433,12 @@ class OpenRouterService:
 
         resolved_model = self._resolve_model(model)
         history_limit = self._history_window_for_model(resolved_model)
-        messages = self._build_messages(conversation_history, message, history_limit)
+        messages = self._build_messages(
+            conversation_history,
+            message,
+            history_limit,
+            history_token_budget=history_token_budget,
+        )
         
         if not messages:
             messages = [{"role": "user", "content": message}]
@@ -502,6 +519,8 @@ class OpenRouterService:
         plugins: Optional[List[Dict[str, Any]]] = None,
         reasoning_mode: bool = False,
         attachments: Optional[List[Any]] = None,
+        *,
+        history_token_budget: Optional[int] = None,
     ) -> AsyncIterator[str | Dict[str, Any]]:
         """Stream response chunks from OpenRouter.
         
@@ -532,7 +551,13 @@ class OpenRouterService:
         # e.g., openai/gpt-5.2-chat -> openai/gpt-5.2 when reasoning_mode=True
         resolved_model = self._resolve_model(model, reasoning_mode=reasoning_mode)
         history_limit = self._history_window_for_model(resolved_model)
-        messages = self._build_messages(conversation_history, message, history_limit, attachments=attachments)
+        messages = self._build_messages(
+            conversation_history,
+            message,
+            history_limit,
+            attachments=attachments,
+            history_token_budget=history_token_budget,
+        )
         
         if not messages:
             messages = [{"role": "user", "content": message}]

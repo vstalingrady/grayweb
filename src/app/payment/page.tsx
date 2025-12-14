@@ -118,6 +118,7 @@ function PaymentContent() {
     const [selectedMethodId, setSelectedMethodId] = useState<string>("gopay");
     const [methodGroup, setMethodGroup] = useState<"wallet" | "va">("wallet");
     const [bankSearch, setBankSearch] = useState<string>("");
+    const [isIndonesia, setIsIndonesia] = useState<boolean | null>(null);
 
     const [status, setStatus] = useState<PaymentStatus>("idle");
     const [chargeData, setChargeData] = useState<ChargeResponse | null>(null);
@@ -132,6 +133,20 @@ function PaymentContent() {
                 method.label.toLowerCase().includes(bankSearch.trim().toLowerCase()),
             )
             : activeMethods;
+
+    // Check geo on mount
+    useEffect(() => {
+        fetch("/api/geo")
+            .then(res => res.json())
+            .then(data => {
+                setIsIndonesia(data.isIndonesia ?? true);
+                // Redirect international users back to pricing with notice
+                if (data.isIndonesia === false) {
+                    router.replace("/pricing?region=intl");
+                }
+            })
+            .catch(() => setIsIndonesia(true)); // Default to Indonesia on error
+    }, [router]);
 
     useEffect(() => {
         // Keep group in sync with selected method (e.g., deep links)
