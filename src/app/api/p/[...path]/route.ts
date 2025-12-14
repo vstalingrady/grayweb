@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 
-// Hardcoded to fix regression from commit ce13ad44 where env var points to prod
-const PROXY_TARGET = 'http://localhost:8000';
+// Use BACKEND_URL env var for Docker (http://backend:8000) or fallback to localhost for local dev
+const PROXY_TARGET = process.env.BACKEND_URL || 'http://localhost:8000';
 
 async function handleProxy(request: Request, { params }: { params: Promise<{ path: string[] }> }) {
     const { path } = await params;

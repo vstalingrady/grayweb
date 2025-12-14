@@ -15,6 +15,7 @@ services:
       - "3000:3000"
     environment:
       - NODE_ENV=production
+      - BACKEND_URL=http://backend:8000
     depends_on:
       - backend
     restart: unless-stopped
