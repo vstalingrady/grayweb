@@ -11746,12 +11746,10 @@ h1.greeting {
 }
 
 .settingsSubscriptionCard[data-variant="highlighted"] {
-  background-image: linear-gradient(
-    135deg,
-    rgba(220, 220, 220, 0.08),
-    rgba(32, 32, 32, 0.92) 60%,
-    rgba(240, 240, 240, 0.15)
-  );
+  background-image: linear-gradient(135deg,
+      rgba(220, 220, 220, 0.08),
+      rgba(32, 32, 32, 0.92) 60%,
+      rgba(240, 240, 240, 0.15));
   box-shadow: 0 25px 70px rgba(0, 0, 0, 0.75);
 }
 
@@ -11944,10 +11942,10 @@ h1.greeting {
   right: 0;
   min-width: 220px;
   padding: 6px;
-  border-radius: 12px;
+  border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(10, 10, 12, 0.92);
-  box-shadow: 0 22px 46px rgba(0, 0, 0, 0.62);
+  background: rgba(24, 24, 28, 0.95);
+  box-shadow: 0 22px 46px rgba(0, 0, 0, 0.5);
   backdrop-filter: blur(14px);
   z-index: 200;
 }
@@ -11960,7 +11958,7 @@ h1.greeting {
   gap: 12px;
   padding: 10px 10px;
   border: none;
-  border-radius: 10px;
+  border-radius: 6px;
   background: transparent;
   color: rgba(245, 245, 245, 0.86);
   font-size: 0.85rem;

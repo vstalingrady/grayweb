@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Optional, Tuple
 
+from backend.tier_utils import normalize_plan_tier
+
 TIERS = ("scout", "voyager", "pioneer")
 
 TIER_LEVELS = {
@@ -39,20 +41,13 @@ DOWNGRADE_FALLBACKS = {
 }
 
 
-def _normalize_tier(value: Optional[str]) -> str:
-    normalized = (value or "scout").strip().lower()
-    if normalized in TIERS:
-        return normalized
-    return "scout"
-
-
 def coerce_model_for_tier(requested_model: Optional[str], plan_tier: Optional[str]) -> Tuple[Optional[str], bool]:
     """
     Clamp a user-supplied `model` to the set allowed for their plan tier.
 
     Returns: (effective_model, was_coerced)
     """
-    tier = _normalize_tier(plan_tier)
+    tier = normalize_plan_tier(plan_tier)
     model_raw = (requested_model or "").strip()
     model = model_raw.lower()
 
@@ -90,4 +85,3 @@ def coerce_model_for_tier(requested_model: Optional[str], plan_tier: Optional[st
 
     # Any other explicit model string is treated as unsupported for user selection.
     return DEFAULT_PIONEER_MODEL if tier == "pioneer" else DEFAULT_VOYAGER_MODEL, True
-
