@@ -43,16 +43,13 @@
 
 .mainGrid {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: clamp(1.25rem, 3vw, 2.5rem);
-    width: 100%;
-    min-height: 100%;
-    max-width: 900px;
-    margin: 0 auto;
-    padding: clamp(1rem, 3vw, 2.5rem);
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    width: 100vw;
+    min-height: 100vh;
+    margin: 0;
+    padding: 0;
     box-sizing: border-box;
-    justify-content: center;
-    align-content: center;
     position: relative;
     z-index: 1;
 }
@@ -69,20 +66,15 @@
     box-sizing: border-box;
 }
 
-/* LEFT COLUMN: Summary (Voyager Card) */
-/* Wrapper only - no visual styles */
 .summaryColumn {
-    padding: 1.5rem;
-    background: transparent;
     display: flex;
     flex-direction: column;
     align-items: center;
-    position: sticky;
-    top: clamp(1rem, 3vw, 2.5rem);
-    min-height: 0;
-    overflow: hidden;
-    /* Starry background */
-    position: relative;
+    justify-content: center;
+    padding: 2rem;
+    background: transparent;
+    min-height: 100vh;
+    box-sizing: border-box;
 }
 
 .summaryColumn::before,
@@ -92,18 +84,18 @@
 
 /* Column-specific starfield removed; global background handles this. */
 
-/* RIGHT COLUMN: Inputs & Controls */
-/* Wrapper only - no visual styles */
 .inputColumn {
-    padding: 1.5rem;
-    background: transparent;
     display: flex;
     flex-direction: column;
-    gap: 2rem;
-    width: 100%;
     align-items: center;
-    min-height: 0;
-    overflow: visible;
+    justify-content: center;
+    padding: 2rem;
+    background: transparent;
+    gap: 1.5rem;
+    min-height: 100vh;
+    box-sizing: border-box;
+    max-width: 420px;
+    margin: 0 auto;
 }
 
 

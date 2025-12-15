@@ -826,26 +826,21 @@ export default function LoginForm({
             speed={isLightTheme ? 1.1 : undefined}
           >
             <div className={styles.authGlassFrame}>
-              <span className={styles.authGlassGlow} />
-              <span className={styles.authGlassSurface} />
-              <div className={styles.authGlassCore}>
-                <span className={styles.authGlassCoreSheen} />
-                <div className={styles.authVisual}>
-                  <div className={styles.authOrb}>
-                    <Image
-                      src={
-                        isLightTheme
-                          ? "/grayaiblacknotspinning.svg"
-                          : "/grayaiwhitenotspinning.svg"
-                      }
-                      alt={t("Gray emblem")}
-                      width={180}
-                      height={180}
-                      priority
-                      className={styles.authOrbLogo}
-                      style={{ height: "auto", width: "clamp(140px, 28vw, 180px)" }}
-                    />
-                  </div>
+              <div className={styles.authVisual}>
+                <div className={styles.authOrb}>
+                  <Image
+                    src={
+                      isLightTheme
+                        ? "/grayaiblacknotspinning.svg"
+                        : "/grayaiwhitenotspinning.svg"
+                    }
+                    alt={t("Gray emblem")}
+                    width={180}
+                    height={180}
+                    priority
+                    className={styles.authOrbLogo}
+                    style={{ height: "auto", width: "clamp(140px, 28vw, 180px)" }}
+                  />
                 </div>
               </div>
             </div>

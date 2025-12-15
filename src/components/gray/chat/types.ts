@@ -163,7 +163,7 @@ export type ChatContextValue = {
 export type GrayReminderEntityType = "plan" | "habit" | "reminder";
 export type GrayReminderPayloadType = "gray.reminder" | "gray.plan" | "gray.habit";
 export type GrayReminderStatus = "created" | "updated" | "completed" | "deleted";
-export type GrayReminderSource = "mcp/plans-habits-server" | "mcp";
+export type GrayReminderSource = "native/backend" | "mcp/plans-habits-server" | "mcp";
 
 export interface GrayReminderCreatedPayload {
     type: GrayReminderPayloadType;

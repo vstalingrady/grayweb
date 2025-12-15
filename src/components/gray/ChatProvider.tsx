@@ -3259,6 +3259,15 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
           continue;
         }
 
+        // Reminders created via backend tool calls are already persisted server-side.
+        if (String(reminder.source || "").toLowerCase() === "native/backend") {
+          persistedReminderKeysRef.current.add(reminderKey);
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new CustomEvent(WORKSPACE_REFRESH_EVENT));
+          }
+          continue;
+        }
+
         // Extract reminder data
         const data = reminder.data;
         const reminderRecord = (data.reminder as Record<string, unknown> | null) ?? null;
