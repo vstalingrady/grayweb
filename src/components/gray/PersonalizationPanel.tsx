@@ -29,6 +29,8 @@ type PersonalizationPanelProps = {
   profileAbout?: string | null;
   profileCustomInstructions?: string | null;
   profileSystemPromptOverride?: string | null;
+  profileLocation?: string | null;
+  profileTimeZone?: string | null;
   backgroundOptions: WorkspaceBackgroundOption[];
   selectedBackgroundId: string;
   onSelectBackground: (backgroundId: string) => void;
@@ -122,6 +124,8 @@ export function PersonalizationPanel({
   profileAbout,
   profileCustomInstructions,
   profileSystemPromptOverride,
+  profileLocation,
+  profileTimeZone,
   backgroundOptions,
   selectedBackgroundId,
   onSelectBackground,
@@ -202,6 +206,15 @@ export function PersonalizationPanel({
   const [systemPromptOverride, setSystemPromptOverride] = useState(
     () => profileSystemPromptOverride ?? ""
   );
+  const resolvedDeviceTimeZone = useMemo(() => {
+    try {
+      return Intl.DateTimeFormat().resolvedOptions().timeZone ?? "UTC";
+    } catch {
+      return "UTC";
+    }
+  }, []);
+  const [location, setLocation] = useState(() => profileLocation ?? "");
+  const [timeZone, setTimeZone] = useState(() => profileTimeZone ?? resolvedDeviceTimeZone);
   const [customInstructionsFileName, setCustomInstructionsFileName] = useState<string | null>(null);
   const [customInstructionsFileError, setCustomInstructionsFileError] = useState<string | null>(null);
   const [aboutSaveState, setAboutSaveState] = useState<"idle" | "saving" | "success" | "error">(
@@ -212,6 +225,8 @@ export function PersonalizationPanel({
     "idle"
   );
   const [customSaveMessage, setCustomSaveMessage] = useState<string | null>(null);
+  const [localeSaveState, setLocaleSaveState] = useState<"idle" | "saving" | "success" | "error">("idle");
+  const [localeSaveMessage, setLocaleSaveMessage] = useState<string | null>(null);
   const [overrideSaveState, setOverrideSaveState] = useState<"idle" | "saving" | "success" | "error">("idle");
   const [overrideSaveMessage, setOverrideSaveMessage] = useState<string | null>(null);
   const [newBackgroundFile, setNewBackgroundFile] = useState<File | null>(null);
@@ -266,6 +281,14 @@ export function PersonalizationPanel({
   }, [profileSystemPromptOverride]);
 
   useEffect(() => {
+    setLocation(profileLocation ?? "");
+  }, [profileLocation]);
+
+  useEffect(() => {
+    setTimeZone(profileTimeZone ?? resolvedDeviceTimeZone);
+  }, [profileTimeZone, resolvedDeviceTimeZone]);
+
+  useEffect(() => {
     if (aboutSaveState !== "success") {
       return;
     }
@@ -290,6 +313,19 @@ export function PersonalizationPanel({
       window.clearTimeout(timeout);
     };
   }, [customSaveState]);
+
+  useEffect(() => {
+    if (localeSaveState !== "success") {
+      return;
+    }
+    const timeout = window.setTimeout(() => {
+      setLocaleSaveState("idle");
+      setLocaleSaveMessage(null);
+    }, 2400);
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [localeSaveState]);
 
   useEffect(() => {
     if (overrideSaveState !== "success") {
@@ -403,6 +439,18 @@ export function PersonalizationPanel({
   const handleSystemPromptOverrideChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
     resetOverrideStatus();
     setSystemPromptOverride(event.target.value);
+  };
+
+  const handleLocationChange = (event: ChangeEvent<HTMLInputElement>) => {
+    setLocaleSaveState("idle");
+    setLocaleSaveMessage(null);
+    setLocation(event.target.value);
+  };
+
+  const handleTimeZoneChange = (event: ChangeEvent<HTMLInputElement>) => {
+    setLocaleSaveState("idle");
+    setLocaleSaveMessage(null);
+    setTimeZone(event.target.value);
   };
 
   const handleCustomInstructionsFileChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -534,6 +582,28 @@ export function PersonalizationPanel({
     } catch (error) {
       setOverrideSaveState("error");
       setOverrideSaveMessage(error instanceof Error ? error.message : t("Failed to save"));
+    }
+  };
+
+  const handleLocaleSubmit = async (event?: FormEvent<HTMLFormElement>) => {
+    event?.preventDefault();
+    if (!userId) {
+      return;
+    }
+    setLocaleSaveState("saving");
+    setLocaleSaveMessage(t("Saving..."));
+    try {
+      const normalizedLocation = location.trim();
+      const normalizedTimeZone = timeZone.trim();
+      await updateUserProfile({
+        personalization_location: normalizedLocation.length > 0 ? normalizedLocation : null,
+        personalization_time_zone: normalizedTimeZone.length > 0 ? normalizedTimeZone : null,
+      });
+      setLocaleSaveState("success");
+      setLocaleSaveMessage(t("Saved"));
+    } catch (error) {
+      setLocaleSaveState("error");
+      setLocaleSaveMessage(error instanceof Error ? error.message : t("Failed to save"));
     }
   };
 
@@ -746,6 +816,63 @@ export function PersonalizationPanel({
                     disabled={!canSubmitAbout}
                   >
                     {aboutSaveState === "saving" ? t("Saving...") : t("Save")}
+                  </button>
+                </div>
+              </form>
+            </section>
+
+            <section className={styles.personalizationCard}>
+              <div className={styles.personalizationCardHeader}>
+                <div>
+                  <h3>{t("Location & time")}</h3>
+                  <p>{t("Gray won't assume your location unless you set it.")}</p>
+                </div>
+              </div>
+              <form className={styles.personalizationForm} onSubmit={handleLocaleSubmit}>
+                <dl className={styles.personalizationAboutList}>
+                  <div className={styles.personalizationAboutItem}>
+                    <dt>
+                      <label htmlFor="personalization-location">{t("Location")}</label>
+                    </dt>
+                    <dd>
+                      <input
+                        id="personalization-location"
+                        className={styles.personalizationAboutInput}
+                        value={location}
+                        onChange={handleLocationChange}
+                        type="text"
+                        placeholder={t("City, region, and/or country (optional)")}
+                      />
+                    </dd>
+                  </div>
+                  <div className={styles.personalizationAboutItem}>
+                    <dt>
+                      <label htmlFor="personalization-timezone">{t("Time zone")}</label>
+                    </dt>
+                    <dd>
+                      <input
+                        id="personalization-timezone"
+                        className={styles.personalizationAboutInput}
+                        value={timeZone}
+                        onChange={handleTimeZoneChange}
+                        type="text"
+                        placeholder={resolvedDeviceTimeZone}
+                      />
+                    </dd>
+                  </div>
+                </dl>
+                <div className={styles.personalizationFormActions}>
+                  {localeSaveMessage ? (
+                    <span
+                      className={styles.personalizationFormStatus}
+                      data-status={localeSaveState}
+                      aria-live="polite"
+                    >
+                      {localeSaveMessage}
+                    </span>
+                  ) : null}
+                  <button type="submit" className={styles.personalizationFormButton}>
+                    {localeSaveState === "saving" ? t("Saving...") : t("Save")}
                   </button>
                 </div>
               </form>

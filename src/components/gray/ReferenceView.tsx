@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useCallback } from "react";
+import React, { useState, useRef, useCallback, useEffect } from "react";
 import {
   Search,
   Upload,
@@ -35,7 +35,37 @@ export function ReferenceView() {
   const [sortMode, setSortMode] = useState<"newest" | "oldest" | "name">("newest");
   const [documents, setDocuments] = useState<UploadedDocument[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Fetch existing uploads on mount
+  useEffect(() => {
+    if (!user) {
+      setIsLoading(false);
+      return;
+    }
+
+    const fetchUploads = async () => {
+      try {
+        const uploads = await apiService.listUploads({ limit: 100 });
+        const docs: UploadedDocument[] = uploads.map((upload) => ({
+          id: upload.id,
+          filename: upload.filename,
+          mime_type: upload.mime_type,
+          size: upload.size,
+          created_at: new Date(upload.created_at),
+          status: 'ready' as const,
+        }));
+        setDocuments(docs);
+      } catch (error) {
+        console.error('Failed to fetch uploads:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchUploads();
+  }, [user]);
 
   const handleUploadClick = useCallback(() => {
     fileInputRef.current?.click();
@@ -246,7 +276,12 @@ export function ReferenceView() {
 
         {/* Gallery */}
         <div className="w-full max-w-5xl mx-auto">
-          {filteredDocuments.length === 0 ? (
+          {isLoading ? (
+            <div className="text-center py-16">
+              <LoaderCircle size={32} className="animate-spin text-zinc-500 mx-auto mb-4" />
+              <p className="text-zinc-500 text-sm">{t("Loading files...")}</p>
+            </div>
+          ) : filteredDocuments.length === 0 ? (
             <div className="text-center py-16">
               <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-white/5 mb-4">
                 <FileText size={32} className="text-zinc-600" />

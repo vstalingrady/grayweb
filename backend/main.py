@@ -1408,6 +1408,8 @@ class UserBase(BaseModel):
     personalization_custom_instructions: Optional[str] = None
     personalization_system_prompt_override: Optional[str] = None
     personalization_show_calendar: Optional[bool] = True
+    personalization_location: Optional[str] = None
+    personalization_time_zone: Optional[str] = None
     auth_user_id: Optional[str] = None  # Link to Supabase Auth UUID
     daily_token_usage: Optional[int] = 0
     monthly_cost_usage: Optional[float] = 0.0
@@ -1434,6 +1436,8 @@ class UserUpdate(BaseModel):
     personalization_custom_instructions: Optional[str] = None
     personalization_system_prompt_override: Optional[str] = None
     personalization_show_calendar: Optional[bool] = None
+    personalization_location: Optional[str] = None
+    personalization_time_zone: Optional[str] = None
     preferred_model: Optional[str] = None
     visible_model_ids: Optional[List[str]] = None
 
@@ -2258,8 +2262,9 @@ async def _resolve_user_timezone_for_streak(user_id: int, db: databases.Database
 
     Preference order:
       1. In-memory cache.
-      2. Supabase proactivity_settings payload.
-      3. Local proactivity_settings payload (SQLite).
+      2. User personalization_time_zone (explicit profile field).
+      3. Supabase proactivity_settings payload.
+      4. Local proactivity_settings payload (SQLite).
     Falls back to UTC when no setting is available or parsing fails.
     """
     cached = _USER_TIMEZONE_CACHE.get(user_id)
@@ -2268,19 +2273,41 @@ async def _resolve_user_timezone_for_streak(user_id: int, db: databases.Database
 
     timezone_name: Optional[str] = None
 
-    try:
-        supabase_settings = _fetch_supabase_proactivity_settings(user_id)
-        if supabase_settings and supabase_settings.timezone:
-            timezone_name = supabase_settings.timezone
-    except Exception as error:  # pragma: no cover - defensive logging
-        api_logger.debug(
-            f"Failed to resolve timezone from Supabase for user {user_id}: {error}",
-            extra={
-                "event_type": "user_timezone_supabase_error",
-                "user_id": user_id,
-                "error": str(error),
-            },
-        )
+    if timezone_name is None:
+        try:
+            record = await db.fetch_one(
+                users.select()
+                .with_only_columns(users.c.personalization_time_zone)
+                .where(users.c.id == user_id)
+            )
+            if record:
+                candidate = _row_get(record, "personalization_time_zone")
+                if isinstance(candidate, str) and candidate.strip():
+                    timezone_name = candidate.strip()
+        except Exception as error:  # pragma: no cover - defensive logging
+            api_logger.debug(
+                f"Failed to resolve timezone from user profile for user {user_id}: {error}",
+                extra={
+                    "event_type": "user_timezone_profile_error",
+                    "user_id": user_id,
+                    "error": str(error),
+                },
+            )
+
+    if timezone_name is None:
+        try:
+            supabase_settings = _fetch_supabase_proactivity_settings(user_id)
+            if supabase_settings and supabase_settings.timezone:
+                timezone_name = supabase_settings.timezone
+        except Exception as error:  # pragma: no cover - defensive logging
+            api_logger.debug(
+                f"Failed to resolve timezone from Supabase for user {user_id}: {error}",
+                extra={
+                    "event_type": "user_timezone_supabase_error",
+                    "user_id": user_id,
+                    "error": str(error),
+                },
+            )
 
     if timezone_name is None:
         try:
@@ -2761,12 +2788,20 @@ async def _run_basic_migrations():
         "users",
         [
             ("visible_model_ids", "TEXT", "NULL"),
+            ("personalization_location", "TEXT", "NULL"),
+            ("personalization_time_zone", "TEXT", "NULL"),
         ],
     )
     if DATABASE_URL.startswith("postgres"):
         try:
             await database.execute(
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS visible_model_ids JSONB"
+            )
+            await database.execute(
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS personalization_location TEXT"
+            )
+            await database.execute(
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS personalization_time_zone TEXT"
             )
         except Exception as exc:  # pragma: no cover - best effort migration
             app_logger.warning(
@@ -6626,6 +6661,8 @@ CRITICAL: When the user asks to "set a plan" or create any plan/reminder/habit, 
                             nickname = _row_get(updated_user, "personalization_nickname") if updated_user else None
                             occupation = _row_get(updated_user, "personalization_occupation") if updated_user else None
                             about = _row_get(updated_user, "personalization_about") if updated_user else None
+                            location = _row_get(updated_user, "personalization_location") if updated_user else None
+                            time_zone = _row_get(updated_user, "personalization_time_zone") if updated_user else None
 
                             profile_lines: List[str] = []
                             if nickname:
@@ -6634,6 +6671,10 @@ CRITICAL: When the user asks to "set a plan" or create any plan/reminder/habit, 
                                 profile_lines.append(f"Occupation/focus: {occupation}")
                             if about:
                                 profile_lines.append(f"About: {about}")
+                            if location:
+                                profile_lines.append(f"Location: {location}")
+                            if time_zone:
+                                profile_lines.append(f"Time zone: {time_zone}")
 
                             profile_block = ""
                             if profile_lines:
@@ -7696,6 +7737,46 @@ async def upload_media(
       created_at=now,
       public_url=public_url,
   )
+
+
+@app.get("/api/uploads", response_model=List[MediaUpload])
+@limiter.limit("30/minute")
+async def list_user_uploads(
+    request: Request,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db: databases.Database = Depends(get_database),
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+):
+    """List all uploads for the current user."""
+    user_id = current_user["id"]
+    query = (
+        media_uploads.select()
+        .where(media_uploads.c.user_id == user_id)
+        .order_by(media_uploads.c.created_at.desc())
+        .limit(limit)
+        .offset(offset)
+    )
+    records = await db.fetch_all(query)
+    
+    result = []
+    for record in records:
+        public_url = None
+        if STORAGE_BASE_URL and record["storage_path"]:
+            storage_name = Path(record["storage_path"]).name
+            public_url = f"{STORAGE_BASE_URL.rstrip('/')}/{storage_name}"
+        
+        result.append(MediaUpload(
+            id=record["id"],
+            user_id=record["user_id"],
+            filename=record["filename"],
+            mime_type=record["mime_type"],
+            size=record["size"],
+            created_at=record["created_at"],
+            public_url=public_url,
+        ))
+    
+    return result
 
 
 @app.get("/api/uploads/{upload_id}/file")
@@ -9238,6 +9319,56 @@ async def update_user(
             update_data["visible_model_ids"] = sanitized
         else:
             update_data.pop("visible_model_ids", None)
+
+    # Normalize optional text fields
+    for field_name, max_length in (
+        ("personalization_location", 160),
+        ("personalization_time_zone", 64),
+    ):
+        if field_name not in update_data:
+            continue
+        value = update_data.get(field_name)
+        if value is None:
+            continue
+        if not isinstance(value, str):
+            update_data.pop(field_name, None)
+            continue
+        normalized = value.strip()
+        if not normalized:
+            update_data[field_name] = None
+            continue
+        update_data[field_name] = normalized[:max_length]
+
+    # Keep per-user timezone caches in sync when the user updates their time zone.
+    if "personalization_time_zone" in update_data:
+        _USER_TIMEZONE_CACHE[user_id] = update_data.get("personalization_time_zone")
+        try:
+            record = await db.fetch_one(
+                proactivity_settings.select().where(proactivity_settings.c.user_id == user_id)
+            )
+            if record:
+                payload = _row_get(record, "payload")
+                if isinstance(payload, str):
+                    try:
+                        payload = json.loads(payload)
+                    except Exception:
+                        payload = None
+                if isinstance(payload, dict):
+                    next_tz = update_data.get("personalization_time_zone")
+                    if next_tz:
+                        payload["timezone"] = next_tz
+                    else:
+                        payload.pop("timezone", None)
+                    await db.execute(
+                        proactivity_settings.update()
+                        .where(proactivity_settings.c.user_id == user_id)
+                        .values(payload=payload, updated_at=utcnow())
+                    )
+        except Exception as exc:  # pragma: no cover - best effort sync
+            api_logger.debug(
+                "Failed to sync personalization_time_zone into proactivity settings",
+                extra={"event_type": "user_timezone_sync_failed", "user_id": user_id, "error": str(exc)},
+            )
 
     update_data["updated_at"] = utcnow()
 

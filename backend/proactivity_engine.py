@@ -705,6 +705,8 @@ class ProactivityEngine:
                   personalization_nickname,
                   personalization_occupation,
                   personalization_about,
+                  personalization_location,
+                  personalization_time_zone,
                   personalization_custom_instructions
                 FROM users
                 WHERE id = :user_id
@@ -723,6 +725,8 @@ class ProactivityEngine:
         nickname = self._format_snippet(row.get("personalization_nickname"), limit=80)
         occupation = self._format_snippet(row.get("personalization_occupation"), limit=120)
         about = self._format_snippet(row.get("personalization_about"), limit=200)
+        location = self._format_snippet(row.get("personalization_location"), limit=120)
+        time_zone = self._format_snippet(row.get("personalization_time_zone"), limit=64)
 
         if nickname:
             summary_parts.append(f"Preferred name: {nickname}")
@@ -730,6 +734,10 @@ class ProactivityEngine:
             summary_parts.append(f"Occupation: {occupation}")
         if about:
             summary_parts.append(f"About: {about}")
+        if location:
+            summary_parts.append(f"Location: {location}")
+        if time_zone:
+            summary_parts.append(f"Time zone: {time_zone}")
 
         profile_summary = ". ".join(summary_parts) if summary_parts else None
         custom_instructions = self._truncate_block(row.get("personalization_custom_instructions"), limit=2000)

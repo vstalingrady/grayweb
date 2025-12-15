@@ -1268,6 +1268,19 @@ class ApiService {
     });
   }
 
+  async listUploads(options?: { limit?: number; offset?: number }): Promise<MediaUpload[]> {
+    const params = new URLSearchParams();
+    if (options?.limit) {
+      params.set('limit', String(options.limit));
+    }
+    if (options?.offset) {
+      params.set('offset', String(options.offset));
+    }
+    const suffix = params.toString();
+    const endpoint = suffix ? `/api/uploads?${suffix}` : '/api/uploads';
+    return this.fetch<MediaUpload[]>(endpoint);
+  }
+
   async createContextCache(userId: number, payload: ContextCacheBase): Promise<ContextCache> {
     const params = new URLSearchParams({ user_id: String(userId) });
     return this.fetch<ContextCache>(`/context-cache?${params.toString()}`, {

@@ -85,6 +85,8 @@ users = sqlalchemy.Table(
     sqlalchemy.Column("personalization_custom_instructions", sqlalchemy.String, nullable=True),
     sqlalchemy.Column("personalization_show_calendar", sqlalchemy.Boolean, default=True),
     sqlalchemy.Column("personalization_system_prompt_override", sqlalchemy.String, nullable=True),
+    sqlalchemy.Column("personalization_location", sqlalchemy.String, nullable=True),
+    sqlalchemy.Column("personalization_time_zone", sqlalchemy.String, nullable=True),
     sqlalchemy.Column("plan_tier", sqlalchemy.String, nullable=True),
     sqlalchemy.Column("subscription_expires_at", sqlalchemy.DateTime, nullable=True),  # When subscription expires
     sqlalchemy.Column("has_seen_general_chat", sqlalchemy.Boolean, default=False),
@@ -398,4 +400,3 @@ habits = sqlalchemy.Table(
     sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
     sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
 )
-

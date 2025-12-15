@@ -15,11 +15,11 @@ const resolveProxyTarget = () => {
 const PROXY_TARGET = resolveProxyTarget();
 
 async function handleProxy(request: Request, { params }: { params: Promise<{ path: string[] }> }) {
-    const { path } = await params;
-    const pathString = path.join('/');
     const url = new URL(request.url);
     const searchParams = url.searchParams.toString();
-    const targetUrl = `${PROXY_TARGET}/${pathString}${searchParams ? `?${searchParams}` : ''}`;
+    const normalizedProxyTarget = PROXY_TARGET.replace(/\/+$/, "");
+    const forwardPathname = url.pathname.replace(/^\/api\/p/, "") || "/";
+    const targetUrl = `${normalizedProxyTarget}${forwardPathname}${searchParams ? `?${searchParams}` : ''}`;
 
     if (isProxyDebugEnabled) {
         console.log(`[Proxy] Forwarding ${request.method} ${url.pathname}`);
@@ -50,6 +50,10 @@ async function handleProxy(request: Request, { params }: { params: Promise<{ pat
         });
 
         const responseHeaders = new Headers(response.headers);
+        const location = responseHeaders.get("location");
+        if (location && location.startsWith("/")) {
+            responseHeaders.set("location", `/api/p${location}`);
+        }
 
         return new NextResponse(response.body, {
             status: response.status,
