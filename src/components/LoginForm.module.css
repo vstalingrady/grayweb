@@ -262,10 +262,10 @@
 
 .authShell {
   width: 100%;
-  max-width: 1240px;
+  max-width: 1680px;
   display: grid;
-  grid-template-columns: minmax(420px, 7fr) minmax(360px, 3fr);
-  gap: 0.35rem;
+  grid-template-columns: minmax(520px, 6fr) minmax(480px, 5fr);
+  gap: clamp(0.75rem, 1.6vw, 1.5rem);
   margin-inline: auto;
 }
 
@@ -830,8 +830,8 @@
 }
 
 .authOrb {
-  inline-size: clamp(200px, 34vw, 230px);
-  block-size: clamp(200px, 34vw, 230px);
+  inline-size: clamp(220px, 24vw, 320px);
+  block-size: clamp(220px, 24vw, 320px);
   display: grid;
   place-items: center;
   position: relative;
@@ -840,7 +840,7 @@
 }
 
 .authOrbLogo {
-  width: clamp(140px, 28vw, 180px);
+  width: clamp(160px, 18vw, 240px);
   height: auto;
   filter:
     drop-shadow(0 0 22px rgba(255, 255, 255, 0.9))

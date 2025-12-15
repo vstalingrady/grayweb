@@ -21,7 +21,6 @@ export type ReminderConfig = {
 
 const REMINDER_STATUS_VALUES: GrayReminderStatus[] = ["created", "updated", "completed", "deleted"];
 const REMINDER_TYPE_VALUES: GrayReminderPayloadType[] = ["gray.reminder", "gray.plan", "gray.habit"];
-const REMINDER_SOURCE_VALUES: GrayReminderSource[] = ["mcp/plans-habits-server", "mcp"];
 
 const normalizeReminderType = (value: unknown): GrayReminderPayloadType | null => {
     if (typeof value !== "string") {
@@ -36,7 +35,13 @@ const normalizeReminderSource = (value: unknown): GrayReminderSource | null => {
         return null;
     }
     const normalized = value.trim().toLowerCase();
-    return REMINDER_SOURCE_VALUES.find((source) => source === normalized) ?? null;
+    if (!normalized) {
+        return null;
+    }
+    if (normalized === "native/backend") {
+        return "native/backend";
+    }
+    return "legacy";
 };
 
 const normalizeReminderStatus = (value: unknown): GrayReminderStatus | null => {
@@ -143,7 +148,7 @@ const coerceLegacyReminderPayload = (candidate: Record<string, unknown>): GrayRe
 
     return {
         type: normalizedType,
-        source: normalizeReminderSource(candidate.source) ?? "mcp/plans-habits-server",
+        source: normalizeReminderSource(candidate.source) ?? "legacy",
         status: reminderStatus ?? "created",
         entity,
         delivery_mode: deliveryMode,
@@ -212,7 +217,7 @@ const coerceStructuredReminderPayload = (candidate: Record<string, unknown>): Gr
 
     return {
         type,
-        source: normalizeReminderSource(candidate.source) ?? "mcp/plans-habits-server",
+        source: normalizeReminderSource(candidate.source) ?? "legacy",
         status,
         entity,
         delivery_mode: deliveryMode,
@@ -309,7 +314,7 @@ const stripReminderPreamble = (segment: string): string => {
 };
 
 const TOOL_FENCE_LINE_PATTERNS = [
-    /via MCP/i,
+    /^via\s+\S+/i,
     /^Plan\s+'[^']+'\s+is\s+set\s+for/i,
     /^I've stored/i,
     /^Vstalin Grady,/i,

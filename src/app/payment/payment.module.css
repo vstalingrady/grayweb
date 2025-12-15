@@ -77,9 +77,10 @@
     box-sizing: border-box;
 }
 
-.summaryColumn::before,
-.summaryColumn::after {
-    content: none;
+.summaryColumn > * {
+    max-height: 520px;
+    width: 100%;
+    max-width: 380px;
 }
 
 /* Column-specific starfield removed; global background handles this. */
@@ -94,7 +95,8 @@
     gap: 1.5rem;
     min-height: 100vh;
     box-sizing: border-box;
-    max-width: 420px;
+    width: 100%;
+    max-width: 380px;
     margin: 0 auto;
 }
 
@@ -363,8 +365,8 @@
     position: relative;
     display: grid;
     grid-template-columns: 1fr 1fr;
-    padding: 0.2rem;
-    border-radius: 999px;
+    padding: 0.25rem;
+    border-radius: 12px;
     border: 1.5px solid rgba(255, 255, 255, 0.15);
     background: rgba(8, 8, 8, 0.7);
     overflow: hidden;
@@ -372,11 +374,11 @@
 
 .billingThumb {
     position: absolute;
-    inset: 0.2rem;
-    width: calc(50% - 0.1rem);
-    border-radius: 999px;
+    inset: 0.25rem;
+    width: calc(50% - 0.125rem);
+    border-radius: 10px;
     background: linear-gradient(135deg, #fefefe, #dcdcdc);
-    box-shadow: 0 12px 26px rgba(0, 0, 0, 0.45);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
     transform: translateX(0%);
     transition: transform 200ms ease;
     pointer-events: none;
