@@ -48,7 +48,7 @@ export function CalendarSidebar({
   showTodayButton = false,
   onGoToday,
   showCreateAction = false,
-  integrationActionLabel = "Add Google Calendar integration",
+  integrationActionLabel = "Connect to Google Calendar",
   onIntegrationAction,
   className,
   showCalendarList = true,
@@ -120,6 +120,30 @@ export function CalendarSidebar({
           onSelectDate={onSelectDate}
         />
 
+        {onIntegrationAction ? (
+          <div className={styles.calendarSidebarIntegration}>
+            <button
+              type="button"
+              className={styles.calendarSidebarIntegrationButton}
+              onClick={onIntegrationAction}
+            >
+              <span className={styles.calendarSidebarIntegrationPlus} aria-hidden="true">
+                +
+              </span>
+              <span className={styles.calendarSidebarIntegrationText}>
+                {t(integrationActionLabel)}
+              </span>
+              <img
+                className={styles.calendarSidebarIntegrationLogo}
+                src="/logos/google-calendar.svg"
+                alt=""
+                aria-hidden="true"
+                loading="lazy"
+              />
+            </button>
+          </div>
+        ) : null}
+
         {showCalendarList ? (
           <section className={styles.calendarSidebarList}>
             <div className={styles.calendarSidebarListBody}>
@@ -140,17 +164,6 @@ export function CalendarSidebar({
                   </button>
                 </div>
               ))}
-              {onIntegrationAction ? (
-                <div className={styles.calendarSidebarIntegration}>
-                  <button
-                    type="button"
-                    className={styles.calendarSidebarIntegrationButton}
-                    onClick={onIntegrationAction}
-                  >
-                    {t(integrationActionLabel)}
-                  </button>
-                </div>
-              ) : null}
             </div>
           </section>
         ) : null}
