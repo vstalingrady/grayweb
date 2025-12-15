@@ -8,7 +8,7 @@ This project integrates a FastAPI backend with a Next.js frontend to replace pla
 - **Profile Pictures**: Supports real profile images with fallback to avatars
 - **Dynamic Roles**: User roles retrieved from database
 - **AI-Powered Chat**: Real chat with Google Gemini AI integration
-- **Conversation Persistence**: Chat history saved to Supabase
+- **Conversation Persistence**: Chat history saved to the local database (SQLite by default)
 - **Markdown Support**: AI responses render with rich formatting
 - **Calendar Events**: User-specific calendar events from database
 - **Automatic User Creation**: Creates new users automatically when they first visit
@@ -92,36 +92,14 @@ Both the backend and frontend now read exclusively from the repo root `.env`, an
 
 The backend now validates that key on startup by issuing a brief prompt through `GeminiService`. Set `VALIDATE_GEMINI_ON_STARTUP=false` in `.env` if you need to skip the validation call (e.g., to avoid extra quota while iterating locally).
 
-**Supabase (Optional - for chat persistence):**
+**Supabase (Auth):**
 1. Create a free account at [supabase.com](https://supabase.com)
 2. Create a new project
 3. Go to Settings > API to get your URL and anon key
 4. Replace the placeholder values in your `.env` file
 
-> **Note:** The backend looks for `SUPABASE_KEY` (service role) but will automatically fall back to `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_SECRET_KEY`, or even `SUPABASE_ANON_KEY` if that's all you have configured. Using the anon key works for read-only access, but some write operations (like persisting conversations) may be limited until you provide the service-role secret.
-
-**Set up Supabase Table:**
-The backend will automatically create the `public.conversations` table at startup whenever it has Supabase database credentials. If you prefer to provision it manually (or are running without direct database access), execute the following SQL in your Supabase SQL Editor:
-
-```sql
-CREATE TABLE public.conversations (
-  id UUID NOT NULL DEFAULT gen_random_uuid(),
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  title TEXT NULL,
-  history JSONB NULL,
-  CONSTRAINT conversations_pkey PRIMARY KEY (id)
-);
-
-ALTER TABLE public.conversations ENABLE ROW LEVEL SECURITY;
-
--- Only the backend (service_role key) should be able to touch this table directly.
-CREATE POLICY "conversations_service_role_full_access"
-  ON public.conversations
-  FOR ALL
-  TO service_role
-  USING (true)
-  WITH CHECK (true);
-```
+> **Note:** Supabase is used for authentication only. All application data (settings, conversations, plans, reminders, etc.)
+> is stored in the service database (SQLite by default), not in Supabase tables.
 
 ### 3. Run the Application
 
@@ -208,15 +186,13 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key>
 Visit [http://localhost:8000/docs](http://localhost:8000/docs) for the automatically generated FastAPI docs once the server is running.
 
 - `GET /time` hits `SELECT NOW()` using the direct PostgreSQL connection.
-- `GET /supabase/health` verifies the Supabase client can be instantiated.
-- `GET /supabase/table/{table_name}?limit=5` previews rows from a Supabase table (RLS must allow anon access).
 
 ## Supabase quick start
 
 - Configure your Supabase project OAuth providers for Google and Discord to match the login buttons.
 - For local development add `http://gray.localhost:3000/callback` to the Supabase **Redirect URLs** list (`http://localhost:3000/callback` is optional if you also sign in from plain `localhost`).
 - The Next.js login form uses the helper in `src/lib/supabaseClient.ts` to create a browser client.
-- The FastAPI service uses `supabase-py` to expose lightweight data previews without shipping database credentials to the client.
+- The FastAPI service uses Supabase for authentication only (token validation fallback + account deletion in Supabase Auth).
 
 ## Learn More
 

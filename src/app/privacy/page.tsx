@@ -61,7 +61,7 @@ export default function PrivacyPolicyPage() {
             <p>We rely on carefully selected processors to operate the Service:</p>
             <BulletList
               items={[
-                "Supabase (authentication, profile storage, and conversation persistence).",
+                "Supabase (authentication).",
                 "Gray-managed AI runtime (responses generated without sending prompts to third-party vendors).",
                 "Google Calendar APIs (when you connect your calendar to sync events).",
                 "Hosting and infrastructure providers required to run the FastAPI backend and Next.js frontend.",
@@ -77,7 +77,8 @@ export default function PrivacyPolicyPage() {
             <h2>Data Storage &amp; Retention</h2>
             <BulletList
               items={[
-                "Account and conversation data is stored in managed databases provisioned through Supabase or the project-maintained PostgreSQL instance.",
+                "Application data (including settings and conversation history) is stored in the Service database (SQLite by default).",
+                "Authentication data (for example email and session identifiers) is handled through Supabase Auth.",
                 "Backups and diagnostics logs are retained for as long as necessary to operate, secure, and improve the Service.",
                 "You may request deletion of your profile or chat history by contacting us; we will erase the requested data unless law or legitimate business needs require retention.",
               ]}

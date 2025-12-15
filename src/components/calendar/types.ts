@@ -18,6 +18,7 @@ export interface CalendarEvent {
   entryType: CalendarEntryType;
   description?: string;
   displayHint?: CalendarEventDisplayHint;
+  reminderMinutesBefore?: number | null;
 }
 
 export interface PositionedEvent extends CalendarEvent {

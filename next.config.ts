@@ -145,7 +145,7 @@ const nextConfig: NextConfig = {
 	              // Scripts: self + specific trusted CDNs only
 	              "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://static.cloudflareinsights.com https://challenges.cloudflare.com https://api.midtrans.com https://api.sandbox.midtrans.com https://app.midtrans.com https://simulator.sandbox.midtrans.com https://cdn.paddle.com",
 	              // Styles: self + Google Fonts
-	              "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+	              "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.paddle.com",
 	              // Images: self + trusted sources
 	              "img-src 'self' blob: data: https://*.supabase.co https://*.googleusercontent.com https://avatars.githubusercontent.com https://*.githubusercontent.com https://cdn.discordapp.com https://secure.gravatar.com https://www.gravatar.com https://api.midtrans.com https://api.sandbox.midtrans.com",
 	              // Fonts: self + Google Fonts

@@ -1150,6 +1150,7 @@ export function GrayDashboardView({
         className={headerClassName}
         onUpgradeClick={onUpgradeClick}
         showUpgradeButton={showUpgradeButton}
+        showTabs={!isScout}
       />
       <div className={styles.dashboardViewScrollContainer}>
         {dashboardGrid}
@@ -1166,6 +1167,7 @@ export function GrayDashboardView({
         className={headerClassName}
         onUpgradeClick={onUpgradeClick}
         showUpgradeButton={showUpgradeButton}
+        showTabs={!isScout}
       />
       <div className={styles.dashboardCompact}>
         {dashboardGrid}

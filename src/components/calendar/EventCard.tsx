@@ -1,5 +1,5 @@
 import { CSSProperties, HTMLAttributes, MouseEvent, memo, useMemo } from "react";
-import { Check, Trash2 } from "lucide-react";
+import { Check } from "lucide-react";
 
 import styles from "./GrayDashboardCalendar.module.css";
 import { PositionedEvent } from "./types";
@@ -101,6 +101,10 @@ type EventCardProps = {
   onClick?: (event: PositionedEvent, anchor: DOMRect, mouseEvent: MouseEvent) => void;
   onDelete?: (event: PositionedEvent) => void;
   taskAction?: TaskToggleAction;
+  resizeProps?: (
+    event: PositionedEvent,
+    edge: "start" | "end"
+  ) => Pick<HTMLAttributes<HTMLElement>, "onPointerDown">;
 };
 
 type EventCardStyle = CSSProperties & {
@@ -118,8 +122,8 @@ export const EventCard = memo(function EventCard({
   isSelected = false,
   draggableProps,
   onClick,
-  onDelete,
   taskAction,
+  resizeProps,
 }: EventCardProps) {
   const timeLabel = useMemo(() => {
     const startLabel = formatEventTime(event.start);
@@ -175,6 +179,9 @@ export const EventCard = memo(function EventCard({
     taskAction.onToggle();
   };
 
+  const resizeStartProps = resizeProps?.(event, "start");
+  const resizeEndProps = resizeProps?.(event, "end");
+
   return (
     <div
       className={styles.eventCard}
@@ -196,6 +203,12 @@ export const EventCard = memo(function EventCard({
       title={tooltipLabel}
       {...draggableProps}
     >
+      {!isPreview && !isDragging && (
+        <>
+          <div className={styles.resizeHandle} data-edge="start" {...resizeStartProps} />
+          <div className={styles.resizeHandle} data-edge="end" {...resizeEndProps} />
+        </>
+      )}
       <div className={styles.eventCardText}>
         <strong
           className={styles.eventCardTitle}

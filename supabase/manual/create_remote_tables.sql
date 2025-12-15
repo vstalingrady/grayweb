@@ -71,6 +71,10 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'last_six_hour_reset') THEN
         ALTER TABLE public.users ADD COLUMN last_six_hour_reset TIMESTAMPTZ;
     END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'subscription_expires_at') THEN
+        ALTER TABLE public.users ADD COLUMN subscription_expires_at TIMESTAMP;
+    END IF;
 END $$;
 
 -- Create other tables

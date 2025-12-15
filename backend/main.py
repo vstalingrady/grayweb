@@ -975,6 +975,8 @@ def _ensure_sqlite_index(table: str, index_name: str, column: str) -> None:
 _ensure_sqlite_columns("users", [
     ("auth_user_id", "TEXT", None),
     ("subscription_expires_at", "DATETIME", None),
+    ("paddle_customer_id", "TEXT", None),
+    ("paddle_subscription_id", "TEXT", None),
     ("has_seen_general_chat", "BOOLEAN", "0"),
     ("maps_enabled", "BOOLEAN", "0"),
     ("improve_model_for_everyone", "BOOLEAN", "0"),
@@ -1053,6 +1055,9 @@ _ensure_sqlite_index("user_chat_messages", "ix_user_chat_messages_thread_id", "t
 # Ensure transactions table has billing_cycle column (added for payment billing cycle tracking)
 _ensure_sqlite_columns("transactions", [
     ("billing_cycle", "VARCHAR", None),
+    ("subscription_starts_at", "DATETIME", None),
+    ("subscription_ends_at", "DATETIME", None),
+    ("paddle_transaction_id", "TEXT", None),
 ])
 
 
@@ -1606,6 +1611,7 @@ class CalendarEventBase(BaseModel):
     end_time: datetime
     calendar_id: Optional[int] = None
     color: Optional[str] = None
+    reminder_minutes_before: Optional[int] = None
 
 class CalendarEventCreate(CalendarEventBase):
     pass
@@ -1617,6 +1623,7 @@ class CalendarEventUpdate(BaseModel):
     end_time: Optional[datetime] = None
     calendar_id: Optional[int] = None
     color: Optional[str] = None
+    reminder_minutes_before: Optional[int] = None
 
 class CalendarEvent(CalendarEventBase):
     id: int
@@ -1976,13 +1983,6 @@ if SUPABASE_URL and SUPABASE_KEY and SUPABASE_URL != "your_supabase_url_here":
 # We no longer configure the conversation store with Supabase clients for data.
 
 
-# =============================================================================
-# Data storage configuration: Supabase is used for auth only.
-# Plans, habits, reminders, and other user data are stored locally (SQLite/Postgres).
-# To re-enable Supabase data storage, set supabase_data = supabase
-supabase_data: Optional[Client] = None  # Disabled - use local storage only
-
-
 _USER_DATA_CACHE: Dict[int, int] = {}
 _USER_TIMEZONE_CACHE: Dict[int, Optional[str]] = {}
 
@@ -1997,11 +1997,6 @@ def _disable_conversation_store(reason: str) -> None:
 
 def _handle_conversation_store_error(context: str, error: Exception) -> None:
   conversation_store._handle_conversation_store_error(context, error)
-
-
-def _handle_supabase_table_error(context: str, error: Exception) -> None:
-    details = getattr(error, "message", None) or str(error)
-    print(f"{context}: {details}")
 
 
 def _general_conversation_user_id(conversation_id: Optional[str]) -> Optional[int]:
@@ -2339,11 +2334,6 @@ def _payload_log_summary(payload: Any) -> Dict[str, Any]:
     return {"payload_present": True, "payload_type": type(payload).__name__}
 
 
-def _fetch_supabase_proactivity_settings(user_id: int) -> Optional[ProactivitySettings]:
-    # Supabase is now auth-only. Data is stored in local SQLite.
-    return None
-
-
 async def _resolve_user_timezone_for_streak(user_id: int, db: databases.Database) -> Optional[str]:
     """
     Best-effort resolution of a user's timezone for streak calculations.
@@ -2351,8 +2341,7 @@ async def _resolve_user_timezone_for_streak(user_id: int, db: databases.Database
     Preference order:
       1. In-memory cache.
       2. User personalization_time_zone (explicit profile field).
-      3. Supabase proactivity_settings payload.
-      4. Local proactivity_settings payload (SQLite).
+      3. Local proactivity_settings payload (SQLite).
     Falls back to UTC when no setting is available or parsing fails.
     """
     cached = _USER_TIMEZONE_CACHE.get(user_id)
@@ -2384,21 +2373,6 @@ async def _resolve_user_timezone_for_streak(user_id: int, db: databases.Database
 
     if timezone_name is None:
         try:
-            supabase_settings = _fetch_supabase_proactivity_settings(user_id)
-            if supabase_settings and supabase_settings.timezone:
-                timezone_name = supabase_settings.timezone
-        except Exception as error:  # pragma: no cover - defensive logging
-            api_logger.debug(
-                f"Failed to resolve timezone from Supabase for user {user_id}: {error}",
-                extra={
-                    "event_type": "user_timezone_supabase_error",
-                    "user_id": user_id,
-                    "error": str(error),
-                },
-            )
-
-    if timezone_name is None:
-        try:
             record = await db.fetch_one(
                 proactivity_settings.select().where(proactivity_settings.c.user_id == user_id)
             )
@@ -2420,11 +2394,6 @@ async def _resolve_user_timezone_for_streak(user_id: int, db: databases.Database
     # Cache even when None so we don't repeatedly query.
     _USER_TIMEZONE_CACHE[user_id] = timezone_name
     return timezone_name
-
-
-def _upsert_supabase_proactivity_settings(user_id: int, payload: Dict[str, Any]) -> None:
-    # Supabase is now auth-only. Data is stored in local SQLite.
-    pass
 
 
 def _timezone_from_time_context(time_context: str) -> Tuple[Optional[str], Optional[timezone]]:
@@ -5615,19 +5584,6 @@ async def _complete_onboarding(
                 },
             )
         else:
-            try:
-                _upsert_supabase_proactivity_settings(user_id, settings_payload)
-            except Exception as supabase_error:
-                api_logger.warning(
-                    f"Failed to sync onboarding proactivity settings to Supabase: {supabase_error}",
-                    extra={
-                        "event_type": "proactivity_settings_onboarding_supabase_error",
-                        "user_id": user_id,
-                        "error": str(supabase_error),
-                        **_payload_log_summary(settings_payload),
-                    },
-                )
-
             # Keep timezone cache and scheduler in sync with onboarding decisions.
             if timezone:
                 _USER_TIMEZONE_CACHE[user_id] = timezone
@@ -9358,81 +9314,26 @@ async def create_conversation(
     """Create a new conversation"""
     try:
         require_same_user(payload.user_id, current_user)
-        if not _conversation_store_available():
-            # Fallback: return mock conversation
-            import uuid
-            return {
-                "id": str(uuid.uuid4()),
-                "title": payload.title,
-                "history": [],
-                "user_id": payload.user_id,
-            }
+        conversation_id = await get_or_create_conversation(
+            None, payload.user_id, title=payload.title
+        )
+        return {
+            "id": conversation_id,
+            "title": payload.title,
+            "history": [],
+            "user_id": payload.user_id,
+        }
 
-        try:
-            await _ensure_user_data_record(payload.user_id)
-            supabase_user_data_id = await _require_supabase_user_data_id(payload.user_id)
-            result = (
-                supabase.table("user_chat_threads")
-                .insert(
-                    {
-                        "title": payload.title or "New Conversation",
-                        "user_identifier": payload.user_id,
-                        "user_data_id": supabase_user_data_id,
-                        "context_snapshot": [],
-                        "metadata": {},
-                    }
-                )
-                .execute()
-            )
-
-            rows = result.data or []
-            if not rows:
-                fallback = (
-                    supabase.table("user_chat_threads")
-                    .select("id, title, created_at, updated_at")
-                    .eq("user_identifier", payload.user_id)
-                    .order("created_at", desc=True)
-                    .limit(1)
-                    .execute()
-                )
-                rows = fallback.data or []
-
-            if rows:
-                row = rows[0]
-                return {
-                    **row,
-                    "history": [],
-                    "user_id": payload.user_id,
-                }
-            else:
-                raise HTTPException(status_code=500, detail="Failed to create conversation")
-        except Exception as supabase_error:
-            # Handle missing table gracefully
-            _handle_conversation_store_error("Warning: Conversations table not found or inaccessible", supabase_error)
-            # Fallback: return mock conversation
-            import uuid
-            return {
-                "id": str(uuid.uuid4()),
-                "title": payload.title,
-                "history": [],
-                "user_id": payload.user_id,
-            }
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error creating conversation: {str(e)}")
+    except HTTPException:
+        raise
+    except Exception as error:
+        raise HTTPException(status_code=500, detail=f"Error creating conversation: {str(error)}")
 
 
 async def _delete_general_conversation_history(
     user_id: int, db: "databases.Database | None" = None
 ) -> None:
-    # 1. Delete from Supabase
-    if _conversation_store_available():
-        try:
-            supabase.table("general_chat_messages").delete().eq("user_id", user_id).execute()
-        except Exception as error:
-            _handle_conversation_store_error("Error deleting general conversation history (Supabase)", error)
-
-    # 2. Delete from SQLite
+    # Local SQLite only.
     try:
         query = general_chat_messages.delete().where(general_chat_messages.c.user_id == user_id)
         await (db or database).execute(query)
@@ -9475,13 +9376,6 @@ async def delete_conversation(
                 # But to be safe:
                 await database.execute(_user_chat_messages.delete().where(_user_chat_messages.c.thread_id == conversation_id))
                 await database.execute(_user_chat_threads.delete().where(_user_chat_threads.c.id == conversation_id))
-                
-                # Also try deleting from legacy Supabase if credentials exist, just to be clean (optional)
-                if supabase and _conversation_store_available():
-                     try:
-                        supabase.table("user_chat_threads").delete().eq("id", conversation_id).execute()
-                     except Exception:
-                        pass
             except Exception as error:
                 _handle_conversation_store_error("Error deleting conversation", error)
         _invalidate_conversation_cache(conversation_id)
@@ -9536,18 +9430,6 @@ async def delete_all_conversations(
 
                 for thread_id in thread_ids:
                     _invalidate_conversation_cache(thread_id)
-
-            # Also clean up Supabase if available (best effort)
-            if supabase and _conversation_store_available():
-                try:
-                    if thread_ids:
-                        try:
-                            supabase.table("user_chat_messages").delete().in_("thread_id", thread_ids).execute()
-                        except Exception:
-                            pass
-                    supabase.table("user_chat_threads").delete().eq("user_identifier", user_id).execute()
-                except Exception:
-                    pass
 
         except Exception as db_error:
             app_logger.error(f"Error checking/deleting named threads: {db_error}")
@@ -11548,14 +11430,17 @@ async def handle_payment_notification(notification: MidtransNotification):
                 plan_tier = transaction["plan_tier"]
                 billing_cycle = transaction.get("billing_cycle", "monthly")
                 
-                # Calculate subscription expiry based on billing cycle
-                # Using exact days: 365 days for annual, 30 days for monthly
-                from datetime import timedelta
+                # Calculate subscription period end (extends active subscriptions).
+                from backend.subscription_utils import calculate_subscription_period
+
                 now = utcnow()
-                if billing_cycle == "annual":
-                    subscription_expires_at = now + timedelta(days=365)
-                else:
-                    subscription_expires_at = now + timedelta(days=30)
+                user_record = await database.fetch_one(users.select().where(users.c.id == user_id))
+                existing_expires_at = user_record["subscription_expires_at"] if user_record else None
+                subscription_starts_at, subscription_expires_at = calculate_subscription_period(
+                    billing_cycle=billing_cycle,
+                    existing_expires_at=existing_expires_at,
+                    now=now,
+                )
                 
                 # Update User Plan and Subscription Expiry
                 user_update = users.update().where(users.c.id == user_id).values(
@@ -11564,6 +11449,17 @@ async def handle_payment_notification(notification: MidtransNotification):
                     updated_at=utcnow()
                 )
                 await database.execute(user_update)
+
+                # Persist the subscription period for this transaction (useful for audits/analytics).
+                await database.execute(
+                    transactions.update()
+                    .where(transactions.c.order_id == notification.order_id)
+                    .values(
+                        subscription_starts_at=subscription_starts_at,
+                        subscription_ends_at=subscription_expires_at,
+                        updated_at=utcnow(),
+                    )
+                )
 
                 # Invalidate auth caches so upgraded users immediately receive paid-tier limits
                 # (e.g., conversation token budget and model access).
@@ -11908,20 +11804,6 @@ async def update_proactivity_settings(
         )
         raise HTTPException(status_code=500, detail="Failed to save proactivity settings")
 
-    # Sync to Supabase if enabled
-    try:
-        _upsert_supabase_proactivity_settings(user_id, updated_payload)
-    except Exception as supabase_error:
-        api_logger.warning(
-            f"Failed to sync proactivity settings to Supabase for user {user_id}: {supabase_error}",
-            extra={
-                "event_type": "proactivity_settings_supabase_error",
-                "user_id": user_id,
-                "error": str(supabase_error),
-                **_payload_log_summary(updated_payload),
-            },
-        )
-
     # Refresh scheduler jobs
     try:
         await proactivity_scheduler.refresh_jobs(user_id)
@@ -12003,34 +11885,7 @@ async def list_proactivity_deliveries(
     now = utcnow()
     since = now - timedelta(days=1)
 
-    # Prefer Supabase for proactivity deliveries when available.
-    if supabase:
-        try:
-            result = (
-                supabase.table("proactive_state")
-                .select("sent_at")
-                .eq("user_id", user_id)
-                .eq("type", "check_in")
-                .gte("sent_at", since.isoformat())
-                .order("sent_at", desc=False)
-                .execute()
-            )
-            rows = result.data or []
-            sent_at_values = []
-            for row in rows:
-                value = row.get("sent_at")
-                if isinstance(value, datetime):
-                    sent_at_values.append(value.isoformat())
-                elif isinstance(value, str):
-                    sent_at_values.append(value)
-            return {"sent_at": sent_at_values}
-        except Exception as error:
-            _handle_supabase_table_error(
-                f"Warning: Failed to load proactivity deliveries from Supabase for user {user_id}",
-                error,
-            )
-
-    # Fallback to local SQLite.
+    # Local SQLite only.
     query = """
         SELECT sent_at
         FROM proactive_notifications
@@ -12186,35 +12041,7 @@ async def get_proactivity_notifications(
 ) -> List[ProactivityNotification]:
     """Fetch proactivity notifications for a user."""
     require_same_user(user_id, current_user)
-    # Prefer Supabase when available.
-    if supabase:
-        try:
-            query = (
-                supabase.table("proactive_state")
-                .select("*")
-                .eq("user_id", user_id)
-            )
-            if unread_only:
-                query = query.is_("read_at", None)
-            query = query.order("sent_at", desc=True)
-            if limit:
-                query = query.limit(limit)
-            result = query.execute()
-            rows = result.data or []
-            return [
-                ProactivityNotification.model_validate(
-                    _serialize_proactivity_notification(row)
-                )
-                for row in rows
-                if _serialize_proactivity_notification(row) is not None
-            ]
-        except Exception as error:
-            _handle_supabase_table_error(
-                f"Warning: Failed to fetch proactivity notifications from Supabase for user {user_id}",
-                error,
-            )
-
-    # Fallback to local SQLite.
+    # Local SQLite only.
     query = proactive_notifications.select().where(proactive_notifications.c.user_id == user_id)
     if unread_only:
         query = query.where(proactive_notifications.c.read_at.is_(None))
@@ -12242,43 +12069,7 @@ async def mark_proactivity_notification_read(
 ) -> ProactivityNotification:
     """Mark a notification as read and return the updated record."""
     require_same_user(user_id, current_user)
-    # Prefer Supabase when available.
-    if supabase:
-        try:
-            # Verify the notification belongs to the user.
-            existing = (
-                supabase.table("proactive_state")
-                .select("*")
-                .eq("id", notification_id)
-                .eq("user_id", user_id)
-                .limit(1)
-                .execute()
-            )
-            rows = existing.data or []
-            if not rows:
-                raise HTTPException(status_code=404, detail="Notification not found.")
-
-            updated = (
-                supabase.table("proactive_state")
-                .update({"read_at": utcnow().isoformat()})
-                .eq("id", notification_id)
-                .eq("user_id", user_id)
-                .execute()
-            )
-            data = (updated.data or rows)[0]
-            payload = _serialize_proactivity_notification(data)
-            if not payload:
-                raise HTTPException(status_code=500, detail="Failed to serialize notification")
-            return ProactivityNotification.model_validate(payload)
-        except HTTPException:
-            raise
-        except Exception as error:
-            _handle_supabase_table_error(
-                f"Warning: Failed to mark proactivity notification read in Supabase for user {user_id}",
-                error,
-            )
-
-    # Fallback to local SQLite.
+    # Local SQLite only.
     select_query = proactive_notifications.select().where(
         (proactive_notifications.c.user_id == user_id)
         & (proactive_notifications.c.id == notification_id)
@@ -12305,19 +12096,6 @@ async def get_proactivity_settings_route(
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     user_id = int(current_user["id"])
-    supabase_settings = _fetch_supabase_proactivity_settings(user_id)
-    if supabase_settings:
-        settings_dump = supabase_settings.model_dump(exclude_none=True)
-        api_logger.debug(
-            f"Retrieved proactivity settings from Supabase for user {user_id}",
-            extra={
-                "event_type": "proactivity_settings_retrieved_supabase",
-                "user_id": user_id,
-                **_payload_log_summary(settings_dump)
-            }
-        )
-        return supabase_settings
-
     record = await db.fetch_one(
         proactivity_settings.select().where(proactivity_settings.c.user_id == user_id)
     )
@@ -12337,9 +12115,6 @@ async def get_proactivity_settings_route(
         }
     )
     settings = _deserialize_proactivity_settings_payload(payload)
-    if settings:
-        # Backfill Supabase when local sqlite contains the canonical value.
-        _upsert_supabase_proactivity_settings(user_id, settings.model_dump(exclude_none=True))
     return settings
 
 
@@ -12398,16 +12173,6 @@ async def update_proactivity_settings_route(
             },
         )
         raise HTTPException(status_code=500, detail=f"Failed to save proactivity settings: {str(db_error)}")
-
-    try:
-        _upsert_supabase_proactivity_settings(user_id, payload)
-    except Exception as supabase_error:
-        # Log but don't fail the request for Supabase errors (it's a backup)
-        api_logger.warning(f"Failed to sync proactivity settings to Supabase: {supabase_error}", extra={
-            "event_type": "proactivity_settings_supabase_error",
-            "user_id": user_id,
-            "error": str(supabase_error)
-        })
 
     api_logger.debug(f"Successfully saved proactivity settings for user {user_id}", extra={
         "event_type": "proactivity_settings_save_success",
@@ -12825,10 +12590,25 @@ async def create_user_calendar_event(
         "start_time": event.start_time,
         "end_time": event.end_time,
         "color": event.color,
+        "reminder_minutes_before": event.reminder_minutes_before,
         "created_at": utcnow(),
     }
     
     event_id = await db.execute(calendar_events.insert().values(**values))
+    if event.reminder_minutes_before is not None:
+        remind_at = event.start_time - timedelta(minutes=max(0, event.reminder_minutes_before))
+        reminder_values = {
+            "user_id": user_id,
+            "label": event.title,
+            "description": event.description,
+            "remind_at": remind_at,
+            "entity_type": "calendar_event",
+            "entity_id": event_id,
+            "status": "pending",
+            "created_at": utcnow(),
+            "updated_at": utcnow(),
+        }
+        await db.execute(reminders.insert().values(**reminder_values))
     query = calendar_events.select().where(calendar_events.c.id == event_id)
     return await db.fetch_one(query)
 
@@ -12853,12 +12633,68 @@ async def update_user_calendar_event(
     values = event_update.dict(exclude_unset=True)
     if not values:
         return existing
+
+    next_start_time = values.get("start_time", existing["start_time"])
+    next_title = values.get("title", existing["title"])
+    next_description = values.get("description", existing.get("description"))
+    next_reminder_minutes_before = values.get(
+        "reminder_minutes_before",
+        existing.get("reminder_minutes_before"),
+    )
         
     await db.execute(
         calendar_events.update()
         .where((calendar_events.c.id == event_id) & (calendar_events.c.user_id == user_id))
         .values(**values)
     )
+
+    reminder_query = reminders.select().where(
+        (reminders.c.user_id == user_id)
+        & (reminders.c.entity_type == "calendar_event")
+        & (reminders.c.entity_id == event_id)
+    )
+    existing_reminder = await db.fetch_one(reminder_query)
+
+    if next_reminder_minutes_before is None:
+        if existing_reminder:
+            await db.execute(
+                reminders.delete().where(
+                    (reminders.c.user_id == user_id)
+                    & (reminders.c.entity_type == "calendar_event")
+                    & (reminders.c.entity_id == event_id)
+                )
+            )
+    else:
+        remind_at = next_start_time - timedelta(minutes=max(0, next_reminder_minutes_before))
+        reminder_payload = {
+            "label": next_title,
+            "description": next_description,
+            "remind_at": remind_at,
+            "status": "pending",
+            "updated_at": utcnow(),
+        }
+        if existing_reminder:
+            await db.execute(
+                reminders.update()
+                .where(
+                    (reminders.c.user_id == user_id)
+                    & (reminders.c.entity_type == "calendar_event")
+                    & (reminders.c.entity_id == event_id)
+                )
+                .values(**reminder_payload)
+            )
+        else:
+            await db.execute(
+                reminders.insert().values(
+                    **{
+                        "user_id": user_id,
+                        "entity_type": "calendar_event",
+                        "entity_id": event_id,
+                        "created_at": utcnow(),
+                        **reminder_payload,
+                    }
+                )
+            )
     
     return await db.fetch_one(query)
 
@@ -12882,6 +12718,13 @@ async def delete_user_calendar_event(
     await db.execute(
         calendar_events.delete()
         .where((calendar_events.c.id == event_id) & (calendar_events.c.user_id == user_id))
+    )
+    await db.execute(
+        reminders.delete().where(
+            (reminders.c.user_id == user_id)
+            & (reminders.c.entity_type == "calendar_event")
+            & (reminders.c.entity_id == event_id)
+        )
     )
     return None
 

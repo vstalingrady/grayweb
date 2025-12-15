@@ -141,7 +141,8 @@
 }
 
 .calendarSidebarMonthLabel {
-  font-size: 0.8rem;
+  font-size: 1rem;
+  font-weight: 600;
   letter-spacing: 0.02em;
   color: rgba(240, 240, 240, 0.82);
   white-space: nowrap;
@@ -527,8 +528,7 @@
   display: flex;
   flex-direction: column;
   position: relative;
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: hidden;
   height: 100%;
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
@@ -1044,12 +1044,11 @@
 
 .calendarWeekColumn,
 .calendarDayColumn {
-  min-height: 0;
   position: relative;
   isolation: isolate;
   display: flex;
   flex-direction: column;
-  height: 100%;
+  height: auto;
 }
 
 .calendarWeekColumn::after {
@@ -1099,10 +1098,9 @@
   min-height: calc(var(--calendar-hour-height, 64px) * 24);
   padding: 0;
   z-index: 2;
-  overflow-y: auto;
-  overflow-x: hidden;
-  height: 100%;
-  flex: 1;
+  overflow: visible;
+  height: auto;
+  flex: 0 0 auto;
   width: 100%;
   box-sizing: border-box;
 }
@@ -2353,8 +2351,8 @@
   appearance: none;
   -webkit-appearance: none;
   color-scheme: dark;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: transparent;
+  border: none;
   border-radius: 10px;
   color: rgba(247, 247, 247, 0.95);
   font-size: 0.98rem;
@@ -2376,13 +2374,47 @@
 }
 
 .composerHeaderSelect:hover {
-  background: rgba(255, 255, 255, 0.09);
-  border-color: rgba(255, 255, 255, 0.22);
+  background: transparent;
+  border-color: transparent;
 }
 
 .composerHeaderSelect:focus-visible {
-  border-color: rgba(130, 180, 255, 0.65);
-  box-shadow: 0 0 0 3px rgba(130, 180, 255, 0.22);
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.resizeHandle {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 8px;
+  cursor: ns-resize;
+  z-index: 10;
+  /* Make it slightly easier to grab without visually blocking */
+  transform: translateY(0);
+}
+
+.resizeHandle[data-edge="start"] {
+  top: 0;
+  cursor: n-resize;
+}
+
+.resizeHandle[data-edge="end"] {
+  bottom: 0;
+  cursor: s-resize;
+}
+
+/* Optional: Show handle on hover for better affordance */
+.resizeHandle:hover::after {
+  content: "";
+  position: absolute;
+  left: 10%;
+  right: 10%;
+  top: 50%;
+  height: 4px;
+  margin-top: -2px;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 2px;
 }
 
 .composerHeaderSelect option {

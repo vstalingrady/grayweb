@@ -41,17 +41,20 @@
 }
 
 
+
 .mainGrid {
-    display: grid;
-    grid-template-columns: auto 1fr;
-    gap: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 2rem;
     width: 100vw;
     min-height: 100vh;
     margin: 0;
-    padding: 0;
+    padding: 2rem;
     box-sizing: border-box;
     position: relative;
     z-index: 1;
+    flex-wrap: wrap;
 }
 
 .container {
@@ -71,9 +74,9 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 3rem;
+    padding: 0;
     background: transparent;
-    min-height: 100vh;
+    min-height: auto;
     box-sizing: border-box;
     width: auto;
 }
@@ -90,13 +93,13 @@
     flex-direction: column;
     align-items: flex-start;
     justify-content: flex-start;
-    padding: 3rem 4rem;
-    background: rgba(8, 8, 10, 0.85);
+    padding: 0;
+    background: transparent;
     gap: 1.5rem;
-    min-height: 100vh;
+    min-height: auto;
     box-sizing: border-box;
-    width: 100%;
-    overflow-y: auto;
+    width: auto;
+    overflow-y: visible;
 }
 
 
@@ -178,6 +181,10 @@
     grid-template-columns: 1fr 1fr;
     gap: 0.5rem;
     margin-bottom: 0.7rem;
+}
+
+.methodGroupTabs button:first-child {
+    grid-column: 1 / -1;
 }
 
 .methodGroupTabs button {

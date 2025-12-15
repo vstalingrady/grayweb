@@ -33,6 +33,7 @@ export type EventComposerPayload = {
   calendarId: string;
   description?: string;
   displayHint?: CalendarEventDisplayHint;
+  reminderMinutesBefore?: number | null;
 };
 
 type AnchorRect = {
@@ -63,6 +64,7 @@ export type ComposerState = {
   entryType: CalendarEntryType;
   calendarId: string;
   details: string;
+  reminderMinutesBefore: number | null;
 };
 
 type ComposerAction =
@@ -193,6 +195,7 @@ const DEFAULT_STATE: ComposerState = {
   entryType: "event",
   calendarId: "default",
   details: "",
+  reminderMinutesBefore: null,
 };
 
 export const DEFAULT_EVENT_DURATION_MINUTES = 60;
@@ -236,6 +239,8 @@ const resolveStateFromEvent = (
   entryType: event.entryType,
   calendarId: event.calendarId ?? fallbackCalendarId,
   details: event.description ?? "",
+  reminderMinutesBefore:
+    typeof event.reminderMinutesBefore === "number" ? event.reminderMinutesBefore : null,
 });
 
 const combineDateWithTime = (date: Date, timeValue: string) => {
@@ -333,6 +338,7 @@ export function EventComposer({
           startTime: formatTimeInput(initialRange.start),
           endTime: formatTimeInput(initialRange.end),
           details: "",
+          reminderMinutesBefore: null,
         },
       });
       return;
@@ -345,6 +351,7 @@ export function EventComposer({
         title: "",
         calendarId: calendarFallbackId,
         details: "",
+        reminderMinutesBefore: null,
       },
     });
   }, [activeEvent, calendarFallbackId, initialRange, isOpen, referenceDate]);
@@ -398,6 +405,7 @@ export function EventComposer({
   }, [anchorRect, isOpen, state.entryType, state.startTime, state.endTime, state.details, state.title]);
 
   const isHabit = state.entryType === "habit";
+  const showReminderControl = state.entryType === "event";
 
   useEffect(() => {
     if (isHabit) {
@@ -456,6 +464,7 @@ export function EventComposer({
         entryType: state.entryType,
         calendarId: state.calendarId,
         description: state.details.trim() ? state.details.trim() : undefined,
+        reminderMinutesBefore: showReminderControl ? state.reminderMinutesBefore : null,
       });
 
       onRequestClose();
@@ -467,10 +476,12 @@ export function EventComposer({
       currentStart,
       onRequestClose,
       onSubmit,
+      showReminderControl,
       state.calendarId,
       state.color,
       state.details,
       state.entryType,
+      state.reminderMinutesBefore,
       state.title,
       t,
     ]
@@ -499,6 +510,7 @@ export function EventComposer({
       entryType: state.entryType,
       calendarId: state.calendarId,
       description: state.details.trim() ? state.details.trim() : undefined,
+      reminderMinutesBefore: showReminderControl ? state.reminderMinutesBefore : null,
     });
     onRequestClose();
   };
@@ -841,6 +853,32 @@ export function EventComposer({
 	                    })()}
 	                  </span>
                 </div>
+                {showReminderControl ? (
+                  <div className={styles.composerField}>
+                    <span>{t("Notification")}</span>
+                    <select
+                      value={state.reminderMinutesBefore === null ? "" : String(state.reminderMinutesBefore)}
+                      onChange={(event) => {
+                        const raw = event.target.value;
+                        const next = raw ? Number.parseInt(raw, 10) : null;
+                        dispatch({
+                          type: "update",
+                          payload: {
+                            reminderMinutesBefore: Number.isFinite(next) ? next : null,
+                          },
+                        });
+                      }}
+                    >
+                      <option value="">{t("No reminder")}</option>
+                      <option value="0">{t("When event starts")}</option>
+                      <option value="5">{t("5 minutes before")}</option>
+                      <option value="10">{t("10 minutes before")}</option>
+                      <option value="15">{t("15 minutes before")}</option>
+                      <option value="30">{t("30 minutes before")}</option>
+                      <option value="60">{t("1 hour before")}</option>
+                    </select>
+                  </div>
+                ) : null}
                 <div className={styles.composerDateRow}>
                   <button
                     type="button"

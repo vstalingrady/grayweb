@@ -71,6 +71,7 @@ import {
   ANON_MESSAGE_LIMIT_VALUE,
 } from "@/lib/anonymousSession";
 import { SignUpPromptModal } from "@/components/gray/SignUpPromptModal";
+import { StarfieldCanvas } from "@/components/gray/StarfieldCanvas";
 
 // Lazy load all heavy components for better code splitting
 const GrayEnhancedSidebar = dynamic(
@@ -773,6 +774,16 @@ function GrayPageClientInner({
     }
   }, [isScout, dashboardTab]);
 
+  useEffect(() => {
+    if (!isScout) {
+      return;
+    }
+
+    if (activeNav === "calendar" || pathname === "/cal") {
+      router.replace(NAVIGATION_ROUTES.general ?? "/g");
+    }
+  }, [activeNav, isScout, pathname, router]);
+
   const viewerInitials = useMemo(() => {
     if (userLoading) {
       return "--";
@@ -784,13 +795,19 @@ function GrayPageClientInner({
   }, [user, userLoading, viewerName]);
 
   const filteredSidebarItems = useMemo(() => {
+    if (isScout) {
+      return SIDEBAR_ITEMS.filter((item) => item.id !== "calendar");
+    }
     return SIDEBAR_ITEMS;
-  }, [viewerPlanLabel]);
+  }, [isScout]);
 
   const filteredRailItems = useMemo(() => {
+    if (isScout) {
+      return SIDEBAR_RAIL_ITEMS.filter((item) => item.id !== "calendar");
+    }
     return SIDEBAR_RAIL_ITEMS;
-  }, [viewerPlanLabel]);
-	  const historySections = useMemo<SidebarHistorySection[]>(() => {
+  }, [isScout]);
+  const historySections = useMemo<SidebarHistorySection[]>(() => {
     // Only show conversations that are bound to a *normalized*
     // conversationId so we don't duplicate entries with both
     // the raw user prompt and the refined AI title or temporary
@@ -836,70 +853,70 @@ function GrayPageClientInner({
       registerSession(`${baseKey}:${session.id}`, session);
     });
 
-	    const dedupedThreadSessions = Array.from(dedupeMap.values());
-	    if (!dedupedThreadSessions.length) {
-	      return DEFAULT_HISTORY_SECTIONS.map((section) => ({
-	        ...section,
-	        entries: section.entries.map((entry) => ({ ...entry })),
-	      }));
-	    }
+    const dedupedThreadSessions = Array.from(dedupeMap.values());
+    if (!dedupedThreadSessions.length) {
+      return DEFAULT_HISTORY_SECTIONS.map((section) => ({
+        ...section,
+        entries: section.entries.map((entry) => ({ ...entry })),
+      }));
+    }
 
-	    // Prevent "ghost" duplicate entries: if a placeholder session is still marked
-	    // as title-generating but we already have another session with the same seed
-	    // prompt within a short window, hide the placeholder so the sidebar doesn't
-	    // show an extra skeleton row.
-	    const sessionsBySeed = new Map<string, ChatSession[]>();
-	    dedupedThreadSessions.forEach((session) => {
-	      const fingerprint = getSessionSeedFingerprint(session);
-	      if (!fingerprint) {
-	        return;
-	      }
-	      const bucket = sessionsBySeed.get(fingerprint) ?? [];
-	      bucket.push(session);
-	      sessionsBySeed.set(fingerprint, bucket);
-	    });
+    // Prevent "ghost" duplicate entries: if a placeholder session is still marked
+    // as title-generating but we already have another session with the same seed
+    // prompt within a short window, hide the placeholder so the sidebar doesn't
+    // show an extra skeleton row.
+    const sessionsBySeed = new Map<string, ChatSession[]>();
+    dedupedThreadSessions.forEach((session) => {
+      const fingerprint = getSessionSeedFingerprint(session);
+      if (!fingerprint) {
+        return;
+      }
+      const bucket = sessionsBySeed.get(fingerprint) ?? [];
+      bucket.push(session);
+      sessionsBySeed.set(fingerprint, bucket);
+    });
 
-	    const isPlaceholderTitle = (session: ChatSession): boolean => {
-	      const normalized = (session.title ?? "").trim().toLowerCase();
-	      return (
-	        !normalized ||
-	        normalized === "new chat" ||
-	        normalized === "new conversation" ||
-	        normalized === "new thread" ||
-	        normalized === "new session"
-	      );
-	    };
+    const isPlaceholderTitle = (session: ChatSession): boolean => {
+      const normalized = (session.title ?? "").trim().toLowerCase();
+      return (
+        !normalized ||
+        normalized === "new chat" ||
+        normalized === "new conversation" ||
+        normalized === "new thread" ||
+        normalized === "new session"
+      );
+    };
 
-	    const prunedThreadSessions = dedupedThreadSessions.filter((session) => {
-	      if (!session.isGeneratingTitle) {
-	        return true;
-	      }
-	      if (!isPlaceholderTitle(session)) {
-	        return true;
-	      }
-	      const fingerprint = getSessionSeedFingerprint(session);
-	      if (!fingerprint) {
-	        return true;
-	      }
-	      const candidates = sessionsBySeed.get(fingerprint) ?? [];
-	      const hasBetterMatch = candidates.some(
-	        (candidate) =>
-	          candidate !== session &&
-	          !candidate.isGeneratingTitle &&
-	          Math.abs(candidate.updatedAt - session.updatedAt) <= HISTORY_DUPLICATE_WINDOW_MS
-	      );
-	      return !hasBetterMatch;
-	    });
+    const prunedThreadSessions = dedupedThreadSessions.filter((session) => {
+      if (!session.isGeneratingTitle) {
+        return true;
+      }
+      if (!isPlaceholderTitle(session)) {
+        return true;
+      }
+      const fingerprint = getSessionSeedFingerprint(session);
+      if (!fingerprint) {
+        return true;
+      }
+      const candidates = sessionsBySeed.get(fingerprint) ?? [];
+      const hasBetterMatch = candidates.some(
+        (candidate) =>
+          candidate !== session &&
+          !candidate.isGeneratingTitle &&
+          Math.abs(candidate.updatedAt - session.updatedAt) <= HISTORY_DUPLICATE_WINDOW_MS
+      );
+      return !hasBetterMatch;
+    });
 
-	    const pinnedSessions: ChatSession[] = [];
-	    const unpinnedSessions: ChatSession[] = [];
+    const pinnedSessions: ChatSession[] = [];
+    const unpinnedSessions: ChatSession[] = [];
 
-	    prunedThreadSessions.forEach((session) => {
-	      // Check for pinned in metadata
-	      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-	      const isPinned = !!(session.metadata as any)?.is_pinned;
-	      if (isPinned) {
-	        pinnedSessions.push(session);
+    prunedThreadSessions.forEach((session) => {
+      // Check for pinned in metadata
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const isPinned = !!(session.metadata as any)?.is_pinned;
+      if (isPinned) {
+        pinnedSessions.push(session);
       } else {
         unpinnedSessions.push(session);
       }
@@ -1774,7 +1791,8 @@ function GrayPageClientInner({
         prev.end.getTime() !== next.end.getTime() ||
         prev.description !== next.description ||
         prev.calendarId !== next.calendarId ||
-        prev.color !== next.color
+        prev.color !== next.color ||
+        prev.reminderMinutesBefore !== next.reminderMinutesBefore
       );
     });
 
@@ -1809,6 +1827,7 @@ function GrayPageClientInner({
             start_time: event.start.toISOString(),
             end_time: event.end.toISOString(),
             color: event.color,
+            reminder_minutes_before: event.reminderMinutesBefore ?? null,
           });
           // Update the local state with the real ID from the backend
           setCalendarEvents(prev => prev.map(e => e.id === event.id ? {
@@ -1839,6 +1858,7 @@ function GrayPageClientInner({
               start_time: event.start.toISOString(),
               end_time: event.end.toISOString(),
               color: event.color,
+              reminder_minutes_before: event.reminderMinutesBefore ?? null,
             });
             // Update local state with the real ID
             setCalendarEvents(prev => prev.map(e => e.id === event.id ? {
@@ -1865,6 +1885,7 @@ function GrayPageClientInner({
             start_time: event.start.toISOString(),
             end_time: event.end.toISOString(),
             color: event.color,
+            reminder_minutes_before: event.reminderMinutesBefore ?? null,
           });
         } catch (error) {
           // If event doesn't exist in database (404), skip the API call and keep optimistic update
@@ -1893,6 +1914,7 @@ function GrayPageClientInner({
     }
 
     const callbackUrl = `${window.location.origin}/api/auth/google-calendar/callback`;
+    const oauthStorageKey = "gray_google_calendar_oauth";
 
     // Open the popup synchronously so browsers don't block it (the auth URL is fetched async).
     const popup = window.open(
@@ -1900,6 +1922,50 @@ function GrayPageClientInner({
       "google-calendar-oauth",
       "popup=yes,width=520,height=720"
     );
+
+    const writePopupStatus = (title: string, message: string) => {
+      if (!popup || popup.closed) {
+        return;
+      }
+      try {
+        const escapedTitle = title.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        const escapedMessage = message.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        popup.document.open();
+        popup.document.write(`
+          <!doctype html>
+          <html lang="en">
+            <head>
+              <meta charset="utf-8" />
+              <meta name="viewport" content="width=device-width, initial-scale=1" />
+              <title>${escapedTitle}</title>
+              <style>
+                body { margin: 0; font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif; background: #0f0f0f; color: #f5f5f5; }
+                .wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
+                .card { width: 100%; max-width: 420px; background: #181818; border-radius: 16px; padding: 28px; box-shadow: 0 25px 45px rgba(0,0,0,0.45); }
+                h1 { font-size: 1.2rem; margin: 0 0 10px; }
+                p { margin: 0; color: rgba(255,255,255,0.75); line-height: 1.45; white-space: pre-wrap; }
+                code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 0.9em; }
+              </style>
+            </head>
+            <body>
+              <div class="wrap">
+                <div class="card">
+                  <h1>${escapedTitle}</h1>
+                  <p>${escapedMessage}</p>
+                </div>
+              </div>
+            </body>
+          </html>
+        `);
+        popup.document.close();
+      } catch (error) {
+        console.warn("Unable to write status to Google Calendar OAuth popup:", error);
+      }
+    };
+
+    if (popup) {
+      writePopupStatus("Connecting to Google Calendar…", "Loading Google authorization…");
+    }
 
     void (async () => {
       try {
@@ -1909,8 +1975,11 @@ function GrayPageClientInner({
         const authUrl = response?.authorization_url;
 
         if (!authUrl) {
-          popup?.close();
-          console.error("Google Calendar integration response did not include an authorization URL.");
+          writePopupStatus(
+            "Unable to start Google Calendar setup",
+            "The backend did not return an authorization URL. Please check the server logs and try again."
+          );
+          console.error("Google Calendar integration response did not include an authorization URL.", response);
           return;
         }
 
@@ -1923,7 +1992,20 @@ function GrayPageClientInner({
         // Popup blocked: fall back to same-tab navigation.
         window.location.assign(authUrl);
       } catch (error) {
-        popup?.close();
+        const message =
+          error instanceof Error ? error.message : "Unknown error while starting Google Calendar setup.";
+
+        const hint = isApiNetworkError(error)
+          ? "\n\nIf you're running locally, make sure the backend is running (e.g. `npm run backend`) and listening on the configured port."
+          : "";
+
+        writePopupStatus("Unable to start Google Calendar setup", `${message}${hint}`);
+        try {
+          window.localStorage.setItem(
+            oauthStorageKey,
+            JSON.stringify({ type: "google-calendar-error", ts: Date.now(), message })
+          );
+        } catch { }
         console.error("Failed to initiate Google Calendar integration:", error);
       }
     })();
@@ -1934,19 +2016,62 @@ function GrayPageClientInner({
       return;
     }
 
+    const oauthStorageKey = "gray_google_calendar_oauth";
+
+    const handleConnected = () => {
+      window.location.reload();
+    };
+
     const handleMessage = (event: MessageEvent) => {
       if (event.origin !== window.location.origin) {
         return;
       }
       const payload = event.data as { type?: string } | null;
       if (payload?.type === "google-calendar-connected") {
-        window.location.reload();
+        handleConnected();
+      }
+    };
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key !== oauthStorageKey || !event.newValue) {
+        return;
+      }
+      try {
+        const payload = JSON.parse(event.newValue) as { type?: string } | null;
+        if (payload?.type === "google-calendar-connected") {
+          handleConnected();
+        }
+      } catch {
+        // ignore
       }
     };
 
     window.addEventListener("message", handleMessage);
+    window.addEventListener("storage", handleStorage);
+
+    let channel: BroadcastChannel | null = null;
+    try {
+      if ("BroadcastChannel" in window) {
+        channel = new BroadcastChannel("gray-oauth");
+        channel.addEventListener("message", (event: MessageEvent) => {
+          const payload = event.data as { type?: string } | null;
+          if (payload?.type === "google-calendar-connected") {
+            handleConnected();
+          }
+        });
+      }
+    } catch {
+      channel = null;
+    }
+
     return () => {
       window.removeEventListener("message", handleMessage);
+      window.removeEventListener("storage", handleStorage);
+      try {
+        channel?.close();
+      } catch {
+        // ignore
+      }
     };
   }, []);
 
@@ -2180,7 +2305,7 @@ function GrayPageClientInner({
     <>
       <div
         className={styles.page}
-        data-dashboard-tab={activeNav === "dashboard" ? dashboardTab : undefined}
+        data-dashboard-tab={dashboardTabAttr}
         data-mobile-sidebar={effectiveIsMobileViewport ? "true" : "false"}
         data-sidebar-expanded={sidebarExpandedForLayout ? "true" : "false"}
         {...(isMounted && { "data-general-attachments": generalAttachmentsFlag ? "true" : "false" })}

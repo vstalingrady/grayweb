@@ -161,7 +161,7 @@ function PaymentContent() {
     const [errorMessage, setErrorMessage] = useState("");
 
     const walletMethods = PAYMENT_METHODS.filter((m) => ["gopay", "qris"].includes(m.id));
-    const virtualAccountMethods = PAYMENT_METHODS.filter((m) => !["gopay", "qris"].includes(m.id));
+    const virtualAccountMethods = PAYMENT_METHODS.filter((m) => !["gopay", "qris"].includes(m.id) && m.type !== "paddle");
     const activeMethods = methodGroup === "wallet" ? walletMethods : virtualAccountMethods;
     const filteredActiveMethods =
         methodGroup === "va" && bankSearch.trim().length
@@ -189,7 +189,6 @@ function PaymentContent() {
         if (typeof window !== "undefined" && window.Paddle && PADDLE_CLIENT_TOKEN) {
             window.Paddle.Initialize({
                 token: PADDLE_CLIENT_TOKEN,
-                environment: PADDLE_SANDBOX ? "sandbox" : "production",
             });
             setIsPaddleReady(true);
         }
@@ -197,7 +196,9 @@ function PaymentContent() {
 
     useEffect(() => {
         // Keep group in sync with selected method (e.g., deep links)
-        if (["gopay", "qris"].includes(selectedMethodId)) {
+        if (selectedMethodId === "card") {
+            setMethodGroup("card");
+        } else if (["gopay", "qris"].includes(selectedMethodId)) {
             setMethodGroup("wallet");
         } else {
             setMethodGroup("va");
@@ -532,7 +533,6 @@ function PaymentContent() {
                         if (window.Paddle) {
                             window.Paddle.Initialize({
                                 token: PADDLE_CLIENT_TOKEN,
-                                environment: PADDLE_SANDBOX ? "sandbox" : "production",
                             });
                             setIsPaddleReady(true);
                         }

@@ -204,10 +204,15 @@ def _is_allowed_redirect(parsed) -> bool:
     if host in LOCAL_REDIRECT_HOSTS:
         return path in ALLOWED_REDIRECT_PATHS
 
-    if host in ALLOWED_REDIRECT_HOSTS:
-        if parsed.scheme != "https":
-            return False
-        return path in ALLOWED_REDIRECT_PATHS
+    if parsed.scheme != "https":
+        return False
+
+    if path not in ALLOWED_REDIRECT_PATHS:
+        return False
+
+    for allowed_host in ALLOWED_REDIRECT_HOSTS:
+        if host == allowed_host or host.endswith(f".{allowed_host}"):
+            return True
 
     return False
 

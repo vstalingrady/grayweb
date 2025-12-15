@@ -1,4 +1,5 @@
 import os
+import sys
 import databases
 import sqlalchemy
 from pathlib import Path
@@ -10,6 +11,11 @@ try:
     from backend.env_utils import ROOT_DIR
 except ImportError:
     from env_utils import ROOT_DIR
+
+if "pytest" in sys.modules:
+    # Tests should not inherit NODE_ENV/ENVIRONMENT from a developer's local .env.
+    os.environ.setdefault("NODE_ENV", "test")
+    os.environ.setdefault("ENVIRONMENT", "test")
 
 load_dotenv(ROOT_DIR / ".env")
 
@@ -89,6 +95,8 @@ users = sqlalchemy.Table(
     sqlalchemy.Column("personalization_time_zone", sqlalchemy.String, nullable=True),
     sqlalchemy.Column("plan_tier", sqlalchemy.String, nullable=True),
     sqlalchemy.Column("subscription_expires_at", sqlalchemy.DateTime, nullable=True),  # When subscription expires
+    sqlalchemy.Column("paddle_customer_id", sqlalchemy.String, nullable=True),
+    sqlalchemy.Column("paddle_subscription_id", sqlalchemy.String, nullable=True),
     sqlalchemy.Column("has_seen_general_chat", sqlalchemy.Boolean, default=False),
     sqlalchemy.Column("daily_token_usage", sqlalchemy.Integer, default=0),
     sqlalchemy.Column("monthly_cost_usage", sqlalchemy.Float, default=0.0),
@@ -118,6 +126,9 @@ transactions = sqlalchemy.Table(
     sqlalchemy.Column("payment_type", sqlalchemy.String, nullable=True),
     sqlalchemy.Column("plan_tier", sqlalchemy.String, nullable=False),  # voyager, pioneer
     sqlalchemy.Column("billing_cycle", sqlalchemy.String, nullable=True),  # monthly, annual
+    sqlalchemy.Column("subscription_starts_at", sqlalchemy.DateTime, nullable=True),
+    sqlalchemy.Column("subscription_ends_at", sqlalchemy.DateTime, nullable=True),
+    sqlalchemy.Column("paddle_transaction_id", sqlalchemy.String, nullable=True),
     sqlalchemy.Column("snap_token", sqlalchemy.String, nullable=True),
     sqlalchemy.Column("snap_redirect_url", sqlalchemy.String, nullable=True),
     sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
@@ -276,6 +287,8 @@ calendar_events = sqlalchemy.Table(
     sqlalchemy.Column("description", sqlalchemy.String, nullable=True),
     sqlalchemy.Column("start_time", sqlalchemy.DateTime, nullable=False),
     sqlalchemy.Column("end_time", sqlalchemy.DateTime, nullable=False),
+    sqlalchemy.Column("color", sqlalchemy.String, nullable=True),
+    sqlalchemy.Column("reminder_minutes_before", sqlalchemy.Integer, nullable=True),
     sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
 )
 

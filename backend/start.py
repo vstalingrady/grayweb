@@ -183,6 +183,7 @@ if __name__ == "__main__":
         sqlalchemy.Column("start_time", sqlalchemy.DateTime),
         sqlalchemy.Column("end_time", sqlalchemy.DateTime),
         sqlalchemy.Column("color", sqlalchemy.String, nullable=True),
+        sqlalchemy.Column("reminder_minutes_before", sqlalchemy.Integer, nullable=True),
         sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=sqlalchemy.func.now()),
     )
     plans = sqlalchemy.Table(
@@ -521,6 +522,7 @@ if __name__ == "__main__":
     ensure_column("plans", "color", "VARCHAR")
     ensure_column("habits", "color", "VARCHAR")
     ensure_column("calendar_events", "color", "VARCHAR")
+    ensure_column("calendar_events", "reminder_minutes_before", "INTEGER")
 
     migration_time = (time.time() - migration_start) * 1000
     if migrations_performed:

@@ -234,6 +234,8 @@ export function useWorkspaceData(userId: number | null, variant: "general" | "da
               ),
               entryType: "event",
               description: event.description ?? undefined,
+              reminderMinutesBefore:
+                typeof event.reminder_minutes_before === "number" ? event.reminder_minutes_before : null,
             };
           })
           : [];

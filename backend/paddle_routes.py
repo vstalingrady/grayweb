@@ -2,9 +2,10 @@ from fastapi import APIRouter, Request, HTTPException, Header, status
 import logging
 import json
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timezone
 from backend.paddle_client import paddle_client
 from backend.database import database, users, transactions, plans
+from backend.subscription_utils import calculate_subscription_period
 from backend.time_utils import utcnow
 
 # setup logger
@@ -12,16 +13,23 @@ logger = logging.getLogger("backend.paddle_webhook")
 
 router = APIRouter()
 
-# Plan Mapping (Price ID -> Tier)
-# Use environment variables for dynamic configuration or hardcode structure
-PADDLE_PRICE_MAP = {
-    os.getenv("PADDLE_PRICE_ID_MONTHLY_SCOUT", "pri_scout_m"): "scout",
-    os.getenv("PADDLE_PRICE_ID_YEARLY_SCOUT", "pri_scout_y"): "scout",
-    os.getenv("PADDLE_PRICE_ID_MONTHLY_VOYAGER", "pri_voyager_m"): "voyager",
-    os.getenv("PADDLE_PRICE_ID_YEARLY_VOYAGER", "pri_voyager_y"): "voyager",
-    os.getenv("PADDLE_PRICE_ID_MONTHLY_PIONEER", "pri_pioneer_m"): "pioneer",
-    os.getenv("PADDLE_PRICE_ID_YEARLY_PIONEER", "pri_pioneer_y"): "pioneer",
+PADDLE_PRICE_INFO = {
+    os.getenv("PADDLE_PRICE_ID_MONTHLY_SCOUT", "pri_scout_m"): {"tier": "scout", "billing_cycle": "monthly"},
+    os.getenv("PADDLE_PRICE_ID_YEARLY_SCOUT", "pri_scout_y"): {"tier": "scout", "billing_cycle": "annual"},
+    os.getenv("PADDLE_PRICE_ID_MONTHLY_VOYAGER", "pri_voyager_m"): {"tier": "voyager", "billing_cycle": "monthly"},
+    os.getenv("PADDLE_PRICE_ID_YEARLY_VOYAGER", "pri_voyager_y"): {"tier": "voyager", "billing_cycle": "annual"},
+    os.getenv("PADDLE_PRICE_ID_MONTHLY_PIONEER", "pri_pioneer_m"): {"tier": "pioneer", "billing_cycle": "monthly"},
+    os.getenv("PADDLE_PRICE_ID_YEARLY_PIONEER", "pri_pioneer_y"): {"tier": "pioneer", "billing_cycle": "annual"},
 }
+
+
+def _parse_paddle_datetime(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    if parsed.tzinfo is None:
+        return parsed
+    return parsed.astimezone(timezone.utc).replace(tzinfo=None)
 
 @router.post("/api/webhooks/paddle")
 async def paddle_webhook(request: Request, paddle_signature: str = Header(None)):
@@ -97,30 +105,36 @@ async def handle_subscription_update(data: dict):
     billing_period = data.get("current_billing_period", {})
     ends_at_str = billing_period.get("ends_at")
     
-    expires_at = None
-    if ends_at_str:
-        expires_at = datetime.fromisoformat(ends_at_str.replace("Z", "+00:00"))
+    expires_at = _parse_paddle_datetime(ends_at_str)
     
     # Determine Plan Tier from Price ID
     # items is a list. usually 1 item for main plan.
     items = data.get("items", [])
     new_tier = None
+    billing_cycle = None
     if items:
         price_id = items[0].get("price", {}).get("id")
-        # Attempt to map price ID to tier
-        # We search our map. 
-        # Note: map keys might be env vars that are set.
-        for pid, tier in PADDLE_PRICE_MAP.items():
-            if pid == price_id:
-                new_tier = tier
-                break
+        info = PADDLE_PRICE_INFO.get(price_id)
+        if info:
+            new_tier = info.get("tier")
+            billing_cycle = info.get("billing_cycle")
+
+    if expires_at is None and billing_cycle:
+        user_record = await database.fetch_one(users.select().where(users.c.id == user_id))
+        existing_expires_at = user_record["subscription_expires_at"] if user_record else None
+        _, expires_at = calculate_subscription_period(
+            billing_cycle=billing_cycle,
+            existing_expires_at=existing_expires_at,
+            now=utcnow(),
+        )
     
     # Update User
     query_values = {
         "paddle_subscription_id": subscription_id,
         "paddle_customer_id": customer_id,
-        "subscription_expires_at": expires_at,
     }
+    if expires_at is not None:
+        query_values["subscription_expires_at"] = expires_at
     
     if new_tier:
         query_values["plan_tier"] = new_tier
@@ -204,10 +218,17 @@ async def handle_transaction_completed(data: dict):
     items = data.get("items", [])
     if items:
         price_id = items[0].get("price", {}).get("id")
-        for pid, tier in PADDLE_PRICE_MAP.items():
-            if pid == price_id:
-                values["plan_tier"] = tier
-                break
+        info = PADDLE_PRICE_INFO.get(price_id)
+        if info:
+            values["plan_tier"] = info.get("tier") or values["plan_tier"]
+            if info.get("billing_cycle"):
+                values["billing_cycle"] = info["billing_cycle"]
+
+    subscription_id = data.get("subscription_id")
+    if subscription_id:
+        user_record = await database.fetch_one(users.select().where(users.c.paddle_subscription_id == subscription_id))
+        if user_record and user_record.get("subscription_expires_at"):
+            values["subscription_ends_at"] = user_record["subscription_expires_at"]
 
     # Try to upsert?
     # Check if exists
@@ -220,4 +241,3 @@ async def handle_transaction_completed(data: dict):
              await database.execute(transactions.insert().values(**values))
         except Exception as e:
             logger.error(f"Failed to insert transaction: {e}")
-

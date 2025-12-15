@@ -49,17 +49,42 @@ const successHtml = `
       <p>You can close this window and return to Gray.</p>
     </div>
     <script>
-      setTimeout(() => {
-        if (window.opener) {
-          const targetOrigin = window.location?.origin || "*";
-          window.opener.postMessage({ type: "google-calendar-connected" }, targetOrigin);
-          window.close();
-          return;
-        }
+      (() => {
+        const payload = { type: "google-calendar-connected", ts: Date.now() };
+        const notify = () => {
+          try {
+            localStorage.setItem("gray_google_calendar_oauth", JSON.stringify(payload));
+          } catch {}
 
-        // If the OAuth flow happened in the same tab (popup blocked), take the user back.
-        window.location.assign("/cal");
-      }, 1500);
+          try {
+            if ("BroadcastChannel" in window) {
+              const channel = new BroadcastChannel("gray-oauth");
+              channel.postMessage(payload);
+              channel.close();
+            }
+          } catch {}
+
+          try {
+            if (window.opener && window.opener !== window) {
+              const targetOrigin = window.location?.origin || "*";
+              window.opener.postMessage(payload, targetOrigin);
+            }
+          } catch {}
+        };
+
+        notify();
+
+        // Close if possible (popup flow). If the window stays open, navigate back to the calendar view.
+        setTimeout(() => {
+          try {
+            window.close();
+          } catch {}
+        }, 400);
+
+        setTimeout(() => {
+          window.location.assign("/cal");
+        }, 1500);
+      })();
     </script>
   </body>
 </html>`;
@@ -117,7 +142,7 @@ const htmlResponse = (html: string, status = 200) =>
 
 const buildBackendCallbackUrl = (request: NextRequest) => {
   const base = new URL(request.url);
-  base.pathname = "/api/backend/google-calendar/oauth/callback";
+  base.pathname = "/api/p/google-calendar/oauth/callback";
   base.search = "";
   return base.toString();
 };

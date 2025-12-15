@@ -22,6 +22,7 @@ import {
 } from "./EventComposer";
 import { layoutDayEvents } from "./layoutDayEvents";
 import { useEventDrag } from "./useEventDrag";
+import { useEventResize } from "./useEventResize";
 import {
   CalendarEvent,
   CalendarInfo,
@@ -251,8 +252,27 @@ export function GrayDashboardCalendar({
   const {
     getDraggableProps,
     suppressClickRef: daySuppressClickRef,
-    activeDrafts: dayDrafts,
+    activeDrafts: dayDragDrafts,
   } = dragControls;
+
+  const resizeControls = useEventResize({
+    containerRef: dayColumnRef,
+    hourHeight,
+    snapMinutes: SNAP_MINUTES,
+    onCommit: handleCommitDrag,
+  });
+  const {
+    getResizeProps,
+    activeDraft: blockResizeDraft,
+  } = resizeControls;
+
+  // We only support resizing single blocks for now, simpler
+  const dayResizeDrafts = blockResizeDraft ? { [blockResizeDraft.id]: blockResizeDraft } : null;
+  const dayDrafts = useMemo(() => {
+    // Resize takes precedence if active
+    if (dayResizeDrafts) return dayResizeDrafts;
+    return dayDragDrafts;
+  }, [dayDragDrafts, dayResizeDrafts]);
 
   // Week view drag with horizontal support
   const weekDragControls = useEventDrag({
@@ -320,22 +340,22 @@ export function GrayDashboardCalendar({
 
   const [composerDraft, setComposerDraft] = useState<ComposerState | null>(null);
 
-	  const composerPreviewEvent = useMemo<CalendarEvent | null>(() => {
-	    if (!composerOpen || !composerRange) {
-	      return null;
-	    }
-	    const draftTitle = composerDraft?.title?.trim();
-	    return {
-	      id: "composer-preview",
-	      title: draftTitle ? draftTitle : "",
-	      start: composerRange.start,
-	      end: composerRange.end,
-	      color: composerDraft?.color || "#3D6F73",
-	      entryType: composerDraft?.entryType || "event",
-	      calendarId: "preview",
-	      isAllDay: false,
-	    };
-	  }, [composerOpen, composerRange, composerDraft]);
+  const composerPreviewEvent = useMemo<CalendarEvent | null>(() => {
+    if (!composerOpen || !composerRange) {
+      return null;
+    }
+    const draftTitle = composerDraft?.title?.trim();
+    return {
+      id: "composer-preview",
+      title: draftTitle ? draftTitle : "",
+      start: composerRange.start,
+      end: composerRange.end,
+      color: composerDraft?.color || "#3D6F73",
+      entryType: composerDraft?.entryType || "event",
+      calendarId: "preview",
+      isAllDay: false,
+    };
+  }, [composerOpen, composerRange, composerDraft]);
 
   const dayEvents = useMemo(() => {
     const filtered = visibleEvents.filter((event) => isSameDay(event.start, selectedDate));
@@ -738,7 +758,6 @@ export function GrayDashboardCalendar({
           <div className={styles.stickyHeaderGroup}>
             <div className={styles.calendarMonthRow}>
               <div className={styles.calendarMonthTitleGroup}>
-                <span className={styles.calendarMonthTitle}>{monthLabel}</span>
                 <div className={styles.calendarSurfaceNavArrows}>
                   <button
                     type="button"
@@ -868,21 +887,22 @@ export function GrayDashboardCalendar({
                     )}
 
                     {eventsToRender.map((event) => (
-                      <EventCard
-                        key={event.id}
-                        event={event}
-                        onClick={(_e, anchorRect, mouseEvent) => handleEventClick(event, anchorRect, mouseEvent)}
-                        draggableProps={
-                          isGoogleCalendarEvent(event)
-                            ? undefined
-                            : viewMode === "week"
-                              ? getWeekDraggableProps(event)
-                              : undefined
-                        }
-                        isDragging={!!activeDrafts?.[event.id]}
-                        isSelected={selectedEventIds.has(event.id)}
-                        onDelete={handleDeleteEvent}
-                      />
+                        <EventCard
+                          key={event.id}
+                          event={event}
+                          onClick={(_e, anchorRect, mouseEvent) => handleEventClick(event, anchorRect, mouseEvent)}
+                          draggableProps={
+                            isGoogleCalendarEvent(event)
+                              ? undefined
+                              : viewMode === "week"
+                                ? getWeekDraggableProps(event)
+                                : undefined
+                          }
+                          resizeProps={isGoogleCalendarEvent(event) ? undefined : getResizeProps}
+                          isDragging={!!activeDrafts?.[event.id]}
+                          isSelected={selectedEventIds.has(event.id)}
+                          onDelete={handleDeleteEvent}
+                        />
                     ))}
                   </div>
                 </div>
@@ -899,7 +919,6 @@ export function GrayDashboardCalendar({
       <div className={styles.calendarBody}>
         <div className={styles.calendarMonthRow}>
           <div className={styles.calendarMonthTitleGroup}>
-            <span className={styles.calendarMonthTitle}>{monthLabel}</span>
             <div className={styles.calendarSurfaceNavArrows}>
               <button
                 type="button"
@@ -1012,6 +1031,7 @@ export function GrayDashboardCalendar({
                         ? getDraggableProps(event)
                         : undefined
                   }
+                  resizeProps={isGoogleCalendarEvent(event) ? undefined : getResizeProps}
                   isDragging={!!activeDrafts?.[event.id]}
                   isSelected={selectedEventIds.has(event.id)}
                   onDelete={handleDeleteEvent}
@@ -1224,7 +1244,6 @@ export function GrayDashboardCalendar({
                       </button>
                     </div>
                   )}
-                  <h2 className={styles.calendarSurfaceTitle}>{monthLabel}</h2>
                 </div>
                 {showHeaderDates && (
                   <p className={styles.calendarSurfaceRange}>{rangeLabel}</p>

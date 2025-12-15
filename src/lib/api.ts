@@ -115,6 +115,7 @@ export interface CalendarEvent {
   start_time: string;
   end_time: string;
   color?: string;
+  reminder_minutes_before?: number | null;
   created_at: string;
 }
 
