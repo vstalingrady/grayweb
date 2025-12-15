@@ -239,11 +239,10 @@ function GrayEnhancedSidebarComponent(props: GrayEnhancedSidebarProps) {
   const profileControlsRef = useRef<HTMLDivElement | null>(null);
   const profileMenuRef = useRef<HTMLDivElement | null>(null);
   const normalizedPlan = viewerPlanLabel?.trim().length ? viewerPlanLabel : "Scout";
-  const isDepthMember = normalizedPlan.trim().toLowerCase() === "depth";
   const planLower = normalizedPlan.trim().toLowerCase();
   const isVoyager = planLower === "voyager";
   const isPioneer = planLower === "pioneer";
-  const isPaidUser = isVoyager || isPioneer || isDepthMember;
+  const isPaidUser = isVoyager || isPioneer;
 
   const historyNavItem = useMemo(() => navItems.find((item) => item.id === "history"), [navItems]);
 
