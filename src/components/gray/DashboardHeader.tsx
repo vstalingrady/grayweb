@@ -30,8 +30,8 @@ export type DashboardHeaderProps = {
 };
 
 const DEFAULT_VIEW_OPTIONS: Array<{ value: "week" | "day"; label: string }> = [
-  { value: "week", label: "Week" },
   { value: "day", label: "Day" },
+  { value: "week", label: "Week" },
 ];
 
 export function DashboardHeader({

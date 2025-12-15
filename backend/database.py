@@ -4,6 +4,10 @@ import sqlalchemy
 from pathlib import Path
 from dotenv import load_dotenv
 from datetime import datetime
+import logging
+import shutil
+import sqlite3
+import time
 
 # Use centralized environment detection
 try:
@@ -12,6 +16,8 @@ except ImportError:
     from env_utils import ROOT_DIR
 
 load_dotenv(ROOT_DIR / ".env")
+
+LOG = logging.getLogger("backend.database")
 
 
 def _normalize_sqlite_url(url: str) -> str:
@@ -55,6 +61,115 @@ def _select_database_url() -> str:
 
 
 DATABASE_URL = _select_database_url()
+
+
+def _sqlite_db_path(database_url: str) -> Path | None:
+    if not database_url.startswith("sqlite:///"):
+        return None
+    raw = database_url.replace("sqlite:///", "", 1)
+    return Path(raw)
+
+
+def _is_truthy_env(name: str) -> bool:
+    value = (os.getenv(name) or "").strip().lower()
+    return value in {"1", "true", "yes", "y", "on"}
+
+
+def _sqlite_check_ok(db_path: Path) -> bool:
+    try:
+        conn = sqlite3.connect(str(db_path))
+        try:
+            result = conn.execute("PRAGMA quick_check").fetchone()
+        finally:
+            conn.close()
+    except sqlite3.DatabaseError:
+        return False
+    return bool(result and result[0] == "ok")
+
+
+def _sqlite_checkpoint_truncate(db_path: Path) -> None:
+    wal_path = db_path.with_name(db_path.name + "-wal")
+    if not wal_path.exists():
+        return
+    try:
+        conn = sqlite3.connect(str(db_path))
+        try:
+            conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        finally:
+            conn.close()
+    except sqlite3.DatabaseError:
+        # If the DB is corrupted, checkpointing may fail; recovery will handle it.
+        return
+
+
+def _sqlite_recover_from_backup(db_path: Path) -> bool:
+    candidates: list[Path] = []
+    candidates.append(db_path.with_name(db_path.name + ".backup"))
+    candidates.append(db_path.with_name(db_path.name + ".bak_migration"))
+    candidates.extend(sorted(db_path.parent.glob(db_path.name + ".bak_migration_*")))
+
+    viable = [p for p in candidates if p.exists() and p.is_file() and p.stat().st_size > 0]
+    if not viable:
+        return False
+
+    backup_path = max(viable, key=lambda p: p.stat().st_mtime)
+    timestamp = time.strftime("%Y%m%d_%H%M%S")
+
+    try:
+        if db_path.exists() and db_path.stat().st_size > 0:
+            corrupt_path = db_path.with_name(f"{db_path.name}.corrupt_{timestamp}")
+            shutil.move(str(db_path), str(corrupt_path))
+            LOG.error("SQLite DB corrupted; moved to %s", corrupt_path)
+
+        shutil.copy2(str(backup_path), str(db_path))
+
+        # WAL/SHM files must match the restored DB; delete any leftovers.
+        for suffix in ("-wal", "-shm"):
+            sidecar = db_path.with_name(db_path.name + suffix)
+            if sidecar.exists():
+                sidecar.unlink()
+
+        LOG.warning("Restored SQLite DB from backup %s", backup_path)
+        return _sqlite_check_ok(db_path)
+    except Exception as exc:  # pragma: no cover - best effort recovery
+        LOG.exception("Failed restoring SQLite DB from backup: %s", exc)
+        return False
+
+
+def ensure_local_sqlite_ok(database_url: str) -> None:
+    db_path = _sqlite_db_path(database_url)
+    if db_path is None:
+        return
+    if not db_path.exists():
+        return
+
+    # First, try to checkpoint/truncate WAL; this often resolves transient issues.
+    _sqlite_checkpoint_truncate(db_path)
+
+    if _sqlite_check_ok(db_path):
+        return
+
+    auto_restore = _is_truthy_env("GRAY_SQLITE_AUTO_RESTORE") or _is_truthy_env("SQLITE_AUTO_RESTORE")
+    if not auto_restore:
+        raise RuntimeError(
+            f"SQLite database appears corrupted: {db_path}. "
+            "Set GRAY_SQLITE_AUTO_RESTORE=1 to restore from the latest local backup."
+        )
+
+    if not _sqlite_recover_from_backup(db_path):
+        raise RuntimeError(
+            f"SQLite database appears corrupted and no usable backup was found: {db_path}. "
+            "Delete the DB file to recreate it, or restore from a known-good backup."
+        )
+
+
+# If we're on local SQLite, validate early so the app doesn't crash mid-request.
+if DATABASE_URL.startswith("sqlite:///"):
+    try:
+        ensure_local_sqlite_ok(DATABASE_URL)
+    except Exception as exc:  # pragma: no cover - fail fast with a clear message
+        LOG.exception("SQLite integrity check failed: %s", exc)
+        raise
 
 # Create database instance
 # Create database instance
@@ -398,4 +513,3 @@ habits = sqlalchemy.Table(
     sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
     sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
 )
-

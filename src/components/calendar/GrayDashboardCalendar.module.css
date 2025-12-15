@@ -139,7 +139,7 @@
   gap: 18px;
   min-height: 0;
   transition: opacity 0.2s ease;
-  padding-left: 12px;
+  padding-left: 0;
   flex-shrink: 0;
   /* Hide scrollbar */
   scrollbar-width: none;
@@ -382,7 +382,7 @@
   width: 100%;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 10px;
   border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.12);
@@ -398,15 +398,20 @@
 }
 
 .calendarSidebarIntegrationPlus {
-  width: 18px;
-  height: 18px;
+  width: 30px;
+  height: 30px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: none;
   color: rgba(245, 245, 245, 0.85);
   flex: 0 0 auto;
+}
+
+.calendarSidebarIntegrationPlus .calendarSidebarIntegrationLogo {
+  width: 26px;
+  height: 26px;
 }
 
 .calendarSidebarIntegrationText {
@@ -543,7 +548,7 @@
 }
 
 .calendarBoard::-webkit-scrollbar {
-  width: 6px;
+  width: var(--scrollbar-width, 6px);
 }
 
 .calendarBoard::-webkit-scrollbar-track {
@@ -688,6 +693,68 @@
   background-position: calc(100% - 14px) 50%;
 }
 
+.calendarViewToggle {
+  position: relative;
+  display: inline-flex;
+}
+
+.calendarViewSelectCaret {
+  display: none;
+}
+
+.calendarViewMenu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 150px;
+  padding: 8px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(10, 10, 10, 0.96);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+  z-index: 50;
+}
+
+.calendarViewMenuItem {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 10px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: rgba(245, 245, 245, 0.86);
+  font-size: 0.86rem;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  cursor: pointer;
+}
+
+.calendarViewMenuItem:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.calendarViewMenuItem[data-active="true"] {
+  color: rgba(255, 255, 255, 0.96);
+}
+
+.calendarViewMenuItemCheck {
+  display: inline-flex;
+  width: 18px;
+  height: 18px;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  color: rgba(245, 245, 245, 0.92);
+}
+
+.calendarViewMenuItemLabel {
+  flex: 1 1 auto;
+  text-align: left;
+}
+
 .calendarViewSelect:focus-visible {
   outline: none;
   border-color: rgba(255, 255, 255, 0.4);
@@ -782,11 +849,12 @@
   box-sizing: border-box;
   position: sticky;
   top: 44px;
+  height: 44px;
   grid-column: 1 / -1;
   grid-row: 1;
-  background: transparent;
+  background: rgba(30, 30, 30, 0.96);
   backdrop-filter: none;
-  padding: 10px 0 8px;
+  padding: 10px var(--scrollbar-width, 6px) 8px 0;
   margin-bottom: 0;
   z-index: 3;
   border-bottom: 1px solid rgba(255, 255, 255, 0.04);
@@ -828,7 +896,7 @@
   height: 100%;
   display: flex;
   align-items: flex-end;
-  justify-content: flex-start;
+  justify-content: flex-end;
   padding: 1px 6px 0 0;
   border-right: 1px solid rgba(255, 255, 255, 0.08);
 }
@@ -836,12 +904,12 @@
 .calendarTimezoneLabel {
   display: inline-flex;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: flex-end;
   font-size: 0.58rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: rgba(230, 230, 230, 0.58);
-  margin-bottom: 6px;
+  margin-bottom: 2px;
 }
 
 .calendarHeaderCell {
@@ -865,7 +933,7 @@
   font-size: 0.66rem;
   letter-spacing: 0;
   text-transform: uppercase;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-family: var(--font-sans, "Plus Jakarta Sans", system-ui, -apple-system, BlinkMacSystemFont, sans-serif);
   line-height: 1;
   text-align: center;
 }
@@ -882,7 +950,7 @@
   border: 1px solid transparent;
   font-size: 0.86rem;
   letter-spacing: 0.02em;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-family: var(--font-sans, "Plus Jakarta Sans", system-ui, -apple-system, BlinkMacSystemFont, sans-serif);
   color: rgba(245, 245, 245, 0.9);
   transition:
     background 0.2s ease,
@@ -940,7 +1008,7 @@
 }
 
 .calendarBodyScroll::-webkit-scrollbar {
-  width: 6px;
+  width: var(--scrollbar-width, 6px);
 }
 
 .calendarBodyScroll::-webkit-scrollbar-thumb {
@@ -1377,7 +1445,7 @@
   color: rgba(247, 247, 247, 0.95);
 }
 
-.composerHeader button {
+.composerCloseButton {
   width: 28px;
   height: 28px;
   border-radius: 0;
@@ -1394,9 +1462,101 @@
     border-color 0.2s ease;
 }
 
-.composerHeader button:hover {
+.composerCloseButton:hover {
   transform: translateY(-1px);
   color: rgba(255, 255, 255, 0.92);
+}
+
+.composerTypeSelector {
+  position: relative;
+}
+
+.composerTypeTrigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: auto;
+  height: auto;
+  min-height: 32px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 6px 10px;
+  margin-left: 0;
+  border-radius: 8px;
+  color: rgba(245, 245, 245, 0.9);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+  user-select: none;
+}
+
+.composerTypeTrigger:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.composerTypeIcon {
+  color: rgba(235, 235, 235, 0.6);
+}
+
+.composerTypeLabel {
+  font-size: 0.95rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  line-height: 1;
+}
+
+.composerTypeChevron {
+  color: rgba(235, 235, 235, 0.4);
+  transition: transform 0.2s ease;
+}
+
+.composerTypeMenu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  width: 180px;
+  background: rgba(30, 30, 30, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  z-index: 50;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(12px);
+}
+
+.composerTypeOption {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  color: rgba(235, 235, 235, 0.7);
+  font-size: 0.9rem;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.composerTypeOption:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(245, 245, 245, 0.95);
+}
+
+.composerTypeOption[data-selected="true"] {
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 1);
+}
+
+.composerTypeCheck {
+  margin-left: auto;
+  color: rgba(255, 255, 255, 0.9);
 }
 
 .composerForm {
@@ -1882,24 +2042,25 @@
   top: 88px;
   grid-column: 1 / -1;
   grid-row: 2;
-  background: rgba(18, 18, 18, 0.94);
+  background: rgba(30, 30, 30, 0.96);
   z-index: 3;
   border-bottom: 1px solid rgba(255, 255, 255, 0.04);
   min-height: 20px;
+  padding-right: var(--scrollbar-width, 6px);
 }
 
 .calendarAllDayLabel {
   display: flex;
   align-items: center;
-  justify-content: center;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-  font-size: 0.45rem;
+  justify-content: flex-end;
+  font-family: var(--font-sans, "Plus Jakarta Sans", system-ui, -apple-system, BlinkMacSystemFont, sans-serif);
+  font-size: 0.55rem;
   color: rgba(225, 225, 225, 0.45);
-  text-transform: uppercase;
+  text-transform: none;
   letter-spacing: 0.1em;
   border-right: 1px solid rgba(255, 255, 255, 0.04);
-  padding: 0 4px;
-  text-align: center;
+  padding: 0 6px 0 0;
+  text-align: right;
   min-height: 20px;
 }
 

@@ -1,4 +1,4 @@
-export type CalendarEntryType = "event" | "task" | "reminder";
+export type CalendarEntryType = "plan" | "event" | "task" | "reminder" | "habit";
 export type CalendarEventDisplayHint = "line";
 
 export interface CalendarInfo {

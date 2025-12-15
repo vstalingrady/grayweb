@@ -9,6 +9,7 @@ import { useUser } from "@/contexts/UserContext";
 import { apiService } from "@/lib/api";
 import { CalendarSidebar } from "@/components/calendar/CalendarSidebar";
 import { CreateEventModal } from "@/components/gray/dashboard/CreateEventModal";
+import { ViewModeSelect } from "@/components/gray/ViewModeSelect";
 import type { CalendarInfo } from "@/components/calendar/types";
 import styles from "./styles.module.css";
 import type { Options, EventObject } from "@toast-ui/calendar";
@@ -363,9 +364,15 @@ export function GrayCalendarView() {
 
                         <div className={styles.viewControls}>
                             <button onClick={handleToday} className={styles.todayBtn}>Today</button>
-                            <button onClick={() => handleViewChange("day")} className={view === "day" ? styles.activeView : ""}>Day</button>
-                            <button onClick={() => handleViewChange("week")} className={view === "week" ? styles.activeView : ""}>Week</button>
-                            <button onClick={() => handleViewChange("month")} className={view === "month" ? styles.activeView : ""}>Month</button>
+                            <ViewModeSelect
+                                value={view}
+                                options={[
+                                    { value: "day", label: "Day" },
+                                    { value: "week", label: "Week" },
+                                    { value: "month", label: "Month" },
+                                ]}
+                                onChange={(nextView) => handleViewChange(nextView)}
+                            />
                         </div>
                     </header>
 

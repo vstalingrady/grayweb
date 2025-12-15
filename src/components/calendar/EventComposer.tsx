@@ -19,7 +19,7 @@ import {
   CalendarInfo,
   CalendarEventDisplayHint,
 } from "./types";
-import { Plus, X } from "lucide-react";
+import { Plus, X, ChevronDown, Check, Calendar, CheckSquare, Bell, Target, Repeat } from "lucide-react";
 import { useI18n } from "@/contexts/I18nContext";
 
 export type EventComposerPayload = {
@@ -51,6 +51,13 @@ type EventComposerProps = {
   onSubmit: (payload: EventComposerPayload) => void;
   onDelete?: (eventId: string) => void;
   anchorRect?: AnchorRect | null;
+  onStateChange?: (state: {
+    title: string;
+    start: Date;
+    end: Date;
+    color: string;
+    entryType: CalendarEntryType;
+  }) => void;
 };
 
 type ComposerState = {
@@ -176,16 +183,19 @@ const NEUTRAL_PALETTE = [
 
 // Default colors  by entry type
 const DEFAULT_COLORS: Record<CalendarEntryType, string> = {
+  plan: "#3D6F73",
   event: "#3D6F73",
   task: "#B77A2B",
   reminder: "#2F6B4F",
+  habit: "#7A5A3A",
 };
 
 const DEFAULT_STATE: ComposerState = {
   title: "New event",
   startTime: "09:00",
   endTime: "10:00",
-  color: DEFAULT_COLORS.event,
+  // Pick a random color from the quick swatches as default
+  color: QUICK_COLOR_SWATCHES[Math.floor(Math.random() * QUICK_COLOR_SWATCHES.length)],
   entryType: "event",
   calendarId: "default",
   details: "",
@@ -193,11 +203,13 @@ const DEFAULT_STATE: ComposerState = {
 
 export const DEFAULT_EVENT_DURATION_MINUTES = 60;
 
-const ENTRY_TYPES: CalendarEntryType[] = ["event", "task", "reminder"];
+const ENTRY_TYPES: CalendarEntryType[] = ["plan", "event", "reminder", "habit"];
 const ENTRY_TYPE_LABELS: Record<CalendarEntryType, string> = {
+  plan: "Plan",
   event: "Event",
   task: "Task",
   reminder: "Reminder",
+  habit: "Habit",
 };
 
 const composerReducer = (state: ComposerState, action: ComposerAction): ComposerState => {
@@ -250,6 +262,7 @@ export function EventComposer({
   onSubmit,
   onDelete,
   anchorRect = null,
+  onStateChange,
 }: EventComposerProps) {
   const { t } = useI18n();
   const calendarFallbackId = useMemo(
@@ -270,6 +283,9 @@ export function EventComposer({
   const [anchoredPosition, setAnchoredPosition] = useState<{ top: number; left: number } | null>(null);
   const [anchorSide, setAnchorSide] = useState<"left" | "right" | null>(null);
   const [isColorPickerOpen, setIsColorPickerOpen] = useState(false);
+  const [isTypeSelectorOpen, setIsTypeSelectorOpen] = useState(false);
+  const typeSelectorMenuRef = useRef<HTMLDivElement>(null);
+  const typeSelectorTriggerRef = useRef<HTMLButtonElement>(null);
   const [hexDraft, setHexDraft] = useState(DEFAULT_STATE.color);
   const [colorPickerPosition, setColorPickerPosition] = useState<{ top: number; left: number } | null>(
     null
@@ -386,6 +402,25 @@ export function EventComposer({
     }
     return combineDateWithTime(referenceDate, state.endTime);
   }, [currentStart, referenceDate, state.endTime, isReminder]);
+
+  useEffect(() => {
+    if (onStateChange) {
+      const normalizedEnd = isReminder
+        ? new Date(currentStart)
+        : currentEnd <= currentStart
+          ? new Date(currentStart.getTime() + DEFAULT_EVENT_DURATION_MINUTES * 60000)
+          : currentEnd;
+
+      onStateChange({
+        title: state.title,
+        start: currentStart,
+        end: normalizedEnd,
+        color: state.color,
+        entryType: state.entryType,
+      });
+    }
+  }, [state, currentStart, currentEnd, onStateChange, isReminder]);
+
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
@@ -474,6 +509,30 @@ export function EventComposer({
       document.removeEventListener("keydown", handleKeyDown);
     };
   }, [isColorPickerOpen]);
+
+  useEffect(() => {
+    if (!isTypeSelectorOpen) return;
+
+    const handlePointerDown = (event: globalThis.MouseEvent) => {
+      const target = event.target as Node | null;
+      if (!target) return;
+      if (typeSelectorMenuRef.current?.contains(target)) return;
+      if (typeSelectorTriggerRef.current?.contains(target)) return;
+      setIsTypeSelectorOpen(false);
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIsTypeSelectorOpen(false);
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isTypeSelectorOpen]);
 
   useLayoutEffect(() => {
     if (!isColorPickerOpen) {
@@ -567,23 +626,58 @@ export function EventComposer({
         className={styles.composerCard}
         data-anchored={anchoredPosition ? "true" : "false"}
         data-anchor-side={anchorSide ?? undefined}
-        style={
-          anchoredPosition
-            ? {
-              position: "fixed",
-              top: `${anchoredPosition.top}px`,
-              left: `${anchoredPosition.left}px`,
-            }
-            : undefined
-        }
+        style={anchoredPosition ? {
+          position: "absolute",
+          top: anchoredPosition.top,
+          left: anchoredPosition.left,
+          margin: 0,
+        } : undefined}
       >
         <div className={styles.composerHeader}>
-          <div>
-            <h2 className={styles.composerHeaderTitle}>
-              {activeEvent
-                ? t("Edit {type}", { type: t(ENTRY_TYPE_LABELS[state.entryType]).toLowerCase() })
-                : t("Create {type}", { type: t(ENTRY_TYPE_LABELS[state.entryType]).toLowerCase() })}
-            </h2>
+          <div className={styles.composerTypeSelector}>
+            <button
+              type="button"
+              className={styles.composerTypeTrigger}
+              onClick={() => setIsTypeSelectorOpen(!isTypeSelectorOpen)}
+              ref={typeSelectorTriggerRef}
+            >
+              {state.entryType === "plan" && <Target size={15} className={styles.composerTypeIcon} />}
+              {state.entryType === "event" && <Calendar size={15} className={styles.composerTypeIcon} />}
+              {state.entryType === "task" && <CheckSquare size={15} className={styles.composerTypeIcon} />}
+              {state.entryType === "reminder" && <Bell size={15} className={styles.composerTypeIcon} />}
+              {state.entryType === "habit" && <Repeat size={15} className={styles.composerTypeIcon} />}
+              <span className={styles.composerTypeLabel}>{t(ENTRY_TYPE_LABELS[state.entryType])}</span>
+              <ChevronDown
+                size={14}
+                className={styles.composerTypeChevron}
+                style={{ transform: isTypeSelectorOpen ? 'rotate(180deg)' : 'none' }}
+              />
+            </button>
+
+            {isTypeSelectorOpen && (
+              <div className={styles.composerTypeMenu} ref={typeSelectorMenuRef}>
+                {ENTRY_TYPES.map((type) => (
+                  <button
+                    key={type}
+                    type="button"
+                    className={styles.composerTypeOption}
+                    data-selected={state.entryType === type}
+                    onClick={() => {
+                      handleSelectEntryType(type);
+                      setIsTypeSelectorOpen(false);
+                    }}
+                  >
+                    {type === "plan" && <Target size={14} />}
+                    {type === "event" && <Calendar size={14} />}
+                    {type === "task" && <CheckSquare size={14} />}
+                    {type === "reminder" && <Bell size={14} />}
+                    {type === "habit" && <Repeat size={14} />}
+                    <span>{t(ENTRY_TYPE_LABELS[type])}</span>
+                    {state.entryType === type && <Check size={14} className={styles.composerTypeCheck} />}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           <button
             type="button"
@@ -610,24 +704,7 @@ export function EventComposer({
             />
           </label>
 
-          <label className={styles.composerField}>
-            <span>{t("Type")}</span>
-            <div className={styles.composerTypeSelectShell}>
-              <select
-                className={styles.composerTypeSelect}
-                value={state.entryType}
-                onChange={(event) =>
-                  handleSelectEntryType(event.target.value as CalendarEntryType)
-                }
-              >
-                {ENTRY_TYPES.map((type) => (
-                  <option key={type} value={type}>
-                    {t(ENTRY_TYPE_LABELS[type])}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </label>
+
 
           {!isReminder ? (
             <div className={styles.composerDualField}>

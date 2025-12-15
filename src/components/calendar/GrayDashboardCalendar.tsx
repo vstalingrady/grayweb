@@ -6,7 +6,6 @@ import {
   useMemo,
   useRef,
   useState,
-  type ChangeEvent,
   type CSSProperties,
   type MouseEvent,
   type ReactNode,
@@ -173,7 +172,7 @@ export function GrayDashboardCalendar({
   const [nowReference, setNowReference] = useState<Date | null>(() => currentDate ?? null);
   const [composerRange, setComposerRange] = useState<{ start: Date; end: Date } | null>(null);
   const [composerAnchorRect, setComposerAnchorRect] = useState<ComposerAnchorRect | null>(null);
-
+  const [previewEvent, setPreviewEvent] = useState<CalendarEvent | null>(null);
 
   const dayColumnRef = useRef<HTMLDivElement | null>(null);
   const weekScrollRef = useRef<HTMLDivElement | null>(null);
@@ -316,8 +315,10 @@ export function GrayDashboardCalendar({
 
   const dayEvents = useMemo(() => {
     const filtered = visibleEvents.filter((event) => isSameDay(event.start, selectedDate));
+    let mapped = filtered;
+
     if (activeDrafts) {
-      return filtered.map((event) => {
+      mapped = filtered.map((event) => {
         const draft = activeDrafts[event.id];
         if (draft) {
           return {
@@ -329,8 +330,13 @@ export function GrayDashboardCalendar({
         return event;
       });
     }
-    return filtered;
-  }, [activeDrafts, selectedDate, visibleEvents]);
+
+    if (previewEvent && isSameDay(previewEvent.start, selectedDate)) {
+      mapped = [...mapped, previewEvent];
+    }
+
+    return mapped;
+  }, [activeDrafts, selectedDate, visibleEvents, previewEvent]);
 
   const dayLayouts = useMemo<PositionedEvent[]>(
     () =>
@@ -377,13 +383,17 @@ export function GrayDashboardCalendar({
         });
       }
 
+      if (previewEvent && isSameDay(previewEvent.start, day)) {
+        eventsWithPreview.push(previewEvent);
+      }
+
       return layoutDayEvents(eventsWithPreview, {
         hourHeight,
         minimumHeight: shortEventMinimumHeight,
         dayStart: startOfDay(day),
       });
     });
-  }, [hourHeight, shortEventMinimumHeight, visibleEvents, weekDays, activeDrafts]);
+  }, [hourHeight, shortEventMinimumHeight, visibleEvents, weekDays, activeDrafts, previewEvent]);
 
   const updateViewMode = useCallback(
     (nextMode: CalendarViewMode) => {
@@ -394,10 +404,6 @@ export function GrayDashboardCalendar({
     },
     [viewModeLocked]
   );
-
-  const handleViewModeChange = (event: ChangeEvent<HTMLSelectElement>) => {
-    updateViewMode(event.target.value as CalendarViewMode);
-  };
 
   const rangeNavigationLabel = viewMode === "week" ? t("Week") : t("Day");
   const shouldShowDashboardToggle = typeof onSelectDashboardTab === "function";
@@ -520,6 +526,7 @@ export function GrayDashboardCalendar({
       setComposerOpen(true);
       // Clear selection when opening composer
       setSelectedEventIds(new Set());
+      setPreviewEvent(null);
     },
     []
   );
@@ -569,6 +576,7 @@ export function GrayDashboardCalendar({
     } else {
       setComposerAnchorRect(null);
     }
+    setPreviewEvent(null);
   };
 
   const handleComposerSubmit = ({ id, ...payload }: EventComposerPayload) => {
@@ -594,6 +602,7 @@ export function GrayDashboardCalendar({
     setEditingEvent(null);
     setComposerRange(null);
     setComposerAnchorRect(null);
+    setPreviewEvent(null);
   };
 
   const handleComposerDelete = (eventId: string) => {
@@ -606,6 +615,21 @@ export function GrayDashboardCalendar({
     setEditingEvent(null);
     setComposerRange(null);
     setComposerAnchorRect(null);
+    setPreviewEvent(null);
+  };
+
+  const handleComposerStateChange = (state: {
+    title: string;
+    start: Date;
+    end: Date;
+    color: string;
+    entryType: CalendarEntryType;
+  }) => {
+    setPreviewEvent({
+      id: "preview-event",
+      calendarId: "preview",
+      ...state,
+    });
   };
 
   const handleColumnClick = (event: MouseEvent<HTMLDivElement>, day: Date) => {
@@ -668,9 +692,27 @@ export function GrayDashboardCalendar({
     updateEvents((previous) => previous.filter((e) => e.id !== event.id));
   };
 
+  const [scrollbarWidth, setScrollbarWidth] = useState(0);
+
+  useEffect(() => {
+    const measureScrollbar = () => {
+      const element = weekScrollRef.current || dayColumnRef.current;
+      if (element) {
+        setScrollbarWidth(element.offsetWidth - element.clientWidth);
+      }
+    };
+
+    measureScrollbar();
+    window.addEventListener('resize', measureScrollbar);
+    return () => window.removeEventListener('resize', measureScrollbar);
+  }, [viewMode]);
+
   const calendarGridStyle = useMemo(
-    () => ({ "--calendar-grid-columns": viewMode === "week" ? "7" : "1" }) as CSSProperties,
-    [viewMode]
+    () => ({
+      "--calendar-grid-columns": viewMode === "week" ? "7" : "1",
+      "--scrollbar-width": `${scrollbarWidth}px`,
+    }) as CSSProperties,
+    [viewMode, scrollbarWidth]
   );
 
   const renderWeekView = () => (
@@ -710,8 +752,8 @@ export function GrayDashboardCalendar({
                 <ViewModeSelect
                   value={viewMode}
                   options={[
-                    { value: "week", label: t("Week") },
                     { value: "day", label: t("Day") },
+                    { value: "week", label: t("Week") },
                   ]}
                   onChange={(mode) => updateViewMode(mode)}
                 />
@@ -722,7 +764,7 @@ export function GrayDashboardCalendar({
         {showHeaderDates && (
           <div className={styles.calendarHeaderRow}>
             <div className={styles.calendarHeaderPlaceholder}>
-              <span className={styles.calendarTimezoneLabel}>+ {timeZoneLabel}</span>
+              <span className={styles.calendarTimezoneLabel}>{timeZoneLabel}</span>
             </div>
             {weekDays.map((day) => {
               const isSelectedDay = isSameDay(day, selectedDate);
@@ -743,7 +785,7 @@ export function GrayDashboardCalendar({
         )}
         <div className={styles.calendarAllDayRow}>
           <div className={styles.calendarAllDayLabel}>
-            <span>{t("All-day")}</span>
+            <span>{t("All-Day")}</span>
           </div>
           {weekDays.map((day) => (
             <div key={day.toISOString()} className={styles.calendarAllDayCell}>
@@ -871,8 +913,8 @@ export function GrayDashboardCalendar({
                 <ViewModeSelect
                   value={viewMode}
                   options={[
-                    { value: "week", label: t("Week") },
                     { value: "day", label: t("Day") },
+                    { value: "week", label: t("Week") },
                   ]}
                   onChange={(mode) => updateViewMode(mode)}
                 />
@@ -1094,8 +1136,8 @@ export function GrayDashboardCalendar({
     viewMode,
     onViewModeChange: showViewSelect ? updateViewMode : undefined,
     viewModeOptions: [
-      { value: "week", label: t("Week") },
       { value: "day", label: t("Day") },
+      { value: "week", label: t("Week") },
     ],
     rangeNavigationLabel,
   };
@@ -1192,14 +1234,14 @@ export function GrayDashboardCalendar({
                   </button>
                 )}
                 {showViewSelect && (
-                  <select
-                    className={styles.calendarViewSelect}
+                  <ViewModeSelect
                     value={viewMode}
-                    onChange={handleViewModeChange}
-                  >
-                    <option value="week">{t("Week")}</option>
-                    <option value="day">{t("Day")}</option>
-                  </select>
+                    options={[
+                      { value: "day", label: t("Day") },
+                      { value: "week", label: t("Week") },
+                    ]}
+                    onChange={(mode) => updateViewMode(mode)}
+                  />
                 )}
               </div>
             </div>
@@ -1263,6 +1305,7 @@ export function GrayDashboardCalendar({
         setComposerRange(null);
         setComposerAnchorRect(null);
       }}
+      onStateChange={handleComposerStateChange}
       onSubmit={handleComposerSubmit}
       onDelete={handleComposerDelete}
     />
