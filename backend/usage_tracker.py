@@ -254,7 +254,8 @@ class UsageTracker:
         query = """
             SELECT plan_tier, daily_token_usage, monthly_cost_usage, 
                    last_daily_reset, last_monthly_reset,
-                   six_hour_cost_usage, last_six_hour_reset
+                   six_hour_cost_usage, last_six_hour_reset,
+                   subscription_expires_at
             FROM users WHERE id = :id
         """
         return await self.db.fetch_one(query=query, values={"id": user_id})
@@ -316,7 +317,18 @@ class UsageTracker:
 
         usage_data = await self._reset_counters_if_needed(user_id, usage_data)
 
-        tier = (usage_data["plan_tier"] or "scout").lower()
+        # Get user tier with subscription expiration check
+        try:
+            from backend.tier_utils import normalize_plan_tier
+        except ImportError:
+            from tier_utils import normalize_plan_tier
+        
+        subscription_expires_at = usage_data.get("subscription_expires_at")
+        tier = normalize_plan_tier(
+            usage_data.get("plan_tier"),
+            None,  # role not available in usage_data
+            subscription_expires_at
+        )
         limits = get_limits_for_tier(tier)
         
         if limits.get("is_unlimited"):
@@ -385,7 +397,18 @@ class UsageTracker:
 
         usage_data = await self._reset_counters_if_needed(user_id, usage_data)
 
-        tier = (usage_data["plan_tier"] or "scout").lower()
+        # Get user tier with subscription expiration check
+        try:
+            from backend.tier_utils import normalize_plan_tier
+        except ImportError:
+            from tier_utils import normalize_plan_tier
+        
+        subscription_expires_at = usage_data.get("subscription_expires_at")
+        tier = normalize_plan_tier(
+            usage_data.get("plan_tier"),
+            None,  # role not available in usage_data
+            subscription_expires_at
+        )
         limits = get_limits_for_tier(tier)
         
         if limits.get("is_unlimited"):

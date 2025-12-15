@@ -193,6 +193,8 @@ export function PlanHabitInlineEditor({
 }: PlanHabitInlineEditorProps) {
   const { t } = useI18n();
   const { user } = useUser();
+  const planTier = (user?.plan_tier || "scout").toLowerCase();
+  const isScout = planTier === "scout";
   const isPlan = type === "plan";
   const isEditing = Boolean(planToEdit || habitToEdit);
   const submitLabel = isEditing ? t("Save") : t("Add");
@@ -232,6 +234,12 @@ export function PlanHabitInlineEditor({
     if (!colorPickerPosition) return undefined;
     return { top: `${colorPickerPosition.top}px`, left: `${colorPickerPosition.left}px` };
   }, [colorPickerPosition]);
+
+  useEffect(() => {
+    if (isScout) {
+      setIsColorPickerOpen(false);
+    }
+  }, [isScout]);
 
   useEffect(() => {
     const now = new Date();
@@ -1089,36 +1097,40 @@ export function PlanHabitInlineEditor({
         <hr className={calendarStyles.composerSectionDivider} />
 
         <label className={calendarStyles.composerField}>
-          <span>{t("Color")}</span>
+          {!isScout ? <span>{t("Color")}</span> : null}
           <div className={calendarStyles.composerColors} ref={colorPickerRef}>
-            {QUICK_COLOR_SWATCHES.map((swatch) => (
-              <button
-                key={swatch}
-                type="button"
-                className={calendarStyles.composerColorDot}
-                style={{ backgroundColor: swatch }}
-                data-active={color === swatch ? "true" : "false"}
-                onClick={() => handleSelectColor(swatch)}
-                aria-label={t("Select {color} color", { color: swatch })}
-                disabled={isSubmitting}
-              />
-            ))}
-            <button
-              type="button"
-              className={calendarStyles.composerColorDot}
-              data-active={
-                QUICK_COLOR_SWATCHES.includes(color as (typeof QUICK_COLOR_SWATCHES)[number])
-                  ? "false"
-                  : "true"
-              }
-              onClick={handlePickCustomColor}
-              aria-label={t("Pick custom color")}
-              aria-expanded={isColorPickerOpen ? "true" : "false"}
-              ref={colorPickerTriggerRef}
-              disabled={isSubmitting}
-            >
-              <Plus size={18} strokeWidth={1.75} aria-hidden="true" />
-            </button>
+            {!isScout ? (
+              <>
+                {QUICK_COLOR_SWATCHES.map((swatch) => (
+                  <button
+                    key={swatch}
+                    type="button"
+                    className={calendarStyles.composerColorDot}
+                    style={{ backgroundColor: swatch }}
+                    data-active={color === swatch ? "true" : "false"}
+                    onClick={() => handleSelectColor(swatch)}
+                    aria-label={t("Select {color} color", { color: swatch })}
+                    disabled={isSubmitting}
+                  />
+                ))}
+                <button
+                  type="button"
+                  className={calendarStyles.composerColorDot}
+                  data-active={
+                    QUICK_COLOR_SWATCHES.includes(color as (typeof QUICK_COLOR_SWATCHES)[number])
+                      ? "false"
+                      : "true"
+                  }
+                  onClick={handlePickCustomColor}
+                  aria-label={t("Pick custom color")}
+                  aria-expanded={isColorPickerOpen ? "true" : "false"}
+                  ref={colorPickerTriggerRef}
+                  disabled={isSubmitting}
+                >
+                  <Plus size={18} strokeWidth={1.75} aria-hidden="true" />
+                </button>
+              </>
+            ) : null}
 
             <button
               type="submit"
@@ -1129,7 +1141,7 @@ export function PlanHabitInlineEditor({
               {isSubmitting ? submittingLabel : submitLabel}
             </button>
 
-            {isColorPickerOpen ? (
+            {!isScout && isColorPickerOpen ? (
               <div
                 ref={colorPickerPopoverRef}
                 className={calendarStyles.composerColorPopover}

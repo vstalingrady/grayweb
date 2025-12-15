@@ -7988,7 +7988,11 @@ async def chat_endpoint(
 
         # Enforce tier restrictions
         # Only Voyager and Pioneer users can use reasoning mode.
-        normalized_tier = normalize_plan_tier(current_user.get("plan_tier"), current_user.get("role"))
+        normalized_tier = normalize_plan_tier(
+            current_user.get("plan_tier"),
+            current_user.get("role"),
+            current_user.get("subscription_expires_at")
+        )
 
         # If user requested reasoning but is not eligible, disable it silently (or we could raise 403)
         effective_reasoning_mode = chat_request.reasoning_mode
@@ -8433,7 +8437,11 @@ async def chat_stream(
 
         # Enforce tier restrictions for streaming
         # user_record was already fetched above
-        normalized_tier = normalize_plan_tier(user_plan_tier, _row_get(user_record, "role"))
+        normalized_tier = normalize_plan_tier(
+            user_plan_tier,
+            _row_get(user_record, "role"),
+            _row_get(user_record, "subscription_expires_at")
+        )
 
         effective_model, model_coerced = coerce_model_for_tier(effective_model, normalized_tier)
         if model_coerced:
@@ -9067,7 +9075,11 @@ async def get_conversation_usage(
         # Context limits are based on the owner's plan tier.
         # We already verified ownership via `_require_conversation_owner`, so `current_user`
         # is the single source of truth (avoids brittle conversation-id parsing / Supabase lookups).
-        user_tier = normalize_plan_tier(current_user.get("plan_tier"), current_user.get("role"))
+        user_tier = normalize_plan_tier(
+            current_user.get("plan_tier"),
+            current_user.get("role"),
+            current_user.get("subscription_expires_at")
+        )
 
         tier_context_limit = tier_conversation_token_limit(user_tier)
         
@@ -10738,12 +10750,13 @@ async def handle_payment_notification(notification: MidtransNotification):
                 billing_cycle = transaction.get("billing_cycle", "monthly")
                 
                 # Calculate subscription expiry based on billing cycle
-                from dateutil.relativedelta import relativedelta
+                # Using exact days: 365 days for annual, 30 days for monthly
+                from datetime import timedelta
                 now = utcnow()
                 if billing_cycle == "annual":
-                    subscription_expires_at = now + relativedelta(years=1)
+                    subscription_expires_at = now + timedelta(days=365)
                 else:
-                    subscription_expires_at = now + relativedelta(months=1)
+                    subscription_expires_at = now + timedelta(days=30)
                 
                 # Update User Plan and Subscription Expiry
                 user_update = users.update().where(users.c.id == user_id).values(
@@ -10968,7 +10981,7 @@ async def stream_user_proactivity(
 
     if not current_user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
-    require_same_user(user_id, current_user)
+    user_id = int(current_user["id"])
     if not proactivity_engine:
         raise HTTPException(status_code=503, detail="Proactivity engine not initialized")
 
@@ -11015,7 +11028,7 @@ async def get_proactivity_status(
     Get the current configuration and status of proactivity for a user.
     """
     global proactivity_engine
-    require_same_user(user_id, current_user)
+    user_id = int(current_user["id"])
     if not proactivity_engine:
         raise HTTPException(status_code=503, detail="Proactivity engine not initialized")
     
@@ -11033,7 +11046,7 @@ async def update_proactivity_settings(
     Update a user's proactivity settings.
     """
     global proactivity_engine, proactivity_scheduler
-    require_same_user(user_id, current_user)
+    user_id = int(current_user["id"])
 
     if not proactivity_engine:
         raise HTTPException(status_code=503, detail="Proactivity engine not initialized")
@@ -11492,7 +11505,7 @@ async def get_proactivity_settings_route(
     db: databases.Database = Depends(get_database),
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
-    require_same_user(user_id, current_user)
+    user_id = int(current_user["id"])
     supabase_settings = _fetch_supabase_proactivity_settings(user_id)
     if supabase_settings:
         settings_dump = supabase_settings.model_dump(exclude_none=True)
@@ -11543,7 +11556,7 @@ async def update_proactivity_settings_route(
     db: databases.Database = Depends(get_database),
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
-    require_same_user(user_id, current_user)
+    user_id = int(current_user["id"])
     payload = settings.model_dump(exclude_none=True)
     now = utcnow()
 

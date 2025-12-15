@@ -15,9 +15,9 @@ if str(BACKEND_PATH) not in sys.path:
 TEST_DB_PATH = ROOT / "backend" / "tests" / "proactivity_test.db"
 if TEST_DB_PATH.exists():
     TEST_DB_PATH.unlink()
-os.environ.setdefault("DATABASE_URL", f"sqlite:///{TEST_DB_PATH}")
-os.environ.setdefault("SUPABASE_URL", "")
-os.environ.setdefault("SUPABASE_KEY", "")
+os.environ["DATABASE_URL"] = f"sqlite:///{TEST_DB_PATH}"
+os.environ["SUPABASE_URL"] = ""
+os.environ["SUPABASE_KEY"] = ""
 
 import main
 from proactivity_engine import ProactivityEngine, ProactivityUserSettings

@@ -13,9 +13,9 @@ TEST_DB_PATH = ROOT / "backend" / "tests" / "web_search_test.db"
 if TEST_DB_PATH.exists():
     TEST_DB_PATH.unlink()
 
-os.environ.setdefault("DATABASE_URL", f"sqlite:///{TEST_DB_PATH}")
-os.environ.setdefault("SUPABASE_URL", "")
-os.environ.setdefault("SUPABASE_KEY", "")
+os.environ["DATABASE_URL"] = f"sqlite:///{TEST_DB_PATH}"
+os.environ["SUPABASE_URL"] = ""
+os.environ["SUPABASE_KEY"] = ""
 
 import main  # noqa: E402
 
@@ -34,4 +34,3 @@ def test_should_enable_search_not_for_research_word():
 
 def test_should_enable_search_not_for_generic_person_question():
     assert main._should_enable_search("Who is Albert Einstein?") is False
-

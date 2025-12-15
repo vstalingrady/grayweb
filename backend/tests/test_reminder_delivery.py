@@ -16,9 +16,9 @@ if str(BACKEND_PATH) not in sys.path:
 TEST_DB_PATH = ROOT / "backend" / "tests" / "reminder_delivery_test.db"
 if TEST_DB_PATH.exists():
     TEST_DB_PATH.unlink()
-os.environ.setdefault("DATABASE_URL", f"sqlite:///{TEST_DB_PATH}")
-os.environ.setdefault("SUPABASE_URL", "")
-os.environ.setdefault("SUPABASE_KEY", "")
+os.environ["DATABASE_URL"] = f"sqlite:///{TEST_DB_PATH}"
+os.environ["SUPABASE_URL"] = ""
+os.environ["SUPABASE_KEY"] = ""
 
 import main  # noqa: E402
 from proactivity_engine import ProactivityEngine, ProactivityRealtimeBroker  # noqa: E402
@@ -97,4 +97,3 @@ async def test_dispatch_reminder_marks_delivered_and_emits_notification(connecte
     )
     assert len(chat_rows) >= 1
     assert "Reminder:" in (chat_rows[-1]["content"] or "")
-
