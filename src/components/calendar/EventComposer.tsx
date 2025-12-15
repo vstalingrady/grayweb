@@ -529,6 +529,10 @@ export function EventComposer({
     setIsColorPickerOpen(false);
   };
 
+  const handleUpdateColorWithoutClosing = (colorValue: string) => {
+    dispatch({ type: "update", payload: { color: colorValue } });
+  };
+
   const handlePickCustomColor = () => {
     setIsColorPickerOpen((previous) => !previous);
   };
@@ -760,7 +764,7 @@ export function EventComposer({
                         min={0}
                         max={255}
                         value={rgb.red}
-                        onChange={(event) => handleSelectColor(rgbToHex(Number(event.target.value), rgb.green, rgb.blue))}
+                        onChange={(event) => handleUpdateColorWithoutClosing(rgbToHex(Number(event.target.value), rgb.green, rgb.blue))}
                       />
                       <output>{rgb.red}</output>
                     </label>
@@ -771,7 +775,7 @@ export function EventComposer({
                         min={0}
                         max={255}
                         value={rgb.green}
-                        onChange={(event) => handleSelectColor(rgbToHex(rgb.red, Number(event.target.value), rgb.blue))}
+                        onChange={(event) => handleUpdateColorWithoutClosing(rgbToHex(rgb.red, Number(event.target.value), rgb.blue))}
                       />
                       <output>{rgb.green}</output>
                     </label>
@@ -782,7 +786,7 @@ export function EventComposer({
                         min={0}
                         max={255}
                         value={rgb.blue}
-                        onChange={(event) => handleSelectColor(rgbToHex(rgb.red, rgb.green, Number(event.target.value)))}
+                        onChange={(event) => handleUpdateColorWithoutClosing(rgbToHex(rgb.red, rgb.green, Number(event.target.value)))}
                       />
                       <output>{rgb.blue}</output>
                     </label>

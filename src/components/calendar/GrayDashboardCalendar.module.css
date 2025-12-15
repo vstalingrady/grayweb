@@ -382,7 +382,7 @@
   width: 100%;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 10px;
   border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.12);
@@ -397,18 +397,6 @@
     color 0.2s ease;
 }
 
-.calendarSidebarIntegrationPlus {
-  width: 18px;
-  height: 18px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  color: rgba(245, 245, 245, 0.85);
-  flex: 0 0 auto;
-}
-
 .calendarSidebarIntegrationText {
   flex: 1 1 auto;
   min-width: 0;
@@ -419,8 +407,9 @@
 }
 
 .calendarSidebarIntegrationLogo {
-  width: 18px;
-  height: 18px;
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
   flex: 0 0 auto;
 }
 

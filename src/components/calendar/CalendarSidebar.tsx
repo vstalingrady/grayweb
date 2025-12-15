@@ -127,12 +127,6 @@ export function CalendarSidebar({
               className={styles.calendarSidebarIntegrationButton}
               onClick={onIntegrationAction}
             >
-              <span className={styles.calendarSidebarIntegrationPlus} aria-hidden="true">
-                +
-              </span>
-              <span className={styles.calendarSidebarIntegrationText}>
-                {t(integrationActionLabel)}
-              </span>
               <img
                 className={styles.calendarSidebarIntegrationLogo}
                 src="/logos/google-calendar.svg"
@@ -140,6 +134,9 @@ export function CalendarSidebar({
                 aria-hidden="true"
                 loading="lazy"
               />
+              <span className={styles.calendarSidebarIntegrationText}>
+                {t(integrationActionLabel)}
+              </span>
             </button>
           </div>
         ) : null}
