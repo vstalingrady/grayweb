@@ -791,7 +791,7 @@ function GrayPageClientInner({
   const filteredRailItems = useMemo(() => {
     return SIDEBAR_RAIL_ITEMS;
   }, [viewerPlanLabel]);
-  const historySections = useMemo<SidebarHistorySection[]>(() => {
+	  const historySections = useMemo<SidebarHistorySection[]>(() => {
     // Only show conversations that are bound to a *normalized*
     // conversationId so we don't duplicate entries with both
     // the raw user prompt and the refined AI title or temporary
@@ -837,24 +837,70 @@ function GrayPageClientInner({
       registerSession(`${baseKey}:${session.id}`, session);
     });
 
-    const dedupedThreadSessions = Array.from(dedupeMap.values());
-    if (!dedupedThreadSessions.length) {
-      return DEFAULT_HISTORY_SECTIONS.map((section) => ({
-        ...section,
-        entries: section.entries.map((entry) => ({ ...entry })),
-      }));
-    }
+	    const dedupedThreadSessions = Array.from(dedupeMap.values());
+	    if (!dedupedThreadSessions.length) {
+	      return DEFAULT_HISTORY_SECTIONS.map((section) => ({
+	        ...section,
+	        entries: section.entries.map((entry) => ({ ...entry })),
+	      }));
+	    }
 
+	    // Prevent "ghost" duplicate entries: if a placeholder session is still marked
+	    // as title-generating but we already have another session with the same seed
+	    // prompt within a short window, hide the placeholder so the sidebar doesn't
+	    // show an extra skeleton row.
+	    const sessionsBySeed = new Map<string, ChatSession[]>();
+	    dedupedThreadSessions.forEach((session) => {
+	      const fingerprint = getSessionSeedFingerprint(session);
+	      if (!fingerprint) {
+	        return;
+	      }
+	      const bucket = sessionsBySeed.get(fingerprint) ?? [];
+	      bucket.push(session);
+	      sessionsBySeed.set(fingerprint, bucket);
+	    });
 
-    const pinnedSessions: ChatSession[] = [];
-    const unpinnedSessions: ChatSession[] = [];
+	    const isPlaceholderTitle = (session: ChatSession): boolean => {
+	      const normalized = (session.title ?? "").trim().toLowerCase();
+	      return (
+	        !normalized ||
+	        normalized === "new chat" ||
+	        normalized === "new conversation" ||
+	        normalized === "new thread" ||
+	        normalized === "new session"
+	      );
+	    };
 
-    dedupedThreadSessions.forEach((session) => {
-      // Check for pinned in metadata
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const isPinned = !!(session.metadata as any)?.is_pinned;
-      if (isPinned) {
-        pinnedSessions.push(session);
+	    const prunedThreadSessions = dedupedThreadSessions.filter((session) => {
+	      if (!session.isGeneratingTitle) {
+	        return true;
+	      }
+	      if (!isPlaceholderTitle(session)) {
+	        return true;
+	      }
+	      const fingerprint = getSessionSeedFingerprint(session);
+	      if (!fingerprint) {
+	        return true;
+	      }
+	      const candidates = sessionsBySeed.get(fingerprint) ?? [];
+	      const hasBetterMatch = candidates.some(
+	        (candidate) =>
+	          candidate !== session &&
+	          !candidate.isGeneratingTitle &&
+	          Math.abs(candidate.updatedAt - session.updatedAt) <= HISTORY_DUPLICATE_WINDOW_MS
+	      );
+	      return !hasBetterMatch;
+	    });
+
+	    const pinnedSessions: ChatSession[] = [];
+	    const unpinnedSessions: ChatSession[] = [];
+
+	    prunedThreadSessions.forEach((session) => {
+	      // Check for pinned in metadata
+	      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+	      const isPinned = !!(session.metadata as any)?.is_pinned;
+	      if (isPinned) {
+	        pinnedSessions.push(session);
       } else {
         unpinnedSessions.push(session);
       }
