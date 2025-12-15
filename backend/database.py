@@ -16,6 +16,9 @@ if "pytest" in sys.modules:
     # Tests should not inherit NODE_ENV/ENVIRONMENT from a developer's local .env.
     os.environ.setdefault("NODE_ENV", "test")
     os.environ.setdefault("ENVIRONMENT", "test")
+    # The repo's default `.env` uses `DB_MODE=local` and sets `LOCAL_DATABASE_URL`.
+    # Most tests set `DATABASE_URL` directly and expect it to take precedence.
+    os.environ.setdefault("DB_MODE", "remote")
 
 load_dotenv(ROOT_DIR / ".env")
 

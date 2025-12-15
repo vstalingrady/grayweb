@@ -3,10 +3,17 @@ import logging
 import json
 import os
 from datetime import datetime, timezone
-from backend.paddle_client import paddle_client
-from backend.database import database, users, transactions, plans
-from backend.subscription_utils import calculate_subscription_period
-from backend.time_utils import utcnow
+
+try:  # Prefer package-relative imports when running as a package
+    from backend.paddle_client import paddle_client
+    from backend.database import database, users, transactions, plans
+    from backend.subscription_utils import calculate_subscription_period
+    from backend.time_utils import utcnow
+except Exception:  # pragma: no cover - fallback for direct backend/ execution (tests)
+    from paddle_client import paddle_client  # type: ignore
+    from database import database, users, transactions, plans  # type: ignore
+    from subscription_utils import calculate_subscription_period  # type: ignore
+    from time_utils import utcnow  # type: ignore
 
 # setup logger
 logger = logging.getLogger("backend.paddle_webhook")

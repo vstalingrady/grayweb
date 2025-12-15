@@ -7,14 +7,14 @@ type StarfieldCanvasProps = {
   minStars?: number;
   speed?: number;
   color?: string;
+  orbitMode?: boolean;
 };
 
 type Star = {
-  x: number;
-  y: number;
+  angle: number;
+  orbitRadius: number;
+  angularSpeed: number;
   radius: number;
-  vx: number;
-  vy: number;
   baseAlpha: number;
   twinkleSpeed: number;
   twinklePhase: number;
@@ -58,6 +58,7 @@ export function StarfieldCanvas({
   minStars = 24,
   speed = 18,
   color,
+  orbitMode = false,
 }: StarfieldCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const rgbTriplet = useMemo(() => parseRgbTriplet(color), [color]);
@@ -107,34 +108,24 @@ export function StarfieldCanvas({
       const area = nextWidth * nextHeight;
       const targetStars = clamp(Math.round(area * density), minStars, maxStars);
 
+      // Max orbit radius - use the distance from bottom-center to the farthest corner
+      const maxOrbitRadius = Math.sqrt(Math.pow(nextWidth, 2) + Math.pow(nextHeight, 2));
+
       for (let index = 0; index < targetStars; index += 1) {
-        const radius = randomBetween(0.55, 1.55);
-        const velocityMagnitude = randomBetween(speed * 0.35, speed * 1.1);
-        const direction = randomBetween(0, Math.PI * 2);
+        const radius = randomBetween(0.6, 1.8);
+        // Distribute stars at various orbit distances
+        const orbitRadius = randomBetween(15, maxOrbitRadius * 0.9);
+        // Angular speed varies inversely with orbit radius (like real planets)
+        const angularSpeed = (speed * 0.015) / Math.sqrt(orbitRadius / 50);
         stars.push({
-          x: Math.random() * nextWidth,
-          y: Math.random() * nextHeight,
+          angle: randomBetween(0, Math.PI * 2),
+          orbitRadius,
+          angularSpeed: randomBetween(angularSpeed * 0.6, angularSpeed * 1.4),
           radius,
-          vx: Math.cos(direction) * velocityMagnitude,
-          vy: Math.sin(direction) * velocityMagnitude,
-          baseAlpha: randomBetween(0.22, 0.85),
+          baseAlpha: randomBetween(0.35, 0.95),
           twinkleSpeed: randomBetween(0.8, 2.2),
           twinklePhase: randomBetween(0, Math.PI * 2),
         });
-      }
-    };
-
-    const wrap = (star: Star) => {
-      const { width, height } = state;
-      if (star.x < -4) {
-        star.x = width + 4;
-      } else if (star.x > width + 4) {
-        star.x = -4;
-      }
-      if (star.y < -4) {
-        star.y = height + 4;
-      } else if (star.y > height + 4) {
-        star.y = -4;
       }
     };
 
@@ -150,19 +141,29 @@ export function StarfieldCanvas({
 
       context.clearRect(0, 0, state.width, state.height);
 
+      // Orbit center is at bottom-center of the canvas
+      const centerX = state.width / 2;
+      const centerY = state.height + 20; // Slightly below the canvas
+
       for (const star of stars) {
         if (!reducedMotion) {
-          star.x += star.vx * dtSeconds;
-          star.y += star.vy * dtSeconds;
-          wrap(star);
+          // Update angle for orbital motion
+          star.angle += star.angularSpeed * dtSeconds;
         }
 
-        const twinkle = 0.55 + 0.45 * Math.sin(timestamp / 1000 * star.twinkleSpeed + star.twinklePhase);
-        const alpha = clamp(star.baseAlpha * twinkle, 0.05, 0.95);
-        context.fillStyle = `rgba(${rgbTriplet}, ${alpha})`;
-        context.beginPath();
-        context.arc(star.x, star.y, star.radius, 0, Math.PI * 2);
-        context.fill();
+        // Calculate position based on orbit
+        const x = centerX + Math.cos(star.angle) * star.orbitRadius;
+        const y = centerY + Math.sin(star.angle) * star.orbitRadius;
+
+        // Only render if within canvas bounds (with some padding)
+        if (x >= -5 && x <= state.width + 5 && y >= -5 && y <= state.height + 5) {
+          const twinkle = 0.55 + 0.45 * Math.sin(timestamp / 1000 * star.twinkleSpeed + star.twinklePhase);
+          const alpha = clamp(star.baseAlpha * twinkle, 0.1, 0.98);
+          context.fillStyle = `rgba(${rgbTriplet}, ${alpha})`;
+          context.beginPath();
+          context.arc(x, y, star.radius, 0, Math.PI * 2);
+          context.fill();
+        }
       }
 
       state.animationFrameId = window.requestAnimationFrame(render);
@@ -202,8 +203,7 @@ export function StarfieldCanvas({
         window.cancelAnimationFrame(state.animationFrameId);
       }
     };
-  }, [density, maxStars, minStars, speed, rgbTriplet]);
+  }, [density, maxStars, minStars, speed, rgbTriplet, orbitMode]);
 
   return <canvas ref={canvasRef} className={className} aria-hidden="true" />;
 }
-
