@@ -43,7 +43,7 @@
 
 .mainGrid {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: auto 1fr;
     gap: 0;
     width: 100vw;
     min-height: 100vh;
@@ -71,16 +71,16 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 2rem;
+    padding: 3rem;
     background: transparent;
     min-height: 100vh;
     box-sizing: border-box;
+    width: auto;
 }
 
-.summaryColumn > * {
-    max-height: 520px;
-    width: 100%;
-    max-width: 380px;
+.summaryColumn>* {
+    width: 320px;
+    max-width: 320px;
 }
 
 /* Column-specific starfield removed; global background handles this. */
@@ -88,16 +88,15 @@
 .inputColumn {
     display: flex;
     flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 2rem;
-    background: transparent;
+    align-items: flex-start;
+    justify-content: flex-start;
+    padding: 3rem 4rem;
+    background: rgba(8, 8, 10, 0.85);
     gap: 1.5rem;
     min-height: 100vh;
     box-sizing: border-box;
     width: 100%;
-    max-width: 380px;
-    margin: 0 auto;
+    overflow-y: auto;
 }
 
 
@@ -908,14 +907,24 @@
     border: none;
     display: flex;
     flex-direction: column;
-    /* min-height: clamp(520px, 60vh, 720px);  <-- Removed fixed height for payment page context where it might need to fit content */
     box-shadow: 0 18px 50px rgba(0, 0, 0, 0.6);
     position: relative;
     overflow: hidden;
     width: 100%;
-    max-width: none;
+    max-width: 380px;
+    min-height: 420px;
+    max-height: 520px;
     margin: 0;
-    /* Fill the summary column */
+}
+
+.paymentFormCard {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    padding: 0;
+    max-width: 480px;
+    width: 100%;
+    overflow: visible;
 }
 
 /* We'll use the "muted" variant style as base for Voyager, or "primary" for Pioneer? 

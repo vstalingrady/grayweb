@@ -154,6 +154,7 @@ function PaymentContent() {
     const [methodGroup, setMethodGroup] = useState<"wallet" | "va">("wallet");
     const [bankSearch, setBankSearch] = useState<string>("");
     const [isIndonesia, setIsIndonesia] = useState<boolean | null>(null);
+    const [isPaddleReady, setIsPaddleReady] = useState(false);
 
     const [status, setStatus] = useState<PaymentStatus>("idle");
     const [chargeData, setChargeData] = useState<ChargeResponse | null>(null);
@@ -190,6 +191,7 @@ function PaymentContent() {
                 token: PADDLE_CLIENT_TOKEN,
                 environment: PADDLE_SANDBOX ? "sandbox" : "production",
             });
+            setIsPaddleReady(true);
         }
     }, []);
 
@@ -252,12 +254,15 @@ function PaymentContent() {
 
             // Route to Paddle for card payments
             if (selectedMethod.type === "paddle") {
+                if (!PADDLE_CLIENT_TOKEN) {
+                    throw new Error("Card payments are not configured. Please contact support.");
+                }
                 const priceId = PADDLE_PRICE_IDS[planParam || "voyager"]?.[billingCycle];
                 if (!priceId) {
                     throw new Error("Paddle payment is not configured. Please contact support.");
                 }
-                if (!window.Paddle) {
-                    throw new Error("Payment system is loading. Please wait a moment and try again.");
+                if (!window.Paddle || !isPaddleReady) {
+                    throw new Error("Payment system couldn't load. Please disable ad blockers and refresh.");
                 }
 
                 // Open Paddle inline checkout
@@ -529,8 +534,10 @@ function PaymentContent() {
                                 token: PADDLE_CLIENT_TOKEN,
                                 environment: PADDLE_SANDBOX ? "sandbox" : "production",
                             });
+                            setIsPaddleReady(true);
                         }
                     }}
+                    onError={() => setIsPaddleReady(false)}
                 />
             )}
 
@@ -707,18 +714,25 @@ function PaymentContent() {
                                 <button
                                     className={styles.payButton}
                                     onClick={handlePayment}
-                                    disabled={status === "loading"}
+                                    disabled={
+                                        status === "loading" ||
+                                        (selectedMethodId === "card" && Boolean(PADDLE_CLIENT_TOKEN) && !isPaddleReady)
+                                    }
                                 >
                                     {status === "loading" ? (
                                         <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem" }}>
                                             <Loader2 size={20} className="animate-spin" /> Processing
+                                        </span>
+                                    ) : selectedMethodId === "card" && Boolean(PADDLE_CLIENT_TOKEN) && !isPaddleReady ? (
+                                        <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem" }}>
+                                            <Loader2 size={20} className="animate-spin" /> Loading payment system
                                         </span>
                                     ) : (
                                         `Subscribe for ${fullPriceDisplay}`
                                     )}
                                 </button>
                                 <div style={{ marginTop: "1rem", display: "flex", justifyContent: "center", gap: "0.5rem", color: "rgba(255,255,255,0.3)", fontSize: "0.8rem" }}>
-                                    Powered by Midtrans • Secure 256-bit SSL Header
+                                    {selectedMethodId === "card" ? "Powered by Paddle • Secure checkout" : "Powered by Midtrans • Secure 256-bit SSL Header"}
                                 </div>
                             </div>
                         </div>
