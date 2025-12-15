@@ -82,6 +82,8 @@ export interface User {
   personalization_about?: string | null;
   personalization_custom_instructions?: string | null;
   personalization_system_prompt_override?: string | null;
+  personalization_location?: string | null;
+  personalization_time_zone?: string | null;
   created_at: string;
   updated_at: string;
   usage_status?: UsageStatus | null;
@@ -571,6 +573,8 @@ export interface UserCreate {
   personalization_occupation?: string | null;
   personalization_about?: string | null;
   personalization_custom_instructions?: string | null;
+  personalization_location?: string | null;
+  personalization_time_zone?: string | null;
 }
 
 export interface UserUpdate {
@@ -586,6 +590,8 @@ export interface UserUpdate {
   personalization_occupation?: string | null;
   personalization_about?: string | null;
   personalization_custom_instructions?: string | null;
+  personalization_location?: string | null;
+  personalization_time_zone?: string | null;
   preferred_model?: string | null;
   visible_model_ids?: string[] | null;
 }

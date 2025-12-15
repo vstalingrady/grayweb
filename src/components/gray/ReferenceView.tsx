@@ -178,37 +178,37 @@ export function ReferenceView() {
         {/* Controls */}
         <div className="flex flex-col gap-4 w-full max-w-5xl mb-6 mx-auto shrink-0">
           <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-            <div className="flex-1 flex items-center gap-3 px-4 py-3 rounded-full bg-[#0A0A0A] border border-white/10 focus-within:border-white/20 transition-colors">
-            <Search size={18} className="text-zinc-500" />
+            <div className="flex-1 flex items-center gap-3 px-4 py-3 rounded-xl bg-[#181818] border border-white/10 focus-within:border-white/20 transition-colors">
+              <Search size={18} className="text-zinc-500" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={t("Search files...")}
+                className="flex-1 bg-transparent border-none outline-none text-zinc-200 placeholder:text-zinc-600 text-sm"
+              />
+            </div>
+
             <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder={t("Search files...")}
-              className="flex-1 bg-transparent border-none outline-none text-zinc-200 placeholder:text-zinc-600 text-sm"
+              ref={fileInputRef}
+              type="file"
+              onChange={handleFileSelect}
+              className="hidden"
+              accept=".pdf,.txt,.md,.doc,.docx,.json,.csv"
             />
-          </div>
 
-          <input
-            ref={fileInputRef}
-            type="file"
-            onChange={handleFileSelect}
-            className="hidden"
-            accept=".pdf,.txt,.md,.doc,.docx,.json,.csv"
-          />
-
-          <button
-            onClick={handleUploadClick}
-            disabled={isUploading}
-            className="w-12 h-12 rounded-full bg-[#0A0A0A] border border-white/10 flex items-center justify-center text-zinc-400 hover:text-zinc-200 hover:border-white/20 hover:bg-white/5 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-            title={t("Upload Files")}
-          >
-            {isUploading ? (
-              <LoaderCircle size={20} className="animate-spin" />
-            ) : (
-              <Upload size={20} />
-            )}
-          </button>
+            <button
+              onClick={handleUploadClick}
+              disabled={isUploading}
+              className="w-12 h-12 rounded-xl bg-[#181818] border border-white/10 flex items-center justify-center text-zinc-400 hover:text-zinc-200 hover:border-white/20 hover:bg-white/5 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              title={t("Upload Files")}
+            >
+              {isUploading ? (
+                <LoaderCircle size={20} className="animate-spin" />
+              ) : (
+                <Upload size={20} />
+              )}
+            </button>
           </div>
 
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -216,7 +216,7 @@ export function ReferenceView() {
               <select
                 value={typeFilter}
                 onChange={(event) => setTypeFilter(event.target.value as typeof typeFilter)}
-                className="px-4 py-2 rounded-full bg-[#0A0A0A] border border-white/10 text-zinc-200 text-sm outline-none hover:border-white/20 focus:border-white/25 transition-colors"
+                className="px-4 py-2 rounded-lg bg-[#181818] border border-white/10 text-zinc-200 text-sm outline-none hover:border-white/20 focus:border-white/25 transition-colors"
                 aria-label={t("Filter files")}
               >
                 <option value="all">{t("All files")}</option>
@@ -227,7 +227,7 @@ export function ReferenceView() {
               <select
                 value={sortMode}
                 onChange={(event) => setSortMode(event.target.value as typeof sortMode)}
-                className="px-4 py-2 rounded-full bg-[#0A0A0A] border border-white/10 text-zinc-200 text-sm outline-none hover:border-white/20 focus:border-white/25 transition-colors"
+                className="px-4 py-2 rounded-lg bg-[#181818] border border-white/10 text-zinc-200 text-sm outline-none hover:border-white/20 focus:border-white/25 transition-colors"
                 aria-label={t("Sort files")}
               >
                 <option value="newest">{t("Newest")}</option>
@@ -263,7 +263,7 @@ export function ReferenceView() {
               {filteredDocuments.map((doc) => (
                 <div
                   key={doc.id}
-                  className="group relative overflow-hidden rounded-2xl bg-[#0A0A0A] border border-white/10 hover:border-white/20 transition-colors"
+                  className="group relative overflow-hidden rounded-xl bg-[#181818] border border-white/10 hover:border-white/20 transition-colors"
                 >
                   <div className="p-4">
                     <div className="flex items-start justify-between gap-3">

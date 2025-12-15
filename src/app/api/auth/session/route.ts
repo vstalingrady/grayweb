@@ -19,10 +19,61 @@ type JwtPayload = {
 
 const SUPABASE_JWT_SECRET = process.env.SUPABASE_JWT_SECRET ?? null;
 
-const resolveSupabaseConfig = () => {
-  const url = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL ?? null;
-  const anonKey = process.env.SUPABASE_ANON_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? null;
-  return { url, anonKey };
+const normalizeUrl = (value: string | null | undefined): string | null => {
+  const trimmed = (value ?? "").trim();
+  return trimmed ? trimmed.replace(/\/+$/, "") : null;
+};
+
+const parseJwtPayload = (accessToken: string): Record<string, unknown> | null => {
+  const segments = accessToken.split(".");
+  if (segments.length !== 3) {
+    return null;
+  }
+
+  try {
+    const payloadBuffer = decodeBase64Url(segments[1]);
+    const parsed = JSON.parse(payloadBuffer.toString("utf8")) as Record<string, unknown>;
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
+};
+
+const issuerMatchesSupabaseUrl = (issuer: string, supabaseUrl: string): boolean => {
+  const normalizedUrl = normalizeUrl(supabaseUrl);
+  const normalizedIssuer = normalizeUrl(issuer);
+  if (!normalizedUrl || !normalizedIssuer) {
+    return false;
+  }
+  const expectedPrefix = `${normalizedUrl}/auth/v1`;
+  return normalizedIssuer === expectedPrefix || normalizedIssuer.startsWith(`${expectedPrefix}/`);
+};
+
+const resolveSupabaseConfig = (accessToken: string) => {
+  const serverUrl = normalizeUrl(process.env.SUPABASE_URL ?? null);
+  const serverAnonKey = (process.env.SUPABASE_ANON_KEY ?? "").trim() || null;
+  const publicUrl = normalizeUrl(process.env.NEXT_PUBLIC_SUPABASE_URL ?? null);
+  const publicAnonKey = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "").trim() || null;
+
+  const serverConfig = serverUrl && serverAnonKey ? { url: serverUrl, anonKey: serverAnonKey } : null;
+  const publicConfig = publicUrl && publicAnonKey ? { url: publicUrl, anonKey: publicAnonKey } : null;
+
+  const payload = parseJwtPayload(accessToken);
+  const issuer = typeof payload?.iss === "string" ? payload.iss : null;
+
+  if (issuer) {
+    if (serverConfig && issuerMatchesSupabaseUrl(issuer, serverConfig.url)) {
+      return serverConfig;
+    }
+    if (publicConfig && issuerMatchesSupabaseUrl(issuer, publicConfig.url)) {
+      return publicConfig;
+    }
+  }
+
+  // Prefer the public config (client + server aligned) when available.
+  // This avoids a common dev pitfall where SUPABASE_URL points at prod while
+  // NEXT_PUBLIC_SUPABASE_URL points at the dev project (cookie sync would fail).
+  return publicConfig ?? serverConfig;
 };
 
 const decodeBase64Url = (value: string): Buffer => {
@@ -73,17 +124,17 @@ const resolveEmailFromJwt = (accessToken: string): string | null => {
 };
 
 const fetchSupabaseEmail = async (accessToken: string): Promise<string | null> => {
-  const { url, anonKey } = resolveSupabaseConfig();
-  if (!url || !anonKey) {
+  const config = resolveSupabaseConfig(accessToken);
+  if (!config?.url || !config.anonKey) {
     console.error("Supabase configuration is missing. Cannot validate access token.");
     return null;
   }
 
   try {
-    const response = await fetch(`${url}/auth/v1/user`, {
+    const response = await fetch(`${config.url}/auth/v1/user`, {
       headers: {
         authorization: `Bearer ${accessToken}`,
-        apikey: anonKey,
+        apikey: config.anonKey,
       },
       cache: "no-store",
       signal: AbortSignal.timeout(5000),

@@ -194,11 +194,30 @@ try:
 except ImportError:
     from model_access import coerce_model_for_tier
 
+try:
+    from backend.tier_utils import normalize_plan_tier
+except ImportError:
+    from tier_utils import normalize_plan_tier  # type: ignore
+
 # Authentication module
 try:
-    from backend.auth import get_current_user, get_current_user_optional, require_same_user, require_admin, invalidate_user_cache
+    from backend.auth import (
+        get_current_user,
+        get_current_user_optional,
+        require_same_user,
+        require_admin,
+        invalidate_user_cache,
+        invalidate_user_cache_redis,
+    )
 except ImportError:
-    from auth import get_current_user, get_current_user_optional, require_same_user, require_admin, invalidate_user_cache
+    from auth import (  # type: ignore
+        get_current_user,
+        get_current_user_optional,
+        require_same_user,
+        require_admin,
+        invalidate_user_cache,
+        invalidate_user_cache_redis,
+    )
 
 # Security utilities
 try:
@@ -420,7 +439,7 @@ TIER_CONVERSATION_TOKEN_LIMITS: Dict[str, int] = {
 
 
 def tier_conversation_token_limit(plan_tier: Optional[str]) -> int:
-    normalized = (plan_tier or "scout").strip().lower()
+    normalized = normalize_plan_tier(plan_tier)
     return TIER_CONVERSATION_TOKEN_LIMITS.get(normalized, TIER_CONVERSATION_TOKEN_LIMITS["scout"])
 
 
@@ -4842,7 +4861,9 @@ async def _complete_onboarding(
     try:
         updated_user = await db.fetch_one(users.select().where(users.c.id == user_id))
         if updated_user and updated_user["auth_user_id"]:
-            invalidate_user_cache(str(updated_user["auth_user_id"]))
+            auth_user_id = str(updated_user["auth_user_id"])
+            invalidate_user_cache(auth_user_id)
+            await invalidate_user_cache_redis(auth_user_id)
     except Exception as exc:
         api_logger.warning(f"Failed to invalidate auth cache for user {user_id}: {exc}")
 
@@ -7836,8 +7857,7 @@ async def chat_endpoint(
 
         # Enforce tier restrictions
         # Only Voyager and Pioneer users can use reasoning mode.
-        plan_tier = current_user.get("plan_tier")
-        normalized_tier = (plan_tier or "scout").lower()
+        normalized_tier = normalize_plan_tier(current_user.get("plan_tier"), current_user.get("role"))
 
         # If user requested reasoning but is not eligible, disable it silently (or we could raise 403)
         effective_reasoning_mode = chat_request.reasoning_mode
@@ -8269,8 +8289,7 @@ async def chat_stream(
 
         # Enforce tier restrictions for streaming
         # user_record was already fetched above
-        plan_tier = user_plan_tier
-        normalized_tier = (plan_tier or "scout").lower()
+        normalized_tier = normalize_plan_tier(user_plan_tier, _row_get(user_record, "role"))
 
         effective_model, model_coerced = coerce_model_for_tier(effective_model, normalized_tier)
         if model_coerced:
@@ -8903,7 +8922,7 @@ async def get_conversation_usage(
         # Context limits are based on the owner's plan tier.
         # We already verified ownership via `_require_conversation_owner`, so `current_user`
         # is the single source of truth (avoids brittle conversation-id parsing / Supabase lookups).
-        user_tier = (current_user.get("plan_tier") or "scout").strip().lower()
+        user_tier = normalize_plan_tier(current_user.get("plan_tier"), current_user.get("role"))
 
         tier_context_limit = tier_conversation_token_limit(user_tier)
         
@@ -9230,7 +9249,9 @@ async def update_user(
     if current_user_record:
         auth_user_id = current_user_record["auth_user_id"] if "auth_user_id" in current_user_record else None
         if auth_user_id:
-            invalidate_user_cache(str(auth_user_id))
+            auth_user_id_str = str(auth_user_id)
+            invalidate_user_cache(auth_user_id_str)
+            await invalidate_user_cache_redis(auth_user_id_str)
 
     # Return updated user
     query = users.select().where(users.c.id == user_id)
@@ -10500,6 +10521,20 @@ async def handle_payment_notification(notification: MidtransNotification):
                     updated_at=utcnow()
                 )
                 await database.execute(user_update)
+
+                # Invalidate auth caches so upgraded users immediately receive paid-tier limits
+                # (e.g., conversation token budget and model access).
+                try:
+                    updated_user = await database.fetch_one(users.select().where(users.c.id == user_id))
+                    if updated_user and updated_user.get("auth_user_id"):
+                        auth_user_id = str(updated_user["auth_user_id"])
+                        invalidate_user_cache(auth_user_id)
+                        await invalidate_user_cache_redis(auth_user_id)
+                except Exception as exc:
+                    app_logger.warning(
+                        "Failed to invalidate auth cache after plan upgrade",
+                        extra={"user_id": user_id, "error": str(exc)},
+                    )
                 
                 app_logger.info(f"Upgraded user {user_id} to {plan_tier} ({billing_cycle}) via order {notification.order_id}, expires {subscription_expires_at}")
                 

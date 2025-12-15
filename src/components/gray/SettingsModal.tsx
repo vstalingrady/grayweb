@@ -2,7 +2,16 @@
 
 /* eslint-disable react-hooks/set-state-in-effect */
 
-import { Fragment, useEffect, useMemo, useRef, useState, type ChangeEvent, type PointerEvent } from "react";
+import {
+  Fragment,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import {
@@ -56,7 +65,7 @@ function SettingsSelect({ value, options, onChange, icon: Icon }: SettingsSelect
     if (!isOpen) {
       return;
     }
-    const handlePointerDown = (event: MouseEvent) => {
+    const handlePointerDown = (event: PointerEvent) => {
       const target = event.target as Node;
       if (containerRef.current && !containerRef.current.contains(target)) {
         setIsOpen(false);
@@ -67,10 +76,10 @@ function SettingsSelect({ value, options, onChange, icon: Icon }: SettingsSelect
         setIsOpen(false);
       }
     };
-    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("pointerdown", handlePointerDown, true);
     document.addEventListener("keydown", handleKeyDown);
     return () => {
-      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("pointerdown", handlePointerDown, true);
       document.removeEventListener("keydown", handleKeyDown);
     };
   }, [isOpen]);
@@ -360,15 +369,41 @@ export function SettingsModal({
   const [occupation, setOccupation] = useState("");
   const [about, setAbout] = useState("");
   const [customInstructions, setCustomInstructions] = useState("");
+  const [location, setLocation] = useState("");
+  const [timeZone, setTimeZone] = useState("");
 
   const [contextActionState, setContextActionState] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [contextActionMessage, setContextActionMessage] = useState<string | null>(null);
 
   const [aboutSaveState, setAboutSaveState] = useState<"idle" | "saving" | "success" | "error">("idle");
   const [customSaveState, setCustomSaveState] = useState<"idle" | "saving" | "success" | "error">("idle");
+  const [localeSaveState, setLocaleSaveState] = useState<"idle" | "saving" | "success" | "error">("idle");
   const [avatarUploadState, setAvatarUploadState] = useState<"idle" | "uploading" | "error">("idle");
   const [avatarUploadError, setAvatarUploadError] = useState<string | null>(null);
   const avatarFileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const resolvedDeviceTimeZone = useMemo(() => {
+    try {
+      return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+    } catch {
+      return "UTC";
+    }
+  }, []);
+
+  const supportedTimeZones = useMemo(() => {
+    if (typeof Intl === "undefined") {
+      return [];
+    }
+    const supportedValuesOf = (Intl as unknown as { supportedValuesOf?: (key: string) => string[] }).supportedValuesOf;
+    if (typeof supportedValuesOf !== "function") {
+      return [];
+    }
+    try {
+      return supportedValuesOf("timeZone") ?? [];
+    } catch {
+      return [];
+    }
+  }, []);
 
   // Sync state with user profile and chat store
   useEffect(() => {
@@ -377,8 +412,10 @@ export function SettingsModal({
       setOccupation(user.personalization_occupation || "");
       setAbout(user.personalization_about || "");
       setCustomInstructions(user.personalization_custom_instructions || "");
+      setLocation(user.personalization_location || "");
+      setTimeZone(user.personalization_time_zone || resolvedDeviceTimeZone);
     }
-  }, [user]);
+  }, [resolvedDeviceTimeZone, user]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -459,6 +496,13 @@ export function SettingsModal({
       return () => clearTimeout(timer);
     }
   }, [customSaveState]);
+
+  useEffect(() => {
+    if (localeSaveState === "success") {
+      const timer = setTimeout(() => setLocaleSaveState("idle"), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [localeSaveState]);
 
   useEffect(() => {
     if (contextActionState === "success") {
@@ -567,6 +611,23 @@ export function SettingsModal({
     }
   };
 
+  const handleSaveLocale = async () => {
+    if (!user?.id) return;
+    setLocaleSaveState("saving");
+    try {
+      const normalizedLocation = location.trim();
+      const normalizedTimeZone = timeZone.trim();
+      await updateUser({
+        personalization_location: normalizedLocation.length > 0 ? normalizedLocation : null,
+        personalization_time_zone: normalizedTimeZone.length > 0 ? normalizedTimeZone : null,
+      });
+      setLocaleSaveState("success");
+    } catch (e) {
+      console.error(e);
+      setLocaleSaveState("error");
+    }
+  };
+
   const handleClearCustomInstructions = () => {
     setCustomInstructions("");
   };
@@ -657,11 +718,21 @@ export function SettingsModal({
     </span>
   );
 
-  const handleOverlayPointerDown = (event: PointerEvent<HTMLDivElement>) => {
+  const handleOverlayPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.target !== event.currentTarget) {
       return;
     }
     if (event.pointerType === "mouse" && event.button !== 0) {
+      return;
+    }
+    onClose();
+  };
+
+  const handleOverlayMouseDown = (event: ReactMouseEvent<HTMLDivElement>) => {
+    if (event.target !== event.currentTarget) {
+      return;
+    }
+    if (event.button !== 0) {
       return;
     }
     onClose();
@@ -673,6 +744,7 @@ export function SettingsModal({
       role="dialog"
       aria-modal="true"
       onPointerDown={handleOverlayPointerDown}
+      onMouseDown={handleOverlayMouseDown}
     >
       <div className={styles.settingsContainer} data-mobile-view={mobileView}>
         {/* Mobile Root View */}
@@ -1194,6 +1266,79 @@ export function SettingsModal({
                   >
                     {aboutSaveState === "saving" ? t("Saving...") :
                       aboutSaveState === "success" ? t("Saved") : t("Save")}
+                  </button>
+                </div>
+              </div>
+
+              <div className={styles.settingsSection}>
+                <h3 className={styles.settingsSectionTitle}>{t("Location & time")}</h3>
+                <div className={styles.settingsFormGrid}>
+                  <div className={styles.settingsFormField}>
+                    <label className={styles.settingsFormLabel} htmlFor="settings-location">
+                      {t("Location")}
+                    </label>
+                    <input
+                      id="settings-location"
+                      className={styles.settingsInput}
+                      value={location}
+                      onChange={(e) => setLocation(e.target.value)}
+                      placeholder={t("City, region, and/or country (optional)")}
+                    />
+                  </div>
+
+                  <div className={styles.settingsFormField}>
+                    <label className={styles.settingsFormLabel} htmlFor="settings-timezone">
+                      {t("Time zone")}
+                    </label>
+                    <input
+                      id="settings-timezone"
+                      className={styles.settingsInput}
+                      value={timeZone}
+                      onChange={(e) => setTimeZone(e.target.value)}
+                      placeholder={resolvedDeviceTimeZone}
+                      list={supportedTimeZones.length > 0 ? "settings-timezone-options" : undefined}
+                    />
+                    {supportedTimeZones.length > 0 ? (
+                      <datalist id="settings-timezone-options">
+                        {supportedTimeZones.map((zone) => (
+                          <option key={zone} value={zone} />
+                        ))}
+                      </datalist>
+                    ) : null}
+                  </div>
+                </div>
+
+                <p className={styles.settingsItemDescription} style={{ marginTop: 12 }}>
+                  {t("Gray won't assume your location. Leave it blank if you prefer.")}
+                </p>
+
+                <div className={styles.settingsButtonGroup}>
+                  <button
+                    type="button"
+                    className={styles.settingsSecondaryButton}
+                    onClick={() => {
+                      setLocation("");
+                      setTimeZone("");
+                    }}
+                  >
+                    <Trash2 size={14} />
+                    {t("Clear")}
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.settingsSecondaryButton}
+                    onClick={() => setTimeZone(resolvedDeviceTimeZone)}
+                  >
+                    <Check size={14} />
+                    {t("Use device time zone")}
+                  </button>
+                  <button
+                    type="button"
+                    className={`${styles.settingsAction} ${styles.settingsPrimaryButton}`}
+                    onClick={handleSaveLocale}
+                  >
+                    {localeSaveState === "saving" ? t("Saving...") :
+                      localeSaveState === "success" ? t("Saved") : t("Save")}
                   </button>
                 </div>
               </div>

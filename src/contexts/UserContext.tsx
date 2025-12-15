@@ -32,6 +32,8 @@ interface UserContextType {
     personalization_about?: string | null;
     personalization_custom_instructions?: string | null;
     personalization_system_prompt_override?: string | null;
+    personalization_location?: string | null;
+    personalization_time_zone?: string | null;
     maps_enabled?: boolean;
     improve_model_for_everyone?: boolean;
     visible_model_ids?: string[] | null;
@@ -150,6 +152,14 @@ const sanitizeCachedUser = (value: unknown): { user: User; timestamp: number } |
       typeof raw.personalization_system_prompt_override === 'string' &&
         raw.personalization_system_prompt_override.length > 0
         ? raw.personalization_system_prompt_override
+        : null,
+    personalization_location:
+      typeof raw.personalization_location === 'string' && raw.personalization_location.length > 0
+        ? raw.personalization_location
+        : null,
+    personalization_time_zone:
+      typeof raw.personalization_time_zone === 'string' && raw.personalization_time_zone.length > 0
+        ? raw.personalization_time_zone
         : null,
     created_at:
       typeof raw.created_at === 'string' && raw.created_at.trim().length > 0
@@ -509,6 +519,8 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
     personalization_about?: string | null;
     personalization_custom_instructions?: string | null;
     personalization_system_prompt_override?: string | null;
+    personalization_location?: string | null;
+    personalization_time_zone?: string | null;
     maps_enabled?: boolean;
     improve_model_for_everyone?: boolean;
     visible_model_ids?: string[] | null;
@@ -527,6 +539,8 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
       personalization_about?: string | null;
       personalization_custom_instructions?: string | null;
       personalization_system_prompt_override?: string | null;
+      personalization_location?: string | null;
+      personalization_time_zone?: string | null;
       maps_enabled?: boolean;
       improve_model_for_everyone?: boolean;
       visible_model_ids?: string[] | null;
@@ -561,6 +575,12 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
     if (Object.prototype.hasOwnProperty.call(userData, 'personalization_system_prompt_override')) {
       payload.personalization_system_prompt_override =
         userData.personalization_system_prompt_override ?? null;
+    }
+    if (Object.prototype.hasOwnProperty.call(userData, 'personalization_location')) {
+      payload.personalization_location = userData.personalization_location ?? null;
+    }
+    if (Object.prototype.hasOwnProperty.call(userData, 'personalization_time_zone')) {
+      payload.personalization_time_zone = userData.personalization_time_zone ?? null;
     }
     if (typeof userData.maps_enabled === 'boolean') {
       payload.maps_enabled = userData.maps_enabled;
