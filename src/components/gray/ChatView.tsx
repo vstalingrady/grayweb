@@ -2718,6 +2718,11 @@ export function GrayChatView({
             (message as { grounding_metadata?: GroundingMetadata | null }).grounding_metadata ??
             (message as { groundingMetadata?: GroundingMetadata | null }).groundingMetadata ??
             null;
+          // Use the message's timestamp from the API if available, otherwise fall back to now
+          const apiTimestamp = (message as { timestamp?: number }).timestamp;
+          const createdAt = typeof apiTimestamp === 'number' && Number.isFinite(apiTimestamp) && apiTimestamp > 0
+            ? apiTimestamp
+            : Date.now();
           return {
             id:
               typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -2725,7 +2730,7 @@ export function GrayChatView({
                 : `${activeConversationId}-${index}-${Date.now()}`,
             role,
             content: reminderExtraction.cleanText,
-            createdAt: Date.now(),
+            createdAt,
             reminders:
               role === "assistant" && reminderExtraction.reminders.length
                 ? reminderExtraction.reminders
