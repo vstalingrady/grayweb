@@ -551,110 +551,110 @@ function GrayEnhancedSidebarComponent(props: GrayEnhancedSidebarProps) {
                       <span>{normalizedPlan}</span>
                     </span>
                   </span>
+                </button>
+                {isProfileMenuOpen && (
+                  <div className={styles.profileMenu} role="menu" ref={profileMenuRef}>
+                    {!isPaidUser ? (
+                      <>
+                        <button
+                          type="button"
+                          className={`${styles.profileMenuItem} ${styles.profileMenuUpgrade}`}
+                          onClick={handleUpgradePlan}
+                          role="menuitem"
+                        >
+                          <span className={styles.profileMenuUpgradeCard}>
+                            <span className={styles.profileMenuUpgradeTitle}>{t("Upgrade")}</span>
+                            <span className={styles.profileMenuUpgradeSubtext}>{t("Unlock more messages")}</span>
+                            <span className={styles.profileMenuUpgradePill}>{t("View Plans")}</span>
+                          </span>
+                        </button>
+                        <span className={styles.profileMenuDivider} aria-hidden="true" />
+                      </>
+                    ) : (isVoyager || isPioneer) ? (
+                      <>
+                        <div
+                          className={`${styles.profileMenuItem} ${styles.profileMenuUpgrade}`}
+                          role="menuitem"
+                        >
+                          <span className={styles.profileMenuUpgradeCard} data-variant={isPioneer ? "pioneer" : "voyager"}>
+                            <span className={styles.profileMenuUpgradeTitle}>{normalizedPlan}</span>
+                            <span className={styles.profileMenuUpgradeSubtext}>{t("Current Plan")}</span>
+                            <StarfieldCanvas className={styles.starfieldCanvas} density={0.005} minStars={8} maxStars={30} speed={3} />
+                          </span>
+                        </div>
+                        <span className={styles.profileMenuDivider} aria-hidden="true" />
+                      </>
+                    ) : null}
+                    <button
+                      type="button"
+                      className={styles.profileMenuItem}
+                      onClick={handleOpenSettings}
+                      role="menuitem"
+                    >
+                      <span className={styles.profileMenuItemContent}>
+                        <span className={styles.profileMenuIcon}>
+                          <SettingsIcon size={16} />
+                        </span>
+                        <span className={styles.profileMenuLabel}>{t("Settings")}</span>
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.profileMenuItem}
+                      onClick={handleOpenHelp}
+                      role="menuitem"
+                    >
+                      <span className={styles.profileMenuItemContent}>
+                        <span className={styles.profileMenuIcon}>
+                          <LifeBuoy size={16} />
+                        </span>
+                        <span className={styles.profileMenuLabel}>{t("Help")}</span>
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.profileMenuItem}
+                      onClick={handleOpenCommunity}
+                      role="menuitem"
+                    >
+                      <span className={styles.profileMenuItemContent}>
+                        <span className={styles.profileMenuIcon}>
+                          <SiDiscord size={16} />
+                        </span>
+                        <span className={styles.profileMenuLabel}>{t("Community")}</span>
+                      </span>
+                    </button>
+                    <span className={styles.profileMenuDivider} aria-hidden="true" />
+                    <button
+                      type="button"
+                      className={`${styles.profileMenuItem} ${styles.profileMenuLogout}`}
+                      onClick={handleLogOut}
+                      role="menuitem"
+                    >
+                      <span className={styles.profileMenuItemContent}>
+                        <span className={styles.profileMenuIcon}>
+                          <LogOut size={16} />
+                        </span>
+                        <span className={styles.profileMenuLabel}>{t("Log out")}</span>
+                      </span>
+                    </button>
+                  </div>
+                )}
+              </div>
+              <button
+                type="button"
+                className={styles.profileToggleButton}
+                aria-label={isExpanded ? t("Collapse sidebar") : t("Expand sidebar")}
+                data-expanded={isExpanded ? "true" : "false"}
+                onClick={handleSidebarToggle}
+              >
+                {isExpanded ? <ChevronsRight size={18} /> : <ChevronsUp size={18} />}
               </button>
-              {isProfileMenuOpen && (
-                <div className={styles.profileMenu} role="menu" ref={profileMenuRef}>
-                  {!isPaidUser ? (
-                    <>
-                      <button
-                        type="button"
-                        className={`${styles.profileMenuItem} ${styles.profileMenuUpgrade}`}
-                        onClick={handleUpgradePlan}
-                        role="menuitem"
-                      >
-                        <span className={styles.profileMenuUpgradeCard}>
-                          <span className={styles.profileMenuUpgradeTitle}>{t("Upgrade")}</span>
-                          <span className={styles.profileMenuUpgradeSubtext}>{t("Unlock more messages")}</span>
-                          <span className={styles.profileMenuUpgradePill}>{t("View Plans")}</span>
-                        </span>
-                      </button>
-                      <span className={styles.profileMenuDivider} aria-hidden="true" />
-                    </>
-                  ) : (isVoyager || isPioneer) ? (
-                    <>
-                      <div
-                        className={`${styles.profileMenuItem} ${styles.profileMenuUpgrade}`}
-                        role="menuitem"
-                      >
-                        <span className={styles.profileMenuUpgradeCard} data-variant={isPioneer ? "pioneer" : "voyager"}>
-                          <span className={styles.profileMenuUpgradeTitle}>{normalizedPlan}</span>
-                          <span className={styles.profileMenuUpgradeSubtext}>{t("Current Plan")}</span>
-                          <StarfieldCanvas className={styles.starfieldCanvas} density={0.0012} maxStars={20} speed={4} />
-                        </span>
-                      </div>
-                      <span className={styles.profileMenuDivider} aria-hidden="true" />
-                    </>
-                  ) : null}
-                  <button
-                    type="button"
-                    className={styles.profileMenuItem}
-                    onClick={handleOpenSettings}
-                    role="menuitem"
-                  >
-                    <span className={styles.profileMenuItemContent}>
-                      <span className={styles.profileMenuIcon}>
-                        <SettingsIcon size={16} />
-                      </span>
-                      <span className={styles.profileMenuLabel}>{t("Settings")}</span>
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    className={styles.profileMenuItem}
-                    onClick={handleOpenHelp}
-                    role="menuitem"
-                  >
-                    <span className={styles.profileMenuItemContent}>
-                      <span className={styles.profileMenuIcon}>
-                        <LifeBuoy size={16} />
-                      </span>
-                      <span className={styles.profileMenuLabel}>{t("Help")}</span>
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    className={styles.profileMenuItem}
-                    onClick={handleOpenCommunity}
-                    role="menuitem"
-                  >
-                    <span className={styles.profileMenuItemContent}>
-                      <span className={styles.profileMenuIcon}>
-                        <SiDiscord size={16} />
-                      </span>
-                      <span className={styles.profileMenuLabel}>{t("Community")}</span>
-                    </span>
-                  </button>
-                  <span className={styles.profileMenuDivider} aria-hidden="true" />
-                  <button
-                    type="button"
-                    className={`${styles.profileMenuItem} ${styles.profileMenuLogout}`}
-                    onClick={handleLogOut}
-                    role="menuitem"
-                  >
-                    <span className={styles.profileMenuItemContent}>
-                      <span className={styles.profileMenuIcon}>
-                        <LogOut size={16} />
-                      </span>
-                      <span className={styles.profileMenuLabel}>{t("Log out")}</span>
-                    </span>
-                  </button>
-                </div>
-              )}
             </div>
-            <button
-              type="button"
-              className={styles.profileToggleButton}
-              aria-label={isExpanded ? t("Collapse sidebar") : t("Expand sidebar")}
-              data-expanded={isExpanded ? "true" : "false"}
-              onClick={handleSidebarToggle}
-            >
-              {isExpanded ? <ChevronsRight size={18} /> : <ChevronsUp size={18} />}
-            </button>
           </div>
-        </div>
 
+        </div>
       </div>
-    </div>
     </aside >
   );
 }
