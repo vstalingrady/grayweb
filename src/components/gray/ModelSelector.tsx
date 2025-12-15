@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useCallback, useMemo, useState, useRef, useEffect } from "react";
-import { Zap, Sparkles, Lock, ChevronUp, Rocket, Grid, ChevronRight, Check, Brain, Settings, ArrowRight, Box, Calendar } from "lucide-react"; // Replaced Cube with Box
+import { Zap, Sparkles, Lock, ChevronUp, Rocket, Grid, ChevronRight, Check, Brain, Settings, ArrowRight, Box, Calendar } from "lucide-react";
 import Image from "next/image";
 import { useChatStore } from "@/components/gray/ChatProvider";
 import { useUser } from "@/contexts/UserContext";
@@ -38,7 +38,6 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
     modelTier, setModelTier, selectedModelId, setSelectedModelId,
     reasoningMode, setReasoningMode,
     webSearchEnabled, toggleWebSearchEnabled,
-    mapsEnabled, toggleMapsEnabled,
     remindersEnabled, toggleRemindersEnabled,
     visibleModelIds,
   } = useChatStore();
@@ -53,6 +52,7 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
   const planTierRaw = (user?.plan_tier || "scout").toLowerCase();
   const currentTier = planTierRaw;
   const currentLevel = TIER_LEVELS[currentTier] ?? 0;
+  const isReasoningLocked = currentTier === "scout" || modelTier === "lite";
 
   const filteredPioneerGroups = useMemo(() => {
     const isVisible = (modelId: string) =>
@@ -271,8 +271,12 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
                   <div className={styles.groupModels}>
                     {/* Reasoning Toggle */}
                     <button
-                      className={`${styles.menuItem} ${styles.subMenuItem}`}
-                      onClick={() => setReasoningMode(!reasoningMode)}
+                      className={`${styles.menuItem} ${styles.subMenuItem} ${isReasoningLocked ? styles.menuItemLocked : ""}`}
+                      onClick={() => {
+                        if (isReasoningLocked) return;
+                        setReasoningMode(!reasoningMode);
+                      }}
+                      disabled={isReasoningLocked}
                       type="button"
                     >
                       <div className={styles.itemIconWrapper}>
@@ -286,9 +290,13 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
                           </div>
                         )}
                       </div>
-                      <div className={`${styles.toggle} ${reasoningMode ? styles.toggleOn : ""}`}>
-                        <div className={styles.toggleKnob} />
-                      </div>
+                      {isReasoningLocked ? (
+                        <Lock size={16} className={styles.actionLock} aria-hidden="true" />
+                      ) : (
+                        <div className={`${styles.toggle} ${reasoningMode ? styles.toggleOn : ""}`}>
+                          <div className={styles.toggleKnob} />
+                        </div>
+                      )}
                     </button>
 
                     {/* Web Search Toggle */}
@@ -302,27 +310,9 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
                         <Grid size={16} />
                       </div>
                       <div className={styles.itemInfo}>
-                        <div className={styles.itemLabel}>{t("Web Search")}</div>
+                        <div className={styles.itemLabel}>{t("Manual web search")}</div>
                       </div>
                       <div className={`${styles.toggle} ${webSearchEnabled ? styles.toggleOn : ""}`}>
-                        <div className={styles.toggleKnob} />
-                      </div>
-                    </button>
-
-                    {/* Maps Grounding Toggle */}
-                    <button
-                      className={`${styles.menuItem} ${styles.subMenuItem}`}
-                      onClick={toggleMapsEnabled}
-                      type="button"
-                    >
-                      <div className={styles.itemIconWrapper}>
-                        {/* Using Box -> Compass/Map placeholder */}
-                        <Box size={16} />
-                      </div>
-                      <div className={styles.itemInfo}>
-                        <div className={styles.itemLabel}>{t("Google Maps")}</div>
-                      </div>
-                      <div className={`${styles.toggle} ${mapsEnabled ? styles.toggleOn : ""}`}>
                         <div className={styles.toggleKnob} />
                       </div>
                     </button>

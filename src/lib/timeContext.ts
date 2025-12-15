@@ -9,9 +9,18 @@ const formatUtcOffset = (offsetMinutes: number) => {
 };
 
 export const buildLocalTimeContext = (referenceDate?: Date) => {
+  return buildLocalTimeContextWithOverrides(referenceDate);
+};
+
+type TimeContextOverrides = {
+  timeZone?: string | null;
+};
+
+export const buildLocalTimeContextWithOverrides = (referenceDate?: Date, overrides?: TimeContextOverrides) => {
   const now = referenceDate ?? new Date();
   const resolved = Intl.DateTimeFormat().resolvedOptions();
-  const timeZone = resolved.timeZone || "UTC";
+  const overrideTimeZone = overrides?.timeZone?.trim();
+  const timeZone = overrideTimeZone || resolved.timeZone || "UTC";
   const offsetMinutes = -now.getTimezoneOffset();
   const utcOffset = formatUtcOffset(offsetMinutes);
   const isoTimestamp = now.toISOString();

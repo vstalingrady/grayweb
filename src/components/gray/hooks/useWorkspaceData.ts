@@ -78,6 +78,8 @@ export function useWorkspaceData(userId: number | null, variant: "general" | "da
           id: plan.id.toString(),
           label: plan.label,
           completed: Boolean(plan.completed),
+          createdAt: plan.created_at,
+          updatedAt: plan.updated_at,
           deadline: plan.deadline ?? null,
           scheduleSlot: plan.schedule_slot ?? null,
           details: plan.description ?? null,
@@ -91,6 +93,8 @@ export function useWorkspaceData(userId: number | null, variant: "general" | "da
           streakLabel: habit.streak_label,
           previousLabel: habit.previous_label,
           completed: false,
+          createdAt: habit.created_at,
+          updatedAt: habit.updated_at,
         }))
         : [];
 
@@ -121,6 +125,8 @@ export function useWorkspaceData(userId: number | null, variant: "general" | "da
           id: `reminder-${reminder.id}`,
           label: reminder.label,
           completed: reminder.status === "completed",
+          createdAt: reminder.created_at,
+          updatedAt: reminder.updated_at,
           deadline: reminder.remind_at ?? null,
           scheduleSlot: null,
           details: reminder.description ?? reminder.summary ?? null,
@@ -363,6 +369,8 @@ export function useWorkspaceData(userId: number | null, variant: "general" | "da
             id: plan.id.toString(),
             label: plan.label,
             completed: Boolean(plan.completed),
+            createdAt: plan.created_at,
+            updatedAt: plan.updated_at,
             deadline: plan.deadline ?? null,
             scheduleSlot: plan.schedule_slot ?? null,
             details: plan.description ?? null,
@@ -376,6 +384,8 @@ export function useWorkspaceData(userId: number | null, variant: "general" | "da
             streakLabel: habit.streak_label,
             previousLabel: habit.previous_label,
             completed: false,
+            createdAt: habit.created_at,
+            updatedAt: habit.updated_at,
           }))
           : [];
 
@@ -388,6 +398,8 @@ export function useWorkspaceData(userId: number | null, variant: "general" | "da
             id: `reminder-${reminder.id}`,
             label: reminder.label,
             completed: reminder.status === "completed",
+            createdAt: reminder.created_at,
+            updatedAt: reminder.updated_at,
             deadline: reminder.remind_at ?? null,
             scheduleSlot: null,
             details: reminder.description ?? reminder.summary ?? null,

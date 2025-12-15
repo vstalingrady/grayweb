@@ -120,6 +120,8 @@ export type ChatContextValue = {
     selectContextCacheId: (cacheId: number | null) => void;
     setContextCacheLabel: (value: string) => void;
     setContextCacheContent: (value: string) => void;
+    autoWebSearchEnabled: boolean;
+    setAutoWebSearchEnabled: (value: boolean) => void;
     webSearchEnabled: boolean;
     setWebSearchEnabled: (value: boolean) => void;
     remindersEnabled: boolean;

@@ -404,7 +404,14 @@ def load_prompt_from_file(path: Path, fallback: str) -> str:
     return fallback.strip()
 
 
-def load_prompt_from_json(path: Path, key: str, fallback: str = "") -> str:
+def _normalize_prompt_locale(locale: Optional[str]) -> str:
+    normalized = (locale or "").strip().lower()
+    if not normalized:
+        return "en"
+    return normalized.split("-")[0]
+
+
+def load_prompt_from_json(path: Path, key: str, fallback: str = "", locale: Optional[str] = None) -> str:
     """
     Load a prompt string from a JSON config file, using a dotted key path like
     "chat" or "proactivity.daily". Raises RuntimeError if prompt can't be loaded.
@@ -420,7 +427,24 @@ def load_prompt_from_json(path: Path, key: str, fallback: str = "") -> str:
         value = value[segment]
     if isinstance(value, str) and value.strip():
         return value.strip()
+    if isinstance(value, dict):
+        normalized_locale = _normalize_prompt_locale(locale)
+        candidate = value.get(normalized_locale)
+        if not isinstance(candidate, str) or not candidate.strip():
+            candidate = value.get("en")
+        if isinstance(candidate, str) and candidate.strip():
+            return candidate.strip()
     raise RuntimeError(f"Prompt key '{key}' is empty in {path}")
+
+
+def _prompt_locale_from_request(request: Request) -> str:
+    header_value = (request.headers.get("accept-language") or "").strip()
+    if not header_value:
+        return "en"
+    first = header_value.split(",")[0].strip()
+    if not first:
+        return "en"
+    return _normalize_prompt_locale(first)
 
 
 
@@ -2762,6 +2786,15 @@ except ImportError:
 proactivity_engine: Optional[ProactivityEngine] = None
 proactivity_scheduler: Optional[ProactivitySchedulerManager] = None
 proactivity_realtime_broker = ProactivityRealtimeBroker()
+reminder_scheduler: Optional["ReminderSchedulerManager"] = None
+
+try:
+    from backend.reminder_scheduler import ReminderSchedulerManager
+except Exception:  # pragma: no cover
+    try:
+        from reminder_scheduler import ReminderSchedulerManager  # type: ignore
+    except Exception:  # pragma: no cover
+        ReminderSchedulerManager = None  # type: ignore
 
 
 
@@ -2861,6 +2894,18 @@ async def _disconnect_database():
         )
 
     try:
+        global reminder_scheduler
+        if reminder_scheduler is not None:
+            await reminder_scheduler.shutdown(timeout=10.0)
+            app_logger.info("Reminder scheduler shut down", extra={"event_type": "reminder_scheduler_shutdown"})
+    except Exception as e:  # pragma: no cover
+        app_logger.warning(
+            f"Reminder scheduler shutdown failed: {e}",
+            exc_info=True,
+            extra={"event_type": "reminder_scheduler_shutdown_failed", "error": str(e)},
+        )
+
+    try:
         await wait_for(database.disconnect(), timeout=10.0)
         db_logger.info("Database connection closed via shutdown event", extra={
             "event_type": "database_disconnected_shutdown"
@@ -2882,7 +2927,7 @@ async def _disconnect_database():
 
 async def _initialize_proactivity_engine():
     """Initialize the hybrid proactivity engine + scheduler."""
-    global proactivity_engine, proactivity_scheduler
+    global proactivity_engine, proactivity_scheduler, reminder_scheduler
 
     try:
         proactivity_engine = ProactivityEngine(
@@ -2892,6 +2937,10 @@ async def _initialize_proactivity_engine():
         )
         proactivity_scheduler = ProactivitySchedulerManager(proactivity_engine)
         await proactivity_scheduler.start()
+
+        if ReminderSchedulerManager is not None:
+            reminder_scheduler = ReminderSchedulerManager(proactivity_engine, database)
+            await reminder_scheduler.start()
     except Exception as e:
         app_logger.error(
             f"Failed to initialize proactivity engine: {e}",
@@ -4007,6 +4056,7 @@ async def _generate_chat_title_async(
 async def _generate_chat_title_inline(
     message: str,
     response_text: str,
+    prompt_locale: str = "en",
 ) -> Optional[str]:
     """
     Generate a concise title for the conversation using a lightweight model.
@@ -4021,6 +4071,8 @@ async def _generate_chat_title_inline(
         GLOBAL_SYSTEM_PROMPTS_PATH,
         "title_generation",
         "Analyze the following conversation and generate a concise, descriptive title (under 25 characters, 3-5 words max). Output ONLY the title text, no tags or quotes."
+        ,
+        locale=prompt_locale,
     )
 
     # Construct a minimal transcript for the title model
@@ -4036,6 +4088,7 @@ async def _generate_chat_title_inline(
                 GLOBAL_SYSTEM_PROMPTS_PATH,
                 "title_generation",
                 "Generate a concise title.",
+                locale=prompt_locale,
             ),
             time_context=None,
             model=GEMINI_LIGHT_MODEL,
@@ -6661,8 +6714,6 @@ CRITICAL: When the user asks to "set a plan" or create any plan/reminder/habit, 
                             nickname = _row_get(updated_user, "personalization_nickname") if updated_user else None
                             occupation = _row_get(updated_user, "personalization_occupation") if updated_user else None
                             about = _row_get(updated_user, "personalization_about") if updated_user else None
-                            location = _row_get(updated_user, "personalization_location") if updated_user else None
-                            time_zone = _row_get(updated_user, "personalization_time_zone") if updated_user else None
 
                             profile_lines: List[str] = []
                             if nickname:
@@ -6671,10 +6722,6 @@ CRITICAL: When the user asks to "set a plan" or create any plan/reminder/habit, 
                                 profile_lines.append(f"Occupation/focus: {occupation}")
                             if about:
                                 profile_lines.append(f"About: {about}")
-                            if location:
-                                profile_lines.append(f"Location: {location}")
-                            if time_zone:
-                                profile_lines.append(f"Time zone: {time_zone}")
 
                             profile_block = ""
                             if profile_lines:
@@ -7462,11 +7509,12 @@ def _starter_fallback_message(payload: ChatStarterRequest) -> str:
     )
 
 
-def _build_starter_prompt(payload: ChatStarterRequest, profile_context: str) -> str:
+def _build_starter_prompt(payload: ChatStarterRequest, profile_context: str, prompt_locale: str) -> str:
     base_prompt = load_prompt_from_json(
         GLOBAL_SYSTEM_PROMPTS_PATH,
         "starter",
         "You are Gray. Write a warm, engaging greeting to start the conversation.",
+        locale=prompt_locale,
     )
     prompt_parts = [base_prompt]
     if profile_context:
@@ -7481,8 +7529,9 @@ async def generate_chat_starter(
 ) -> ChatStarterResponse:
     """Return an AI-authored greeting for the General workspace."""
     require_same_user(payload.user_id, current_user)
+    prompt_locale = _prompt_locale_from_request(request)
     profile_context = _starter_profile_context(payload)
-    prompt = _build_starter_prompt(payload, profile_context)
+    prompt = _build_starter_prompt(payload, profile_context, prompt_locale)
     fallback_message = _starter_fallback_message(payload)
     try:
         ai_logger.info(
@@ -7841,6 +7890,7 @@ async def chat_endpoint(
     # Use authenticated ID for consistency
     authenticated_user_id = current_user["id"]
     chat_request.user_id = authenticated_user_id
+    prompt_locale = _prompt_locale_from_request(request)
     start_time = utcnow()
 
     # Set request context for logging
@@ -8013,7 +8063,8 @@ async def chat_endpoint(
             try:
                 generated_title = await _generate_chat_title_inline(
                     chat_request.message,
-                    ai_response
+                    ai_response,
+                    prompt_locale=prompt_locale,
                 )
                 if generated_title:
                     final_title = generated_title
@@ -8169,6 +8220,7 @@ async def chat_stream(
     """Stream an AI response token-by-token using Server-Sent Events."""
     chat_request.user_id = current_user["id"]
     start_time = utcnow()
+    prompt_locale = _prompt_locale_from_request(request)
 
     # Set request context for logging
     correlation_id = str(uuid4())
@@ -8243,11 +8295,22 @@ async def chat_stream(
         # field (nickname, occupation, or about) is missing.
         is_onboarding = bool(needs_personalization)
 
+        onboarding_system_prompt = load_prompt_from_json(
+            GLOBAL_SYSTEM_PROMPTS_PATH,
+            "onboarding",
+            locale=prompt_locale,
+        )
+        default_system_prompt = load_prompt_from_json(
+            GLOBAL_SYSTEM_PROMPTS_PATH,
+            "chat",
+            locale=prompt_locale,
+        )
+
         if is_onboarding:
             # Ignore client-provided prompts during onboarding so the AI
             # reliably completes the profile setup flow (name, occupation, blurb, etc.)
             # before switching to the regular chat persona.
-            effective_system_prompt = ONBOARDING_SYSTEM_PROMPT
+            effective_system_prompt = onboarding_system_prompt
         elif chat_request.system_prompt:
             # IMPORTANT: Always include the base expansive Gray persona.
             # The client may send personalization (user profile, nickname, custom instructions)
@@ -8255,15 +8318,15 @@ async def chat_stream(
             # Check if the client prompt already contains the base (to avoid duplication).
             client_prompt = chat_request.system_prompt.strip()
             # DEFAULT_SYSTEM_PROMPT now starts with "You are Gray", so we check for that signature.
-            base_signature = "You are Gray"
-            if base_signature in client_prompt:
+            base_signatures = ("You are Gray", "Anda adalah Gray")
+            if any(signature in client_prompt for signature in base_signatures):
                 # Client already sent the full prompt, use as-is
                 effective_system_prompt = client_prompt
             else:
                 # Client sent personalization only; prepend the base persona
-                effective_system_prompt = f"{DEFAULT_SYSTEM_PROMPT}\n\n{client_prompt}"
+                effective_system_prompt = f"{default_system_prompt}\n\n{client_prompt}"
         else:
-            effective_system_prompt = DEFAULT_SYSTEM_PROMPT
+            effective_system_prompt = default_system_prompt
 
         # Replace {{date}} placeholder if present.
         if effective_system_prompt and "{{date}}" in effective_system_prompt:
@@ -8290,7 +8353,7 @@ async def chat_stream(
         # If force_onboarding_mode is active, or if explicitly requested and needed, enforce onboarding settings.
         if force_onboarding_mode or (user_record and wants_onboarding and needs_personalization):
             # Always use onboarding prompt and tools in onboarding mode
-            effective_system_prompt = ONBOARDING_SYSTEM_PROMPT
+            effective_system_prompt = onboarding_system_prompt
             tool_list = list(ONBOARDING_TOOLS) + list(PLAN_TOOLS)
             
             # Force a capable model for onboarding tools (already handled by stream_ai_response based on tools)
@@ -8503,6 +8566,7 @@ async def chat_stream(
                         generated_title = await _generate_chat_title_inline(
                             effective_message,
                             final_response,
+                            prompt_locale=prompt_locale,
                         )
                         if generated_title:
                             final_title = generated_title
@@ -9955,6 +10019,15 @@ async def create_user_reminder(
     row = await db.fetch_one(reminders.select().where(reminders.c.id == reminder_id))
     if not row:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to create reminder")
+    try:
+        global reminder_scheduler
+        if reminder_scheduler is not None:
+            await reminder_scheduler.refresh_job(user_id=user_id, reminder_id=int(reminder_id), remind_at=payload.remind_at)
+    except Exception as exc:  # pragma: no cover
+        api_logger.warning(
+            "Failed to schedule reminder",
+            extra={"event_type": "reminder_schedule_failed", "user_id": user_id, "reminder_id": reminder_id, "error": str(exc)},
+        )
     return _serialize_reminder_row(row)
 
 
@@ -9976,7 +10049,7 @@ async def update_user_reminder(
     if payload.summary is not None:
         update_values["summary"] = payload.summary
     if payload.remind_at is not None:
-        update_values["remind_at"] = payload.remind_at.isoformat()
+        update_values["remind_at"] = payload.remind_at
     if payload.status is not None:
         update_values["status"] = payload.status
     if payload.delivery_mode is not None:
@@ -10011,6 +10084,25 @@ async def update_user_reminder(
     )
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reminder not found after update")
+    try:
+        global reminder_scheduler
+        if reminder_scheduler is not None:
+            normalized_status = (update_values.get("status") or existing.get("status") or "").strip().lower()
+            if normalized_status != "pending":
+                await reminder_scheduler.cancel_job(user_id=user_id, reminder_id=reminder_id)
+            else:
+                remind_at_value = update_values.get("remind_at") or existing.get("remind_at")
+                if isinstance(remind_at_value, str):
+                    try:
+                        remind_at_value = datetime.fromisoformat(remind_at_value.replace("Z", "+00:00"))
+                    except Exception:
+                        remind_at_value = None
+                await reminder_scheduler.refresh_job(user_id=user_id, reminder_id=reminder_id, remind_at=remind_at_value)
+    except Exception as exc:  # pragma: no cover
+        api_logger.warning(
+            "Failed to reschedule reminder",
+            extra={"event_type": "reminder_reschedule_failed", "user_id": user_id, "reminder_id": reminder_id, "error": str(exc)},
+        )
     return _serialize_reminder_row(row)
 
 
@@ -10035,6 +10127,13 @@ async def delete_user_reminder(
     )
     if not existing:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reminder not found")
+
+    try:
+        global reminder_scheduler
+        if reminder_scheduler is not None:
+            await reminder_scheduler.cancel_job(user_id=user_id, reminder_id=reminder_id)
+    except Exception:  # pragma: no cover
+        pass
 
     await db.execute(
         reminders.delete().where(
@@ -10119,6 +10218,7 @@ async def create_calendar_event(
             description=event.description,
             start_time=event.start_time,
             end_time=event.end_time,
+            color=event.color,
             created_at=now,
         )
     )

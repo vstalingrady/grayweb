@@ -1732,7 +1732,14 @@ class ApiService {
   }
 
   async getConversation(conversationId: string): Promise<ChatMessage[]> {
-    return this.fetch<ChatMessage[]>(`/api/conversation/${encodeURIComponent(conversationId)}`);
+    try {
+      return await this.fetch<ChatMessage[]>(`/api/conversation/${encodeURIComponent(conversationId)}`);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) {
+        return [];
+      }
+      throw error;
+    }
   }
 
   async getConversationUsage(conversationId: string): Promise<ConversationUsage | null> {

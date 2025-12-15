@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { ArrowRight, Bell, Calendar, ChevronDown, ChevronLeft, ChevronRight, Plus, X } from "lucide-react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { ArrowRight, Bell, Calendar, ChevronDown, ChevronLeft, ChevronRight, Clock, Plus, X } from "lucide-react";
 import calendarStyles from "@/components/calendar/GrayDashboardCalendar.module.css";
 import { MiniMonth } from "@/components/calendar/MiniMonth";
 import { useUser } from "@/contexts/UserContext";
@@ -195,6 +195,8 @@ export function PlanHabitInlineEditor({
   const { user } = useUser();
   const isPlan = type === "plan";
   const isEditing = Boolean(planToEdit || habitToEdit);
+  const submitLabel = isEditing ? t("Save") : t("Add");
+  const submittingLabel = isEditing ? t("Saving...") : t("Adding...");
 
   const formRef = useRef<HTMLFormElement | null>(null);
   const colorPickerRef = useRef<HTMLDivElement | null>(null);
@@ -217,6 +219,9 @@ export function PlanHabitInlineEditor({
   const [reminderPreset, setReminderPreset] = useState<ReminderPreset>("none");
   const [isReminderMenuOpen, setIsReminderMenuOpen] = useState(false);
   const [customReminderMinutes, setCustomReminderMinutes] = useState<string>("");
+  const [reminderMenuPosition, setReminderMenuPosition] = useState<{ top: number; left: number; width: number } | null>(
+    null
+  );
   const [linkedReminderId, setLinkedReminderId] = useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -358,6 +363,51 @@ export function PlanHabitInlineEditor({
     const handle = requestAnimationFrame(focusTarget);
     return () => cancelAnimationFrame(handle);
   }, [isReminderMenuOpen, reminderPreset]);
+
+  const updateReminderMenuPosition = useCallback(() => {
+    if (!isReminderMenuOpen) return;
+    const triggerRect = reminderTriggerRef.current?.getBoundingClientRect();
+    const menuRect = reminderMenuRef.current?.getBoundingClientRect();
+    if (!triggerRect || !menuRect) return;
+
+    const viewportPadding = 12;
+    const gap = 8;
+    const maxWidth = Math.max(0, window.innerWidth - viewportPadding * 2);
+    const desiredWidth = Math.max(220, triggerRect.width);
+    const width = Math.min(desiredWidth, maxWidth);
+    const left = clamp(triggerRect.left, viewportPadding, window.innerWidth - viewportPadding - width);
+
+    const spaceBelow = window.innerHeight - triggerRect.bottom - viewportPadding;
+    const spaceAbove = triggerRect.top - viewportPadding;
+    const height = menuRect.height;
+    const shouldOpenUp = spaceBelow < height && spaceAbove > spaceBelow;
+    const top = shouldOpenUp ? Math.max(viewportPadding, triggerRect.top - gap - height) : triggerRect.bottom + gap;
+
+    setReminderMenuPosition({ top, left, width });
+  }, [isReminderMenuOpen]);
+
+  useLayoutEffect(() => {
+    if (!isReminderMenuOpen) {
+      setReminderMenuPosition(null);
+      return;
+    }
+    updateReminderMenuPosition();
+  }, [isReminderMenuOpen, updateReminderMenuPosition]);
+
+  useEffect(() => {
+    if (!isReminderMenuOpen) return;
+
+    const scheduleUpdate = () => {
+      requestAnimationFrame(updateReminderMenuPosition);
+    };
+
+    window.addEventListener("resize", scheduleUpdate);
+    window.addEventListener("scroll", scheduleUpdate, true);
+    return () => {
+      window.removeEventListener("resize", scheduleUpdate);
+      window.removeEventListener("scroll", scheduleUpdate, true);
+    };
+  }, [isReminderMenuOpen, updateReminderMenuPosition]);
 
   useLayoutEffect(() => {
     if (!isColorPickerOpen) {
@@ -768,18 +818,33 @@ export function PlanHabitInlineEditor({
                 disabled={isSubmitting}
               />
             </div>
-            <span className={calendarStyles.composerDuration}>
-              {(() => {
-                const start = new Date(`2000-01-01T${startTime}`);
-                const end = new Date(`2000-01-01T${endTime}`);
-                const minutes = Math.max(0, Math.round((end.getTime() - start.getTime()) / 60000));
-                if (!Number.isFinite(minutes) || minutes <= 0) {
-                  return "";
-                }
-                return `${minutes}min`;
-              })()}
-	            </span>
-	          </div>
+	            <span className={calendarStyles.composerDuration}>
+	              {(() => {
+	                const start = new Date(`2000-01-01T${startTime}`);
+	                const end = new Date(`2000-01-01T${endTime}`);
+	                let diff = end.getTime() - start.getTime();
+	                if (!Number.isFinite(diff)) {
+	                  return "";
+	                }
+	                if (diff < 0) {
+	                  diff += 24 * 60 * 60 * 1000;
+	                }
+	                const totalMinutes = Math.floor(diff / 60000);
+	                if (!Number.isFinite(totalMinutes) || totalMinutes <= 0) {
+	                  return "";
+	                }
+	                const hours = Math.floor(totalMinutes / 60);
+	                const minutes = totalMinutes % 60;
+	                if (hours <= 0) {
+	                  return `${totalMinutes}m`;
+	                }
+	                if (minutes === 0) {
+	                  return `${hours}h`;
+	                }
+	                return `${hours}h ${minutes}m`;
+	              })()}
+		            </span>
+		          </div>
           <div className={calendarStyles.composerTimeMetaRow}>
             <div className={calendarStyles.composerDateRow}>
               <button
@@ -850,6 +915,15 @@ export function PlanHabitInlineEditor({
                 <div
                   ref={reminderMenuRef}
                   className={calendarStyles.composerInlineSelectPopover}
+                  style={
+                    reminderMenuPosition
+                      ? {
+                        top: reminderMenuPosition.top,
+                        left: reminderMenuPosition.left,
+                        width: reminderMenuPosition.width,
+                      }
+                      : undefined
+                  }
                   role="listbox"
                   aria-label={t("Notification")}
                   tabIndex={-1}
@@ -914,22 +988,28 @@ export function PlanHabitInlineEditor({
                 </div>
               ) : null}
             </div>
+
+            {reminderPreset === "custom" ? (
+              <div className={calendarStyles.composerInlineNumber}>
+                <Clock size={14} aria-hidden="true" className={calendarStyles.composerInlineControlIcon} />
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={customReminderMinutes}
+                  onChange={(event) => setCustomReminderMinutes(event.target.value)}
+                  placeholder="30"
+                  aria-label={t("Minutes before")}
+                  className={calendarStyles.composerInlineNumberInput}
+                  disabled={isSubmitting}
+                />
+                <span className={calendarStyles.composerInlineNumberSuffix} aria-hidden="true">
+                  min
+                </span>
+              </div>
+            ) : null}
           </div>
         </div>
-        {reminderPreset === "custom" ? (
-          <label className={calendarStyles.composerField}>
-            <span>{t("Minutes before")}</span>
-            <input
-              type="number"
-              min={0}
-              step={1}
-              value={customReminderMinutes}
-              onChange={(event) => setCustomReminderMinutes(event.target.value)}
-              placeholder="30"
-              disabled={isSubmitting}
-            />
-          </label>
-        ) : null}
         <hr className={calendarStyles.composerSectionDivider} />
 
         {isDatePickerOpen ? (
@@ -1038,6 +1118,15 @@ export function PlanHabitInlineEditor({
               disabled={isSubmitting}
             >
               <Plus size={18} strokeWidth={1.75} aria-hidden="true" />
+            </button>
+
+            <button
+              type="submit"
+              className={calendarStyles.composerInlineSubmit}
+              disabled={isSubmitting || !title.trim() || !user}
+              aria-label={isSubmitting ? submittingLabel : submitLabel}
+            >
+              {isSubmitting ? submittingLabel : submitLabel}
             </button>
 
             {isColorPickerOpen ? (

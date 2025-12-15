@@ -5,7 +5,6 @@ export type SidebarNavKey =
   | "general"
   | "threads"
   | "dashboard"
-  | "reference"
   | "history"
   | "search"
   | "calendar";
@@ -40,6 +39,8 @@ export type PlanItem = {
   id: string;
   label: string;
   completed: boolean;
+  createdAt?: string;
+  updatedAt?: string;
   deadline?: string | null;
   scheduleSlot?: string | null;
   details?: string | null;
@@ -61,6 +62,8 @@ export type HabitItem = {
   previousLabel: string;
   completed?: boolean;
   details?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 export type HabitUpdates = {

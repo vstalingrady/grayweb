@@ -117,12 +117,6 @@ const GrayGeneralView = dynamic(
   { loading: () => null }
 );
 
-// DashboardOverlay removed
-const GrayReferenceView = dynamic(
-  () => import("@/components/gray/ReferenceView").then((mod) => mod.ReferenceView),
-  { loading: () => null }
-);
-
 const HistoryOverlay = dynamic(
   () => import("@/components/gray/HistoryOverlay").then((mod) => mod.HistoryOverlay),
   { loading: () => null }
@@ -317,10 +311,43 @@ function GrayPageClientInner({
 
   const [habitEditorTarget, setHabitEditorTarget] = useState<HabitItem | null>(null);
 
-  const [isSidebarExpanded, setIsSidebarExpanded] = useState<boolean>(defaultSidebarExpandedDesktop);
-  const [hasLoadedSidebarPref, setHasLoadedSidebarPref] = useState(false);
-  const [isMobileViewport, setIsMobileViewport] = useState(false);
+  const readSidebarExpandedPreference = useCallback(() => {
+    if (typeof window === "undefined") {
+      return defaultSidebarExpandedDesktop;
+    }
+    try {
+      const stored = localStorage.getItem(sidebarPreferenceKey);
+      if (stored === "true") return true;
+      if (stored === "false") return false;
+    } catch {
+      // localStorage may be unavailable
+    }
+    return defaultSidebarExpandedDesktop;
+  }, [defaultSidebarExpandedDesktop, sidebarPreferenceKey]);
+
+  const [isMobileViewport, setIsMobileViewport] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return (window.innerWidth || 0) <= 768;
+  });
+
+  const [isSidebarExpanded, setIsSidebarExpanded] = useState<boolean>(() => {
+    if (typeof window === "undefined") {
+      return defaultSidebarExpandedDesktop;
+    }
+    const shouldCollapseSidebar = (window.innerWidth || 0) <= 768;
+    if (shouldCollapseSidebar) return false;
+    try {
+      const stored = localStorage.getItem(sidebarPreferenceKey);
+      if (stored === "true") return true;
+      if (stored === "false") return false;
+    } catch {
+      // localStorage may be unavailable
+    }
+    return defaultSidebarExpandedDesktop;
+  });
+
   const [isMounted, setIsMounted] = useState(false);
+  const wasMobileViewportRef = useRef(isMobileViewport);
 
 
   useEffect(() => {
@@ -359,26 +386,15 @@ function GrayPageClientInner({
 
       setIsSidebarExpanded((previous) => {
         if (shouldCollapseSidebar) {
+          wasMobileViewportRef.current = true;
           return false;
         }
-        if (!hasLoadedSidebarPref) {
-          // On first load for desktop, read from localStorage
-          try {
-            const stored = localStorage.getItem(sidebarPreferenceKey);
-            if (stored !== null) {
-              return stored === "true";
-            }
-          } catch {
-            // localStorage may be unavailable
-          }
-          return defaultSidebarExpandedDesktop;
+        if (wasMobileViewportRef.current) {
+          wasMobileViewportRef.current = false;
+          return readSidebarExpandedPreference();
         }
         return previous;
       });
-
-      if (!hasLoadedSidebarPref) {
-        setHasLoadedSidebarPref(true);
-      }
     };
 
     // Initial check
@@ -390,11 +406,11 @@ function GrayPageClientInner({
       window.removeEventListener("resize", handleResize);
       window.removeEventListener("orientationchange", handleResize);
     };
-  }, [defaultSidebarExpandedDesktop, hasLoadedSidebarPref, sidebarPreferenceKey]);
+  }, [readSidebarExpandedPreference]);
 
   // Persist sidebar preference to localStorage when it changes (desktop only)
   useEffect(() => {
-    if (typeof window === "undefined" || isMobileViewport || !hasLoadedSidebarPref) {
+    if (typeof window === "undefined" || isMobileViewport) {
       return;
     }
     try {
@@ -402,7 +418,7 @@ function GrayPageClientInner({
     } catch {
       // localStorage may be unavailable
     }
-  }, [isSidebarExpanded, isMobileViewport, hasLoadedSidebarPref, sidebarPreferenceKey]);
+  }, [isSidebarExpanded, isMobileViewport, sidebarPreferenceKey]);
 
   const [dashboardTab, setDashboardTab] = useState<"pulse" | "calendar">(() => initialDashboardTab);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -527,9 +543,6 @@ function GrayPageClientInner({
       || pathname === "/g"
       || (pathname?.startsWith("/g/") ?? false));
   const renderPrimaryView = () => {
-    if (activeNav === "reference") {
-      return <GrayReferenceView />;
-    }
     if (isDashboardView) {
       return (
         <GrayDashboardView
@@ -638,7 +651,7 @@ function GrayPageClientInner({
         </div>
       );
     }
-    if (viewMode === "general" && activeNav !== "reference") {
+    if (viewMode === "general") {
       return (
         <div
           className={styles.mainContent}
@@ -772,19 +785,11 @@ function GrayPageClientInner({
   }, [user, userLoading, viewerName]);
 
   const filteredSidebarItems = useMemo(() => {
-    const isPioneerOrHigher = ["Pioneer", "Depth"].includes(viewerPlanLabel);
-    if (isPioneerOrHigher) {
-      return SIDEBAR_ITEMS;
-    }
-    return SIDEBAR_ITEMS.filter((item) => item.id !== "reference");
+    return SIDEBAR_ITEMS;
   }, [viewerPlanLabel]);
 
   const filteredRailItems = useMemo(() => {
-    const isPioneerOrHigher = ["Pioneer", "Depth"].includes(viewerPlanLabel);
-    if (isPioneerOrHigher) {
-      return SIDEBAR_RAIL_ITEMS;
-    }
-    return SIDEBAR_RAIL_ITEMS.filter((item) => item.id !== "reference");
+    return SIDEBAR_RAIL_ITEMS;
   }, [viewerPlanLabel]);
   const historySections = useMemo<SidebarHistorySection[]>(() => {
     // Only show conversations that are bound to a *normalized*
@@ -980,7 +985,6 @@ function GrayPageClientInner({
 
   const handleNavigate = (navId: SidebarNavKey) => {
     if (navId === "search") {
-      setIsSidebarExpanded(true);
       return;
     }
 
@@ -992,15 +996,6 @@ function GrayPageClientInner({
     if (navId === "dashboard") {
       setManualViewMode(null);
       router.push("/");
-      return;
-    }
-
-    if (navId === "reference") {
-      setManualViewMode(null);
-      const target = NAVIGATION_ROUTES[navId];
-      if (target) {
-        router.push(target);
-      }
       return;
     }
 
@@ -1023,7 +1018,6 @@ function GrayPageClientInner({
     }
 
     if (navId === "threads") {
-      setIsSidebarExpanded(true);
       setManualViewMode(null);
       const target = NAVIGATION_ROUTES[navId];
       if (target) {
@@ -1031,8 +1025,6 @@ function GrayPageClientInner({
       }
       return;
     }
-
-    setIsSidebarExpanded(true);
   };
 
   useEffect(() => {
@@ -2048,6 +2040,7 @@ function GrayPageClientInner({
             description: event.description,
             start_time: event.start.toISOString(),
             end_time: event.end.toISOString(),
+            color: event.color,
           });
           // Update the local state with the real ID from the backend
           setCalendarEvents(prev => prev.map(e => e.id === event.id ? {
@@ -2479,8 +2472,8 @@ function GrayPageClientInner({
       />
     )
     : null;
-  const effectiveIsMobileViewport = isMounted ? isMobileViewport : false;
-  const effectiveIsSidebarExpanded = isMounted ? isSidebarExpanded : defaultSidebarExpandedDesktop;
+  const effectiveIsMobileViewport = isMobileViewport;
+  const effectiveIsSidebarExpanded = isSidebarExpanded;
   const isCalendarPage = pathname.startsWith("/cal");
   const sidebarExpandedForLayout = isCalendarPage ? false : effectiveIsSidebarExpanded;
 
@@ -2623,7 +2616,7 @@ function GrayPageClientInner({
 
 
               {isDashboardView ? renderPrimaryView() : renderMainSurface()}
-              {isMounted && viewMode === "general" && activeNav !== "reference" ? (
+              {isMounted && viewMode === "general" ? (
                 <div className={styles.chatComposerDock} data-surface="threads">
                   <div className={styles.chatAttachmentTopTray}>{generalAttachmentTray}</div>
                   <input

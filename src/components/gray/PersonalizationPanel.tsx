@@ -134,7 +134,7 @@ export function PersonalizationPanel({
   backgroundError = null,
 }: PersonalizationPanelProps) {
   const { t } = useI18n();
-  const { webSearchEnabled, setWebSearchEnabled } = useChatStore();
+  const { autoWebSearchEnabled, setAutoWebSearchEnabled } = useChatStore();
 
   // Derived context usage display metadata from backend payload only.
   const contextProviderLabel = formatContextLabel(contextUsage);
@@ -704,17 +704,17 @@ export function PersonalizationPanel({
                 <button
                   type="button"
                   className={styles.personalizationToggle}
-                  data-active={webSearchEnabled ? "true" : "false"}
-                  aria-pressed={webSearchEnabled}
-                  onClick={() => setWebSearchEnabled(!webSearchEnabled)}
+                  data-active={autoWebSearchEnabled ? "true" : "false"}
+                  aria-pressed={autoWebSearchEnabled}
+                  onClick={() => setAutoWebSearchEnabled(!autoWebSearchEnabled)}
                 >
                   <span>
-                    <span>{t("Web search")}</span>
+                    <span>{t("Automatic web search")}</span>
                     <span className={styles.personalizationToggleHint}>
                       {t("Let Gray search for answers automatically.")}
                     </span>
                   </span>
-                  <span className={styles.personalizationSwitch} data-active={webSearchEnabled ? "true" : "false"}>
+                  <span className={styles.personalizationSwitch} data-active={autoWebSearchEnabled ? "true" : "false"}>
                     <span className={styles.personalizationSlider} />
                   </span>
                 </button>
@@ -825,7 +825,6 @@ export function PersonalizationPanel({
               <div className={styles.personalizationCardHeader}>
                 <div>
                   <h3>{t("Location & time")}</h3>
-                  <p>{t("Gray won't assume your location unless you set it.")}</p>
                 </div>
               </div>
               <form className={styles.personalizationForm} onSubmit={handleLocaleSubmit}>
@@ -841,7 +840,7 @@ export function PersonalizationPanel({
                         value={location}
                         onChange={handleLocationChange}
                         type="text"
-                        placeholder={t("City, region, and/or country (optional)")}
+                        placeholder={t("City, region, and/or country")}
                       />
                     </dd>
                   </div>

@@ -224,9 +224,15 @@ export const shouldRequestAutoTitleForSession = (session?: ChatSession | null): 
     if (!session) return true; // Generate title for new sessions
     // Generate title if session has auto mode and a generic/placeholder title
     if (session.titleMode === "auto") {
-        // Only request title for truly generic titles (New Chat, empty, etc.)
-        // Do NOT request title if it's already derived from message - that means we already have a title
-        return isGenericSessionTitle(session.title);
+        if (session.isGeneratingTitle) {
+            return false;
+        }
+        // Request a generated title when we're still showing a placeholder title OR when
+        // we fell back to a title derived from the first user message (so it can be replaced).
+        return (
+            isGenericSessionTitle(session.title) ||
+            isTitleDerivedFromMessage(session.title ?? "", session.messages ?? [])
+        );
     }
     return false;
 };

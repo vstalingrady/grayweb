@@ -131,6 +131,34 @@
   background: rgba(255, 255, 255, 0.08);
 }
 
+.menuItemLocked {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.menuItemLocked .itemIconWrapper {
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.menuItemLocked .itemLabel {
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.menuItemLocked .itemDescription {
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.menuItemLocked:hover {
+  background: transparent;
+}
+
+.menuItem:disabled {
+  cursor: not-allowed;
+}
+
+.menuItem:disabled:hover {
+  background: transparent;
+}
+
 .itemIconWrapper {
   display: flex;
   align-items: center;

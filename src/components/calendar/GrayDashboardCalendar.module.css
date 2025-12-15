@@ -1566,12 +1566,12 @@
   align-items: center;
   justify-content: flex-start;
   gap: 12px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 
 .composerInlineSelect {
-  min-width: 180px;
-  flex: 0 1 240px;
+  min-width: 0;
+  flex: 1 1 0;
   position: relative;
 }
 
@@ -1579,19 +1579,77 @@
   width: 100%;
 }
 
-.composerInlineSelectPopover {
+.composerInlineNumber {
+  min-width: 0;
+  flex: 1 1 0;
+  position: relative;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  background: rgba(38, 38, 38, 0.92);
+  border-radius: 10px;
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 42px 0 32px;
+}
+
+.composerInlineNumberInput {
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: rgba(248, 248, 248, 0.94);
+  font: inherit;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  padding: 6px 0;
+  min-height: 32px;
+  outline: none;
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.composerInlineNumberInput::placeholder {
+  color: rgba(255, 255, 255, 0.38);
+}
+
+.composerInlineNumberInput::-webkit-outer-spin-button,
+.composerInlineNumberInput::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.composerInlineNumberInput:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.composerInlineNumberSuffix {
   position: absolute;
-  top: calc(100% + 8px);
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: rgba(255, 255, 255, 0.42);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  pointer-events: none;
+}
+
+.composerInlineNumber:focus-within {
+  outline: 2px solid rgba(255, 255, 255, 0.22);
+  outline-offset: 2px;
+}
+
+.composerInlineSelectPopover {
+  position: fixed;
+  top: 0;
   left: 0;
   min-width: 220px;
   max-width: min(320px, 90vw);
   padding: 6px;
   border-radius: 12px;
-  background: rgba(10, 10, 12, 0.92);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: 0 22px 46px rgba(0, 0, 0, 0.62);
-  backdrop-filter: blur(14px);
-  z-index: 4;
+  background: rgb(38, 38, 38);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: none;
+  z-index: 2000;
   max-height: 280px;
   overflow: auto;
 }
@@ -1628,12 +1686,24 @@
 
 .composerTimeMetaRow .composerDateRow {
   margin-top: 0;
-  min-width: 180px;
-  flex: 0 1 240px;
+  min-width: 0;
+  flex: 1 1 0;
 }
 
 .composerTimeMetaRow .composerDateTrigger {
   width: 100%;
+}
+
+@media (max-width: 420px) {
+  .composerTimeMetaRow {
+    flex-wrap: wrap;
+  }
+
+  .composerTimeMetaRow .composerDateRow,
+  .composerInlineSelect,
+  .composerInlineNumber {
+    flex: 1 1 100%;
+  }
 }
 
 .composerInlineControlIcon {
@@ -1769,7 +1839,13 @@
   border-radius: 14px;
   background: rgba(28, 28, 28, 0.98);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  z-index: 3;
+  z-index: 100;
+}
+
+@media (min-width: 768px) {
+  .composerDatePopover {
+    transform: translateX(calc(-100% - 20px));
+  }
 }
 
 .composerDatePopoverHeader {
@@ -1847,7 +1923,68 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
+  flex: 1 1 auto;
+  min-width: 0;
+  flex-wrap: nowrap;
+}
+
+.composerInlineSubmit {
+  margin-left: auto;
+  padding: 7px 12px;
+  border-radius: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.92);
+  color: rgba(10, 10, 10, 0.92);
+  font-weight: 600;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  flex: 0 0 auto;
+  transition: filter 0.2s ease, opacity 0.2s ease;
+}
+
+.composerInlineSubmit:hover {
+  filter: brightness(1.02);
+}
+
+.composerInlineSubmit:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.composerColorRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  container-type: inline-size;
+}
+
+.composerQuickSwatches {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+}
+
+@container (max-width: 420px) {
+  .composerQuickSwatches button:nth-child(n + 7) {
+    display: none;
+  }
+}
+
+@container (max-width: 380px) {
+  .composerQuickSwatches button:nth-child(n + 6) {
+    display: none;
+  }
+}
+
+@container (max-width: 340px) {
+  .composerQuickSwatches button:nth-child(n + 5) {
+    display: none;
+  }
 }
 
 .composerColorPopover {
@@ -2005,7 +2142,9 @@
   display: flex;
   justify-content: flex-end;
   gap: 12px;
-  margin-top: 8px;
+  margin-top: 0;
+  flex: 0 0 auto;
+  align-items: center;
 }
 
 .composerFooter button {

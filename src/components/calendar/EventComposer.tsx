@@ -839,18 +839,24 @@ export function EventComposer({
                       required
                     />
                   </div>
-                  <span className={styles.composerDuration}>
-                    {(() => {
-                      const start = new Date(`2000-01-01T${state.startTime}`);
-                      const end = new Date(`2000-01-01T${state.endTime}`);
-                      let diff = end.getTime() - start.getTime();
-                      if (diff < 0) diff += 24 * 60 * 60 * 1000;
-                      const mins = Math.floor(diff / 60000);
-                      const h = Math.floor(mins / 60);
-                      const m = mins % 60;
-                      return `${h > 0 ? `${h}h ` : ""}${m}min`;
-                    })()}
-                  </span>
+	                  <span className={styles.composerDuration}>
+	                    {(() => {
+	                      const start = new Date(`2000-01-01T${state.startTime}`);
+	                      const end = new Date(`2000-01-01T${state.endTime}`);
+	                      let diff = end.getTime() - start.getTime();
+	                      if (diff < 0) diff += 24 * 60 * 60 * 1000;
+	                      const mins = Math.floor(diff / 60000);
+	                      const h = Math.floor(mins / 60);
+	                      const m = mins % 60;
+	                      if (h <= 0) {
+	                        return `${mins}m`;
+	                      }
+	                      if (m === 0) {
+	                        return `${h}h`;
+	                      }
+	                      return `${h}h ${m}m`;
+	                    })()}
+	                  </span>
                 </div>
                 <div className={styles.composerDateRow}>
                   <button
@@ -1014,166 +1020,174 @@ export function EventComposer({
           </label>
 
           <div className={styles.composerField}>
-            <div className={styles.composerColors} ref={colorPickerRef}>
-              {QUICK_COLOR_SWATCHES.map((swatch) => (
+            <span>{t("Color")}</span>
+            <div className={styles.composerColorRow}>
+              <div className={styles.composerColors} ref={colorPickerRef}>
+                <div className={styles.composerQuickSwatches}>
+                  {QUICK_COLOR_SWATCHES.map((swatch) => (
+                    <button
+                      key={swatch}
+                      type="button"
+                      className={styles.composerColorDot}
+                      style={{ backgroundColor: swatch }}
+                      data-active={state.color === swatch ? "true" : "false"}
+                      onClick={() => handleSelectColor(swatch)}
+                      aria-label={t("Select {color} color", { color: swatch })}
+                    />
+                  ))}
+                </div>
                 <button
-                  key={swatch}
                   type="button"
                   className={styles.composerColorDot}
-                  style={{ backgroundColor: swatch }}
-                  data-active={state.color === swatch ? "true" : "false"}
-                  onClick={() => handleSelectColor(swatch)}
-                  aria-label={t("Select {color} color", { color: swatch })}
-                />
-              ))}
-              <button
-                type="button"
-                className={styles.composerColorDot}
-                data-active={
-                  QUICK_COLOR_SWATCHES.includes(state.color as (typeof QUICK_COLOR_SWATCHES)[number])
-                    ? "false"
-                    : "true"
-                }
-                onClick={handlePickCustomColor}
-                aria-label={t("Pick custom color")}
-                aria-expanded={isColorPickerOpen ? "true" : "false"}
-                ref={colorPickerTriggerRef}
-              >
-                <Plus size={18} strokeWidth={1.75} aria-hidden="true" />
-              </button>
-
-              {isColorPickerOpen ? (
-                <div
-                  ref={colorPickerPopoverRef}
-                  className={styles.composerColorPopover}
-                  style={colorPopoverStyle}
-                  role="dialog"
-                  aria-label={t("Color picker")}
+                  data-active={
+                    QUICK_COLOR_SWATCHES.includes(state.color as (typeof QUICK_COLOR_SWATCHES)[number])
+                      ? "false"
+                      : "true"
+                  }
+                  onClick={handlePickCustomColor}
+                  aria-label={t("Pick custom color")}
+                  aria-expanded={isColorPickerOpen ? "true" : "false"}
+                  ref={colorPickerTriggerRef}
                 >
-                  <div className={styles.composerColorPopoverHeader}>
-                    <div
-                      className={styles.composerColorPreview}
-                      style={{ backgroundColor: state.color }}
-                      aria-hidden="true"
-                    />
-                    <label className={styles.composerColorHexLabel}>
-                      <span>HEX</span>
-                      <input
-                        value={hexDraft}
-                        onChange={(event) => setHexDraft(event.target.value)}
-                        onBlur={handleHexCommit}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter") {
-                            event.preventDefault();
-                            handleHexCommit();
-                          }
-                        }}
-                        inputMode="text"
-                        autoComplete="off"
-                        spellCheck={false}
-                      />
-                    </label>
-                  </div>
+                  <Plus size={18} strokeWidth={1.75} aria-hidden="true" />
+                </button>
 
-                  <div className={styles.composerColorSliders} aria-label={t("RGB sliders")}>
-                    <label>
-                      <span>R</span>
-                      <input
-                        type="range"
-                        min={0}
-                        max={255}
-                        value={rgb.red}
-                        onChange={(event) => handleUpdateColorWithoutClosing(rgbToHex(Number(event.target.value), rgb.green, rgb.blue))}
+                {isColorPickerOpen ? (
+                  <div
+                    ref={colorPickerPopoverRef}
+                    className={styles.composerColorPopover}
+                    style={colorPopoverStyle}
+                    role="dialog"
+                    aria-label={t("Color picker")}
+                  >
+                    <div className={styles.composerColorPopoverHeader}>
+                      <div
+                        className={styles.composerColorPreview}
+                        style={{ backgroundColor: state.color }}
+                        aria-hidden="true"
                       />
-                      <output>{rgb.red}</output>
-                    </label>
-                    <label>
-                      <span>G</span>
-                      <input
-                        type="range"
-                        min={0}
-                        max={255}
-                        value={rgb.green}
-                        onChange={(event) => handleUpdateColorWithoutClosing(rgbToHex(rgb.red, Number(event.target.value), rgb.blue))}
-                      />
-                      <output>{rgb.green}</output>
-                    </label>
-                    <label>
-                      <span>B</span>
-                      <input
-                        type="range"
-                        min={0}
-                        max={255}
-                        value={rgb.blue}
-                        onChange={(event) => handleUpdateColorWithoutClosing(rgbToHex(rgb.red, rgb.green, Number(event.target.value)))}
-                      />
-                      <output>{rgb.blue}</output>
-                    </label>
-                  </div>
-
-                  <div className={styles.composerColorPaletteSection}>
-                    <h3>Earthy</h3>
-                    <div className={styles.composerColorPaletteGrid}>
-                      {EARTHY_PALETTE.map((swatch) => (
-                        <button
-                          key={`earthy-${swatch}`}
-                          type="button"
-                          className={styles.composerColorSwatch}
-                          style={{ backgroundColor: swatch }}
-                          data-active={state.color === swatch ? "true" : "false"}
-                          onClick={() => handleSelectColor(swatch)}
-                          aria-label={t("Select {color} color", { color: swatch })}
+                      <label className={styles.composerColorHexLabel}>
+                        <span>HEX</span>
+                        <input
+                          value={hexDraft}
+                          onChange={(event) => setHexDraft(event.target.value)}
+                          onBlur={handleHexCommit}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") {
+                              event.preventDefault();
+                              handleHexCommit();
+                            }
+                          }}
+                          inputMode="text"
+                          autoComplete="off"
+                          spellCheck={false}
                         />
-                      ))}
+                      </label>
+                    </div>
+
+                    <div className={styles.composerColorSliders} aria-label={t("RGB sliders")}>
+                      <label>
+                        <span>R</span>
+                        <input
+                          type="range"
+                          min={0}
+                          max={255}
+                          value={rgb.red}
+                          onChange={(event) => handleUpdateColorWithoutClosing(rgbToHex(Number(event.target.value), rgb.green, rgb.blue))}
+                        />
+                        <output>{rgb.red}</output>
+                      </label>
+                      <label>
+                        <span>G</span>
+                        <input
+                          type="range"
+                          min={0}
+                          max={255}
+                          value={rgb.green}
+                          onChange={(event) => handleUpdateColorWithoutClosing(rgbToHex(rgb.red, Number(event.target.value), rgb.blue))}
+                        />
+                        <output>{rgb.green}</output>
+                      </label>
+                      <label>
+                        <span>B</span>
+                        <input
+                          type="range"
+                          min={0}
+                          max={255}
+                          value={rgb.blue}
+                          onChange={(event) => handleUpdateColorWithoutClosing(rgbToHex(rgb.red, rgb.green, Number(event.target.value)))}
+                        />
+                        <output>{rgb.blue}</output>
+                      </label>
+                    </div>
+
+                    <div className={styles.composerColorPaletteSection}>
+                      <h3>Earthy</h3>
+                      <div className={styles.composerColorPaletteGrid}>
+                        {EARTHY_PALETTE.map((swatch) => (
+                          <button
+                            key={`earthy-${swatch}`}
+                            type="button"
+                            className={styles.composerColorSwatch}
+                            style={{ backgroundColor: swatch }}
+                            data-active={state.color === swatch ? "true" : "false"}
+                            onClick={() => handleSelectColor(swatch)}
+                            aria-label={t("Select {color} color", { color: swatch })}
+                          />
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className={styles.composerColorPaletteSection}>
+                      <h3>Pastel</h3>
+                      <div className={styles.composerColorPaletteGrid}>
+                        {PASTEL_PALETTE.map((swatch) => (
+                          <button
+                            key={`pastel-${swatch}`}
+                            type="button"
+                            className={styles.composerColorSwatch}
+                            style={{ backgroundColor: swatch }}
+                            data-active={state.color === swatch ? "true" : "false"}
+                            onClick={() => handleSelectColor(swatch)}
+                            aria-label={t("Select {color} color", { color: swatch })}
+                          />
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className={styles.composerColorPaletteSection}>
+                      <h3>Neutrals</h3>
+                      <div className={styles.composerColorPaletteGrid}>
+                        {NEUTRAL_PALETTE.map((swatch) => (
+                          <button
+                            key={`neutral-${swatch}`}
+                            type="button"
+                            className={styles.composerColorSwatch}
+                            style={{ backgroundColor: swatch }}
+                            data-active={state.color === swatch ? "true" : "false"}
+                            onClick={() => handleSelectColor(swatch)}
+                            aria-label={t("Select {color} color", { color: swatch })}
+                          />
+                        ))}
+                      </div>
                     </div>
                   </div>
+                ) : null}
+              </div>
 
-                  <div className={styles.composerColorPaletteSection}>
-                    <h3>Pastel</h3>
-                    <div className={styles.composerColorPaletteGrid}>
-                      {PASTEL_PALETTE.map((swatch) => (
-                        <button
-                          key={`pastel-${swatch}`}
-                          type="button"
-                          className={styles.composerColorSwatch}
-                          style={{ backgroundColor: swatch }}
-                          data-active={state.color === swatch ? "true" : "false"}
-                          onClick={() => handleSelectColor(swatch)}
-                          aria-label={t("Select {color} color", { color: swatch })}
-                        />
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className={styles.composerColorPaletteSection}>
-                    <h3>Neutrals</h3>
-                    <div className={styles.composerColorPaletteGrid}>
-                      {NEUTRAL_PALETTE.map((swatch) => (
-                        <button
-                          key={`neutral-${swatch}`}
-                          type="button"
-                          className={styles.composerColorSwatch}
-                          style={{ backgroundColor: swatch }}
-                          data-active={state.color === swatch ? "true" : "false"}
-                          onClick={() => handleSelectColor(swatch)}
-                          aria-label={t("Select {color} color", { color: swatch })}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              ) : null}
+              <div className={styles.composerFooter}>
+                {activeEvent && onDelete ? (
+                  <button type="button" className={styles.composerDeleteButton} onClick={handleDelete}>
+                    {t("Delete")}
+                  </button>
+                ) : null}
+                <button type="submit">
+                  {activeEvent ? t("Save") : t("Add")}
+                </button>
+              </div>
             </div>
           </div>
 
-
-          <footer className={styles.composerFooter}>
-            {activeEvent && onDelete ? (
-              <button type="button" className={styles.composerDeleteButton} onClick={handleDelete}>
-                {t("Delete")}
-              </button>
-            ) : null}
-          </footer>
         </form>
       </div>
     </div>

@@ -205,8 +205,8 @@ export function SettingsModal({
   const { t, locale: activeLocale, setLocale } = useI18n();
   const { user, updateUser } = useUser();
   const {
-    webSearchEnabled,
-    setWebSearchEnabled,
+    autoWebSearchEnabled,
+    setAutoWebSearchEnabled,
     visibleModelIds,
     setVisibleModelIds,
     selectedModelId,
@@ -1209,12 +1209,16 @@ export function SettingsModal({
 
                 <div className={styles.settingsRow}>
                   <div className={styles.settingsLabelGroup}>
-                    <span className={styles.settingsLabel}>{t("Web search")}</span>
+                    <span className={styles.settingsLabel}>{t("Automatic web search")}</span>
                     <span className={styles.settingsItemDescription}>
                       {t("Let Gray search for answers automatically.")}
                     </span>
                   </div>
-                  {renderToggle(webSearchEnabled, () => setWebSearchEnabled(!webSearchEnabled), t("Toggle Web search"))}
+                  {renderToggle(
+                    autoWebSearchEnabled,
+                    () => setAutoWebSearchEnabled(!autoWebSearchEnabled),
+                    t("Toggle automatic web search")
+                  )}
                 </div>
 
               </div>
@@ -1282,7 +1286,7 @@ export function SettingsModal({
                       className={styles.settingsInput}
                       value={location}
                       onChange={(e) => setLocation(e.target.value)}
-                      placeholder={t("City, region, and/or country (optional)")}
+                      placeholder={t("City, region, and/or country")}
                     />
                   </div>
 
@@ -1307,10 +1311,6 @@ export function SettingsModal({
                     ) : null}
                   </div>
                 </div>
-
-                <p className={styles.settingsItemDescription} style={{ marginTop: 12 }}>
-                  {t("Gray won't assume your location. Leave it blank if you prefer.")}
-                </p>
 
                 <div className={styles.settingsButtonGroup}>
                   <button

@@ -460,6 +460,93 @@ class ProactivityEngine:
 
         return dispatch
 
+    async def dispatch_reminder(
+        self,
+        *,
+        user_id: int,
+        reminder_id: int,
+        source: str,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Deliver a reminder as a chat message + notification, and mark it delivered.
+        """
+        await self._ensure_connection()
+        row = await self.db.fetch_one(
+            """
+            SELECT id, label, description, remind_at, status
+            FROM reminders
+            WHERE id = :id AND user_id = :user_id
+            """,
+            {"id": reminder_id, "user_id": user_id},
+        )
+        if not row:
+            return None
+
+        reminder = dict(row)
+        status = (reminder.get("status") or "").strip().lower()
+        if status != "pending":
+            return None
+
+        remind_at = reminder.get("remind_at")
+        if isinstance(remind_at, str):
+            try:
+                remind_at = datetime.fromisoformat(remind_at)
+            except Exception:
+                remind_at = None
+        if isinstance(remind_at, datetime):
+            remind_at_utc = remind_at if remind_at.tzinfo else remind_at.replace(tzinfo=dt_timezone.utc)
+            remind_at_utc = remind_at_utc.astimezone(dt_timezone.utc)
+        else:
+            remind_at_utc = datetime.now(dt_timezone.utc)
+
+        label = (reminder.get("label") or "Reminder").strip()
+        description = (reminder.get("description") or "").strip()
+
+        message_lines = [f"Reminder: {label}"]
+        if description:
+            message_lines.append(description)
+        message = "\n".join(message_lines).strip()
+
+        # Persist into General chat so the reminder isn't missed.
+        await self._save_general_message(user_id, "model", message)
+
+        title = "🔔 Reminder"
+        await self._send_browser_notification(
+            user_id,
+            title,
+            message,
+            notification_type="reminder",
+            due_at=remind_at_utc,
+        )
+        await self._send_web_push_notification(user_id, title, message)
+
+        now = datetime.now(dt_timezone.utc)
+        try:
+            await self.db.execute(
+                """
+                UPDATE reminders
+                SET status = 'delivered', delivered_at = :delivered_at
+                WHERE id = :id AND user_id = :user_id
+                """,
+                {"id": reminder_id, "user_id": user_id, "delivered_at": now},
+            )
+        except Exception as exc:
+            logger.warning("Failed to mark reminder delivered: %s", exc, exc_info=True)
+
+        dispatch = {
+            "user_id": user_id,
+            "message": message,
+            "source": source,
+            "due_at": remind_at_utc.isoformat(),
+            "delivery_key": f"reminder:{reminder_id}",
+            "sent_at": now.isoformat(),
+        }
+
+        if self.realtime_broker:
+            await self.realtime_broker.broadcast(user_id, "proactivity_message", dispatch)
+
+        return dispatch
+
     async def _generate_checkin_message(
         self,
         user_id: int,
@@ -725,8 +812,6 @@ class ProactivityEngine:
         nickname = self._format_snippet(row.get("personalization_nickname"), limit=80)
         occupation = self._format_snippet(row.get("personalization_occupation"), limit=120)
         about = self._format_snippet(row.get("personalization_about"), limit=200)
-        location = self._format_snippet(row.get("personalization_location"), limit=120)
-        time_zone = self._format_snippet(row.get("personalization_time_zone"), limit=64)
 
         if nickname:
             summary_parts.append(f"Preferred name: {nickname}")
@@ -734,10 +819,6 @@ class ProactivityEngine:
             summary_parts.append(f"Occupation: {occupation}")
         if about:
             summary_parts.append(f"About: {about}")
-        if location:
-            summary_parts.append(f"Location: {location}")
-        if time_zone:
-            summary_parts.append(f"Time zone: {time_zone}")
 
         profile_summary = ". ".join(summary_parts) if summary_parts else None
         custom_instructions = self._truncate_block(row.get("personalization_custom_instructions"), limit=2000)
@@ -916,7 +997,15 @@ class ProactivityEngine:
 
 
 
-    async def _send_browser_notification(self, user_id: int, title: str, message: str) -> bool:
+    async def _send_browser_notification(
+        self,
+        user_id: int,
+        title: str,
+        message: str,
+        *,
+        notification_type: str = "check_in",
+        due_at: Optional[datetime] = None,
+    ) -> bool:
         now = datetime.now(dt_timezone.utc)
         try:
         # Use local SQLite exclusively.
@@ -932,10 +1021,10 @@ class ProactivityEngine:
                 query,
                 {
                     "user_id": user_id,
-                    "type": "check_in",
+                    "type": notification_type,
                     "title": title,
                     "message": message,
-                    "due_at": now,
+                    "due_at": due_at or now,
                     "sent_at": now,
                     "created_at": now,
                 },

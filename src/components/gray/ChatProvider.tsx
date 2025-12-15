@@ -15,6 +15,7 @@ import {
 } from "react";
 import { usePathname } from "next/navigation";
 import { useUser } from "@/contexts/UserContext";
+import { useI18n } from "@/contexts/I18nContext";
 import {
   apiService,
   isApiNetworkError,
@@ -28,7 +29,7 @@ import {
   type ReminderCreatePayload,
   type User,
 } from "@/lib/api";
-import { buildLocalTimeContext } from "@/lib/timeContext";
+import { buildLocalTimeContextWithOverrides } from "@/lib/timeContext";
 import { formatReminderDateLabel, formatReminderSlotLabel } from "./reminderTimeUtils";
 import { type QuestionnaireSession } from "@/lib/questionnaire";
 
@@ -461,6 +462,7 @@ type ChatProviderProps = {
 
 export function ChatProvider({ children, workspaceContext }: ChatProviderProps) {
   const { user, waitForUser, updateUser, refreshUser } = useUser();
+  const { locale } = useI18n();
   const [defaultSystemPrompt, setDefaultSystemPrompt] = useState<string | null>(null);
   const [, setShowIntro] = useState(false);
   const onboardingSeenRef = useRef(false);
@@ -470,6 +472,30 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
   useEffect(() => {
     let isMounted = true;
     let controller = new AbortController();
+
+    const resolvePromptString = (value: unknown, activeLocale: string): string => {
+      if (typeof value === "string") {
+        return value;
+      }
+      if (!value || typeof value !== "object") {
+        return "";
+      }
+      const record = value as Record<string, unknown>;
+      const baseLocale = String(activeLocale || "en").split("-")[0];
+      const direct = record[activeLocale];
+      if (typeof direct === "string") {
+        return direct;
+      }
+      const base = record[baseLocale];
+      if (typeof base === "string") {
+        return base;
+      }
+      const fallback = record["en"];
+      if (typeof fallback === "string") {
+        return fallback;
+      }
+      return "";
+    };
 
     const loadSystemPrompt = async () => {
       try {
@@ -482,11 +508,11 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
         if (!response.ok) {
           return;
         }
-        const data = (await response.json()) as { chat?: string | null } | null;
+        const data = (await response.json()) as { chat?: unknown } | null;
         if (!isMounted) {
           return;
         }
-        const raw = typeof data?.chat === "string" ? data.chat : "";
+        const raw = resolvePromptString(data?.chat, locale);
         const trimmed = raw.trim();
         setDefaultSystemPrompt(trimmed.length > 0 ? trimmed : null);
       } catch (error) {
@@ -518,7 +544,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       isMounted = false;
       controller.abort();
     };
-  }, []);
+  }, [locale]);
 
   // Sync selected model from user profile on load
   useEffect(() => {
@@ -747,6 +773,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
   const [selectedContextCacheId, setSelectedContextCacheId] = useState<number | null>(null);
   const [contextCacheMessage, setContextCacheMessage] = useState<string | null>(null);
   const [isContextCacheSaving, setIsContextCacheSaving] = useState(false);
+  const [autoWebSearchEnabled, setAutoWebSearchEnabled] = useState(false);
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
   const [fileSearchStores, setFileSearchStores] = useState<{ name: string; display_name?: string }[]>([]);
   const [fileSearchDisplayName, setFileSearchDisplayName] = useState("");
@@ -2402,7 +2429,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
         trimmed
       );
       const contextPayload = includeWorkspaceContext ? workspaceContextValue ?? undefined : undefined;
-      const shouldUseWebSearch = webSearchEnabled;
+      const shouldUseWebSearch = autoWebSearchEnabled || webSearchEnabled;
 
       const streamGeneralResponse = () => {
         (async () => {
@@ -2411,7 +2438,11 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
           let didReceiveToken = false;
           const streamingUserId = resolvedUser.id;
           try {
-            const timeContext = buildLocalTimeContext();
+            const effectiveTimeZone =
+              resolvedUser.personalization_time_zone?.trim() || resolveClientTimezone();
+            const timeContext = buildLocalTimeContextWithOverrides(undefined, {
+              timeZone: effectiveTimeZone,
+            });
             // const autoMapPayload = buildAutoMapPayload(trimmed); // Removed
 
             // Only include full profile when it changes or on first message
@@ -2460,7 +2491,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
               context: contextPayload,
               conversation_id: requestConversationId ?? undefined,
               time_context: timeContext,
-              timezone: resolveClientTimezone(),
+              timezone: effectiveTimeZone,
               conversation_memory_enabled: conversationMemoryEnabled,
               attachments: attachmentPayloads,
               context_cache_id: selectedContextCacheId ?? undefined,
@@ -2642,6 +2673,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       promptForLocationConsent,
       selectedContextCacheId,
       shouldAttachWorkspaceContextForSession,
+      autoWebSearchEnabled,
       webSearchEnabled,
       reasoningMode, // Added
       remindersEnabled, // Added
@@ -3051,6 +3083,8 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       setContextCacheLabel,
       setContextCacheContent,
       // Web Search (with toggles above)
+      autoWebSearchEnabled,
+      setAutoWebSearchEnabled,
       webSearchEnabled,
       setWebSearchEnabled,
       // File Search / Stores
@@ -3137,6 +3171,8 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       selectContextCacheId,
       setContextCacheLabel,
       setContextCacheContent,
+      autoWebSearchEnabled,
+      setAutoWebSearchEnabled,
       webSearchEnabled,
       setWebSearchEnabled,
       fileSearchStores,

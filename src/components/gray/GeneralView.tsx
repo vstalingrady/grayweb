@@ -100,10 +100,32 @@ export function GrayGeneralView({
   const isAdding = Boolean(activeEditor && !activeEditor.plan && !activeEditor.habit);
 
   const unifiedItems = useMemo(
-    () => [
-      ...plans.map((plan) => ({ kind: "plan" as const, item: plan })),
-      ...habits.map((habit) => ({ kind: "habit" as const, item: habit })),
-    ],
+    () => {
+      const next = [
+        ...plans.map((plan) => ({ kind: "plan" as const, item: plan })),
+        ...habits.map((habit) => ({ kind: "habit" as const, item: habit })),
+      ];
+
+      const toTimestamp = (value: string | null | undefined): number => {
+        if (!value) return 0;
+        const parsed = Date.parse(value);
+        return Number.isFinite(parsed) ? parsed : 0;
+      };
+
+      next.sort((a, b) => {
+        const aTime =
+          toTimestamp(a.item.updatedAt) ||
+          toTimestamp(a.item.createdAt) ||
+          toTimestamp(a.item.deadline);
+        const bTime =
+          toTimestamp(b.item.updatedAt) ||
+          toTimestamp(b.item.createdAt) ||
+          toTimestamp(b.item.deadline);
+        return bTime - aTime;
+      });
+
+      return next;
+    },
     [habits, plans]
   );
 
@@ -144,6 +166,14 @@ export function GrayGeneralView({
                 </button>
                 <span className={styles.planLabelGroup}>
                   <span className={styles.planLabel}>{item.label}</span>
+                  {(() => {
+                    const rawDetails = (item.details ?? "").trim();
+                    if (!rawDetails) {
+                      return null;
+                    }
+                    const preview = rawDetails.split(/\n+/)[0]?.trim();
+                    return preview ? <span className={styles.planDetails}>{preview}</span> : null;
+                  })()}
                 </span>
               </div>
               <span className={styles.listItemActions}>
@@ -230,15 +260,17 @@ export function GrayGeneralView({
           </div>
         ) : (
           <>
-            <button
-              type="button"
-              className={styles.secondaryAction}
-              onClick={() => setActiveEditor({ type: "plan", plan: null, habit: null })}
-              style={{ marginTop: 0 }}
-            >
-              {t("New event")}
-            </button>
-            {plansContent}
+            <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+              {plansContent}
+              <button
+                type="button"
+                className={styles.secondaryAction}
+                onClick={() => setActiveEditor({ type: "plan", plan: null, habit: null })}
+                style={{ marginTop: "auto" }}
+              >
+                {t("New event")}
+              </button>
+            </div>
           </>
         )}
       </div>

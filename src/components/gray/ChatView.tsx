@@ -288,7 +288,7 @@ const GrayStreamingSpinner = ({
 import { useUser } from "@/contexts/UserContext";
 import { UsageLimitBanner } from "@/components/gray/UsageLimitBanner";
 import { apiService, type ConversationUsage, type GroundingMetadata } from "@/lib/api";
-import { buildLocalTimeContext } from "@/lib/timeContext";
+import { buildLocalTimeContextWithOverrides } from "@/lib/timeContext";
 import type { ContextUsageSummary } from "@/components/gray/types";
 type GrayChatViewProps = {
   sessionId: string | null;
@@ -2318,6 +2318,7 @@ export function GrayChatView({
     fileSearchImportStatus,
     handleFileSearchImport,
     fileSearchUploadInputRef,
+    autoWebSearchEnabled,
     webSearchEnabled,
     loadConversationMessages,
     sendGeneralMessage,
@@ -2345,6 +2346,8 @@ export function GrayChatView({
   const [thinkingDots, setThinkingDots] = useState("");
   const replyTimeout = useRef<number | null>(null);
   const scrollAnchorRef = useRef<HTMLDivElement | null>(null);
+  // Track if the user is currently at the bottom of the chat to implement "sticky scrolling"
+  const isAtBottomRef = useRef(true);
   const isLoadingHistoryRef = useRef<string | null>(null);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const copyResetTimeoutRef = useRef<number | null>(null);
@@ -2506,6 +2509,15 @@ export function GrayChatView({
     return `${activeStreamingMessageId}:${contentLength}`;
   }, [activeStreamingMessageId, messages]);
 
+  const handleScroll = useCallback(() => {
+    const viewport = chatViewportRef.current;
+    if (!viewport) return;
+    const threshold = 300; // Same generous threshold
+    const isNearBottom =
+      viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight <= threshold;
+    isAtBottomRef.current = isNearBottom;
+  }, []);
+
   const scrollToBottomIfNear = useCallback((instant = false) => {
     const viewport = chatViewportRef.current;
     if (!viewport || !scrollAnchorRef.current) return;
@@ -2531,12 +2543,14 @@ export function GrayChatView({
     scrollToBottom();
   }, [messages.length, scrollToBottom]);
 
-  // Auto-scroll during active streaming if near bottom (use instant to prevent jitter)
+  // Auto-scroll during active streaming if we were already at the bottom.
+  // We use the ref-based check to ensure "sticky" behavior even if a large
+  // chunk of content arrives that pushes the bottom further away than the threshold.
   useEffect(() => {
-    if (streamingContentSignature) {
-      scrollToBottomIfNear(true);
+    if (streamingContentSignature && scrollAnchorRef.current && isAtBottomRef.current) {
+      scrollAnchorRef.current.scrollIntoView({ behavior: "instant" });
     }
-  }, [streamingContentSignature, scrollToBottomIfNear]);
+  }, [streamingContentSignature]);
 
   useLayoutEffect(() => {
     const node = composerDockRef.current;
@@ -2874,12 +2888,16 @@ export function GrayChatView({
       const streamingUserId = resolvedUser.id;
       const abortController = new AbortController();
       streamAbortControllerRef.current = abortController;
-      const shouldUseWebSearch = webSearchEnabled;
+      const shouldUseWebSearch = autoWebSearchEnabled || webSearchEnabled;
       const shouldAttachToConversation = !isRegeneration;
 
       try {
         let localThinkingStartTime: number | null = null;
-        const timeContext = buildLocalTimeContext();
+        const effectiveTimeZone =
+          resolvedUser.personalization_time_zone?.trim() || resolveClientTimezone();
+        const timeContext = buildLocalTimeContextWithOverrides(undefined, {
+          timeZone: effectiveTimeZone,
+        });
         for await (const event of apiService.sendMessageStream(
           {
             message: prompt,
@@ -2892,6 +2910,7 @@ export function GrayChatView({
             user_id: streamingUserId,
             context: contextPayload,
             time_context: timeContext,
+            timezone: effectiveTimeZone,
             attachments: buildAttachmentPayloads(),
             should_generate_title: requestTitleHint,
             web_search_enabled: shouldUseWebSearch,
@@ -3063,8 +3082,10 @@ export function GrayChatView({
             system_prompt: personalizedSystemPrompt,
             user_id: streamingUserId,
             context: contextPayload,
-            time_context: buildLocalTimeContext(),
-            timezone: resolveClientTimezone(),
+            time_context: buildLocalTimeContextWithOverrides(undefined, {
+              timeZone: resolvedUser.personalization_time_zone?.trim() || resolveClientTimezone(),
+            }),
+            timezone: resolvedUser.personalization_time_zone?.trim() || resolveClientTimezone(),
             attachments: buildAttachmentPayloads(),
             context_cache_id: selectedContextCacheId ?? undefined,
             web_search_enabled: shouldUseWebSearch,
@@ -3852,7 +3873,7 @@ export function GrayChatView({
     <div className={styles.chatView} aria-live="polite" style={chatViewStyle}>
       <div className={styles.chatHeaderControls}>
       </div>
-      <div className={styles.chatViewport} ref={chatViewportRef}>
+      <div className={styles.chatViewport} ref={chatViewportRef} onScroll={handleScroll}>
         <div className={styles.chatFade} aria-hidden="true" />
         {/* Welcome screen - show on empty chats, but not on /g (general chat session) */}
         {messages.length === 0 && sessionId && sessionId !== GENERAL_CHAT_SESSION_ID && (

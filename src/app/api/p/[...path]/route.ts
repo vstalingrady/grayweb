@@ -3,23 +3,54 @@ import { NextResponse } from 'next/server';
 const isProxyDebugEnabled = process.env.NODE_ENV !== "production";
 
 const resolveProxyTarget = () => {
-    const envTarget =
-        process.env.BACKEND_URL ||
-        process.env.BACKEND_API_URL ||
-        process.env.NEXT_PUBLIC_API_URL;
+    // Highest priority: explicit server-side proxy target (Docker/local override).
+    if (process.env.BACKEND_URL) {
+        return process.env.BACKEND_URL;
+    }
+    if (process.env.API_PROXY_TARGET) {
+        return process.env.API_PROXY_TARGET;
+    }
 
-    return envTarget || 'http://localhost:8000';
+    // Local dev default: prefer the local backend even if prod URLs exist in env.
+    if (process.env.NODE_ENV !== "production") {
+        return process.env.BACKEND_DEV_URL || "http://localhost:8000";
+    }
+
+    // Production: use configured public/backend API URL.
+    return process.env.BACKEND_API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 };
 
 // Use BACKEND_URL (Docker), BACKEND_API_URL (prod), or fallback to localhost (local dev)
 const PROXY_TARGET = resolveProxyTarget();
 
-async function handleProxy(request: Request, { params }: { params: Promise<{ path: string[] }> }) {
+const buildTargetUrl = (options: { proxyTarget: string; pathname: string; searchParams: string }) => {
+    const normalizedProxyTarget = options.proxyTarget.replace(/\/+$/, "");
+
+    try {
+        const baseUrl = new URL(normalizedProxyTarget);
+        const basePath = baseUrl.pathname.replace(/\/+$/, "");
+        const forwardPath = options.pathname.startsWith("/") ? options.pathname : `/${options.pathname}`;
+
+        const targetPath =
+            basePath && basePath !== "/"
+                ? (
+                    forwardPath === basePath || forwardPath.startsWith(`${basePath}/`)
+                        ? forwardPath
+                        : `${basePath}${forwardPath}`
+                )
+                : forwardPath;
+
+        return `${baseUrl.origin}${targetPath}${options.searchParams ? `?${options.searchParams}` : ""}`;
+    } catch {
+        return `${normalizedProxyTarget}${options.pathname}${options.searchParams ? `?${options.searchParams}` : ""}`;
+    }
+};
+
+async function handleProxy(request: Request) {
     const url = new URL(request.url);
     const searchParams = url.searchParams.toString();
-    const normalizedProxyTarget = PROXY_TARGET.replace(/\/+$/, "");
     const forwardPathname = url.pathname.replace(/^\/api\/p/, "") || "/";
-    const targetUrl = `${normalizedProxyTarget}${forwardPathname}${searchParams ? `?${searchParams}` : ''}`;
+    const targetUrl = buildTargetUrl({ proxyTarget: PROXY_TARGET, pathname: forwardPathname, searchParams });
 
     if (isProxyDebugEnabled) {
         console.log(`[Proxy] Forwarding ${request.method} ${url.pathname}`);
@@ -70,10 +101,10 @@ async function handleProxy(request: Request, { params }: { params: Promise<{ pat
     }
 }
 
-export async function GET(request: Request, props: { params: Promise<{ path: string[] }> }) { return handleProxy(request, props); }
-export async function POST(request: Request, props: { params: Promise<{ path: string[] }> }) { return handleProxy(request, props); }
-export async function PUT(request: Request, props: { params: Promise<{ path: string[] }> }) { return handleProxy(request, props); }
-export async function PATCH(request: Request, props: { params: Promise<{ path: string[] }> }) { return handleProxy(request, props); }
-export async function DELETE(request: Request, props: { params: Promise<{ path: string[] }> }) { return handleProxy(request, props); }
-export async function HEAD(request: Request, props: { params: Promise<{ path: string[] }> }) { return handleProxy(request, props); }
-export async function OPTIONS(request: Request, props: { params: Promise<{ path: string[] }> }) { return handleProxy(request, props); }
+export async function GET(request: Request) { return handleProxy(request); }
+export async function POST(request: Request) { return handleProxy(request); }
+export async function PUT(request: Request) { return handleProxy(request); }
+export async function PATCH(request: Request) { return handleProxy(request); }
+export async function DELETE(request: Request) { return handleProxy(request); }
+export async function HEAD(request: Request) { return handleProxy(request); }
+export async function OPTIONS(request: Request) { return handleProxy(request); }

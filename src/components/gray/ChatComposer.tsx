@@ -18,10 +18,12 @@ const GrayChatComposerBase = ({
   ...rest
 }: GrayChatComposerProps) => {
   const { user } = useUser();
-  const { reasoningMode, setReasoningMode, modelTier, webSearchEnabled, toggleWebSearchEnabled } = useChatStore();
+  const { reasoningMode, setReasoningMode, modelTier, autoWebSearchEnabled, webSearchEnabled, toggleWebSearchEnabled } =
+    useChatStore();
 
   const planTier = (user?.plan_tier || "scout").toLowerCase();
   const isReasoningLocked = planTier === "scout" || modelTier === "lite";
+  const isWebSearchEnabled = autoWebSearchEnabled || webSearchEnabled;
 
   return (
     <div
@@ -35,7 +37,7 @@ const GrayChatComposerBase = ({
           isReasoningEnabled={reasoningMode}
           onToggleReasoning={() => setReasoningMode(!reasoningMode)}
           isReasoningLocked={isReasoningLocked}
-          isSearchEnabled={webSearchEnabled}
+          isSearchEnabled={isWebSearchEnabled}
           onToggleSearch={toggleWebSearchEnabled}
           modelSelector={<ModelSelector />}
           onPasteFiles={rest.onPasteFiles}
