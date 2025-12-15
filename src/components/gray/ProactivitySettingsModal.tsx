@@ -203,9 +203,10 @@ export function ProactivitySettingsModal({
                     time: primaryTime,
                     times: presetTimes,
                 });
+                onClose();
             }
         },
-        [onSelectProactivity]
+        [onClose, onSelectProactivity]
     );
 
     const modalRemoveLabel = activeProactivity ? t("Remove proactivity") : t("Skip for now");

@@ -3,16 +3,15 @@ import {
   apiService,
   type Calendar,
   type CalendarEvent as ApiCalendarEvent,
-  type Reminder,
   type GoogleCalendarInfo,
   type GoogleCalendarEvent as ApiGoogleCalendarEvent,
 } from "@/lib/api";
-import { sanitizeEventColor, DEFAULT_EVENT_COLOR, REMINDER_RETENTION_WINDOW_MS } from "@/app/gray/constants";
+import { sanitizeEventColor, DEFAULT_EVENT_COLOR } from "@/app/gray/constants";
 import { type PlanItem, type HabitItem } from "@/components/gray/types";
 import type { CalendarEvent, CalendarInfo } from "@/components/calendar/types";
 
-// Custom event name for triggering reminder refresh from anywhere in the app
-export const REMINDERS_REFRESH_EVENT = "gray:reminders-refresh";
+// Custom event name for triggering workspace refresh from anywhere in the app
+export const WORKSPACE_REFRESH_EVENT = "gray:workspace-refresh";
 
 const GOOGLE_CALENDAR_PREFIX = "google:";
 const GOOGLE_CALENDAR_COLOR_PALETTE = ["#4C6FFF", "#0AD5B0", "#F6A623", "#D075FF", "#E36D7D", "#CDD1D5"] as const;
@@ -40,24 +39,9 @@ const resolveGoogleDate = (payload: ApiGoogleCalendarEvent["start"] | ApiGoogleC
   return parsed;
 };
 
-const shouldIncludeCalendarReminder = (reminder: Reminder, nowMs: number): boolean => {
-  if (reminder.status === "pending") {
-    return true;
-  }
-  if (reminder.status !== "delivered") {
-    return false;
-  }
-  const remindAt = Date.parse(reminder.remind_at);
-  if (!Number.isFinite(remindAt)) {
-    return false;
-  }
-  return remindAt >= nowMs - REMINDER_RETENTION_WINDOW_MS;
-};
-
 export function useWorkspaceData(userId: number | null, variant: "general" | "dashboard" | "chat") {
   const [plans, setPlans] = useState<PlanItem[]>([]);
   const [habits, setHabits] = useState<HabitItem[]>([]);
-  const [reminderPlans, setReminderPlans] = useState<PlanItem[]>([]);
   const [calendarCalendars, setCalendarCalendars] = useState<CalendarInfo[]>([]);
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
   const [streakCount, setStreakCount] = useState(0);
@@ -83,6 +67,8 @@ export function useWorkspaceData(userId: number | null, variant: "general" | "da
           deadline: plan.deadline ?? null,
           scheduleSlot: plan.schedule_slot ?? null,
           details: plan.description ?? null,
+          reminderAt: plan.reminder_at ?? null,
+          color: plan.color ?? null,
         }))
         : [];
 
@@ -95,6 +81,8 @@ export function useWorkspaceData(userId: number | null, variant: "general" | "da
           completed: false,
           createdAt: habit.created_at,
           updatedAt: habit.updated_at,
+          details: habit.description ?? null,
+          reminderAt: habit.reminder_at ?? null,
         }))
         : [];
 
@@ -106,60 +94,23 @@ export function useWorkspaceData(userId: number | null, variant: "general" | "da
     }
   }, [userId]);
 
-  const refreshReminders = useCallback(async () => {
-    if (!userId) return;
-
-    try {
-      const reminderResponse = await apiService.getUserReminders(userId, {
-        limit: 50,
-        includeArchived: true,
-      });
-
-      const nowMs = Date.now();
-      const includedReminders: Reminder[] = Array.isArray(reminderResponse)
-        ? reminderResponse.filter((reminder) => shouldIncludeCalendarReminder(reminder, nowMs))
-        : [];
-
-      setReminderPlans(
-        includedReminders.map((reminder) => ({
-          id: `reminder-${reminder.id}`,
-          label: reminder.label,
-          completed: reminder.status === "completed",
-          createdAt: reminder.created_at,
-          updatedAt: reminder.updated_at,
-          deadline: reminder.remind_at ?? null,
-          scheduleSlot: null,
-          details: reminder.description ?? reminder.summary ?? null,
-          reminderId: reminder.id,
-          reminderStatus: reminder.status,
-        }))
-      );
-    } catch (err) {
-      console.error("Failed to refresh reminders:", err);
-      setError(err);
-    }
-  }, [userId]);
-
   const refreshWorkspaceData = useCallback(async () => {
-    await Promise.all([
-      refreshPlansAndHabits(),
-      refreshReminders(),
-    ]);
-  }, [refreshPlansAndHabits, refreshReminders]);
+    await refreshPlansAndHabits();
+  }, [refreshPlansAndHabits]);
 
-  // Listen for custom event to refresh reminders (dispatched by ChatProvider after reminder creation)
+  // Listen for custom event to refresh workspace (dispatched after AI-created plans/reminders)
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    const handleRemindersRefresh = () => {
-      void refreshReminders();
+    const handleWorkspaceRefresh = () => {
+      void refreshPlansAndHabits();
     };
 
-    window.addEventListener(REMINDERS_REFRESH_EVENT, handleRemindersRefresh);
+    window.addEventListener(WORKSPACE_REFRESH_EVENT, handleWorkspaceRefresh);
     return () => {
-      window.removeEventListener(REMINDERS_REFRESH_EVENT, handleRemindersRefresh);
+      window.removeEventListener(WORKSPACE_REFRESH_EVENT, handleWorkspaceRefresh);
     };
-  }, [refreshReminders]);
+  }, [refreshPlansAndHabits]);
 
   useEffect(() => {
     if (userId === null) {
@@ -193,10 +144,6 @@ export function useWorkspaceData(userId: number | null, variant: "general" | "da
             : Promise.resolve<GoogleCalendarInfo[]>([]),
           apiService.getPlans(userId),
           apiService.getUserHabits(userId),
-          apiService.getUserReminders(userId, {
-            limit: 50,
-            includeArchived: true,
-          }),
           apiService.getUserStreak(userId),
         ]);
 
@@ -210,7 +157,6 @@ export function useWorkspaceData(userId: number | null, variant: "general" | "da
           googleCalendarsResult,
           planResult,
           habitResult,
-          reminderResult,
           streakResult,
         ] = results;
 
@@ -235,9 +181,6 @@ export function useWorkspaceData(userId: number | null, variant: "general" | "da
 
         const habitResponse = habitResult.status === 'fulfilled' ? habitResult.value : [];
         if (habitResult.status === 'rejected') console.error('Failed to load habits:', habitResult.reason);
-
-        const reminderResponse = reminderResult.status === 'fulfilled' ? reminderResult.value : [];
-        if (reminderResult.status === 'rejected') console.error('Failed to load reminders:', reminderResult.reason);
 
         const streakResponse = streakResult.status === 'fulfilled' ? streakResult.value : null;
         if (streakResult.status === 'rejected') console.error('Failed to load streak:', streakResult.reason);
@@ -343,27 +286,6 @@ export function useWorkspaceData(userId: number | null, variant: "general" | "da
             .filter((event): event is CalendarEvent => Boolean(event));
         });
 
-        const nowMs = Date.now();
-        const includedReminders: Reminder[] = Array.isArray(reminderResponse)
-          ? reminderResponse.filter((reminder) => shouldIncludeCalendarReminder(reminder, nowMs))
-          : [];
-
-        const reminderEvents: CalendarEvent[] = includedReminders.map<CalendarEvent>((reminder) => ({
-          id: `reminder-${reminder.id}`,
-          calendarId: "reminder",
-          title: reminder.label,
-          start: new Date(reminder.remind_at),
-          end: new Date(reminder.remind_at),
-          color: sanitizeEventColor(
-            calendarColorMap.get(fallbackCalendarId) ?? fallbackEventColor
-          ),
-          entryType: "reminder",
-          displayHint: "line",
-          description: reminder.summary ?? reminder.description ?? undefined,
-          reminderId: reminder.id,
-          reminderStatus: reminder.status,
-        }));
-
         const mappedPlans: PlanItem[] = Array.isArray(planResponse)
           ? planResponse.map((plan) => ({
             id: plan.id.toString(),
@@ -374,6 +296,8 @@ export function useWorkspaceData(userId: number | null, variant: "general" | "da
             deadline: plan.deadline ?? null,
             scheduleSlot: plan.schedule_slot ?? null,
             details: plan.description ?? null,
+            reminderAt: plan.reminder_at ?? null,
+            color: plan.color ?? null,
           }))
           : [];
 
@@ -386,27 +310,15 @@ export function useWorkspaceData(userId: number | null, variant: "general" | "da
             completed: false,
             createdAt: habit.created_at,
             updatedAt: habit.updated_at,
+            details: habit.description ?? null,
+            reminderAt: habit.reminder_at ?? null,
           }))
           : [];
 
         setCalendarCalendars([...mappedCalendars, ...mappedGoogleCalendars]);
-        setCalendarEvents([...mappedEvents, ...mappedGoogleEvents, ...reminderEvents]);
+        setCalendarEvents([...mappedEvents, ...mappedGoogleEvents]);
         setPlans(mappedPlans);
         setHabits(mappedHabits);
-        setReminderPlans(
-          includedReminders.map((reminder) => ({
-            id: `reminder-${reminder.id}`,
-            label: reminder.label,
-            completed: reminder.status === "completed",
-            createdAt: reminder.created_at,
-            updatedAt: reminder.updated_at,
-            deadline: reminder.remind_at ?? null,
-            scheduleSlot: null,
-            details: reminder.description ?? reminder.summary ?? null,
-            reminderId: reminder.id,
-            reminderStatus: reminder.status,
-          }))
-        );
         setStreakCount(streakResponse?.current_streak ?? 0);
       } catch (err) {
         console.error("Failed to load workspace data:", err);
@@ -428,8 +340,6 @@ export function useWorkspaceData(userId: number | null, variant: "general" | "da
     setPlans,
     habits,
     setHabits,
-    reminderPlans,
-    setReminderPlans,
     calendarCalendars,
     setCalendarCalendars,
     calendarEvents,
@@ -438,7 +348,6 @@ export function useWorkspaceData(userId: number | null, variant: "general" | "da
     loading,
     error,
     refreshPlansAndHabits,
-    refreshReminders,
     refreshWorkspaceData
   };
 }

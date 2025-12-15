@@ -123,11 +123,11 @@ export const EventCard = memo(function EventCard({
 }: EventCardProps) {
   const timeLabel = useMemo(() => {
     const startLabel = formatEventTime(event.start);
-    if (event.entryType === "reminder" || event.start.getTime() === event.end.getTime()) {
+    if (event.displayHint === "line" || event.start.getTime() === event.end.getTime()) {
       return startLabel;
     }
     return `${startLabel} — ${formatEventTime(event.end)}`;
-  }, [event.start, event.end, event.entryType]);
+  }, [event.displayHint, event.start, event.end]);
   const tooltipLabel = useMemo(() => {
     const segments = [event.title];
     if (event.description) {
@@ -158,7 +158,7 @@ export const EventCard = memo(function EventCard({
 
   cardStyle["--event-card-color"] = backgroundColor;
   cardStyle["--event-line-color"] = backgroundColor;
-  if (event.entryType !== "reminder" && event.displayHint !== "line") {
+  if (event.displayHint !== "line") {
     cardStyle.backgroundColor = backgroundColor;
   }
   cardStyle["--event-card-text-color"] = textColor;

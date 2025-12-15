@@ -295,10 +295,6 @@ export function GrayDashboardCalendar({
 
   const visibleEvents = useMemo(
     () => events.filter((event) => {
-      // Always show reminder events, even if they don't have a matching calendar
-      if (event.entryType === "reminder") {
-        return true;
-      }
       // For regular events, check if their calendar is visible
       return calendarMap.get(event.calendarId)?.isVisible !== false;
     }),

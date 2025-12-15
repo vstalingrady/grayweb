@@ -91,8 +91,9 @@ const clonePlans = (plans: PlanItem[]): PlanItem[] =>
     completed: plan.completed,
     deadline: plan.deadline ?? null,
     scheduleSlot: plan.scheduleSlot ?? null,
-    reminderId: plan.reminderId,
-    reminderStatus: plan.reminderStatus,
+    details: plan.details ?? null,
+    reminderAt: plan.reminderAt ?? null,
+    color: plan.color ?? null,
   }));
 
 const cloneHabits = (habits: HabitItem[]): HabitItem[] =>
@@ -102,6 +103,8 @@ const cloneHabits = (habits: HabitItem[]): HabitItem[] =>
     streakLabel: habit.streakLabel,
     previousLabel: habit.previousLabel,
     completed: Boolean(habit.completed),
+    details: habit.details ?? null,
+    reminderAt: habit.reminderAt ?? null,
   }));
 
 const createPulseSnapshot = (

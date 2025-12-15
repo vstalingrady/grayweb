@@ -59,6 +59,8 @@ const CALENDAR_PANEL_MAX_HEIGHT_WITH_CHAT =
 const CALENDAR_PANEL_MAX_HEIGHT_NO_CHAT =
   "clamp(420px, calc(100vh - clamp(48px, 6vh, 120px)), calc(100vh - clamp(32px, 4vh, 96px)))";
 const CALENDAR_PANEL_HOUR_HEIGHT = 62;
+const CALENDAR_PANEL_MIN_HEIGHT_PX = 420;
+const CALENDAR_PANEL_HEIGHT_STORAGE_KEY = "gray.dashboard.calendarPanelHeightPx";
 
 const buildPanelSizingStyle = (hasChatBar: boolean) =>
   ({
@@ -148,9 +150,7 @@ type GrayDashboardViewProps = {
   chatBar?: ReactNode;
   isCompactLayout?: boolean;
   userId?: number | null;
-  reminderPlans?: PlanItem[];
   proactivityDeliveryKeys?: ReadonlySet<string>;
-  onReminderMove?: (reminderId: number, range: { start: Date; end: Date }) => Promise<void> | void;
   streakCount?: number;
   onUpgradeClick?: () => void;
   showUpgradeButton?: boolean;
@@ -189,9 +189,7 @@ export function GrayDashboardView({
   chatBar,
   isCompactLayout = false,
   userId,
-  reminderPlans,
   proactivityDeliveryKeys,
-  onReminderMove,
   streakCount = 0,
   onUpgradeClick,
   showUpgradeButton = false,
@@ -239,9 +237,8 @@ export function GrayDashboardView({
   }, [calendarEvents, pulseSelectedDate, t]);
 
   const displayHabits = hasPulseData ? currentPulse?.habits ?? [] : [];
-  const derivedReminderPlans = reminderPlans ?? [];
   const visiblePlans = useMemo(() => {
-    const all = [...displayPlans, ...derivedTaskPlans, ...derivedReminderPlans];
+    const all = [...displayPlans, ...derivedTaskPlans];
     const seen = new Set<string>();
     return all.filter((item) => {
       if (seen.has(item.id)) {
@@ -250,15 +247,10 @@ export function GrayDashboardView({
       seen.add(item.id);
       return true;
     });
-  }, [displayPlans, derivedTaskPlans, derivedReminderPlans]);
+  }, [displayPlans, derivedTaskPlans]);
   const visibleHabits = useMemo(() => [...displayHabits], [displayHabits]);
-  const derivedReminderIds = useMemo(
-    () => new Set(derivedReminderPlans.map((plan) => plan.id)),
-    [derivedReminderPlans]
-  );
   const planCalendarEvents = useMemo(() => {
-    const plansExcludingReminders = displayPlans.filter((plan) => !plan.id.startsWith("reminder-"));
-    return mapPlansToCalendarEvents(plansExcludingReminders);
+    return mapPlansToCalendarEvents(displayPlans);
   }, [displayPlans]);
 
   const handleCalendarTaskToggle = useCallback(
@@ -277,44 +269,6 @@ export function GrayDashboardView({
         return;
       }
 
-      // Handle reminder events (e.g., "reminder-31")
-      if (event.id.startsWith("reminder-")) {
-        const targetPlan = displayPlans.find((plan) => plan.id === event.id);
-        if (targetPlan) {
-          // console.log(`[CALENDAR] Deleting reminder event: ${event.id}`);
-          onDeletePlan(targetPlan);
-          return;
-        }
-
-        // Fallback 1: Try to match complex chat-session reminder IDs (reminder-assistant-{id}-{iso})
-        // to the normalized plan ID (reminder-{id}).
-        const complexMatch = event.id.match(/^reminder-[^-]+-(\d+)-/);
-        if (complexMatch) {
-          const numericId = complexMatch[1];
-          const simpleId = `reminder-${numericId}`;
-          const fallbackPlan = displayPlans.find((plan) => plan.id === simpleId);
-          if (fallbackPlan) {
-            // console.log(`[CALENDAR] Deleting reminder event via fallback: ${event.id} -> ${simpleId}`);
-            onDeletePlan(fallbackPlan);
-            return;
-          }
-        }
-
-        // Fallback 2: If still not found (e.g. stale displayPlans but valid chat event),
-        // construct a synthetic plan to trigger deletion by ID.
-        // console.log(`[CALENDAR] Deleting reminder event via synthetic fallback: ${event.id}`);
-        const syntheticPlan: PlanItem = {
-          id: event.id,
-          label: event.title,
-          completed: false,
-          deadline: null,
-          scheduleSlot: null,
-          details: null,
-        };
-        onDeletePlan(syntheticPlan);
-        return;
-      }
-
       // Handle plan events (e.g., "plan-event-123")
       if (event.id.startsWith(PLAN_EVENT_ID_PREFIX)) {
         const planId = event.id.slice(PLAN_EVENT_ID_PREFIX.length);
@@ -325,7 +279,7 @@ export function GrayDashboardView({
           return;
         }
       }
-      console.warn(`[CALENDAR] Could not find plan/reminder for event: ${event.id}`);
+      console.warn(`[CALENDAR] Could not find plan for event: ${event.id}`);
     },
     [displayPlans, onDeletePlan]
   );
@@ -350,16 +304,63 @@ export function GrayDashboardView({
   const isChatBarVisible = Boolean(chatBar);
   const calendarContainerRef = useRef<HTMLDivElement | null>(null);
   const chatDockRef = useRef<HTMLDivElement | null>(null);
-  const [panelMaxHeightPx, setPanelMaxHeightPx] = useState<number | null>(null);
+  const [panelAvailableHeightPx, setPanelAvailableHeightPx] = useState<number | null>(null);
+  const [panelUserHeightPx, setPanelUserHeightPx] = useState<number | null>(null);
+  const panelResizeRef = useRef<{ pointerId: number; startY: number; startHeight: number } | null>(null);
+  const [isPanelResizing, setIsPanelResizing] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const stored = window.localStorage.getItem(CALENDAR_PANEL_HEIGHT_STORAGE_KEY);
+    if (!stored) {
+      return;
+    }
+    const parsed = Number.parseInt(stored, 10);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      setPanelUserHeightPx(parsed);
+    }
+  }, []);
+
+  const effectivePanelHeightPx = useMemo(() => {
+    if (panelAvailableHeightPx === null) {
+      return null;
+    }
+    const maximum = Math.max(panelAvailableHeightPx, CALENDAR_PANEL_MIN_HEIGHT_PX);
+    const desired = panelUserHeightPx ?? maximum;
+    return Math.max(CALENDAR_PANEL_MIN_HEIGHT_PX, Math.min(desired, maximum));
+  }, [panelAvailableHeightPx, panelUserHeightPx]);
+
+  useEffect(() => {
+    if (panelUserHeightPx === null || panelAvailableHeightPx === null) {
+      return;
+    }
+    if (panelUserHeightPx > panelAvailableHeightPx) {
+      setPanelUserHeightPx(panelAvailableHeightPx);
+    }
+  }, [panelAvailableHeightPx, panelUserHeightPx]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    if (panelUserHeightPx === null) {
+      window.localStorage.removeItem(CALENDAR_PANEL_HEIGHT_STORAGE_KEY);
+      return;
+    }
+    window.localStorage.setItem(CALENDAR_PANEL_HEIGHT_STORAGE_KEY, String(panelUserHeightPx));
+  }, [panelUserHeightPx]);
+
   const panelSizingStyle = useMemo(() => {
     const style = buildPanelSizingStyle(isChatBarVisible);
-    if (panelMaxHeightPx !== null) {
-      const maxHeightValue = `${panelMaxHeightPx}px`;
+    if (effectivePanelHeightPx !== null) {
+      const maxHeightValue = `${effectivePanelHeightPx}px`;
       style["--calendar-max-height"] = maxHeightValue;
       style["--dashboard-panel-max-height"] = maxHeightValue;
     }
     return style;
-  }, [isChatBarVisible, panelMaxHeightPx]);
+  }, [effectivePanelHeightPx, isChatBarVisible]);
 
   const { user } = useUser();
   const planTier = (user?.plan_tier || "scout").toLowerCase();
@@ -385,8 +386,11 @@ export function GrayDashboardView({
           ? chatDockRef.current.getBoundingClientRect().height
           : 0;
       const clearance = paddingBottom + chatDockHeight + (isChatBarVisible ? 24 : 16);
-      const availableHeight = Math.max(420, viewportHeight - rect.top - clearance);
-      setPanelMaxHeightPx((previous) => {
+      const availableHeight = Math.max(
+        CALENDAR_PANEL_MIN_HEIGHT_PX,
+        viewportHeight - rect.top - clearance
+      );
+      setPanelAvailableHeightPx((previous) => {
         const rounded = Math.round(availableHeight);
         return previous === rounded ? previous : rounded;
       });
@@ -417,6 +421,64 @@ export function GrayDashboardView({
       observers.forEach((observer) => observer.disconnect());
     };
   }, [isChatBarVisible, activeTab]);
+
+  const handlePanelResizePointerDown = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      if (event.pointerType === "touch") {
+        return;
+      }
+      if (effectivePanelHeightPx === null || panelAvailableHeightPx === null) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      const target = event.currentTarget;
+      panelResizeRef.current = {
+        pointerId: event.pointerId,
+        startY: event.clientY,
+        startHeight: effectivePanelHeightPx,
+      };
+      setIsPanelResizing(true);
+      target.setPointerCapture(event.pointerId);
+
+      const onMove = (moveEvent: PointerEvent) => {
+        const state = panelResizeRef.current;
+        if (!state || moveEvent.pointerId !== state.pointerId) {
+          return;
+        }
+        const deltaY = moveEvent.clientY - state.startY;
+        const nextHeight = Math.round(state.startHeight + deltaY);
+        const clamped = Math.max(
+          CALENDAR_PANEL_MIN_HEIGHT_PX,
+          Math.min(nextHeight, panelAvailableHeightPx)
+        );
+        setPanelUserHeightPx(clamped);
+      };
+
+      const release = () => {
+        target.removeEventListener("pointermove", onMove);
+        target.removeEventListener("pointerup", onUp);
+        target.removeEventListener("pointercancel", onCancel);
+        if (panelResizeRef.current?.pointerId === event.pointerId) {
+          panelResizeRef.current = null;
+        }
+        setIsPanelResizing(false);
+        if (target.hasPointerCapture(event.pointerId)) {
+          target.releasePointerCapture(event.pointerId);
+        }
+      };
+
+      const onUp = () => release();
+      const onCancel = () => release();
+
+      target.addEventListener("pointermove", onMove);
+      target.addEventListener("pointerup", onUp);
+      target.addEventListener("pointercancel", onCancel);
+    },
+    [effectivePanelHeightPx, panelAvailableHeightPx]
+  );
   const pulseTodayButtonLabel = useMemo(
     () => formatRelativeDayLabel(pulseSelectedDate, currentDate),
     [pulseSelectedDate, currentDate]
@@ -1161,7 +1223,6 @@ export function GrayDashboardView({
         />
       )}
       embedWithinParentSurface
-      maxHeight={panelMaxHeightPx !== null ? `${panelMaxHeightPx}px` : undefined}
       surfaceClassName={styles.dashboardCalendarInnerSurface}
     />
   );
@@ -1205,6 +1266,7 @@ export function GrayDashboardView({
           className={styles.dashboardCalendarShell}
           style={panelSizingStyle}
           data-compact={isCompactLayout ? "true" : "false"}
+          data-resizing={isPanelResizing ? "true" : "false"}
         >
           <div
             className={dashboardSurfaceClassName}
@@ -1212,6 +1274,17 @@ export function GrayDashboardView({
           >
             {surfaceContent}
           </div>
+          {isCompactLayout ? null : (
+            <div
+              className={styles.dashboardCalendarResizeHandle}
+              data-active={isPanelResizing ? "true" : "false"}
+              role="separator"
+              aria-orientation="horizontal"
+              aria-label={t("Resize calendar panel")}
+              onPointerDown={handlePanelResizePointerDown}
+              onDoubleClick={() => setPanelUserHeightPx(null)}
+            />
+          )}
         </div>
         {isChatBarVisible ? (
           <div className={styles.chatComposerDock} ref={chatDockRef}>

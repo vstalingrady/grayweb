@@ -10,9 +10,19 @@ interface ShaderBackgroundProps {
   children: React.ReactNode
   className?: string
   fullHeight?: boolean
+  colors?: string[]
+  backgroundColor?: string
+  speed?: number
 }
 
-export default function ShaderBackground({ children, className, fullHeight = true }: ShaderBackgroundProps) {
+export default function ShaderBackground({
+  children,
+  className,
+  fullHeight = true,
+  colors,
+  backgroundColor,
+  speed,
+}: ShaderBackgroundProps) {
   const containerClassName = [styles.container, fullHeight ? styles.fullHeight : "", className ?? ""]
     .filter((token) => token)
     .join(" ")
@@ -21,6 +31,10 @@ export default function ShaderBackground({ children, className, fullHeight = tru
     minPixelRatio: 1,
     maxPixelCount: 128_000,
   }
+
+  const resolvedColors = colors ?? ["#000000", "#0a0a0a", "#1d1d1d", "#333333", "#555555"]
+  const resolvedBackground = backgroundColor ?? "#010101"
+  const resolvedSpeed = speed ?? 1
 
   return (
     <div className={containerClassName}>
@@ -55,9 +69,9 @@ export default function ShaderBackground({ children, className, fullHeight = tru
       {/* Background Shaders */}
       <MeshGradient
         className={styles.layer}
-        colors={["#000000", "#0a0a0a", "#1d1d1d", "#333333", "#555555"]}
-        speed={1}
-        style={{ backgroundColor: "#010101" }}
+        colors={resolvedColors}
+        speed={resolvedSpeed}
+        style={{ backgroundColor: resolvedBackground }}
         {...sharedShaderProps}
       />
 

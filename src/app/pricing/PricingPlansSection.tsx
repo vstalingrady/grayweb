@@ -175,10 +175,6 @@ export function PricingPlansSection() {
         annualSavingsPercent > 0 ? t("Save ~{percent}%", { percent: annualSavingsPercent }) : undefined;
 
     const handleUpgrade = (plan: "voyager" | "pioneer") => {
-        // Block international users until Paddle is ready
-        if (isIndonesia === false) {
-            return; // Button is disabled for international users
-        }
         const paymentUrl = `/payment?plan=${plan}&cycle=${billingCycle}`;
         if (!user) {
             // Redirect to login with return URL to complete purchase
@@ -296,9 +292,8 @@ export function PricingPlansSection() {
                             type="button"
                             className={`${styles.planButton} ${styles.planButtonOutline}`}
                             onClick={() => handleUpgrade("voyager")}
-                            disabled={isIndonesia === false}
                         >
-                            {isIndonesia === false ? t("Coming soon") : t("Upgrade")}
+                            {t("Upgrade")}
                         </button>
                     </div>
                 </article>
@@ -338,9 +333,8 @@ export function PricingPlansSection() {
                             type="button"
                             className={`${styles.planButton} ${styles.planButtonPrimary}`}
                             onClick={() => handleUpgrade("pioneer")}
-                            disabled={isIndonesia === false}
                         >
-                            {isIndonesia === false ? t("Coming soon") : t("Upgrade")}
+                            {t("Upgrade")}
                         </button>
                     </div>
                 </article>

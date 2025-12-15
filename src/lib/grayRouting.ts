@@ -229,10 +229,17 @@ export const resolveWorkspaceOrigin = (
     return null;
   }
 
+  // Normalize protocol to always include colon suffix
+  const normalizeProtocol = (proto?: string): string => {
+    if (!proto) return "http:";
+    const trimmed = proto.trim();
+    return trimmed.endsWith(":") ? trimmed : `${trimmed}:`;
+  };
+
   const normalized = normalizeHostname(workspaceHost);
 
   if (isLocalHostname(workspaceHost)) {
-    const scheme = protocol ?? "http:";
+    const scheme = normalizeProtocol(protocol ?? "http");
     const portSuffix = port ? `:${port}` : "";
     return `${scheme}//${workspaceHost}${portSuffix}`;
   }
@@ -244,7 +251,7 @@ export const resolveWorkspaceOrigin = (
     return `https://${workspaceHost}`;
   }
 
-  const scheme = protocol ?? "https:";
+  const scheme = normalizeProtocol(protocol ?? "https");
   const portSuffix = port ? `:${port}` : "";
   return `${scheme}//${workspaceHost}${portSuffix}`;
 };

@@ -19,7 +19,7 @@ PLAN_TOOL = types.Tool(
         ),
         types.FunctionDeclaration(
             name="create_plan",
-            description="Create a new plan.",
+            description="Create a new plan. Reminders are plans with an optional reminder_at.",
             parameters=types.Schema(
                 type="OBJECT",
                 properties={
@@ -38,6 +38,10 @@ PLAN_TOOL = types.Tool(
                     "schedule_slot": types.Schema(
                         type="STRING",
                         description="Optional schedule slot (e.g. 'Morning', 'Evening').",
+                    ),
+                    "reminder_at": types.Schema(
+                        type="STRING",
+                        description="Optional reminder time (ISO 8601 with timezone offset). Leave empty or omit for no reminder.",
                     ),
                 },
                 required=["label"],
@@ -87,6 +91,10 @@ PLAN_TOOL = types.Tool(
                         type="STRING",
                         description="New schedule slot.",
                     ),
+                    "reminder_at": types.Schema(
+                        type="STRING",
+                        description="Optional reminder time (ISO 8601 with timezone offset). Set to empty string to clear.",
+                    ),
                 },
                 required=["plan_id"],
             ),
@@ -123,6 +131,10 @@ PLAN_TOOL = types.Tool(
                         type="INTEGER",
                         description="Optional streak count in consecutive days (integer only).",
                     ),
+                    "reminder_at": types.Schema(
+                        type="STRING",
+                        description="Optional reminder time (ISO 8601 with timezone offset). Leave empty or omit for no reminder.",
+                    ),
                 },
                 required=["label"],
             ),
@@ -148,6 +160,10 @@ PLAN_TOOL = types.Tool(
                     "streak_days": types.Schema(
                         type="INTEGER",
                         description="New streak count in consecutive days (integer).",
+                    ),
+                    "reminder_at": types.Schema(
+                        type="STRING",
+                        description="Optional reminder time (ISO 8601 with timezone offset). Set to empty string to clear.",
                     ),
                 },
                 required=["habit_id"],
@@ -192,102 +208,6 @@ PLAN_TOOL = types.Tool(
                     "entity_type": types.Schema(
                         type="STRING",
                         description='Optional entity type filter such as "plan" or "habit".',
-                    ),
-                },
-                required=[],
-            ),
-        ),
-        types.FunctionDeclaration(
-            name="create_reminder",
-            description="Create a new reminder.",
-            parameters=types.Schema(
-                type="OBJECT",
-                properties={
-                    "label": types.Schema(
-                        type="STRING",
-                        description="Description of what to be reminded about.",
-                    ),
-                    "remind_at": types.Schema(
-                        type="STRING",
-                        description="ISO 8601 datetime string with timezone offset for the reminder time (e.g., 2024-12-11T21:00:00+07:00). Always include the user's timezone offset from the time context.",
-                    ),
-                    "description": types.Schema(
-                        type="STRING",
-                        description="Optional longer description.",
-                    ),
-                },
-                required=["label", "remind_at"],
-            ),
-        ),
-        types.FunctionDeclaration(
-            name="update_reminder",
-            description="Update an existing reminder.",
-            parameters=types.Schema(
-                type="OBJECT",
-                properties={
-                    "reminder_id": types.Schema(
-                        type="INTEGER",
-                        description="The ID of the reminder to update.",
-                    ),
-                    "label": types.Schema(
-                        type="STRING",
-                        description="New label.",
-                    ),
-                    "remind_at": types.Schema(
-                        type="STRING",
-                        description="New reminder time (ISO 8601 with timezone offset, e.g., 2024-12-11T21:00:00+07:00).",
-                    ),
-                    "status": types.Schema(
-                        type="STRING",
-                        description="New status (pending, completed, cancelled).",
-                    ),
-                    "description": types.Schema(
-                        type="STRING",
-                        description="New description.",
-                    ),
-                },
-                required=["reminder_id"],
-            ),
-        ),
-        types.FunctionDeclaration(
-            name="delete_reminder",
-            description="Delete a reminder.",
-            parameters=types.Schema(
-                type="OBJECT",
-                properties={
-                    "reminder_id": types.Schema(
-                        type="INTEGER",
-                        description="The ID of the reminder to delete.",
-                    ),
-                },
-                required=["reminder_id"],
-            ),
-        ),
-        types.FunctionDeclaration(
-            name="delete_latest_reminder",
-            description="Delete the most recent reminder(s), optionally matching a label substring or time window. Can delete all matching reminders at once.",
-            parameters=types.Schema(
-                type="OBJECT",
-                properties={
-                    "label_substring": types.Schema(
-                        type="STRING",
-                        description="Optional label text to match (case-insensitive substring).",
-                    ),
-                    "remind_before": types.Schema(
-                        type="STRING",
-                        description="Optional ISO 8601 datetime; only delete reminders at or before this time.",
-                    ),
-                    "remind_after": types.Schema(
-                        type="STRING",
-                        description="Optional ISO 8601 datetime; only delete reminders at or after this time.",
-                    ),
-                    "status": types.Schema(
-                        type="STRING",
-                        description="Optional status filter (pending, delivered, completed, cancelled). Defaults to pending/delivered.",
-                    ),
-                    "delete_all": types.Schema(
-                        type="BOOLEAN",
-                        description="If true, delete ALL matching reminders instead of just the most recent one. Useful for bulk cleanup.",
                     ),
                 },
                 required=[],

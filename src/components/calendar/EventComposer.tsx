@@ -181,7 +181,6 @@ const NEUTRAL_PALETTE = [
 const DEFAULT_COLORS: Record<CalendarEntryType, string> = {
   event: "#3D6F73",
   task: "#B77A2B",
-  reminder: "#2F6B4F",
   plan: "#5E7E91",
   habit: "#5E9182",
 };
@@ -202,7 +201,6 @@ const VISIBLE_ENTRY_TYPES: CalendarEntryType[] = ["plan", "habit", "event"];
 const ENTRY_TYPE_LABELS: Record<CalendarEntryType, string> = {
   event: "Event",
   task: "Task",
-  reminder: "Reminder",
   plan: "Plans",
   habit: "Habits",
 };
@@ -399,7 +397,6 @@ export function EventComposer({
     return () => window.removeEventListener("resize", updatePosition);
   }, [anchorRect, isOpen, state.entryType, state.startTime, state.endTime, state.details, state.title]);
 
-  const isReminder = state.entryType === "reminder";
   const isHabit = state.entryType === "habit";
 
   useEffect(() => {
@@ -416,9 +413,6 @@ export function EventComposer({
       entryType: nextType,
       color: DEFAULT_COLORS[nextType], // Apply default color for the new type
     };
-    if (nextType === "reminder") {
-      payload.endTime = state.startTime;
-    }
     dispatch({ type: "update", payload });
   };
 
@@ -427,11 +421,8 @@ export function EventComposer({
     [selectedDate, state.startTime]
   );
   const currentEnd = useMemo(() => {
-    if (isReminder) {
-      return currentStart;
-    }
     return combineDateWithTime(selectedDate, state.endTime);
-  }, [currentStart, selectedDate, state.endTime, isReminder]);
+  }, [currentStart, selectedDate, state.endTime]);
 
   const closeWithOptionalAutoCreate = useCallback(
     (options?: { allowAutoCreate?: boolean }) => {
@@ -450,10 +441,9 @@ export function EventComposer({
       }
 
       const start = currentStart;
-      const rawEnd = isReminder ? new Date(start) : currentEnd;
-      const normalizedEnd = isReminder
-        ? new Date(start)
-        : rawEnd <= start
+      const rawEnd = currentEnd;
+      const normalizedEnd =
+        rawEnd <= start
           ? new Date(start.getTime() + DEFAULT_EVENT_DURATION_MINUTES * 60000)
           : rawEnd;
 
@@ -466,7 +456,6 @@ export function EventComposer({
         entryType: state.entryType,
         calendarId: state.calendarId,
         description: state.details.trim() ? state.details.trim() : undefined,
-        displayHint: isReminder ? "line" : undefined,
       });
 
       onRequestClose();
@@ -476,7 +465,6 @@ export function EventComposer({
       activeEventId,
       currentEnd,
       currentStart,
-      isReminder,
       onRequestClose,
       onSubmit,
       state.calendarId,
@@ -496,10 +484,9 @@ export function EventComposer({
     event.preventDefault();
 
     const start = currentStart;
-    const rawEnd = isReminder ? new Date(start) : currentEnd;
-    const normalizedEnd = isReminder
-      ? new Date(start)
-      : rawEnd <= start
+    const rawEnd = currentEnd;
+    const normalizedEnd =
+      rawEnd <= start
         ? new Date(start.getTime() + DEFAULT_EVENT_DURATION_MINUTES * 60000)
         : rawEnd;
 
@@ -512,7 +499,6 @@ export function EventComposer({
       entryType: state.entryType,
       calendarId: state.calendarId,
       description: state.details.trim() ? state.details.trim() : undefined,
-      displayHint: isReminder ? "line" : undefined,
     });
     onRequestClose();
   };
@@ -811,10 +797,7 @@ export function EventComposer({
               className={styles.composerTitleInput}
             />
           </div>
-
-
-
-          {!isReminder && !isHabit ? (
+          {!isHabit ? (
             <>
               <div className={styles.composerTimeSection}>
                 <div className={styles.composerTimeRow}>
@@ -890,54 +873,6 @@ export function EventComposer({
                   </button>
                 </div>
               </div>
-            </>
-          ) : isReminder ? (
-            <>
-              <label className={styles.composerField}>
-                <span>{t("Reminder time")}</span>
-                <div className={styles.composerInputShell}>
-                  <input
-                    type="time"
-                    value={state.startTime}
-                    onChange={(event) =>
-                      dispatch({ type: "update", payload: { startTime: event.target.value } })
-                    }
-                    step={300}
-                    required
-                  />
-                </div>
-                <div className={styles.composerDateRow}>
-                  <button
-                    type="button"
-                    className={styles.composerDateTrigger}
-                    onClick={() => {
-                      setMonthDate(startOfMonth(selectedDate));
-                      setIsDatePickerOpen((previous) => !previous);
-                    }}
-                    aria-expanded={isDatePickerOpen ? "true" : "false"}
-                    aria-label={t("Choose date")}
-                    ref={datePickerTriggerRef}
-                  >
-                    <Calendar
-                      size={14}
-                      aria-hidden="true"
-                      className={styles.composerInlineControlIcon}
-                    />
-                    <span className={styles.composerInlineControlLabel}>
-                      {selectedDate.toLocaleDateString(undefined, {
-                        weekday: "short",
-                        month: "short",
-                        day: "numeric",
-                      })}
-                    </span>
-                    <ChevronDown
-                      size={14}
-                      aria-hidden="true"
-                      className={styles.composerInlineControlChevron}
-                    />
-                  </button>
-                </div>
-              </label>
             </>
           ) : null}
 

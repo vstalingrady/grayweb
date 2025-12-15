@@ -1,4 +1,5 @@
 import { getSupabaseClient } from './supabaseClient';
+import type { NotificationPreferences } from './notificationPreferences';
 
 const API_PROXY_PREFIX = '/api/p';
 
@@ -89,6 +90,12 @@ export interface User {
   usage_status?: UsageStatus | null;
   preferred_model?: string | null;
   visible_model_ids?: string[] | null;
+  theme_mode?: 'light' | 'dark' | 'system' | null;
+  ui_locale?: 'en' | 'id' | null;
+  preferred_response_language?: 'auto' | 'en' | 'id' | null;
+  notification_preferences?: NotificationPreferences | null;
+  conversation_memory_enabled?: boolean | null;
+  auto_web_search_enabled?: boolean | null;
 }
 
 export interface ChatSession {
@@ -130,6 +137,7 @@ export interface Plan {
   schedule_slot?: string | null;
   description?: string | null;
   color?: string;
+  reminder_at?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -141,6 +149,7 @@ export interface Habit {
   streak_label: string;
   previous_label: string;
   description?: string | null;
+  reminder_at?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -594,6 +603,12 @@ export interface UserUpdate {
   personalization_time_zone?: string | null;
   preferred_model?: string | null;
   visible_model_ids?: string[] | null;
+  theme_mode?: 'light' | 'dark' | 'system' | null;
+  ui_locale?: 'en' | 'id' | null;
+  preferred_response_language?: 'auto' | 'en' | 'id' | null;
+  notification_preferences?: NotificationPreferences | null;
+  conversation_memory_enabled?: boolean | null;
+  auto_web_search_enabled?: boolean | null;
 }
 
 class ApiService {
@@ -1041,6 +1056,8 @@ class ApiService {
       deadline?: string | null;
       scheduleSlot?: string | null;
       description?: string | null;
+      reminderAt?: string | null;
+      color?: string | null;
     }
   ): Promise<Plan> {
     const payload: Record<string, unknown> = {};
@@ -1058,6 +1075,12 @@ class ApiService {
     }
     if ("description" in updateData) {
       payload.description = updateData.description ?? null;
+    }
+    if ("reminderAt" in updateData) {
+      payload.reminder_at = updateData.reminderAt ?? null;
+    }
+    if ("color" in updateData) {
+      payload.color = updateData.color ?? null;
     }
 
     return this.fetch<Plan>(`/users/${userId}/plans/${planId}`, {
@@ -1080,6 +1103,8 @@ class ApiService {
       deadline?: string | null;
       scheduleSlot?: string | null;
       description?: string | null;
+      reminderAt?: string | null;
+      color?: string | null;
     }
   ): Promise<Plan> {
     const payload = {
@@ -1088,6 +1113,8 @@ class ApiService {
       deadline: planData.deadline ?? null,
       schedule_slot: planData.scheduleSlot ?? null,
       description: planData.description ?? null,
+      reminder_at: planData.reminderAt ?? null,
+      color: planData.color ?? null,
     };
 
     return this.fetch<Plan>(`/users/${userId}/plans`, {
@@ -1108,6 +1135,7 @@ class ApiService {
       streak_label?: string | null;
       previous_label?: string | null;
       description?: string | null;
+      reminderAt?: string | null;
     }
   ): Promise<Habit> {
     const payload = {
@@ -1115,6 +1143,7 @@ class ApiService {
       streak_label: habitData.streak_label ?? "0",
       previous_label: habitData.previous_label ?? "No history yet",
       description: habitData.description ?? null,
+      reminder_at: habitData.reminderAt ?? null,
     };
 
     return this.fetch<Habit>(`/users/${userId}/habits`, {
@@ -1131,6 +1160,7 @@ class ApiService {
       streak_label?: string | null;
       previous_label?: string | null;
       description?: string | null;
+      reminderAt?: string | null;
     }
   ): Promise<Habit> {
     const payload: Record<string, unknown> = {};
@@ -1145,6 +1175,9 @@ class ApiService {
     }
     if ("description" in updateData) {
       payload.description = updateData.description ?? null;
+    }
+    if ("reminderAt" in updateData) {
+      payload.reminder_at = updateData.reminderAt ?? null;
     }
 
     return this.fetch<Habit>(`/users/${userId}/habits/${habitId}`, {

@@ -2,9 +2,9 @@
 
 /* eslint-disable react-hooks/set-state-in-effect */
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Plus, Pencil, X } from "lucide-react";
+import { ChevronDown, Plus, Pencil, X } from "lucide-react";
 import calendarStyles from "@/components/calendar/GrayDashboardCalendar.module.css";
 import styles from "@/app/gray/GrayPageClient.module.css";
 import { useI18n } from "@/contexts/I18nContext";
@@ -43,7 +43,13 @@ export function ProactivityInlineMenu({
 }: ProactivityInlineMenuProps) {
   const { t } = useI18n();
   const panelRef = useRef<HTMLDivElement | null>(null);
+  const presetTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const presetMenuRef = useRef<HTMLDivElement | null>(null);
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
+  const [isPresetMenuOpen, setIsPresetMenuOpen] = useState(false);
+  const [presetMenuPosition, setPresetMenuPosition] = useState<{ top: number; left: number; width: number } | null>(
+    null
+  );
 
   const activeProactivityId = activeProactivity?.id ?? "";
   const initialPresetId = useMemo(() => {
@@ -72,6 +78,8 @@ export function ProactivityInlineMenu({
     if (!isOpen) {
       setEditingCustomTimeIndex(null);
       setEditingCustomTimeDraft("");
+      setIsPresetMenuOpen(false);
+      setPresetMenuPosition(null);
       return;
     }
     setSelectedPresetId(initialPresetId);
@@ -95,11 +103,11 @@ export function ProactivityInlineMenu({
       const viewportPadding = 12;
       const gap = 10;
 
-      const preferredTop = anchorRect.bottom + gap;
-      const canPlaceBelow = preferredTop + panelRect.height <= window.innerHeight - viewportPadding;
-      const top = canPlaceBelow
-        ? preferredTop
-        : clamp(anchorRect.top - gap - panelRect.height, viewportPadding, window.innerHeight - viewportPadding - panelRect.height);
+      const top = clamp(
+        anchorRect.top - gap - panelRect.height,
+        viewportPadding,
+        window.innerHeight - viewportPadding - panelRect.height
+      );
 
       const left = clamp(
         anchorRect.left,
@@ -118,6 +126,45 @@ export function ProactivityInlineMenu({
       window.removeEventListener("scroll", update, true);
     };
   }, [anchorRef, isOpen, selectedPresetId, customTimes.length]);
+
+  useLayoutEffect(() => {
+    if (!isOpen || !isPresetMenuOpen) {
+      setPresetMenuPosition(null);
+      return;
+    }
+
+    const triggerEl = presetTriggerRef.current;
+    const menuEl = presetMenuRef.current;
+    if (!triggerEl || !menuEl) {
+      return;
+    }
+
+    const update = () => {
+      const triggerRect = triggerEl.getBoundingClientRect();
+      const menuRect = menuEl.getBoundingClientRect();
+      const viewportPadding = 12;
+      const gap = 8;
+
+      const preferredTop = triggerRect.bottom + gap;
+      const canPlaceBelow = preferredTop + menuRect.height <= window.innerHeight - viewportPadding;
+      const top = canPlaceBelow
+        ? preferredTop
+        : clamp(triggerRect.top - gap - menuRect.height, viewportPadding, window.innerHeight - viewportPadding - menuRect.height);
+
+      const width = Math.round(triggerRect.width);
+      const left = clamp(triggerRect.left, viewportPadding, window.innerWidth - viewportPadding - width);
+
+      setPresetMenuPosition({ top: Math.round(top), left: Math.round(left), width });
+    };
+
+    update();
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", update, true);
+    return () => {
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update, true);
+    };
+  }, [isOpen, isPresetMenuOpen]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -166,18 +213,31 @@ export function ProactivityInlineMenu({
     [onSelectProactivity]
   );
 
-  const handlePresetChange = useCallback(
-    (event: ChangeEvent<HTMLSelectElement>) => {
-      const nextId = event.target.value;
+  const presetOptions = useMemo(() => {
+    return [
+      { id: "off", label: t("Off") },
+      ...PROACTIVITY_PRESETS.map((preset) => ({ id: preset.id, label: t(preset.title) })),
+      { id: CUSTOM_PROACTIVITY_ID, label: t("Custom") },
+    ];
+  }, [t]);
+
+  const selectedPresetLabel = useMemo(() => {
+    return presetOptions.find((option) => option.id === selectedPresetId)?.label ?? t("Off");
+  }, [presetOptions, selectedPresetId, t]);
+
+  const handlePresetSelect = useCallback(
+    (nextId: string) => {
       setSelectedPresetId(nextId);
 
       if (nextId === "off") {
         onRemoveProactivity();
+        setIsPresetMenuOpen(false);
         onClose();
         return;
       }
 
       if (nextId === CUSTOM_PROACTIVITY_ID) {
+        setIsPresetMenuOpen(false);
         applyCustomProactivity(customTimes);
         return;
       }
@@ -201,6 +261,8 @@ export function ProactivityInlineMenu({
         time: primaryTime,
         times: presetTimes,
       });
+      setIsPresetMenuOpen(false);
+      onClose();
     },
     [applyCustomProactivity, customTimes, onClose, onRemoveProactivity, onSelectProactivity]
   );
@@ -279,18 +341,92 @@ export function ProactivityInlineMenu({
         </button>
       </div>
 
-      <label className={calendarStyles.composerField}>
-        <span>{t("Preset cadence")}</span>
-        <select value={selectedPresetId} onChange={handlePresetChange}>
-          <option value="off">{t("Off")}</option>
-          {PROACTIVITY_PRESETS.map((preset) => (
-            <option key={preset.id} value={preset.id}>
-              {t(preset.title)}
-            </option>
-          ))}
-          <option value={CUSTOM_PROACTIVITY_ID}>{t("Custom")}</option>
-        </select>
-      </label>
+      <div className={calendarStyles.composerInlineSelect} style={{ marginBottom: 14 }}>
+        <button
+          type="button"
+          ref={presetTriggerRef}
+          className={`${calendarStyles.composerDateTrigger} ${calendarStyles.composerInlineSelectTrigger}`}
+          onClick={() => setIsPresetMenuOpen((previous) => !previous)}
+          aria-haspopup="listbox"
+          aria-expanded={isPresetMenuOpen ? "true" : "false"}
+          aria-label={t("Preset cadence")}
+          onKeyDown={(event) => {
+            if (event.key === "ArrowDown" || event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              setIsPresetMenuOpen(true);
+            }
+          }}
+        >
+          <span className={calendarStyles.composerInlineControlLabel}>{selectedPresetLabel}</span>
+          <ChevronDown size={14} aria-hidden="true" className={calendarStyles.composerInlineControlChevron} />
+        </button>
+        {isPresetMenuOpen ? (
+          <div
+            ref={presetMenuRef}
+            className={calendarStyles.composerInlineSelectPopover}
+            style={
+              presetMenuPosition
+                ? { top: presetMenuPosition.top, left: presetMenuPosition.left, width: presetMenuPosition.width }
+                : undefined
+            }
+            role="listbox"
+            aria-label={t("Preset cadence")}
+            tabIndex={-1}
+            onKeyDown={(event) => {
+              const optionButtons = Array.from(
+                presetMenuRef.current?.querySelectorAll<HTMLButtonElement>("button[data-proactivity-option]") ?? []
+              );
+              if (optionButtons.length === 0) return;
+              const activeIndex = optionButtons.findIndex((button) => button === document.activeElement);
+              const selectedIndex = Math.max(0, presetOptions.findIndex((option) => option.id === selectedPresetId));
+              const currentIndex = activeIndex >= 0 ? activeIndex : selectedIndex;
+
+              if (event.key === "Escape") {
+                event.preventDefault();
+                setIsPresetMenuOpen(false);
+                presetTriggerRef.current?.focus();
+                return;
+              }
+              if (event.key === "ArrowDown") {
+                event.preventDefault();
+                optionButtons[(currentIndex + 1) % optionButtons.length]?.focus();
+                return;
+              }
+              if (event.key === "ArrowUp") {
+                event.preventDefault();
+                optionButtons[(currentIndex - 1 + optionButtons.length) % optionButtons.length]?.focus();
+                return;
+              }
+              if (event.key === "Home") {
+                event.preventDefault();
+                optionButtons[0]?.focus();
+                return;
+              }
+              if (event.key === "End") {
+                event.preventDefault();
+                optionButtons[optionButtons.length - 1]?.focus();
+              }
+            }}
+          >
+            {presetOptions.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                role="option"
+                aria-selected={option.id === selectedPresetId}
+                data-proactivity-option={option.id}
+                className={calendarStyles.composerInlineSelectOption}
+                onClick={() => {
+                  handlePresetSelect(option.id);
+                  presetTriggerRef.current?.focus();
+                }}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
 
       {isCustomPresetSelected ? (
         <section className={styles.proactivityCustomSection} style={{ padding: 0, border: "none" }}>
@@ -358,6 +494,11 @@ export function ProactivityInlineMenu({
               </div>
             </div>
           </div>
+          <footer className={styles.proactivityModalFooter} style={{ marginTop: 16 }}>
+            <button type="button" className={styles.proactivityModalDismiss} onClick={onClose}>
+              {t("Done")}
+            </button>
+          </footer>
         </section>
       ) : null}
     </div>

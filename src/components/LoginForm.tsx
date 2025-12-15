@@ -252,9 +252,24 @@ export default function LoginForm({
 }: LoginFormProps) {
   const { t } = useI18n();
   const router = useRouter();
+  const [isLightTheme, setIsLightTheme] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
   useEffect(() => {
     setIsMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (typeof document === "undefined") {
+      return;
+    }
+
+    const root = document.documentElement;
+    const syncTheme = () => setIsLightTheme(root.classList.contains("light"));
+    syncTheme();
+
+    const observer = new MutationObserver(() => syncTheme());
+    observer.observe(root, { attributes: true, attributeFilter: ["class"] });
+    return () => observer.disconnect();
   }, []);
 
   const shouldEnableCaptcha = useMemo(() => {
@@ -799,7 +814,17 @@ export default function LoginForm({
     <div className={styles.authPage}>
       <div className={styles.authShell}>
         <aside className={styles.authVisualPanel} aria-hidden>
-          <ShaderBackground className={styles.authVisualGradient} fullHeight={false}>
+          <ShaderBackground
+            className={styles.authVisualGradient}
+            fullHeight={false}
+            colors={
+              isLightTheme
+                ? ["#ffffff", "#f4f4f4", "#dedede", "#b6b6b6", "#6b6b6b"]
+                : undefined
+            }
+            backgroundColor={isLightTheme ? "#ffffff" : undefined}
+            speed={isLightTheme ? 1.1 : undefined}
+          >
             <div className={styles.authGlassFrame}>
               <span className={styles.authGlassGlow} />
               <span className={styles.authGlassSurface} />
@@ -808,7 +833,11 @@ export default function LoginForm({
                 <div className={styles.authVisual}>
                   <div className={styles.authOrb}>
                     <Image
-                      src="/grayaiwhitenotspinning.svg"
+                      src={
+                        isLightTheme
+                          ? "/grayaiblacknotspinning.svg"
+                          : "/grayaiwhitenotspinning.svg"
+                      }
                       alt={t("Gray emblem")}
                       width={180}
                       height={180}

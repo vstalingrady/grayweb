@@ -1,4 +1,4 @@
-export type CalendarEntryType = "event" | "task" | "reminder" | "plan" | "habit";
+export type CalendarEntryType = "event" | "task" | "plan" | "habit";
 export type CalendarEventDisplayHint = "line";
 
 export interface CalendarInfo {
@@ -7,8 +7,6 @@ export interface CalendarInfo {
   color: string;
   isVisible: boolean;
 }
-
-import type { ReminderStatus } from "@/lib/api";
 
 export interface CalendarEvent {
   id: string;
@@ -20,8 +18,6 @@ export interface CalendarEvent {
   entryType: CalendarEntryType;
   description?: string;
   displayHint?: CalendarEventDisplayHint;
-  reminderId?: number;
-  reminderStatus?: ReminderStatus;
 }
 
 export interface PositionedEvent extends CalendarEvent {

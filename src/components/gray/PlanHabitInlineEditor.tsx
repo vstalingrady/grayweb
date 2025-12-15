@@ -224,7 +224,6 @@ export function PlanHabitInlineEditor({
   const [reminderMenuPosition, setReminderMenuPosition] = useState<{ top: number; left: number; width: number } | null>(
     null
   );
-  const [linkedReminderId, setLinkedReminderId] = useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const headerLabel = useMemo(() => t("Events"), [t]);
@@ -259,6 +258,7 @@ export function PlanHabitInlineEditor({
           setSelectedDate(startOfDay(now));
           setMonthDate(startOfMonth(now));
         }
+        setColor(planToEdit.color ?? QUICK_COLOR_SWATCHES[1]);
       } else {
         setTitle("");
         setDetailsValue("");
@@ -277,8 +277,8 @@ export function PlanHabitInlineEditor({
       }
       setSelectedDate(startOfDay(now));
       setMonthDate(startOfMonth(now));
+      setColor(QUICK_COLOR_SWATCHES[1]);
     }
-    setLinkedReminderId(null);
     setReminderPreset("none");
     setCustomReminderMinutes("");
     setIsColorPickerOpen(false);
@@ -457,57 +457,46 @@ export function PlanHabitInlineEditor({
   }, [isColorPickerOpen]);
 
   useEffect(() => {
-    const loadExistingReminder = async () => {
-      if (!user) return;
-      const editingItem = planToEdit ?? habitToEdit;
-      if (!editingItem) return;
-      const numericId = Number(editingItem.id);
-      if (Number.isNaN(numericId)) return;
+    const editingItem = planToEdit ?? habitToEdit;
+    if (!editingItem) {
+      setReminderPreset("none");
+      setCustomReminderMinutes("");
+      return;
+    }
 
-      try {
-        const reminders = await apiService.getUserReminders(user.id, {
-          includeArchived: true,
-          limit: 200,
-          entityType: type,
-        });
-        const matching = reminders
-          .filter((reminder) => reminder.entity_id === numericId)
-          .sort((a, b) => Date.parse(b.remind_at) - Date.parse(a.remind_at));
+    const reminderAt = editingItem.reminderAt;
+    if (!reminderAt) {
+      setReminderPreset("none");
+      setCustomReminderMinutes("");
+      return;
+    }
 
-        const active = matching.find((reminder) => reminder.status === "pending") ?? matching[0];
-        if (!active) {
-          setLinkedReminderId(null);
-          setReminderPreset("none");
-          setCustomReminderMinutes("");
-          return;
-        }
+    const remindAtMs = Date.parse(reminderAt);
+    if (!Number.isFinite(remindAtMs)) {
+      setReminderPreset("none");
+      setCustomReminderMinutes("");
+      return;
+    }
 
-        setLinkedReminderId(active.id);
-
-        const remindAtMs = Date.parse(active.remind_at);
-        if (!Number.isFinite(remindAtMs)) {
-          setReminderPreset("none");
-          setCustomReminderMinutes("");
-          return;
-        }
-
-        const deltaMinutes = Math.max(0, Math.round((eventStart.getTime() - remindAtMs) / 60000));
-        const presets: Array<Exclude<typeof reminderPreset, "custom" | "none">> = ["0", "5", "10", "15", "30", "60", "1440"];
-        const matched = presets.find((value) => Number(value) === deltaMinutes);
-        if (matched) {
-          setReminderPreset(matched);
-          setCustomReminderMinutes("");
-        } else {
-          setReminderPreset("custom");
-          setCustomReminderMinutes(String(deltaMinutes));
-        }
-      } catch (loadError) {
-        console.warn("[PlanHabitInlineEditor] Failed to load reminders:", loadError);
-      }
-    };
-
-    void loadExistingReminder();
-  }, [eventStart, habitToEdit, planToEdit, type, user]);
+    const deltaMinutes = Math.max(0, Math.round((eventStart.getTime() - remindAtMs) / 60000));
+    const presets: Array<Exclude<typeof reminderPreset, "custom" | "none">> = [
+      "0",
+      "5",
+      "10",
+      "15",
+      "30",
+      "60",
+      "1440",
+    ];
+    const matched = presets.find((value) => Number(value) === deltaMinutes);
+    if (matched) {
+      setReminderPreset(matched);
+      setCustomReminderMinutes("");
+    } else {
+      setReminderPreset("custom");
+      setCustomReminderMinutes(String(deltaMinutes));
+    }
+  }, [eventStart, habitToEdit, planToEdit]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -562,7 +551,10 @@ export function PlanHabitInlineEditor({
         return Number.parseInt(reminderPreset, 10);
       };
       const reminderLeadMinutes = resolveReminderLeadMinutes();
-      const shouldHaveReminder = reminderLeadMinutes !== null;
+      const reminderAtIso =
+        reminderLeadMinutes === null
+          ? null
+          : new Date(eventStart.getTime() - reminderLeadMinutes * 60000).toISOString();
 
       if (isPlan) {
         const scheduleSlotValue = `${startTime}-${endTime}`;
@@ -573,10 +565,9 @@ export function PlanHabitInlineEditor({
           details: descriptionValue,
           deadline: deadlineValue,
           scheduleSlot: scheduleSlotValue,
+          reminderAt: reminderAtIso,
+          color,
         };
-
-        const entityType = "plan";
-        let entityId: number | null = null;
 
         if (planToEdit) {
           if (onSubmitPlan) {
@@ -591,63 +582,27 @@ export function PlanHabitInlineEditor({
               description: payload.details ?? null,
               deadline: payload.deadline ?? null,
               scheduleSlot: payload.scheduleSlot ?? null,
+              reminderAt: payload.reminderAt ?? null,
+              color: payload.color ?? null,
             });
           }
-          entityId = Number(planToEdit.id);
         } else {
-          const createdPlan = await apiService.createPlan(user.id, {
+          await apiService.createPlan(user.id, {
             label: payload.label,
             completed: false,
             deadline: payload.deadline ?? null,
             scheduleSlot: payload.scheduleSlot ?? null,
             description: payload.details ?? null,
+            reminderAt: payload.reminderAt ?? null,
+            color: payload.color ?? null,
           });
-          entityId = createdPlan?.id ?? null;
-        }
-
-        if (entityId && !Number.isNaN(entityId)) {
-          if (!shouldHaveReminder && linkedReminderId) {
-            try {
-              await apiService.deleteReminder(user.id, linkedReminderId);
-            } catch (reminderError) {
-              console.warn("[PlanHabitInlineEditor] Failed to delete reminder:", reminderError);
-            }
-            setLinkedReminderId(null);
-          } else if (shouldHaveReminder) {
-            const remindAt = new Date(eventStart.getTime() - reminderLeadMinutes * 60000);
-            const remindAtIso = remindAt.toISOString();
-            if (linkedReminderId) {
-              await apiService.updateReminder(user.id, linkedReminderId, {
-                label: trimmed,
-                description: descriptionValue,
-                summary: descriptionValue ?? undefined,
-                remind_at: remindAtIso,
-                metadata: { color },
-                color,
-              });
-            } else {
-              const createdReminder = await apiService.createReminder(user.id, {
-                label: trimmed,
-                description: descriptionValue,
-                summary: descriptionValue ?? undefined,
-                remind_at: remindAtIso,
-                entity_type: entityType,
-                entity_id: entityId,
-                metadata: { color },
-                color,
-              });
-              setLinkedReminderId(createdReminder.id);
-            }
-          }
         }
       } else {
         const payload: HabitUpdates = {
           label: trimmed,
           details: details.length > 0 ? details : null,
+          reminderAt: reminderAtIso,
         };
-
-        const entityType = "habit";
-        let entityId: number | null = null;
 
         if (habitToEdit) {
           if (onSubmitHabit) {
@@ -660,53 +615,17 @@ export function PlanHabitInlineEditor({
             await apiService.updateHabit(user.id, numericId, {
               label: payload.label,
               description: payload.details ?? null,
+              reminderAt: payload.reminderAt ?? null,
             });
           }
-          entityId = Number(habitToEdit.id);
         } else {
-          const createdHabit = await apiService.createHabit(user.id, {
+          await apiService.createHabit(user.id, {
             label: payload.label,
             streak_label: "0",
             previous_label: t("No history yet"),
             description: payload.details ?? null,
+            reminderAt: payload.reminderAt ?? null,
           });
-          entityId = createdHabit?.id ?? null;
-        }
-
-        if (entityId && !Number.isNaN(entityId)) {
-          if (!shouldHaveReminder && linkedReminderId) {
-            try {
-              await apiService.deleteReminder(user.id, linkedReminderId);
-            } catch (reminderError) {
-              console.warn("[PlanHabitInlineEditor] Failed to delete reminder:", reminderError);
-            }
-            setLinkedReminderId(null);
-          } else if (shouldHaveReminder) {
-            const remindAt = new Date(eventStart.getTime() - reminderLeadMinutes * 60000);
-            const remindAtIso = remindAt.toISOString();
-            if (linkedReminderId) {
-              await apiService.updateReminder(user.id, linkedReminderId, {
-                label: trimmed,
-                description: descriptionValue,
-                summary: descriptionValue ?? undefined,
-                remind_at: remindAtIso,
-                metadata: { color },
-                color,
-              });
-            } else {
-              const createdReminder = await apiService.createReminder(user.id, {
-                label: trimmed,
-                description: descriptionValue,
-                summary: descriptionValue ?? undefined,
-                remind_at: remindAtIso,
-                entity_type: entityType,
-                entity_id: entityId,
-                metadata: { color },
-                color,
-              });
-              setLinkedReminderId(createdReminder.id);
-            }
-          }
         }
       }
 
@@ -1097,9 +1016,9 @@ export function PlanHabitInlineEditor({
         <hr className={calendarStyles.composerSectionDivider} />
 
         <label className={calendarStyles.composerField}>
-          {!isScout ? <span>{t("Color")}</span> : null}
+          {!isScout && isPlan ? <span>{t("Color")}</span> : null}
           <div className={calendarStyles.composerColors} ref={colorPickerRef}>
-            {!isScout ? (
+            {!isScout && isPlan ? (
               <>
                 {QUICK_COLOR_SWATCHES.map((swatch) => (
                   <button
@@ -1141,7 +1060,7 @@ export function PlanHabitInlineEditor({
               {isSubmitting ? submittingLabel : submitLabel}
             </button>
 
-            {!isScout && isColorPickerOpen ? (
+            {!isScout && isPlan && isColorPickerOpen ? (
               <div
                 ref={colorPickerPopoverRef}
                 className={calendarStyles.composerColorPopover}

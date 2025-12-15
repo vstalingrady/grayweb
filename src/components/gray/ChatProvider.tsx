@@ -83,7 +83,7 @@ import {
   REMINDER_POLL_MIN_INTERVAL,
   REMINDER_POLL_SHORT_INTERVAL,
 } from "./chat/constants";
-import { REMINDERS_REFRESH_EVENT } from "./hooks/useWorkspaceData";
+import { WORKSPACE_REFRESH_EVENT } from "./hooks/useWorkspaceData";
 
 const WORKSPACE_CONTEXT_COOLDOWN_MS = 600000; // 10 minutes
 const CONVERSATION_MEMORY_STORAGE_PREFIX = "gray_conversation_memory";
@@ -773,7 +773,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
   const [selectedContextCacheId, setSelectedContextCacheId] = useState<number | null>(null);
   const [contextCacheMessage, setContextCacheMessage] = useState<string | null>(null);
   const [isContextCacheSaving, setIsContextCacheSaving] = useState(false);
-  const [autoWebSearchEnabled, setAutoWebSearchEnabled] = useState(false);
+  const [autoWebSearchEnabled, setAutoWebSearchEnabledState] = useState(false);
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
   const [fileSearchStores, setFileSearchStores] = useState<{ name: string; display_name?: string }[]>([]);
   const [fileSearchDisplayName, setFileSearchDisplayName] = useState("");
@@ -971,7 +971,25 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
 
   const [questionnaireSession, setQuestionnaireSession] = useState<QuestionnaireSession | null>(null);
 
-  // Web search preference is now kept in memory for the current session only.
+  // Persist automatic web search preference per user (falls back to session memory for anon users).
+  useEffect(() => {
+    if (typeof user?.auto_web_search_enabled === "boolean") {
+      setAutoWebSearchEnabledState(user.auto_web_search_enabled);
+    }
+  }, [user?.auto_web_search_enabled]);
+
+  const setAutoWebSearchEnabled = useCallback(
+    (value: boolean) => {
+      setAutoWebSearchEnabledState(value);
+      if (!user) {
+        return;
+      }
+      void updateUser({ auto_web_search_enabled: value }).catch((error) => {
+        console.error("Failed to persist automatic web search preference:", error);
+      });
+    },
+    [updateUser, user]
+  );
 
   useEffect(() => {
     workspaceContextUsageRef.current.clear();
@@ -2472,17 +2490,20 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
               updateSession(generalSession.id, { isGeneratingTitle: true });
             }
 
-            const conversationMemoryEnabled = (() => {
-              if (typeof window === "undefined") {
-                return true;
-              }
-              const storageKey = `${CONVERSATION_MEMORY_STORAGE_PREFIX}:${streamingUserId ?? "anon"}`;
-              try {
-                return window.localStorage.getItem(storageKey) !== "0";
-              } catch {
-                return true;
-              }
-            })();
+	            const conversationMemoryEnabled = (() => {
+	              if (typeof resolvedUser.conversation_memory_enabled === "boolean") {
+	                return resolvedUser.conversation_memory_enabled;
+	              }
+	              if (typeof window === "undefined") {
+	                return true;
+	              }
+	              const storageKey = `${CONVERSATION_MEMORY_STORAGE_PREFIX}:${streamingUserId ?? "anon"}`;
+	              try {
+	                return window.localStorage.getItem(storageKey) !== "0";
+	              } catch {
+	                return true;
+	              }
+	            })();
 
             for await (const event of apiService.sendMessageStream({
               message: trimmed,
@@ -3277,7 +3298,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
           .then((created) => {
             // Dispatch custom event so useWorkspaceData can refresh reminder list
             if (typeof window !== "undefined") {
-              window.dispatchEvent(new CustomEvent(REMINDERS_REFRESH_EVENT));
+              window.dispatchEvent(new CustomEvent(WORKSPACE_REFRESH_EVENT));
             }
           })
           .catch((error) => {

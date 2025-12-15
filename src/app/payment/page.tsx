@@ -35,6 +35,8 @@ declare global {
     interface Window {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         MidtransNew3ds: any;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        Paddle: any;
     }
 }
 
@@ -45,8 +47,35 @@ const VOYAGER_PRICING = {
 
 const PIONEER_PRICING = {
     monthly: { price: "Rp 377.000,-", fullPrice: "Rp 377.000" },
-    annual: { price: "Rp 314.750,-", fullPrice: "Rp 3.777.000" }, // 3.777m / 12 ~ 314.75k
+    annual: { price: "Rp 314.750,-", fullPrice: "Rp 3.777.000" },
 } as const;
+
+// USD pricing for international users
+const VOYAGER_PRICING_USD = {
+    monthly: { price: "$17", fullPrice: "$17" },
+    annual: { price: "$14.75", fullPrice: "$177" },
+} as const;
+
+const PIONEER_PRICING_USD = {
+    monthly: { price: "$37", fullPrice: "$37" },
+    annual: { price: "$31.42", fullPrice: "$377" },
+} as const;
+
+// Paddle Price IDs - configure in .env
+const PADDLE_PRICE_IDS: Record<string, Record<string, string>> = {
+    voyager: {
+        monthly: process.env.NEXT_PUBLIC_PADDLE_PRICE_ID_MONTHLY_VOYAGER || "",
+        annual: process.env.NEXT_PUBLIC_PADDLE_PRICE_ID_YEARLY_VOYAGER || "",
+    },
+    pioneer: {
+        monthly: process.env.NEXT_PUBLIC_PADDLE_PRICE_ID_MONTHLY_PIONEER || "",
+        annual: process.env.NEXT_PUBLIC_PADDLE_PRICE_ID_YEARLY_PIONEER || "",
+    },
+};
+
+// Paddle config
+const PADDLE_CLIENT_TOKEN = process.env.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN || "";
+const PADDLE_SANDBOX = process.env.NEXT_PUBLIC_PADDLE_SANDBOX !== "false";
 
 
 const PAYMENT_METHODS = [
@@ -104,6 +133,12 @@ const PAYMENT_METHODS = [
         logo: "/logos/payment/permata.svg",
         type: "bank_transfer",
         bank: "permata"
+    },
+    // Paddle payment method (international)
+    {
+        id: "card",
+        label: "Credit/Debit Card",
+        type: "paddle"
     }
 ];
 
@@ -134,19 +169,29 @@ function PaymentContent() {
             )
             : activeMethods;
 
-    // Check geo on mount
+    // Check geo on mount and initialize Paddle
     useEffect(() => {
         fetch("/api/geo")
             .then(res => res.json())
             .then(data => {
                 setIsIndonesia(data.isIndonesia ?? true);
-                // Redirect international users back to pricing with notice
+                // If international, default to card payment
                 if (data.isIndonesia === false) {
-                    router.replace("/pricing?region=intl");
+                    setSelectedMethodId("card");
                 }
             })
             .catch(() => setIsIndonesia(true)); // Default to Indonesia on error
-    }, [router]);
+    }, []);
+
+    // Initialize Paddle when SDK loads
+    useEffect(() => {
+        if (typeof window !== "undefined" && window.Paddle && PADDLE_CLIENT_TOKEN) {
+            window.Paddle.Initialize({
+                token: PADDLE_CLIENT_TOKEN,
+                environment: PADDLE_SANDBOX ? "sandbox" : "production",
+            });
+        }
+    }, []);
 
     useEffect(() => {
         // Keep group in sync with selected method (e.g., deep links)
@@ -181,9 +226,6 @@ function PaymentContent() {
         setErrorMessage("");
 
         try {
-
-
-
             const supabase = getSupabaseClient();
             if (!supabase) {
                 throw new Error("Authentication is not configured. Please refresh and try again.");
@@ -191,6 +233,9 @@ function PaymentContent() {
 
             const { data: sessionData } = await supabase.auth.getSession();
             const accessToken = sessionData.session?.access_token ?? null;
+            const userEmail = sessionData.session?.user?.email ?? undefined;
+            const userId = sessionData.session?.user?.id ?? undefined;
+
             if (!accessToken) {
                 const returnTo =
                     typeof window !== "undefined"
@@ -205,13 +250,39 @@ function PaymentContent() {
             const selectedMethod = PAYMENT_METHODS.find(m => m.id === selectedMethodId);
             if (!selectedMethod) throw new Error("Invalid payment method");
 
+            // Route to Paddle for card payments
+            if (selectedMethod.type === "paddle") {
+                const priceId = PADDLE_PRICE_IDS[planParam || "voyager"]?.[billingCycle];
+                if (!priceId) {
+                    throw new Error("Paddle payment is not configured. Please contact support.");
+                }
+                if (!window.Paddle) {
+                    throw new Error("Payment system is loading. Please wait a moment and try again.");
+                }
+
+                // Open Paddle inline checkout
+                window.Paddle.Checkout.open({
+                    items: [{ priceId, quantity: 1 }],
+                    customer: userEmail ? { email: userEmail } : undefined,
+                    customData: { user_id: userId },
+                    settings: {
+                        displayMode: "overlay",
+                        theme: "dark",
+                        locale: "en",
+                        successUrl: `${window.location.origin}/payment/success?provider=paddle`,
+                    },
+                });
+                setStatus("idle"); // Reset since Paddle handles the flow
+                return;
+            }
+
+            // Midtrans payment flow
             const payload = {
                 plan_tier: planParam,
                 payment_type: selectedMethod.type,
-                bank: selectedMethod.bank, // undefined for non-bank_transfer
+                bank: (selectedMethod as { bank?: string }).bank,
                 billing_cycle: billingCycle
             };
-
 
             const res = await fetch("/api/p/api/payment/charge", {
                 method: "POST",
@@ -243,7 +314,6 @@ function PaymentContent() {
                         const text = await res.text();
                         const trimmed = text.trim();
                         if (trimmed) {
-                            // Avoid dumping full HTML error documents into the UI/console.
                             if (contentType.includes("text/html") || trimmed.startsWith("<!DOCTYPE html")) {
                                 detail = `Payment initialization failed (HTTP ${res.status})`;
                             } else {
@@ -261,7 +331,6 @@ function PaymentContent() {
             setChargeData(data);
             setStatus("success");
 
-            // Handle 3DS Redirect for Credit Card
             // Handle Redirects (3DS or other)
             if (data.redirect_url) {
                 window.location.href = data.redirect_url;
@@ -450,6 +519,20 @@ function PaymentContent() {
                 data-environment={process.env.NEXT_PUBLIC_MIDTRANS_IS_PRODUCTION === 'true' ? 'production' : 'sandbox'}
                 data-client-key={process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY}
             />
+            {PADDLE_CLIENT_TOKEN && (
+                <Script
+                    id="paddle-script"
+                    src="https://cdn.paddle.com/paddle/v2/paddle.js"
+                    onLoad={() => {
+                        if (window.Paddle) {
+                            window.Paddle.Initialize({
+                                token: PADDLE_CLIENT_TOKEN,
+                                environment: PADDLE_SANDBOX ? "sandbox" : "production",
+                            });
+                        }
+                    }}
+                />
+            )}
 
             <div className={styles.topRow}>
                 <button
@@ -514,6 +597,19 @@ function PaymentContent() {
                                     <button
                                         type="button"
                                         role="tab"
+                                        data-active={methodGroup === "card"}
+                                        aria-selected={methodGroup === "card"}
+                                        onClick={() => {
+                                            setMethodGroup("card");
+                                            setSelectedMethodId("card");
+                                            setBankSearch("");
+                                        }}
+                                    >
+                                        Card
+                                    </button>
+                                    <button
+                                        type="button"
+                                        role="tab"
                                         data-active={methodGroup === "wallet"}
                                         aria-selected={methodGroup === "wallet"}
                                         onClick={() => {
@@ -538,45 +634,66 @@ function PaymentContent() {
                                     </button>
                                 </div>
 
-                                {methodGroup === "va" && (
-                                    <div className={styles.methodSearch}>
-                                        <Search size={16} aria-hidden="true" />
-                                        <input
-                                            type="text"
-                                            value={bankSearch}
-                                            onChange={(e) => setBankSearch(e.target.value)}
-                                            placeholder="Search for your bank"
-                                            className={styles.methodSearchInput}
-                                            aria-label="Search for your bank"
-                                        />
+                                {methodGroup === "card" && (
+                                    <div className={styles.methodGrid} role="tabpanel">
+                                        <button
+                                            type="button"
+                                            className={styles.methodOption}
+                                            data-selected={selectedMethodId === "card"}
+                                            onClick={() => setSelectedMethodId("card")}
+                                            style={{ gridColumn: "1 / -1" }}
+                                        >
+                                            <span className={styles.methodLabel}>💳 Pay with Credit/Debit Card</span>
+                                        </button>
+                                        <p style={{ gridColumn: "1 / -1", color: "rgba(255,255,255,0.5)", fontSize: "0.85rem", textAlign: "center", margin: "0.5rem 0 0" }}>
+                                            Visa, Mastercard, American Express, PayPal, Apple Pay, Google Pay
+                                        </p>
                                     </div>
                                 )}
 
-                                <div className={styles.methodGrid} role="tabpanel">
-                                    {filteredActiveMethods.map((method) => (
-                                        <button
-                                            key={method.id}
-                                            type="button"
-                                            className={styles.methodOption}
-                                            data-selected={selectedMethodId === method.id}
-                                            onClick={() => setSelectedMethodId(method.id)}
-                                        >
-                                            {method.logo ? (
-                                                // eslint-disable-next-line @next/next/no-img-element
-                                                <img
-                                                    src={method.logo}
-                                                    alt=""
-                                                    className={styles.methodLogo}
-                                                    loading="lazy"
+                                {methodGroup !== "card" && (
+                                    <>
+                                        {methodGroup === "va" && (
+                                            <div className={styles.methodSearch}>
+                                                <Search size={16} aria-hidden="true" />
+                                                <input
+                                                    type="text"
+                                                    value={bankSearch}
+                                                    onChange={(e) => setBankSearch(e.target.value)}
+                                                    placeholder="Search for your bank"
+                                                    className={styles.methodSearchInput}
+                                                    aria-label="Search for your bank"
                                                 />
-                                            ) : null}
-                                            <span className={styles.methodLabel}>{method.label}</span>
-                                        </button>
-                                    ))}
-                                    {filteredActiveMethods.length === 0 && (
-                                        <div className={styles.methodEmpty}>No banks match that search.</div>
-                                    )}
-                                </div>
+                                            </div>
+                                        )}
+
+                                        <div className={styles.methodGrid} role="tabpanel">
+                                            {filteredActiveMethods.map((method) => (
+                                                <button
+                                                    key={method.id}
+                                                    type="button"
+                                                    className={styles.methodOption}
+                                                    data-selected={selectedMethodId === method.id}
+                                                    onClick={() => setSelectedMethodId(method.id)}
+                                                >
+                                                    {method.logo ? (
+                                                        // eslint-disable-next-line @next/next/no-img-element
+                                                        <img
+                                                            src={method.logo}
+                                                            alt=""
+                                                            className={styles.methodLogo}
+                                                            loading="lazy"
+                                                        />
+                                                    ) : null}
+                                                    <span className={styles.methodLabel}>{method.label}</span>
+                                                </button>
+                                            ))}
+                                            {filteredActiveMethods.length === 0 && (
+                                                <div className={styles.methodEmpty}>No banks match that search.</div>
+                                            )}
+                                        </div>
+                                    </>
+                                )}
                                 <div className={styles.paymentSelectHint}>You can change this later in checkout.</div>
                             </div>
 

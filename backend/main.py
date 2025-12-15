@@ -163,9 +163,11 @@ except ImportError:
     from usage_tracker import UsageTracker, UsageLimitExceeded
 try:
     from backend.calendar_tools import CALENDAR_TOOLS
+    from backend.calendar_context import build_calendar_context
     from backend.file_search import FileSearchService
 except ImportError:
     from calendar_tools import CALENDAR_TOOLS
+    from calendar_context import build_calendar_context
     from file_search import FileSearchService
 try:
     from backend.onboarding_tools import ONBOARDING_TOOLS
@@ -338,6 +340,11 @@ try:
 except ImportError:
     from database import transactions
 
+try:
+    from backend.paddle_routes import router as paddle_router
+except ImportError:
+    from paddle_routes import router as paddle_router
+
 # Use centralized environment detection
 try:
     from backend.env_utils import ROOT_DIR
@@ -416,13 +423,37 @@ def load_prompt_from_json(path: Path, key: str, fallback: str = "", locale: Opti
     Load a prompt string from a JSON config file, using a dotted key path like
     "chat" or "proactivity.daily". Raises RuntimeError if prompt can't be loaded.
     
-    The fallback parameter is DEPRECATED and ignored.
+    If the key is missing/empty and a fallback is provided, the fallback is returned.
     """
-    raw = path.read_text(encoding="utf-8")
-    data: Any = json.loads(raw)
+    fallback_value = (fallback or "").strip()
+    try:
+        raw = path.read_text(encoding="utf-8")
+        data: Any = json.loads(raw)
+    except FileNotFoundError:
+        if fallback_value:
+            app_logger.warning(
+                "Prompt file missing; using fallback",
+                extra={"prompt_path": str(path), "prompt_key": key},
+            )
+            return fallback_value
+        raise
+    except Exception as exc:
+        if fallback_value:
+            app_logger.warning(
+                "Failed to load prompt JSON; using fallback",
+                extra={"prompt_path": str(path), "prompt_key": key, "error": str(exc)},
+            )
+            return fallback_value
+        raise
     value: Any = data
     for segment in key.split("."):
         if not isinstance(value, dict) or segment not in value:
+            if fallback_value:
+                app_logger.warning(
+                    "Prompt key missing; using fallback",
+                    extra={"prompt_path": str(path), "prompt_key": key},
+                )
+                return fallback_value
             raise RuntimeError(f"Prompt key '{key}' not found in {path}")
         value = value[segment]
     if isinstance(value, str) and value.strip():
@@ -434,6 +465,12 @@ def load_prompt_from_json(path: Path, key: str, fallback: str = "", locale: Opti
             candidate = value.get("en")
         if isinstance(candidate, str) and candidate.strip():
             return candidate.strip()
+    if fallback_value:
+        app_logger.warning(
+            "Prompt key empty; using fallback",
+            extra={"prompt_path": str(path), "prompt_key": key},
+        )
+        return fallback_value
     raise RuntimeError(f"Prompt key '{key}' is empty in {path}")
 
 
@@ -1071,6 +1108,12 @@ GEMINI_DEFAULT_MODEL = os.getenv("GEMINI_DEFAULT_MODEL", "models/gemini-flash-li
 GEMINI_LIGHT_MODEL = os.getenv("GEMINI_LIGHT_MODEL", "models/gemini-flash-lite-latest")
 GEMINI_PRO_MODEL = os.getenv("GEMINI_PRO_MODEL", "models/gemini-3-pro-preview")
 REMINDER_FUNCTION_NAMES = (
+    "create_plan",
+    "update_plan",
+    "delete_plan",
+    "create_habit",
+    "update_habit",
+    "delete_habit",
     "create_reminder",
     "add_reminder",
     "update_reminder",
@@ -1441,6 +1484,12 @@ class UserBase(BaseModel):
     six_hour_cost_usage: Optional[float] = 0.0
     preferred_model: Optional[str] = None
     visible_model_ids: Optional[List[str]] = None
+    theme_mode: Optional[str] = None
+    ui_locale: Optional[str] = None
+    preferred_response_language: Optional[str] = None
+    notification_preferences: Optional[Dict[str, bool]] = None
+    conversation_memory_enabled: Optional[bool] = True
+    auto_web_search_enabled: Optional[bool] = False
 
 class UserCreate(UserBase):
     pass
@@ -1464,6 +1513,12 @@ class UserUpdate(BaseModel):
     personalization_time_zone: Optional[str] = None
     preferred_model: Optional[str] = None
     visible_model_ids: Optional[List[str]] = None
+    theme_mode: Optional[str] = None
+    ui_locale: Optional[str] = None
+    preferred_response_language: Optional[str] = None
+    notification_preferences: Optional[Dict[str, bool]] = None
+    conversation_memory_enabled: Optional[bool] = None
+    auto_web_search_enabled: Optional[bool] = None
 
 class UsageStatus(BaseModel):
     tier: str
@@ -1497,6 +1552,13 @@ def _serialize_user_row(row: Mapping[str, Any]) -> Dict[str, Any]:
         try:
             import json
             user_dict["visible_model_ids"] = json.loads(user_dict["visible_model_ids"])
+        except Exception:
+            pass  # Let validation fail naturally if JSON is invalid
+
+    if isinstance(user_dict.get("notification_preferences"), str):
+        try:
+            import json
+            user_dict["notification_preferences"] = json.loads(user_dict["notification_preferences"])
         except Exception:
             pass  # Let validation fail naturally if JSON is invalid
 
@@ -1601,6 +1663,7 @@ class PlanBase(BaseModel):
     schedule_slot: Optional[str] = None
     description: Optional[str] = None
     color: Optional[str] = None
+    reminder_at: Optional[datetime] = None
 
 class PlanCreate(PlanBase):
     pass
@@ -1740,13 +1803,14 @@ class PlanUpdate(BaseModel):
     schedule_slot: Optional[str] = None
     description: Optional[str] = None
     color: Optional[str] = None
+    reminder_at: Optional[datetime] = None
 
 class HabitBase(BaseModel):
     label: str
     streak_label: str
     previous_label: str
     description: Optional[str] = None
-    color: Optional[str] = None
+    reminder_at: Optional[datetime] = None
 
 class HabitCreate(HabitBase):
     pass
@@ -1764,7 +1828,7 @@ class HabitUpdate(BaseModel):
     streak_label: Optional[str] = None
     previous_label: Optional[str] = None
     description: Optional[str] = None
-    color: Optional[str] = None
+    reminder_at: Optional[datetime] = None
 
 
 class DashboardPulsePlanItem(BaseModel):
@@ -2532,6 +2596,7 @@ async def _create_reminders_from_actions(
     Returns a list of operation payloads shaped as:
       { "operation": "created" | "rescheduled", "reminder": { ...row... } }
     """
+    global reminder_scheduler
     results: List[Dict[str, Any]] = []
     now = utcnow()
 
@@ -2612,6 +2677,23 @@ async def _create_reminders_from_actions(
             row = await db.fetch_one(
                 reminders.select().where(reminders.c.id == reminder_id)
             )
+            try:
+                if reminder_scheduler is not None:
+                    await reminder_scheduler.refresh_job(
+                        user_id=user_id,
+                        reminder_id=int(reminder_id),
+                        remind_at=remind_at,
+                    )
+            except Exception as exc:  # pragma: no cover
+                api_logger.warning(
+                    "Failed to reschedule reminder job",
+                    extra={
+                        "event_type": "reminder_schedule_failed",
+                        "user_id": user_id,
+                        "reminder_id": reminder_id,
+                        "error": str(exc),
+                    },
+                )
             results.append(
                 {
                     "operation": "rescheduled",
@@ -2654,6 +2736,23 @@ async def _create_reminders_from_actions(
             row = await db.fetch_one(
                 reminders.select().where(reminders.c.id == reminder_id)
             )
+            try:
+                if reminder_scheduler is not None:
+                    await reminder_scheduler.refresh_job(
+                        user_id=user_id,
+                        reminder_id=int(reminder_id),
+                        remind_at=remind_at,
+                    )
+            except Exception as exc:  # pragma: no cover
+                api_logger.warning(
+                    "Failed to schedule reminder job",
+                    extra={
+                        "event_type": "reminder_schedule_failed",
+                        "user_id": user_id,
+                        "reminder_id": reminder_id,
+                        "error": str(exc),
+                    },
+                )
             results.append(
                 {
                     "operation": "created",
@@ -2682,6 +2781,7 @@ async def lifespan(app: FastAPI):
     """Centralized startup/shutdown without deprecated on_event hooks."""
     await _connect_database()
     await _run_basic_migrations()
+    await _ensure_paddle_columns()
     await _initialize_proactivity_engine()
     await _validate_gemini_api_key_on_startup()
     try:
@@ -2689,8 +2789,42 @@ async def lifespan(app: FastAPI):
     finally:
         await _disconnect_database()
 
+async def _ensure_paddle_columns():
+    """Ensure Paddle columns exist in SQLite."""
+    try:
+        # Check users table
+        api_logger.info("Checking for Paddle columns...")
+        query = "PRAGMA table_info(users)"
+        columns = await database.fetch_all(query)
+        col_names = [col["name"] for col in columns]
+
+        if "paddle_customer_id" not in col_names:
+            api_logger.info("Adding paddle_customer_id to users")
+            await database.execute("ALTER TABLE users ADD COLUMN paddle_customer_id TEXT")
+            await database.execute("CREATE INDEX ix_users_paddle_customer_id ON users (paddle_customer_id)")
+        
+        if "paddle_subscription_id" not in col_names:
+            api_logger.info("Adding paddle_subscription_id to users")
+            await database.execute("ALTER TABLE users ADD COLUMN paddle_subscription_id TEXT")
+            await database.execute("CREATE INDEX ix_users_paddle_subscription_id ON users (paddle_subscription_id)")
+
+        # Check transactions table
+        query = "PRAGMA table_info(transactions)"
+        columns = await database.fetch_all(query)
+        col_names = [col["name"] for col in columns]
+        
+        if "paddle_transaction_id" not in col_names:
+            api_logger.info("Adding paddle_transaction_id to transactions")
+            await database.execute("ALTER TABLE transactions ADD COLUMN paddle_transaction_id TEXT")
+            await database.execute("CREATE UNIQUE INDEX ix_transactions_paddle_transaction_id ON transactions (paddle_transaction_id)")
+
+    except Exception as e:
+        api_logger.error(f"Failed to ensure Paddle columns: {e}")
+
+
 
 app = FastAPI(title="User Profile API with AI Chat", version="1.0.0", lifespan=lifespan)
+app.include_router(paddle_router)
 
 # Security Headers Middleware
 @app.middleware("http")
@@ -4008,9 +4142,6 @@ async def _generate_chat_title_async(
     Generate a concise title for the conversation using a lightweight model
     in the background, then update the database.
     """
-    if not GEMINI_SERVICE or not GEMINI_SERVICE.available:
-        return
-
     # Load prompt from JSON or fallback
     prompt_template = load_prompt_from_json(
         GLOBAL_SYSTEM_PROMPTS_PATH,
@@ -4020,31 +4151,57 @@ async def _generate_chat_title_async(
 
     # Construct a minimal transcript for the title model
     transcript = f"User: {message}\nAssistant: {response_text}"
+
+    def _clean_title(raw_title: str) -> Optional[str]:
+        candidate = (raw_title or "").strip()
+        if not candidate:
+            return None
+        # Remove any accidental quotes, tags, and "Title:" prefixes.
+        candidate = re.sub(r'^["\']|["\']$', "", candidate).strip()
+        candidate = re.sub(r"<[^>]+>", "", candidate).strip()
+        candidate = re.sub(r"^title\\s*:\\s*", "", candidate, flags=re.IGNORECASE).strip()
+        candidate = re.sub(r"\\s+", " ", candidate).strip()
+        return candidate or None
     
     try:
-        # Use the configured light model (e.g. Gemini Flash Lite)
-        response = await GEMINI_SERVICE.generate(
-            message=f"{prompt_template}\n\n{transcript}",
-            conversation_history=None,
-            workspace_context=None,
-            system_prompt=load_prompt_from_json(
-                GLOBAL_SYSTEM_PROMPTS_PATH,
-                "title_generation",
-                "Generate a concise title.",
-            ),
-            time_context=None,
-            model=GEMINI_LIGHT_MODEL,
-        )
-        
-        # Extract and clean title
-        if response and response.candidates:
-            raw_title = _candidate_text(response.candidates[0]).strip()
-            # Remove any accidental quotes or tags
-            clean_title = re.sub(r'^["\']|["\']$', '', raw_title)
-            clean_title = re.sub(r'<[^>]+>', '', clean_title).strip()
-            
-            if clean_title:
-                await _update_conversation_title(conversation_id, clean_title)
+        generated_title: Optional[str] = None
+
+        # Prefer OpenRouter when available so title generation works even when Gemini isn't configured.
+        if OPENROUTER_SERVICE and OPENROUTER_SERVICE.available:
+            try:
+                raw_title = await OPENROUTER_SERVICE.generate(
+                    transcript,
+                    conversation_history=None,
+                    workspace_context=None,
+                    system_prompt=prompt_template,
+                    time_context=None,
+                    model=OPENROUTER_LITE_MODEL,
+                    include_usage=False,
+                    response_format=None,
+                    tools=None,
+                    tool_choice=None,
+                )
+                generated_title = _clean_title(raw_title)
+            except Exception as error:  # pragma: no cover - best effort logging
+                api_logger.warning(
+                    "OpenRouter title generation failed; falling back to Gemini",
+                    extra={"event_type": "title_generation_error", "error": str(error), "provider": "openrouter"},
+                )
+
+        if generated_title is None and GEMINI_SERVICE and GEMINI_SERVICE.available:
+            response = await GEMINI_SERVICE.generate(
+                message=transcript,
+                conversation_history=None,
+                workspace_context=None,
+                system_prompt=prompt_template,
+                time_context=None,
+                model=GEMINI_LIGHT_MODEL,
+            )
+            if response and response.candidates:
+                generated_title = _clean_title(_candidate_text(response.candidates[0]))
+
+        if generated_title:
+            await _update_conversation_title(conversation_id, generated_title)
 
     except Exception as e:
         api_logger.warning(
@@ -4063,9 +4220,6 @@ async def _generate_chat_title_inline(
     Returns the generated title or None if generation fails.
     This is called inline (blocking) so the SSE end event can include the title.
     """
-    if not GEMINI_SERVICE or not GEMINI_SERVICE.available:
-        return None
-
     # Load prompt from JSON or fallback
     prompt_template = load_prompt_from_json(
         GLOBAL_SYSTEM_PROMPTS_PATH,
@@ -4077,32 +4231,45 @@ async def _generate_chat_title_inline(
 
     # Construct a minimal transcript for the title model
     transcript = f"User: {message}\nAssistant: {response_text}"
+
+    def _clean_title(raw_title: str) -> Optional[str]:
+        candidate = (raw_title or "").strip()
+        if not candidate:
+            return None
+        candidate = re.sub(r'^["\']|["\']$', "", candidate).strip()
+        candidate = re.sub(r"<[^>]+>", "", candidate).strip()
+        candidate = re.sub(r"^title\\s*:\\s*", "", candidate, flags=re.IGNORECASE).strip()
+        candidate = re.sub(r"\\s+", " ", candidate).strip()
+        return candidate or None
     
     try:
-        # Use the configured light model (e.g. Gemini Flash Lite)
-        response = await GEMINI_SERVICE.generate(
-            message=f"{prompt_template}\n\n{transcript}",
-            conversation_history=None,
-            workspace_context=None,
-            system_prompt=load_prompt_from_json(
-                GLOBAL_SYSTEM_PROMPTS_PATH,
-                "title_generation",
-                "Generate a concise title.",
-                locale=prompt_locale,
-            ),
-            time_context=None,
-            model=GEMINI_LIGHT_MODEL,
-        )
-        
-        # Extract and clean title
-        if response and response.candidates:
-            raw_title = _candidate_text(response.candidates[0]).strip()
-            # Remove any accidental quotes or tags
-            clean_title = re.sub(r'^["\']|["\']$', '', raw_title)
-            clean_title = re.sub(r'<[^>]+>', '', clean_title).strip()
-            
-            if clean_title:
-                return clean_title
+        # Prefer OpenRouter when available so title generation works even when Gemini isn't configured.
+        if OPENROUTER_SERVICE and OPENROUTER_SERVICE.available:
+            raw_title = await OPENROUTER_SERVICE.generate(
+                transcript,
+                conversation_history=None,
+                workspace_context=None,
+                system_prompt=prompt_template,
+                time_context=None,
+                model=OPENROUTER_LITE_MODEL,
+                include_usage=False,
+                response_format=None,
+                tools=None,
+                tool_choice=None,
+            )
+            return _clean_title(raw_title)
+
+        if GEMINI_SERVICE and GEMINI_SERVICE.available:
+            response = await GEMINI_SERVICE.generate(
+                message=transcript,
+                conversation_history=None,
+                workspace_context=None,
+                system_prompt=prompt_template,
+                time_context=None,
+                model=GEMINI_LIGHT_MODEL,
+            )
+            if response and response.candidates:
+                return _clean_title(_candidate_text(response.candidates[0]))
 
     except Exception as e:
         api_logger.warning(
@@ -4471,6 +4638,8 @@ async def _create_habit_tool(user_id: int, args: Dict[str, Any], db: databases.D
     label = args.get("label")
     if not label:
         return {"error": "label is required"}
+
+    reminder_at = _parse_remind_at(args.get("reminder_at"))
     
     streak_value = _coerce_streak_label_value(
         streak_days=args.get("streak_days"),
@@ -4484,7 +4653,6 @@ async def _create_habit_tool(user_id: int, args: Dict[str, Any], db: databases.D
         "description": args.get("description"),
         "streak_label": streak_value,
         "previous_label": args.get("previous_label") or "",
-        "color": args.get("color"),
     }
     
     habit_id = await db.execute(
@@ -4495,6 +4663,20 @@ async def _create_habit_tool(user_id: int, args: Dict[str, Any], db: databases.D
         )
     )
     created = await db.fetch_one(habits.select().where(habits.c.id == habit_id))
+
+    if created and reminder_at is not None:
+        record = dict(created)
+        await _upsert_entity_reminder(
+            user_id=user_id,
+            entity_type="habit",
+            entity_id=int(habit_id),
+            label=str(record.get("label") or str(label)),
+            description=record.get("description"),
+            remind_at=reminder_at,
+            metadata=None,
+            color=None,
+            db=db,
+        )
     return _build_reminder_payload(dict(created), user_id, "created", entity="habit")
 
 
@@ -4502,6 +4684,9 @@ async def _update_habit_tool(user_id: int, args: Dict[str, Any], db: databases.D
     habit_id = args.get("habit_id")
     if not habit_id:
         return {"error": "habit_id is required"}
+
+    reminder_at_provided = "reminder_at" in args
+    reminder_at = _parse_remind_at(args.get("reminder_at")) if reminder_at_provided else None
     
     updates = {}
     if "label" in args:
@@ -4513,20 +4698,40 @@ async def _update_habit_tool(user_id: int, args: Dict[str, Any], db: databases.D
             streak_days=args.get("streak_days"),
             streak_label=args.get("streak_label"),
         )
-    if "color" in args:
-        updates["color"] = args["color"]
         
-    if not updates:
+    if not updates and not reminder_at_provided:
         return {"status": "no_change", "message": "No updates provided."}
         
     now = utcnow()
     
     updates["updated_at"] = now
-    await db.execute(
-        habits.update()
-        .where((habits.c.id == habit_id) & (habits.c.user_id == user_id))
-        .values(**updates)
+    existing = await db.fetch_one(
+        habits.select().where((habits.c.id == habit_id) & (habits.c.user_id == user_id))
     )
+    if not existing:
+        return {"error": "Habit not found or access denied."}
+
+    if updates:
+        await db.execute(
+            habits.update()
+            .where((habits.c.id == habit_id) & (habits.c.user_id == user_id))
+            .values(**updates)
+        )
+
+    if reminder_at_provided:
+        updated = await db.fetch_one(habits.select().where(habits.c.id == habit_id))
+        record = dict(updated) if updated else dict(existing)
+        await _upsert_entity_reminder(
+            user_id=user_id,
+            entity_type="habit",
+            entity_id=int(habit_id),
+            label=str(record.get("label") or ""),
+            description=record.get("description"),
+            remind_at=reminder_at,
+            metadata=None,
+            color=None,
+            db=db,
+        )
     return {"status": "success", "message": f"Habit {habit_id} updated."}
 
 
@@ -4534,7 +4739,13 @@ async def _delete_habit_tool(user_id: int, args: Dict[str, Any], db: databases.D
     habit_id = args.get("habit_id")
     if not habit_id:
         return {"error": "habit_id is required"}
-        
+
+    await _delete_all_entity_reminders(
+        user_id=user_id,
+        entity_type="habit",
+        entity_id=int(habit_id),
+        db=db,
+    )
     await db.execute(
         habits.delete().where((habits.c.id == habit_id) & (habits.c.user_id == user_id))
     )
@@ -4584,6 +4795,24 @@ async def _create_reminder_tool(
     result = await db.execute(query)
     created_id = result
     created = await db.fetch_one(reminders.select().where(reminders.c.id == created_id))
+    try:
+        global reminder_scheduler
+        if reminder_scheduler is not None:
+            await reminder_scheduler.refresh_job(
+                user_id=user_id,
+                reminder_id=int(created_id),
+                remind_at=remind_at_dt,
+            )
+    except Exception as exc:  # pragma: no cover
+        api_logger.warning(
+            "Failed to schedule reminder job",
+            extra={
+                "event_type": "reminder_schedule_failed",
+                "user_id": user_id,
+                "reminder_id": created_id,
+                "error": str(exc),
+            },
+        )
     return _build_reminder_payload(dict(created), user_id, "created")
 
 
@@ -4621,6 +4850,29 @@ async def _update_reminder_tool(user_id: int, args: Dict[str, Any], db: database
     )
     if not updated:
         raise HTTPException(status_code=404, detail="Reminder not found")
+    try:
+        global reminder_scheduler
+        if reminder_scheduler is not None:
+            normalized_status = (dict(updated).get("status") or "").strip().lower()
+            if normalized_status != "pending":
+                await reminder_scheduler.cancel_job(user_id=user_id, reminder_id=int(reminder_id))
+            else:
+                remind_at_value = dict(updated).get("remind_at")
+                await reminder_scheduler.refresh_job(
+                    user_id=user_id,
+                    reminder_id=int(reminder_id),
+                    remind_at=remind_at_value,
+                )
+    except Exception as exc:  # pragma: no cover
+        api_logger.warning(
+            "Failed to reschedule reminder job",
+            extra={
+                "event_type": "reminder_reschedule_failed",
+                "user_id": user_id,
+                "reminder_id": reminder_id,
+                "error": str(exc),
+            },
+        )
     return _build_reminder_payload(dict(updated), user_id, "updated")
 
 
@@ -4636,6 +4888,13 @@ async def _delete_reminder_tool(user_id: int, args: Dict[str, Any], db: database
     )
     if not reminder:
         raise HTTPException(status_code=404, detail="Reminder not found")
+
+    try:
+        global reminder_scheduler
+        if reminder_scheduler is not None:
+            await reminder_scheduler.cancel_job(user_id=user_id, reminder_id=int(reminder_id))
+    except Exception:  # pragma: no cover
+        pass
     
     query = (
         reminders.delete()
@@ -4699,6 +4958,13 @@ async def _delete_latest_reminder_tool(user_id: int, args: Dict[str, Any], db: d
         reminder_label = record.get("label")
         reminder_time = record.get("remind_at")
 
+        try:
+            global reminder_scheduler
+            if reminder_scheduler is not None:
+                await reminder_scheduler.cancel_job(user_id=user_id, reminder_id=int(reminder_id))
+        except Exception:  # pragma: no cover
+            pass
+
         await db.execute(
             reminders.delete().where((reminders.c.id == reminder_id) & (reminders.c.user_id == user_id))
         )
@@ -4753,6 +5019,272 @@ def _build_reminder_payload(reminder: Dict[str, Any], user_id: int, status: str,
             "raw": safe_raw,
         },
     }
+
+
+def _normalize_remind_at(remind_at: Optional[datetime]) -> Optional[datetime]:
+    if remind_at is None:
+        return None
+    if remind_at.tzinfo is None:
+        # Backend stores naive UTC timestamps.
+        return remind_at
+    return remind_at.astimezone(timezone.utc).replace(tzinfo=None)
+
+
+def _parse_remind_at(value: Any) -> Optional[datetime]:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return _normalize_remind_at(value)
+    if isinstance(value, str):
+        trimmed = value.strip()
+        if not trimmed:
+            return None
+        try:
+            parsed = datetime.fromisoformat(trimmed.replace("Z", "+00:00"))
+        except Exception:
+            return None
+        return _normalize_remind_at(parsed)
+    return None
+
+
+async def _get_pending_entity_reminder_map(
+    *,
+    user_id: int,
+    entity_type: str,
+    entity_ids: List[int],
+    db: databases.Database,
+) -> Dict[int, datetime]:
+    if not entity_ids:
+        return {}
+
+    rows = await db.fetch_all(
+        reminders.select()
+        .where(
+            (reminders.c.user_id == user_id)
+            & (reminders.c.entity_type == entity_type)
+            & (reminders.c.entity_id.in_(entity_ids))
+            & (reminders.c.status == "pending")
+        )
+        .order_by(reminders.c.entity_id.asc(), reminders.c.created_at.desc(), reminders.c.id.desc())
+    )
+
+    reminder_map: Dict[int, datetime] = {}
+    for row in rows:
+        raw_entity_id = row.get("entity_id")
+        if raw_entity_id is None:
+            continue
+        try:
+            entity_id = int(raw_entity_id)
+        except Exception:
+            continue
+        if entity_id in reminder_map:
+            continue
+        remind_at = row.get("remind_at")
+        if isinstance(remind_at, datetime):
+            reminder_map[entity_id] = remind_at
+    return reminder_map
+
+
+async def _delete_pending_entity_reminders(
+    *,
+    user_id: int,
+    entity_type: str,
+    entity_id: int,
+    db: databases.Database,
+) -> None:
+    rows = await db.fetch_all(
+        reminders.select().where(
+            (reminders.c.user_id == user_id)
+            & (reminders.c.entity_type == entity_type)
+            & (reminders.c.entity_id == entity_id)
+            & (reminders.c.status == "pending")
+        )
+    )
+    if not rows:
+        return
+
+    for row in rows:
+        reminder_id = int(row["id"])
+        try:
+            global reminder_scheduler
+            if reminder_scheduler is not None:
+                await reminder_scheduler.cancel_job(user_id=user_id, reminder_id=reminder_id)
+        except Exception:  # pragma: no cover
+            pass
+        await db.execute(
+            reminders.delete().where(
+                (reminders.c.id == reminder_id) & (reminders.c.user_id == user_id)
+            )
+        )
+
+
+async def _delete_all_entity_reminders(
+    *,
+    user_id: int,
+    entity_type: str,
+    entity_id: int,
+    db: databases.Database,
+) -> None:
+    rows = await db.fetch_all(
+        reminders.select().where(
+            (reminders.c.user_id == user_id)
+            & (reminders.c.entity_type == entity_type)
+            & (reminders.c.entity_id == entity_id)
+        )
+    )
+    if not rows:
+        return
+
+    for row in rows:
+        reminder_id = int(row["id"])
+        try:
+            global reminder_scheduler
+            if reminder_scheduler is not None:
+                await reminder_scheduler.cancel_job(user_id=user_id, reminder_id=reminder_id)
+        except Exception:  # pragma: no cover
+            pass
+        await db.execute(
+            reminders.delete().where(
+                (reminders.c.id == reminder_id) & (reminders.c.user_id == user_id)
+            )
+        )
+
+
+async def _upsert_entity_reminder(
+    *,
+    user_id: int,
+    entity_type: str,
+    entity_id: int,
+    label: str,
+    description: Optional[str],
+    remind_at: Optional[datetime],
+    metadata: Optional[Dict[str, Any]],
+    color: Optional[str],
+    db: databases.Database,
+) -> Optional[int]:
+    global reminder_scheduler
+    normalized_remind_at = _normalize_remind_at(remind_at)
+    if normalized_remind_at is None:
+        await _delete_pending_entity_reminders(
+            user_id=user_id,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            db=db,
+        )
+        return None
+
+    existing_pending = await db.fetch_one(
+        reminders.select()
+        .where(
+            (reminders.c.user_id == user_id)
+            & (reminders.c.entity_type == entity_type)
+            & (reminders.c.entity_id == entity_id)
+            & (reminders.c.status == "pending")
+        )
+        .order_by(reminders.c.created_at.desc(), reminders.c.id.desc())
+        .limit(1)
+    )
+
+    now = utcnow()
+    base_values: Dict[str, Any] = {
+        "label": label,
+        "description": description,
+        "summary": description,
+        "remind_at": normalized_remind_at,
+        "delivery_mode": entity_type,
+        "metadata": metadata,
+        "color": color,
+        "updated_at": now,
+    }
+
+    if existing_pending:
+        reminder_id = int(existing_pending["id"])
+        await db.execute(
+            reminders.update()
+            .where((reminders.c.id == reminder_id) & (reminders.c.user_id == user_id))
+            .values(**base_values)
+        )
+        try:
+            if reminder_scheduler is not None:
+                await reminder_scheduler.refresh_job(
+                    user_id=user_id,
+                    reminder_id=reminder_id,
+                    remind_at=normalized_remind_at,
+                )
+        except Exception as exc:  # pragma: no cover
+            api_logger.warning(
+                "Failed to reschedule entity reminder",
+                extra={
+                    "event_type": "entity_reminder_reschedule_failed",
+                    "user_id": user_id,
+                    "entity_type": entity_type,
+                    "entity_id": entity_id,
+                    "reminder_id": reminder_id,
+                    "error": str(exc),
+                },
+            )
+        return reminder_id
+
+    existing_delivered = await db.fetch_one(
+        reminders.select()
+        .where(
+            (reminders.c.user_id == user_id)
+            & (reminders.c.entity_type == entity_type)
+            & (reminders.c.entity_id == entity_id)
+            & (reminders.c.status == "delivered")
+        )
+        .order_by(reminders.c.created_at.desc(), reminders.c.id.desc())
+        .limit(1)
+    )
+
+    # If the latest reminder already fired and the requested time is still in the past,
+    # avoid re-creating a new pending reminder (common when editing an event after the
+    # reminder delivered).
+    if existing_delivered and normalized_remind_at <= now:
+        reminder_id = int(existing_delivered["id"])
+        await db.execute(
+            reminders.update()
+            .where((reminders.c.id == reminder_id) & (reminders.c.user_id == user_id))
+            .values(
+                label=label,
+                description=description,
+                summary=description,
+                metadata=metadata,
+                color=color,
+                updated_at=now,
+            )
+        )
+        return reminder_id
+
+    insert_values: Dict[str, Any] = {
+        "user_id": user_id,
+        "entity_type": entity_type,
+        "entity_id": entity_id,
+        "status": "pending",
+        "created_at": now,
+        **base_values,
+    }
+    reminder_id = await db.execute(reminders.insert().values(**insert_values))
+    try:
+        if reminder_scheduler is not None:
+            await reminder_scheduler.refresh_job(
+                user_id=user_id,
+                reminder_id=int(reminder_id),
+                remind_at=normalized_remind_at,
+            )
+    except Exception as exc:  # pragma: no cover
+        api_logger.warning(
+            "Failed to schedule entity reminder",
+            extra={
+                "event_type": "entity_reminder_schedule_failed",
+                "user_id": user_id,
+                "entity_type": entity_type,
+                "entity_id": entity_id,
+                "reminder_id": reminder_id,
+                "error": str(exc),
+            },
+        )
+    return int(reminder_id)
 
 
 
@@ -4820,6 +5352,8 @@ async def _create_plan_tool(user_id: int, args: Dict[str, Any], db: databases.Da
     label = args.get("label")
     if not label:
         return {"error": "label is required"}
+
+    reminder_at = _parse_remind_at(args.get("reminder_at"))
     
     base_values = {
         "user_id": user_id,
@@ -4840,6 +5374,22 @@ async def _create_plan_tool(user_id: int, args: Dict[str, Any], db: databases.Da
         )
     )
     created = await db.fetch_one(plans.select().where(plans.c.id == plan_id))
+
+    if created and reminder_at is not None:
+        record = dict(created)
+        color = record.get("color")
+        metadata = {"color": color} if color else None
+        await _upsert_entity_reminder(
+            user_id=user_id,
+            entity_type="plan",
+            entity_id=int(plan_id),
+            label=str(record.get("label") or label),
+            description=record.get("description"),
+            remind_at=reminder_at,
+            metadata=metadata,
+            color=color,
+            db=db,
+        )
     return _build_reminder_payload(dict(created), user_id, "created", entity="plan")
 
 
@@ -4847,6 +5397,9 @@ async def _update_plan_tool(user_id: int, args: Dict[str, Any], db: databases.Da
     plan_id = args.get("plan_id")
     if not plan_id:
         return {"error": "plan_id is required"}
+
+    reminder_at_provided = "reminder_at" in args
+    reminder_at = _parse_remind_at(args.get("reminder_at")) if reminder_at_provided else None
         
     updates = {}
     if "label" in args:
@@ -4862,7 +5415,7 @@ async def _update_plan_tool(user_id: int, args: Dict[str, Any], db: databases.Da
     if "color" in args:
         updates["color"] = args["color"]
         
-    if not updates:
+    if not updates and not reminder_at_provided:
         return {"status": "no_changes", "message": "No updates provided."}
         
     # Verify ownership locally
@@ -4872,8 +5425,26 @@ async def _update_plan_tool(user_id: int, args: Dict[str, Any], db: databases.Da
         return {"error": "Plan not found or access denied."}
 
     updates["updated_at"] = utcnow()
-    query = plans.update().where(plans.c.id == plan_id).values(**updates)
-    await db.execute(query)
+    if updates:
+        query = plans.update().where(plans.c.id == plan_id).values(**updates)
+        await db.execute(query)
+
+    if reminder_at_provided:
+        updated = await db.fetch_one(plans.select().where(plans.c.id == plan_id))
+        record = dict(updated) if updated else dict(existing)
+        color = record.get("color")
+        metadata = {"color": color} if color else None
+        await _upsert_entity_reminder(
+            user_id=user_id,
+            entity_type="plan",
+            entity_id=int(plan_id),
+            label=str(record.get("label") or ""),
+            description=record.get("description"),
+            remind_at=reminder_at,
+            metadata=metadata,
+            color=color,
+            db=db,
+        )
     return {"status": "success", "message": "Plan updated."}
 
 
@@ -4888,6 +5459,12 @@ async def _delete_plan_tool(user_id: int, args: Dict[str, Any], db: databases.Da
     if not existing:
         return {"error": "Plan not found or access denied."}
 
+    await _delete_all_entity_reminders(
+        user_id=user_id,
+        entity_type="plan",
+        entity_id=int(plan_id),
+        db=db,
+    )
     query = plans.delete().where(plans.c.id == plan_id)
     await db.execute(query)
     return {"status": "success", "message": "Plan deleted."}
@@ -6255,6 +6832,23 @@ async def stream_ai_response(
     if cache_text_block:
         workspace_with_cache = "\n\n".join(filter(None, [workspace_context, cache_text_block]))
 
+    try:
+        calendar_context_block = await build_calendar_context(
+            user_id=user_id,
+            db=db,
+            user_timezone=user_timezone,
+            time_context=time_context,
+        )
+    except Exception as error:  # pragma: no cover - best effort logging
+        api_logger.debug(
+            f"Failed to build calendar context for user {user_id}: {error}",
+            extra={"event_type": "calendar_context_error", "user_id": user_id, "error": str(error)},
+        )
+        calendar_context_block = None
+
+    if calendar_context_block:
+        workspace_with_cache = "\n\n".join(filter(None, [workspace_with_cache, calendar_context_block]))
+
     effective_system_prompt = system_prompt
 
     # Prepare tools for all providers
@@ -6375,13 +6969,15 @@ async def stream_ai_response(
                     # Inject explicit tool usage instructions so the model knows to CALL the tools
                     tool_instruction = """
 You have tools available and MUST use them when the user requests:
-- create_plan: Use when user asks to set, create, or make a plan/goal with a deadline
-- create_reminder: Use when user asks for a reminder at a specific time  
+- create_plan: Use for plans/tasks AND reminders (reminders are plans with an optional `reminder_at`)
 - create_habit: Use when user wants to track a recurring habit
-- update_plan/update_reminder/update_habit: Use when user wants to modify existing items
-- delete_plan/delete_reminder/delete_habit: Use when user wants to remove items
+- update_plan/update_habit: Use when user wants to modify existing items (including setting/clearing `reminder_at`)
+- delete_plan/delete_habit: Use when user wants to remove items
+- list_plans/list_habits/list_reminders: Use to look up existing items when needed
 
-CRITICAL: When the user asks to "set a plan" or create any plan/reminder/habit, you MUST call the appropriate tool. Do not just describe what you would do - actually invoke the function."""
+When the user asks for a reminder: create/update a plan for the actual event time, then ask how long before the start they want to be reminded, and set `reminder_at` (ISO 8601 with timezone offset).
+
+CRITICAL: When the user asks to create/update a plan or habit, you MUST call the appropriate tool. Do not just describe what you would do - actually invoke the function."""
                     hybrid_system_prompt = (effective_system_prompt or "") + "\n\n" + tool_instruction
                     
                     # Execute tools with Gemini Flash
@@ -7235,6 +7831,24 @@ async def generate_ai_response(
     if cache_text_block:
         workspace_with_cache = "\n\n".join(filter(None, [workspace_context, cache_text_block]))
     
+    if user_id is not None and db is not None:
+        try:
+            calendar_context_block = await build_calendar_context(
+                user_id=user_id,
+                db=db,
+                user_timezone=user_timezone,
+                time_context=time_context,
+            )
+        except Exception as error:  # pragma: no cover - best effort logging
+            api_logger.debug(
+                f"Failed to build calendar context for user {user_id}: {error}",
+                extra={"event_type": "calendar_context_error", "user_id": user_id, "error": str(error)},
+            )
+            calendar_context_block = None
+
+        if calendar_context_block:
+            workspace_with_cache = "\n\n".join(filter(None, [workspace_with_cache, calendar_context_block]))
+
     effective_system_prompt = system_prompt
 
     # Prepare tools and attachments for all providers
@@ -9396,6 +10010,79 @@ async def update_user(
         else:
             update_data.pop("visible_model_ids", None)
 
+    # Normalize settings/preferences fields
+    if "theme_mode" in update_data:
+        raw_theme_mode = update_data.get("theme_mode")
+        if raw_theme_mode is None:
+            update_data["theme_mode"] = None
+        elif isinstance(raw_theme_mode, str):
+            normalized = raw_theme_mode.strip().lower()
+            if normalized in {"light", "dark", "system"}:
+                update_data["theme_mode"] = normalized
+            else:
+                update_data.pop("theme_mode", None)
+        else:
+            update_data.pop("theme_mode", None)
+
+    if "ui_locale" in update_data:
+        raw_ui_locale = update_data.get("ui_locale")
+        if raw_ui_locale is None:
+            update_data["ui_locale"] = None
+        elif isinstance(raw_ui_locale, str):
+            normalized = raw_ui_locale.strip().lower()
+            if not normalized:
+                update_data["ui_locale"] = None
+            elif normalized in {"en", "id"}:
+                update_data["ui_locale"] = normalized
+            else:
+                update_data.pop("ui_locale", None)
+        else:
+            update_data.pop("ui_locale", None)
+
+    if "preferred_response_language" in update_data:
+        raw_response_language = update_data.get("preferred_response_language")
+        if raw_response_language is None:
+            update_data["preferred_response_language"] = None
+        elif isinstance(raw_response_language, str):
+            normalized = raw_response_language.strip().lower()
+            if not normalized:
+                update_data["preferred_response_language"] = None
+            elif normalized in {"auto", "en", "id"}:
+                update_data["preferred_response_language"] = normalized
+            else:
+                update_data.pop("preferred_response_language", None)
+        else:
+            update_data.pop("preferred_response_language", None)
+
+    if "notification_preferences" in update_data:
+        raw_notification_prefs = update_data.get("notification_preferences")
+        if raw_notification_prefs is None:
+            update_data["notification_preferences"] = None
+        elif isinstance(raw_notification_prefs, dict):
+            defaults: Dict[str, bool] = {
+                "device": False,
+                "tasks": True,
+                "proactivity": True,
+                "calendarEvents": True,
+            }
+            sanitized = dict(defaults)
+            for key in defaults.keys():
+                value = raw_notification_prefs.get(key)
+                if isinstance(value, bool):
+                    sanitized[key] = value
+            update_data["notification_preferences"] = sanitized
+        else:
+            update_data.pop("notification_preferences", None)
+
+    for flag_field in ("conversation_memory_enabled", "auto_web_search_enabled"):
+        if flag_field not in update_data:
+            continue
+        raw_value = update_data.get(flag_field)
+        if raw_value is None:
+            continue
+        if not isinstance(raw_value, bool):
+            update_data.pop(flag_field, None)
+
     # Normalize optional text fields
     for field_name, max_length in (
         ("personalization_location", 160),
@@ -9662,7 +10349,21 @@ async def get_user_plans(
     query = plans.select().where(plans.c.user_id == user_id).order_by(plans.c.created_at)
     if limit:
         query = query.limit(limit)
-    return await db.fetch_all(query)
+    rows = await db.fetch_all(query)
+    payload = [dict(row) for row in rows]
+    plan_ids = [int(item["id"]) for item in payload if item.get("id") is not None]
+    reminder_map = await _get_pending_entity_reminder_map(
+        user_id=user_id,
+        entity_type="plan",
+        entity_ids=plan_ids,
+        db=db,
+    )
+    for item in payload:
+        plan_id = item.get("id")
+        if plan_id is None:
+            continue
+        item["reminder_at"] = reminder_map.get(int(plan_id))
+    return payload
 
 @app.post("/users/{user_id}/plans", response_model=Plan, status_code=status.HTTP_201_CREATED)
 async def create_plan(
@@ -9692,7 +10393,33 @@ async def create_plan(
         )
     )
     query = plans.select().where(plans.c.id == plan_id)
-    return await db.fetch_one(query)
+    created = await db.fetch_one(query)
+
+    if created and plan.reminder_at is not None:
+        record = dict(created)
+        color = record.get("color")
+        metadata = {"color": color} if color else None
+        await _upsert_entity_reminder(
+            user_id=user_id,
+            entity_type="plan",
+            entity_id=int(plan_id),
+            label=str(record.get("label") or plan.label),
+            description=record.get("description"),
+            remind_at=plan.reminder_at,
+            metadata=metadata,
+            color=color,
+            db=db,
+        )
+
+    response_payload = dict(created) if created else {}
+    reminder_map = await _get_pending_entity_reminder_map(
+        user_id=user_id,
+        entity_type="plan",
+        entity_ids=[int(plan_id)],
+        db=db,
+    )
+    response_payload["reminder_at"] = reminder_map.get(int(plan_id))
+    return response_payload
 
 @app.patch("/users/{user_id}/plans/{plan_id}", response_model=Plan)
 async def update_plan(
@@ -9705,6 +10432,8 @@ async def update_plan(
     user_id = current_user["id"]
     require_same_user(user_id, current_user)
     update_data = plan_update.dict(exclude_unset=True)
+    reminder_at_provided = "reminder_at" in update_data
+    reminder_at_value = update_data.pop("reminder_at", None)
 
     existing = await db.fetch_one(
         plans.select().where(
@@ -9713,16 +10442,43 @@ async def update_plan(
     )
     if not existing:
         raise HTTPException(status_code=404, detail="Plan not found")
-    if not update_data:
+    if not update_data and not reminder_at_provided:
         return existing
     update_data["updated_at"] = utcnow()
-    await db.execute(
-        plans.update()
-        .where((plans.c.id == plan_id) & (plans.c.user_id == user_id))
-        .values(**update_data)
-    )
+    if update_data:
+        await db.execute(
+            plans.update()
+            .where((plans.c.id == plan_id) & (plans.c.user_id == user_id))
+            .values(**update_data)
+        )
     query = plans.select().where(plans.c.id == plan_id)
-    return await db.fetch_one(query)
+    updated = await db.fetch_one(query)
+
+    if reminder_at_provided:
+        record = dict(updated) if updated else dict(existing)
+        color = record.get("color")
+        metadata = {"color": color} if color else None
+        await _upsert_entity_reminder(
+            user_id=user_id,
+            entity_type="plan",
+            entity_id=plan_id,
+            label=str(record.get("label") or ""),
+            description=record.get("description"),
+            remind_at=reminder_at_value,
+            metadata=metadata,
+            color=color,
+            db=db,
+        )
+
+    response_payload = dict(updated) if updated else dict(existing)
+    reminder_map = await _get_pending_entity_reminder_map(
+        user_id=user_id,
+        entity_type="plan",
+        entity_ids=[int(plan_id)],
+        db=db,
+    )
+    response_payload["reminder_at"] = reminder_map.get(int(plan_id))
+    return response_payload
 
 @app.delete("/users/{user_id}/plans/{plan_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_plan(
@@ -9740,6 +10496,13 @@ async def delete_plan(
     existing = await db.fetch_one(query)
     if not existing:
         raise HTTPException(status_code=404, detail="Plan not found")
+
+    await _delete_all_entity_reminders(
+        user_id=user_id,
+        entity_type="plan",
+        entity_id=plan_id,
+        db=db,
+    )
     delete_query = plans.delete().where(
         (plans.c.id == plan_id) & (plans.c.user_id == user_id)
     )
@@ -9759,7 +10522,20 @@ async def get_habits(
     if limit:
         query = query.limit(limit)
     rows = await db.fetch_all(query)
-    return [_serialize_habit_record(row) for row in rows]
+    payload = [_serialize_habit_record(row) for row in rows]
+    habit_ids = [int(item["id"]) for item in payload if item.get("id") is not None]
+    reminder_map = await _get_pending_entity_reminder_map(
+        user_id=user_id,
+        entity_type="habit",
+        entity_ids=habit_ids,
+        db=db,
+    )
+    for item in payload:
+        habit_id = item.get("id")
+        if habit_id is None:
+            continue
+        item["reminder_at"] = reminder_map.get(int(habit_id))
+    return payload
 
 @app.post("/users/{user_id}/habits", response_model=Habit, status_code=status.HTTP_201_CREATED)
 async def create_habit(
@@ -9776,7 +10552,6 @@ async def create_habit(
         "streak_label": habit.streak_label,
         "previous_label": habit.previous_label,
         "description": habit.description,
-        "color": habit.color,
     }
 
     now = utcnow()
@@ -9788,7 +10563,31 @@ async def create_habit(
         )
     )
     query = habits.select().where(habits.c.id == habit_id)
-    return await db.fetch_one(query)
+    created = await db.fetch_one(query)
+
+    if created and habit.reminder_at is not None:
+        record = dict(created)
+        await _upsert_entity_reminder(
+            user_id=user_id,
+            entity_type="habit",
+            entity_id=int(habit_id),
+            label=str(record.get("label") or habit.label),
+            description=record.get("description"),
+            remind_at=habit.reminder_at,
+            metadata=None,
+            color=None,
+            db=db,
+        )
+
+    response_payload = _serialize_habit_record(created)
+    reminder_map = await _get_pending_entity_reminder_map(
+        user_id=user_id,
+        entity_type="habit",
+        entity_ids=[int(habit_id)],
+        db=db,
+    )
+    response_payload["reminder_at"] = reminder_map.get(int(habit_id))
+    return response_payload
 
 @app.patch("/users/{user_id}/habits/{habit_id}", response_model=Habit)
 async def update_habit(
@@ -9801,6 +10600,8 @@ async def update_habit(
     user_id = current_user["id"]
     require_same_user(user_id, current_user)
     update_data = habit_update.dict(exclude_unset=True)
+    reminder_at_provided = "reminder_at" in update_data
+    reminder_at_value = update_data.pop("reminder_at", None)
 
     existing = await db.fetch_one(
         habits.select().where(
@@ -9809,16 +10610,41 @@ async def update_habit(
     )
     if not existing:
         raise HTTPException(status_code=404, detail="Habit not found")
-    if not update_data:
+    if not update_data and not reminder_at_provided:
         return existing
     update_data["updated_at"] = utcnow()
-    await db.execute(
-        habits.update()
-        .where((habits.c.id == habit_id) & (habits.c.user_id == user_id))
-        .values(**update_data)
-    )
+    if update_data:
+        await db.execute(
+            habits.update()
+            .where((habits.c.id == habit_id) & (habits.c.user_id == user_id))
+            .values(**update_data)
+        )
     query = habits.select().where(habits.c.id == habit_id)
-    return await db.fetch_one(query)
+    updated = await db.fetch_one(query)
+
+    if reminder_at_provided:
+        record = dict(updated) if updated else dict(existing)
+        await _upsert_entity_reminder(
+            user_id=user_id,
+            entity_type="habit",
+            entity_id=habit_id,
+            label=str(record.get("label") or ""),
+            description=record.get("description"),
+            remind_at=reminder_at_value,
+            metadata=None,
+            color=None,
+            db=db,
+        )
+
+    response_payload = _serialize_habit_record(updated if updated else existing)
+    reminder_map = await _get_pending_entity_reminder_map(
+        user_id=user_id,
+        entity_type="habit",
+        entity_ids=[int(habit_id)],
+        db=db,
+    )
+    response_payload["reminder_at"] = reminder_map.get(int(habit_id))
+    return response_payload
 
 @app.delete("/users/{user_id}/habits/{habit_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_habit(
@@ -9835,6 +10661,13 @@ async def delete_habit(
     existing = await db.fetch_one(query)
     if not existing:
         raise HTTPException(status_code=404, detail="Habit not found")
+
+    await _delete_all_entity_reminders(
+        user_id=user_id,
+        entity_type="habit",
+        entity_id=habit_id,
+        db=db,
+    )
     delete_query = habits.delete().where(
         (habits.c.id == habit_id) & (habits.c.user_id == user_id)
     )
@@ -9949,43 +10782,9 @@ async def list_user_reminders(
 
         rows = await db.fetch_all(query)
         
-        # Self-healing for SQLite: Auto-DELETE stale pending reminders
-        if status_filter == "pending" and rows:
-            now = utcnow()
-            stale_threshold = now - timedelta(minutes=15)
-            stale_ids = []
-            filtered_rows = []
-            for row in rows:
-                try:
-                    remind_at = row["remind_at"]
-                    if isinstance(remind_at, str):
-                        remind_at = datetime.fromisoformat(remind_at.replace("Z", "+00:00"))
-                    # Ensure naive datetime for comparison
-                    if remind_at is not None and hasattr(remind_at, 'tzinfo') and remind_at.tzinfo is not None:
-                        remind_at = remind_at.replace(tzinfo=None)
-                    
-                    # Check if it's stale and hasn't been delivered
-                    # Note: SQLite rows might not have 'delivered_at' populated if schema migration failed or old data
-                    is_stale = remind_at is not None and remind_at < stale_threshold
-                    if is_stale:
-                        stale_ids.append(row["id"])
-                    else:
-                        filtered_rows.append(row)
-                except (ValueError, TypeError) as e:
-                    api_logger.warning(f"Skipping reminder due to date parsing error (SQLite self-healing): {e}", extra={"reminder_id": row["id"]})
-                    filtered_rows.append(row) # Keep row if parsing fails but it's not stale
-            
-            if stale_ids:
-                try:
-                    api_logger.info(f"Auto-deleting {len(stale_ids)} stale reminders (SQLite)", extra={"user_id": user_id, "reminder_ids": stale_ids})
-                    delete_query = reminders.delete().where(reminders.c.id.in_(stale_ids))
-                    await db.execute(delete_query)
-                    rows = filtered_rows
-                except Exception as e:
-                    api_logger.error(f"Failed to auto-delete stale reminders (SQLite): {e}", exc_info=True)
-                    rows = filtered_rows # Ensure we still return non-deleted rows
-            else:
-                rows = filtered_rows
+        # Reminder delivery is handled by the reminder scheduler. Do not mutate reminder
+        # state on read here (older versions deleted "stale" rows, which could drop
+        # legitimate overdue reminders if the scheduler was temporarily offline).
 
         return [_serialize_reminder_row(row) for row in rows]
     except Exception as e:

@@ -2352,25 +2352,41 @@
 .composerHeaderSelect {
   appearance: none;
   -webkit-appearance: none;
-  background: transparent;
-  border: none;
+  color-scheme: dark;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 10px;
   color: rgba(247, 247, 247, 0.95);
-  font-size: 1rem;
-  letter-spacing: 0.04em;
-  padding: 4px 22px 4px 0;
+  font-size: 0.98rem;
+  letter-spacing: 0.02em;
+  padding: 6px 28px 6px 10px;
   margin: 0;
   cursor: pointer;
   font-family: inherit;
   font-weight: 600;
   width: auto;
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease;
 }
 
 .composerHeaderSelect:focus {
   outline: none;
 }
 
+.composerHeaderSelect:hover {
+  background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+.composerHeaderSelect:focus-visible {
+  border-color: rgba(130, 180, 255, 0.65);
+  box-shadow: 0 0 0 3px rgba(130, 180, 255, 0.22);
+}
+
 .composerHeaderSelect option {
-  background-color: rgba(24, 24, 24, 0.96);
+  background-color: rgba(20, 20, 20, 0.98);
   color: rgba(247, 247, 247, 0.95);
   font-size: 0.9rem;
   padding: 8px;

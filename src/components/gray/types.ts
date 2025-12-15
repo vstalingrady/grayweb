@@ -1,5 +1,4 @@
 import { type ComponentType } from "react";
-import type { ReminderStatus } from "@/lib/api";
 
 export type SidebarNavKey =
   | "general"
@@ -44,8 +43,8 @@ export type PlanItem = {
   deadline?: string | null;
   scheduleSlot?: string | null;
   details?: string | null;
-  reminderId?: number;
-  reminderStatus?: ReminderStatus;
+  reminderAt?: string | null;
+  color?: string | null;
 };
 
 export type PlanUpdates = {
@@ -53,6 +52,8 @@ export type PlanUpdates = {
   details?: string | null;
   deadline?: string | null;
   scheduleSlot?: string | null;
+  reminderAt?: string | null;
+  color?: string | null;
 };
 
 export type HabitItem = {
@@ -64,6 +65,7 @@ export type HabitItem = {
   details?: string | null;
   createdAt?: string;
   updatedAt?: string;
+  reminderAt?: string | null;
 };
 
 export type HabitUpdates = {
@@ -71,6 +73,7 @@ export type HabitUpdates = {
   details?: string | null;
   streakLabel?: string | null;
   previousLabel?: string | null;
+  reminderAt?: string | null;
 };
 
 export type DayEvent = {

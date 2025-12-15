@@ -49,20 +49,15 @@ import { useProactivityNotifications } from "@/components/gray/ProactivityNotifi
 import { useWorkspaceData } from "@/components/gray/hooks/useWorkspaceData";
 import { useProactivity } from "@/components/gray/hooks/useProactivity";
 import { usePulse } from "@/components/gray/hooks/usePulse";
-import { DEFAULT_EVENT_COLOR } from "./constants";
 import { toDateKey, normalizeProactivityTimes, primaryProactivityTime, normalizeProactivityChannels } from "./utils";
 import { UsageLimitBanner } from "@/components/gray/UsageLimitBanner";
 // Type-only import
 import { GrayChatComposer } from "@/components/gray/ChatComposer";
 import {
   buildGeneralChatSession,
-  buildReminderEventKey,
-  buildCalendarEventFromReminder,
   derivePlanTierLabel,
   getSessionSeedFingerprint,
   getReadableSessionTitle,
-  parseReminderPlanId,
-  extractReminderId,
   deriveInitials,
   greetingForDate,
   type PlanCarrierUser,
@@ -182,8 +177,6 @@ function GrayPageClientInner({
     setPlans,
     habits,
     setHabits,
-    reminderPlans,
-    setReminderPlans,
     calendarCalendars,
     setCalendarCalendars,
     calendarEvents,
@@ -200,7 +193,6 @@ function GrayPageClientInner({
 
   void pathname;
 
-  // Include reminderPlans in derivedPlans so they appear in the pulse
   const {
     sessions,
     renameSession,
@@ -221,7 +213,6 @@ function GrayPageClientInner({
     pinSession,
     remoteConversationsLoaded,
   } = useChatStore();
-  const reminderEventKeysRef = useRef<Set<string>>(new Set());
   const supportsInlineChat = variant !== "chat";
   const [currentChatId, setCurrentChatId] = useState<string | null>(() => activeChatId ?? null);
   const [isCompactLayout, setIsCompactLayout] = useState(false);
@@ -229,7 +220,7 @@ function GrayPageClientInner({
   const { deliveredKeys: deliveredProactivityKeys } = useProactivityNotifications();
   const lastDeletedChatIdStorageKey = "gray:lastDeletedChatId";
 
-  const derivedPlans = user ? [...plans, ...reminderPlans] : [];
+  const derivedPlans = user ? plans : [];
   const derivedHabits = user ? habits : [];
 
   const [threadComposerDraft, setThreadComposerDraft] = useState("");
@@ -346,6 +337,8 @@ function GrayPageClientInner({
     return defaultSidebarExpandedDesktop;
   });
 
+  const [isCalendarSidebarExpanded, setIsCalendarSidebarExpanded] = useState(false);
+
   const [isMounted, setIsMounted] = useState(false);
   const wasMobileViewportRef = useRef(isMobileViewport);
 
@@ -419,6 +412,14 @@ function GrayPageClientInner({
       // localStorage may be unavailable
     }
   }, [isSidebarExpanded, isMobileViewport, sidebarPreferenceKey]);
+
+  const isCalendarPage = pathname.startsWith("/cal");
+
+  useEffect(() => {
+    if (isCalendarPage) {
+      setIsCalendarSidebarExpanded(false);
+    }
+  }, [isCalendarPage]);
 
   const [dashboardTab, setDashboardTab] = useState<"pulse" | "calendar">(() => initialDashboardTab);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -576,9 +577,7 @@ function GrayPageClientInner({
           chatBar={null}
           isCompactLayout={isCompactLayout}
           userId={userId}
-          reminderPlans={reminderPlans}
           proactivityDeliveryKeys={deliveredProactivityKeys}
-          onReminderMove={handleReminderMove}
           streakCount={streakCount}
           onUpgradeClick={handleUpgradePlan}
           showUpgradeButton={shouldShowUpgradeButton}
@@ -1113,10 +1112,6 @@ function GrayPageClientInner({
     }
   }, [router]);
 
-  const reminderPlanMap = useMemo(
-    () => new Map(reminderPlans.map((plan) => [plan.id, plan])),
-    [reminderPlans]
-  );
   const currentChatSession = useMemo(() => {
     if (!currentChatId) {
       return null;
@@ -1172,70 +1167,6 @@ function GrayPageClientInner({
   useEffect(() => {
     setWorkspaceContext(workspaceContextSummary);
   }, [setWorkspaceContext, workspaceContextSummary]);
-
-  useEffect(() => {
-    if (!sessions.length) {
-      reminderEventKeysRef.current.clear();
-      return;
-    }
-    const calendarId = calendarCalendars[0]?.id ?? "default";
-    const calendarColor = calendarCalendars[0]?.color ?? DEFAULT_EVENT_COLOR;
-    const eventsToAdd: CalendarEvent[] = [];
-    const keysToRemove: string[] = [];
-
-    sessions.forEach((session) => {
-      session.messages.forEach((message) => {
-        if (message.role !== "assistant" || !Array.isArray(message.reminders)) {
-          return;
-        }
-        message.reminders.forEach((reminder) => {
-          const key = buildReminderEventKey(reminder);
-          const normalizedStatus = (
-            (reminder.data.reminder_status ?? reminder.status ?? "created") as string
-          ).toString().trim().toLowerCase();
-          if (normalizedStatus === "deleted") {
-            if (reminderEventKeysRef.current.has(key)) {
-              keysToRemove.push(key);
-              reminderEventKeysRef.current.delete(key);
-            }
-            return;
-          }
-          if (reminderEventKeysRef.current.has(key)) {
-            return;
-          }
-          const event = buildCalendarEventFromReminder(reminder, key, calendarId, calendarColor);
-          if (!event) {
-            return;
-          }
-          reminderEventKeysRef.current.add(key);
-          eventsToAdd.push(event);
-        });
-      });
-    });
-
-    if (!eventsToAdd.length && !keysToRemove.length) {
-      return;
-    }
-
-    setCalendarEvents((previous) => {
-      const filtered = keysToRemove.length
-        ? previous.filter(
-          (event) =>
-            !(event.id.startsWith("reminder-") &&
-              keysToRemove.includes(event.id.replace(/^reminder-/, "")))
-        )
-        : previous;
-      if (!eventsToAdd.length) {
-        return filtered;
-      }
-      const existingIds = new Set(filtered.map((event) => event.id));
-      const toAppend = eventsToAdd.filter((event) => !existingIds.has(event.id));
-      if (!toAppend.length) {
-        return filtered;
-      }
-      return [...filtered, ...toAppend];
-    });
-  }, [sessions, calendarCalendars, setCalendarEvents]);
 
   useEffect(() => {
     if (activeNav === "threads") {
@@ -1352,53 +1283,6 @@ function GrayPageClientInner({
       return;
     }
 
-    const reminderId = parseReminderPlanId(id);
-    if (reminderId !== null) {
-      const previousReminderPlans = reminderPlans;
-      const previousCalendarEvents = calendarEvents;
-      const targetPlan = reminderPlanMap.get(id);
-      if (!targetPlan) {
-        return;
-      }
-      const nextCompleted = !targetPlan.completed;
-      const newStatus: "delivered" | "pending" = nextCompleted ? "delivered" : "pending";
-      const updated = previousReminderPlans.map((plan) => {
-        if (plan.id === id) {
-          return {
-            ...plan,
-            completed: nextCompleted,
-            reminderStatus: newStatus,
-          };
-        }
-        return plan;
-      });
-
-      // Also update the corresponding calendar event
-      const updatedCalendarEvents = previousCalendarEvents.map((event) => {
-        if (event.id === id) {
-          return {
-            ...event,
-            reminderStatus: newStatus,
-          };
-        }
-        return event;
-      });
-
-      setReminderPlans(updated);
-      setCalendarEvents(updatedCalendarEvents);
-
-      apiService
-        .updateReminder(user.id, reminderId, {
-          status: nextCompleted ? "delivered" : "pending",
-        })
-        .catch((error) => {
-          console.error("Failed to update reminder:", error);
-          setReminderPlans(previousReminderPlans);
-          setCalendarEvents(previousCalendarEvents);
-        });
-      return;
-    }
-
     const planId = Number(id);
     if (Number.isNaN(planId)) {
       return;
@@ -1433,40 +1317,6 @@ function GrayPageClientInner({
       return;
     }
 
-    const reminderId = parseReminderPlanId(planId);
-    if (reminderId !== null) {
-      const previousReminderPlans = reminderPlans;
-      const targetPlan = reminderPlanMap.get(planId);
-      if (!targetPlan) {
-        return;
-      }
-      const nextPlans = previousReminderPlans.map((plan) =>
-        plan.id === planId
-          ? {
-            ...plan,
-            label: updates.label,
-            details: updates.details ?? null,
-            deadline: updates.deadline ?? null,
-          }
-          : plan
-      );
-      setReminderPlans(nextPlans);
-      const title = updates.label || targetPlan.label || "Reminder plan";
-      void sendDashboardNotification("Plan saved", `${title} updated in today's pulse.`);
-      try {
-        await apiService.updateReminder(user.id, reminderId, {
-          label: updates.label,
-          description: updates.details ?? null,
-          remind_at: updates.deadline ?? targetPlan.deadline ?? undefined,
-        });
-      } catch (error) {
-        console.error("Failed to update reminder:", error);
-        setReminderPlans(previousReminderPlans);
-        throw error;
-      }
-      return;
-    }
-
     const numericPlanId = Number(planId);
     if (Number.isNaN(numericPlanId)) {
       return;
@@ -1481,6 +1331,8 @@ function GrayPageClientInner({
           deadline: updates.deadline ?? null,
           scheduleSlot: updates.scheduleSlot ?? null,
           details: updates.details ?? null,
+          reminderAt: "reminderAt" in updates ? (updates.reminderAt ?? null) : plan.reminderAt ?? null,
+          color: "color" in updates ? (updates.color ?? null) : plan.color ?? null,
         }
         : plan
     );
@@ -1491,12 +1343,19 @@ function GrayPageClientInner({
     void sendDashboardNotification("Plan saved", `${planLabel} updated in today's pulse.`);
 
     try {
-      await apiService.updatePlan(user.id, numericPlanId, {
+      const updatePayload: Parameters<typeof apiService.updatePlan>[2] = {
         label: updates.label,
         description: updates.details ?? null,
         deadline: updates.deadline ?? null,
         scheduleSlot: updates.scheduleSlot ?? null,
-      });
+      };
+      if ("reminderAt" in updates) {
+        updatePayload.reminderAt = updates.reminderAt ?? null;
+      }
+      if ("color" in updates) {
+        updatePayload.color = updates.color ?? null;
+      }
+      await apiService.updatePlan(user.id, numericPlanId, updatePayload);
     } catch (error) {
       console.error("Failed to update plan:", error);
       setPlans(previousPlans);
@@ -1509,42 +1368,6 @@ function GrayPageClientInner({
       return;
     }
     if (!isActivePulseEditable && pulseEntries.length > 0) {
-      return;
-    }
-
-    const reminderId = parseReminderPlanId(planToDelete.id);
-    if (reminderId !== null) {
-      console.log(`[DELETE] Attempting to delete reminder ${reminderId} (plan ID: ${planToDelete.id})`);
-      const previousReminderPlans = reminderPlans;
-      const previousCalendarEvents = calendarEvents;
-      const updatedReminderPlans = previousReminderPlans.filter((plan) => plan.id !== planToDelete.id);
-
-      // Also remove the corresponding calendar event
-      // We must handle both simple IDs (reminder-{id}) and complex IDs (reminder-{source}-{id}-{iso})
-      const updatedCalendarEvents = previousCalendarEvents.filter((event) => {
-        if (event.id === planToDelete.id) {
-          return false;
-        }
-        // Check for complex ID match
-        const match = event.id.match(/^reminder-[^-]+-(\d+)-/);
-        if (match && Number(match[1]) === reminderId) {
-          return false;
-        }
-        return true;
-      });
-
-      setReminderPlans(updatedReminderPlans);
-      setCalendarEvents(updatedCalendarEvents);
-
-      apiService.deleteReminder(user.id, reminderId)
-        .then(() => {
-          console.log(`[DELETE] Successfully deleted reminder ${reminderId}`);
-        })
-        .catch((error) => {
-          console.error(`[DELETE] Failed to delete reminder ${reminderId}:`, error);
-          setReminderPlans(previousReminderPlans);
-          setCalendarEvents(previousCalendarEvents);
-        });
       return;
     }
 
@@ -1834,10 +1657,7 @@ function GrayPageClientInner({
 
     // 1. Separate events by type
     const planEvents = allEvents.filter((e) => e.id.startsWith(PLAN_EVENT_ID_PREFIX));
-    const reminderEvents = allEvents.filter((e) => e.id.startsWith("reminder-"));
-    const standardEvents = allEvents.filter(
-      (e) => !e.id.startsWith(PLAN_EVENT_ID_PREFIX) && !e.id.startsWith("reminder-")
-    );
+    const standardEvents = allEvents.filter((e) => !e.id.startsWith(PLAN_EVENT_ID_PREFIX));
 
     // 2. Handle Plans (Update schedule + deadline day when moved between days)
     // We compare against current `plans` state to see if schedule or day changed.
@@ -1895,47 +1715,11 @@ function GrayPageClientInner({
     // 3. Capture previousEvents BEFORE any state changes for accurate comparison
     const previousEvents = calendarEvents;
 
-    // 4. Handle Reminders (Update remind_at)
-    reminderEvents.forEach((event) => {
-      const originalEvent = previousEvents.find((e) => e.id === event.id);
-      // If start/end didn't change, skip
-      if (
-        originalEvent &&
-        originalEvent.start.getTime() === event.start.getTime() &&
-        originalEvent.end.getTime() === event.end.getTime()
-      ) {
-        return;
-      }
-
-      const reminderId = extractReminderId(event.id);
-      if (reminderId !== null && user) {
-        // Update API
-        const previousReminderPlans = reminderPlans;
-
-        // Optimistically update local state
-        const updatedReminderPlans = previousReminderPlans.map((plan) =>
-          plan.reminderId === reminderId
-            ? { ...plan, deadline: event.start.toISOString() }
-            : plan
-        );
-        setReminderPlans(updatedReminderPlans);
-
-        apiService.updateReminder(user.id, reminderId, {
-          remind_at: event.start.toISOString(),
-          metadata: { color: event.color },
-        }).catch(err => {
-          console.error("Failed to update reminder time", err);
-          // Revert on error
-          setReminderPlans(previousReminderPlans);
-        });
-      }
-    });
-
-    // 5. Update Calendar State (Standard + Reminders + Plans)
+    // 4. Update Calendar State (Standard + Plans)
     // We need to preserve plan events in the calendar state to prevent them from disappearing
     // when events are clicked or moved. Plan data lives in `plans` state, but the calendar
     // events derived from plans need to remain in calendarEvents for rendering.
-    const nextStateEvents = [...standardEvents, ...reminderEvents, ...planEvents];
+    const nextStateEvents = [...standardEvents, ...planEvents];
     setCalendarEvents(nextStateEvents);
 
     if (!user) {
@@ -1970,7 +1754,7 @@ function GrayPageClientInner({
     };
 
     // Find deleted events (in previous but not in next)
-    // Only consider standard/reminder events for deletion detection against previous state
+    // Only consider standard events for deletion detection against previous state
     const deletedEventIds = previousEvents
       .filter(prev => !nextStateEvents.find(next => next.id === prev.id))
       .map(event => event.id);
@@ -1996,23 +1780,6 @@ function GrayPageClientInner({
 
     // Delete removed events
     for (const eventId of deletedEventIds) {
-      if (eventId.startsWith("reminder-")) {
-        const reminderId = extractReminderId(eventId);
-        if (reminderId !== null) {
-          console.log(`[CALENDAR DELETE] Attempting to delete reminder ${reminderId} from calendar`);
-          try {
-            await apiService.deleteReminder(user.id, reminderId);
-            console.log(`[CALENDAR DELETE] Successfully deleted reminder ${reminderId}`);
-          } catch (error) {
-            console.error(`[CALENDAR DELETE] Failed to delete reminder ${reminderId}:`, error);
-            logCalendarSyncError("delete reminder", error);
-            revertDelete(eventId);
-            return;
-          }
-        }
-        continue;
-      }
-
       const numericId = Number(eventId);
       if (!Number.isNaN(numericId)) {
         // Real event - delete from backend
@@ -2032,51 +1799,6 @@ function GrayPageClientInner({
     // Create new events
     console.log("[CALENDAR] Creating new events:", newEvents.map(e => ({ id: e.id, title: e.title, calendarId: e.calendarId, entryType: e.entryType })));
     for (const event of newEvents) {
-      if (event.entryType === "reminder") {
-        try {
-          const createdReminder = await apiService.createReminder(user.id, {
-            label: event.title,
-            remind_at: event.start.toISOString(),
-            description: event.description,
-            summary: event.description,
-          });
-          const newId = `reminder-${createdReminder.id}`;
-          setCalendarEvents((prev) =>
-            prev.map((e) =>
-              e.id === event.id
-                ? {
-                  ...e,
-                  id: newId,
-                  reminderId: createdReminder.id,
-                  reminderStatus: createdReminder.status,
-                }
-                : e
-            )
-          );
-          // Also update reminderPlans to reflect the new reminder immediately
-          setReminderPlans((prev) => [
-            ...prev,
-            {
-              id: newId,
-              label: createdReminder.label,
-              completed: createdReminder.status === "completed",
-              deadline: createdReminder.remind_at,
-              scheduleSlot: null,
-              details: createdReminder.description ?? createdReminder.summary ?? null,
-              reminderId: createdReminder.id,
-              reminderStatus: createdReminder.status,
-            },
-          ]);
-        } catch (error) {
-          logCalendarSyncError("create reminder", error);
-          revertCreate(event.id);
-          return;
-        }
-        continue;
-      }
-
-      if (event.id.startsWith("reminder-")) continue; // Should not happen for new events, but safety check
-
       const numericCalendarId = event.calendarId ? Number(event.calendarId) : null;
       if (!Number.isNaN(numericCalendarId) || event.calendarId === "default") {
         try {
@@ -2104,38 +1826,6 @@ function GrayPageClientInner({
     // Update existing events
     console.log("[CALENDAR] Updating events:", updatedEvents.map(e => ({ id: e.id, title: e.title })));
     for (const event of updatedEvents) {
-      if (event.entryType === "reminder" || event.id.startsWith("reminder-")) {
-        const reminderId = event.reminderId ?? Number(event.id.replace("reminder-", ""));
-        if (!Number.isNaN(reminderId)) {
-          try {
-            await apiService.updateReminder(user.id, reminderId, {
-              label: event.title,
-              description: event.description,
-              remind_at: event.start.toISOString(),
-              metadata: { color: event.color },
-            });
-            // Update reminderPlans as well
-            setReminderPlans((prev) =>
-              prev.map((plan) =>
-                plan.reminderId === reminderId
-                  ? {
-                    ...plan,
-                    label: event.title,
-                    details: event.description ?? null,
-                    deadline: event.start.toISOString(),
-                  }
-                  : plan
-              )
-            );
-          } catch (error) {
-            logCalendarSyncError("update reminder", error);
-            revertUpdate(event.id);
-            return;
-          }
-        }
-        continue;
-      }
-
       // Handle temporary events (evt-*) that were created locally but not yet persisted
       if (event.id.startsWith('evt-')) {
         // Treat as a new event that needs to be created
@@ -2191,42 +1881,6 @@ function GrayPageClientInner({
 
     // Suppress desktop notifications for routine calendar event edits/moves.
   };
-
-  const handleReminderMove = useCallback(
-    async (reminderId: number, range: { start: Date; end: Date }) => {
-      if (!user) {
-        return;
-      }
-
-      const previousReminderPlans = reminderPlans;
-      const previousCalendarEvents = calendarEvents;
-      const isoTime = range.start.toISOString();
-
-      const updatedReminderPlans = previousReminderPlans.map((plan) =>
-        plan.reminderId === reminderId ? { ...plan, deadline: isoTime } : plan
-      );
-      const updatedCalendarEvents = previousCalendarEvents.map((event) =>
-        event.reminderId === reminderId
-          ? { ...event, start: new Date(range.start), end: new Date(range.end) }
-          : event
-      );
-
-      setReminderPlans(updatedReminderPlans);
-      setCalendarEvents(updatedCalendarEvents);
-
-      try {
-        await apiService.updateReminder(user.id, reminderId, {
-          remind_at: isoTime,
-          metadata: { color: updatedCalendarEvents.find(e => e.reminderId === reminderId)?.color },
-        });
-      } catch (error) {
-        console.error("Failed to move reminder:", error);
-        setReminderPlans(previousReminderPlans);
-        setCalendarEvents(previousCalendarEvents);
-      }
-    },
-    [user, reminderPlans, calendarEvents]
-  );
 
   const handleCalendarIntegration = useCallback(() => {
     if (!user) {
@@ -2520,8 +2174,7 @@ function GrayPageClientInner({
     : null;
   const effectiveIsMobileViewport = isMobileViewport;
   const effectiveIsSidebarExpanded = isSidebarExpanded;
-  const isCalendarPage = pathname.startsWith("/cal");
-  const sidebarExpandedForLayout = isCalendarPage ? false : effectiveIsSidebarExpanded;
+  const sidebarExpandedForLayout = isCalendarPage ? isCalendarSidebarExpanded : effectiveIsSidebarExpanded;
 
   return (
     <>
@@ -2541,9 +2194,11 @@ function GrayPageClientInner({
                   <button
                     className={styles.mobileMenuButton}
                     onClick={() => {
-                      if (!isCalendarPage) {
-                        setIsSidebarExpanded(!isSidebarExpanded);
+                      if (isCalendarPage) {
+                        setIsCalendarSidebarExpanded((previous) => !previous);
+                        return;
                       }
+                      setIsSidebarExpanded(!isSidebarExpanded);
                     }}
                   >
                     <Menu size={24} />
@@ -2578,7 +2233,7 @@ function GrayPageClientInner({
               </div>
             </div>
 
-            {!effectiveIsSidebarExpanded ? (
+            {!sidebarExpandedForLayout ? (
               <div className={styles.mobileHeaderRight}>
                 {streakCount > 0 && activeNav !== "dashboard" && (
                   <div className={styles.streakBadge} aria-label={`Streak ${streakCount}`}>
@@ -2604,16 +2259,26 @@ function GrayPageClientInner({
               activeNav={activeNav ?? "general"}
               isExpanded={sidebarExpandedForLayout}
               onToggle={() => {
-                if (!isCalendarPage) {
-                  setIsSidebarExpanded((prev) => !prev);
+                if (isCalendarPage) {
+                  setIsCalendarSidebarExpanded((previous) => !previous);
+                  return;
                 }
+                setIsSidebarExpanded((prev) => !prev);
               }}
               onExpand={() => {
-                if (!isCalendarPage) {
-                  setIsSidebarExpanded(true);
+                if (isCalendarPage) {
+                  setIsCalendarSidebarExpanded(true);
+                  return;
                 }
+                setIsSidebarExpanded(true);
               }}
-              onCollapse={() => setIsSidebarExpanded(false)}
+              onCollapse={() => {
+                if (isCalendarPage) {
+                  setIsCalendarSidebarExpanded(false);
+                  return;
+                }
+                setIsSidebarExpanded(false);
+              }}
               viewerName={viewerName}
               viewerInitials={viewerInitials}
               viewerAvatarUrl={viewerAvatarUrl}
@@ -2651,6 +2316,10 @@ function GrayPageClientInner({
                   data-visible={effectiveIsMobileViewport && sidebarExpandedForLayout ? "true" : "false"}
                   onClick={() => {
                     if (effectiveIsMobileViewport) {
+                      if (isCalendarPage) {
+                        setIsCalendarSidebarExpanded(false);
+                        return;
+                      }
                       setIsSidebarExpanded(false);
                     }
                   }}
