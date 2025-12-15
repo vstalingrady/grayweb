@@ -614,6 +614,38 @@
   letter-spacing: 0.02em;
 }
 
+/* Voyager plan variant - blue tinted */
+.profileMenuUpgradeCard[data-variant="voyager"] {
+  border-color: rgba(100, 160, 255, 0.25);
+  background: linear-gradient(165deg, rgba(60, 120, 200, 0.15) 0%, rgba(10, 10, 20, 0.95) 100%);
+}
+
+.profileMenuUpgradeCard[data-variant="voyager"]::before {
+  background:
+    radial-gradient(140% 100% at 50% 0%, rgba(100, 160, 255, 0.18), transparent 55%),
+    linear-gradient(180deg, rgba(40, 80, 160, 0.08), rgba(0, 0, 0, 0.55));
+}
+
+.profileMenuUpgradeCard[data-variant="voyager"] .profileMenuUpgradeTitle {
+  color: rgba(150, 200, 255, 0.95);
+}
+
+/* Pioneer plan variant - gold tinted */
+.profileMenuUpgradeCard[data-variant="pioneer"] {
+  border-color: rgba(255, 200, 100, 0.25);
+  background: linear-gradient(165deg, rgba(200, 150, 50, 0.15) 0%, rgba(20, 15, 10, 0.95) 100%);
+}
+
+.profileMenuUpgradeCard[data-variant="pioneer"]::before {
+  background:
+    radial-gradient(140% 100% at 50% 0%, rgba(255, 200, 100, 0.18), transparent 55%),
+    linear-gradient(180deg, rgba(160, 120, 40, 0.08), rgba(0, 0, 0, 0.55));
+}
+
+.profileMenuUpgradeCard[data-variant="pioneer"] .profileMenuUpgradeTitle {
+  color: rgba(255, 210, 130, 0.95);
+}
+
 .profileMenuIcon {
   display: inline-flex;
   align-items: center;

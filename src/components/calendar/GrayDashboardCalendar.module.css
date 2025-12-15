@@ -1564,18 +1564,103 @@
 .composerTimeMetaRow {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 12px;
   flex-wrap: wrap;
 }
 
 .composerInlineSelect {
   min-width: 180px;
-  flex: 1 1 180px;
+  flex: 0 1 240px;
+  position: relative;
 }
 
-.composerInlineSelect select {
+.composerInlineSelectTrigger {
   width: 100%;
+}
+
+.composerInlineSelectPopover {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  min-width: 220px;
+  max-width: min(320px, 90vw);
+  padding: 6px;
+  border-radius: 12px;
+  background: rgba(10, 10, 12, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 22px 46px rgba(0, 0, 0, 0.62);
+  backdrop-filter: blur(14px);
+  z-index: 4;
+  max-height: 280px;
+  overflow: auto;
+}
+
+.composerInlineSelectOption {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 10px 10px;
+  border-radius: 10px;
+  background: transparent;
+  border: none;
+  color: rgba(245, 245, 245, 0.86);
+  font: inherit;
+  font-size: 0.82rem;
+  line-height: 1.25;
+  cursor: pointer;
+  text-align: left;
+  transition: background 140ms ease, color 140ms ease;
+}
+
+.composerInlineSelectOption:hover,
+.composerInlineSelectOption:focus-visible {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.95);
+  outline: none;
+}
+
+.composerInlineSelectOption[aria-selected="true"] {
+  background: rgba(255, 255, 255, 0.14);
+  color: rgba(248, 248, 248, 0.96);
+}
+
+.composerTimeMetaRow .composerDateRow {
+  margin-top: 0;
+  min-width: 180px;
+  flex: 0 1 240px;
+}
+
+.composerTimeMetaRow .composerDateTrigger {
+  width: 100%;
+}
+
+.composerInlineControlIcon {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: rgba(255, 255, 255, 0.5);
+  pointer-events: none;
+}
+
+.composerInlineControlChevron {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: rgba(255, 255, 255, 0.35);
+  pointer-events: none;
+}
+
+.composerInlineControlLabel {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .composerTimeRow {
@@ -1643,27 +1728,38 @@
 }
 
 .composerDateTrigger {
-  border: none;
-  background: transparent;
-  color: inherit;
+  position: relative;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  background: rgba(38, 38, 38, 0.92);
+  color: rgba(248, 248, 248, 0.94);
   font: inherit;
-  padding: 2px 0;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  padding: 6px 32px 6px 32px;
   border-radius: 10px;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  transition: background 0.18s ease, color 0.18s ease;
+  min-height: 32px;
+  transition:
+    border-color 0.18s ease,
+    background 0.18s ease,
+    color 0.18s ease;
 }
 
 .composerDateTrigger:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(245, 245, 245, 0.82);
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(46, 46, 46, 0.92);
 }
 
 .composerDateTrigger:focus-visible {
   outline: 2px solid rgba(255, 255, 255, 0.22);
   outline-offset: 2px;
+}
+
+.composerDateTrigger:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
 }
 
 .composerDatePopover {
@@ -1673,7 +1769,6 @@
   border-radius: 14px;
   background: rgba(28, 28, 28, 0.98);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
   z-index: 3;
 }
 
@@ -1762,7 +1857,6 @@
   border-radius: 12px;
   background: rgba(28, 28, 28, 0.98);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
   z-index: 2;
   max-height: min(560px, calc(100vh - 24px));
   overflow: auto;

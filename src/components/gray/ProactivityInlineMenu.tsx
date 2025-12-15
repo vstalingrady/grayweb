@@ -1,0 +1,367 @@
+"use client";
+
+/* eslint-disable react-hooks/set-state-in-effect */
+
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { createPortal } from "react-dom";
+import { Plus, Pencil, X } from "lucide-react";
+import calendarStyles from "@/components/calendar/GrayDashboardCalendar.module.css";
+import styles from "@/app/gray/GrayPageClient.module.css";
+import { useI18n } from "@/contexts/I18nContext";
+import { type ProactivityItem } from "./types";
+import {
+  CUSTOM_PROACTIVITY_ID,
+  DEFAULT_CUSTOM_SETTINGS,
+  DEFAULT_PROACTIVITY_TIME,
+  PROACTIVITY_PRESETS,
+  dedupeTimes,
+  findNextCustomTime,
+  formatCustomTimeLabel,
+  normalizeTimeForInput,
+} from "./proactivityUtils";
+
+type ProactivityInlineMenuProps = {
+  isOpen: boolean;
+  onClose: () => void;
+  anchorRef: React.RefObject<HTMLElement>;
+  activeProactivity?: ProactivityItem | null;
+  activeProactivityTimes: string[];
+  onSelectProactivity: (next: ProactivityItem) => void;
+  onRemoveProactivity: () => void;
+};
+
+const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+
+export function ProactivityInlineMenu({
+  isOpen,
+  onClose,
+  anchorRef,
+  activeProactivity,
+  activeProactivityTimes,
+  onSelectProactivity,
+  onRemoveProactivity,
+}: ProactivityInlineMenuProps) {
+  const { t } = useI18n();
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
+
+  const activeProactivityId = activeProactivity?.id ?? "";
+  const initialPresetId = useMemo(() => {
+    if (activeProactivityId && PROACTIVITY_PRESETS.some((preset) => preset.id === activeProactivityId)) {
+      return activeProactivityId;
+    }
+    if (activeProactivityId === CUSTOM_PROACTIVITY_ID) {
+      return CUSTOM_PROACTIVITY_ID;
+    }
+    if (!activeProactivity) {
+      return "off";
+    }
+    return "";
+  }, [activeProactivity, activeProactivityId]);
+
+  const [selectedPresetId, setSelectedPresetId] = useState<string>(initialPresetId);
+  const [customTimes, setCustomTimes] = useState<string[]>(
+    activeProactivityTimes.length > 0 ? activeProactivityTimes : [...DEFAULT_CUSTOM_SETTINGS.times]
+  );
+  const [editingCustomTimeIndex, setEditingCustomTimeIndex] = useState<number | null>(null);
+  const [editingCustomTimeDraft, setEditingCustomTimeDraft] = useState<string>("");
+
+  const isCustomPresetSelected = selectedPresetId === CUSTOM_PROACTIVITY_ID;
+
+  useEffect(() => {
+    if (!isOpen) {
+      setEditingCustomTimeIndex(null);
+      setEditingCustomTimeDraft("");
+      return;
+    }
+    setSelectedPresetId(initialPresetId);
+    setCustomTimes(activeProactivityTimes.length > 0 ? activeProactivityTimes : [...DEFAULT_CUSTOM_SETTINGS.times]);
+  }, [activeProactivityTimes, initialPresetId, isOpen]);
+
+  useLayoutEffect(() => {
+    if (!isOpen) {
+      setPosition(null);
+      return;
+    }
+    const anchorEl = anchorRef.current;
+    const panelEl = panelRef.current;
+    if (!anchorEl || !panelEl) {
+      return;
+    }
+
+    const update = () => {
+      const anchorRect = anchorEl.getBoundingClientRect();
+      const panelRect = panelEl.getBoundingClientRect();
+      const viewportPadding = 12;
+      const gap = 10;
+
+      const preferredTop = anchorRect.bottom + gap;
+      const canPlaceBelow = preferredTop + panelRect.height <= window.innerHeight - viewportPadding;
+      const top = canPlaceBelow
+        ? preferredTop
+        : clamp(anchorRect.top - gap - panelRect.height, viewportPadding, window.innerHeight - viewportPadding - panelRect.height);
+
+      const left = clamp(
+        anchorRect.left,
+        viewportPadding,
+        window.innerWidth - viewportPadding - panelRect.width
+      );
+
+      setPosition({ top, left });
+    };
+
+    update();
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", update, true);
+    return () => {
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update, true);
+    };
+  }, [anchorRef, isOpen, selectedPresetId, customTimes.length]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target as Node | null;
+      if (!target) return;
+      if (anchorRef.current?.contains(target)) return;
+      if (panelRef.current?.contains(target)) return;
+      onClose();
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [anchorRef, isOpen, onClose]);
+
+  const applyCustomProactivity = useCallback(
+    (nextTimes: string[]) => {
+      const sortedTimes = dedupeTimes(nextTimes);
+      const firstTime = sortedTimes[0] ?? DEFAULT_PROACTIVITY_TIME;
+      const formattedTimes = sortedTimes.map((time) => formatCustomTimeLabel(time)).join(", ");
+      const descriptionParts = [`${sortedTimes.length} touchpoints`, formattedTimes];
+
+      onSelectProactivity({
+        id: CUSTOM_PROACTIVITY_ID,
+        label: "Custom plan",
+        description: descriptionParts.join(" • "),
+        cadence: "Custom",
+        time: firstTime,
+        times: sortedTimes,
+      });
+    },
+    [onSelectProactivity]
+  );
+
+  const handlePresetChange = useCallback(
+    (event: ChangeEvent<HTMLSelectElement>) => {
+      const nextId = event.target.value;
+      setSelectedPresetId(nextId);
+
+      if (nextId === "off") {
+        onRemoveProactivity();
+        onClose();
+        return;
+      }
+
+      if (nextId === CUSTOM_PROACTIVITY_ID) {
+        applyCustomProactivity(customTimes);
+        return;
+      }
+
+      const preset = PROACTIVITY_PRESETS.find((option) => option.id === nextId);
+      if (!preset) {
+        return;
+      }
+
+      const presetTimes =
+        preset.defaultTimes && preset.defaultTimes.length > 0
+          ? dedupeTimes(preset.defaultTimes)
+          : dedupeTimes([preset.defaultTime ?? DEFAULT_PROACTIVITY_TIME]);
+      const primaryTime = presetTimes[0] ?? DEFAULT_PROACTIVITY_TIME;
+
+      onSelectProactivity({
+        id: preset.id,
+        label: preset.label,
+        description: preset.description,
+        cadence: preset.cadence,
+        time: primaryTime,
+        times: presetTimes,
+      });
+    },
+    [applyCustomProactivity, customTimes, onClose, onRemoveProactivity, onSelectProactivity]
+  );
+
+  const handleCustomTimeEdit = useCallback(
+    (index: number) => {
+      setEditingCustomTimeIndex(index);
+      setEditingCustomTimeDraft(customTimes[index] ?? DEFAULT_PROACTIVITY_TIME);
+    },
+    [customTimes]
+  );
+
+  const commitCustomTimeEdit = useCallback(
+    (index: number, draftValue: string) => {
+      setCustomTimes((previous) => {
+        const nextTimes = [...previous];
+        const previousValue = nextTimes[index] ?? DEFAULT_PROACTIVITY_TIME;
+        const normalized = normalizeTimeForInput(draftValue || previousValue);
+        nextTimes[index] = normalized;
+        const finalTimes = dedupeTimes(nextTimes);
+        applyCustomProactivity(finalTimes);
+        return finalTimes;
+      });
+      setEditingCustomTimeIndex(null);
+      setEditingCustomTimeDraft("");
+    },
+    [applyCustomProactivity]
+  );
+
+  const handleCustomTimeAdd = useCallback(() => {
+    const nextTime = findNextCustomTime(customTimes);
+    const nextTimes = [...customTimes, nextTime];
+    setCustomTimes(nextTimes);
+    setEditingCustomTimeIndex(nextTimes.length - 1);
+    setEditingCustomTimeDraft(nextTime);
+    applyCustomProactivity(nextTimes);
+  }, [applyCustomProactivity, customTimes]);
+
+  const handleCustomTimeRemove = useCallback(
+    (index: number) => {
+      const nextTimes = customTimes.filter((_, currentIndex) => currentIndex !== index);
+      const finalTimes = nextTimes.length > 0 ? nextTimes : [...DEFAULT_CUSTOM_SETTINGS.times];
+      setCustomTimes(finalTimes);
+      setEditingCustomTimeIndex(null);
+      setEditingCustomTimeDraft("");
+      applyCustomProactivity(finalTimes);
+    },
+    [applyCustomProactivity, customTimes]
+  );
+
+  if (!isOpen || typeof document === "undefined") {
+    return null;
+  }
+
+  const panel = (
+    <div
+      ref={panelRef}
+      className={calendarStyles.composerColorPopover}
+      style={
+        position
+          ? { top: `${position.top}px`, left: `${position.left}px`, width: "min(420px, 92vw)" }
+          : { width: "min(420px, 92vw)" }
+      }
+      role="dialog"
+      aria-label={t("Proactivity")}
+    >
+      <div className={calendarStyles.composerColorPopoverHeader}>
+        <span style={{ fontSize: "0.86rem", color: "rgba(240, 240, 240, 0.88)" }}>{t("Proactivity")}</span>
+        <button
+          type="button"
+          className={styles.listItemActionButton}
+          onClick={onClose}
+          aria-label={t("Close proactivity options")}
+        >
+          <X size={14} />
+        </button>
+      </div>
+
+      <label className={calendarStyles.composerField}>
+        <span>{t("Preset cadence")}</span>
+        <select value={selectedPresetId} onChange={handlePresetChange}>
+          <option value="off">{t("Off")}</option>
+          {PROACTIVITY_PRESETS.map((preset) => (
+            <option key={preset.id} value={preset.id}>
+              {t(preset.title)}
+            </option>
+          ))}
+          <option value={CUSTOM_PROACTIVITY_ID}>{t("Custom")}</option>
+        </select>
+      </label>
+
+      {isCustomPresetSelected ? (
+        <section className={styles.proactivityCustomSection} style={{ padding: 0, border: "none" }}>
+          <header className={styles.proactivityCustomHeader} style={{ marginTop: 10 }}>
+            <div>
+              <span className={styles.proactivityCustomEyebrow}>{t("Custom setup")}</span>
+            </div>
+          </header>
+          <div className={styles.proactivityCustomControls}>
+            <div className={styles.proactivityCustomField}>
+              <div className={styles.proactivityTimes}>
+                {customTimes.map((time, index) => (
+                  <div key={`${time}-${index}`} className={styles.proactivityTimeListItem}>
+                    {editingCustomTimeIndex === index ? (
+                      <input
+                        type="time"
+                        value={editingCustomTimeDraft}
+                        onChange={(event) => setEditingCustomTimeDraft(event.target.value)}
+                        className={styles.proactivityTimeInput}
+                        autoFocus
+                        step={300}
+                        onBlur={() => commitCustomTimeEdit(index, editingCustomTimeDraft)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === "Escape") {
+                            event.preventDefault();
+                            commitCustomTimeEdit(index, editingCustomTimeDraft);
+                          }
+                        }}
+                        aria-label={t("Edit custom start time {time}", { time })}
+                      />
+                    ) : (
+                      <button
+                        type="button"
+                        className={styles.proactivityTimeListButton}
+                        onClick={() => handleCustomTimeEdit(index)}
+                      >
+                        <span className={styles.proactivityTimeLabel}>{t(formatCustomTimeLabel(time))}</span>
+                      </button>
+                    )}
+                    <div className={styles.proactivityTimeActions}>
+                      <button
+                        type="button"
+                        className={styles.listItemActionButton}
+                        onClick={() => handleCustomTimeEdit(index)}
+                        aria-label={t("Edit custom start time {time}", { time })}
+                      >
+                        <Pencil size={12} />
+                      </button>
+                      <button
+                        type="button"
+                        className={styles.listItemActionButton}
+                        onClick={() => handleCustomTimeRemove(index)}
+                        aria-label={t("Remove custom start time {time}", { time })}
+                        disabled={customTimes.length <= 1}
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                <button type="button" className={styles.proactivityTimeAdd} onClick={handleCustomTimeAdd}>
+                  <Plus size={14} />
+                  <span>{t("Add time")}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+      ) : null}
+    </div>
+  );
+
+  return createPortal(panel, document.body);
+}

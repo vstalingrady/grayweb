@@ -8900,66 +8900,10 @@ async def get_conversation_usage(
         # if gemini_tokens is not None:
         #     total_tokens = gemini_tokens
         
-        # Determine context limit based on user tier
-        # Extract user_id from conversation to lookup tier
-        # Handle generic session ID gracefully
-        if conversation_id == "general-session":
-            # We can't determine the user from this ID alone, so we return default/empty usage
-            # or we could try to get it from the request if we had auth context.
-            # For now, return safe defaults.
-            return {
-                "conversation_id": conversation_id,
-                "message_count": 0,
-                "conversation_tokens": 0,
-                "limit": tier_conversation_token_limit("scout"),
-                "provider": os.getenv("AI_PROVIDER", "openrouter"),
-                "model_name": os.getenv("AI_MODEL_NAME", None),
-                "model_label": os.getenv("AI_MODEL_NAME", None),
-                "user_tier": "scout",
-            }
-
-        # Extract user_id from conversation to lookup tier
-        user_id = None  # Initialize to avoid UnboundLocalError
-        user_tier = "scout"  # Default to safest tier when unknown
-        try:
-            # Case 1: General conversation (format: "general:123")
-            if conversation_id.startswith("general:"):
-                try:
-                    user_id = int(conversation_id.split(":")[1])
-                except (ValueError, IndexError):
-                    user_id = None
-            
-            # Case 2: Thread conversation (UUID)
-            else:
-                # Get user_id from the conversation metadata in Supabase
-                # Note: The column in user_chat_threads is 'user_identifier', not 'user_id'
-                if supabase:
-                    try:
-                        conv_result = supabase.table("user_chat_threads").select("user_identifier").eq("id", conversation_id).single().execute()
-                        if conv_result and conv_result.data:
-                            user_id = conv_result.data.get("user_identifier")
-                    except Exception:
-                        # Conversation might not exist in Supabase yet, skip silently
-                        pass
-            
-            # If we found a user_id, look up their tier
-            if user_id:
-                # Check if user_id is an int (SQLite/Postgres ID) or UUID (Supabase Auth ID)
-                # The users table uses integer IDs for the primary key 'id'
-                # If user_identifier is a string (UUID), we might need to query by auth_user_id
-                
-                try:
-                    # Try querying by ID first (assuming it's the integer ID)
-                    user_result = supabase.table("users").select("plan_tier").eq("id", user_id).single().execute()
-                    
-                    if user_result and user_result.data:
-                        user_tier = (user_result.data.get("plan_tier") or "scout").lower()
-                except Exception:
-                    # User might not exist or query failed, use default tier
-                    pass
-                    
-        except Exception as tier_error:
-            app_logger.warning(f"Could not determine user tier for conversation {conversation_id}: {tier_error}")
+        # Context limits are based on the owner's plan tier.
+        # We already verified ownership via `_require_conversation_owner`, so `current_user`
+        # is the single source of truth (avoids brittle conversation-id parsing / Supabase lookups).
+        user_tier = (current_user.get("plan_tier") or "scout").strip().lower()
 
         tier_context_limit = tier_conversation_token_limit(user_tier)
         

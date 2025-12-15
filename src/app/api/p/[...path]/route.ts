@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 
+const isProxyDebugEnabled = process.env.NODE_ENV !== "production";
+
 const resolveProxyTarget = () => {
     const envTarget =
         process.env.BACKEND_URL ||
@@ -19,17 +21,21 @@ async function handleProxy(request: Request, { params }: { params: Promise<{ pat
     const searchParams = url.searchParams.toString();
     const targetUrl = `${PROXY_TARGET}/${pathString}${searchParams ? `?${searchParams}` : ''}`;
 
-    console.log(`[Proxy] Forwarding ${request.method} ${url.pathname} to ${targetUrl}`);
+    if (isProxyDebugEnabled) {
+        console.log(`[Proxy] Forwarding ${request.method} ${url.pathname}`);
+    }
 
     try {
         const headers = new Headers(request.headers);
-        // Preserve the original host for downstream localhost-only/dev-only gating.
-        // (We still remove the Host header since it must match the target origin.)
-        headers.set('x-forwarded-host', url.host);
-        headers.set('x-forwarded-proto', url.protocol.replace(':', ''));
         headers.delete('host');
         headers.delete('connection');
         headers.delete('content-length');
+        headers.delete('keep-alive');
+        headers.delete('proxy-connection');
+        headers.delete('transfer-encoding');
+        headers.delete('upgrade');
+        headers.delete('te');
+        headers.delete('trailer');
 
         let body: BodyInit | null | undefined;
         if (request.method !== 'GET' && request.method !== 'HEAD') {
@@ -40,6 +46,7 @@ async function handleProxy(request: Request, { params }: { params: Promise<{ pat
             method: request.method,
             headers,
             body,
+            cache: "no-store",
         });
 
         const responseHeaders = new Headers(response.headers);

@@ -240,6 +240,10 @@ function GrayEnhancedSidebarComponent(props: GrayEnhancedSidebarProps) {
   const profileMenuRef = useRef<HTMLDivElement | null>(null);
   const normalizedPlan = viewerPlanLabel?.trim().length ? viewerPlanLabel : "Scout";
   const isDepthMember = normalizedPlan.trim().toLowerCase() === "depth";
+  const planLower = normalizedPlan.trim().toLowerCase();
+  const isVoyager = planLower === "voyager";
+  const isPioneer = planLower === "pioneer";
+  const isPaidUser = isVoyager || isPioneer || isDepthMember;
 
   const historyNavItem = useMemo(() => navItems.find((item) => item.id === "history"), [navItems]);
 
@@ -552,7 +556,7 @@ function GrayEnhancedSidebarComponent(props: GrayEnhancedSidebarProps) {
                 </button>
                 {isProfileMenuOpen && (
                   <div className={styles.profileMenu} role="menu" ref={profileMenuRef}>
-                    {!isDepthMember ? (
+                    {!isPaidUser ? (
                       <>
                         <button
                           type="button"
@@ -566,6 +570,21 @@ function GrayEnhancedSidebarComponent(props: GrayEnhancedSidebarProps) {
                             <span className={styles.profileMenuUpgradePill}>{t("View Plans")}</span>
                           </span>
                         </button>
+                        <span className={styles.profileMenuDivider} aria-hidden="true" />
+                      </>
+                    ) : (isVoyager || isPioneer) ? (
+                      <>
+                        <div
+                          className={`${styles.profileMenuItem} ${styles.profileMenuUpgrade}`}
+                          role="menuitem"
+                        >
+                          <span className={styles.profileMenuUpgradeCard} data-variant={isPioneer ? "pioneer" : "voyager"}>
+                            <span className={styles.profileMenuUpgradeTitle}>{normalizedPlan}</span>
+                            <span className={styles.profileMenuUpgradeSubtext}>
+                              {isPioneer ? "Rp 377.000,-" : "Rp 177.000,-"} / {t("month")}
+                            </span>
+                          </span>
+                        </div>
                         <span className={styles.profileMenuDivider} aria-hidden="true" />
                       </>
                     ) : null}

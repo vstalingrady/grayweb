@@ -1,13 +1,15 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { ArrowRight, ChevronDown, ChevronLeft, ChevronRight, Plus, X } from "lucide-react";
+import { ArrowRight, Bell, Calendar, ChevronDown, ChevronLeft, ChevronRight, Plus, X } from "lucide-react";
 import calendarStyles from "@/components/calendar/GrayDashboardCalendar.module.css";
 import { MiniMonth } from "@/components/calendar/MiniMonth";
 import { useUser } from "@/contexts/UserContext";
 import { useI18n } from "@/contexts/I18nContext";
 import { apiService } from "@/lib/api";
 import type { HabitItem, HabitUpdates, PlanItem, PlanUpdates } from "./types";
+
+type ReminderPreset = "none" | "0" | "5" | "10" | "15" | "30" | "60" | "1440" | "custom";
 
 const QUICK_COLOR_SWATCHES = [
   "#2F6B4F",
@@ -198,6 +200,8 @@ export function PlanHabitInlineEditor({
   const colorPickerRef = useRef<HTMLDivElement | null>(null);
   const colorPickerTriggerRef = useRef<HTMLButtonElement | null>(null);
   const colorPickerPopoverRef = useRef<HTMLDivElement | null>(null);
+  const reminderMenuRef = useRef<HTMLDivElement | null>(null);
+  const reminderTriggerRef = useRef<HTMLButtonElement | null>(null);
 
   const [title, setTitle] = useState("");
   const [detailsValue, setDetailsValue] = useState("");
@@ -210,9 +214,8 @@ export function PlanHabitInlineEditor({
   const [isColorPickerOpen, setIsColorPickerOpen] = useState(false);
   const [hexDraft, setHexDraft] = useState(QUICK_COLOR_SWATCHES[1]);
   const [colorPickerPosition, setColorPickerPosition] = useState<{ top: number; left: number } | null>(null);
-  const [reminderPreset, setReminderPreset] = useState<
-    "none" | "0" | "5" | "10" | "15" | "30" | "60" | "1440" | "custom"
-  >("none");
+  const [reminderPreset, setReminderPreset] = useState<ReminderPreset>("none");
+  const [isReminderMenuOpen, setIsReminderMenuOpen] = useState(false);
   const [customReminderMinutes, setCustomReminderMinutes] = useState<string>("");
   const [linkedReminderId, setLinkedReminderId] = useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -273,6 +276,26 @@ export function PlanHabitInlineEditor({
     setHexDraft(color);
   }, [color]);
 
+  const reminderOptions = useMemo(
+    () =>
+      [
+        { value: "none", label: t("No reminder") },
+        { value: "0", label: t("When event starts") },
+        { value: "5", label: t("5 minutes before") },
+        { value: "10", label: t("10 minutes before") },
+        { value: "15", label: t("15 minutes before") },
+        { value: "30", label: t("30 minutes before") },
+        { value: "60", label: t("1 hour before") },
+        { value: "1440", label: t("1 day before") },
+        { value: "custom", label: t("Custom...") },
+      ] satisfies ReadonlyArray<{ value: ReminderPreset; label: string }>,
+    [t]
+  );
+
+  const reminderLabel = useMemo(() => {
+    return reminderOptions.find((option) => option.value === reminderPreset)?.label ?? t("No reminder");
+  }, [reminderOptions, reminderPreset, t]);
+
   useEffect(() => {
     if (!isColorPickerOpen) return;
 
@@ -297,6 +320,44 @@ export function PlanHabitInlineEditor({
       document.removeEventListener("keydown", handleKeyDown);
     };
   }, [isColorPickerOpen]);
+
+  useEffect(() => {
+    if (!isReminderMenuOpen) return;
+
+    const handlePointerDown = (event: globalThis.MouseEvent) => {
+      const target = event.target as Node | null;
+      if (!target) return;
+      if (reminderTriggerRef.current?.contains(target)) return;
+      if (reminderMenuRef.current?.contains(target)) return;
+      setIsReminderMenuOpen(false);
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setIsReminderMenuOpen(false);
+      reminderTriggerRef.current?.focus();
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isReminderMenuOpen]);
+
+  useEffect(() => {
+    if (!isReminderMenuOpen) return;
+    const focusTarget = () => {
+      const optionButton = reminderMenuRef.current?.querySelector<HTMLButtonElement>(
+        `[data-reminder-option="${reminderPreset}"]`
+      );
+      optionButton?.focus();
+    };
+    const handle = requestAnimationFrame(focusTarget);
+    return () => cancelAnimationFrame(handle);
+  }, [isReminderMenuOpen, reminderPreset]);
 
   useLayoutEffect(() => {
     if (!isColorPickerOpen) {
@@ -719,45 +780,139 @@ export function PlanHabitInlineEditor({
               })()}
 	            </span>
 	          </div>
-	          <div className={calendarStyles.composerTimeMetaRow}>
+          <div className={calendarStyles.composerTimeMetaRow}>
             <div className={calendarStyles.composerDateRow}>
               <button
                 type="button"
                 className={calendarStyles.composerDateTrigger}
                 onClick={() => {
                   setMonthDate(startOfMonth(selectedDate));
+                  setIsReminderMenuOpen(false);
                   setIsDatePickerOpen((previous) => !previous);
                 }}
                 aria-expanded={isDatePickerOpen ? "true" : "false"}
                 aria-label={t("Choose date")}
                 disabled={isSubmitting}
               >
-                {selectedDate.toLocaleDateString(undefined, {
-                  weekday: "short",
-                  month: "short",
-                  day: "numeric",
-                })}
-                <ChevronDown size={14} aria-hidden="true" />
+                <Calendar
+                  size={14}
+                  aria-hidden="true"
+                  className={calendarStyles.composerInlineControlIcon}
+                />
+                <span className={calendarStyles.composerInlineControlLabel}>
+                  {selectedDate.toLocaleDateString(undefined, {
+                    weekday: "short",
+                    month: "short",
+                    day: "numeric",
+                  })}
+                </span>
+                <ChevronDown
+                  size={14}
+                  aria-hidden="true"
+                  className={calendarStyles.composerInlineControlChevron}
+                />
               </button>
             </div>
 
             <div className={calendarStyles.composerInlineSelect}>
-              <select
-                value={reminderPreset}
-                onChange={(event) => setReminderPreset(event.target.value as typeof reminderPreset)}
-                disabled={isSubmitting}
+              <button
+                type="button"
+                ref={reminderTriggerRef}
+                className={`${calendarStyles.composerDateTrigger} ${calendarStyles.composerInlineSelectTrigger}`}
+                onClick={() => {
+                  setIsDatePickerOpen(false);
+                  setIsReminderMenuOpen((previous) => !previous);
+                }}
+                aria-haspopup="listbox"
+                aria-expanded={isReminderMenuOpen ? "true" : "false"}
                 aria-label={t("Notification")}
+                disabled={isSubmitting}
+                onKeyDown={(event) => {
+                  if (event.key === "ArrowDown" || event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    setIsReminderMenuOpen(true);
+                  }
+                }}
               >
-                <option value="none">{t("No reminder")}</option>
-                <option value="0">{t("When event starts")}</option>
-                <option value="5">{t("5 minutes before")}</option>
-                <option value="10">{t("10 minutes before")}</option>
-                <option value="15">{t("15 minutes before")}</option>
-                <option value="30">{t("30 minutes before")}</option>
-                <option value="60">{t("1 hour before")}</option>
-                <option value="1440">{t("1 day before")}</option>
-                <option value="custom">{t("Custom...")}</option>
-              </select>
+                <Bell
+                  size={14}
+                  aria-hidden="true"
+                  className={calendarStyles.composerInlineControlIcon}
+                />
+                <span className={calendarStyles.composerInlineControlLabel}>{reminderLabel}</span>
+                <ChevronDown
+                  size={14}
+                  aria-hidden="true"
+                  className={calendarStyles.composerInlineControlChevron}
+                />
+              </button>
+              {isReminderMenuOpen ? (
+                <div
+                  ref={reminderMenuRef}
+                  className={calendarStyles.composerInlineSelectPopover}
+                  role="listbox"
+                  aria-label={t("Notification")}
+                  tabIndex={-1}
+                  onKeyDown={(event) => {
+                    const optionButtons = Array.from(
+                      reminderMenuRef.current?.querySelectorAll<HTMLButtonElement>(
+                        "button[data-reminder-option]"
+                      ) ?? []
+                    );
+                    if (optionButtons.length === 0) return;
+                    const activeIndex = optionButtons.findIndex((button) => button === document.activeElement);
+                    const selectedIndex = Math.max(
+                      0,
+                      reminderOptions.findIndex((option) => option.value === reminderPreset)
+                    );
+                    const currentIndex = activeIndex >= 0 ? activeIndex : selectedIndex;
+
+                    if (event.key === "Escape") {
+                      event.preventDefault();
+                      setIsReminderMenuOpen(false);
+                      reminderTriggerRef.current?.focus();
+                      return;
+                    }
+                    if (event.key === "ArrowDown") {
+                      event.preventDefault();
+                      optionButtons[(currentIndex + 1) % optionButtons.length]?.focus();
+                      return;
+                    }
+                    if (event.key === "ArrowUp") {
+                      event.preventDefault();
+                      optionButtons[(currentIndex - 1 + optionButtons.length) % optionButtons.length]?.focus();
+                      return;
+                    }
+                    if (event.key === "Home") {
+                      event.preventDefault();
+                      optionButtons[0]?.focus();
+                      return;
+                    }
+                    if (event.key === "End") {
+                      event.preventDefault();
+                      optionButtons[optionButtons.length - 1]?.focus();
+                    }
+                  }}
+                >
+                  {reminderOptions.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      role="option"
+                      aria-selected={option.value === reminderPreset}
+                      data-reminder-option={option.value}
+                      className={calendarStyles.composerInlineSelectOption}
+                      onClick={() => {
+                        setReminderPreset(option.value);
+                        setIsReminderMenuOpen(false);
+                        reminderTriggerRef.current?.focus();
+                      }}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
             </div>
           </div>
         </div>

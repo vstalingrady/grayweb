@@ -737,36 +737,54 @@ class ProactivityEngine:
 
     async def _load_recent_chat_context(self, user_id: int, *, limit: int = 6) -> Optional[str]:
         """Summarize the latest general chat turns for the AI prompt."""
-        # Use local SQLite exclusively.
         await self._ensure_connection()
+        rows: List[Dict[str, Any]] = []
+
+        # Prefer the General workspace (`/g`) conversation history.
         try:
-             # Logic to fetch from user_chat_messages via user_chat_threads
-             # user_chat_messages -> thread_id -> user_chat_threads -> user_identifier (which is user_id)
-             # Note: user_chat_threads uses 'user_identifier' as integer ID per schema in database.py
-             query = """
-                SELECT m.role, m.text as content, m.created_at
-                FROM user_chat_messages m
-                JOIN user_chat_threads t ON m.thread_id = t.id
-                WHERE t.user_identifier = :user_id
-                ORDER BY m.created_at DESC
+            query = """
+                SELECT role, content, created_at
+                FROM general_chat_messages
+                WHERE user_id = :user_id
+                ORDER BY created_at DESC
                 LIMIT :limit
-             """
-             rows = await self.db.fetch_all(query, {"user_id": user_id, "limit": limit})
+            """
+            raw_rows = await self.db.fetch_all(query, {"user_id": user_id, "limit": limit})
+            rows = [dict(r) for r in raw_rows]
         except Exception as exc:
             logger.debug(
-                "Failed to load chat history for proactivity from SQLite",
+                "Failed to load general chat history for proactivity from SQLite",
                 extra={
-                    "event_type": "proactivity_history_load_failure",
+                    "event_type": "proactivity_general_history_load_failure",
                     "user_id": user_id,
                     "error": str(exc),
                 },
             )
-            return None
-        
-        # Convert record rows to dict-like for existing logic
-        rows = [dict(r) for r in rows]
 
-
+        # Fallback: if general chat is empty (or missing in older schemas),
+        # pull the most recent thread messages.
+        if not rows:
+            try:
+                query = """
+                    SELECT m.role, m.text as content, m.created_at
+                    FROM user_chat_messages m
+                    JOIN user_chat_threads t ON m.thread_id = t.id
+                    WHERE t.user_identifier = :user_id
+                    ORDER BY m.created_at DESC
+                    LIMIT :limit
+                """
+                raw_rows = await self.db.fetch_all(query, {"user_id": user_id, "limit": limit})
+                rows = [dict(r) for r in raw_rows]
+            except Exception as exc:
+                logger.debug(
+                    "Failed to load thread chat history for proactivity from SQLite",
+                    extra={
+                        "event_type": "proactivity_thread_history_load_failure",
+                        "user_id": user_id,
+                        "error": str(exc),
+                    },
+                )
+                return None
 
         if not rows:
             return None

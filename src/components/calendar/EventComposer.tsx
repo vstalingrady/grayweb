@@ -19,7 +19,7 @@ import {
   CalendarInfo,
   CalendarEventDisplayHint,
 } from "./types";
-import { Plus, X, ChevronDown, ArrowRight, ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowRight, Calendar, ChevronDown, ChevronLeft, ChevronRight, Plus, X } from "lucide-react";
 import { useI18n } from "@/contexts/I18nContext";
 import { MiniMonth } from "./MiniMonth";
 
@@ -198,13 +198,13 @@ const DEFAULT_STATE: ComposerState = {
 
 export const DEFAULT_EVENT_DURATION_MINUTES = 60;
 
-const ENTRY_TYPES: CalendarEntryType[] = ["event", "task", "reminder", "plan", "habit"];
+const VISIBLE_ENTRY_TYPES: CalendarEntryType[] = ["plan", "habit", "event"];
 const ENTRY_TYPE_LABELS: Record<CalendarEntryType, string> = {
   event: "Event",
   task: "Task",
   reminder: "Reminder",
-  plan: "Plan",
-  habit: "Habit",
+  plan: "Plans",
+  habit: "Habits",
 };
 
 const composerReducer = (state: ComposerState, action: ComposerAction): ComposerState => {
@@ -257,6 +257,19 @@ const startOfMonth = (value: Date) => {
   const result = startOfDay(value);
   result.setDate(1);
   return result;
+};
+
+const isPointerEventInside = (
+  event: globalThis.PointerEvent,
+  element: HTMLElement | null
+) => {
+  if (!element) return false;
+  const target = event.target as Node | null;
+  if (!target) return false;
+  if (typeof event.composedPath === "function") {
+    return event.composedPath().includes(element);
+  }
+  return element.contains(target);
 };
 
 export function EventComposer({
@@ -554,11 +567,9 @@ export function EventComposer({
   useEffect(() => {
     if (!isDatePickerOpen) return;
 
-    const handlePointerDown = (event: globalThis.MouseEvent) => {
-      const target = event.target as Node | null;
-      if (!target) return;
-      if (datePickerTriggerRef.current?.contains(target)) return;
-      if (datePickerPopoverRef.current?.contains(target)) return;
+    const handlePointerDown = (event: globalThis.PointerEvent) => {
+      if (isPointerEventInside(event, datePickerTriggerRef.current)) return;
+      if (isPointerEventInside(event, datePickerPopoverRef.current)) return;
       setIsDatePickerOpen(false);
     };
 
@@ -566,11 +577,11 @@ export function EventComposer({
       if (event.key === "Escape") setIsDatePickerOpen(false);
     };
 
-    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("pointerdown", handlePointerDown, { capture: true });
     document.addEventListener("keydown", handleKeyDown);
 
     return () => {
-      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("pointerdown", handlePointerDown, { capture: true });
       document.removeEventListener("keydown", handleKeyDown);
     };
   }, [isDatePickerOpen]);
@@ -578,10 +589,8 @@ export function EventComposer({
   useEffect(() => {
     if (!isColorPickerOpen) return;
 
-    const handlePointerDown = (event: globalThis.MouseEvent) => {
-      const target = event.target as Node | null;
-      if (!target) return;
-      if (colorPickerRef.current?.contains(target)) return;
+    const handlePointerDown = (event: globalThis.PointerEvent) => {
+      if (isPointerEventInside(event, colorPickerRef.current)) return;
       setIsColorPickerOpen(false);
     };
 
@@ -589,11 +598,11 @@ export function EventComposer({
       if (event.key === "Escape") setIsColorPickerOpen(false);
     };
 
-    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("pointerdown", handlePointerDown, { capture: true });
     document.addEventListener("keydown", handleKeyDown);
 
     return () => {
-      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("pointerdown", handlePointerDown, { capture: true });
       document.removeEventListener("keydown", handleKeyDown);
     };
   }, [isColorPickerOpen]);
@@ -654,11 +663,14 @@ export function EventComposer({
       const popoverWidth = popoverRect?.width ?? 320;
       const popoverHeight = popoverRect?.height ?? 340;
 
-      const left = clamp(
-        triggerRect.right - popoverWidth,
-        viewportPadding,
-        window.innerWidth - viewportPadding - popoverWidth
-      );
+      const maxLeft = window.innerWidth - viewportPadding - popoverWidth;
+      const preferredLeftOfTrigger = triggerRect.left - gap - popoverWidth;
+      const preferredRightAligned = triggerRect.right - popoverWidth;
+
+      const left =
+        preferredLeftOfTrigger >= viewportPadding
+          ? Math.min(preferredLeftOfTrigger, maxLeft)
+          : clamp(preferredRightAligned, viewportPadding, maxLeft);
 
       const preferredTop = triggerRect.bottom + gap;
       const canPlaceBelow = preferredTop + popoverHeight <= window.innerHeight - viewportPadding;
@@ -759,11 +771,20 @@ export function EventComposer({
               }
               className={styles.composerHeaderSelect}
             >
-              {ENTRY_TYPES.map((type) => (
-                <option key={type} value={type}>
-                  {t(ENTRY_TYPE_LABELS[type])}
-                </option>
-              ))}
+              {(() => {
+                const entryTypes = VISIBLE_ENTRY_TYPES.includes(state.entryType)
+                  ? VISIBLE_ENTRY_TYPES
+                  : [state.entryType, ...VISIBLE_ENTRY_TYPES];
+                return entryTypes.map((type) => (
+                  <option
+                    key={type}
+                    value={type}
+                    disabled={!VISIBLE_ENTRY_TYPES.includes(type)}
+                  >
+                    {t(ENTRY_TYPE_LABELS[type])}
+                  </option>
+                ));
+              })()}
             </select>
             <ChevronDown size={16} className={styles.composerHeaderSelectArrow} />
           </div>
@@ -843,16 +864,26 @@ export function EventComposer({
                     aria-label={t("Choose date")}
                     ref={datePickerTriggerRef}
                   >
-                    {selectedDate.toLocaleDateString(undefined, {
-                      weekday: "short",
-                      month: "short",
-                      day: "numeric",
-                    })}
-                    <ChevronDown size={14} aria-hidden="true" />
+                    <Calendar
+                      size={14}
+                      aria-hidden="true"
+                      className={styles.composerInlineControlIcon}
+                    />
+                    <span className={styles.composerInlineControlLabel}>
+                      {selectedDate.toLocaleDateString(undefined, {
+                        weekday: "short",
+                        month: "short",
+                        day: "numeric",
+                      })}
+                    </span>
+                    <ChevronDown
+                      size={14}
+                      aria-hidden="true"
+                      className={styles.composerInlineControlChevron}
+                    />
                   </button>
                 </div>
               </div>
-              <hr className={styles.composerSectionDivider} />
             </>
           ) : isReminder ? (
             <>
@@ -881,15 +912,26 @@ export function EventComposer({
                     aria-label={t("Choose date")}
                     ref={datePickerTriggerRef}
                   >
-                    {selectedDate.toLocaleDateString(undefined, {
-                      weekday: "short",
-                      month: "short",
-                      day: "numeric",
-                    })}
+                    <Calendar
+                      size={14}
+                      aria-hidden="true"
+                      className={styles.composerInlineControlIcon}
+                    />
+                    <span className={styles.composerInlineControlLabel}>
+                      {selectedDate.toLocaleDateString(undefined, {
+                        weekday: "short",
+                        month: "short",
+                        day: "numeric",
+                      })}
+                    </span>
+                    <ChevronDown
+                      size={14}
+                      aria-hidden="true"
+                      className={styles.composerInlineControlChevron}
+                    />
                   </button>
                 </div>
               </label>
-              <hr className={styles.composerSectionDivider} />
             </>
           ) : null}
 

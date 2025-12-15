@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { CheckSquare, Square, Zap, Pencil, Trash2, ChevronLeft, ChevronRight, Check } from "lucide-react";
+import { useMemo, useRef, useState } from "react";
+import { CheckSquare, Square, Pencil, Trash2, ChevronLeft, ChevronRight, Check } from "lucide-react";
 import styles from "@/app/gray/GrayPageClient.module.css";
 import { type HabitItem, type PlanItem, type PlanUpdates, type ProactivityItem } from "./types";
 import { useI18n } from "@/contexts/I18nContext";
@@ -8,7 +8,7 @@ import {
   getProactivityTimes,
   formatCustomTimeLabel,
 } from "./proactivityUtils";
-import { ProactivitySettingsModal } from "./ProactivitySettingsModal";
+import { ProactivityInlineMenu } from "./ProactivityInlineMenu";
 import { PlanHabitInlineEditor } from "./PlanHabitInlineEditor";
 
 type GrayGeneralViewProps = {
@@ -64,7 +64,8 @@ export function GrayGeneralView({
     | { type: "plan" | "habit"; plan: PlanItem | null; habit: HabitItem | null }
   >(null);
 
-  const [isProactivityModalOpen, setIsProactivityModalOpen] = useState(false);
+  const [isProactivityMenuOpen, setIsProactivityMenuOpen] = useState(false);
+  const proactivityAnchorRef = useRef<HTMLButtonElement | null>(null);
 
   const calendarMonthLabel = useMemo(
     () =>
@@ -89,11 +90,11 @@ export function GrayGeneralView({
   };
 
   const handleOpenProactivityModal = () => {
-    setIsProactivityModalOpen(true);
+    setIsProactivityMenuOpen(true);
   };
 
   const handleCloseProactivityModal = () => {
-    setIsProactivityModalOpen(false);
+    setIsProactivityMenuOpen(false);
   };
 
   const isAdding = Boolean(activeEditor && !activeEditor.plan && !activeEditor.habit);
@@ -352,6 +353,7 @@ export function GrayGeneralView({
           type="button"
           className={styles.secondaryAction}
           onClick={handleOpenProactivityModal}
+          ref={proactivityAnchorRef}
         >
           {t("configure")}
         </button>
@@ -377,16 +379,15 @@ export function GrayGeneralView({
         </section>
       ) : null}
 
-      {isProactivityModalOpen && (
-        <ProactivitySettingsModal
-          isOpen={isProactivityModalOpen}
-          onClose={handleCloseProactivityModal}
-          activeProactivity={proactivity}
-          activeProactivityTimes={activeProactivityTimes}
-          onSelectProactivity={onSelectProactivity}
-          onRemoveProactivity={onRemoveProactivity}
-        />
-      )}
+      <ProactivityInlineMenu
+        isOpen={isProactivityMenuOpen}
+        onClose={handleCloseProactivityModal}
+        anchorRef={proactivityAnchorRef}
+        activeProactivity={proactivity}
+        activeProactivityTimes={activeProactivityTimes}
+        onSelectProactivity={onSelectProactivity}
+        onRemoveProactivity={onRemoveProactivity}
+      />
     </>
   );
 }
