@@ -852,6 +852,12 @@
   gap: 6px;
   cursor: pointer;
   user-select: none;
+  position: relative;
+  border-right: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.calendarHeaderCell:last-child {
+  border-right: none;
 }
 
 .calendarHeaderCell span {
