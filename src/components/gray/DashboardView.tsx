@@ -14,17 +14,18 @@ import { Check, Square, Zap, X, Plus, ChevronDown, Pencil, Trash2 } from "lucide
 import styles from "@/app/gray/GrayPageClient.module.css";
 import { GrayDashboardCalendar } from "@/components/calendar/GrayDashboardCalendar";
 import type { CalendarEvent, CalendarInfo, PositionedEvent } from "@/components/calendar/types";
+import { EventComposerPayload } from "@/components/calendar/EventComposer";
 import { type ProactivityItem, type PulseEntry, type PlanItem, type HabitItem, type PlanUpdates } from "./types";
 import { CalendarSidebar } from "@/components/calendar/CalendarSidebar";
 import calendarStyles from "@/components/calendar/GrayDashboardCalendar.module.css";
 import { DashboardHeader } from "./DashboardHeader";
-import { AddPlanHabitModal } from "./AddPlanHabitModal";
 import { mapPlansToCalendarEvents, PLAN_EVENT_ID_PREFIX } from "./planCalendarUtils";
 import { formatPlanTimeLabel } from "./planUtils";
 import { requestNotificationPermission } from "@/lib/notificationUtils";
 import { useUser } from "@/contexts/UserContext";
 import { useI18n } from "@/contexts/I18nContext";
 import { greetingForDate } from "@/components/gray/utils/helperFunctions";
+import { PlanHabitInlineEditor } from "./PlanHabitInlineEditor";
 
 import {
   CUSTOM_PROACTIVITY_ID,
@@ -140,6 +141,8 @@ type GrayDashboardViewProps = {
   onCalendarSelectedDateChange?: (date: Date) => void;
   onEditHabit?: (habit: { id: string; label: string; previousLabel: string; streakLabel: string }) => void;
   onDeleteHabit?: (habit: { id: string; label: string; previousLabel: string; streakLabel: string }) => void;
+  onCreatePlan?: (plan: EventComposerPayload) => Promise<void> | void;
+  onCreateHabit?: (habit: EventComposerPayload) => Promise<void> | void;
   onIntegrationAction?: () => void;
   onRefreshData: () => Promise<void>;
   chatBar?: ReactNode;
@@ -179,6 +182,8 @@ export function GrayDashboardView({
   onCalendarSelectedDateChange,
   onEditHabit,
   onDeleteHabit,
+  onCreatePlan,
+  onCreateHabit,
   onIntegrationAction,
   onRefreshData,
   chatBar,
@@ -328,11 +333,7 @@ export function GrayDashboardView({
     hasPulseData && isCurrentPulseEditable
       ? currentPulse?.proactivity ?? proactivityFallback
       : proactivityFallback;
-  const [modalState, setModalState] = useState<{ isOpen: boolean; type: "plan" | "habit" | null }>({
-    isOpen: false,
-    type: null,
-  });
-  const [planEditorTarget, setPlanEditorTarget] = useState<PlanItem | null>(null);
+  const [inlineEditorType, setInlineEditorType] = useState<"plan" | "habit" | null>(null);
   const [isProactivityModalOpen, setIsProactivityModalOpen] = useState(false);
   const fallbackProactivityTimes = useMemo(
     () => getProactivityTimes(proactivityFallback),
@@ -346,7 +347,7 @@ export function GrayDashboardView({
   }, [displayProactivity, fallbackProactivityTimes]);
   const fallbackProactivityTime = fallbackProactivityTimes[0];
   const activeProactivityTime = activeProactivityTimes[0] ?? fallbackProactivityTime;
-  const isChatBarVisible = Boolean(chatBar) && !modalState.isOpen;
+  const isChatBarVisible = Boolean(chatBar);
   const calendarContainerRef = useRef<HTMLDivElement | null>(null);
   const chatDockRef = useRef<HTMLDivElement | null>(null);
   const [panelMaxHeightPx, setPanelMaxHeightPx] = useState<number | null>(null);
@@ -470,21 +471,20 @@ export function GrayDashboardView({
   });
   /* Helper vars for modal UI */
 
-  const formattedProactivityTimes = useMemo(
-    () => activeProactivityTimes.map((time) => formatCustomTimeLabel(time)),
-    [activeProactivityTimes]
-  );
-
   const proactivityScheduleEntries = useMemo(() => {
     const todayKey = toDateKey(currentDate);
     // Safe access to keySet, assumed to be part of props or overlapping context
     const keySet = proactivityDeliveryKeys;
     if (activeProactivityTimes.length > 0) {
-      return activeProactivityTimes.map((time, index) => ({
-        time,
-        label: formattedProactivityTimes[index] ?? formatCustomTimeLabel(time),
-        delivered: keySet?.has(`${todayKey}T${time}`) ?? false,
-      }));
+      return activeProactivityTimes
+        .map((time) => time.trim())
+        .filter((time) => time.length > 0)
+        .map((time) => ({
+          time,
+          label: formatCustomTimeLabel(time),
+          delivered: keySet?.has(`${todayKey}T${time}`) ?? false,
+        }))
+        .filter(({ label }) => label.trim().length > 0);
     }
     if (activeProactivityTime) {
       return [
@@ -498,7 +498,6 @@ export function GrayDashboardView({
     return [];
   }, [
     activeProactivityTimes,
-    formattedProactivityTimes,
     activeProactivityTime,
     proactivityDeliveryKeys,
     currentDate,
@@ -642,18 +641,18 @@ export function GrayDashboardView({
     [calendars, onCalendarsChange]
   );
 
-  const openModal = useCallback(
+  const openInlineEditor = useCallback(
     (type: "plan" | "habit") => {
       if (!isCurrentPulseEditable) {
         return;
       }
-      setModalState({ isOpen: true, type });
+      setInlineEditorType(type);
     },
     [isCurrentPulseEditable]
   );
 
-  const closeModal = useCallback(() => {
-    setModalState({ isOpen: false, type: null });
+  const closeInlineEditor = useCallback(() => {
+    setInlineEditorType(null);
   }, []);
 
   const handleModalSuccess = useCallback(async () => {
@@ -935,10 +934,18 @@ export function GrayDashboardView({
         )}
         <button
           className={styles.dashboardButtonNeutral}
-          onClick={() => openModal("plan")}
+          onClick={() => openInlineEditor("plan")}
         >
           {t("Add plans")}
         </button>
+        {inlineEditorType === "plan" ? (
+          <PlanHabitInlineEditor
+            type="plan"
+            onCancel={closeInlineEditor}
+            onSuccess={handleModalSuccess}
+            onTypeChange={openInlineEditor}
+          />
+        ) : null}
       </div>
     </div>
   );
@@ -981,10 +988,18 @@ export function GrayDashboardView({
         )}
         <button
           className={styles.dashboardButtonNeutral}
-          onClick={() => openModal("habit")}
+          onClick={() => openInlineEditor("habit")}
         >
           {t("Add habits")}
         </button>
+        {inlineEditorType === "habit" ? (
+          <PlanHabitInlineEditor
+            type="habit"
+            onCancel={closeInlineEditor}
+            onSuccess={handleModalSuccess}
+            onTypeChange={openInlineEditor}
+          />
+        ) : null}
       </div>
     </div>
   );
@@ -1121,6 +1136,8 @@ export function GrayDashboardView({
       onCalendarsChange={onCalendarsChange}
       onEventsChange={onCalendarEventsChange}
       onEventDelete={handleCalendarEventDelete}
+      onCreatePlan={onCreatePlan}
+      onCreateHabit={onCreateHabit}
       selectedDate={calendarSelectedDate}
       onSelectedDateChange={onCalendarSelectedDateChange}
       hourHeight={CALENDAR_PANEL_HOUR_HEIGHT}
@@ -1202,29 +1219,6 @@ export function GrayDashboardView({
           </div>
         ) : null}
       </div>
-      {modalState.isOpen && modalState.type && (
-        <AddPlanHabitModal
-          isOpen={modalState.isOpen}
-          onClose={closeModal}
-          type={modalState.type}
-          onSuccess={handleModalSuccess}
-        />
-      )}
-      {planEditorTarget && onSavePlan ? (
-        <AddPlanHabitModal
-          isOpen={Boolean(planEditorTarget)}
-          onClose={() => setPlanEditorTarget(null)}
-          type="plan"
-          onSuccess={handleModalSuccess}
-          planToEdit={planEditorTarget}
-          onSubmitPlan={async (planId, updates) => {
-            if (!planId) {
-              return;
-            }
-            await onSavePlan(planId, updates);
-          }}
-        />
-      ) : null}
     </>
   );
 }

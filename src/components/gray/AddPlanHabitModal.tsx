@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, type MouseEvent } from "react";
-import { X } from "lucide-react";
+import { X, ChevronDown } from "lucide-react";
 import styles from "@/app/gray/GrayPageClient.module.css";
 import { useUser } from "@/contexts/UserContext";
 import { apiService } from "@/lib/api";
@@ -66,6 +66,11 @@ export function AddPlanHabitModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { user } = useUser();
+  const [activeType, setActiveType] = useState<"plan" | "habit">(type);
+
+  useEffect(() => {
+    setActiveType(type);
+  }, [type, isOpen]);
   useEffect(() => {
     if (type !== "plan" || !planToEdit || !isOpen) {
       return;
@@ -129,214 +134,214 @@ export function AddPlanHabitModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
 
-      e.preventDefault();
+    e.preventDefault();
 
-      // console.log('[AddPlanHabitModal] handleSubmit called', { type, inputValue, user: !!user });
+    // console.log('[AddPlanHabitModal] handleSubmit called', { type: activeType, inputValue, user: !!user });
 
-  
 
-      if (!user) {
 
-        setError(t("You must be signed in to perform this action."));
+    if (!user) {
 
-        return;
+      setError(t("You must be signed in to perform this action."));
 
-      }
+      return;
 
-  
+    }
 
-      if (!inputValue.trim()) {
 
-        // console.log('[AddPlanHabitModal] Input value is empty, returning');
 
-        return;
+    if (!inputValue.trim()) {
 
-      }
+      // console.log('[AddPlanHabitModal] Input value is empty, returning');
 
-  
+      return;
 
-      if ((planScheduleStart && !planScheduleEnd) || (!planScheduleStart && planScheduleEnd)) {
+    }
 
-        setError(t("Please provide both a start and end time for the schedule."));
 
-        return;
 
-      }
+    if ((planScheduleStart && !planScheduleEnd) || (!planScheduleStart && planScheduleEnd)) {
 
-  
+      setError(t("Please provide both a start and end time for the schedule."));
 
-      if (reminderEnabled && !planDeadline) {
+      return;
 
-        setError(t("Please provide a reminder time when reminder is checked."));
+    }
 
-        return;
 
-      }
 
-  
+    if (reminderEnabled && !planDeadline) {
 
-      setIsSubmitting(true);
+      setError(t("Please provide a reminder time when reminder is checked."));
 
-      setError(null);
+      return;
 
-      // console.log('[AddPlanHabitModal] Starting submission...');
+    }
 
-  
 
-      const isEditingPlan = type === "plan" && Boolean(planToEdit);
 
-      const isEditingHabit = type === "habit" && Boolean(habitToEdit);
+    setIsSubmitting(true);
 
-      try {
+    setError(null);
 
-        const trimmed = inputValue.trim();
+    // console.log('[AddPlanHabitModal] Starting submission...');
 
-        const details = detailsValue.trim();
 
-        if (type === "plan") {
 
-          const scheduleSlotValue =
+    const isEditingPlan = activeType === "plan" && Boolean(planToEdit);
 
-            planScheduleStart && planScheduleEnd
+    const isEditingHabit = activeType === "habit" && Boolean(habitToEdit);
 
-              ? `${planScheduleStart}-${planScheduleEnd}`
+    try {
 
-              : null;
+      const trimmed = inputValue.trim();
 
-          const deadlineValue = planDeadline ? planDeadline : null;
+      const details = detailsValue.trim();
 
-          const descriptionValue = details.length > 0 ? details : null;
+      if (activeType === "plan") {
 
-          const payload: PlanUpdates = {
+        const scheduleSlotValue =
+
+          planScheduleStart && planScheduleEnd
+
+            ? `${planScheduleStart}-${planScheduleEnd}`
+
+            : null;
+
+        const deadlineValue = planDeadline ? planDeadline : null;
+
+        const descriptionValue = details.length > 0 ? details : null;
+
+        const payload: PlanUpdates = {
+
+          label: trimmed,
+
+          details: descriptionValue,
+
+          deadline: deadlineValue,
+
+          scheduleSlot: scheduleSlotValue,
+
+        };
+
+        // console.log('[AddPlanHabitModal] Saving plan', { isEditing: isEditingPlan, payload, hasOnSubmitPlan: !!onSubmitPlan });
+
+        if (onSubmitPlan) {
+
+          await onSubmitPlan(planToEdit?.id ?? null, payload);
+
+        } else {
+
+          const result = await apiService.createPlan(user.id, {
 
             label: trimmed,
 
-            details: descriptionValue,
+            completed: false,
 
             deadline: deadlineValue,
 
             scheduleSlot: scheduleSlotValue,
 
+            description: descriptionValue,
+
+          });
+
+          // console.log('[AddPlanHabitModal] Plan created successfully', result);
+
+        }
+
+      } else {
+
+        if (isEditingHabit) {
+
+          const payload: HabitUpdates = {
+
+            label: trimmed,
+
+            details: details.length > 0 ? details : null,
+
           };
 
-          // console.log('[AddPlanHabitModal] Saving plan', { isEditing: isEditingPlan, payload, hasOnSubmitPlan: !!onSubmitPlan });
+          // console.log('[AddPlanHabitModal] Updating habit', { payload, hasOnSubmitHabit: !!onSubmitHabit });
 
-          if (onSubmitPlan) {
+          if (onSubmitHabit) {
 
-            await onSubmitPlan(planToEdit?.id ?? null, payload);
+            await onSubmitHabit(habitToEdit?.id ?? null, payload);
 
-          } else {
+          } else if (user && habitToEdit) {
 
-            const result = await apiService.createPlan(user.id, {
+            const habitId = Number(habitToEdit.id);
 
-              label: trimmed,
+            await apiService.updateHabit(user.id, habitId, {
 
-              completed: false,
+              label: payload.label,
 
-              deadline: deadlineValue,
-
-              scheduleSlot: scheduleSlotValue,
-
-              description: descriptionValue,
+              description: payload.details ?? null,
 
             });
-
-            // console.log('[AddPlanHabitModal] Plan created successfully', result);
 
           }
 
         } else {
 
-          if (isEditingHabit) {
+          // console.log('[AddPlanHabitModal] Creating new habit');
 
-            const payload: HabitUpdates = {
+          const result = await apiService.createHabit(user.id, {
 
-              label: trimmed,
+            label: trimmed,
 
-              details: details.length > 0 ? details : null,
+            streak_label: "0",
 
-            };
+            previous_label: t("No history yet"),
 
-            // console.log('[AddPlanHabitModal] Updating habit', { payload, hasOnSubmitHabit: !!onSubmitHabit });
+            description: details.length > 0 ? details : null,
 
-            if (onSubmitHabit) {
+          });
 
-              await onSubmitHabit(habitToEdit?.id ?? null, payload);
-
-            } else if (user && habitToEdit) {
-
-              const habitId = Number(habitToEdit.id);
-
-              await apiService.updateHabit(user.id, habitId, {
-
-                label: payload.label,
-
-                description: payload.details ?? null,
-
-              });
-
-            }
-
-          } else {
-
-            // console.log('[AddPlanHabitModal] Creating new habit');
-
-	            const result = await apiService.createHabit(user.id, {
-
-	              label: trimmed,
-
-	              streak_label: "0",
-
-	              previous_label: t("No history yet"),
-
-	              description: details.length > 0 ? details : null,
-
-	            });
-
-            // console.log('[AddPlanHabitModal] Habit created successfully', result);
-
-          }
+          // console.log('[AddPlanHabitModal] Habit created successfully', result);
 
         }
 
-  
-
-        setInputValue("");
-
-        setDetailsValue("");
-
-        setPlanDeadline("");
-
-        setPlanScheduleStart("");
-
-        setPlanScheduleEnd("");
-
-        // console.log('[AddPlanHabitModal] Calling onSuccess...');
-
-        await onSuccess();
-
-        // console.log('[AddPlanHabitModal] onSuccess completed, closing modal');
-
-        onClose();
-
-      } catch (err) {
-
-		        const typeLabel = type === "plan" ? t("Plan") : t("Habit");
-		        const fallbackError = isEditingPlan || isEditingHabit
-		          ? t("Failed to update {type}", { type: typeLabel })
-		          : t("Failed to add {type}", { type: typeLabel });
-
-	        console.error(`[AddPlanHabitModal] Failed to ${isEditingPlan || isEditingHabit ? "update" : "add"} ${type}:`, err);
-
-	        setError(err instanceof Error ? err.message : fallbackError);
-
-	      } finally {
-
-        setIsSubmitting(false);
-
       }
 
-    };
+
+
+      setInputValue("");
+
+      setDetailsValue("");
+
+      setPlanDeadline("");
+
+      setPlanScheduleStart("");
+
+      setPlanScheduleEnd("");
+
+      // console.log('[AddPlanHabitModal] Calling onSuccess...');
+
+      await onSuccess();
+
+      // console.log('[AddPlanHabitModal] onSuccess completed, closing modal');
+
+      onClose();
+
+    } catch (err) {
+
+      const typeLabel = activeType === "plan" ? t("Plan") : t("Habit");
+      const fallbackError = isEditingPlan || isEditingHabit
+        ? t("Failed to update {type}", { type: typeLabel })
+        : t("Failed to add {type}", { type: typeLabel });
+
+      console.error(`[AddPlanHabitModal] Failed to ${isEditingPlan || isEditingHabit ? "update" : "add"} ${activeType}:`, err);
+
+      setError(err instanceof Error ? err.message : fallbackError);
+
+    } finally {
+
+      setIsSubmitting(false);
+
+    }
+
+  };
 
   const handleInputChange = (value: string) => {
     setInputValue(value);
@@ -351,7 +356,8 @@ export function AddPlanHabitModal({
     return null;
   }
 
-  const isPlan = type === "plan";
+  const isPlan = activeType === "plan";
+  const isEditing = Boolean(planToEdit || habitToEdit);
   const title = isPlan ? t("Add Plan") : t("Add Habit");
 
   return (
@@ -370,7 +376,25 @@ export function AddPlanHabitModal({
       >
         <header className={styles.personalizationPanelHeader}>
           <div>
-            <h2 id="add-item-title">{title}</h2>
+            {!isEditing ? (
+              <div className={styles.personalizationHeaderTypeSelect}>
+                <span className={styles.personalizationEyebrow} style={{ position: "absolute", top: "-18px", left: "2px" }}>
+                  {t("Create new")}
+                </span>
+                <select
+                  value={activeType}
+                  onChange={(e) => setActiveType(e.target.value as "plan" | "habit")}
+                  className={styles.personalizationHeaderSelect}
+                  aria-label={t("Select item type")}
+                >
+                  <option value="plan">{t("Add Plan")}</option>
+                  <option value="habit">{t("Add Habit")}</option>
+                </select>
+                <ChevronDown className={styles.personalizationHeaderSelectArrow} />
+              </div>
+            ) : (
+              <h2 id="add-item-title">{title}</h2>
+            )}
           </div>
           <button
             type="button"
@@ -394,33 +418,33 @@ export function AddPlanHabitModal({
           <div className={styles.personalizationColumn}>
             {isPlan ? (
               <>
-	                <div className={styles.personalizationFieldGroup}>
-	                  <label htmlFor="plan-description">{t("Plan *")}</label>
-	                  <textarea
-	                    id="plan-description"
-	                    className={styles.personalizationField}
-	                    value={inputValue}
-	                    onChange={(event) => handleInputChange(event.target.value)}
-	                    placeholder={t("What needs to happen?")}
-	                    disabled={isSubmitting}
-	                    rows={3}
-	                    autoFocus
-	                    required
-	                  />
-	                </div>
+                <div className={styles.personalizationFieldGroup}>
+                  <label htmlFor="plan-description">{t("Plan *")}</label>
+                  <textarea
+                    id="plan-description"
+                    className={styles.personalizationField}
+                    value={inputValue}
+                    onChange={(event) => handleInputChange(event.target.value)}
+                    placeholder={t("What needs to happen?")}
+                    disabled={isSubmitting}
+                    rows={3}
+                    autoFocus
+                    required
+                  />
+                </div>
 
-	                <div className={styles.personalizationFieldGroup}>
-	                  <label htmlFor="plan-details">{t("Details")}</label>
-	                  <textarea
-	                    id="plan-details"
-	                    className={styles.personalizationField}
-	                    value={detailsValue}
-	                    onChange={(event) => handleDetailsChange(event.target.value)}
-	                    placeholder={t("Add notes, links, or context")}
-	                    disabled={isSubmitting}
-	                    rows={3}
-	                  />
-	                </div>
+                <div className={styles.personalizationFieldGroup}>
+                  <label htmlFor="plan-details">{t("Details")}</label>
+                  <textarea
+                    id="plan-details"
+                    className={styles.personalizationField}
+                    value={detailsValue}
+                    onChange={(event) => handleDetailsChange(event.target.value)}
+                    placeholder={t("Add notes, links, or context")}
+                    disabled={isSubmitting}
+                    rows={3}
+                  />
+                </div>
 
                 <div
                   style={{
@@ -435,7 +459,7 @@ export function AddPlanHabitModal({
                     className={styles.personalizationFieldGroup}
                     style={{ minWidth: "260px", flex: "1 1 260px" }}
                   >
-	                    <label htmlFor="plan-schedule-start">{t("Schedule window")}</label>
+                    <label htmlFor="plan-schedule-start">{t("Schedule window")}</label>
                     <div
                       style={{
                         display: "grid",
@@ -449,7 +473,7 @@ export function AddPlanHabitModal({
                           className={styles.personalizationHint}
                           style={{ textTransform: "uppercase", letterSpacing: "0.2em" }}
                         >
-	                          {t("Start")}
+                          {t("Start")}
                         </span>
                         <input
                           id="plan-schedule-start"
@@ -466,7 +490,7 @@ export function AddPlanHabitModal({
                           className={styles.personalizationHint}
                           style={{ textTransform: "uppercase", letterSpacing: "0.2em" }}
                         >
-	                          {t("End")}
+                          {t("End")}
                         </span>
                         <input
                           id="plan-schedule-end"
@@ -505,7 +529,7 @@ export function AddPlanHabitModal({
                           disabled={isSubmitting}
                           className={styles.reminderCheckboxInput}
                         />
-	                        {t("Reminder")}
+                        {t("Reminder")}
                       </label>
                     </div>
                     <div
@@ -533,27 +557,27 @@ export function AddPlanHabitModal({
             ) : (
               <>
                 <div className={styles.personalizationFieldGroup}>
-	                  <label htmlFor="habit-label">{t("Habit *")}</label>
+                  <label htmlFor="habit-label">{t("Habit *")}</label>
                   <input
                     id="habit-label"
                     type="text"
                     className={styles.personalizationField}
                     value={inputValue}
                     onChange={(event) => handleInputChange(event.target.value)}
-	                    placeholder={t("Name the habit...")}
+                    placeholder={t("Name the habit...")}
                     disabled={isSubmitting}
                     autoFocus
                     required
                   />
                 </div>
                 <div className={styles.personalizationFieldGroup} style={{ marginTop: "16px" }}>
-	                  <label htmlFor="habit-details">{t("Details")}</label>
+                  <label htmlFor="habit-details">{t("Details")}</label>
                   <textarea
                     id="habit-details"
                     className={styles.personalizationField}
                     value={detailsValue}
                     onChange={(event) => handleDetailsChange(event.target.value)}
-	                    placeholder={t("What does success look like?")}
+                    placeholder={t("What does success look like?")}
                     disabled={isSubmitting}
                     rows={3}
                   />
@@ -573,17 +597,17 @@ export function AddPlanHabitModal({
                 onClick={onClose}
                 disabled={isSubmitting}
                 style={{ flex: 1 }}
-	              >
-	                {t("Cancel")}
-	              </button>
+              >
+                {t("Cancel")}
+              </button>
               <button
                 type="submit"
                 className={styles.secondaryAction}
                 disabled={!inputValue.trim() || isSubmitting}
                 style={{ flex: 1 }}
-	              >
-	                {isSubmitting ? t("Saving...") : t("Save")}
-	              </button>
+              >
+                {isSubmitting ? t("Saving...") : t("Save")}
+              </button>
             </div>
           </div>
         </form>

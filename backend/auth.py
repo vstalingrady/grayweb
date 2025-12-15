@@ -38,9 +38,20 @@ except ImportError:
 # Optional, explicitly gated insecure fallback for local development.
 # When enabled, the backend may accept JWTs that were NOT validated
 # against Supabase or a shared secret, based only on their payload.
-_ALLOW_INSECURE_JWT_FALLBACK = (
+_NODE_ENV = os.getenv("NODE_ENV", "").strip().lower()
+_ENVIRONMENT = os.getenv("ENVIRONMENT", "").strip().lower()
+_IS_PRODUCTION = _NODE_ENV == "production" or _ENVIRONMENT == "production"
+
+_ALLOW_INSECURE_JWT_FALLBACK_FLAG = (
     os.getenv("ALLOW_INSECURE_JWT_FALLBACK", "").strip().lower() in ("1", "true", "yes")
 )
+_ALLOW_INSECURE_JWT_FALLBACK = _ALLOW_INSECURE_JWT_FALLBACK_FLAG and not _IS_PRODUCTION
+
+if _ALLOW_INSECURE_JWT_FALLBACK_FLAG and _IS_PRODUCTION:
+    logger.error(
+        "ALLOW_INSECURE_JWT_FALLBACK is enabled in production; ignoring for safety.",
+        extra={"event_type": "auth_insecure_fallback_disabled"},
+    )
 
 def _get_cached_user(auth_user_id: str) -> Optional[Dict[str, Any]]:
     """Get user from L1 (in-memory) cache if valid"""

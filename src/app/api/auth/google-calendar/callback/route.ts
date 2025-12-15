@@ -53,8 +53,12 @@ const successHtml = `
         if (window.opener) {
           const targetOrigin = window.location?.origin || "*";
           window.opener.postMessage({ type: "google-calendar-connected" }, targetOrigin);
+          window.close();
+          return;
         }
-        window.close();
+
+        // If the OAuth flow happened in the same tab (popup blocked), take the user back.
+        window.location.assign("/cal");
       }, 1500);
     </script>
   </body>

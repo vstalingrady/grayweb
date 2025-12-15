@@ -1,0 +1,12 @@
+/* Sidebar/history skeletons should shimmer left-to-right even if the OS enables reduced motion. */
+.gray-history-skeleton .react-loading-skeleton {
+  --animation-duration: 1.2s;
+  --pseudo-element-display: block;
+}
+
+@media (prefers-reduced-motion) {
+  .gray-history-skeleton .react-loading-skeleton {
+    --pseudo-element-display: block;
+  }
+}
+

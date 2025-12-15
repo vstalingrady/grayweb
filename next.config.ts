@@ -2,6 +2,7 @@ import type { NextConfig } from "next";
 
 // Force server restart to clear HMR cache
 const rawProxyTarget =
+  process.env.BACKEND_URL ||
   process.env.API_PROXY_TARGET ||
   process.env.NEXT_PUBLIC_API_URL ||
   "http://127.0.0.1:8000";

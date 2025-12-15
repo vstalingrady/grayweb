@@ -2,7 +2,7 @@
 
 /* eslint-disable react-hooks/set-state-in-effect */
 
-import { Fragment, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type ChangeEvent, type PointerEvent } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import {
@@ -655,8 +655,23 @@ export function SettingsModal({
     </span>
   );
 
+  const handleOverlayPointerDown = (event: PointerEvent<HTMLDivElement>) => {
+    if (event.target !== event.currentTarget) {
+      return;
+    }
+    if (event.pointerType === "mouse" && event.button !== 0) {
+      return;
+    }
+    onClose();
+  };
+
   return (
-    <div className={styles.settingsOverlay} role="dialog" aria-modal="true">
+    <div
+      className={styles.settingsOverlay}
+      role="dialog"
+      aria-modal="true"
+      onPointerDown={handleOverlayPointerDown}
+    >
       <div className={styles.settingsContainer} data-mobile-view={mobileView}>
         {/* Mobile Root View */}
         {isMobile && mobileView === "root" && (
@@ -1093,16 +1108,6 @@ export function SettingsModal({
               </div>
 
               <div className={styles.settingsSection}>
-                <h3 className={styles.settingsSectionTitle}>{t("Artificial Intelligence")}</h3>
-
-                <div className={styles.settingsRow}>
-                  <span className={styles.settingsLabel}>{t("Model")}</span>
-                  <button className={styles.settingsAction}>{t("Upgrade to choose")}</button>
-                </div>
-              </div>
-
-              <div className={styles.settingsSection}>
-                <h3 className={styles.settingsSectionTitle}>{t("About you")}</h3>
                 <div className={styles.settingsFormGrid}>
                   <div className={styles.settingsFormField}>
                     <label className={styles.settingsFormLabel} htmlFor="settings-nickname">
@@ -1255,116 +1260,133 @@ export function SettingsModal({
                 <div className={styles.settingsRow}>
                   <div className={styles.settingsLabelGroup}>
                     <span className={styles.settingsLabel}>{t("Gray Lite")}</span>
-                    <span className={styles.settingsItemDescription}>{t("Gray Lite is always available.")}</span>
+                    <span className={styles.settingsItemDescription}>{t("Always available.")}</span>
                   </div>
                 </div>
               </div>
 
-              {PIONEER_GROUPS.map((group) => {
+              {(() => {
                 const normalizedQuery = modelSearchQuery.trim().toLowerCase();
                 const visibleIds = visibleModelIds ?? ALL_PIONEER_MODEL_IDS;
-                const matchesGroup = !normalizedQuery || group.label.toLowerCase().includes(normalizedQuery);
-                const filteredModels = group.models.filter((model) => {
-                  if (!normalizedQuery) return true;
-                  const haystack = `${group.label} ${model.label} ${model.id}`.toLowerCase();
-                  return matchesGroup || haystack.includes(normalizedQuery);
+
+                const groupsToRender = PIONEER_GROUPS.flatMap((group) => {
+                  const matchesGroup = !normalizedQuery || group.label.toLowerCase().includes(normalizedQuery);
+                  const filteredModels = group.models.filter((model) => {
+                    if (!normalizedQuery) return true;
+                    const haystack = `${group.label} ${model.label} ${model.id}`.toLowerCase();
+                    return matchesGroup || haystack.includes(normalizedQuery);
+                  });
+
+                  return filteredModels.length ? [{ group, filteredModels }] : [];
                 });
 
-                if (filteredModels.length === 0) {
-                  return null;
-                }
+                const lockedRequiresPioneerOverall = groupsToRender.some(({ filteredModels }) =>
+                  filteredModels.some((model) => (model.tierRequired ?? "voyager") === "pioneer")
+                );
+                const premiumNote = lockedRequiresPioneerOverall
+                  ? t("Upgrade to Voyager or Pioneer to access.")
+                  : t("Upgrade to Voyager to access.");
 
                 return (
-                  <div key={group.id} className={styles.settingsSection}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
-                      {renderLogo(group.iconPath, group.label, tierLevel < 1)}
-                      <h3 className={styles.settingsSectionTitle} style={{ margin: 0 }}>
-                        {group.label}
-                      </h3>
-                    </div>
-                    {(() => {
-                      const modelRows = filteredModels.map((model) => {
-                        const isSelected = selectedModelId === model.id;
-                        const isEnabled = visibleModelIds === null || visibleIds.includes(model.id);
-                        const requiredTier = model.tierRequired ?? "voyager";
-                        const requiredLevel = requiredTier === "pioneer" ? 2 : 1;
-                        const isTierLocked = tierLevel < requiredLevel;
-                        const isScoutLocked = tierLevel < 1;
-                        const isLocked = isScoutLocked || isTierLocked;
+                  <>
+                    {tierLevel < 1 && groupsToRender.length > 0 ? (
+                      <div className={styles.settingsTierSeparator} role="separator" aria-label={t("Premium models")}>
+                        <div className={styles.settingsTierSeparatorTitle}>{t("Premium models")}</div>
+                        <div className={styles.settingsTierSeparatorSubtitle}>{premiumNote}</div>
+                      </div>
+                    ) : null}
 
-                        return { model, isSelected, isEnabled, requiredTier, isLocked };
-                      });
+                    {groupsToRender.map(({ group, filteredModels }) => (
+                      <div key={group.id} className={styles.settingsSection}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+                          {renderLogo(group.iconPath, group.label, tierLevel < 1)}
+                          <h3 className={styles.settingsSectionTitle} style={{ margin: 0 }}>
+                            {group.label}
+                          </h3>
+                        </div>
+                        {(() => {
+                          const modelRows = filteredModels.map((model) => {
+                            const isSelected = selectedModelId === model.id;
+                            const isEnabled = visibleModelIds === null || visibleIds.includes(model.id);
+                            const requiredTier = model.tierRequired ?? "voyager";
+                            const requiredLevel = requiredTier === "pioneer" ? 2 : 1;
+                            const isTierLocked = tierLevel < requiredLevel;
+                            const isScoutLocked = tierLevel < 1;
+                            const isLocked = isScoutLocked || isTierLocked;
 
-                      const firstLockedIndex = modelRows.findIndex((row) => row.isLocked);
-                      const lockedRequiresPioneer = modelRows.some((row) => row.isLocked && row.requiredTier === "pioneer");
-                      const premiumNote = lockedRequiresPioneer
-                        ? t("Upgrade to Voyager or Pioneer to access.")
-                        : t("Upgrade to Voyager to access.");
+                            return { model, isSelected, isEnabled, requiredTier, isLocked };
+                          });
 
-                      return modelRows.map((row, index) => (
-                        <Fragment key={row.model.id}>
-                          {index === firstLockedIndex ? (
-                            <div className={styles.settingsTierSeparator} role="separator" aria-label={t("Premium models")}>
-                              <div className={styles.settingsTierSeparatorTitle}>{t("Premium models")}</div>
-                              <div className={styles.settingsTierSeparatorSubtitle}>{premiumNote}</div>
-                            </div>
-                          ) : null}
+                          const firstLockedIndex = modelRows.findIndex((row) => row.isLocked);
+                          const lockedRequiresPioneer = modelRows.some(
+                            (row) => row.isLocked && row.requiredTier === "pioneer"
+                          );
+                          const groupPremiumNote = lockedRequiresPioneer
+                            ? t("Upgrade to Voyager or Pioneer to access.")
+                            : t("Upgrade to Voyager to access.");
 
-                          <div
-                            className={styles.settingsRow}
-                            style={row.isLocked ? { opacity: 0.5, filter: "grayscale(1)" } : undefined}
-                          >
-                            <div className={styles.settingsLabelGroup}>
-                              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                                {renderLogo(group.iconPath, group.label, false)}
-                                <span className={styles.settingsLabel}>{row.model.label}</span>
-                              </div>
-                              <span className={styles.settingsItemDescription}>
-                                {row.model.cost ? (
-                                  <span className={styles.monoText}>{row.model.cost}</span>
+                          return modelRows.map((row, index) => (
+                            <Fragment key={row.model.id}>
+                              {tierLevel >= 1 && index === firstLockedIndex ? (
+                                <div className={styles.settingsTierSeparator} role="separator" aria-label={t("Premium models")}>
+                                  <div className={styles.settingsTierSeparatorTitle}>{t("Premium models")}</div>
+                                  <div className={styles.settingsTierSeparatorSubtitle}>{groupPremiumNote}</div>
+                                </div>
+                              ) : null}
+
+                              <div
+                                className={styles.settingsRow}
+                                style={row.isLocked ? { opacity: 0.5, filter: "grayscale(1)" } : undefined}
+                              >
+                                <div className={styles.settingsLabelGroup}>
+                                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                    {renderLogo(group.iconPath, group.label, false)}
+                                    <span className={styles.settingsLabel}>{row.model.label}</span>
+                                  </div>
+                                  <span className={styles.settingsItemDescription}>
+                                    {row.model.cost ? <span className={styles.monoText}>{row.model.cost}</span> : row.model.id}
+                                    {row.isSelected ? ` • ${t("Selected")}` : ""}
+                                  </span>
+                                </div>
+                                {row.isLocked ? (
+                                  <div style={{ padding: "0 10px", opacity: 0.5 }}>
+                                    <Lock size={16} />
+                                  </div>
                                 ) : (
-                                  row.model.id
+                                  renderToggle(
+                                    row.isEnabled,
+                                    () => {
+                                      if (row.isSelected) {
+                                        setModelsStatus(t("You can't hide the currently selected model."));
+                                        return;
+                                      }
+                                      if (visibleModelIds === null) {
+                                        const next = ALL_PIONEER_MODEL_IDS.filter((id) => id !== row.model.id);
+                                        setVisibleModelIds(next);
+                                        setModelsStatus(null);
+                                        return;
+                                      }
+                                      if (row.isEnabled) {
+                                        setVisibleModelIds(visibleModelIds.filter((id) => id !== row.model.id));
+                                        setModelsStatus(null);
+                                        return;
+                                      }
+                                      const next = Array.from(new Set([...visibleModelIds, row.model.id]));
+                                      setVisibleModelIds(next.length === ALL_PIONEER_MODEL_IDS.length ? null : next);
+                                      setModelsStatus(null);
+                                    },
+                                    t("Toggle {model}", { model: row.model.label })
+                                  )
                                 )}
-                                {row.isSelected ? ` • ${t("Selected")}` : ""}
-                              </span>
-                            </div>
-                            {row.isLocked ? (
-                              <div style={{ padding: "0 10px", opacity: 0.5 }}>
-                                <Lock size={16} />
                               </div>
-                            ) : (
-                              renderToggle(
-                                row.isEnabled,
-                                () => {
-                                  if (row.isSelected) {
-                                    setModelsStatus(t("You can't hide the currently selected model."));
-                                    return;
-                                  }
-                                  if (visibleModelIds === null) {
-                                    const next = ALL_PIONEER_MODEL_IDS.filter((id) => id !== row.model.id);
-                                    setVisibleModelIds(next);
-                                    setModelsStatus(null);
-                                    return;
-                                  }
-                                  if (row.isEnabled) {
-                                    setVisibleModelIds(visibleModelIds.filter((id) => id !== row.model.id));
-                                    setModelsStatus(null);
-                                    return;
-                                  }
-                                  const next = Array.from(new Set([...visibleModelIds, row.model.id]));
-                                  setVisibleModelIds(next.length === ALL_PIONEER_MODEL_IDS.length ? null : next);
-                                  setModelsStatus(null);
-                                },
-                                t("Toggle {model}", { model: row.model.label })
-                              )
-                            )}
-                          </div>
-                        </Fragment>
-                      ));
-                    })()}
-                  </div>
+                            </Fragment>
+                          ));
+                        })()}
+                      </div>
+                    ))}
+                  </>
                 );
-              })}
+              })()}
             </>
           )}
 

@@ -32,8 +32,6 @@ export default async function CalendarPage() {
       activeNav="calendar"
       variant="dashboard"
       initialDashboardTab="calendar"
-      defaultSidebarExpandedDesktop={false}
-      sidebarPreferenceKey="gray:calendar:sidebarExpanded"
     />
   );
 }

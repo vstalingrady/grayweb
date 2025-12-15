@@ -175,13 +175,15 @@ export function GraySidebar({
                       {section.entries.map((entry) => (
                         <li key={entry.id}>
                           {entry.isGeneratingTitle || !entry.title?.trim() ? (
-                            <div style={{ padding: "4px 12px" }}>
+                            <div className="gray-history-skeleton" style={{ padding: "4px 12px" }}>
                               <Skeleton
                                 height={14}
                                 width={120}
                                 baseColor="rgba(255, 255, 255, 0.05)"
                                 highlightColor="rgba(255, 255, 255, 0.1)"
                                 borderRadius={4}
+                                duration={1.2}
+                                enableAnimation
                               />
                             </div>
                           ) : (

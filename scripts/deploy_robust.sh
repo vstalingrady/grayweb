@@ -26,6 +26,8 @@ REPO_DIR="${REPO_DIR:-/home/ubuntu/gray}"
 BRANCH="${1:-main}"
 DEPLOY_LOG="${REPO_DIR}/logs/deploy_$(date +%Y%m%d_%H%M%S).log"
 ALERT_EMAIL="${ALERT_EMAIL:-}"
+DISCORD_WEBHOOK_URL="${DISCORD_WEBHOOK_URL:-}"
+DISCORD_USER_ID="${DISCORD_USER_ID:-}"
 MAX_HEALTH_RETRIES="${MAX_HEALTH_RETRIES:-5}"
 HEALTH_CHECK_DELAY="${HEALTH_CHECK_DELAY:-10}"
 BACKEND_URL="${BACKEND_URL:-http://localhost:8000}"
@@ -53,35 +55,56 @@ log_warn() { log "WARN" "${YELLOW}$*${NC}"; }
 log_error() { log "ERROR" "${RED}$*${NC}"; }
 log_success() { log "SUCCESS" "${GREEN}$*${NC}"; }
 
-# Send email notification on failure
+# Send notification on failure
 send_failure_notification() {
     local subject="$1"
     local body="$2"
     
-    if [[ -z "$ALERT_EMAIL" ]]; then
-        log_warn "No ALERT_EMAIL configured. Skipping notification."
-        return 0
+    local sent_notification=false
+    
+    # Try Discord webhook first (preferred)
+    if [[ -n "${DISCORD_WEBHOOK_URL:-}" ]]; then
+        log_info "Sending Discord notification..."
+        
+        # Format message with user ping if configured
+        local discord_message="🚨 **Deployment Failed**\n**$subject**"
+        if [[ -n "${DISCORD_USER_ID:-}" ]]; then
+            discord_message="<@${DISCORD_USER_ID}> $discord_message"
+        fi
+        discord_message="$discord_message\n\`\`\`$body\`\`\`"
+        
+        if curl -sf -X POST "$DISCORD_WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -d "{\"content\":$(echo "$discord_message" | jq -Rs .)}" 2>/dev/null; then
+            log_success "Discord notification sent!"
+            sent_notification=true
+        else
+            log_warn "Discord notification failed"
+        fi
     fi
     
-    log_info "Sending failure notification to $ALERT_EMAIL"
+    # Try email if configured
+    if [[ -n "${ALERT_EMAIL:-}" ]]; then
+        log_info "Sending email notification to $ALERT_EMAIL"
+        
+        if command -v mail &>/dev/null; then
+            if echo "$body" | mail -s "$subject" "$ALERT_EMAIL" 2>/dev/null; then
+                sent_notification=true
+            fi
+        elif command -v sendmail &>/dev/null; then
+            if {
+                echo "Subject: $subject"
+                echo "To: $ALERT_EMAIL"
+                echo ""
+                echo "$body"
+            } | sendmail "$ALERT_EMAIL" 2>/dev/null; then
+                sent_notification=true
+            fi
+        fi
+    fi
     
-    # Try different email methods
-    if command -v mail &>/dev/null; then
-        echo "$body" | mail -s "$subject" "$ALERT_EMAIL" 2>/dev/null || true
-    elif command -v sendmail &>/dev/null; then
-        {
-            echo "Subject: $subject"
-            echo "To: $ALERT_EMAIL"
-            echo ""
-            echo "$body"
-        } | sendmail "$ALERT_EMAIL" 2>/dev/null || true
-    elif command -v curl &>/dev/null && [[ -n "${SLACK_WEBHOOK_URL:-}" ]]; then
-        # Fallback to Slack if configured
-        curl -s -X POST -H 'Content-type: application/json' \
-            --data "{\"text\":\"🚨 *Deployment Failed*\n$subject\n\`\`\`$body\`\`\`\"}" \
-            "$SLACK_WEBHOOK_URL" || true
-    else
-        log_warn "No email tool available (mail, sendmail). Check logs at: $DEPLOY_LOG"
+    if [[ "$sent_notification" == false ]]; then
+        log_warn "No notification method available or all failed. Check logs at: $DEPLOY_LOG"
     fi
 }
 

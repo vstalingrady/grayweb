@@ -310,13 +310,18 @@ export function GrayCalendarView() {
         const calendarInstance = calendarInstanceRef.current;
         calendarInstance?.setDate(date);
         setCurrentDate(date);
-        setMonthDate(date);
+        const nextMonthDate = new Date(date);
+        nextMonthDate.setDate(1);
+        nextMonthDate.setHours(0, 0, 0, 0);
+        setMonthDate(nextMonthDate);
     };
 
     const handleMonthNavigate = (offset: number) => {
         setMonthDate(prev => {
             const next = new Date(prev);
             next.setMonth(prev.getMonth() + offset);
+            next.setDate(1);
+            next.setHours(0, 0, 0, 0);
             return next;
         });
     };
@@ -341,7 +346,8 @@ export function GrayCalendarView() {
                     monthDate={monthDate}
                     selectedDate={currentDate}
                     onSelectDate={handleMiniMonthSelect}
-                    onNavigateMonth={handleMonthNavigate}
+                    onNavigate={handleMonthNavigate}
+                    showMonthNavigation={true}
                     calendars={calendars}
                     onToggleCalendar={handleToggleCalendar}
                     showCreateAction={true}

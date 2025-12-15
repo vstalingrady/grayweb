@@ -15,7 +15,11 @@ import {
 import styles from "./GrayDashboardCalendar.module.css";
 import { CalendarSidebar } from "./CalendarSidebar";
 import { EventCard } from "./EventCard";
-import { EventComposer, EventComposerPayload } from "./EventComposer";
+import {
+  EventComposer,
+  EventComposerPayload,
+  ComposerState,
+} from "./EventComposer";
 import { layoutDayEvents } from "./layoutDayEvents";
 import { useEventDrag } from "./useEventDrag";
 import {
@@ -120,6 +124,8 @@ type GrayDashboardCalendarProps = {
   selectedDate?: Date;
   onSelectedDateChange?: (date: Date) => void;
   onEventDelete?: (event: CalendarEvent) => void;
+  onCreatePlan?: (payload: EventComposerPayload) => void;
+  onCreateHabit?: (payload: EventComposerPayload) => void;
 };
 
 export function GrayDashboardCalendar({
@@ -151,6 +157,8 @@ export function GrayDashboardCalendar({
   selectedDate: controlledSelectedDate,
   onSelectedDateChange,
   onEventDelete,
+  onCreatePlan,
+  onCreateHabit,
 }: GrayDashboardCalendarProps) {
   const { t } = useI18n();
   const hourHeight = hourHeightProp ?? DEFAULT_HOUR_HEIGHT;
@@ -314,10 +322,31 @@ export function GrayDashboardCalendar({
     return zone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
   }, []);
 
+  const [composerDraft, setComposerDraft] = useState<ComposerState | null>(null);
+
+	  const composerPreviewEvent = useMemo<CalendarEvent | null>(() => {
+	    if (!composerOpen || !composerRange) {
+	      return null;
+	    }
+	    const draftTitle = composerDraft?.title?.trim();
+	    return {
+	      id: "composer-preview",
+	      title: draftTitle ? draftTitle : "",
+	      start: composerRange.start,
+	      end: composerRange.end,
+	      color: composerDraft?.color || "#3D6F73",
+	      entryType: composerDraft?.entryType || "event",
+	      calendarId: "preview",
+	      isAllDay: false,
+	    };
+	  }, [composerOpen, composerRange, composerDraft]);
+
   const dayEvents = useMemo(() => {
     const filtered = visibleEvents.filter((event) => isSameDay(event.start, selectedDate));
+    let result = filtered;
+
     if (activeDrafts) {
-      return filtered.map((event) => {
+      result = result.map((event) => {
         const draft = activeDrafts[event.id];
         if (draft) {
           return {
@@ -329,8 +358,13 @@ export function GrayDashboardCalendar({
         return event;
       });
     }
-    return filtered;
-  }, [activeDrafts, selectedDate, visibleEvents]);
+
+    if (composerPreviewEvent && isSameDay(composerPreviewEvent.start, selectedDate)) {
+      result = [...result, composerPreviewEvent];
+    }
+
+    return result;
+  }, [activeDrafts, selectedDate, visibleEvents, composerPreviewEvent]);
 
   const dayLayouts = useMemo<PositionedEvent[]>(
     () =>
@@ -377,13 +411,17 @@ export function GrayDashboardCalendar({
         });
       }
 
+      if (composerPreviewEvent && isSameDay(composerPreviewEvent.start, day)) {
+        eventsWithPreview.push(composerPreviewEvent);
+      }
+
       return layoutDayEvents(eventsWithPreview, {
         hourHeight,
         minimumHeight: shortEventMinimumHeight,
         dayStart: startOfDay(day),
       });
     });
-  }, [hourHeight, shortEventMinimumHeight, visibleEvents, weekDays, activeDrafts]);
+  }, [hourHeight, shortEventMinimumHeight, visibleEvents, weekDays, activeDrafts, composerPreviewEvent]);
 
   const updateViewMode = useCallback(
     (nextMode: CalendarViewMode) => {
@@ -572,6 +610,24 @@ export function GrayDashboardCalendar({
   };
 
   const handleComposerSubmit = ({ id, ...payload }: EventComposerPayload) => {
+    if (payload.entryType === "plan" && onCreatePlan) {
+      onCreatePlan({ id, ...payload });
+      setComposerOpen(false);
+      setEditingEvent(null);
+      setComposerRange(null);
+      setComposerAnchorRect(null);
+      return;
+    }
+
+    if (payload.entryType === "habit" && onCreateHabit) {
+      onCreateHabit({ id, ...payload });
+      setComposerOpen(false);
+      setEditingEvent(null);
+      setComposerRange(null);
+      setComposerAnchorRect(null);
+      return;
+    }
+
     updateEvents((previous) => {
       if (id) {
         return previous.map((event) =>
@@ -631,11 +687,17 @@ export function GrayDashboardCalendar({
     const minutes = totalMinutes % 60;
     const start = new Date(day);
     start.setHours(hours, minutes, 0, 0);
+
+    const startMinutes = hours * 60 + minutes;
+    const startOffsetPx = (startMinutes / 60) * hourHeight;
+    const defaultDurationMinutes = 60; // Default event length
+    const eventHeightPx = (defaultDurationMinutes / 60) * hourHeight;
+
     const anchorRect: ComposerAnchorRect = {
-      left: bounds.right,
-      width: 16,
-      top: event.clientY - 12,
-      height: 24,
+      left: bounds.left,
+      width: bounds.width,
+      top: bounds.top + startOffsetPx,
+      height: eventHeightPx,
     };
     openComposerAt(start, anchorRect);
   };
@@ -676,82 +738,84 @@ export function GrayDashboardCalendar({
   const renderWeekView = () => (
     <div className={styles.calendarGrid} style={calendarGridStyle}>
       <div className={styles.calendarBody}>
-        <div className={styles.calendarMonthRow}>
-          <div className={styles.calendarMonthTitleGroup}>
-            <span className={styles.calendarMonthTitle}>{monthLabel}</span>
-            <div className={styles.calendarSurfaceNavArrows}>
-              <button
-                type="button"
-                aria-label={t("Previous {range}", { range: rangeNavigationLabel })}
-                onClick={() => handleNavigateRange(-1)}
-              >
-                ‹
-              </button>
-              <button
-                type="button"
-                aria-label={t("Next {range}", { range: rangeNavigationLabel })}
-                onClick={() => handleNavigateRange(1)}
-              >
-                ›
-              </button>
+        <div className={styles.calendarBodyScroll} ref={weekScrollRef}>
+          <div className={styles.stickyHeaderGroup}>
+            <div className={styles.calendarMonthRow}>
+              <div className={styles.calendarMonthTitleGroup}>
+                <span className={styles.calendarMonthTitle}>{monthLabel}</span>
+                <div className={styles.calendarSurfaceNavArrows}>
+                  <button
+                    type="button"
+                    aria-label={t("Previous {range}", { range: rangeNavigationLabel })}
+                    onClick={() => handleNavigateRange(-1)}
+                  >
+                    ‹
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={t("Next {range}", { range: rangeNavigationLabel })}
+                    onClick={() => handleNavigateRange(1)}
+                  >
+                    ›
+                  </button>
+                </div>
+                {showTodayControl && (
+                  <button
+                    type="button"
+                    className={styles.calendarSurfaceButton}
+                    onClick={handleGoToday}
+                    style={{ height: 32, padding: "0 12px", fontSize: "0.55rem" }}
+                  >
+                    {t("Today")}
+                  </button>
+                )}
+                {showViewSelect && (
+                  <div style={{ transform: "scale(0.9)", transformOrigin: "left center" }}>
+                    <ViewModeSelect
+                      value={viewMode}
+                      options={[
+                        { value: "week", label: t("Week") },
+                        { value: "day", label: t("Day") },
+                      ]}
+                      onChange={(mode) => updateViewMode(mode)}
+                    />
+                  </div>
+                )}
+              </div>
             </div>
-            {showTodayControl && (
-              <button
-                type="button"
-                className={styles.calendarSurfaceButton}
-                onClick={handleGoToday}
-                style={{ height: 32, padding: "0 12px", fontSize: "0.55rem" }}
-              >
-                {t("Today")}
-              </button>
-            )}
-            {showViewSelect && (
-              <div style={{ transform: "scale(0.9)", transformOrigin: "left center" }}>
-                <ViewModeSelect
-                  value={viewMode}
-                  options={[
-                    { value: "week", label: t("Week") },
-                    { value: "day", label: t("Day") },
-                  ]}
-                  onChange={(mode) => updateViewMode(mode)}
-                />
+            {showHeaderDates && (
+              <div className={styles.calendarHeaderRow}>
+                <div className={styles.calendarHeaderPlaceholder}>
+                  <span className={styles.calendarTimezoneLabel}>{timeZoneLabel}</span>
+                </div>
+                {weekDays.map((day) => {
+                  const isSelectedDay = isSameDay(day, selectedDate);
+                  const isToday = nowReference ? isSameDay(day, nowReference) : false;
+                  return (
+                    <div
+                      key={day.toISOString()}
+                      className={styles.calendarHeaderCell}
+                      data-selected={isSelectedDay ? "true" : "false"}
+                      data-today={isToday ? "true" : "false"}
+                    >
+                      <span>{day.toLocaleDateString(undefined, { weekday: "short" })}</span>
+                      <strong>{day.getDate()}</strong>
+                    </div>
+                  );
+                })}
               </div>
             )}
-          </div>
-        </div>
-        {showHeaderDates && (
-          <div className={styles.calendarHeaderRow}>
-            <div className={styles.calendarHeaderPlaceholder}>
-              <span className={styles.calendarTimezoneLabel}>+ {timeZoneLabel}</span>
-            </div>
-            {weekDays.map((day) => {
-              const isSelectedDay = isSameDay(day, selectedDate);
-              const isToday = nowReference ? isSameDay(day, nowReference) : false;
-              return (
-                <div
-                  key={day.toISOString()}
-                  className={styles.calendarHeaderCell}
-                  data-selected={isSelectedDay ? "true" : "false"}
-                  data-today={isToday ? "true" : "false"}
-                >
-                  <span>{day.toLocaleDateString(undefined, { weekday: "short" })}</span>
-                  <strong>{day.getDate()}</strong>
+            <div className={styles.calendarAllDayRow}>
+              <div className={styles.calendarAllDayLabel}>
+                <span>{t("All day")}</span>
+              </div>
+              {weekDays.map((day) => (
+                <div key={day.toISOString()} className={styles.calendarAllDayCell}>
+                  {/* All-day events will go here later */}
                 </div>
-              );
-            })}
-          </div>
-        )}
-        <div className={styles.calendarAllDayRow}>
-          <div className={styles.calendarAllDayLabel}>
-            <span>{t("All-day")}</span>
-          </div>
-          {weekDays.map((day) => (
-            <div key={day.toISOString()} className={styles.calendarAllDayCell}>
-              {/* All-day events will go here later */}
+              ))}
             </div>
-          ))}
-        </div>
-        <div className={styles.calendarBodyScroll} ref={weekScrollRef}>
+          </div>
           <div className={styles.calendarTimesColumn}>
             {HOURS_LABEL.map((label, hour) => (
               <span key={label} data-hour={hour}>
@@ -1265,6 +1329,7 @@ export function GrayDashboardCalendar({
       }}
       onSubmit={handleComposerSubmit}
       onDelete={handleComposerDelete}
+      onStateChange={setComposerDraft}
     />
   );
 

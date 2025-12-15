@@ -51,6 +51,65 @@ const normalizeNavLabel = (item: SidebarNavItem): string => {
   return item.label;
 };
 
+const SidebarHistorySkeleton = () => (
+  <div
+    className="gray-history-skeleton"
+    style={{
+      padding: "6px 16px",
+      display: "flex",
+      flexDirection: "column",
+      gap: 10,
+    }}
+    aria-label="Loading"
+  >
+    <Skeleton
+      height={14}
+      width="78%"
+      baseColor="rgba(255, 255, 255, 0.08)"
+      highlightColor="rgba(255, 255, 255, 0.18)"
+      borderRadius={6}
+      duration={1.2}
+      enableAnimation
+    />
+    <Skeleton
+      height={14}
+      width="64%"
+      baseColor="rgba(255, 255, 255, 0.08)"
+      highlightColor="rgba(255, 255, 255, 0.18)"
+      borderRadius={6}
+      duration={1.2}
+      enableAnimation
+    />
+    <Skeleton
+      height={14}
+      width="70%"
+      baseColor="rgba(255, 255, 255, 0.08)"
+      highlightColor="rgba(255, 255, 255, 0.18)"
+      borderRadius={6}
+      duration={1.2}
+      enableAnimation
+    />
+    <Skeleton
+      height={14}
+      width="52%"
+      baseColor="rgba(255, 255, 255, 0.08)"
+      highlightColor="rgba(255, 255, 255, 0.18)"
+      borderRadius={6}
+      duration={1.2}
+      enableAnimation
+    />
+    <Skeleton
+      height={14}
+      width="68%"
+      baseColor="rgba(255, 255, 255, 0.08)"
+      highlightColor="rgba(255, 255, 255, 0.18)"
+      borderRadius={6}
+      duration={1.2}
+      enableAnimation
+    />
+  </div>
+);
+
 const HistoryItemMenu = ({
   entry,
   onRename,
@@ -385,65 +444,63 @@ function GrayEnhancedSidebarComponent(props: GrayEnhancedSidebarProps) {
                     historySections.map((group) => (
                       <div key={group.id} className={styles.sidebarHistoryGroup}>
                         <span className={styles.sidebarHistoryLabel}>{t(group.label)}</span>
-                        <ul className={styles.sidebarHistoryList}>
-                          {group.entries.map((entry) => {
-                            const isActive = entry.id === activeChatId;
-                            return (
-                              <li key={entry.id}>
-                                {entry.isGeneratingTitle || !entry.title?.trim() ? (
-                                  <div style={{ padding: "6px 16px" }}>
-                                    <Skeleton
-                                      height={14}
-                                      width={140}
-                                      baseColor="rgba(255, 255, 255, 0.05)"
-                                      highlightColor="rgba(255, 255, 255, 0.1)"
-                                      borderRadius={4}
-                                    />
-                                  </div>
-                                ) : (
-                                  <>
-                                    <Link
-                                      href={entry.href}
-                                      className={
-                                        isActive
-                                          ? `${styles.sidebarHistoryLink} ${styles.sidebarHistoryLinkActive}`
-                                          : styles.sidebarHistoryLink
-                                      }
-                                    >
-                                      {entry.isPinned && (
-                                        <Pin
-                                          size={10}
-                                          fill="currentColor"
-                                          style={{ marginRight: 6, opacity: 0.7, flexShrink: 0 }}
-                                        />
-                                      )}
-                                      {entry.title}
-                                    </Link>
-                                    <HistoryItemMenu
-                                      entry={entry}
-                                      onRename={onRenameHistoryEntry}
-                                      onDelete={onDeleteHistoryEntry}
-                                      onPin={onPinHistoryEntry}
-                                    />
-                                  </>
-                                )}
-                              </li>
-                            );
-                          })}
-                        </ul>
+                        {group.entries.length > 0 ? (
+                          <ul className={styles.sidebarHistoryList}>
+                            {group.entries.map((entry) => {
+                              const isActive = entry.id === activeChatId;
+                              return (
+                                <li key={entry.id}>
+                                  {entry.isGeneratingTitle || !entry.title?.trim() ? (
+                                    <div className="gray-history-skeleton" style={{ padding: "6px 16px" }}>
+                                      <Skeleton
+                                        height={14}
+                                        width={140}
+                                        baseColor="rgba(255, 255, 255, 0.08)"
+                                        highlightColor="rgba(255, 255, 255, 0.18)"
+                                        borderRadius={4}
+                                        duration={1.2}
+                                        enableAnimation
+                                      />
+                                    </div>
+                                  ) : (
+                                    <>
+                                      <Link
+                                        href={entry.href}
+                                        className={
+                                          isActive
+                                            ? `${styles.sidebarHistoryLink} ${styles.sidebarHistoryLinkActive}`
+                                            : styles.sidebarHistoryLink
+                                        }
+                                      >
+                                        {entry.isPinned && (
+                                          <Pin
+                                            size={10}
+                                            fill="currentColor"
+                                            style={{ marginRight: 6, opacity: 0.7, flexShrink: 0 }}
+                                          />
+                                        )}
+                                        {entry.title}
+                                      </Link>
+                                      <HistoryItemMenu
+                                        entry={entry}
+                                        onRename={onRenameHistoryEntry}
+                                        onDelete={onDeleteHistoryEntry}
+                                        onPin={onPinHistoryEntry}
+                                      />
+                                    </>
+                                  )}
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        ) : isLoadingHistory ? (
+                          <SidebarHistorySkeleton />
+                        ) : null}
                       </div>
                     ))
                   ) : isLoadingHistory ? (
-                    <div className={styles.sidebarSkeletonGroup}>
-                      <div className={styles.sidebarSkeletonLine} style={{ width: "60%", marginBottom: 16 }} />
-                      <div className={styles.sidebarSkeletonLine} style={{ width: "80%" }} />
-                      <div className={styles.sidebarSkeletonLine} style={{ width: "70%" }} />
-                      <div className={styles.sidebarSkeletonLine} style={{ width: "50%" }} />
-                      <div className={styles.sidebarSkeletonLine} style={{ width: "65%" }} />
-                    </div>
-                  ) : (
-                    <span className={styles.sidebarHistoryEmpty}>{t("No conversations yet.")}</span>
-                  )}
+                    <SidebarHistorySkeleton />
+                  ) : null}
                 </div>
               </div>
               <div className={styles.sidebarScrollFadeFixed} aria-hidden="true" />

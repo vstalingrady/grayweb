@@ -34,6 +34,8 @@ import {
   GENERAL_CHAT_SESSION_ID,
   SHARED_CHAT_PLACEHOLDER_TITLE,
 } from "@/components/gray/chat/constants";
+import { EventComposerPayload } from "@/components/calendar/EventComposer";
+import { useI18n } from "@/contexts/I18nContext";
 import {
   type ChatSession,
 } from "@/components/gray/chat/types";
@@ -134,6 +136,8 @@ type GrayPageClientProps = {
   variant?: "general" | "dashboard" | "chat";
   activeChatId?: string | null;
   initialDashboardTab?: "pulse" | "calendar";
+  sidebarPreferenceKey?: string;
+  defaultSidebarExpandedDesktop?: boolean;
 };
 
 function GrayPageClientInner({
@@ -143,9 +147,9 @@ function GrayPageClientInner({
   activeChatId = null,
   initialDashboardTab = "pulse",
   sidebarPreferenceKey = "gray:sidebarExpanded",
-  defaultSidebarExpandedDesktop = true,
+  defaultSidebarExpandedDesktop = false,
 }: GrayPageClientProps) {
-
+  const { t } = useI18n();
   const { user, loading: userLoading } = useUser();
   const usageStatus = user?.usage_status;
   const isUsageLimitReached = usageStatus?.is_monthly_limit_reached || usageStatus?.is_six_hour_limit_reached;
@@ -242,6 +246,42 @@ function GrayPageClientInner({
     }),
     []
   );
+
+  const handleCreatePlan = useCallback(async (payload: EventComposerPayload) => {
+    if (!user?.id) return;
+
+    const formatTime = (date: Date) => {
+      // Format as HH:MM in 24h format
+      return date.toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit' });
+    };
+
+    const startStr = formatTime(payload.start);
+    const endStr = formatTime(payload.end);
+    const scheduleSlot = `${startStr}-${endStr}`;
+
+    await apiService.createPlan(user.id, {
+      label: payload.title,
+      completed: false,
+      deadline: null,
+      scheduleSlot: scheduleSlot,
+      description: payload.description || null,
+    });
+
+    await refreshPlansAndHabits();
+  }, [user?.id, refreshPlansAndHabits]);
+
+  const handleCreateHabit = useCallback(async (payload: EventComposerPayload) => {
+    if (!user?.id) return;
+
+    await apiService.createHabit(user.id, {
+      label: payload.title,
+      streak_label: "0",
+      previous_label: t("No history yet"),
+      description: payload.description || null,
+    });
+
+    await refreshPlansAndHabits();
+  }, [user?.id, refreshPlansAndHabits, t]);
 
   const sendDashboardNotification = useCallback(async (title: string, body: string) => {
     if (typeof window === "undefined" || typeof Notification === "undefined") {
@@ -518,6 +558,8 @@ function GrayPageClientInner({
           onDeleteHabit={deleteHabit}
           onIntegrationAction={handleCalendarIntegration}
           onRefreshData={refreshPlansAndHabits}
+          onCreatePlan={handleCreatePlan}
+          onCreateHabit={handleCreateHabit}
           chatBar={null}
           isCompactLayout={isCompactLayout}
           userId={userId}
@@ -556,7 +598,6 @@ function GrayPageClientInner({
           onToggleHabit={toggleHabit}
           onSavePlan={savePlan}
           onDeletePlan={deletePlan}
-          onEditHabit={editHabit}
           onDeleteHabit={deleteHabit}
           onRefreshData={refreshPlansAndHabits}
           showGreeting={false}
@@ -2148,30 +2189,51 @@ function GrayPageClientInner({
     [user, reminderPlans, calendarEvents]
   );
 
-  const handleCalendarIntegration = useCallback(async () => {
+  const handleCalendarIntegration = useCallback(() => {
     if (!user) {
       console.warn("Unable to start Google Calendar integration without a user.");
       return;
     }
 
-    const callbackUrl = typeof window !== "undefined"
-      ? `${window.location.origin}/api/auth/google-calendar/callback`
-      : undefined;
-
-    try {
-      const response = await apiService.requestGoogleCalendarAuth(user.id, {
-        redirectUri: callbackUrl,
-      });
-      const authUrl = response?.authorization_url;
-
-      if (authUrl) {
-        window.open(authUrl, "_blank", "noopener,noreferrer");
-      } else {
-        console.error("Google Calendar integration response did not include an authorization URL.");
-      }
-    } catch (error) {
-      console.error("Failed to initiate Google Calendar integration:", error);
+    if (typeof window === "undefined") {
+      return;
     }
+
+    const callbackUrl = `${window.location.origin}/api/auth/google-calendar/callback`;
+
+    // Open the popup synchronously so browsers don't block it (the auth URL is fetched async).
+    const popup = window.open(
+      "about:blank",
+      "google-calendar-oauth",
+      "popup=yes,width=520,height=720"
+    );
+
+    void (async () => {
+      try {
+        const response = await apiService.requestGoogleCalendarAuth(user.id, {
+          redirectUri: callbackUrl,
+        });
+        const authUrl = response?.authorization_url;
+
+        if (!authUrl) {
+          popup?.close();
+          console.error("Google Calendar integration response did not include an authorization URL.");
+          return;
+        }
+
+        if (popup) {
+          popup.location.href = authUrl;
+          popup.focus?.();
+          return;
+        }
+
+        // Popup blocked: fall back to same-tab navigation.
+        window.location.assign(authUrl);
+      } catch (error) {
+        popup?.close();
+        console.error("Failed to initiate Google Calendar integration:", error);
+      }
+    })();
   }, [user]);
 
   useEffect(() => {
@@ -2419,6 +2481,8 @@ function GrayPageClientInner({
     : null;
   const effectiveIsMobileViewport = isMounted ? isMobileViewport : false;
   const effectiveIsSidebarExpanded = isMounted ? isSidebarExpanded : defaultSidebarExpandedDesktop;
+  const isCalendarPage = pathname.startsWith("/cal");
+  const sidebarExpandedForLayout = isCalendarPage ? false : effectiveIsSidebarExpanded;
 
   return (
     <>
@@ -2426,18 +2490,22 @@ function GrayPageClientInner({
         className={styles.page}
         data-dashboard-tab={activeNav === "dashboard" ? dashboardTab : undefined}
         data-mobile-sidebar={effectiveIsMobileViewport ? "true" : "false"}
-        data-sidebar-expanded={effectiveIsSidebarExpanded ? "true" : "false"}
+        data-sidebar-expanded={sidebarExpandedForLayout ? "true" : "false"}
         {...(isMounted && { "data-general-attachments": generalAttachmentsFlag ? "true" : "false" })}
       >
         {/* Mobile Header - only rendered after hydration to avoid SSR/CSR mismatch */}
         {isMounted && (
           <div className={styles.mobileHeader}>
             <div className={styles.mobileHeaderLeft}>
-              {!effectiveIsSidebarExpanded ? (
+              {!sidebarExpandedForLayout ? (
                 <>
                   <button
                     className={styles.mobileMenuButton}
-                    onClick={() => setIsSidebarExpanded(!isSidebarExpanded)}
+                    onClick={() => {
+                      if (!isCalendarPage) {
+                        setIsSidebarExpanded(!isSidebarExpanded);
+                      }
+                    }}
                   >
                     <Menu size={24} />
                   </button>
@@ -2489,15 +2557,23 @@ function GrayPageClientInner({
             className={styles.layout}
             data-view={viewMode}
             data-mobile-sidebar={effectiveIsMobileViewport ? "true" : "false"}
-            {...(isMounted && { "data-sidebar-expanded": effectiveIsSidebarExpanded ? "true" : "false" })}
+            {...(isMounted && { "data-sidebar-expanded": sidebarExpandedForLayout ? "true" : "false" })}
           >
 
 
             <GrayEnhancedSidebar
               activeNav={activeNav ?? "general"}
-              isExpanded={effectiveIsSidebarExpanded}
-              onToggle={() => setIsSidebarExpanded((prev) => !prev)}
-              onExpand={() => setIsSidebarExpanded(true)}
+              isExpanded={sidebarExpandedForLayout}
+              onToggle={() => {
+                if (!isCalendarPage) {
+                  setIsSidebarExpanded((prev) => !prev);
+                }
+              }}
+              onExpand={() => {
+                if (!isCalendarPage) {
+                  setIsSidebarExpanded(true);
+                }
+              }}
               onCollapse={() => setIsSidebarExpanded(false)}
               viewerName={viewerName}
               viewerInitials={viewerInitials}
@@ -2533,7 +2609,7 @@ function GrayPageClientInner({
               {isMounted && (
                 <div
                   className={styles.overlay}
-                  data-visible={effectiveIsMobileViewport && effectiveIsSidebarExpanded ? "true" : "false"}
+                  data-visible={effectiveIsMobileViewport && sidebarExpandedForLayout ? "true" : "false"}
                   onClick={() => {
                     if (effectiveIsMobileViewport) {
                       setIsSidebarExpanded(false);

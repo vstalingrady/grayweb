@@ -203,12 +203,6 @@ export const EventCard = memo(function EventCard({
         >
           {event.title}
         </strong>
-        <span
-          className={styles.eventCardTime}
-          data-task-completed={taskCompleted ? "true" : undefined}
-        >
-          {timeLabel}
-        </span>
       </div>
       {taskAction ? (
         <button

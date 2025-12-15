@@ -1,6 +1,6 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 import { useState, useEffect, useCallback } from "react";
-import { apiService, type ProactivitySettings } from "@/lib/api";
+import { ApiError, apiService, type ProactivitySettings } from "@/lib/api";
 import { type ProactivityItem } from "@/components/gray/types";
 import { normalizeProactivityTimes, primaryProactivityTime, normalizeProactivityChannels } from "@/app/gray/utils";
 
@@ -127,6 +127,13 @@ export function useProactivity(userId: number | null, resolvedTimezone: string) 
           return normalized;
         });
       } catch (error) {
+        if (cancelled) {
+          return;
+        }
+        if (error instanceof ApiError && error.status === 404) {
+          setProactivity((previous) => previous ?? PROACTIVITY_SEED);
+          return;
+        }
         console.error("Failed to load proactivity settings:", error);
       }
     };

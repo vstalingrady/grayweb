@@ -1,7 +1,16 @@
 import { NextResponse } from 'next/server';
 
-// Use BACKEND_URL env var for Docker (http://backend:8000) or fallback to localhost for local dev
-const PROXY_TARGET = process.env.BACKEND_URL || 'http://localhost:8000';
+const resolveProxyTarget = () => {
+    const envTarget =
+        process.env.BACKEND_URL ||
+        process.env.BACKEND_API_URL ||
+        process.env.NEXT_PUBLIC_API_URL;
+
+    return envTarget || 'http://localhost:8000';
+};
+
+// Use BACKEND_URL (Docker), BACKEND_API_URL (prod), or fallback to localhost (local dev)
+const PROXY_TARGET = resolveProxyTarget();
 
 async function handleProxy(request: Request, { params }: { params: Promise<{ path: string[] }> }) {
     const { path } = await params;
@@ -44,7 +53,7 @@ async function handleProxy(request: Request, { params }: { params: Promise<{ pat
     } catch (error) {
         console.error(`[Proxy] Error forwarding to ${targetUrl}:`, error);
         return NextResponse.json(
-            { error: 'Internal Proxy Error', details: String(error) },
+            { detail: 'Internal Proxy Error', error: String(error) },
             { status: 500 }
         );
     }

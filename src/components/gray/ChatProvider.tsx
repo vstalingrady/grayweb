@@ -2097,6 +2097,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
   useEffect(() => {
     setRemoteConversationsLoaded(false);
     if (!user?.id) {
+      setRemoteConversationsLoaded(true);
       return;
     }
     let cancelled = false;

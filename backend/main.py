@@ -1699,6 +1699,7 @@ class HabitBase(BaseModel):
     streak_label: str
     previous_label: str
     description: Optional[str] = None
+    color: Optional[str] = None
 
 class HabitCreate(HabitBase):
     pass
@@ -1716,6 +1717,7 @@ class HabitUpdate(BaseModel):
     streak_label: Optional[str] = None
     previous_label: Optional[str] = None
     description: Optional[str] = None
+    color: Optional[str] = None
 
 
 class DashboardPulsePlanItem(BaseModel):
@@ -2916,6 +2918,16 @@ async def get_database():
 
 
 def _is_localhost_request(request: Request) -> bool:
+    """
+    Best-effort helper for gating local-only endpoints.
+
+    Security: In production, always return False. Loopback detection is unreliable
+    behind reverse proxies (where the backend may see 127.0.0.1 for all traffic),
+    and forwarded headers / Host are client-controlled unless explicitly validated.
+    """
+    if IS_PRODUCTION:
+        return False
+
     def _parse_ip(value: str) -> Optional[ipaddress.IPv4Address | ipaddress.IPv6Address]:
         try:
             return ipaddress.ip_address(value)
@@ -2927,36 +2939,11 @@ def _is_localhost_request(request: Request) -> bool:
     except Exception:
         client_host = ""
 
-    forwarded_host = (request.headers.get("x-forwarded-host") or "").split(",")[0].strip().lower()
-    host_header = (request.headers.get("host") or "").split(",")[0].strip().lower()
-    host_value = forwarded_host or host_header
-    hostname = host_value.split(":")[0] if host_value else ""
-
-    forwarded_for = (request.headers.get("x-forwarded-for") or "").split(",")[0].strip().lower()
-    real_ip = (request.headers.get("x-real-ip") or "").strip().lower()
-    effective_client_ip = _parse_ip(forwarded_for) or _parse_ip(real_ip) or _parse_ip(client_host)
-
-    if client_host in {"127.0.0.1", "::1", "localhost", "0.0.0.0"}:
+    if client_host in {"127.0.0.1", "::1", "localhost"}:
         return True
 
-    if hostname in {"127.0.0.1", "localhost", "0.0.0.0"}:
-        return True
-
-    if hostname.endswith(".localhost"):
-        return True
-
-    hostname_ip = _parse_ip(hostname) if hostname else None
-    if hostname_ip is not None and (hostname_ip.is_loopback or hostname_ip.is_private or hostname_ip.is_link_local):
-        return True
-
-    if effective_client_ip is not None and (
-        effective_client_ip.is_loopback or effective_client_ip.is_private or effective_client_ip.is_link_local
-    ):
-        # Allow container/service-name hosts like "backend:8000" while rejecting public domains.
-        if not hostname or "." not in hostname:
-            return True
-
-    return False
+    client_ip = _parse_ip(client_host)
+    return bool(client_ip and client_ip.is_loopback)
 
 
 @app.get("/dev/analytics/summary")
@@ -4272,6 +4259,7 @@ async def _create_calendar_event(user_id: int, args: Dict[str, Any], db: databas
     end_str = args.get("end_time")
     description = args.get("description")
     calendar_id = args.get("calendar_id")
+    color = args.get("color")
 
     if not title or not start_str or not end_str:
         return {"error": "Missing required fields: title, start_time, end_time"}
@@ -4289,6 +4277,7 @@ async def _create_calendar_event(user_id: int, args: Dict[str, Any], db: databas
         start_time=start_time,
         end_time=end_time,
         calendar_id=calendar_id,
+        color=color,
         created_at=utcnow()
     )
     event_id = await db.execute(query)
@@ -4315,8 +4304,12 @@ async def _update_calendar_event(user_id: int, args: Dict[str, Any], db: databas
             updates["end_time"] = datetime.fromisoformat(args["end_time"].replace("Z", "+00:00"))
         except ValueError:
             return {"error": "Invalid end_time format."}
+        except ValueError:
+            return {"error": "Invalid end_time format."}
     if "calendar_id" in args:
         updates["calendar_id"] = args["calendar_id"]
+    if "color" in args:
+        updates["color"] = args["color"]
 
     if not updates:
         return {"status": "no_changes", "message": "No updates provided."}
@@ -4384,6 +4377,7 @@ async def _create_habit_tool(user_id: int, args: Dict[str, Any], db: databases.D
         "description": args.get("description"),
         "streak_label": streak_value,
         "previous_label": args.get("previous_label") or "",
+        "color": args.get("color"),
     }
     
     habit_id = await db.execute(
@@ -4412,6 +4406,8 @@ async def _update_habit_tool(user_id: int, args: Dict[str, Any], db: databases.D
             streak_days=args.get("streak_days"),
             streak_label=args.get("streak_label"),
         )
+    if "color" in args:
+        updates["color"] = args["color"]
         
     if not updates:
         return {"status": "no_change", "message": "No updates provided."}
@@ -4725,6 +4721,7 @@ async def _create_plan_tool(user_id: int, args: Dict[str, Any], db: databases.Da
         "deadline": args.get("deadline"),
         "schedule_slot": args.get("schedule_slot"),
         "description": args.get("description"),
+        "color": args.get("color"),
     }
     
     now = utcnow()
@@ -4755,6 +4752,8 @@ async def _update_plan_tool(user_id: int, args: Dict[str, Any], db: databases.Da
         updates["deadline"] = args["deadline"]
     if "schedule_slot" in args:
         updates["schedule_slot"] = args["schedule_slot"]
+    if "color" in args:
+        updates["color"] = args["color"]
         
     if not updates:
         return {"status": "no_changes", "message": "No updates provided."}
@@ -5731,24 +5730,13 @@ async def get_admin_metrics(
     current_user: Optional[Dict[str, Any]] = Depends(get_current_user_optional),
 ):
     """Lightweight metrics for local admin use."""
-    # Allow localhost access without auth for Next.js SSR
-    client_host = request.client.host if request.client else None
-    x_real_ip = request.headers.get("x-real-ip", "")
-    x_forwarded_for = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
-    
-    # Check if request originates from localhost (direct or through nginx)
-    localhost_ips = ("127.0.0.1", "::1", "localhost")
-    is_localhost = (
-        client_host in localhost_ips or 
-        x_real_ip in localhost_ips or 
-        x_forwarded_for in localhost_ips
-    )
-    
-    if not is_localhost:
-        # External requests require admin authentication
-        if not current_user:
-            raise HTTPException(status_code=401, detail="Authentication required")
+    is_localhost = _is_localhost_request(request)
+
+    # In production, localhost bypass is disabled (see _is_localhost_request).
+    if current_user:
         require_admin(current_user)
+    elif not is_localhost:
+        raise HTTPException(status_code=401, detail="Authentication required")
     now = utcnow()
     start_of_today = datetime.combine(now.date(), datetime.min.time())
 
@@ -6330,19 +6318,19 @@ CRITICAL: When the user asks to "set a plan" or create any plan/reminder/habit, 
                 total_accumulated = ""
                 current_message = message
                 
-	                for turn in range(max_tool_turns + 1):
-	                    accumulated = ""
-	                    t0_first_token = time.perf_counter()
-	                    got_first_token = False
-	                    onboarding_completed_this_turn = False
-	                    
-	                    # Buffer for detecting JSON tool calls (legacy text fallback for onboarding)
-	                    tool_buffer = ""
-	                    is_collecting_tool = False
-	                    intercepted_legacy_tool_call = False
-	                    
-	                    # Native tool call accumulator: index -> {name, arguments_parts, id}
-	                    pending_tool_calls = {}
+                for turn in range(max_tool_turns + 1):
+                    accumulated = ""
+                    t0_first_token = time.perf_counter()
+                    got_first_token = False
+                    onboarding_completed_this_turn = False
+                    
+                    # Buffer for detecting JSON tool calls (legacy text fallback for onboarding)
+                    tool_buffer = ""
+                    is_collecting_tool = False
+                    intercepted_legacy_tool_call = False
+                    
+                    # Native tool call accumulator: index -> {name, arguments_parts, id}
+                    pending_tool_calls = {}
                     # Track if we've started streaming reasoning content (to wrap in <thinking> tags once)
                     reasoning_started = False
                     # DEBUG: Log what we're sending to OpenRouter
@@ -6447,28 +6435,29 @@ CRITICAL: When the user asks to "set a plan" or create any plan/reminder/habit, 
                                         
                                         if json_match:
                                             json_str = json_match.group(1)
-	                                            tool_data = json.loads(json_str)
+                                            tool_data = json.loads(json_str)
 
-	                                            if tool_data.get("tool") == "complete_onboarding":
-	                                                api_logger.info(f"Intercepted OpenRouter onboarding tool call (text-based) for user {user_id}")
-	                                                tool_args = tool_data.get("params") or tool_data.get("arguments") or tool_data
-	                                                pending_tool_calls[0] = {
-	                                                    "name": "complete_onboarding",
-	                                                    "arguments": [json.dumps(tool_args)],
-	                                                    "id": f"legacy_complete_onboarding_{turn}",
-	                                                }
-	                                                tool_buffer = ""
-	                                                is_collecting_tool = False
-	                                                intercepted_legacy_tool_call = True
-	                                                break
-	                                    except Exception as e:
-	                                        api_logger.warning(f"Failed to parse intercepted tool JSON: {e}")
-	                                        yield ("delta", tool_buffer)
-	                                        yielded_any_tokens = True
-                                        accumulated += tool_buffer
-                                        tool_buffer = ""
-                                        is_collecting_tool = False
-                                continue
+                                            if tool_data.get("tool") == "complete_onboarding":
+                                                api_logger.info(f"Intercepted OpenRouter onboarding tool call (text-based) for user {user_id}")
+                                                tool_args = tool_data.get("params") or tool_data.get("arguments") or tool_data
+                                                pending_tool_calls[0] = {
+                                                    "name": "complete_onboarding",
+                                                    "arguments_parts": [json.dumps(tool_args)],
+                                                    "id": "legacy_onboarding_call"
+                                                }
+                                                tool_buffer = ""
+                                                is_collecting_tool = False
+                                                intercepted_legacy_tool_call = True
+                                                break
+                                    except Exception as e:
+                                        api_logger.warning(f"Failed to parse intercepted tool JSON: {e}")
+                                        yield ("delta", tool_buffer)
+                                        yielded_any_tokens = True
+
+                                    accumulated += tool_buffer
+                                    tool_buffer = ""
+                                    is_collecting_tool = False
+                                    continue
 
                             if len(tool_buffer) > 20 and not is_collecting_tool:
                                 yield ("delta", tool_buffer)
@@ -6481,19 +6470,20 @@ CRITICAL: When the user asks to "set a plan" or create any plan/reminder/habit, 
                                 yield ("delta", "</thinking>\n")
                                 accumulated += "</thinking>\n"
                                 reasoning_started = False  # Reset for potential future reasoning
-	                            accumulated += chunk
-	                            if chunk:
-	                                yield ("delta", chunk)
-	                                if not got_first_token:
-	                                    got_first_token = True
-	                                    first_token_ms = (time.perf_counter() - t0_first_token) * 1000
-	                                    api_logger.info(f"[Timing] First token: {first_token_ms:.0f}ms")
-	                                yielded_any_tokens = True
-	                    
-	                    if intercepted_legacy_tool_call:
-	                        # Stop streaming the provider response early; we'll execute the tool and
-	                        # then do a follow-up model call (same as native tool_calls flow).
-	                        pass
+                            accumulated += chunk
+                            if chunk:
+                                yield ("delta", chunk)
+                                if not got_first_token:
+                                    got_first_token = True
+                                    first_token_ms = (time.perf_counter() - t0_first_token) * 1000
+                                    api_logger.info(f"[Timing] First token: {first_token_ms:.0f}ms")
+                                yielded_any_tokens = True
+                    
+                    if intercepted_legacy_tool_call:
+                        # Stop streaming the provider response early; we'll execute the tool and
+                        # then do a follow-up model call (same as native tool_calls flow).
+                        api_logger.info(f"Breaking stream loop for legacy tool call on turn {turn}")
+                        pass
                     
                     # Flush remaining buffer
                     if tool_buffer:
@@ -6533,9 +6523,9 @@ CRITICAL: When the user asks to "set a plan" or create any plan/reminder/habit, 
                         }
                         
                         tool_results = []
-	                        for idx, call in pending_tool_calls.items():
-	                            tool_name = call.get("name")
-	                            handler = tool_handlers.get(tool_name)
+                        for idx, call in pending_tool_calls.items():
+                            tool_name = call.get("name")
+                            handler = tool_handlers.get(tool_name)
                             
                             if not handler:
                                 api_logger.warning(f"Unknown tool call from OpenRouter: {tool_name}")
@@ -6544,21 +6534,21 @@ CRITICAL: When the user asks to "set a plan" or create any plan/reminder/habit, 
                             
                             api_logger.info(f"Executing OpenRouter tool call: {tool_name}")
                             try:
-	                                args_str = "".join(call["arguments"])
-	                                args = json.loads(args_str) if args_str.strip() else {}
-	                                tool_result = await handler(user_id, args, db)
-	                                tool_results.append({"tool": tool_name, "result": tool_result, "call_id": call.get("id", "")})
-	                                if tool_name == "complete_onboarding" and isinstance(tool_result, dict):
-	                                    onboarding_completed_this_turn = tool_result.get("status") == "success"
-	                                
-	                                # Yield reminder/plan/habit cards to frontend
-	                                if isinstance(tool_result, dict) and tool_result.get("type") in {"gray.reminder", "gray.plan", "gray.habit"}:
-	                                    yield ("reminders", [tool_result])
-	                                    yielded_any_tokens = True
-	                                    
-	                            except Exception as e:
-	                                api_logger.error(f"Failed to execute OpenRouter tool call {tool_name}: {e}", exc_info=True)
-	                                tool_results.append({"tool": tool_name, "error": str(e), "call_id": call.get("id", "")})
+                                args_str = "".join(call["arguments"])
+                                args = json.loads(args_str) if args_str.strip() else {}
+                                tool_result = await handler(user_id, args, db)
+                                tool_results.append({"tool": tool_name, "result": tool_result, "call_id": call.get("id", "")})
+                                if tool_name == "complete_onboarding" and isinstance(tool_result, dict):
+                                    onboarding_completed_this_turn = tool_result.get("status") == "success"
+                                
+                                # Yield reminder/plan/habit cards to frontend
+                                if isinstance(tool_result, dict) and tool_result.get("type") in {"gray.reminder", "gray.plan", "gray.habit"}:
+                                    yield ("reminders", [tool_result])
+                                    yielded_any_tokens = True
+                                    
+                            except Exception as e:
+                                api_logger.error(f"Failed to execute OpenRouter tool call {tool_name}: {e}", exc_info=True)
+                                tool_results.append({"tool": tool_name, "error": str(e), "call_id": call.get("id", "")})
                         
                         # Skip follow-up call for read-only list tools (optimization)
                         # These just return data - no need for LLM to summarize
@@ -6597,61 +6587,61 @@ CRITICAL: When the user asks to "set a plan" or create any plan/reminder/habit, 
                             ]
                         })
                         
-	                        for tr in tool_results:
-	                            result_content = json.dumps(tr.get("result", tr.get("error", {})))
-	                            current_history.append({
-	                                "role": "tool",
-	                                "name": tr.get("tool"),
-	                                "tool_call_id": tr.get("call_id", ""),
-	                                "content": result_content
-	                            })
+                        for tr in tool_results:
+                            result_content = json.dumps(tr.get("result", tr.get("error", {})))
+                            current_history.append({
+                                "role": "tool",
+                                "name": tr.get("tool"),
+                                "tool_call_id": tr.get("call_id", ""),
+                                "content": result_content
+                            })
 
-	                        if onboarding_completed_this_turn:
-	                            try:
-	                                updated_user = await db.fetch_one(users.select().where(users.c.id == user_id))
-	                            except Exception:
-	                                updated_user = None
+                        if onboarding_completed_this_turn:
+                            try:
+                                updated_user = await db.fetch_one(users.select().where(users.c.id == user_id))
+                            except Exception:
+                                updated_user = None
 
-	                            nickname = _row_get(updated_user, "personalization_nickname") if updated_user else None
-	                            occupation = _row_get(updated_user, "personalization_occupation") if updated_user else None
-	                            about = _row_get(updated_user, "personalization_about") if updated_user else None
+                            nickname = _row_get(updated_user, "personalization_nickname") if updated_user else None
+                            occupation = _row_get(updated_user, "personalization_occupation") if updated_user else None
+                            about = _row_get(updated_user, "personalization_about") if updated_user else None
 
-	                            profile_lines: List[str] = []
-	                            if nickname:
-	                                profile_lines.append(f"Preferred name: {nickname}")
-	                            if occupation:
-	                                profile_lines.append(f"Occupation/focus: {occupation}")
-	                            if about:
-	                                profile_lines.append(f"About: {about}")
+                            profile_lines: List[str] = []
+                            if nickname:
+                                profile_lines.append(f"Preferred name: {nickname}")
+                            if occupation:
+                                profile_lines.append(f"Occupation/focus: {occupation}")
+                            if about:
+                                profile_lines.append(f"About: {about}")
 
-	                            profile_block = ""
-	                            if profile_lines:
-	                                profile_block = "User profile:\n- " + "\n- ".join(profile_lines)
+                            profile_block = ""
+                            if profile_lines:
+                                profile_block = "User profile:\n- " + "\n- ".join(profile_lines)
 
-	                            effective_system_prompt = "\n\n".join(
-	                                p
-	                                for p in [
-	                                    DEFAULT_SYSTEM_PROMPT,
-	                                    profile_block,
-	                                    "Onboarding is complete. Continue naturally and respond to the user's last message.",
-	                                ]
-	                                if p
-	                            )
+                            effective_system_prompt = "\n\n".join(
+                                p
+                                for p in [
+                                    DEFAULT_SYSTEM_PROMPT,
+                                    profile_block,
+                                    "Onboarding is complete. Continue naturally and respond to the user's last message.",
+                                ]
+                                if p
+                            )
 
-	                            # Prevent re-triggering onboarding inside the same request.
-	                            is_onboarding_tool = False
-	                            tool_list = [
-	                                t
-	                                for t in tool_list
-	                                if not (
-	                                    getattr(t, "function_declarations", None)
-	                                    and any(fd.name == "complete_onboarding" for fd in t.function_declarations)
-	                                )
-	                            ]
-	                        
-	                        total_accumulated += accumulated
-	                        current_message = ""  # Empty message, rely on history
-	                        continue  # Loop back for model's response after tool execution
+                            # Prevent re-triggering onboarding inside the same request.
+                            is_onboarding_tool = False
+                            tool_list = [
+                                t
+                                for t in tool_list
+                                if not (
+                                    getattr(t, "function_declarations", None)
+                                    and any(fd.name == "complete_onboarding" for fd in t.function_declarations)
+                                )
+                            ]
+                        
+                        total_accumulated += accumulated
+                        current_message = ""  # Empty message, rely on history
+                        continue  # Loop back for model's response after tool execution
                     
                     # No tool calls - we're done with this turn
                     total_accumulated += accumulated
@@ -9518,6 +9508,7 @@ async def create_plan(
         "deadline": plan.deadline,
         "schedule_slot": plan.schedule_slot,
         "description": plan.description,
+        "color": plan.color,
     }
 
     now = utcnow()
@@ -9613,6 +9604,7 @@ async def create_habit(
         "streak_label": habit.streak_label,
         "previous_label": habit.previous_label,
         "description": habit.description,
+        "color": habit.color,
     }
 
     now = utcnow()
@@ -10353,10 +10345,12 @@ async def create_payment_charge(
     # 1. Determine Amount & Item Details based on plan tier and billing cycle
     is_annual = request.billing_cycle == "annual"
     if request.plan_tier == "voyager":
-        amount = 1777000 if is_annual else 177000
+        # TESTING: Using Rp 1,000 for test transactions
+        amount = 1000  # Original: 1777000 if is_annual else 177000
         item_name = f"Gray Voyager Plan ({'Annual' if is_annual else 'Monthly'})"
     elif request.plan_tier == "pioneer":
-        amount = 3777000 if is_annual else 377000
+        # TESTING: Using Rp 1,000 for test transactions
+        amount = 1000  # Original: 3777000 if is_annual else 377000
         item_name = f"Gray Pioneer Plan ({'Annual' if is_annual else 'Monthly'})"
     else:
         raise HTTPException(status_code=400, detail="Invalid plan tier")

@@ -8,25 +8,6 @@ Run these verification steps in order before deploying:
 
 We use GitHub Actions for CI/CD. To check the status of builds directly from your terminal:
 
-1. **Install GitHub CLI** (if not already installed)
-
-   ```bash
-   # Ubuntu/Debian/PopOS
-   (type -p curl >/dev/null || (sudo apt update && sudo apt install curl -y)) && \
-   curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg && \
-   sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg && \
-   echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null && \
-   sudo apt update && \
-   sudo apt install gh -y
-   ```
-
-2. **Authenticate**
-
-   ```bash
-   gh auth login
-   # Select GitHub.com -> SSH -> Upload key -> Title: [MachineName]
-   ```
-
 3. **Check Workflow Status**
 
    ```bash
@@ -80,7 +61,7 @@ npm run lint && npm run build && python -m pytest backend/tests -v
 | ESLint error | Fix code or add eslint-disable with justification |
 | TypeScript error | Check types match between frontend and backend |
 
-## After Making Changes
+## After Making Changes (BUT DO THIS ONLY WHEN I TELL YOU TO)
 
 1. Run full verification script
 2. Commit with descriptive message

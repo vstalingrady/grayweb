@@ -9,7 +9,10 @@ import {
   normalizeWorkspaceRedirect,
   resolveDefaultWorkspacePath,
   resolveWorkspaceHost,
+  resolveWorkspaceOrigin,
 } from "@/lib/grayRouting";
+
+const isAuthDebugEnabled = process.env.NODE_ENV !== "production";
 
 const sanitizeRedirect = (value: string | null): string | null => {
   if (!value) {
@@ -33,13 +36,47 @@ const sanitizeRedirect = (value: string | null): string | null => {
   }
 };
 
+const sanitizeAbsoluteRedirect = (
+  value: string | null,
+  allowedOrigins: string[]
+): string | null => {
+  if (!value) {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return null;
+    }
+
+    const allowed = new Set(allowedOrigins.filter(Boolean));
+    if (!allowed.has(parsed.origin)) {
+      return null;
+    }
+
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+};
+
 const resolveDestination = (
   rawRedirect: string | null,
   workspaceHost: string | null,
   origin: string
 ): string => {
-  if (rawRedirect && (rawRedirect.startsWith("http://") || rawRedirect.startsWith("https://"))) {
-    return rawRedirect;
+  const allowedAbsolute = sanitizeAbsoluteRedirect(rawRedirect, [
+    origin,
+    resolveWorkspaceOrigin(workspaceHost),
+  ]);
+  if (allowedAbsolute) {
+    return allowedAbsolute;
   }
 
   const redirectTarget =
@@ -55,7 +92,6 @@ const resolveDestination = (
 
 const findCodeVerifier = (): { verifier: string; storageKey: string } | null => {
   if (typeof window === "undefined") {
-    console.log("[VERIFIER DEBUG] Window is undefined");
     return null;
   }
 
@@ -63,7 +99,9 @@ const findCodeVerifier = (): { verifier: string; storageKey: string } | null => 
   const storageKeys = getSupabaseAuthStorageKeys().filter((key) =>
     key.endsWith("code-verifier")
   );
-  console.log("[VERIFIER DEBUG] Storage keys from getSupabaseAuthStorageKeys:", storageKeys);
+  if (isAuthDebugEnabled) {
+    console.log("[VERIFIER DEBUG] Storage keys from getSupabaseAuthStorageKeys:", storageKeys);
+  }
   storageKeys.forEach((key) => candidateKeys.add(key));
 
   try {
@@ -83,14 +121,14 @@ const findCodeVerifier = (): { verifier: string; storageKey: string } | null => 
     // Ignore storage access errors
   }
 
-  console.log("[VERIFIER DEBUG] All candidate keys:", Array.from(candidateKeys));
+  if (isAuthDebugEnabled) {
+    console.log("[VERIFIER DEBUG] All candidate keys:", Array.from(candidateKeys));
+  }
 
   for (const key of candidateKeys) {
     try {
       const raw = window.localStorage.getItem(key);
-      console.log(`[VERIFIER DEBUG] Key: ${key}, raw value:`, raw);
       if (!raw) {
-        console.log(`[VERIFIER DEBUG] Key ${key} has no value, skipping`);
         continue;
       }
 
@@ -98,24 +136,22 @@ const findCodeVerifier = (): { verifier: string; storageKey: string } | null => 
       let parsed = raw;
       try {
         parsed = JSON.parse(raw);
-        console.log(`[VERIFIER DEBUG] Successfully parsed JSON, parsed value:`, parsed);
       } catch {
-        console.log(`[VERIFIER DEBUG] Not JSON-encoded, using raw value`);
+        // Not JSON-encoded; use raw string
       }
 
       const [verifier] = parsed.split("/");
-      console.log(`[VERIFIER DEBUG] Key: ${key}, extracted verifier: "${verifier}", length: ${verifier?.length}`);
       if (verifier && verifier.trim().length > 0) {
-        console.log(`[VERIFIER DEBUG] Found valid verifier for key ${key}`);
         return { verifier: verifier.trim(), storageKey: key };
       }
     } catch (err) {
-      console.log(`[VERIFIER DEBUG] Error processing key ${key}:`, err);
+      if (isAuthDebugEnabled) {
+        console.log(`[VERIFIER DEBUG] Error processing key ${key}:`, err);
+      }
       // Skip malformed entries
     }
   }
 
-  console.log("[VERIFIER DEBUG] No valid verifier found, returning null");
   return null;
 };
 
@@ -164,24 +200,25 @@ export default function CallbackPage() {
         const perfStart = performance.now();
 
         // Debug logging for troubleshooting auth issues
-        console.log("[AUTH DEBUG] Callback processing started");
-        console.log("[AUTH DEBUG] Origin:", currentOrigin);
-        console.log("[AUTH DEBUG] Code:", code ? "Present" : "Missing");
+        if (isAuthDebugEnabled) {
+          console.log("[AUTH DEBUG] Callback processing started");
+          console.log("[AUTH DEBUG] Origin:", currentOrigin);
+          console.log("[AUTH DEBUG] Code:", code ? "Present" : "Missing");
+        }
 
         if (typeof window !== "undefined") {
-          const sbKeys = Object.keys(window.localStorage).filter(k => k.startsWith("sb-"));
-          console.log("[AUTH DEBUG] Supabase keys in localStorage:", sbKeys);
-          sbKeys.forEach(k => {
-            if (k.endsWith("code-verifier")) {
-              console.log(`[AUTH DEBUG] Found verifier key: ${k}, value length: ${window.localStorage.getItem(k)?.length}`);
-            }
-          });
+          if (isAuthDebugEnabled) {
+            const sbKeys = Object.keys(window.localStorage).filter((key) => key.startsWith("sb-"));
+            console.log("[AUTH DEBUG] Supabase keys in localStorage:", sbKeys);
+          }
         }
 
         // CRITICAL: Extract the code verifier BEFORE calling exchangeCodeForSession
         // because Supabase's SDK will delete it from storage even if the exchange fails
         const codeVerifier = findCodeVerifier();
-        console.log("[AUTH DEBUG] Pre-extracted code verifier:", codeVerifier ? "Found" : "Not found");
+        if (isAuthDebugEnabled) {
+          console.log("[AUTH DEBUG] Pre-extracted code verifier:", codeVerifier ? "Found" : "Not found");
+        }
 
         let data: { session?: Session | null; user?: User | null } | null = null;
 
@@ -202,10 +239,12 @@ export default function CallbackPage() {
             supabaseAnonKey &&
             typeof fetch !== "undefined"
           ) {
-            console.log(`[AUTH DEBUG] Found PKCE verifier in storage key ${codeVerifier.storageKey}`);
-            console.warn("[AUTH DEBUG] Primary exchange failed; attempting manual PKCE exchange");
-            console.log(`[AUTH DEBUG] Sending verifier (length ${codeVerifier.verifier.length}):`, codeVerifier.verifier);
-            console.log(`[AUTH DEBUG] Sending auth_code (length ${code.length}):`, code.substring(0, 10) + "...");
+            if (isAuthDebugEnabled) {
+              console.log(`[AUTH DEBUG] Found PKCE verifier in storage key ${codeVerifier.storageKey}`);
+              console.warn("[AUTH DEBUG] Primary exchange failed; attempting manual PKCE exchange");
+              console.log(`[AUTH DEBUG] Sending verifier (length ${codeVerifier.verifier.length})`);
+              console.log(`[AUTH DEBUG] Sending auth_code (length ${code.length})`);
+            }
             const manualStart = performance.now();
             const response = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=pkce`, {
               method: "POST",
@@ -283,7 +322,9 @@ export default function CallbackPage() {
         }
 
         const destination = resolveDestination(redirectParam, workspaceHost, currentOrigin);
-        console.log(`[AUTH DEBUG] Redirecting to: ${destination}`);
+        if (isAuthDebugEnabled) {
+          console.log(`[AUTH DEBUG] Redirecting to: ${destination}`);
+        }
         window.location.replace(destination);
       } catch (err) {
         const message =

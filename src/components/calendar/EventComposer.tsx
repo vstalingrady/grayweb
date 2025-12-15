@@ -19,8 +19,9 @@ import {
   CalendarInfo,
   CalendarEventDisplayHint,
 } from "./types";
-import { Plus, X } from "lucide-react";
+import { Plus, X, ChevronDown, ArrowRight, ChevronLeft, ChevronRight } from "lucide-react";
 import { useI18n } from "@/contexts/I18nContext";
+import { MiniMonth } from "./MiniMonth";
 
 export type EventComposerPayload = {
   id?: string;
@@ -51,9 +52,10 @@ type EventComposerProps = {
   onSubmit: (payload: EventComposerPayload) => void;
   onDelete?: (eventId: string) => void;
   anchorRect?: AnchorRect | null;
+  onStateChange?: (state: ComposerState) => void;
 };
 
-type ComposerState = {
+export type ComposerState = {
   title: string;
   startTime: string;
   endTime: string;
@@ -175,14 +177,17 @@ const NEUTRAL_PALETTE = [
 ] as const;
 
 // Default colors  by entry type
+// Default colors  by entry type
 const DEFAULT_COLORS: Record<CalendarEntryType, string> = {
   event: "#3D6F73",
   task: "#B77A2B",
   reminder: "#2F6B4F",
+  plan: "#5E7E91",
+  habit: "#5E9182",
 };
 
 const DEFAULT_STATE: ComposerState = {
-  title: "New event",
+  title: "",
   startTime: "09:00",
   endTime: "10:00",
   color: DEFAULT_COLORS.event,
@@ -193,11 +198,13 @@ const DEFAULT_STATE: ComposerState = {
 
 export const DEFAULT_EVENT_DURATION_MINUTES = 60;
 
-const ENTRY_TYPES: CalendarEntryType[] = ["event", "task", "reminder"];
+const ENTRY_TYPES: CalendarEntryType[] = ["event", "task", "reminder", "plan", "habit"];
 const ENTRY_TYPE_LABELS: Record<CalendarEntryType, string> = {
   event: "Event",
   task: "Task",
   reminder: "Reminder",
+  plan: "Plan",
+  habit: "Habit",
 };
 
 const composerReducer = (state: ComposerState, action: ComposerAction): ComposerState => {
@@ -240,6 +247,18 @@ const combineDateWithTime = (date: Date, timeValue: string) => {
   return result;
 };
 
+const startOfDay = (value: Date) => {
+  const result = new Date(value);
+  result.setHours(0, 0, 0, 0);
+  return result;
+};
+
+const startOfMonth = (value: Date) => {
+  const result = startOfDay(value);
+  result.setDate(1);
+  return result;
+};
+
 export function EventComposer({
   isOpen,
   referenceDate,
@@ -248,6 +267,7 @@ export function EventComposer({
   calendars,
   onRequestClose,
   onSubmit,
+  onStateChange,
   onDelete,
   anchorRect = null,
 }: EventComposerProps) {
@@ -259,7 +279,7 @@ export function EventComposer({
 
   const [state, dispatch] = useReducer(composerReducer, {
     ...DEFAULT_STATE,
-    title: t("New event"),
+    title: "",
     calendarId: calendarFallbackId,
   });
   const cardRef = useRef<HTMLDivElement | null>(null);
@@ -267,6 +287,8 @@ export function EventComposer({
   const colorPickerRef = useRef<HTMLDivElement | null>(null);
   const colorPickerTriggerRef = useRef<HTMLButtonElement | null>(null);
   const colorPickerPopoverRef = useRef<HTMLDivElement | null>(null);
+  const datePickerTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const datePickerPopoverRef = useRef<HTMLDivElement | null>(null);
   const [anchoredPosition, setAnchoredPosition] = useState<{ top: number; left: number } | null>(null);
   const [anchorSide, setAnchorSide] = useState<"left" | "right" | null>(null);
   const [isColorPickerOpen, setIsColorPickerOpen] = useState(false);
@@ -274,6 +296,10 @@ export function EventComposer({
   const [colorPickerPosition, setColorPickerPosition] = useState<{ top: number; left: number } | null>(
     null
   );
+  const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
+  const [datePickerPosition, setDatePickerPosition] = useState<{ top: number; left: number } | null>(null);
+  const [selectedDate, setSelectedDate] = useState(() => startOfDay(referenceDate));
+  const [monthDate, setMonthDate] = useState(() => startOfMonth(referenceDate));
   const activeEventId = activeEvent?.id;
 
   useEffect(() => {
@@ -291,7 +317,7 @@ export function EventComposer({
         type: "reset",
         payload: {
           ...DEFAULT_STATE,
-          title: t("New event"),
+          title: "",
           calendarId: calendarFallbackId,
           startTime: formatTimeInput(initialRange.start),
           endTime: formatTimeInput(initialRange.end),
@@ -305,12 +331,12 @@ export function EventComposer({
       type: "reset",
       payload: {
         ...DEFAULT_STATE,
-        title: t("New event"),
+        title: "",
         calendarId: calendarFallbackId,
         details: "",
       },
     });
-  }, [activeEvent, calendarFallbackId, initialRange, isOpen, t]);
+  }, [activeEvent, calendarFallbackId, initialRange, isOpen, referenceDate]);
 
   useLayoutEffect(() => {
     if (typeof window === "undefined") {
@@ -361,6 +387,13 @@ export function EventComposer({
   }, [anchorRect, isOpen, state.entryType, state.startTime, state.endTime, state.details, state.title]);
 
   const isReminder = state.entryType === "reminder";
+  const isHabit = state.entryType === "habit";
+
+  useEffect(() => {
+    if (isHabit) {
+      setIsDatePickerOpen(false);
+    }
+  }, [isHabit]);
 
   const handleSelectEntryType = (nextType: CalendarEntryType) => {
     if (state.entryType === nextType) {
@@ -377,15 +410,75 @@ export function EventComposer({
   };
 
   const currentStart = useMemo(
-    () => combineDateWithTime(referenceDate, state.startTime),
-    [referenceDate, state.startTime]
+    () => combineDateWithTime(selectedDate, state.startTime),
+    [selectedDate, state.startTime]
   );
   const currentEnd = useMemo(() => {
     if (isReminder) {
       return currentStart;
     }
-    return combineDateWithTime(referenceDate, state.endTime);
-  }, [currentStart, referenceDate, state.endTime, isReminder]);
+    return combineDateWithTime(selectedDate, state.endTime);
+  }, [currentStart, selectedDate, state.endTime, isReminder]);
+
+  const closeWithOptionalAutoCreate = useCallback(
+    (options?: { allowAutoCreate?: boolean }) => {
+      const allowAutoCreate = options?.allowAutoCreate ?? true;
+
+      if (!allowAutoCreate) {
+        onRequestClose();
+        return;
+      }
+
+      const trimmedTitle = state.title.trim();
+
+      if (activeEventId || trimmedTitle.length === 0) {
+        onRequestClose();
+        return;
+      }
+
+      const start = currentStart;
+      const rawEnd = isReminder ? new Date(start) : currentEnd;
+      const normalizedEnd = isReminder
+        ? new Date(start)
+        : rawEnd <= start
+          ? new Date(start.getTime() + DEFAULT_EVENT_DURATION_MINUTES * 60000)
+          : rawEnd;
+
+      onSubmit({
+        id: activeEvent?.id,
+        title: trimmedTitle || t("Untitled"),
+        start,
+        end: normalizedEnd,
+        color: state.color,
+        entryType: state.entryType,
+        calendarId: state.calendarId,
+        description: state.details.trim() ? state.details.trim() : undefined,
+        displayHint: isReminder ? "line" : undefined,
+      });
+
+      onRequestClose();
+    },
+    [
+      activeEvent,
+      activeEventId,
+      currentEnd,
+      currentStart,
+      isReminder,
+      onRequestClose,
+      onSubmit,
+      state.calendarId,
+      state.color,
+      state.details,
+      state.entryType,
+      state.title,
+      t,
+    ]
+  );
+
+  useEffect(() => {
+    onStateChange?.(state);
+  }, [state, onStateChange]);
+
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
@@ -424,6 +517,11 @@ export function EventComposer({
     }
 
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeWithOptionalAutoCreate();
+        return;
+      }
       if (event.key === "Delete" && activeEventId) {
         event.preventDefault();
         handleDelete();
@@ -440,17 +538,42 @@ export function EventComposer({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [activeEventId, handleDelete, isOpen]);
+  }, [activeEventId, closeWithOptionalAutoCreate, handleDelete, isOpen]);
 
   useEffect(() => {
     if (!isOpen) {
       setIsColorPickerOpen(false);
+      setIsDatePickerOpen(false);
     }
   }, [isOpen]);
 
   useEffect(() => {
     setHexDraft(state.color);
   }, [state.color]);
+
+  useEffect(() => {
+    if (!isDatePickerOpen) return;
+
+    const handlePointerDown = (event: globalThis.MouseEvent) => {
+      const target = event.target as Node | null;
+      if (!target) return;
+      if (datePickerTriggerRef.current?.contains(target)) return;
+      if (datePickerPopoverRef.current?.contains(target)) return;
+      setIsDatePickerOpen(false);
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIsDatePickerOpen(false);
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isDatePickerOpen]);
 
   useEffect(() => {
     if (!isColorPickerOpen) return;
@@ -514,11 +637,57 @@ export function EventComposer({
     setColorPickerPosition({ top, left });
   }, [isColorPickerOpen]);
 
+  useLayoutEffect(() => {
+    if (!isDatePickerOpen) {
+      setDatePickerPosition(null);
+      return;
+    }
+
+    const viewportPadding = 12;
+    const gap = 10;
+
+    const updatePosition = () => {
+      const triggerRect = datePickerTriggerRef.current?.getBoundingClientRect();
+      if (!triggerRect) return;
+
+      const popoverRect = datePickerPopoverRef.current?.getBoundingClientRect();
+      const popoverWidth = popoverRect?.width ?? 320;
+      const popoverHeight = popoverRect?.height ?? 340;
+
+      const left = clamp(
+        triggerRect.right - popoverWidth,
+        viewportPadding,
+        window.innerWidth - viewportPadding - popoverWidth
+      );
+
+      const preferredTop = triggerRect.bottom + gap;
+      const canPlaceBelow = preferredTop + popoverHeight <= window.innerHeight - viewportPadding;
+      const top = canPlaceBelow
+        ? preferredTop
+        : clamp(
+          triggerRect.top - gap - popoverHeight,
+          viewportPadding,
+          window.innerHeight - viewportPadding - popoverHeight
+        );
+
+      setDatePickerPosition({ top, left });
+    };
+
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    return () => window.removeEventListener("resize", updatePosition);
+  }, [isDatePickerOpen, monthDate]);
+
   const rgb = hexToRgb(state.color) ?? { red: 0, green: 0, blue: 0 };
   const colorPopoverStyle = useMemo<CSSProperties | undefined>(() => {
     if (!colorPickerPosition) return undefined;
     return { top: `${colorPickerPosition.top}px`, left: `${colorPickerPosition.left}px` };
   }, [colorPickerPosition]);
+
+  const datePopoverStyle = useMemo<CSSProperties | undefined>(() => {
+    if (!datePickerPosition) return undefined;
+    return { top: `${datePickerPosition.top}px`, left: `${datePickerPosition.left}px` };
+  }, [datePickerPosition]);
 
   if (!isOpen) {
     return null;
@@ -555,7 +724,7 @@ export function EventComposer({
 
   const handleOverlayClick = (event: MouseEvent<HTMLDivElement>) => {
     if (event.target === event.currentTarget) {
-      onRequestClose();
+      closeWithOptionalAutoCreate();
     }
   };
 
@@ -582,16 +751,25 @@ export function EventComposer({
         }
       >
         <div className={styles.composerHeader}>
-          <div>
-            <h2 className={styles.composerHeaderTitle}>
-              {activeEvent
-                ? t("Edit {type}", { type: t(ENTRY_TYPE_LABELS[state.entryType]).toLowerCase() })
-                : t("Create {type}", { type: t(ENTRY_TYPE_LABELS[state.entryType]).toLowerCase() })}
-            </h2>
+          <div className={styles.composerHeaderTypeSelect}>
+            <select
+              value={state.entryType}
+              onChange={(event) =>
+                handleSelectEntryType(event.target.value as CalendarEntryType)
+              }
+              className={styles.composerHeaderSelect}
+            >
+              {ENTRY_TYPES.map((type) => (
+                <option key={type} value={type}>
+                  {t(ENTRY_TYPE_LABELS[type])}
+                </option>
+              ))}
+            </select>
+            <ChevronDown size={16} className={styles.composerHeaderSelectArrow} />
           </div>
           <button
             type="button"
-            onClick={onRequestClose}
+            onClick={() => closeWithOptionalAutoCreate()}
             aria-label={t("Close dialog")}
             className={styles.composerCloseButton}
           >
@@ -600,43 +778,86 @@ export function EventComposer({
         </div>
 
         <form ref={formRef} onSubmit={handleSubmit} className={styles.composerForm}>
-
-          <label className={styles.composerTitleRow}>
-            <span className={styles.composerTitleLabel}>{t("Title")}</span>
+          <button type="submit" style={{ display: "none" }} aria-hidden="true" tabIndex={-1} />
+          <div className={styles.composerTitleRow}>
             <input
               type="text"
               value={state.title}
               onChange={(event) =>
                 dispatch({ type: "update", payload: { title: event.target.value } })
               }
-              placeholder={t("Add title")}
+              placeholder={t("Title")}
               className={styles.composerTitleInput}
             />
-          </label>
+          </div>
 
-          <label className={styles.composerField}>
-            <span>{t("Type")}</span>
-            <div className={styles.composerTypeSelectShell}>
-              <select
-                className={styles.composerTypeSelect}
-                value={state.entryType}
-                onChange={(event) =>
-                  handleSelectEntryType(event.target.value as CalendarEntryType)
-                }
-              >
-                {ENTRY_TYPES.map((type) => (
-                  <option key={type} value={type}>
-                    {t(ENTRY_TYPE_LABELS[type])}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </label>
 
-          {!isReminder ? (
-            <div className={styles.composerDualField}>
+
+          {!isReminder && !isHabit ? (
+            <>
+              <div className={styles.composerTimeSection}>
+                <div className={styles.composerTimeRow}>
+                  <div className={styles.composerTimeInputGroup}>
+                    <input
+                      type="time"
+                      value={state.startTime}
+                      onChange={(event) =>
+                        dispatch({ type: "update", payload: { startTime: event.target.value } })
+                      }
+                      className={styles.composerTimeInput}
+                      required
+                    />
+                    <ArrowRight size={14} className={styles.composerTimeArrow} />
+                    <input
+                      type="time"
+                      value={state.endTime}
+                      onChange={(event) =>
+                        dispatch({ type: "update", payload: { endTime: event.target.value } })
+                      }
+                      className={styles.composerTimeInput}
+                      required
+                    />
+                  </div>
+                  <span className={styles.composerDuration}>
+                    {(() => {
+                      const start = new Date(`2000-01-01T${state.startTime}`);
+                      const end = new Date(`2000-01-01T${state.endTime}`);
+                      let diff = end.getTime() - start.getTime();
+                      if (diff < 0) diff += 24 * 60 * 60 * 1000;
+                      const mins = Math.floor(diff / 60000);
+                      const h = Math.floor(mins / 60);
+                      const m = mins % 60;
+                      return `${h > 0 ? `${h}h ` : ""}${m}min`;
+                    })()}
+                  </span>
+                </div>
+                <div className={styles.composerDateRow}>
+                  <button
+                    type="button"
+                    className={styles.composerDateTrigger}
+                    onClick={() => {
+                      setMonthDate(startOfMonth(selectedDate));
+                      setIsDatePickerOpen((previous) => !previous);
+                    }}
+                    aria-expanded={isDatePickerOpen ? "true" : "false"}
+                    aria-label={t("Choose date")}
+                    ref={datePickerTriggerRef}
+                  >
+                    {selectedDate.toLocaleDateString(undefined, {
+                      weekday: "short",
+                      month: "short",
+                      day: "numeric",
+                    })}
+                    <ChevronDown size={14} aria-hidden="true" />
+                  </button>
+                </div>
+              </div>
+              <hr className={styles.composerSectionDivider} />
+            </>
+          ) : isReminder ? (
+            <>
               <label className={styles.composerField}>
-                <span>{t("Start")}</span>
+                <span>{t("Reminder time")}</span>
                 <div className={styles.composerInputShell}>
                   <input
                     type="time"
@@ -648,53 +869,109 @@ export function EventComposer({
                     required
                   />
                 </div>
-              </label>
-              <label className={styles.composerField}>
-                <span>{t("End")}</span>
-                <div className={styles.composerInputShell}>
-                  <input
-                    type="time"
-                    value={state.endTime}
-                    onChange={(event) =>
-                      dispatch({ type: "update", payload: { endTime: event.target.value } })
-                    }
-                    step={300}
-                    required
-                  />
+                <div className={styles.composerDateRow}>
+                  <button
+                    type="button"
+                    className={styles.composerDateTrigger}
+                    onClick={() => {
+                      setMonthDate(startOfMonth(selectedDate));
+                      setIsDatePickerOpen((previous) => !previous);
+                    }}
+                    aria-expanded={isDatePickerOpen ? "true" : "false"}
+                    aria-label={t("Choose date")}
+                    ref={datePickerTriggerRef}
+                  >
+                    {selectedDate.toLocaleDateString(undefined, {
+                      weekday: "short",
+                      month: "short",
+                      day: "numeric",
+                    })}
+                  </button>
                 </div>
               </label>
-            </div>
-          ) : (
-            <label className={styles.composerField}>
-              <span>{t("Reminder time")}</span>
-              <div className={styles.composerInputShell}>
-                <input
-                  type="time"
-                  value={state.startTime}
-                  onChange={(event) =>
-                    dispatch({ type: "update", payload: { startTime: event.target.value } })
-                  }
-                  step={300}
-                  required
+              <hr className={styles.composerSectionDivider} />
+            </>
+          ) : null}
+
+          {isDatePickerOpen ? (
+            <div
+              ref={datePickerPopoverRef}
+              className={styles.composerDatePopover}
+              style={datePopoverStyle}
+              role="dialog"
+              aria-label={t("Date picker")}
+            >
+              <div className={styles.composerDatePopoverHeader}>
+                <span className={styles.composerDatePopoverMonthLabel}>
+                  {monthDate.toLocaleDateString(undefined, { month: "long", year: "numeric" })}
+                </span>
+                <span className={styles.composerDatePopoverControls}>
+                  <button
+                    type="button"
+                    className={styles.composerDatePopoverNavButton}
+                    aria-label={t("Previous")}
+                    title={t("Go to previous month")}
+                    onClick={() =>
+                      setMonthDate((previous) => {
+                        const next = startOfMonth(previous);
+                        next.setMonth(previous.getMonth() - 1);
+                        return next;
+                      })
+                    }
+                  >
+                    <ChevronLeft size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.composerDatePopoverNavButton}
+                    aria-label={t("Next")}
+                    title={t("Go to next month")}
+                    onClick={() =>
+                      setMonthDate((previous) => {
+                        const next = startOfMonth(previous);
+                        next.setMonth(previous.getMonth() + 1);
+                        return next;
+                      })
+                    }
+                  >
+                    <ChevronRight size={14} />
+                  </button>
+                </span>
+              </div>
+
+              <div className={styles.composerMiniCalendarCompact}>
+                <MiniMonth
+                  referenceDate={monthDate}
+                  selectedDate={selectedDate}
+                  onSelectDate={(nextDate) => {
+                    const normalized = startOfDay(nextDate);
+                    setSelectedDate(normalized);
+                    if (
+                      normalized.getMonth() !== monthDate.getMonth() ||
+                      normalized.getFullYear() !== monthDate.getFullYear()
+                    ) {
+                      setMonthDate(startOfMonth(normalized));
+                    }
+                    setIsDatePickerOpen(false);
+                  }}
                 />
               </div>
-            </label>
-          )}
+            </div>
+          ) : null}
 
           <label className={styles.composerField}>
-            <span>{t("Details")}</span>
             <textarea
               value={state.details}
               onChange={(event) =>
                 dispatch({ type: "update", payload: { details: event.target.value } })
               }
-              placeholder={t("Add context, agenda, or notes")}
+              placeholder={t("Description")}
               rows={3}
+              aria-label={t("Description")}
             />
           </label>
 
           <div className={styles.composerField}>
-            <span>{t("Color")}</span>
             <div className={styles.composerColors} ref={colorPickerRef}>
               {QUICK_COLOR_SWATCHES.map((swatch) => (
                 <button
@@ -854,7 +1131,6 @@ export function EventComposer({
                 {t("Delete")}
               </button>
             ) : null}
-            <button type="submit">{activeEvent ? t("Save changes") : t("Add event")}</button>
           </footer>
         </form>
       </div>

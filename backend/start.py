@@ -131,6 +131,7 @@ if __name__ == "__main__":
         sqlalchemy.Column("personalization_occupation", sqlalchemy.String, nullable=True),
         sqlalchemy.Column("personalization_about", sqlalchemy.String, nullable=True),
         sqlalchemy.Column("personalization_custom_instructions", sqlalchemy.String, nullable=True),
+        sqlalchemy.Column("subscription_expires_at", sqlalchemy.DateTime, nullable=True),
         sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=sqlalchemy.func.now()),
         sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=sqlalchemy.func.now(), onupdate=sqlalchemy.func.now()),
     )
@@ -181,6 +182,7 @@ if __name__ == "__main__":
         sqlalchemy.Column("description", sqlalchemy.String, nullable=True),
         sqlalchemy.Column("start_time", sqlalchemy.DateTime),
         sqlalchemy.Column("end_time", sqlalchemy.DateTime),
+        sqlalchemy.Column("color", sqlalchemy.String, nullable=True),
         sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=sqlalchemy.func.now()),
     )
     plans = sqlalchemy.Table(
@@ -193,6 +195,7 @@ if __name__ == "__main__":
         sqlalchemy.Column("deadline", sqlalchemy.String, nullable=True),
         sqlalchemy.Column("schedule_slot", sqlalchemy.String, nullable=True),
         sqlalchemy.Column("description", sqlalchemy.String, nullable=True),
+        sqlalchemy.Column("color", sqlalchemy.String, nullable=True),
         sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=sqlalchemy.func.now()),
         sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=sqlalchemy.func.now(), onupdate=sqlalchemy.func.now()),
     )
@@ -222,6 +225,7 @@ if __name__ == "__main__":
         sqlalchemy.Column("streak_label", sqlalchemy.String),
         sqlalchemy.Column("previous_label", sqlalchemy.String),
         sqlalchemy.Column("description", sqlalchemy.String, nullable=True),
+        sqlalchemy.Column("color", sqlalchemy.String, nullable=True),
         sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=sqlalchemy.func.now()),
         sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=sqlalchemy.func.now(), onupdate=sqlalchemy.func.now()),
     )
@@ -514,6 +518,9 @@ if __name__ == "__main__":
     ensure_column("chat_sessions", "scope", "VARCHAR DEFAULT 'thread'")
     ensure_column("users", "subscription_expires_at", "DATETIME")
     ensure_column("users", "improve_model_for_everyone", "BOOLEAN DEFAULT 0")
+    ensure_column("plans", "color", "VARCHAR")
+    ensure_column("habits", "color", "VARCHAR")
+    ensure_column("calendar_events", "color", "VARCHAR")
 
     migration_time = (time.time() - migration_start) * 1000
     if migrations_performed:

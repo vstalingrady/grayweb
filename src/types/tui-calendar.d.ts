@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 declare module '@toast-ui/react-calendar' {
     import { Component } from 'react';
     import type { Options, EventObject } from '@toast-ui/calendar';

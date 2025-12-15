@@ -61,8 +61,7 @@ export function CalendarSidebar({
   const shouldShowMonthNav = Boolean(showMonthNavigation && onNavigate);
   const shouldShowToday = Boolean(showTodayButton && onGoToday);
   const shouldShowCreate = Boolean(showCreateAction);
-  const shouldRenderHeaderActions =
-    shouldShowMonthNav || shouldShowToday || shouldShowCreate;
+  const shouldRenderHeaderActions = shouldShowToday || shouldShowCreate;
 
   return (
     <aside className={sidebarClassName}>
@@ -70,24 +69,6 @@ export function CalendarSidebar({
         <header className={styles.calendarSidebarHeader}>
           {shouldRenderHeaderActions ? (
             <div className={styles.calendarSidebarHeaderActions} style={{ marginLeft: "auto" }}>
-              {shouldShowMonthNav ? (
-                <div className={styles.calendarSurfaceNavArrows}>
-                  <button
-                    type="button"
-                    aria-label={t("Previous month")}
-                    onClick={() => onNavigate?.(-1)}
-                  >
-                    <ChevronUp size={16} />
-                  </button>
-                  <button
-                    type="button"
-                    aria-label={t("Next month")}
-                    onClick={() => onNavigate?.(1)}
-                  >
-                    <ChevronDown size={16} />
-                  </button>
-                </div>
-              ) : null}
               {shouldShowToday ? (
                 <button
                   type="button"
@@ -114,6 +95,30 @@ export function CalendarSidebar({
         className={styles.calendarSidebarContent}
         data-visible={isCollapsed ? "false" : "true"}
       >
+        <div className={styles.calendarSidebarMonthRow}>
+          <span className={styles.calendarSidebarMonthLabel}>{formatMonthLabel(monthDate)}</span>
+          {shouldShowMonthNav ? (
+            <div className={styles.calendarSurfaceNavArrows}>
+              <button
+                type="button"
+                aria-label={t("Previous month")}
+                title={t("Previous month")}
+                onClick={() => onNavigate?.(-1)}
+              >
+                <ChevronUp size={16} />
+              </button>
+              <button
+                type="button"
+                aria-label={t("Next month")}
+                title={t("Next month")}
+                onClick={() => onNavigate?.(1)}
+              >
+                <ChevronDown size={16} />
+              </button>
+            </div>
+          ) : null}
+        </div>
+
         <MiniMonth
           referenceDate={monthDate}
           selectedDate={selectedDate}

@@ -17,11 +17,25 @@ type SessionCookieOptions = {
 const SESSION_COOKIE_NAME = "gray-auth-session";
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30;
 
-const resolveSecret = () =>
-  process.env.AUTH_COOKIE_SECRET ??
-  process.env.COOKIE_SECRET ??
-  process.env.NEXTAUTH_SECRET ??
-  "development-gray-session-secret";
+const resolveSecret = () => {
+  const secret =
+    process.env.AUTH_COOKIE_SECRET ??
+    process.env.COOKIE_SECRET ??
+    process.env.NEXTAUTH_SECRET ??
+    "";
+  const isProd = process.env.NODE_ENV === "production";
+
+  if (!secret) {
+    if (isProd) {
+      throw new Error(
+        "Missing AUTH_COOKIE_SECRET/COOKIE_SECRET/NEXTAUTH_SECRET in production (refusing to use an insecure default)."
+      );
+    }
+    return "development-gray-session-secret";
+  }
+
+  return secret;
+};
 
 const signPayload = (payload: SignedSession) => {
   const secret = resolveSecret();

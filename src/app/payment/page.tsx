@@ -468,145 +468,145 @@ function PaymentContent() {
                 </div>
 
                 <div className={styles.inputColumn}>
-
-                    <div>
-                        <h3 className={styles.sectionTitle}>Billing Cycle</h3>
-                        <div
-                            className={styles.billingToggle}
-                            role="group"
-                            aria-label="Billing cadence"
-                            data-cycle={billingCycle}
-                        >
-                            <div className={styles.billingThumb} aria-hidden="true" />
-                            <button
-                                type="button"
-                                data-active={billingCycle === "monthly"}
-                                aria-pressed={billingCycle === "monthly"}
-                                onClick={() => setBillingCycle("monthly")}
-                            >
-                                <div className={styles.cycleHeader}>
-                                    <span>Pay monthly</span>
-                                </div>
-                                <div className={styles.cycleMeta}>{pricingData.monthly.fullPrice} per month</div>
-                            </button>
-                            <button
-                                type="button"
-                                data-active={billingCycle === "annual"}
-                                aria-pressed={billingCycle === "annual"}
-                                onClick={() => setBillingCycle("annual")}
-                            >
-                                <div className={styles.cycleHeader}>
-                                    <span className={styles.cycleHeaderWithBadge}>
-                                        Pay yearly
-                                        <span className={styles.saveBadge}>Save 17%</span>
-                                    </span>
-                                </div>
-                                <div className={styles.cycleMeta}>{pricingData.annual.fullPrice} per year</div>
-                            </button>
-                        </div>
-                    </div>
-
-
-                    <div className={styles.activePaymentMethodsCard}>
-                        <h3 className={styles.activePaymentMethodsTitle}>Active payment methods</h3>
-                        <div className={styles.methodGroupTabs} role="tablist" aria-label="Payment method type">
-                            <button
-                                type="button"
-                                role="tab"
-                                data-active={methodGroup === "wallet"}
-                                aria-selected={methodGroup === "wallet"}
-                                onClick={() => {
-                                    setMethodGroup("wallet");
-                                    setSelectedMethodId(walletMethods[0]?.id ?? "gopay");
-                                    setBankSearch("");
-                                }}
-                            >
-                                E‑Wallet & QRIS
-                            </button>
-                            <button
-                                type="button"
-                                role="tab"
-                                data-active={methodGroup === "va"}
-                                aria-selected={methodGroup === "va"}
-                                onClick={() => {
-                                    setMethodGroup("va");
-                                    setSelectedMethodId(virtualAccountMethods[0]?.id ?? "bni");
-                                }}
-                            >
-                                Virtual Accounts
-                            </button>
-                        </div>
-
-                        {methodGroup === "va" && (
-                            <div className={styles.methodSearch}>
-                                <Search size={16} aria-hidden="true" />
-                                <input
-                                    type="text"
-                                    value={bankSearch}
-                                    onChange={(e) => setBankSearch(e.target.value)}
-                                    placeholder="Search for your bank"
-                                    className={styles.methodSearchInput}
-                                    aria-label="Search for your bank"
-                                />
-                            </div>
-                        )}
-
-                        <div className={styles.methodGrid} role="tabpanel">
-                            {filteredActiveMethods.map((method) => (
-                                <button
-                                    key={method.id}
-                                    type="button"
-                                    className={styles.methodOption}
-                                    data-selected={selectedMethodId === method.id}
-                                    onClick={() => setSelectedMethodId(method.id)}
+                    <article className={`${pricingStyles.planCard} ${styles.paymentFormCard}`} data-variant="muted">
+                        <div className={pricingStyles.cardBody}>
+                            <div>
+                                <h3 className={styles.sectionTitle}>Billing Cycle</h3>
+                                <div
+                                    className={styles.billingToggle}
+                                    role="group"
+                                    aria-label="Billing cadence"
+                                    data-cycle={billingCycle}
                                 >
-                                    {method.logo ? (
-                                        // eslint-disable-next-line @next/next/no-img-element
-                                        <img
-                                            src={method.logo}
-                                            alt=""
-                                            className={styles.methodLogo}
-                                            loading="lazy"
-                                        />
-                                    ) : null}
-                                    <span className={styles.methodLabel}>{method.label}</span>
-                                </button>
-                            ))}
-                            {filteredActiveMethods.length === 0 && (
-                                <div className={styles.methodEmpty}>No banks match that search.</div>
-                            )}
-                        </div>
-                        <div className={styles.paymentSelectHint}>You can change this later in checkout.</div>
-                    </div>
-
-
-
-
-                    <div className={styles.payButtonContainer}>
-                        {status === "error" && (
-                            <div style={{ marginBottom: "1rem", padding: "0.75rem", background: "rgba(239, 68, 68, 0.1)", color: "#fca5a5", borderRadius: "8px", display: "flex", gap: "0.5rem", alignItems: "center", fontSize: "0.9rem" }}>
-                                <AlertCircle size={16} />
-                                <span>{errorMessage}</span>
+                                    <div className={styles.billingThumb} aria-hidden="true" />
+                                    <button
+                                        type="button"
+                                        data-active={billingCycle === "monthly"}
+                                        aria-pressed={billingCycle === "monthly"}
+                                        onClick={() => setBillingCycle("monthly")}
+                                    >
+                                        <div className={styles.cycleHeader}>
+                                            <span>Pay monthly</span>
+                                        </div>
+                                        <div className={styles.cycleMeta}>{pricingData.monthly.fullPrice} per month</div>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        data-active={billingCycle === "annual"}
+                                        aria-pressed={billingCycle === "annual"}
+                                        onClick={() => setBillingCycle("annual")}
+                                    >
+                                        <div className={styles.cycleHeader}>
+                                            <span className={styles.cycleHeaderWithBadge}>
+                                                Pay yearly
+                                                <span className={styles.saveBadge}>Save 17%</span>
+                                            </span>
+                                        </div>
+                                        <div className={styles.cycleMeta}>{pricingData.annual.fullPrice} per year</div>
+                                    </button>
+                                </div>
                             </div>
-                        )}
-                        <button
-                            className={styles.payButton}
-                            onClick={handlePayment}
-                            disabled={status === "loading"}
-                        >
-                            {status === "loading" ? (
-                                <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem" }}>
-                                    <Loader2 size={20} className="animate-spin" /> Processing
-                                </span>
-                            ) : (
-                                `Subscribe for ${fullPriceDisplay}`
-                            )}
-                        </button>
-                        <div style={{ marginTop: "1rem", display: "flex", justifyContent: "center", gap: "0.5rem", color: "rgba(255,255,255,0.3)", fontSize: "0.8rem" }}>
-                            Powered by Midtrans • Secure 256-bit SSL Header
+
+
+                            <div className={styles.activePaymentMethodsCard}>
+                                <h3 className={styles.activePaymentMethodsTitle}>Active payment methods</h3>
+                                <div className={styles.methodGroupTabs} role="tablist" aria-label="Payment method type">
+                                    <button
+                                        type="button"
+                                        role="tab"
+                                        data-active={methodGroup === "wallet"}
+                                        aria-selected={methodGroup === "wallet"}
+                                        onClick={() => {
+                                            setMethodGroup("wallet");
+                                            setSelectedMethodId(walletMethods[0]?.id ?? "gopay");
+                                            setBankSearch("");
+                                        }}
+                                    >
+                                        E‑Wallet & QRIS
+                                    </button>
+                                    <button
+                                        type="button"
+                                        role="tab"
+                                        data-active={methodGroup === "va"}
+                                        aria-selected={methodGroup === "va"}
+                                        onClick={() => {
+                                            setMethodGroup("va");
+                                            setSelectedMethodId(virtualAccountMethods[0]?.id ?? "bni");
+                                        }}
+                                    >
+                                        Virtual Accounts
+                                    </button>
+                                </div>
+
+                                {methodGroup === "va" && (
+                                    <div className={styles.methodSearch}>
+                                        <Search size={16} aria-hidden="true" />
+                                        <input
+                                            type="text"
+                                            value={bankSearch}
+                                            onChange={(e) => setBankSearch(e.target.value)}
+                                            placeholder="Search for your bank"
+                                            className={styles.methodSearchInput}
+                                            aria-label="Search for your bank"
+                                        />
+                                    </div>
+                                )}
+
+                                <div className={styles.methodGrid} role="tabpanel">
+                                    {filteredActiveMethods.map((method) => (
+                                        <button
+                                            key={method.id}
+                                            type="button"
+                                            className={styles.methodOption}
+                                            data-selected={selectedMethodId === method.id}
+                                            onClick={() => setSelectedMethodId(method.id)}
+                                        >
+                                            {method.logo ? (
+                                                // eslint-disable-next-line @next/next/no-img-element
+                                                <img
+                                                    src={method.logo}
+                                                    alt=""
+                                                    className={styles.methodLogo}
+                                                    loading="lazy"
+                                                />
+                                            ) : null}
+                                            <span className={styles.methodLabel}>{method.label}</span>
+                                        </button>
+                                    ))}
+                                    {filteredActiveMethods.length === 0 && (
+                                        <div className={styles.methodEmpty}>No banks match that search.</div>
+                                    )}
+                                </div>
+                                <div className={styles.paymentSelectHint}>You can change this later in checkout.</div>
+                            </div>
+
+                            <div className={styles.payButtonContainer}>
+                                {status === "error" && (
+                                    <div style={{ marginBottom: "1rem", padding: "0.75rem", background: "rgba(239, 68, 68, 0.1)", color: "#fca5a5", borderRadius: "8px", display: "flex", gap: "0.5rem", alignItems: "center", fontSize: "0.9rem" }}>
+                                        <AlertCircle size={16} />
+                                        <span>{errorMessage}</span>
+                                    </div>
+                                )}
+                                <button
+                                    className={styles.payButton}
+                                    onClick={handlePayment}
+                                    disabled={status === "loading"}
+                                >
+                                    {status === "loading" ? (
+                                        <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem" }}>
+                                            <Loader2 size={20} className="animate-spin" /> Processing
+                                        </span>
+                                    ) : (
+                                        `Subscribe for ${fullPriceDisplay}`
+                                    )}
+                                </button>
+                                <div style={{ marginTop: "1rem", display: "flex", justifyContent: "center", gap: "0.5rem", color: "rgba(255,255,255,0.3)", fontSize: "0.8rem" }}>
+                                    Powered by Midtrans • Secure 256-bit SSL Header
+                                </div>
+                            </div>
                         </div>
-                    </div>
-                </div >
+                    </article>
+                </div>
 
             </div>
         </div >

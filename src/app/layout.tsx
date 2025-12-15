@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import "katex/dist/katex.min.css";
+import "react-loading-skeleton/dist/skeleton.css";
+import "./skeleton-overrides.css";
 import ApiNetworkErrorHandler from "@/components/ApiNetworkErrorHandler";
 import { readServerSession } from "@/lib/auth/server";
 import { GrayProviders } from "@/components/GrayProviders";

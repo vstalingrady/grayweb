@@ -133,6 +133,20 @@
   margin: 2px 0 4px;
 }
 
+.calendarSidebarMonthRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.calendarSidebarMonthLabel {
+  font-size: 0.8rem;
+  letter-spacing: 0.02em;
+  color: rgba(240, 240, 240, 0.82);
+  white-space: nowrap;
+}
+
 .calendarSidebarContent {
   display: flex;
   flex-direction: column;
@@ -342,15 +356,6 @@
   transition:
     border-color 0.2s ease,
     background 0.2s ease;
-}
-
-.calendarSidebarHeaderActions button:first-child,
-.calendarSidebarHeaderActions button:nth-child(2) {
-  width: 34px;
-  height: 34px;
-  padding: 0;
-  font-size: 1rem;
-  line-height: 0;
 }
 
 .calendarSidebarCreate {
@@ -777,8 +782,10 @@
   backdrop-filter: none;
   padding: 10px 0 8px;
   margin-bottom: 0;
-  z-index: 3;
+  z-index: 10;
   border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  /* Brighter background for date header */
+  background: rgba(30, 30, 30, 0.98);
 }
 
 .calendarMonthRow {
@@ -790,10 +797,11 @@
   top: 0;
   grid-column: 1 / -1;
   grid-row: 1;
-  z-index: 4;
+  z-index: 11;
   height: 44px;
   padding: 0;
-  background: transparent;
+  /* Opaque background for month title row */
+  background: rgba(18, 18, 18, 0.98);
 }
 
 .calendarMonthTitleGroup {
@@ -817,20 +825,20 @@
   height: 100%;
   display: flex;
   align-items: flex-end;
-  justify-content: flex-start;
-  padding: 1px 6px 0 0;
+  justify-content: flex-end;
+  padding: 0 6px 0 0;
   border-right: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .calendarTimezoneLabel {
   display: inline-flex;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: flex-end;
   font-size: 0.58rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: rgba(230, 230, 230, 0.58);
-  margin-bottom: 6px;
+  margin-bottom: 2px;
 }
 
 .calendarHeaderCell {
@@ -908,7 +916,7 @@
 .calendarBodyScroll {
   position: relative;
   display: grid;
-  grid-template-columns: var(--calendar-timeline-width, 72px) minmax(0, 1fr);
+  grid-template-columns: var(--calendar-timeline-width, 56px) minmax(0, 1fr);
   gap: 0;
   height: 100%;
   max-height: 100%;
@@ -925,7 +933,7 @@
   touch-action: pan-y;
   -webkit-overflow-scrolling: touch;
   box-sizing: border-box;
-  grid-row: 2;
+  grid-row: 1 / -1;
 }
 
 .calendarBodyScroll::-webkit-scrollbar {
@@ -946,7 +954,7 @@
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   color: rgba(225, 225, 225, 0.32);
   text-align: right;
-  padding: 1px 6px 0 0;
+  padding: 0 6px 0 0;
   text-transform: uppercase;
   background-image: linear-gradient(to bottom,
       var(--calendar-grid-line-color, rgba(255, 255, 255, 0.08)) 1px,
@@ -955,8 +963,44 @@
   background-position: top;
   border-right: 1px solid rgba(255, 255, 255, 0.08);
   box-sizing: border-box;
-  width: var(--calendar-timeline-width, 72px);
-  height: 100%;
+  width: var(--calendar-timeline-width, 56px);
+  /* The timeline must start after the sticky headers */
+  /* We can't easily change the grid track start here without more complex CSS.
+     Instead, let's keep it in the same grid but ensure it pushes down or is offset correctly.
+     Actually, since we are moving headers INSIDE .calendarBodyScroll, they will just flow before this.
+     But .calendarBodyScroll is a grid. We need to make sure the headers span across.
+  */
+  grid-row: 2;
+  /* Assuming headers are in a wrapper that is grid-row: 1? No, we didn't wrap them in a single grid cell...
+     Wait, in the TSX I wrapped them in .stickyHeaderGroup.
+  */
+}
+
+.stickyHeaderGroup {
+  grid-column: 1 / -1;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Adjust sticky tops now that they are inside a flex container (stickyHeaderGroup) which is itself sticky */
+.calendarMonthRow {
+  position: sticky;
+  /* It's already at top of sticky container */
+  top: 0;
+}
+
+.calendarHeaderRow {
+  position: sticky;
+  top: 44px;
+}
+
+.calendarAllDayRow {
+  position: sticky;
+  top: 88px;
+  /* 44px (Month) + ~44px (Header) */
 }
 
 .calendarTimesColumn span {
@@ -1335,11 +1379,11 @@
 }
 
 .composerCard {
-  width: min(420px, 92vw);
+  width: min(340px, 92vw);
   background: rgba(24, 24, 24, 0.96);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 10px;
-  padding: 20px 20px 18px;
+  padding: 16px 16px 14px;
   box-shadow: none;
 }
 
@@ -1347,8 +1391,8 @@
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 16px;
-  margin-bottom: 18px;
+  gap: 12px;
+  margin-bottom: 12px;
 }
 
 .composerEyebrow {
@@ -1391,7 +1435,15 @@
 .composerForm {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 12px;
+}
+
+.composerSectionDivider {
+  width: 100%;
+  height: 0;
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  margin: -6px 0;
 }
 
 .composerTitleRow {
@@ -1408,12 +1460,16 @@
 }
 
 .composerTitleInput {
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  background: rgba(38, 38, 38, 0.92);
+  border-radius: 12px;
+  border: none;
+  background: rgba(0, 0, 0, 0.2);
   color: rgba(248, 248, 248, 0.94);
-  padding: 12px 16px;
-  font-size: 0.9rem;
+  padding: 10px 12px;
+  font-size: 0.94rem;
+}
+
+.composerTitleInput::placeholder {
+  color: rgba(255, 255, 255, 0.25);
 }
 
 .composerSummary {
@@ -1430,7 +1486,7 @@
 .composerField {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
 .composerField span {
@@ -1460,8 +1516,8 @@
   border: 1px solid rgba(255, 255, 255, 0.09);
   background: rgba(38, 38, 38, 0.92);
   color: rgba(248, 248, 248, 0.94);
-  padding: 12px 16px;
-  font-size: 0.9rem;
+  padding: 8px 12px;
+  font-size: 0.85rem;
   transition:
     border-color 0.2s ease,
     box-shadow 0.2s ease;
@@ -1488,9 +1544,9 @@
   border: 1px solid rgba(255, 255, 255, 0.09);
   background: rgba(38, 38, 38, 0.92);
   color: rgba(248, 248, 248, 0.94);
-  padding: 12px 16px;
-  font-size: 0.9rem;
-  min-height: 72px;
+  padding: 10px 12px;
+  font-size: 0.85rem;
+  min-height: 56px;
   resize: vertical;
 }
 
@@ -1499,27 +1555,175 @@
   outline: none;
 }
 
-.composerDualField {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
+.composerTimeSection {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
-.composerInputShell {
-  position: relative;
+.composerTimeMetaRow {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
-.composerInputShell input {
+.composerInlineSelect {
+  min-width: 180px;
+  flex: 1 1 180px;
+}
+
+.composerInlineSelect select {
   width: 100%;
-  padding-right: 40px;
 }
 
-.composerInputShell svg {
-  position: absolute;
-  right: 14px;
-  color: rgba(235, 235, 235, 0.6);
+.composerTimeRow {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  color: rgba(240, 240, 240, 0.9);
+}
+
+.composerTimeInputGroup {
+  display: grid;
+  grid-template-columns: 92px 14px 92px;
+  align-items: center;
+  column-gap: 10px;
+}
+
+.composerTimeInput {
+  background: transparent;
+  border: none;
+  color: rgba(248, 248, 248, 0.94);
+  font-size: 0.85rem;
+  line-height: 1.35;
+  font-family: inherit;
+  cursor: pointer;
+  padding: 0;
+  width: 92px;
+  font-variant-numeric: tabular-nums;
+}
+
+.composerTimeInput:focus {
+  outline: none;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+}
+
+.composerTimeInput::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+  opacity: 0.5;
+  cursor: pointer;
+  width: 14px;
+  height: 14px;
+}
+
+.composerTimeArrow {
+  color: rgba(255, 255, 255, 0.25);
+  justify-self: center;
+}
+
+.composerDuration {
+  font-size: 0.72rem;
+  line-height: 1.35;
+  color: rgba(255, 255, 255, 0.35);
+  margin-left: auto;
+  width: 56px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.composerDateRow {
+  padding-left: 0;
+  margin-top: 2px;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.composerDateTrigger {
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  padding: 2px 0;
+  border-radius: 10px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: background 0.18s ease, color 0.18s ease;
+}
+
+.composerDateTrigger:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(245, 245, 245, 0.82);
+}
+
+.composerDateTrigger:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.22);
+  outline-offset: 2px;
+}
+
+.composerDatePopover {
+  position: fixed;
+  width: min(320px, 86vw);
+  padding: 14px 14px 16px;
+  border-radius: 14px;
+  background: rgba(28, 28, 28, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+  z-index: 3;
+}
+
+.composerDatePopoverHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.composerDatePopoverMonthLabel {
+  font-size: 0.8rem;
+  letter-spacing: 0.02em;
+  color: rgba(240, 240, 240, 0.82);
+  white-space: nowrap;
+}
+
+.composerDatePopoverControls {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.composerDatePopoverNavButton {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+  color: rgba(245, 245, 245, 0.9);
+  cursor: pointer;
+}
+
+.composerDatePopoverNavButton:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.composerMiniCalendarCompact {
+  --mini-month-gap: 8px;
+  --mini-month-week-gap: 3px;
+  --mini-month-day-gap: 1px;
+  --mini-month-cell-max: clamp(22px, calc((100% - (6 * var(--mini-month-day-gap))) / 7), 34px);
+  --mini-month-day-font: 0.62rem;
+  --mini-month-weekday-font: 0.48rem;
+  --mini-month-weekday-letter-spacing: 0.22em;
 }
 
 .composerTaskToggle {
@@ -1547,7 +1751,7 @@
   position: relative;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
@@ -1675,8 +1879,8 @@
 }
 
 .composerColorDot {
-  width: 36px;
-  height: 36px;
+  width: 30px;
+  height: 30px;
   border-radius: 8px;
   border: 1px solid transparent;
   display: inline-flex;
@@ -1729,6 +1933,7 @@
   border-color: #525cf4;
   color: #050505;
   font-weight: 600;
+  border-radius: 5px;
   box-shadow: none;
 }
 
@@ -1870,9 +2075,8 @@
   position: sticky;
   top: 88px;
   grid-column: 1 / -1;
-  grid-row: 2;
-  background: rgba(18, 18, 18, 0.94);
-  z-index: 3;
+  background: rgba(30, 30, 30, 0.98);
+  z-index: 10;
   border-bottom: 1px solid rgba(255, 255, 255, 0.04);
   min-height: 20px;
 }
@@ -1880,15 +2084,15 @@
 .calendarAllDayLabel {
   display: flex;
   align-items: center;
-  justify-content: center;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-  font-size: 0.45rem;
+  justify-content: flex-end;
+  font-family: var(--font-sans, "Plus Jakarta Sans", system-ui, -apple-system, BlinkMacSystemFont, sans-serif);
+  font-size: 0.58rem;
   color: rgba(225, 225, 225, 0.45);
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
+  text-transform: none;
+  letter-spacing: 0.02em;
   border-right: 1px solid rgba(255, 255, 255, 0.04);
-  padding: 0 4px;
-  text-align: center;
+  padding: 0 6px 0 0;
+  text-align: right;
   min-height: 20px;
 }
 
@@ -1898,9 +2102,52 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  padding: 2px;
+  padding: 0 2px 2px;
 }
 
 .calendarAllDayCell:last-child {
   border-right: none;
+}
+
+.composerHeaderTypeSelect {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.composerHeaderSelect {
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  border: none;
+  color: rgba(247, 247, 247, 0.95);
+  font-size: 1rem;
+  letter-spacing: 0.04em;
+  padding: 4px 22px 4px 0;
+  margin: 0;
+  cursor: pointer;
+  font-family: inherit;
+  font-weight: 600;
+  width: auto;
+}
+
+.composerHeaderSelect:focus {
+  outline: none;
+}
+
+.composerHeaderSelect option {
+  background-color: rgba(24, 24, 24, 0.96);
+  color: rgba(247, 247, 247, 0.95);
+  font-size: 0.9rem;
+  padding: 8px;
+}
+
+.composerHeaderSelectArrow {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  color: rgba(245, 245, 245, 0.65);
+  pointer-events: none;
 }

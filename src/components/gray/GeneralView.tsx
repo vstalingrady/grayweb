@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import { CheckSquare, Square, Zap, Pencil, Trash2, ChevronLeft, ChevronRight, Check } from "lucide-react";
 import styles from "@/app/gray/GrayPageClient.module.css";
-import { AddPlanHabitModal } from "./AddPlanHabitModal";
 import { type HabitItem, type PlanItem, type PlanUpdates, type ProactivityItem } from "./types";
 import { useI18n } from "@/contexts/I18nContext";
 import { MiniMonth } from "@/components/calendar/MiniMonth";
@@ -10,8 +9,7 @@ import {
   formatCustomTimeLabel,
 } from "./proactivityUtils";
 import { ProactivitySettingsModal } from "./ProactivitySettingsModal";
-
-type TasksTab = "plans" | "habits";
+import { PlanHabitInlineEditor } from "./PlanHabitInlineEditor";
 
 type GrayGeneralViewProps = {
   greeting: string;
@@ -25,7 +23,6 @@ type GrayGeneralViewProps = {
   onToggleHabit: (id: string) => void;
   onSavePlan: (planId: string, updates: PlanUpdates) => Promise<void> | void;
   onDeletePlan: (plan: PlanItem) => void;
-  onEditHabit: (habit: HabitItem) => void;
   onDeleteHabit: (habit: HabitItem) => void;
   onRefreshData: () => Promise<void>;
   showGreeting?: boolean;
@@ -44,7 +41,6 @@ export function GrayGeneralView({
   onToggleHabit,
   onSavePlan,
   onDeletePlan,
-  onEditHabit,
   onDeleteHabit,
   onRefreshData,
   showGreeting = true,
@@ -63,14 +59,12 @@ export function GrayGeneralView({
     base.setHours(0, 0, 0, 0);
     return base;
   });
-  const [modalState, setModalState] = useState<{ isOpen: boolean; type: "plan" | "habit" | null }>({
-    isOpen: false,
-    type: null,
-  });
-  const [planEditorTarget, setPlanEditorTarget] = useState<PlanItem | null>(null);
+  const [activeEditor, setActiveEditor] = useState<
+    | null
+    | { type: "plan" | "habit"; plan: PlanItem | null; habit: HabitItem | null }
+  >(null);
 
   const [isProactivityModalOpen, setIsProactivityModalOpen] = useState(false);
-  const [tasksTab, setTasksTab] = useState<TasksTab>("plans");
 
   const calendarMonthLabel = useMemo(
     () =>
@@ -90,16 +84,7 @@ export function GrayGeneralView({
     });
   };
 
-  const openModal = (type: "plan" | "habit") => {
-    setModalState({ isOpen: true, type });
-  };
-
-  const closeModal = () => {
-    setModalState({ isOpen: false, type: null });
-  };
-
-  const handleModalSuccess = async () => {
-    // Trigger a refresh of the data
+  const handleEditorSuccess = async () => {
     await onRefreshData();
   };
 
@@ -111,29 +96,53 @@ export function GrayGeneralView({
     setIsProactivityModalOpen(false);
   };
 
+  const isAdding = Boolean(activeEditor && !activeEditor.plan && !activeEditor.habit);
+
+  const unifiedItems = useMemo(
+    () => [
+      ...plans.map((plan) => ({ kind: "plan" as const, item: plan })),
+      ...habits.map((habit) => ({ kind: "habit" as const, item: habit })),
+    ],
+    [habits, plans]
+  );
+
+  const shouldShowEmptyState = unifiedItems.length === 0 && !isAdding;
+
   const plansContent = (
     <>
-      <ul className={styles.planList}>
-        {plans.length ? (
-          plans.map((plan) => (
-            <li key={plan.id} className={styles.planListItem}>
-              <div className={styles.planItemButton} data-completed={plan.completed ? "true" : "false"} role="group">
+      {unifiedItems.length ? (
+        <ul className={styles.planList}>
+          {unifiedItems.map(({ kind, item }) => (
+            <li key={`${kind}-${item.id}`} className={styles.planListItem}>
+              <div
+                className={styles.planItemButton}
+                data-completed={item.completed ? "true" : "false"}
+                role="group"
+              >
                 <button
                   type="button"
                   className={styles.planCheckboxButton}
-                  aria-label={plan.completed ? t("Mark plan as incomplete") : t("Mark plan as complete")}
+                  aria-label={
+                    item.completed
+                      ? t("Mark plan as incomplete")
+                      : t("Mark plan as complete")
+                  }
                   onClick={(event) => {
                     event.preventDefault();
                     event.stopPropagation();
-                    onTogglePlan(plan.id);
+                    if (kind === "plan") {
+                      onTogglePlan(item.id);
+                    } else {
+                      onToggleHabit(item.id);
+                    }
                   }}
                 >
                   <span className={styles.planCheckbox} aria-hidden="true">
-                    {plan.completed ? <CheckSquare size={16} /> : <Square size={16} />}
+                    {item.completed ? <CheckSquare size={16} /> : <Square size={16} />}
                   </span>
                 </button>
                 <span className={styles.planLabelGroup}>
-                  <span className={styles.planLabel}>{plan.label}</span>
+                  <span className={styles.planLabel}>{item.label}</span>
                 </span>
               </div>
               <span className={styles.listItemActions}>
@@ -143,10 +152,14 @@ export function GrayGeneralView({
                   onClick={(event) => {
                     event.preventDefault();
                     event.stopPropagation();
-                    setPlanEditorTarget(plan);
+                    if (kind === "plan") {
+                      setActiveEditor({ type: "plan", plan: item as PlanItem, habit: null });
+                    } else {
+                      setActiveEditor({ type: "habit", plan: null, habit: item as HabitItem });
+                    }
                   }}
-                  aria-label={t("Edit plan {label}", { label: plan.label })}
-                  disabled={!onSavePlan}
+                  aria-label={t("Edit plan {label}", { label: item.label })}
+                  disabled={kind === "plan" ? !onSavePlan : false}
                 >
                   <Pencil size={14} />
                 </button>
@@ -156,136 +169,84 @@ export function GrayGeneralView({
                   onClick={(event) => {
                     event.preventDefault();
                     event.stopPropagation();
-                    onDeletePlan(plan);
+                    if (kind === "plan") {
+                      onDeletePlan(item as PlanItem);
+                    } else {
+                      onDeleteHabit(item as HabitItem);
+                    }
                   }}
-                  aria-label={t("Delete plan {label}", { label: plan.label })}
+                  aria-label={t("Delete plan {label}", { label: item.label })}
                 >
                   <Trash2 size={14} />
                 </button>
               </span>
             </li>
-          ))
-        ) : (
-          <li className={styles.listEmptyMessage}>
-            <span>{t("No plans captured yet.")}</span>
-          </li>
-        )}
-      </ul>
-      <button type="button" className={styles.secondaryAction} onClick={() => openModal("plan")}>
-        {t("Add plans")}
-      </button>
-    </>
-  );
-
-  const habitsContent = (
-    <>
-      <ul className={styles.habitList}>
-        {habits.length ? (
-          habits.map((habit) => (
-            <li key={habit.id} className={styles.habitListItem}>
-              <div className={styles.planItemButton} data-completed={habit.completed ? "true" : "false"} role="group">
-                <button
-                  type="button"
-                  className={styles.planCheckboxButton}
-                  aria-label={habit.completed ? t("Mark habit as incomplete") : t("Mark habit as complete")}
-                  onClick={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    onToggleHabit(habit.id);
-                  }}
-                >
-                  <span className={styles.planCheckbox} aria-hidden="true">
-                    {habit.completed ? <CheckSquare size={16} /> : <Square size={16} />}
-                  </span>
-                </button>
-                <span className={styles.habitContent}>
-                  <span className={styles.habitLabel}>{habit.label}</span>
-                </span>
-              </div>
-              <span className={styles.habitRightSection}>
-                <span className={styles.listItemActions}>
-                  <button
-                    type="button"
-                    className={styles.listItemActionButton}
-                    onClick={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      onEditHabit(habit);
-                    }}
-                    aria-label={t("Edit habit {label}", { label: habit.label })}
-                  >
-                    <Pencil size={14} />
-                  </button>
-                  <button
-                    type="button"
-                    className={styles.listItemActionButton}
-                    onClick={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      onDeleteHabit(habit);
-                    }}
-                    aria-label={t("Delete habit {label}", { label: habit.label })}
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </span>
-                <span className={styles.habitStreak}>
-                  <Zap size={12} aria-hidden="true" />
-                  <span>{habit.streakLabel}</span>
-                </span>
-              </span>
-            </li>
-          ))
-        ) : (
-          <li className={styles.listEmptyMessage}>
-            <span>{t("No habits tracked yet.")}</span>
-          </li>
-        )}
-      </ul>
-      <button type="button" className={styles.secondaryAction} onClick={() => openModal("habit")}>
-        {t("Add habits")}
-      </button>
+          ))}
+        </ul>
+      ) : null}
     </>
   );
 
   const tasksCard = (
     <article className={styles.dashboardCard}>
       <header className={styles.dashboardCardHeader}>
-        <div className={styles.dashboardTasksToggle} role="tablist" aria-label={t("Switch tasks view")}>
-          <button
-            type="button"
-            className={styles.dashboardTasksToggleButton}
-            role="tab"
-            aria-selected={tasksTab === "plans"}
-            data-active={tasksTab === "plans" ? "true" : "false"}
-            onClick={() => setTasksTab("plans")}
-          >
-            {t("Plans")}
-          </button>
-          <button
-            type="button"
-            className={styles.dashboardTasksToggleButton}
-            role="tab"
-            aria-selected={tasksTab === "habits"}
-            data-active={tasksTab === "habits" ? "true" : "false"}
-            onClick={() => setTasksTab("habits")}
-          >
-            {t("Habits")}
-          </button>
-        </div>
+        <h2 className={styles.dashboardCardTitle}>{t("Events")}</h2>
       </header>
-      <div className={styles.dashboardCardBody}>{tasksTab === "plans" ? plansContent : habitsContent}</div>
+      <div className={styles.dashboardCardBody}>
+        {activeEditor ? (
+          <div style={{ marginBottom: "12px" }}>
+            <PlanHabitInlineEditor
+              type={activeEditor.type}
+              onTypeChange={(nextType) => setActiveEditor({ type: nextType, plan: null, habit: null })}
+              planToEdit={activeEditor.plan}
+              habitToEdit={activeEditor.habit}
+              onCancel={() => setActiveEditor(null)}
+              onSuccess={handleEditorSuccess}
+              onSubmitPlan={
+                onSavePlan
+                  ? async (planId, updates) => {
+                      if (!planId) {
+                        return;
+                      }
+                      await onSavePlan(planId, updates);
+                    }
+                  : undefined
+              }
+            />
+          </div>
+        ) : shouldShowEmptyState ? (
+          <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+            <div className={styles.listEmptyMessage} style={{ marginTop: "auto", marginBottom: "auto" }}>
+              <span>{t("No events captured yet.")}</span>
+            </div>
+            <button
+              type="button"
+              className={styles.secondaryAction}
+              onClick={() => setActiveEditor({ type: "plan", plan: null, habit: null })}
+            >
+              {t("New event")}
+            </button>
+          </div>
+        ) : (
+          <>
+            <button
+              type="button"
+              className={styles.secondaryAction}
+              onClick={() => setActiveEditor({ type: "plan", plan: null, habit: null })}
+              style={{ marginTop: 0 }}
+            >
+              {t("New event")}
+            </button>
+            {plansContent}
+          </>
+        )}
+      </div>
     </article>
   );
 
   const activeProactivityTimes = useMemo(() => {
     return getProactivityTimes(proactivity);
   }, [proactivity]);
-
-  const formattedProactivityTimes = useMemo(
-    () => activeProactivityTimes.map((time) => formatCustomTimeLabel(time)),
-    [activeProactivityTimes]
-  );
 
   // To match dashboard checklist UI perfectly, we need "delivered" status.
   // However, GeneralView props might not have delivered keys. 
@@ -301,14 +262,18 @@ export function GrayGeneralView({
 
   const proactivityScheduleEntries = useMemo(() => {
     if (activeProactivityTimes.length > 0) {
-      return activeProactivityTimes.map((time, index) => ({
-        time,
-        label: formattedProactivityTimes[index] ?? formatCustomTimeLabel(time),
-        delivered: false, // GeneralView doesn't seem to track delivery deliveryKeys prop.
-      }));
+      return activeProactivityTimes
+        .map((time) => time.trim())
+        .filter((time) => time.length > 0)
+        .map((time) => ({
+          time,
+          label: formatCustomTimeLabel(time),
+          delivered: false, // GeneralView doesn't seem to track delivery deliveryKeys prop.
+        }))
+        .filter(({ label }) => label.trim().length > 0);
     }
     return [];
-  }, [activeProactivityTimes, formattedProactivityTimes]);
+  }, [activeProactivityTimes]);
 
 
   const calendarCard = (
@@ -410,30 +375,6 @@ export function GrayGeneralView({
           </div>
           <div className={`${styles.dashboardSectionCard} ${styles.dashboardGridItemTasks}`}>{tasksCard}</div>
         </section>
-      ) : null}
-
-      {modalState.isOpen && modalState.type && (
-        <AddPlanHabitModal
-          isOpen={modalState.isOpen}
-          onClose={closeModal}
-          type={modalState.type}
-          onSuccess={handleModalSuccess}
-        />
-      )}
-      {planEditorTarget && onSavePlan ? (
-        <AddPlanHabitModal
-          isOpen={Boolean(planEditorTarget)}
-          onClose={() => setPlanEditorTarget(null)}
-          type="plan"
-          onSuccess={handleModalSuccess}
-          planToEdit={planEditorTarget}
-          onSubmitPlan={async (planId, updates) => {
-            if (!planId) {
-              return;
-            }
-            await onSavePlan(planId, updates);
-          }}
-        />
       ) : null}
 
       {isProactivityModalOpen && (
