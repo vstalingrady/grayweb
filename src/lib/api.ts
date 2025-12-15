@@ -981,39 +981,7 @@ class ApiService {
     return this.fetch<CalendarEvent[]>(endpoint);
   }
 
-  async createCalendarEvent(userId: number, eventData: {
-    calendar_id?: number | null;
-    title: string;
-    description?: string;
-    start_time: string;
-    end_time: string;
-    color?: string;
-  }): Promise<CalendarEvent> {
-    return this.fetch<CalendarEvent>(`/users/${userId}/calendar-events`, {
-      method: 'POST',
-      body: JSON.stringify(eventData),
-    });
-  }
 
-  async updateCalendarEvent(userId: number, eventId: number, eventData: {
-    calendar_id?: number | null;
-    title?: string;
-    description?: string;
-    start_time?: string;
-    end_time?: string;
-    color?: string;
-  }): Promise<CalendarEvent> {
-    return this.fetch<CalendarEvent>(`/users/${userId}/calendar-events/${eventId}`, {
-      method: 'PATCH',
-      body: JSON.stringify(eventData),
-    });
-  }
-
-  async deleteCalendarEvent(userId: number, eventId: number): Promise<void> {
-    return this.fetch<void>(`/users/${userId}/calendar-events/${eventId}`, {
-      method: 'DELETE',
-    });
-  }
 
   async getUserCalendars(userId: number): Promise<Calendar[]> {
     return this.fetch<Calendar[]>(`/users/${userId}/calendars`);
@@ -1026,8 +994,34 @@ class ApiService {
     });
   }
 
+  // Calendar events
+  async getCalendarEvents(userId: number, calendarId?: number): Promise<CalendarEvent[]> {
+    const query = calendarId ? `?calendar_id=${calendarId}` : '';
+    return this.fetch<CalendarEvent[]>(`users/${userId}/calendar_events${query}`);
+  }
+
+  async createCalendarEvent(userId: number, event: Partial<CalendarEvent>): Promise<CalendarEvent> {
+    return this.fetch<CalendarEvent>(`users/${userId}/calendar_events`, {
+      method: 'POST',
+      body: JSON.stringify(event),
+    });
+  }
+
+  async updateCalendarEvent(userId: number, eventId: number, event: Partial<CalendarEvent>): Promise<CalendarEvent> {
+    return this.fetch<CalendarEvent>(`users/${userId}/calendar_events/${eventId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(event),
+    });
+  }
+
+  async deleteCalendarEvent(userId: number, eventId: number): Promise<void> {
+    return this.fetch<void>(`users/${userId}/calendar_events/${eventId}`, {
+      method: 'DELETE',
+    });
+  }
+
   // Plans
-  async getUserPlans(userId: number, limit?: number): Promise<Plan[]> {
+  async getPlans(userId: number, limit?: number): Promise<Plan[]> {
     const endpoint = limit ? `/users/${userId}/plans?limit=${limit}` : `/users/${userId}/plans`;
     return this.fetch<Plan[]>(endpoint);
   }

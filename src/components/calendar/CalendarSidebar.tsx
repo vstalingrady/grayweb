@@ -1,6 +1,7 @@
 "use client";
 
 import { type ReactNode } from "react";
+import { ChevronUp, ChevronDown } from "lucide-react";
 import { CalendarInfo } from "./types";
 import styles from "./GrayDashboardCalendar.module.css";
 import { MiniMonth } from "./MiniMonth";
@@ -10,10 +11,11 @@ type CalendarSidebarProps = {
   monthDate: Date;
   selectedDate: Date;
   onSelectDate: (date: Date) => void;
-  onNavigateMonth?: (offset: number) => void;
+  onNavigate?: (offset: number) => void;
   calendars: CalendarInfo[];
   onToggleCalendar: (calendarId: string) => void;
   isCollapsed?: boolean;
+  showHeader?: boolean;
   showSelectedDateLabel?: boolean;
   showMonthNavigation?: boolean;
   showTodayButton?: boolean;
@@ -36,10 +38,11 @@ export function CalendarSidebar({
   monthDate,
   selectedDate,
   onSelectDate,
-  onNavigateMonth,
+  onNavigate,
   calendars,
   onToggleCalendar,
   isCollapsed,
+  showHeader = true,
   showSelectedDateLabel = true,
   showMonthNavigation = false,
   showTodayButton = false,
@@ -48,14 +51,14 @@ export function CalendarSidebar({
   integrationActionLabel = "Add Google Calendar integration",
   onIntegrationAction,
   className,
-	showCalendarList = true,
-	children,
+  showCalendarList = true,
+  children,
 }: CalendarSidebarProps) {
   const { t } = useI18n();
   const sidebarClassName = [styles.calendarSidebar, className]
     .filter(Boolean)
     .join(" ");
-  const shouldShowMonthNav = Boolean(showMonthNavigation && onNavigateMonth);
+  const shouldShowMonthNav = Boolean(showMonthNavigation && onNavigate);
   const shouldShowToday = Boolean(showTodayButton && onGoToday);
   const shouldShowCreate = Boolean(showCreateAction);
   const shouldRenderHeaderActions =
@@ -63,60 +66,49 @@ export function CalendarSidebar({
 
   return (
     <aside className={sidebarClassName}>
-      <header className={styles.calendarSidebarHeader}>
-        <div>
-
-          <h2>{formatMonthLabel(monthDate)}</h2>
-          {showSelectedDateLabel ? (
-            <span className={styles.calendarSidebarSubhead}>
-              {selectedDate.toLocaleDateString(undefined, {
-                month: "long",
-                day: "numeric",
-                year: "numeric",
-              })}
-            </span>
+      {showHeader ? (
+        <header className={styles.calendarSidebarHeader}>
+          {shouldRenderHeaderActions ? (
+            <div className={styles.calendarSidebarHeaderActions} style={{ marginLeft: "auto" }}>
+              {shouldShowMonthNav ? (
+                <div className={styles.calendarSurfaceNavArrows}>
+                  <button
+                    type="button"
+                    aria-label={t("Previous month")}
+                    onClick={() => onNavigate?.(-1)}
+                  >
+                    <ChevronUp size={16} />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={t("Next month")}
+                    onClick={() => onNavigate?.(1)}
+                  >
+                    <ChevronDown size={16} />
+                  </button>
+                </div>
+              ) : null}
+              {shouldShowToday ? (
+                <button
+                  type="button"
+                  className={styles.calendarSurfaceButton}
+                  onClick={() => onGoToday?.()}
+                >
+                  {t("Today")}
+                </button>
+              ) : null}
+              {shouldShowCreate ? (
+                <button
+                  type="button"
+                  className={styles.calendarSidebarCreate}
+                >
+                  + {t("Create")}
+                </button>
+              ) : null}
+            </div>
           ) : null}
-        </div>
-        {shouldRenderHeaderActions ? (
-          <div className={styles.calendarSidebarHeaderActions}>
-            {shouldShowMonthNav ? (
-              <div className={styles.calendarSurfaceNavArrows}>
-	                <button
-	                  type="button"
-	                  aria-label={t("Previous month")}
-	                  onClick={() => onNavigateMonth?.(-1)}
-	                >
-	                  ‹
-	                </button>
-	                <button
-	                  type="button"
-	                  aria-label={t("Next month")}
-	                  onClick={() => onNavigateMonth?.(1)}
-	                >
-	                  ›
-	                </button>
-              </div>
-            ) : null}
-            {shouldShowToday ? (
-	              <button
-	                type="button"
-	                className={styles.calendarSurfaceButton}
-	                onClick={() => onGoToday?.()}
-	              >
-	                {t("Today")}
-	              </button>
-	            ) : null}
-	            {shouldShowCreate ? (
-	              <button
-	                type="button"
-	                className={styles.calendarSidebarCreate}
-	              >
-	                + {t("Create")}
-	              </button>
-	            ) : null}
-          </div>
-        ) : null}
-      </header>
+        </header>
+      ) : null}
 
       <div
         className={styles.calendarSidebarContent}
@@ -130,9 +122,9 @@ export function CalendarSidebar({
 
         {showCalendarList ? (
           <section className={styles.calendarSidebarList}>
-            <ul>
+            <div className={styles.calendarSidebarListBody}>
               {calendars.map((calendar) => (
-                <li key={calendar.id}>
+                <div key={calendar.id} className={styles.calendarSidebarItemWrapper}>
                   <button
                     type="button"
                     className={styles.calendarSidebarChip}
@@ -146,20 +138,20 @@ export function CalendarSidebar({
                     />
                     <span>{calendar.label}</span>
                   </button>
-                </li>
+                </div>
               ))}
               {onIntegrationAction ? (
-                <li className={styles.calendarSidebarIntegration}>
-	                  <button
-	                    type="button"
-	                    className={styles.calendarSidebarIntegrationButton}
-	                    onClick={onIntegrationAction}
-	                  >
-	                    {t(integrationActionLabel)}
-	                  </button>
-                </li>
+                <div className={styles.calendarSidebarIntegration}>
+                  <button
+                    type="button"
+                    className={styles.calendarSidebarIntegrationButton}
+                    onClick={onIntegrationAction}
+                  >
+                    {t(integrationActionLabel)}
+                  </button>
+                </div>
               ) : null}
-            </ul>
+            </div>
           </section>
         ) : null}
         {children ? <div className={styles.calendarSidebarExtra}>{children}</div> : null}

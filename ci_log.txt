@@ -1,0 +1,1041 @@
+ci	Set up job	﻿2025-12-14T16:58:05.8281906Z Current runner version: '2.329.0'
+ci	Set up job	2025-12-14T16:58:05.8348423Z ##[group]Runner Image Provisioner
+ci	Set up job	2025-12-14T16:58:05.8349748Z Hosted Compute Agent
+ci	Set up job	2025-12-14T16:58:05.8350594Z Version: 20251202.455
+ci	Set up job	2025-12-14T16:58:05.8351707Z Commit: 6c10caca4910e198df60de23adf20ad317c474e3
+ci	Set up job	2025-12-14T16:58:05.8352831Z Build Date: 2025-12-02T15:56:59Z
+ci	Set up job	2025-12-14T16:58:05.8354164Z Worker ID: {5c5133ef-4d5a-4e7e-945b-1c05a5498066}
+ci	Set up job	2025-12-14T16:58:05.8355442Z ##[endgroup]
+ci	Set up job	2025-12-14T16:58:05.8356333Z ##[group]Operating System
+ci	Set up job	2025-12-14T16:58:05.8357247Z Ubuntu
+ci	Set up job	2025-12-14T16:58:05.8358153Z 24.04.3
+ci	Set up job	2025-12-14T16:58:05.8358881Z LTS
+ci	Set up job	2025-12-14T16:58:05.8359546Z ##[endgroup]
+ci	Set up job	2025-12-14T16:58:05.8360470Z ##[group]Runner Image
+ci	Set up job	2025-12-14T16:58:05.8361284Z Image: ubuntu-24.04
+ci	Set up job	2025-12-14T16:58:05.8362072Z Version: 20251208.163.1
+ci	Set up job	2025-12-14T16:58:05.8394280Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20251208.163/images/ubuntu/Ubuntu2404-Readme.md
+ci	Set up job	2025-12-14T16:58:05.8396810Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20251208.163
+ci	Set up job	2025-12-14T16:58:05.8399024Z ##[endgroup]
+ci	Set up job	2025-12-14T16:58:05.8400998Z ##[group]GITHUB_TOKEN Permissions
+ci	Set up job	2025-12-14T16:58:05.8404097Z Contents: read
+ci	Set up job	2025-12-14T16:58:05.8404954Z Metadata: read
+ci	Set up job	2025-12-14T16:58:05.8405887Z Packages: read
+ci	Set up job	2025-12-14T16:58:05.8406675Z ##[endgroup]
+ci	Set up job	2025-12-14T16:58:05.8409951Z Secret source: Actions
+ci	Set up job	2025-12-14T16:58:05.8411310Z Prepare workflow directory
+ci	Set up job	2025-12-14T16:58:05.9420758Z Prepare all required actions
+ci	Set up job	2025-12-14T16:58:05.9529939Z Getting action download info
+ci	Set up job	2025-12-14T16:58:06.3376904Z Download action repository 'actions/checkout@v4' (SHA:34e114876b0b11c390a56381ad16ebd13914f8d5)
+ci	Set up job	2025-12-14T16:58:06.4625827Z Download action repository 'actions/setup-node@v4' (SHA:49933ea5288caeca8642d1e84afbd3f7d6820020)
+ci	Set up job	2025-12-14T16:58:06.5625216Z Download action repository 'actions/setup-python@v5' (SHA:a26af69be951a213d495a4c3e4e4022e16d87065)
+ci	Set up job	2025-12-14T16:58:06.7710118Z Complete job name: ci
+ci	Run actions/checkout@v4	﻿2025-12-14T16:58:06.8779598Z ##[group]Run actions/checkout@v4
+ci	Run actions/checkout@v4	2025-12-14T16:58:06.8782002Z with:
+ci	Run actions/checkout@v4	2025-12-14T16:58:06.8790557Z   repository: vstalingrady/gray
+ci	Run actions/checkout@v4	2025-12-14T16:58:06.8792679Z   token: ***
+ci	Run actions/checkout@v4	2025-12-14T16:58:06.8793972Z   ssh-strict: true
+ci	Run actions/checkout@v4	2025-12-14T16:58:06.8795128Z   ssh-user: git
+ci	Run actions/checkout@v4	2025-12-14T16:58:06.8796284Z   persist-credentials: true
+ci	Run actions/checkout@v4	2025-12-14T16:58:06.8797754Z   clean: true
+ci	Run actions/checkout@v4	2025-12-14T16:58:06.8799040Z   sparse-checkout-cone-mode: true
+ci	Run actions/checkout@v4	2025-12-14T16:58:06.8800784Z   fetch-depth: 1
+ci	Run actions/checkout@v4	2025-12-14T16:58:06.8801949Z   fetch-tags: false
+ci	Run actions/checkout@v4	2025-12-14T16:58:06.8803117Z   show-progress: true
+ci	Run actions/checkout@v4	2025-12-14T16:58:06.8804813Z   lfs: false
+ci	Run actions/checkout@v4	2025-12-14T16:58:06.8806053Z   submodules: false
+ci	Run actions/checkout@v4	2025-12-14T16:58:06.8807418Z   set-safe-directory: true
+ci	Run actions/checkout@v4	2025-12-14T16:58:06.8809540Z ##[endgroup]
+ci	Run actions/checkout@v4	2025-12-14T16:58:07.0195000Z Syncing repository: vstalingrady/gray
+ci	Run actions/checkout@v4	2025-12-14T16:58:07.0197728Z ##[group]Getting Git version info
+ci	Run actions/checkout@v4	2025-12-14T16:58:07.0198849Z Working directory is '/home/runner/work/gray/gray'
+ci	Run actions/checkout@v4	2025-12-14T16:58:07.0200494Z [command]/usr/bin/git version
+ci	Run actions/checkout@v4	2025-12-14T16:58:07.8555380Z git version 2.52.0
+ci	Run actions/checkout@v4	2025-12-14T16:58:07.8605696Z ##[endgroup]
+ci	Run actions/checkout@v4	2025-12-14T16:58:07.8624898Z Temporarily overriding HOME='/home/runner/work/_temp/9a7b9d7c-2faa-40dc-aab3-c14900864183' before making global git config changes
+ci	Run actions/checkout@v4	2025-12-14T16:58:07.8626477Z Adding repository directory to the temporary git global config as a safe directory
+ci	Run actions/checkout@v4	2025-12-14T16:58:07.8656036Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/gray/gray
+ci	Run actions/checkout@v4	2025-12-14T16:58:07.9034987Z Deleting the contents of '/home/runner/work/gray/gray'
+ci	Run actions/checkout@v4	2025-12-14T16:58:07.9036314Z ##[group]Initializing the repository
+ci	Run actions/checkout@v4	2025-12-14T16:58:07.9037067Z [command]/usr/bin/git init /home/runner/work/gray/gray
+ci	Run actions/checkout@v4	2025-12-14T16:58:07.9965319Z hint: Using 'master' as the name for the initial branch. This default branch name
+ci	Run actions/checkout@v4	2025-12-14T16:58:07.9968759Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+ci	Run actions/checkout@v4	2025-12-14T16:58:07.9969885Z hint: to use in all of your new repositories, which will suppress this warning,
+ci	Run actions/checkout@v4	2025-12-14T16:58:07.9971250Z hint: call:
+ci	Run actions/checkout@v4	2025-12-14T16:58:07.9971669Z hint:
+ci	Run actions/checkout@v4	2025-12-14T16:58:07.9972251Z hint: 	git config --global init.defaultBranch <name>
+ci	Run actions/checkout@v4	2025-12-14T16:58:07.9972852Z hint:
+ci	Run actions/checkout@v4	2025-12-14T16:58:07.9973777Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+ci	Run actions/checkout@v4	2025-12-14T16:58:07.9974785Z hint: 'development'. The just-created branch can be renamed via this command:
+ci	Run actions/checkout@v4	2025-12-14T16:58:07.9975662Z hint:
+ci	Run actions/checkout@v4	2025-12-14T16:58:07.9976211Z hint: 	git branch -m <name>
+ci	Run actions/checkout@v4	2025-12-14T16:58:07.9976853Z hint:
+ci	Run actions/checkout@v4	2025-12-14T16:58:07.9977736Z hint: Disable this message with "git config set advice.defaultBranchName false"
+ci	Run actions/checkout@v4	2025-12-14T16:58:07.9978921Z Initialized empty Git repository in /home/runner/work/gray/gray/.git/
+ci	Run actions/checkout@v4	2025-12-14T16:58:07.9981116Z [command]/usr/bin/git remote add origin https://github.com/vstalingrady/gray
+ci	Run actions/checkout@v4	2025-12-14T16:58:08.0057161Z ##[endgroup]
+ci	Run actions/checkout@v4	2025-12-14T16:58:08.0064001Z ##[group]Disabling automatic garbage collection
+ci	Run actions/checkout@v4	2025-12-14T16:58:08.0066111Z [command]/usr/bin/git config --local gc.auto 0
+ci	Run actions/checkout@v4	2025-12-14T16:58:08.0182130Z ##[endgroup]
+ci	Run actions/checkout@v4	2025-12-14T16:58:08.0183516Z ##[group]Setting up auth
+ci	Run actions/checkout@v4	2025-12-14T16:58:08.0190308Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+ci	Run actions/checkout@v4	2025-12-14T16:58:08.0228494Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+ci	Run actions/checkout@v4	2025-12-14T16:58:08.7995671Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+ci	Run actions/checkout@v4	2025-12-14T16:58:08.8034755Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+ci	Run actions/checkout@v4	2025-12-14T16:58:08.8309858Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+ci	Run actions/checkout@v4	2025-12-14T16:58:08.8415131Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+ci	Run actions/checkout@v4	2025-12-14T16:58:08.8785277Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+ci	Run actions/checkout@v4	2025-12-14T16:58:09.0038069Z ##[endgroup]
+ci	Run actions/checkout@v4	2025-12-14T16:58:09.0041313Z ##[group]Fetching the repository
+ci	Run actions/checkout@v4	2025-12-14T16:58:09.0056279Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +58fb67b774bbc2c1f5d20b060d24b5b3d5c0234c:refs/remotes/origin/main
+ci	Run actions/checkout@v4	2025-12-14T16:58:10.0376939Z From https://github.com/vstalingrady/gray
+ci	Run actions/checkout@v4	2025-12-14T16:58:10.0380588Z  * [new ref]         58fb67b774bbc2c1f5d20b060d24b5b3d5c0234c -> origin/main
+ci	Run actions/checkout@v4	2025-12-14T16:58:10.0418398Z ##[endgroup]
+ci	Run actions/checkout@v4	2025-12-14T16:58:10.0418982Z ##[group]Determining the checkout info
+ci	Run actions/checkout@v4	2025-12-14T16:58:10.0422874Z ##[endgroup]
+ci	Run actions/checkout@v4	2025-12-14T16:58:10.0431163Z [command]/usr/bin/git sparse-checkout disable
+ci	Run actions/checkout@v4	2025-12-14T16:58:10.0502157Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+ci	Run actions/checkout@v4	2025-12-14T16:58:10.0553440Z ##[group]Checking out the ref
+ci	Run actions/checkout@v4	2025-12-14T16:58:10.0558190Z [command]/usr/bin/git checkout --progress --force -B main refs/remotes/origin/main
+ci	Run actions/checkout@v4	2025-12-14T16:58:10.2267243Z Switched to a new branch 'main'
+ci	Run actions/checkout@v4	2025-12-14T16:58:10.2267744Z branch 'main' set up to track 'origin/main'.
+ci	Run actions/checkout@v4	2025-12-14T16:58:10.2280471Z ##[endgroup]
+ci	Run actions/checkout@v4	2025-12-14T16:58:10.2324060Z [command]/usr/bin/git log -1 --format=%H
+ci	Run actions/checkout@v4	2025-12-14T16:58:10.2347998Z 58fb67b774bbc2c1f5d20b060d24b5b3d5c0234c
+ci	Setup Node	﻿2025-12-14T16:58:10.2594118Z ##[group]Run actions/setup-node@v4
+ci	Setup Node	2025-12-14T16:58:10.2594411Z with:
+ci	Setup Node	2025-12-14T16:58:10.2594589Z   node-version: 20
+ci	Setup Node	2025-12-14T16:58:10.2594768Z   cache: npm
+ci	Setup Node	2025-12-14T16:58:10.2595040Z   always-auth: false
+ci	Setup Node	2025-12-14T16:58:10.2595384Z   check-latest: false
+ci	Setup Node	2025-12-14T16:58:10.2595889Z   token: ***
+ci	Setup Node	2025-12-14T16:58:10.2596214Z ##[endgroup]
+ci	Setup Node	2025-12-14T16:58:10.4472028Z Found in cache @ /opt/hostedtoolcache/node/20.19.6/x64
+ci	Setup Node	2025-12-14T16:58:10.4477292Z ##[group]Environment details
+ci	Setup Node	2025-12-14T16:58:10.9113841Z node: v20.19.6
+ci	Setup Node	2025-12-14T16:58:10.9118251Z npm: 10.8.2
+ci	Setup Node	2025-12-14T16:58:10.9122678Z yarn: 1.22.22
+ci	Setup Node	2025-12-14T16:58:10.9125798Z ##[endgroup]
+ci	Setup Node	2025-12-14T16:58:10.9144304Z [command]/opt/hostedtoolcache/node/20.19.6/x64/bin/npm config get cache
+ci	Setup Node	2025-12-14T16:58:11.1272359Z /home/runner/.npm
+ci	Setup Node	2025-12-14T16:58:11.3170136Z Cache hit for: node-cache-Linux-x64-npm-df5db92f71df755477d350fb19a75edbc628503ac71d13a20274e13112bb5f0f
+ci	Setup Node	2025-12-14T16:58:12.4483823Z Received 134217728 of 224214138 (59.9%), 127.9 MBs/sec
+ci	Setup Node	2025-12-14T16:58:12.8829971Z Received 224214138 of 224214138 (100.0%), 149.0 MBs/sec
+ci	Setup Node	2025-12-14T16:58:12.8833433Z Cache Size: ~214 MB (224214138 B)
+ci	Setup Node	2025-12-14T16:58:12.8884685Z [command]/usr/bin/tar -xf /home/runner/work/_temp/4e50c97f-521e-4de0-a76e-425d7fcb6f15/cache.tzst -P -C /home/runner/work/gray/gray --use-compress-program unzstd
+ci	Setup Node	2025-12-14T16:58:13.5619549Z Cache restored successfully
+ci	Setup Node	2025-12-14T16:58:13.6211925Z Cache restored from key: node-cache-Linux-x64-npm-df5db92f71df755477d350fb19a75edbc628503ac71d13a20274e13112bb5f0f
+ci	Install frontend deps	﻿2025-12-14T16:58:13.6506858Z ##[group]Run npm ci
+ci	Install frontend deps	2025-12-14T16:58:13.6507264Z [36;1mnpm ci[0m
+ci	Install frontend deps	2025-12-14T16:58:13.6999268Z shell: /usr/bin/bash -e {0}
+ci	Install frontend deps	2025-12-14T16:58:13.6999701Z ##[endgroup]
+ci	Install frontend deps	2025-12-14T16:58:16.0541544Z npm warn EBADENGINE Unsupported engine {
+ci	Install frontend deps	2025-12-14T16:58:16.0542973Z npm warn EBADENGINE   package: '@mendable/firecrawl-js@4.8.2',
+ci	Install frontend deps	2025-12-14T16:58:16.0544204Z npm warn EBADENGINE   required: { node: '>=22.0.0' },
+ci	Install frontend deps	2025-12-14T16:58:16.0545242Z npm warn EBADENGINE   current: { node: 'v20.19.6', npm: '10.8.2' }
+ci	Install frontend deps	2025-12-14T16:58:16.0546002Z npm warn EBADENGINE }
+ci	Install frontend deps	2025-12-14T16:58:22.6514866Z npm warn deprecated node-domexception@1.0.0: Use your platform's native DOMException instead
+ci	Install frontend deps	2025-12-14T16:58:38.2054929Z 
+ci	Install frontend deps	2025-12-14T16:58:38.2055773Z added 662 packages, and audited 663 packages in 24s
+ci	Install frontend deps	2025-12-14T16:58:38.2056248Z 
+ci	Install frontend deps	2025-12-14T16:58:38.2056523Z 279 packages are looking for funding
+ci	Install frontend deps	2025-12-14T16:58:38.2057079Z   run `npm fund` for details
+ci	Install frontend deps	2025-12-14T16:58:38.2057418Z 
+ci	Install frontend deps	2025-12-14T16:58:38.2057642Z found 0 vulnerabilities
+ci	Lint frontend	﻿2025-12-14T16:58:38.3062212Z ##[group]Run npm run lint
+ci	Lint frontend	2025-12-14T16:58:38.3062721Z [36;1mnpm run lint[0m
+ci	Lint frontend	2025-12-14T16:58:38.3103668Z shell: /usr/bin/bash -e {0}
+ci	Lint frontend	2025-12-14T16:58:38.3103930Z ##[endgroup]
+ci	Lint frontend	2025-12-14T16:58:38.4345245Z 
+ci	Lint frontend	2025-12-14T16:58:38.4347200Z > hackathon@0.1.0 lint
+ci	Lint frontend	2025-12-14T16:58:38.4348709Z > eslint
+ci	Lint frontend	2025-12-14T16:58:38.4348910Z 
+ci	Lint frontend	2025-12-14T16:58:59.2000679Z 
+ci	Lint frontend	2025-12-14T16:58:59.2004023Z /home/runner/work/gray/gray/src/app/gray/GrayMarketingClient.tsx
+ci	Lint frontend	2025-12-14T16:58:59.2042535Z ##[warning]  167:17  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+ci	Lint frontend	2025-12-14T16:58:59.2060272Z ##[warning]  176:17  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+ci	Lint frontend	2025-12-14T16:58:59.2066969Z ##[warning]  185:17  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+ci	Lint frontend	2025-12-14T16:58:59.2073056Z ##[warning]  194:17  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+ci	Lint frontend	2025-12-14T16:58:59.2075889Z 
+ci	Lint frontend	2025-12-14T16:58:59.2076774Z /home/runner/work/gray/gray/src/app/gray/GrayPageClient.tsx
+ci	Lint frontend	2025-12-14T16:58:59.2080790Z ##[warning]   611:19  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+ci	Lint frontend	2025-12-14T16:58:59.2085365Z ##[warning]   927:9   warning  'workspaceDateLabel' is assigned a value but never used                                                                                                                                                                                                                                  @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2089383Z ##[warning]  1604:5   warning  React Hook useCallback has missing dependencies: 'setHabits' and 'user'. Either include them or remove the dependency array                                                                                                                                                              react-hooks/exhaustive-deps
+ci	Lint frontend	2025-12-14T16:58:59.2094143Z ##[warning]  2138:5   warning  React Hook useCallback has missing dependencies: 'setCalendarEvents' and 'setReminderPlans'. Either include them or remove the dependency array                                                                                                                                          react-hooks/exhaustive-deps
+ci	Lint frontend	2025-12-14T16:58:59.2098488Z ##[warning]  2316:6   warning  React Hook useEffect has a missing dependency: 'router'. Either include it or remove the dependency array                                                                                                                                                                                react-hooks/exhaustive-deps
+ci	Lint frontend	2025-12-14T16:58:59.2102572Z ##[warning]  2371:6   warning  React Hook useCallback has an unnecessary dependency: 'sessions'. Either exclude it or remove the dependency array                                                                                                                                                                       react-hooks/exhaustive-deps
+ci	Lint frontend	2025-12-14T16:58:59.2105091Z 
+ci	Lint frontend	2025-12-14T16:58:59.2105647Z /home/runner/work/gray/gray/src/app/gray/components/PerformanceChart.tsx
+ci	Lint frontend	2025-12-14T16:58:59.2107913Z ##[warning]  90:6  warning  React Hook useEffect has a missing dependency: 'updateData'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+ci	Lint frontend	2025-12-14T16:58:59.2109567Z 
+ci	Lint frontend	2025-12-14T16:58:59.2109914Z /home/runner/work/gray/gray/src/app/not-found.tsx
+ci	Lint frontend	2025-12-14T16:58:59.2111078Z   1:1  warning  Unused eslint-disable directive (no problems were reported from 'react/no-unescaped-entities')
+ci	Lint frontend	2025-12-14T16:58:59.2111779Z 
+ci	Lint frontend	2025-12-14T16:58:59.2112068Z /home/runner/work/gray/gray/src/app/page.tsx
+ci	Lint frontend	2025-12-14T16:58:59.2113360Z   20:5  warning  Unused eslint-disable directive (no problems were reported from 'react-hooks/purity')
+ci	Lint frontend	2025-12-14T16:58:59.2114037Z 
+ci	Lint frontend	2025-12-14T16:58:59.2114455Z /home/runner/work/gray/gray/src/app/payment/finish/page.tsx
+ci	Lint frontend	2025-12-14T16:58:59.2116000Z ##[warning]  13:11  warning  'status' is assigned a value but never used  @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2117446Z 
+ci	Lint frontend	2025-12-14T16:58:59.2117826Z /home/runner/work/gray/gray/src/app/payment/page.tsx
+ci	Lint frontend	2025-12-14T16:58:59.2119155Z ##[warning]  121:12  warning  'isIndonesia' is assigned a value but never used  @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2120553Z 
+ci	Lint frontend	2025-12-14T16:58:59.2121019Z /home/runner/work/gray/gray/src/app/pricing/PricingClient.tsx
+ci	Lint frontend	2025-12-14T16:58:59.2122236Z   1:1  warning  Unused eslint-disable directive (no problems were reported from 'react-hooks/purity')
+ci	Lint frontend	2025-12-14T16:58:59.2123937Z   2:1  warning  Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-explicit-any')
+ci	Lint frontend	2025-12-14T16:58:59.2124660Z 
+ci	Lint frontend	2025-12-14T16:58:59.2125162Z /home/runner/work/gray/gray/src/app/pricing/PricingPlansSection.tsx
+ci	Lint frontend	2025-12-14T16:58:59.2126739Z   1:1  warning  Unused eslint-disable directive (no problems were reported from 'react/no-unescaped-entities')
+ci	Lint frontend	2025-12-14T16:58:59.2127431Z 
+ci	Lint frontend	2025-12-14T16:58:59.2127801Z /home/runner/work/gray/gray/src/components/LoginForm.tsx
+ci	Lint frontend	2025-12-14T16:58:59.2129421Z ##[warning]  19:3  warning  'resolveDefaultWorkspacePath' is defined but never used  @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2130872Z 
+ci	Lint frontend	2025-12-14T16:58:59.2131357Z /home/runner/work/gray/gray/src/components/calendar/EventCard.tsx
+ci	Lint frontend	2025-12-14T16:58:59.2132755Z ##[warning]    2:17  warning  'Trash2' is defined but never used    @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2135044Z ##[warning]  121:3   warning  'onDelete' is defined but never used  @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2136285Z 
+ci	Lint frontend	2025-12-14T16:58:59.2136856Z /home/runner/work/gray/gray/src/components/calendar/GrayDashboardCalendar.tsx
+ci	Lint frontend	2025-12-14T16:58:59.2138428Z ##[warning]  643:9  warning  'getEventOverride' is assigned a value but never used  @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2139936Z 
+ci	Lint frontend	2025-12-14T16:58:59.2140448Z /home/runner/work/gray/gray/src/components/gray/AddPlanHabitModal.tsx
+ci	Lint frontend	2025-12-14T16:58:59.2141982Z ##[warning]  230:19  warning  'result' is assigned a value but never used  @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2144452Z ##[warning]  284:20  warning  'result' is assigned a value but never used  @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2145767Z 
+ci	Lint frontend	2025-12-14T16:58:59.2146175Z /home/runner/work/gray/gray/src/components/gray/ChatBar.tsx
+ci	Lint frontend	2025-12-14T16:58:59.2147673Z ##[warning]  43:3  warning  'isReasoningEnabled' is assigned a value but never used  @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2150063Z ##[warning]  44:3  warning  'onToggleReasoning' is defined but never used            @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2152380Z ##[warning]  45:3  warning  'isReasoningLocked' is assigned a value but never used   @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2154926Z ##[warning]  47:3  warning  'onToggleSearch' is defined but never used               @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2156574Z 
+ci	Lint frontend	2025-12-14T16:58:59.2157047Z /home/runner/work/gray/gray/src/components/gray/ChatProvider.tsx
+ci	Lint frontend	2025-12-14T16:58:59.2159076Z ##[warning]    11:8   warning  'ChangeEvent' is defined but never used                                                                                                                                                                                                                                                              @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2162680Z ##[warning]    21:8   warning  'ChatStreamTiming' is defined but never used                                                                                                                                                                                                                                                         @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2165962Z ##[warning]    29:8   warning  'User' is defined but never used                                                                                                                                                                                                                                                                     @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2169037Z ##[warning]    32:35  warning  'formatReminderSlotLabel' is defined but never used                                                                                                                                                                                                                                                  @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2172054Z ##[warning]    58:3   warning  'deriveTitleFromMessage' is defined but never used                                                                                                                                                                                                                                                   @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2175615Z ##[warning]    64:3   warning  'formatConversationTitle' is defined but never used                                                                                                                                                                                                                                                  @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2178733Z ##[warning]    74:3   warning  'GENERAL_CONVERSATION_PREFIX' is defined but never used                                                                                                                                                                                                                                              @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2181723Z ##[warning]    76:3   warning  'GREETING_PATTERN' is defined but never used                                                                                                                                                                                                                                                         @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2185054Z ##[warning]    78:3   warning  'WORKSPACE_CONTEXT_KEYWORDS' is defined but never used                                                                                                                                                                                                                                               @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2188186Z ##[warning]    79:3   warning  'LOW_SIGNAL_TITLE_WORDS' is defined but never used                                                                                                                                                                                                                                                   @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2191611Z ##[warning]   115:7   warning  'PLACEHOLDER_SESSION_IDS' is assigned a value but never used                                                                                                                                                                                                                                         @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2195013Z ##[warning]   120:7   warning  'PLACEHOLDER_TITLES' is assigned a value but never used                                                                                                                                                                                                                                              @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2198295Z ##[warning]   125:7   warning  'FALLBACK_ASSISTANT_DELAY_MS' is assigned a value but never used                                                                                                                                                                                                                                     @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2201648Z ##[warning]   276:7   warning  'getSessionSeedFingerprint' is assigned a value but never used                                                                                                                                                                                                                                       @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2205359Z ##[warning]   603:10  warning  'remoteConversationsLoaded' is assigned a value but never used                                                                                                                                                                                                                                       @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2209068Z ##[warning]   608:9   warning  'debouncedUpdateTimeoutsRef' is assigned a value but never used                                                                                                                                                                                                                                      @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2213091Z ##[warning]   716:6   warning  React Hook useCallback has a missing dependency: 'requestLocationCoordinates'. Either include it or remove the dependency array                                                                                                                                                                      react-hooks/exhaustive-deps
+ci	Lint frontend	2025-12-14T16:58:59.2217707Z ##[warning]  1148:6   warning  React Hook useCallback has a missing dependency: 'fileSearchUploadInputRef'. Either include it or remove the dependency array                                                                                                                                                                        react-hooks/exhaustive-deps
+ci	Lint frontend	2025-12-14T16:58:59.2221495Z ##[warning]  1176:9   warning  'sessionStorageKey' is assigned a value but never used                                                                                                                                                                                                                                               @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2225159Z ##[warning]  1177:9   warning  'previousSessionStorageKeyRef' is assigned a value but never used                                                                                                                                                                                                                                    @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2230295Z ##[warning]  1236:28  warning  The ref value 'historySyncTimersRef.current' will likely have changed by the time this effect cleanup function runs. If this ref points to a node rendered by React, copy 'historySyncTimersRef.current' to a variable inside the effect, and use that variable in the cleanup function              react-hooks/exhaustive-deps
+ci	Lint frontend	2025-12-14T16:58:59.2235650Z ##[warning]  1376:6   warning  React Hook useEffect has missing dependencies: 'sessions.length' and 'setSessions'. Either include them or remove the dependency array                                                                                                                                                               react-hooks/exhaustive-deps
+ci	Lint frontend	2025-12-14T16:58:59.2239805Z ##[warning]  1520:5   warning  React Hook useCallback has a missing dependency: 'setSessions'. Either include it or remove the dependency array                                                                                                                                                                                     react-hooks/exhaustive-deps
+ci	Lint frontend	2025-12-14T16:58:59.2244011Z ##[warning]  1611:5   warning  React Hook useCallback has a missing dependency: 'setSessions'. Either include it or remove the dependency array                                                                                                                                                                                     react-hooks/exhaustive-deps
+ci	Lint frontend	2025-12-14T16:58:59.2249488Z ##[warning]  1645:34  warning  The ref value 'throttledUpdateTimeoutsRef.current' will likely have changed by the time this effect cleanup function runs. If this ref points to a node rendered by React, copy 'throttledUpdateTimeoutsRef.current' to a variable inside the effect, and use that variable in the cleanup function  react-hooks/exhaustive-deps
+ci	Lint frontend	2025-12-14T16:58:59.2254406Z ##[warning]  1700:5   warning  React Hook useCallback has a missing dependency: 'setSessions'. Either include it or remove the dependency array                                                                                                                                                                                     react-hooks/exhaustive-deps
+ci	Lint frontend	2025-12-14T16:58:59.2258724Z ##[warning]  1830:5   warning  React Hook useCallback has a missing dependency: 'setSessions'. Either include it or remove the dependency array                                                                                                                                                                                     react-hooks/exhaustive-deps
+ci	Lint frontend	2025-12-14T16:58:59.2262754Z ##[warning]  1868:5   warning  React Hook useCallback has a missing dependency: 'setSessions'. Either include it or remove the dependency array                                                                                                                                                                                     react-hooks/exhaustive-deps
+ci	Lint frontend	2025-12-14T16:58:59.2267094Z ##[warning]  1892:6   warning  React Hook useCallback has a missing dependency: 'setSessions'. Either include it or remove the dependency array                                                                                                                                                                                     react-hooks/exhaustive-deps
+ci	Lint frontend	2025-12-14T16:58:59.2271076Z ##[warning]  1906:6   warning  React Hook useCallback has a missing dependency: 'setSessions'. Either include it or remove the dependency array                                                                                                                                                                                     react-hooks/exhaustive-deps
+ci	Lint frontend	2025-12-14T16:58:59.2275770Z ##[warning]  2094:5   warning  React Hook useCallback has a missing dependency: 'setSessions'. Either include it or remove the dependency array                                                                                                                                                                                     react-hooks/exhaustive-deps
+ci	Lint frontend	2025-12-14T16:58:59.2279747Z ##[warning]  2208:5   warning  React Hook useCallback has a missing dependency: 'setSessions'. Either include it or remove the dependency array                                                                                                                                                                                     react-hooks/exhaustive-deps
+ci	Lint frontend	2025-12-14T16:58:59.2283434Z ##[warning]  2229:43  warning  '_mode' is defined but never used                                                                                                                                                                                                                                                                    @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2287123Z ##[warning]  2309:5   warning  React Hook useCallback has a missing dependency: 'updateUser'. Either include it or remove the dependency array                                                                                                                                                                                      react-hooks/exhaustive-deps
+ci	Lint frontend	2025-12-14T16:58:59.2290547Z ##[warning]  2361:13  warning  'userMessage' is assigned a value but never used                                                                                                                                                                                                                                                     @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2293697Z ##[warning]  2479:23  warning  'content' is assigned a value but never used                                                                                                                                                                                                                                                         @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2298932Z ##[warning]  2630:5   warning  React Hook useCallback has missing dependencies: 'markAutoStreamTriggered' and 'selectedModelId'. Either include them or remove the dependency array. Outer scope values like 'endSearchTracking' aren't valid dependencies because mutating them doesn't re-render the component                    react-hooks/exhaustive-deps
+ci	Lint frontend	2025-12-14T16:58:59.2304336Z ##[warning]  2719:5   warning  React Hook useCallback has a missing dependency: 'setSessions'. Either include it or remove the dependency array                                                                                                                                                                                     react-hooks/exhaustive-deps
+ci	Lint frontend	2025-12-14T16:58:59.2309952Z ##[warning]  3088:5   warning  React Hook useMemo has missing dependencies: 'cancelQuestionnaire', 'questionnaireSession', 'remindersEnabled', 'startQuestionnaire', 'toggleMapsEnabled', 'toggleRemindersEnabled', and 'toggleWebSearchEnabled'. Either include them or remove the dependency array                                react-hooks/exhaustive-deps
+ci	Lint frontend	2025-12-14T16:58:59.2314141Z ##[warning]  3239:18  warning  'created' is defined but never used                                                                                                                                                                                                                                                                  @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2315584Z 
+ci	Lint frontend	2025-12-14T16:58:59.2316016Z /home/runner/work/gray/gray/src/components/gray/ChatView.tsx
+ci	Lint frontend	2025-12-14T16:58:59.2317990Z ##[warning]    20:3   warning  'Maximize2' is defined but never used                                                                                                                                                                                                                                                    @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2320808Z ##[warning]    21:3   warning  'Minimize2' is defined but never used                                                                                                                                                                                                                                                    @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2324074Z ##[warning]    22:3   warning  'Pause' is defined but never used                                                                                                                                                                                                                                                        @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2326910Z ##[warning]    23:3   warning  'Play' is defined but never used                                                                                                                                                                                                                                                         @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2329720Z ##[warning]    24:3   warning  'RotateCcw' is defined but never used                                                                                                                                                                                                                                                    @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2332513Z ##[warning]    25:3   warning  'Square' is defined but never used                                                                                                                                                                                                                                                       @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2335490Z ##[warning]    26:3   warning  'Repeat' is defined but never used                                                                                                                                                                                                                                                       @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2338792Z ##[warning]    58:3   warning  'deriveTitleFromMessage' is defined but never used                                                                                                                                                                                                                                       @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2341843Z ##[warning]   289:10  warning  'UsageLimitBanner' is defined but never used                                                                                                                                                                                                                                             @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2346973Z ##[warning]   376:11  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+ci	Lint frontend	2025-12-14T16:58:59.2352589Z ##[warning]  1337:9   warning  The 'formatTime' function makes the dependencies of useMemo Hook (at line 1362) change on every render. Move it inside the useMemo callback. Alternatively, wrap the definition of 'formatTime' in its own useCallback() Hook                                                            react-hooks/exhaustive-deps
+ci	Lint frontend	2025-12-14T16:58:59.2356734Z ##[warning]  1416:5   warning  'showFirstMessageSpinner' is defined but never used                                                                                                                                                                                                                                      @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2359115Z   1460:10  warning  Unused eslint-disable directive (no problems were reported from 'react-hooks/rules-of-hooks')
+ci	Lint frontend	2025-12-14T16:58:59.2361817Z ##[warning]  1524:17  warning  'isLatestAssistantMessage' is assigned a value but never used                                                                                                                                                                                                                            @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2367335Z ##[warning]  1549:25  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+ci	Lint frontend	2025-12-14T16:58:59.2373121Z ##[warning]  1734:47  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+ci	Lint frontend	2025-12-14T16:58:59.2377310Z ##[warning]  2268:5   warning  'getSession' is assigned a value but never used                                                                                                                                                                                                                                          @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2380350Z ##[warning]  2291:5   warning  'contextCaches' is assigned a value but never used                                                                                                                                                                                                                                       @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2383691Z ##[warning]  2292:5   warning  'contextCacheLabel' is assigned a value but never used                                                                                                                                                                                                                                   @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2387196Z ##[warning]  2293:5   warning  'contextCacheContent' is assigned a value but never used                                                                                                                                                                                                                                 @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2390379Z ##[warning]  2295:5   warning  'contextCacheMessage' is assigned a value but never used                                                                                                                                                                                                                                 @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2393729Z ##[warning]  2296:5   warning  'isContextCacheSaving' is assigned a value but never used                                                                                                                                                                                                                                @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2397012Z ##[warning]  2297:5   warning  'createContextCache' is assigned a value but never used                                                                                                                                                                                                                                  @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2400205Z ##[warning]  2298:5   warning  'selectContextCacheId' is assigned a value but never used                                                                                                                                                                                                                                @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2403667Z ##[warning]  2299:5   warning  'setContextCacheLabel' is assigned a value but never used                                                                                                                                                                                                                                @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2407273Z ##[warning]  2300:5   warning  'setContextCacheContent' is assigned a value but never used                                                                                                                                                                                                                              @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2410449Z ##[warning]  2301:5   warning  'fileSearchStores' is assigned a value but never used                                                                                                                                                                                                                                    @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2413812Z ##[warning]  2302:5   warning  'fileSearchDisplayName' is assigned a value but never used                                                                                                                                                                                                                               @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2417181Z ##[warning]  2303:5   warning  'setFileSearchDisplayName' is assigned a value but never used                                                                                                                                                                                                                            @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2420352Z ##[warning]  2304:5   warning  'fileSearchStatus' is assigned a value but never used                                                                                                                                                                                                                                    @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2424078Z ##[warning]  2305:5   warning  'isCreatingFileSearchStore' is assigned a value but never used                                                                                                                                                                                                                           @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2427453Z ##[warning]  2306:5   warning  'handleCreateFileSearchStore' is assigned a value but never used                                                                                                                                                                                                                         @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2430713Z ##[warning]  2307:5   warning  'selectedFileSearchStore' is assigned a value but never used                                                                                                                                                                                                                             @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2434145Z ##[warning]  2308:5   warning  'setSelectedFileSearchStore' is assigned a value but never used                                                                                                                                                                                                                          @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2437391Z ##[warning]  2309:5   warning  'fileSearchUploadFile' is assigned a value but never used                                                                                                                                                                                                                                @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2440628Z ##[warning]  2310:5   warning  'setFileSearchUploadFile' is assigned a value but never used                                                                                                                                                                                                                             @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2444260Z ##[warning]  2311:5   warning  'fileSearchUploadStatus' is assigned a value but never used                                                                                                                                                                                                                              @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2447582Z ##[warning]  2312:5   warning  'handleFileSearchUpload' is assigned a value but never used                                                                                                                                                                                                                              @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2450852Z ##[warning]  2313:5   warning  'fileSearchChunking' is assigned a value but never used                                                                                                                                                                                                                                  @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2454323Z ##[warning]  2314:5   warning  'setFileSearchChunking' is assigned a value but never used                                                                                                                                                                                                                               @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2457655Z ##[warning]  2315:5   warning  'fileSearchImportName' is assigned a value but never used                                                                                                                                                                                                                                @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2461175Z ##[warning]  2316:5   warning  'setFileSearchImportName' is assigned a value but never used                                                                                                                                                                                                                             @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2464617Z ##[warning]  2317:5   warning  'fileSearchImportStatus' is assigned a value but never used                                                                                                                                                                                                                              @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2467909Z ##[warning]  2318:5   warning  'handleFileSearchImport' is assigned a value but never used                                                                                                                                                                                                                              @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2471118Z ##[warning]  2319:5   warning  'fileSearchUploadInputRef' is assigned a value but never used                                                                                                                                                                                                                            @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2474426Z ##[warning]  2344:10  warning  'thinkingDots' is assigned a value but never used                                                                                                                                                                                                                                        @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2477627Z ##[warning]  2410:9   warning  'latestSearchSources' is assigned a value but never used                                                                                                                                                                                                                                 @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2481049Z ##[warning]  2451:9   warning  'streamingStatusLabel' is assigned a value but never used                                                                                                                                                                                                                                @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2484337Z ##[warning]  2886:13  warning  'didReceiveToken' is assigned a value but never used                                                                                                                                                                                                                                     @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2489508Z ##[warning]  3137:5   warning  React Hook useCallback has missing dependencies: 'buildAttachmentPayloads', 'clearAttachments', 'mapPayload', 'modelTier', 'reasoningMode', 'selectedContextCacheId', 'selectedModelId', and 'webSearchEnabled'. Either include them or remove the dependency array                      react-hooks/exhaustive-deps
+ci	Lint frontend	2025-12-14T16:58:59.2493989Z ##[warning]  3197:11  warning  'isAwaitingAssistant' is assigned a value but never used                                                                                                                                                                                                                                 @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2496980Z ##[warning]  3725:33  warning  '_node' is defined but never used                                                                                                                                                                                                                                                        @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2501106Z ##[warning]  3771:6   warning  React Hook useEffect has a missing dependency: 'conversationContextStats.modelLimit'. Either include it or remove the dependency array                                                                                                                                                   react-hooks/exhaustive-deps
+ci	Lint frontend	2025-12-14T16:58:59.2503090Z 
+ci	Lint frontend	2025-12-14T16:58:59.2503778Z /home/runner/work/gray/gray/src/components/gray/DashboardHeader.tsx
+ci	Lint frontend	2025-12-14T16:58:59.2505343Z ##[warning]  52:3  warning  'onUpgradeClick' is defined but never used              @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2507661Z ##[warning]  53:3  warning  'showUpgradeButton' is assigned a value but never used  @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2508988Z 
+ci	Lint frontend	2025-12-14T16:58:59.2509477Z /home/runner/work/gray/gray/src/components/gray/DashboardOverlay.tsx
+ci	Lint frontend	2025-12-14T16:58:59.2510744Z ##[warning]  3:21  warning  'useRef' is defined but never used  @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2512713Z ##[warning]  4:10  warning  'X' is defined but never used       @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2514304Z 
+ci	Lint frontend	2025-12-14T16:58:59.2514787Z /home/runner/work/gray/gray/src/components/gray/DashboardView.tsx
+ci	Lint frontend	2025-12-14T16:58:59.2516660Z ##[warning]     9:8   warning  'ChangeEvent' is defined but never used                                                                                                                                                                                                     @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2519520Z ##[warning]    12:10  warning  'createPortal' is defined but never used                                                                                                                                                                                                    @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2522463Z ##[warning]    13:33  warning  'Plus' is defined but never used                                                                                                                                                                                                            @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2525450Z ##[warning]    13:39  warning  'ChevronDown' is defined but never used                                                                                                                                                                                                     @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2528186Z ##[warning]    13:60  warning  'Trash2' is defined but never used                                                                                                                                                                                                          @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2531007Z ##[warning]    16:44  warning  'PositionedEvent' is defined but never used                                                                                                                                                                                                 @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2534117Z ##[warning]    18:10  warning  'CalendarSidebar' is defined but never used                                                                                                                                                                                                 @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2537070Z ##[warning]    19:8   warning  'calendarStyles' is defined but never used                                                                                                                                                                                                  @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2540265Z ##[warning]    23:10  warning  'formatPlanTimeLabel' is defined but never used                                                                                                                                                                                             @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2543363Z ##[warning]    33:8   warning  'ProactivityPreset' is defined but never used                                                                                                                                                                                               @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2546385Z ##[warning]   109:6   warning  'DashboardSectionSpec' is defined but never used                                                                                                                                                                                            @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2549355Z ##[warning]   165:3   warning  'onTestProactivity' is defined but never used                                                                                                                                                                                               @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2552154Z ##[warning]   185:3   warning  'userId' is defined but never used                                                                                                                                                                                                          @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2555283Z ##[warning]   188:3   warning  'onReminderMove' is defined but never used                                                                                                                                                                                                  @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2559643Z ##[warning]   235:9   warning  The 'displayHabits' conditional could make the dependencies of useMemo Hook (at line 248) change on every render. Move it inside the useMemo callback. Alternatively, wrap the initialization of 'displayHabits' in its own useMemo() Hook  react-hooks/exhaustive-deps
+ci	Lint frontend	2025-12-14T16:58:59.2565210Z ##[warning]   236:9   warning  The 'derivedReminderPlans' logical expression could make the dependencies of useMemo Hook (at line 247) change on every render. To fix this, wrap the initialization of 'derivedReminderPlans' in its own useMemo() Hook                    react-hooks/exhaustive-deps
+ci	Lint frontend	2025-12-14T16:58:59.2570378Z ##[warning]   236:9   warning  The 'derivedReminderPlans' logical expression could make the dependencies of useMemo Hook (at line 251) change on every render. To fix this, wrap the initialization of 'derivedReminderPlans' in its own useMemo() Hook                    react-hooks/exhaustive-deps
+ci	Lint frontend	2025-12-14T16:58:59.2574394Z ##[warning]   249:9   warning  'derivedReminderIds' is assigned a value but never used                                                                                                                                                                                     @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2577632Z ##[warning]   258:9   warning  'handleCalendarTaskToggle' is assigned a value but never used                                                                                                                                                                               @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2580794Z ##[warning]   418:9   warning  'pulseTodayButtonLabel' is assigned a value but never used                                                                                                                                                                                  @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2583951Z ##[warning]   423:9   warning  'timezoneLabel' is assigned a value but never used                                                                                                                                                                                          @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2587249Z ##[warning]   431:10  warning  'customSettings' is assigned a value but never used                                                                                                                                                                                         @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2590191Z ##[warning]   500:9   warning  'canApplyCustom' is assigned a value but never used                                                                                                                                                                                         @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2592975Z ##[warning]   505:9   warning  'modalRemoveLabel' is assigned a value but never used                                                                                                                                                                                       @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2596118Z ##[warning]   520:9   warning  'selectedPreset' is assigned a value but never used                                                                                                                                                                                         @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2599040Z ##[warning]   524:9   warning  'isCustomPresetSelected' is assigned a value but never used                                                                                                                                                                                 @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2601822Z ##[warning]   555:24  warning  'prev' is defined but never used                                                                                                                                                                                                            @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2605253Z ##[warning]   607:9   warning  'handlePulseShiftDay' is assigned a value but never used                                                                                                                                                                                    @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2608462Z ##[warning]   617:9   warning  'handlePulseMonthNavigate' is assigned a value but never used                                                                                                                                                                               @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2611699Z ##[warning]   625:9   warning  'handleCalendarVisibilityToggle' is assigned a value but never used                                                                                                                                                                         @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2615212Z ##[warning]   738:9   warning  'resolvePlanFromEvent' is assigned a value but never used                                                                                                                                                                                   @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2618396Z ##[warning]   749:9   warning  'handlePlanDelete' is assigned a value but never used                                                                                                                                                                                       @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2621406Z ##[warning]   759:9   warning  'handleHabitEdit' is assigned a value but never used                                                                                                                                                                                        @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2624874Z ##[warning]   769:9   warning  'handleHabitDelete' is assigned a value but never used                                                                                                                                                                                      @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2627961Z ##[warning]   783:9   warning  'canManagePlans' is assigned a value but never used                                                                                                                                                                                         @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2630882Z ##[warning]   785:9   warning  'canManageHabits' is assigned a value but never used                                                                                                                                                                                        @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2634125Z ##[warning]   786:10  warning  'isMounted' is assigned a value but never used                                                                                                                                                                                              @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2637139Z ##[warning]   891:9   warning  'proactivityCard' is assigned a value but never used                                                                                                                                                                                        @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2640130Z ##[warning]  1049:9   warning  'pulseMonthLabel' is assigned a value but never used                                                                                                                                                                                        @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2643129Z ##[warning]  1054:9   warning  'pulseRangeLabel' is assigned a value but never used                                                                                                                                                                                        @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2645052Z 
+ci	Lint frontend	2025-12-14T16:58:59.2645560Z /home/runner/work/gray/gray/src/components/gray/DiagnosticModule.tsx
+ci	Lint frontend	2025-12-14T16:58:59.2646834Z   3:1   warning  Unused eslint-disable directive (no problems were reported from 'react/no-unescaped-entities')
+ci	Lint frontend	2025-12-14T16:58:59.2648790Z ##[warning]  4:10  warning  'useState' is defined but never used                                                            @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2650124Z 
+ci	Lint frontend	2025-12-14T16:58:59.2650601Z /home/runner/work/gray/gray/src/components/gray/EnhancedSidebar.tsx
+ci	Lint frontend	2025-12-14T16:58:59.2652003Z ##[warning]    7:3  warning  'ChevronsDown' is defined but never used             @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2654505Z ##[warning]  152:5  warning  'viewerInitials' is assigned a value but never used  @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2655859Z 
+ci	Lint frontend	2025-12-14T16:58:59.2656323Z /home/runner/work/gray/gray/src/components/gray/HistoryOverlay.tsx
+ci	Lint frontend	2025-12-14T16:58:59.2657776Z ##[warning]    4:54   warning  'X' is defined but never used                                                                       @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2660112Z ##[warning]    4:57   warning  'ArrowRight' is defined but never used                                                              @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2662274Z    51:13   warning  Unused eslint-disable directive (no problems were reported from 'react-hooks/set-state-in-effect')
+ci	Lint frontend	2025-12-14T16:58:59.2664279Z ##[warning]  107:30   warning  'e' is defined but never used                                                                       @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2666991Z ##[warning]  208:100  warning  'idx' is defined but never used                                                                     @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2668286Z 
+ci	Lint frontend	2025-12-14T16:58:59.2668740Z /home/runner/work/gray/gray/src/components/gray/ModelSelector.tsx
+ci	Lint frontend	2025-12-14T16:58:59.2670048Z ##[warning]    4:15  warning  'Sparkles' is defined but never used           @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2672117Z ##[warning]    4:42  warning  'Rocket' is defined but never used             @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2674654Z ##[warning]    4:94  warning  'ArrowRight' is defined but never used         @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2676772Z ##[warning]  154:9   warning  'nextTier' is assigned a value but never used  @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2678043Z 
+ci	Lint frontend	2025-12-14T16:58:59.2678572Z /home/runner/work/gray/gray/src/components/gray/PersonalizationPanel.tsx
+ci	Lint frontend	2025-12-14T16:58:59.2679944Z     3:1   warning  Unused eslint-disable directive (no problems were reported from 'react-hooks/set-state-in-effect')
+ci	Lint frontend	2025-12-14T16:58:59.2682043Z ##[warning]   99:7   warning  'CUSTOM_INSTRUCTION_FILE_ACCEPT' is assigned a value but never used                                 @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2685050Z ##[warning]  104:7   warning  'WORKSPACE_BACKGROUND_FILE_ACCEPT' is assigned a value but never used                               @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2687710Z ##[warning]  116:3   warning  'viewerRole' is assigned a value but never used                                                     @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2690144Z ##[warning]  117:3   warning  'viewerPlan' is defined but never used                                                              @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2692652Z ##[warning]  126:3   warning  'selectedBackgroundId' is defined but never used                                                    @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2695897Z ##[warning]  127:3   warning  'onSelectBackground' is defined but never used                                                      @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2698557Z ##[warning]  129:3   warning  'backgroundsLoading' is assigned a value but never used                                             @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2701170Z ##[warning]  130:3   warning  'backgroundError' is assigned a value but never used                                                @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2704046Z ##[warning]  136:9   warning  'contextProviderLabel' is assigned a value but never used                                           @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2706798Z ##[warning]  152:9   warning  'contextLimitLabel' is assigned a value but never used                                              @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2709549Z ##[warning]  168:9   warning  'contextMeterDescription' is assigned a value but never used                                        @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2712293Z ##[warning]  169:9   warning  'contextFooterDescription' is assigned a value but never used                                       @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2715326Z ##[warning]  183:9   warning  'handleMapsToggle' is assigned a value but never used                                               @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2718219Z ##[warning]  192:9   warning  'resolvedBackgroundOptions' is assigned a value but never used                                      @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2721081Z ##[warning]  205:10  warning  'customInstructionsFileName' is assigned a value but never used                                     @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2724563Z ##[warning]  206:10  warning  'customInstructionsFileError' is assigned a value but never used                                    @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2727397Z ##[warning]  210:10  warning  'aboutSaveMessage' is assigned a value but never used                                               @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2730104Z ##[warning]  216:10  warning  'overrideSaveMessage' is assigned a value but never used                                            @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2732912Z ##[warning]  342:9   warning  'canSubmitSystemPromptOverride' is assigned a value but never used                                  @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2736185Z ##[warning]  403:9   warning  'handleSystemPromptOverrideChange' is assigned a value but never used                               @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2739177Z ##[warning]  408:9   warning  'handleCustomInstructionsFileChange' is assigned a value but never used                             @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2742129Z ##[warning]  446:9   warning  'handleBackgroundFileChange' is assigned a value but never used                                     @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2745293Z ##[warning]  521:9   warning  'handleSystemPromptOverrideSubmit' is assigned a value but never used                               @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2748204Z ##[warning]  540:9   warning  'handleBackgroundSubmit' is assigned a value but never used                                         @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2749675Z 
+ci	Lint frontend	2025-12-14T16:58:59.2750327Z /home/runner/work/gray/gray/src/components/gray/ProactivityNotificationProvider.tsx
+ci	Lint frontend	2025-12-14T16:58:59.2751943Z ##[warning]    8:3   warning  'useMemo' is defined but never used                           @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2754607Z ##[warning]    9:3   warning  'useRef' is defined but never used                            @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2757343Z ##[warning]   17:10  warning  'requestNotificationPermission' is defined but never used     @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2759750Z ##[warning]   31:7   warning  'toDateKey' is assigned a value but never used                @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2762143Z ##[warning]   38:7   warning  'showBrowserNotification' is assigned a value but never used  @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2764807Z ##[warning]  106:26  warning  'generalSessionId' is assigned a value but never used         @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2767814Z ##[warning]  106:44  warning  'ensureSession' is assigned a value but never used            @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2770240Z ##[warning]  109:10  warning  'toastMessage' is assigned a value but never used             @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2772550Z ##[warning]  229:45  warning  'event' is defined but never used                             @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2774120Z 
+ci	Lint frontend	2025-12-14T16:58:59.2774707Z /home/runner/work/gray/gray/src/components/gray/ProactivitySettingsModal.tsx
+ci	Lint frontend	2025-12-14T16:58:59.2776190Z ##[warning]  14:10  warning  'ProactivityPreset' is defined but never used  @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2777478Z 
+ci	Lint frontend	2025-12-14T16:58:59.2777927Z /home/runner/work/gray/gray/src/components/gray/SettingsModal.tsx
+ci	Lint frontend	2025-12-14T16:58:59.2779224Z     3:1   warning  Unused eslint-disable directive (no problems were reported from 'react-hooks/set-state-in-effect')
+ci	Lint frontend	2025-12-14T16:58:59.2781672Z ##[warning]  439:6   warning  React Hook useEffect has a missing dependency: 'user.improve_model_for_everyone'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+ci	Lint frontend	2025-12-14T16:58:59.2784712Z ##[warning]  631:49  warning  'muted' is defined but never used                                                                                                   @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2786354Z 
+ci	Lint frontend	2025-12-14T16:58:59.2786856Z /home/runner/work/gray/gray/src/components/gray/UsageLimitBanner.tsx
+ci	Lint frontend	2025-12-14T16:58:59.2788154Z   1:1  warning  Unused eslint-disable directive (no problems were reported from 'react/no-unescaped-entities')
+ci	Lint frontend	2025-12-14T16:58:59.2788815Z 
+ci	Lint frontend	2025-12-14T16:58:59.2789300Z /home/runner/work/gray/gray/src/components/gray/WorkspaceHeader.tsx
+ci	Lint frontend	2025-12-14T16:58:59.2790826Z ##[warning]  35:9  warning  'handlePlanBadgeClick' is assigned a value but never used  @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2792209Z 
+ci	Lint frontend	2025-12-14T16:58:59.2792631Z /home/runner/work/gray/gray/src/components/gray/chat/types.ts
+ci	Lint frontend	2025-12-14T16:58:59.2794390Z ##[warning]  1:26  warning  'ReactNode' is defined but never used  @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2795679Z 
+ci	Lint frontend	2025-12-14T16:58:59.2796127Z /home/runner/work/gray/gray/src/components/gray/chat/utils.ts
+ci	Lint frontend	2025-12-14T16:58:59.2797582Z ##[warning]   1:28  warning  'GrayReminderCreatedPayload' is defined but never used  @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2799916Z ##[warning]  11:5   warning  'REMINDER_PRE_BLOCK_REGEX' is defined but never used    @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2802161Z ##[warning]  12:5   warning  'REMINDER_CODE_BLOCK_REGEX' is defined but never used   @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2804736Z ##[warning]  19:35  warning  'formatReminderSlotLabel' is defined but never used     @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2806119Z 
+ci	Lint frontend	2025-12-14T16:58:59.2806499Z /home/runner/work/gray/gray/src/contexts/I18nContext.tsx
+ci	Lint frontend	2025-12-14T16:58:59.2807753Z   56:7  warning  Unused eslint-disable directive (no problems were reported from 'react-hooks/set-state-in-effect')
+ci	Lint frontend	2025-12-14T16:58:59.2808435Z 
+ci	Lint frontend	2025-12-14T16:58:59.2808798Z /home/runner/work/gray/gray/src/contexts/UserContext.tsx
+ci	Lint frontend	2025-12-14T16:58:59.2810979Z ##[warning]   54:7   warning  'USER_CACHE_MAX_AGE_MS' is assigned a value but never used                                                                                                                                                                                                                                     @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2814753Z ##[warning]   84:7   warning  'sanitizeCachedUser' is assigned a value but never used                                                                                                                                                                                                                                        @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2818053Z ##[warning]  167:7   warning  'getUserCacheKey' is assigned a value but never used                                                                                                                                                                                                                                           @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2821005Z ##[warning]  169:25  warning  '_email' is defined but never used                                                                                                                                                                                                                                                             @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2823982Z ##[warning]  171:28  warning  '_email' is defined but never used                                                                                                                                                                                                                                                             @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2826848Z ##[warning]  171:44  warning  '_user' is defined but never used                                                                                                                                                                                                                                                              @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2830065Z ##[warning]  175:27  warning  '_email' is defined but never used                                                                                                                                                                                                                                                             @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2832987Z ##[warning]  198:9   warning  'cachedUser' is assigned a value but never used                                                                                                                                                                                                                                                @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2838409Z ##[warning]  670:31  warning  The ref value 'pendingUserResolversRef.current' will likely have changed by the time this effect cleanup function runs. If this ref points to a node rendered by React, copy 'pendingUserResolversRef.current' to a variable inside the effect, and use that variable in the cleanup function  react-hooks/exhaustive-deps
+ci	Lint frontend	2025-12-14T16:58:59.2843418Z ##[warning]  694:6   warning  React Hook useEffect has missing dependencies: 'loadUser' and 'user'. Either include them or remove the dependency array                                                                                                                                                                       react-hooks/exhaustive-deps
+ci	Lint frontend	2025-12-14T16:58:59.2845256Z 
+ci	Lint frontend	2025-12-14T16:58:59.2845550Z /home/runner/work/gray/gray/src/lib/api.ts
+ci	Lint frontend	2025-12-14T16:58:59.2846525Z   1411:7  warning  Unused eslint-disable directive (no problems were reported from 'no-console')
+ci	Lint frontend	2025-12-14T16:58:59.2847803Z   1461:9  warning  Unused eslint-disable directive (no problems were reported from 'no-console')
+ci	Lint frontend	2025-12-14T16:58:59.2848406Z 
+ci	Lint frontend	2025-12-14T16:58:59.2848993Z /home/runner/work/gray/gray/src/lib/imageCompression.ts
+ci	Lint frontend	2025-12-14T16:58:59.2850331Z ##[warning]  25:34  warning  'reject' is defined but never used  @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2851585Z 
+ci	Lint frontend	2025-12-14T16:58:59.2851872Z /home/runner/work/gray/gray/src/lib/names.ts
+ci	Lint frontend	2025-12-14T16:58:59.2853419Z ##[warning]  146:7  warning  'splitCompactName' is assigned a value but never used  @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2855817Z ##[warning]  225:3  warning  'fallbackIdentifier' is defined but never used         @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2857174Z 
+ci	Lint frontend	2025-12-14T16:58:59.2857568Z /home/runner/work/gray/gray/src/lib/supabase/middleware.ts
+ci	Lint frontend	2025-12-14T16:58:59.2858896Z ##[warning]  34:17  warning  'user' is assigned a value but never used  @typescript-eslint/no-unused-vars
+ci	Lint frontend	2025-12-14T16:58:59.2860142Z 
+ci	Lint frontend	2025-12-14T16:58:59.2860717Z ✖ 240 problems (0 errors, 240 warnings)
+ci	Lint frontend	2025-12-14T16:58:59.2861422Z   0 errors and 14 warnings potentially fixable with the `--fix` option.
+ci	Lint frontend	2025-12-14T16:58:59.2861888Z 
+ci	Setup Python	﻿2025-12-14T16:58:59.3305052Z ##[group]Run actions/setup-python@v5
+ci	Setup Python	2025-12-14T16:58:59.3305363Z with:
+ci	Setup Python	2025-12-14T16:58:59.3305544Z   python-version: 3.11
+ci	Setup Python	2025-12-14T16:58:59.3305742Z   cache: pip
+ci	Setup Python	2025-12-14T16:58:59.3305919Z   check-latest: false
+ci	Setup Python	2025-12-14T16:58:59.3306227Z   token: ***
+ci	Setup Python	2025-12-14T16:58:59.3306415Z   update-environment: true
+ci	Setup Python	2025-12-14T16:58:59.3306633Z   allow-prereleases: false
+ci	Setup Python	2025-12-14T16:58:59.3306837Z   freethreaded: false
+ci	Setup Python	2025-12-14T16:58:59.3307031Z ##[endgroup]
+ci	Setup Python	2025-12-14T16:58:59.5102892Z ##[group]Installed versions
+ci	Setup Python	2025-12-14T16:58:59.5189919Z Successfully set up CPython (3.11.14)
+ci	Setup Python	2025-12-14T16:58:59.5192124Z ##[endgroup]
+ci	Setup Python	2025-12-14T16:59:04.5979639Z [command]/opt/hostedtoolcache/Python/3.11.14/x64/bin/pip cache dir
+ci	Setup Python	2025-12-14T16:59:06.2256774Z /home/runner/.cache/pip
+ci	Setup Python	2025-12-14T16:59:06.3940447Z Cache hit for: setup-python-Linux-x64-24.04-Ubuntu-python-3.11.14-pip-85dcb8a6d47eb5c43c1e7fc9b5506135f4a7353c8e42b40953d088eb72d876eb
+ci	Setup Python	2025-12-14T16:59:07.1917403Z Received 61914936 of 61914936 (100.0%), 86.7 MBs/sec
+ci	Setup Python	2025-12-14T16:59:07.1920918Z Cache Size: ~59 MB (61914936 B)
+ci	Setup Python	2025-12-14T16:59:07.2108843Z [command]/usr/bin/tar -xf /home/runner/work/_temp/58c1b110-ff10-4315-ad2a-955ec7bf9088/cache.tzst -P -C /home/runner/work/gray/gray --use-compress-program unzstd
+ci	Setup Python	2025-12-14T16:59:07.4399581Z Cache restored successfully
+ci	Setup Python	2025-12-14T16:59:07.4579716Z Cache restored from key: setup-python-Linux-x64-24.04-Ubuntu-python-3.11.14-pip-85dcb8a6d47eb5c43c1e7fc9b5506135f4a7353c8e42b40953d088eb72d876eb
+ci	Install backend deps	﻿2025-12-14T16:59:07.4780424Z ##[group]Run pip install -r backend/requirements.txt
+ci	Install backend deps	2025-12-14T16:59:07.4780857Z [36;1mpip install -r backend/requirements.txt[0m
+ci	Install backend deps	2025-12-14T16:59:07.4814993Z shell: /usr/bin/bash -e {0}
+ci	Install backend deps	2025-12-14T16:59:07.4815241Z env:
+ci	Install backend deps	2025-12-14T16:59:07.4815501Z   pythonLocation: /opt/hostedtoolcache/Python/3.11.14/x64
+ci	Install backend deps	2025-12-14T16:59:07.4815948Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.11.14/x64/lib/pkgconfig
+ci	Install backend deps	2025-12-14T16:59:07.4816345Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+ci	Install backend deps	2025-12-14T16:59:07.4816700Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+ci	Install backend deps	2025-12-14T16:59:07.4817057Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+ci	Install backend deps	2025-12-14T16:59:07.4817417Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.11.14/x64/lib
+ci	Install backend deps	2025-12-14T16:59:07.4817711Z ##[endgroup]
+ci	Install backend deps	2025-12-14T16:59:08.8997140Z Collecting fastapi (from -r backend/requirements.txt (line 1))
+ci	Install backend deps	2025-12-14T16:59:08.9015169Z   Using cached fastapi-0.124.4-py3-none-any.whl.metadata (30 kB)
+ci	Install backend deps	2025-12-14T16:59:09.1717231Z Collecting sqlalchemy (from -r backend/requirements.txt (line 4))
+ci	Install backend deps	2025-12-14T16:59:09.1735499Z   Using cached sqlalchemy-2.0.45-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (9.5 kB)
+ci	Install backend deps	2025-12-14T16:59:09.1965638Z Collecting python-dotenv (from -r backend/requirements.txt (line 6))
+ci	Install backend deps	2025-12-14T16:59:09.1985758Z   Using cached python_dotenv-1.2.1-py3-none-any.whl.metadata (25 kB)
+ci	Install backend deps	2025-12-14T16:59:09.2108418Z Collecting python-multipart (from -r backend/requirements.txt (line 7))
+ci	Install backend deps	2025-12-14T16:59:09.2124337Z   Using cached python_multipart-0.0.20-py3-none-any.whl.metadata (1.8 kB)
+ci	Install backend deps	2025-12-14T16:59:09.2353437Z Collecting supabase (from -r backend/requirements.txt (line 8))
+ci	Install backend deps	2025-12-14T16:59:09.2370365Z   Using cached supabase-2.25.1-py3-none-any.whl.metadata (4.6 kB)
+ci	Install backend deps	2025-12-14T16:59:09.2545577Z Collecting APScheduler (from -r backend/requirements.txt (line 9))
+ci	Install backend deps	2025-12-14T16:59:09.2560300Z   Using cached apscheduler-3.11.1-py3-none-any.whl.metadata (6.4 kB)
+ci	Install backend deps	2025-12-14T16:59:09.3091913Z Collecting google-api-python-client (from -r backend/requirements.txt (line 11))
+ci	Install backend deps	2025-12-14T16:59:09.3109071Z   Using cached google_api_python_client-2.187.0-py3-none-any.whl.metadata (7.0 kB)
+ci	Install backend deps	2025-12-14T16:59:09.3235698Z Collecting google-auth-oauthlib (from -r backend/requirements.txt (line 12))
+ci	Install backend deps	2025-12-14T16:59:09.3251863Z   Using cached google_auth_oauthlib-1.2.3-py3-none-any.whl.metadata (3.1 kB)
+ci	Install backend deps	2025-12-14T16:59:09.3344982Z Collecting google-auth-httplib2 (from -r backend/requirements.txt (line 13))
+ci	Install backend deps	2025-12-14T16:59:09.3358911Z   Using cached google_auth_httplib2-0.2.1-py3-none-any.whl.metadata (3.0 kB)
+ci	Install backend deps	2025-12-14T16:59:09.3710208Z Collecting google-auth (from -r backend/requirements.txt (line 14))
+ci	Install backend deps	2025-12-14T16:59:09.3727056Z   Using cached google_auth-2.43.0-py2.py3-none-any.whl.metadata (6.6 kB)
+ci	Install backend deps	2025-12-14T16:59:09.4003062Z Collecting google-genai (from -r backend/requirements.txt (line 15))
+ci	Install backend deps	2025-12-14T16:59:09.4017362Z   Using cached google_genai-1.55.0-py3-none-any.whl.metadata (47 kB)
+ci	Install backend deps	2025-12-14T16:59:09.4694927Z Collecting psycopg2-binary (from -r backend/requirements.txt (line 16))
+ci	Install backend deps	2025-12-14T16:59:09.4712684Z   Using cached psycopg2_binary-2.9.11-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (4.9 kB)
+ci	Install backend deps	2025-12-14T16:59:09.5281516Z Collecting tiktoken (from -r backend/requirements.txt (line 17))
+ci	Install backend deps	2025-12-14T16:59:09.5302639Z   Using cached tiktoken-0.12.0-cp311-cp311-manylinux_2_28_x86_64.whl.metadata (6.7 kB)
+ci	Install backend deps	2025-12-14T16:59:09.5614404Z Collecting anthropic (from -r backend/requirements.txt (line 18))
+ci	Install backend deps	2025-12-14T16:59:09.5630203Z   Using cached anthropic-0.75.0-py3-none-any.whl.metadata (28 kB)
+ci	Install backend deps	2025-12-14T16:59:09.5774603Z Collecting pywebpush (from -r backend/requirements.txt (line 19))
+ci	Install backend deps	2025-12-14T16:59:09.5788596Z   Using cached pywebpush-2.1.2-py3-none-any.whl.metadata (8.3 kB)
+ci	Install backend deps	2025-12-14T16:59:09.6188239Z Collecting asyncpg (from -r backend/requirements.txt (line 20))
+ci	Install backend deps	2025-12-14T16:59:09.6204288Z   Using cached asyncpg-0.31.0-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (4.4 kB)
+ci	Install backend deps	2025-12-14T16:59:09.6533818Z Collecting midtransclient (from -r backend/requirements.txt (line 21))
+ci	Install backend deps	2025-12-14T16:59:09.6547426Z   Using cached midtransclient-1.4.2-py3-none-any.whl.metadata (20 kB)
+ci	Install backend deps	2025-12-14T16:59:09.6654148Z Collecting slowapi (from -r backend/requirements.txt (line 22))
+ci	Install backend deps	2025-12-14T16:59:09.6668273Z   Using cached slowapi-0.1.9-py3-none-any.whl.metadata (3.0 kB)
+ci	Install backend deps	2025-12-14T16:59:09.6786226Z Collecting python-dateutil (from -r backend/requirements.txt (line 23))
+ci	Install backend deps	2025-12-14T16:59:09.6801092Z   Using cached python_dateutil-2.9.0.post0-py2.py3-none-any.whl.metadata (8.4 kB)
+ci	Install backend deps	2025-12-14T16:59:09.7063034Z Collecting redis>=5.0.0 (from -r backend/requirements.txt (line 24))
+ci	Install backend deps	2025-12-14T16:59:09.7076379Z   Using cached redis-7.1.0-py3-none-any.whl.metadata (12 kB)
+ci	Install backend deps	2025-12-14T16:59:09.7277052Z Collecting arq>=0.26.0 (from -r backend/requirements.txt (line 25))
+ci	Install backend deps	2025-12-14T16:59:09.7292388Z   Using cached arq-0.26.3-py3-none-any.whl.metadata (2.7 kB)
+ci	Install backend deps	2025-12-14T16:59:09.7627881Z Collecting pytest (from -r backend/requirements.txt (line 27))
+ci	Install backend deps	2025-12-14T16:59:09.7643573Z   Using cached pytest-9.0.2-py3-none-any.whl.metadata (7.6 kB)
+ci	Install backend deps	2025-12-14T16:59:09.7842262Z Collecting pytest-asyncio (from -r backend/requirements.txt (line 28))
+ci	Install backend deps	2025-12-14T16:59:09.7857703Z   Using cached pytest_asyncio-1.3.0-py3-none-any.whl.metadata (4.1 kB)
+ci	Install backend deps	2025-12-14T16:59:09.8105972Z Collecting uvicorn[standard] (from -r backend/requirements.txt (line 2))
+ci	Install backend deps	2025-12-14T16:59:09.8120736Z   Using cached uvicorn-0.38.0-py3-none-any.whl.metadata (6.8 kB)
+ci	Install backend deps	2025-12-14T16:59:09.8261317Z Collecting databases[sqlite] (from -r backend/requirements.txt (line 3))
+ci	Install backend deps	2025-12-14T16:59:09.8276190Z   Using cached databases-0.9.0-py3-none-any.whl.metadata (5.4 kB)
+ci	Install backend deps	2025-12-14T16:59:09.9397261Z Collecting pydantic[email] (from -r backend/requirements.txt (line 5))
+ci	Install backend deps	2025-12-14T16:59:09.9412788Z   Using cached pydantic-2.12.5-py3-none-any.whl.metadata (90 kB)
+ci	Install backend deps	2025-12-14T16:59:09.9705584Z Collecting starlette<0.51.0,>=0.40.0 (from fastapi->-r backend/requirements.txt (line 1))
+ci	Install backend deps	2025-12-14T16:59:09.9724855Z   Using cached starlette-0.50.0-py3-none-any.whl.metadata (6.3 kB)
+ci	Install backend deps	2025-12-14T16:59:10.0328515Z Collecting typing-extensions>=4.8.0 (from fastapi->-r backend/requirements.txt (line 1))
+ci	Install backend deps	2025-12-14T16:59:10.0343597Z   Using cached typing_extensions-4.15.0-py3-none-any.whl.metadata (3.3 kB)
+ci	Install backend deps	2025-12-14T16:59:10.0416493Z Collecting annotated-doc>=0.0.2 (from fastapi->-r backend/requirements.txt (line 1))
+ci	Install backend deps	2025-12-14T16:59:10.0430458Z   Using cached annotated_doc-0.0.4-py3-none-any.whl.metadata (6.6 kB)
+ci	Install backend deps	2025-12-14T16:59:10.0526681Z Collecting annotated-types>=0.6.0 (from pydantic[email]->-r backend/requirements.txt (line 5))
+ci	Install backend deps	2025-12-14T16:59:10.0540182Z   Using cached annotated_types-0.7.0-py3-none-any.whl.metadata (15 kB)
+ci	Install backend deps	2025-12-14T16:59:10.7671233Z Collecting pydantic-core==2.41.5 (from pydantic[email]->-r backend/requirements.txt (line 5))
+ci	Install backend deps	2025-12-14T16:59:10.7717588Z   Using cached pydantic_core-2.41.5-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (7.3 kB)
+ci	Install backend deps	2025-12-14T16:59:10.7828483Z Collecting typing-inspection>=0.4.2 (from pydantic[email]->-r backend/requirements.txt (line 5))
+ci	Install backend deps	2025-12-14T16:59:10.7842921Z   Using cached typing_inspection-0.4.2-py3-none-any.whl.metadata (2.6 kB)
+ci	Install backend deps	2025-12-14T16:59:10.8034798Z Collecting anyio<5,>=3.6.2 (from starlette<0.51.0,>=0.40.0->fastapi->-r backend/requirements.txt (line 1))
+ci	Install backend deps	2025-12-14T16:59:10.8050310Z   Using cached anyio-4.12.0-py3-none-any.whl.metadata (4.3 kB)
+ci	Install backend deps	2025-12-14T16:59:10.8201245Z Collecting idna>=2.8 (from anyio<5,>=3.6.2->starlette<0.51.0,>=0.40.0->fastapi->-r backend/requirements.txt (line 1))
+ci	Install backend deps	2025-12-14T16:59:10.8216372Z   Using cached idna-3.11-py3-none-any.whl.metadata (8.4 kB)
+ci	Install backend deps	2025-12-14T16:59:10.8422230Z Collecting click>=7.0 (from uvicorn[standard]->-r backend/requirements.txt (line 2))
+ci	Install backend deps	2025-12-14T16:59:10.8437008Z   Using cached click-8.3.1-py3-none-any.whl.metadata (2.6 kB)
+ci	Install backend deps	2025-12-14T16:59:10.8526382Z Collecting h11>=0.8 (from uvicorn[standard]->-r backend/requirements.txt (line 2))
+ci	Install backend deps	2025-12-14T16:59:10.8540410Z   Using cached h11-0.16.0-py3-none-any.whl.metadata (8.3 kB)
+ci	Install backend deps	2025-12-14T16:59:10.8837872Z Collecting httptools>=0.6.3 (from uvicorn[standard]->-r backend/requirements.txt (line 2))
+ci	Install backend deps	2025-12-14T16:59:10.8854886Z   Using cached httptools-0.7.1-cp311-cp311-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl.metadata (3.5 kB)
+ci	Install backend deps	2025-12-14T16:59:10.9243583Z Collecting pyyaml>=5.1 (from uvicorn[standard]->-r backend/requirements.txt (line 2))
+ci	Install backend deps	2025-12-14T16:59:10.9260994Z   Using cached pyyaml-6.0.3-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (2.4 kB)
+ci	Install backend deps	2025-12-14T16:59:10.9647716Z Collecting uvloop>=0.15.1 (from uvicorn[standard]->-r backend/requirements.txt (line 2))
+ci	Install backend deps	2025-12-14T16:59:10.9663706Z   Using cached uvloop-0.22.1-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (4.9 kB)
+ci	Install backend deps	2025-12-14T16:59:11.0388570Z Collecting watchfiles>=0.13 (from uvicorn[standard]->-r backend/requirements.txt (line 2))
+ci	Install backend deps	2025-12-14T16:59:11.0401524Z   Using cached watchfiles-1.1.1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (4.9 kB)
+ci	Install backend deps	2025-12-14T16:59:11.1235898Z Collecting websockets>=10.4 (from uvicorn[standard]->-r backend/requirements.txt (line 2))
+ci	Install backend deps	2025-12-14T16:59:11.1252217Z   Using cached websockets-15.0.1-cp311-cp311-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (6.8 kB)
+ci	Install backend deps	2025-12-14T16:59:11.1513803Z Collecting aiosqlite (from databases[sqlite]->-r backend/requirements.txt (line 3))
+ci	Install backend deps	2025-12-14T16:59:11.2123937Z   Downloading aiosqlite-0.22.0-py3-none-any.whl.metadata (4.3 kB)
+ci	Install backend deps	2025-12-14T16:59:11.3933532Z Collecting greenlet>=1 (from sqlalchemy->-r backend/requirements.txt (line 4))
+ci	Install backend deps	2025-12-14T16:59:11.3954011Z   Using cached greenlet-3.3.0-cp311-cp311-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl.metadata (4.1 kB)
+ci	Install backend deps	2025-12-14T16:59:11.4158706Z Collecting email-validator>=2.0.0 (from pydantic[email]->-r backend/requirements.txt (line 5))
+ci	Install backend deps	2025-12-14T16:59:11.4173828Z   Using cached email_validator-2.3.0-py3-none-any.whl.metadata (26 kB)
+ci	Install backend deps	2025-12-14T16:59:11.4368686Z Collecting realtime==2.25.1 (from supabase->-r backend/requirements.txt (line 8))
+ci	Install backend deps	2025-12-14T16:59:11.4383566Z   Using cached realtime-2.25.1-py3-none-any.whl.metadata (7.0 kB)
+ci	Install backend deps	2025-12-14T16:59:11.4528833Z Collecting supabase-functions==2.25.1 (from supabase->-r backend/requirements.txt (line 8))
+ci	Install backend deps	2025-12-14T16:59:11.4542636Z   Using cached supabase_functions-2.25.1-py3-none-any.whl.metadata (2.4 kB)
+ci	Install backend deps	2025-12-14T16:59:11.4697151Z Collecting storage3==2.25.1 (from supabase->-r backend/requirements.txt (line 8))
+ci	Install backend deps	2025-12-14T16:59:11.4712677Z   Using cached storage3-2.25.1-py3-none-any.whl.metadata (2.1 kB)
+ci	Install backend deps	2025-12-14T16:59:11.4860231Z Collecting supabase-auth==2.25.1 (from supabase->-r backend/requirements.txt (line 8))
+ci	Install backend deps	2025-12-14T16:59:11.4874559Z   Using cached supabase_auth-2.25.1-py3-none-any.whl.metadata (6.4 kB)
+ci	Install backend deps	2025-12-14T16:59:11.5029718Z Collecting postgrest==2.25.1 (from supabase->-r backend/requirements.txt (line 8))
+ci	Install backend deps	2025-12-14T16:59:11.5043475Z   Using cached postgrest-2.25.1-py3-none-any.whl.metadata (3.4 kB)
+ci	Install backend deps	2025-12-14T16:59:11.5205711Z Collecting httpx<0.29,>=0.26 (from supabase->-r backend/requirements.txt (line 8))
+ci	Install backend deps	2025-12-14T16:59:11.5220323Z   Using cached httpx-0.28.1-py3-none-any.whl.metadata (7.1 kB)
+ci	Install backend deps	2025-12-14T16:59:11.5391510Z Collecting deprecation>=2.1.0 (from postgrest==2.25.1->supabase->-r backend/requirements.txt (line 8))
+ci	Install backend deps	2025-12-14T16:59:11.5405380Z   Using cached deprecation-2.1.0-py2.py3-none-any.whl.metadata (4.6 kB)
+ci	Install backend deps	2025-12-14T16:59:11.7835862Z Collecting yarl>=1.20.1 (from postgrest==2.25.1->supabase->-r backend/requirements.txt (line 8))
+ci	Install backend deps	2025-12-14T16:59:11.7857028Z   Using cached yarl-1.22.0-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (75 kB)
+ci	Install backend deps	2025-12-14T16:59:11.8195956Z Collecting pyjwt>=2.10.1 (from pyjwt[crypto]>=2.10.1->supabase-auth==2.25.1->supabase->-r backend/requirements.txt (line 8))
+ci	Install backend deps	2025-12-14T16:59:11.8210569Z   Using cached PyJWT-2.10.1-py3-none-any.whl.metadata (4.0 kB)
+ci	Install backend deps	2025-12-14T16:59:11.8345673Z Collecting strenum>=0.4.15 (from supabase-functions==2.25.1->supabase->-r backend/requirements.txt (line 8))
+ci	Install backend deps	2025-12-14T16:59:11.8359409Z   Using cached StrEnum-0.4.15-py3-none-any.whl.metadata (5.3 kB)
+ci	Install backend deps	2025-12-14T16:59:11.8551372Z Collecting certifi (from httpx<0.29,>=0.26->supabase->-r backend/requirements.txt (line 8))
+ci	Install backend deps	2025-12-14T16:59:11.8565820Z   Using cached certifi-2025.11.12-py3-none-any.whl.metadata (2.5 kB)
+ci	Install backend deps	2025-12-14T16:59:11.8731602Z Collecting httpcore==1.* (from httpx<0.29,>=0.26->supabase->-r backend/requirements.txt (line 8))
+ci	Install backend deps	2025-12-14T16:59:11.8747329Z   Using cached httpcore-1.0.9-py3-none-any.whl.metadata (21 kB)
+ci	Install backend deps	2025-12-14T16:59:11.8962969Z Collecting h2<5,>=3 (from httpx[http2]<0.29,>=0.26->postgrest==2.25.1->supabase->-r backend/requirements.txt (line 8))
+ci	Install backend deps	2025-12-14T16:59:11.8977648Z   Using cached h2-4.3.0-py3-none-any.whl.metadata (5.1 kB)
+ci	Install backend deps	2025-12-14T16:59:11.9119977Z Collecting hyperframe<7,>=6.1 (from h2<5,>=3->httpx[http2]<0.29,>=0.26->postgrest==2.25.1->supabase->-r backend/requirements.txt (line 8))
+ci	Install backend deps	2025-12-14T16:59:11.9134153Z   Using cached hyperframe-6.1.0-py3-none-any.whl.metadata (4.3 kB)
+ci	Install backend deps	2025-12-14T16:59:11.9229919Z Collecting hpack<5,>=4.1 (from h2<5,>=3->httpx[http2]<0.29,>=0.26->postgrest==2.25.1->supabase->-r backend/requirements.txt (line 8))
+ci	Install backend deps	2025-12-14T16:59:11.9244370Z   Using cached hpack-4.1.0-py3-none-any.whl.metadata (4.6 kB)
+ci	Install backend deps	2025-12-14T16:59:11.9407264Z Collecting tzlocal>=3.0 (from APScheduler->-r backend/requirements.txt (line 9))
+ci	Install backend deps	2025-12-14T16:59:11.9421180Z   Using cached tzlocal-5.3.1-py3-none-any.whl.metadata (7.6 kB)
+ci	Install backend deps	2025-12-14T16:59:11.9562955Z Collecting httplib2<1.0.0,>=0.19.0 (from google-api-python-client->-r backend/requirements.txt (line 11))
+ci	Install backend deps	2025-12-14T16:59:11.9577023Z   Using cached httplib2-0.31.0-py3-none-any.whl.metadata (2.2 kB)
+ci	Install backend deps	2025-12-14T16:59:12.0377157Z Collecting google-api-core!=2.0.*,!=2.1.*,!=2.2.*,!=2.3.0,<3.0.0,>=1.31.5 (from google-api-python-client->-r backend/requirements.txt (line 11))
+ci	Install backend deps	2025-12-14T16:59:12.0390462Z   Using cached google_api_core-2.28.1-py3-none-any.whl.metadata (3.3 kB)
+ci	Install backend deps	2025-12-14T16:59:12.1227381Z Collecting uritemplate<5,>=3.0.1 (from google-api-python-client->-r backend/requirements.txt (line 11))
+ci	Install backend deps	2025-12-14T16:59:12.1242142Z   Using cached uritemplate-4.2.0-py3-none-any.whl.metadata (2.6 kB)
+ci	Install backend deps	2025-12-14T16:59:12.1444888Z Collecting cachetools<7.0,>=2.0.0 (from google-auth->-r backend/requirements.txt (line 14))
+ci	Install backend deps	2025-12-14T16:59:12.1459236Z   Using cached cachetools-6.2.3-py3-none-any.whl.metadata (5.6 kB)
+ci	Install backend deps	2025-12-14T16:59:12.1614745Z Collecting pyasn1-modules>=0.2.1 (from google-auth->-r backend/requirements.txt (line 14))
+ci	Install backend deps	2025-12-14T16:59:12.1628902Z   Using cached pyasn1_modules-0.4.2-py3-none-any.whl.metadata (3.5 kB)
+ci	Install backend deps	2025-12-14T16:59:12.1768778Z Collecting rsa<5,>=3.1.4 (from google-auth->-r backend/requirements.txt (line 14))
+ci	Install backend deps	2025-12-14T16:59:12.1783762Z   Using cached rsa-4.9.1-py3-none-any.whl.metadata (5.6 kB)
+ci	Install backend deps	2025-12-14T16:59:12.1982417Z Collecting googleapis-common-protos<2.0.0,>=1.56.2 (from google-api-core!=2.0.*,!=2.1.*,!=2.2.*,!=2.3.0,<3.0.0,>=1.31.5->google-api-python-client->-r backend/requirements.txt (line 11))
+ci	Install backend deps	2025-12-14T16:59:12.1996441Z   Using cached googleapis_common_protos-1.72.0-py3-none-any.whl.metadata (9.4 kB)
+ci	Install backend deps	2025-12-14T16:59:12.3896604Z Collecting protobuf!=3.20.0,!=3.20.1,!=4.21.0,!=4.21.1,!=4.21.2,!=4.21.3,!=4.21.4,!=4.21.5,<7.0.0,>=3.19.5 (from google-api-core!=2.0.*,!=2.1.*,!=2.2.*,!=2.3.0,<3.0.0,>=1.31.5->google-api-python-client->-r backend/requirements.txt (line 11))
+ci	Install backend deps	2025-12-14T16:59:12.3909720Z   Using cached protobuf-6.33.2-cp39-abi3-manylinux2014_x86_64.whl.metadata (593 bytes)
+ci	Install backend deps	2025-12-14T16:59:12.4057530Z Collecting proto-plus<2.0.0,>=1.22.3 (from google-api-core!=2.0.*,!=2.1.*,!=2.2.*,!=2.3.0,<3.0.0,>=1.31.5->google-api-python-client->-r backend/requirements.txt (line 11))
+ci	Install backend deps	2025-12-14T16:59:12.4071753Z   Using cached proto_plus-1.26.1-py3-none-any.whl.metadata (2.2 kB)
+ci	Install backend deps	2025-12-14T16:59:12.4538041Z Collecting requests<3.0.0,>=2.18.0 (from google-api-core!=2.0.*,!=2.1.*,!=2.2.*,!=2.3.0,<3.0.0,>=1.31.5->google-api-python-client->-r backend/requirements.txt (line 11))
+ci	Install backend deps	2025-12-14T16:59:12.4552972Z   Using cached requests-2.32.5-py3-none-any.whl.metadata (4.9 kB)
+ci	Install backend deps	2025-12-14T16:59:12.5420372Z Collecting pyparsing<4,>=3.0.4 (from httplib2<1.0.0,>=0.19.0->google-api-python-client->-r backend/requirements.txt (line 11))
+ci	Install backend deps	2025-12-14T16:59:12.5435838Z   Using cached pyparsing-3.2.5-py3-none-any.whl.metadata (5.0 kB)
+ci	Install backend deps	2025-12-14T16:59:12.6887002Z Collecting charset_normalizer<4,>=2 (from requests<3.0.0,>=2.18.0->google-api-core!=2.0.*,!=2.1.*,!=2.2.*,!=2.3.0,<3.0.0,>=1.31.5->google-api-python-client->-r backend/requirements.txt (line 11))
+ci	Install backend deps	2025-12-14T16:59:12.6901955Z   Using cached charset_normalizer-3.4.4-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (37 kB)
+ci	Install backend deps	2025-12-14T16:59:12.7210647Z Collecting urllib3<3,>=1.21.1 (from requests<3.0.0,>=2.18.0->google-api-core!=2.0.*,!=2.1.*,!=2.2.*,!=2.3.0,<3.0.0,>=1.31.5->google-api-python-client->-r backend/requirements.txt (line 11))
+ci	Install backend deps	2025-12-14T16:59:12.7227543Z   Using cached urllib3-2.6.2-py3-none-any.whl.metadata (6.6 kB)
+ci	Install backend deps	2025-12-14T16:59:12.7535458Z Collecting pyasn1>=0.1.3 (from rsa<5,>=3.1.4->google-auth->-r backend/requirements.txt (line 14))
+ci	Install backend deps	2025-12-14T16:59:12.7550336Z   Using cached pyasn1-0.6.1-py3-none-any.whl.metadata (8.4 kB)
+ci	Install backend deps	2025-12-14T16:59:12.7868375Z Collecting google-auth (from -r backend/requirements.txt (line 14))
+ci	Install backend deps	2025-12-14T16:59:12.7884135Z   Using cached google_auth-2.41.1-py2.py3-none-any.whl.metadata (6.6 kB)
+ci	Install backend deps	2025-12-14T16:59:12.8018559Z Collecting requests-oauthlib>=0.7.0 (from google-auth-oauthlib->-r backend/requirements.txt (line 12))
+ci	Install backend deps	2025-12-14T16:59:12.8032913Z   Using cached requests_oauthlib-2.0.0-py2.py3-none-any.whl.metadata (11 kB)
+ci	Install backend deps	2025-12-14T16:59:12.8366254Z Collecting tenacity<9.2.0,>=8.2.3 (from google-genai->-r backend/requirements.txt (line 15))
+ci	Install backend deps	2025-12-14T16:59:12.8381421Z   Using cached tenacity-9.1.2-py3-none-any.whl.metadata (1.2 kB)
+ci	Install backend deps	2025-12-14T16:59:12.8559567Z Collecting distro<2,>=1.7.0 (from google-genai->-r backend/requirements.txt (line 15))
+ci	Install backend deps	2025-12-14T16:59:12.8577554Z   Using cached distro-1.9.0-py3-none-any.whl.metadata (6.8 kB)
+ci	Install backend deps	2025-12-14T16:59:12.8660055Z Collecting sniffio (from google-genai->-r backend/requirements.txt (line 15))
+ci	Install backend deps	2025-12-14T16:59:12.8674215Z   Using cached sniffio-1.3.1-py3-none-any.whl.metadata (3.9 kB)
+ci	Install backend deps	2025-12-14T16:59:13.3672001Z Collecting regex>=2022.1.18 (from tiktoken->-r backend/requirements.txt (line 17))
+ci	Install backend deps	2025-12-14T16:59:13.3689916Z   Using cached regex-2025.11.3-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (40 kB)
+ci	Install backend deps	2025-12-14T16:59:13.3961688Z Collecting docstring-parser<1,>=0.15 (from anthropic->-r backend/requirements.txt (line 18))
+ci	Install backend deps	2025-12-14T16:59:13.3975298Z   Using cached docstring_parser-0.17.0-py3-none-any.whl.metadata (3.5 kB)
+ci	Install backend deps	2025-12-14T16:59:13.4712388Z Collecting jiter<1,>=0.4.0 (from anthropic->-r backend/requirements.txt (line 18))
+ci	Install backend deps	2025-12-14T16:59:13.4729643Z   Using cached jiter-0.12.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (5.2 kB)
+ci	Install backend deps	2025-12-14T16:59:13.9539211Z Collecting aiohttp (from pywebpush->-r backend/requirements.txt (line 19))
+ci	Install backend deps	2025-12-14T16:59:13.9555544Z   Using cached aiohttp-3.13.2-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (8.1 kB)
+ci	Install backend deps	2025-12-14T16:59:14.2425864Z Collecting cryptography>=2.6.1 (from pywebpush->-r backend/requirements.txt (line 19))
+ci	Install backend deps	2025-12-14T16:59:14.2442562Z   Using cached cryptography-46.0.3-cp311-abi3-manylinux_2_34_x86_64.whl.metadata (5.7 kB)
+ci	Install backend deps	2025-12-14T16:59:14.2634726Z Collecting http-ece>=1.1.0 (from pywebpush->-r backend/requirements.txt (line 19))
+ci	Install backend deps	2025-12-14T16:59:14.2641906Z   Using cached http_ece-1.2.1-py2.py3-none-any.whl
+ci	Install backend deps	2025-12-14T16:59:14.2971711Z Collecting six>=1.15.0 (from pywebpush->-r backend/requirements.txt (line 19))
+ci	Install backend deps	2025-12-14T16:59:14.2987357Z   Using cached six-1.17.0-py2.py3-none-any.whl.metadata (1.7 kB)
+ci	Install backend deps	2025-12-14T16:59:14.3096450Z Collecting py-vapid>=1.7.0 (from pywebpush->-r backend/requirements.txt (line 19))
+ci	Install backend deps	2025-12-14T16:59:14.3109111Z   Using cached py_vapid-1.9.2-py3-none-any.whl.metadata (4.4 kB)
+ci	Install backend deps	2025-12-14T16:59:14.3485645Z Collecting limits>=2.3 (from slowapi->-r backend/requirements.txt (line 22))
+ci	Install backend deps	2025-12-14T16:59:14.3501583Z   Using cached limits-5.6.0-py3-none-any.whl.metadata (10 kB)
+ci	Install backend deps	2025-12-14T16:59:14.3737867Z Collecting redis>=5.0.0 (from -r backend/requirements.txt (line 24))
+ci	Install backend deps	2025-12-14T16:59:14.3754091Z   Using cached redis-5.3.1-py3-none-any.whl.metadata (9.2 kB)
+ci	Install backend deps	2025-12-14T16:59:14.4720827Z Collecting hiredis>=3.0.0 (from redis[hiredis]<6,>=4.2.0->arq>=0.26.0->-r backend/requirements.txt (line 25))
+ci	Install backend deps	2025-12-14T16:59:14.4738456Z   Using cached hiredis-3.3.0-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (7.5 kB)
+ci	Install backend deps	2025-12-14T16:59:14.4848007Z Collecting iniconfig>=1.0.1 (from pytest->-r backend/requirements.txt (line 27))
+ci	Install backend deps	2025-12-14T16:59:14.4862638Z   Using cached iniconfig-2.3.0-py3-none-any.whl.metadata (2.5 kB)
+ci	Install backend deps	2025-12-14T16:59:14.4994618Z Collecting packaging>=22 (from pytest->-r backend/requirements.txt (line 27))
+ci	Install backend deps	2025-12-14T16:59:14.5009008Z   Using cached packaging-25.0-py3-none-any.whl.metadata (3.3 kB)
+ci	Install backend deps	2025-12-14T16:59:14.5111408Z Collecting pluggy<2,>=1.5 (from pytest->-r backend/requirements.txt (line 27))
+ci	Install backend deps	2025-12-14T16:59:14.5125332Z   Using cached pluggy-1.6.0-py3-none-any.whl.metadata (4.8 kB)
+ci	Install backend deps	2025-12-14T16:59:14.5302022Z Collecting pygments>=2.7.2 (from pytest->-r backend/requirements.txt (line 27))
+ci	Install backend deps	2025-12-14T16:59:14.5318329Z   Using cached pygments-2.19.2-py3-none-any.whl.metadata (2.5 kB)
+ci	Install backend deps	2025-12-14T16:59:14.6622883Z Collecting cffi>=2.0.0 (from cryptography>=2.6.1->pywebpush->-r backend/requirements.txt (line 19))
+ci	Install backend deps	2025-12-14T16:59:14.6640174Z   Using cached cffi-2.0.0-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (2.6 kB)
+ci	Install backend deps	2025-12-14T16:59:14.6757051Z Collecting pycparser (from cffi>=2.0.0->cryptography>=2.6.1->pywebpush->-r backend/requirements.txt (line 19))
+ci	Install backend deps	2025-12-14T16:59:14.6771328Z   Using cached pycparser-2.23-py3-none-any.whl.metadata (993 bytes)
+ci	Install backend deps	2025-12-14T16:59:14.6940842Z Collecting dnspython>=2.0.0 (from email-validator>=2.0.0->pydantic[email]->-r backend/requirements.txt (line 5))
+ci	Install backend deps	2025-12-14T16:59:14.6955888Z   Using cached dnspython-2.8.0-py3-none-any.whl.metadata (5.7 kB)
+ci	Install backend deps	2025-12-14T16:59:14.7570259Z Collecting deprecated>=1.2 (from limits>=2.3->slowapi->-r backend/requirements.txt (line 22))
+ci	Install backend deps	2025-12-14T16:59:14.7585226Z   Using cached deprecated-1.3.1-py2.py3-none-any.whl.metadata (5.9 kB)
+ci	Install backend deps	2025-12-14T16:59:14.8937099Z Collecting wrapt<3,>=1.10 (from deprecated>=1.2->limits>=2.3->slowapi->-r backend/requirements.txt (line 22))
+ci	Install backend deps	2025-12-14T16:59:14.8953749Z   Using cached wrapt-2.0.1-cp311-cp311-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl.metadata (9.0 kB)
+ci	Install backend deps	2025-12-14T16:59:14.9658994Z Collecting oauthlib>=3.0.0 (from requests-oauthlib>=0.7.0->google-auth-oauthlib->-r backend/requirements.txt (line 12))
+ci	Install backend deps	2025-12-14T16:59:14.9673740Z   Using cached oauthlib-3.3.1-py3-none-any.whl.metadata (7.9 kB)
+ci	Install backend deps	2025-12-14T16:59:15.2217556Z Collecting multidict>=4.0 (from yarl>=1.20.1->postgrest==2.25.1->supabase->-r backend/requirements.txt (line 8))
+ci	Install backend deps	2025-12-14T16:59:15.2232916Z   Using cached multidict-6.7.0-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (5.3 kB)
+ci	Install backend deps	2025-12-14T16:59:15.2740636Z Collecting propcache>=0.2.1 (from yarl>=1.20.1->postgrest==2.25.1->supabase->-r backend/requirements.txt (line 8))
+ci	Install backend deps	2025-12-14T16:59:15.2756522Z   Using cached propcache-0.4.1-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (13 kB)
+ci	Install backend deps	2025-12-14T16:59:15.3000722Z Collecting aiohappyeyeballs>=2.5.0 (from aiohttp->pywebpush->-r backend/requirements.txt (line 19))
+ci	Install backend deps	2025-12-14T16:59:15.3014803Z   Using cached aiohappyeyeballs-2.6.1-py3-none-any.whl.metadata (5.9 kB)
+ci	Install backend deps	2025-12-14T16:59:15.3091730Z Collecting aiosignal>=1.4.0 (from aiohttp->pywebpush->-r backend/requirements.txt (line 19))
+ci	Install backend deps	2025-12-14T16:59:15.3105605Z   Using cached aiosignal-1.4.0-py3-none-any.whl.metadata (3.7 kB)
+ci	Install backend deps	2025-12-14T16:59:15.3232172Z Collecting attrs>=17.3.0 (from aiohttp->pywebpush->-r backend/requirements.txt (line 19))
+ci	Install backend deps	2025-12-14T16:59:15.3247100Z   Using cached attrs-25.4.0-py3-none-any.whl.metadata (10 kB)
+ci	Install backend deps	2025-12-14T16:59:15.3909767Z Collecting frozenlist>=1.1.1 (from aiohttp->pywebpush->-r backend/requirements.txt (line 19))
+ci	Install backend deps	2025-12-14T16:59:15.3925641Z   Using cached frozenlist-1.8.0-cp311-cp311-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl.metadata (20 kB)
+ci	Install backend deps	2025-12-14T16:59:15.4402491Z Using cached fastapi-0.124.4-py3-none-any.whl (113 kB)
+ci	Install backend deps	2025-12-14T16:59:15.4416716Z Using cached pydantic-2.12.5-py3-none-any.whl (463 kB)
+ci	Install backend deps	2025-12-14T16:59:15.4434329Z Using cached pydantic_core-2.41.5-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (2.1 MB)
+ci	Install backend deps	2025-12-14T16:59:15.4462820Z Using cached starlette-0.50.0-py3-none-any.whl (74 kB)
+ci	Install backend deps	2025-12-14T16:59:15.4476872Z Using cached anyio-4.12.0-py3-none-any.whl (113 kB)
+ci	Install backend deps	2025-12-14T16:59:15.4490808Z Using cached uvicorn-0.38.0-py3-none-any.whl (68 kB)
+ci	Install backend deps	2025-12-14T16:59:15.4504651Z Using cached databases-0.9.0-py3-none-any.whl (25 kB)
+ci	Install backend deps	2025-12-14T16:59:15.4518756Z Using cached sqlalchemy-2.0.45-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (3.3 MB)
+ci	Install backend deps	2025-12-14T16:59:15.4556113Z Using cached python_dotenv-1.2.1-py3-none-any.whl (21 kB)
+ci	Install backend deps	2025-12-14T16:59:15.4569734Z Using cached python_multipart-0.0.20-py3-none-any.whl (24 kB)
+ci	Install backend deps	2025-12-14T16:59:15.4582989Z Using cached supabase-2.25.1-py3-none-any.whl (16 kB)
+ci	Install backend deps	2025-12-14T16:59:15.4596544Z Using cached postgrest-2.25.1-py3-none-any.whl (21 kB)
+ci	Install backend deps	2025-12-14T16:59:15.4609748Z Using cached realtime-2.25.1-py3-none-any.whl (22 kB)
+ci	Install backend deps	2025-12-14T16:59:15.4623162Z Using cached storage3-2.25.1-py3-none-any.whl (26 kB)
+ci	Install backend deps	2025-12-14T16:59:15.4637019Z Using cached supabase_auth-2.25.1-py3-none-any.whl (48 kB)
+ci	Install backend deps	2025-12-14T16:59:15.4650688Z Using cached supabase_functions-2.25.1-py3-none-any.whl (8.5 kB)
+ci	Install backend deps	2025-12-14T16:59:15.4664239Z Using cached httpx-0.28.1-py3-none-any.whl (73 kB)
+ci	Install backend deps	2025-12-14T16:59:15.4678211Z Using cached httpcore-1.0.9-py3-none-any.whl (78 kB)
+ci	Install backend deps	2025-12-14T16:59:15.4692266Z Using cached h2-4.3.0-py3-none-any.whl (61 kB)
+ci	Install backend deps	2025-12-14T16:59:15.4706501Z Using cached hpack-4.1.0-py3-none-any.whl (34 kB)
+ci	Install backend deps	2025-12-14T16:59:15.4720169Z Using cached hyperframe-6.1.0-py3-none-any.whl (13 kB)
+ci	Install backend deps	2025-12-14T16:59:15.4734509Z Using cached websockets-15.0.1-cp311-cp311-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl (182 kB)
+ci	Install backend deps	2025-12-14T16:59:15.4748616Z Using cached apscheduler-3.11.1-py3-none-any.whl (64 kB)
+ci	Install backend deps	2025-12-14T16:59:15.4762495Z Using cached google_api_python_client-2.187.0-py3-none-any.whl (14.6 MB)
+ci	Install backend deps	2025-12-14T16:59:15.4886409Z Using cached google_auth_httplib2-0.2.1-py3-none-any.whl (9.5 kB)
+ci	Install backend deps	2025-12-14T16:59:15.4899053Z Using cached cachetools-6.2.3-py3-none-any.whl (11 kB)
+ci	Install backend deps	2025-12-14T16:59:15.4912331Z Using cached google_api_core-2.28.1-py3-none-any.whl (173 kB)
+ci	Install backend deps	2025-12-14T16:59:15.4927326Z Using cached googleapis_common_protos-1.72.0-py3-none-any.whl (297 kB)
+ci	Install backend deps	2025-12-14T16:59:15.4943569Z Using cached httplib2-0.31.0-py3-none-any.whl (91 kB)
+ci	Install backend deps	2025-12-14T16:59:15.4957747Z Using cached proto_plus-1.26.1-py3-none-any.whl (50 kB)
+ci	Install backend deps	2025-12-14T16:59:15.4971669Z Using cached protobuf-6.33.2-cp39-abi3-manylinux2014_x86_64.whl (323 kB)
+ci	Install backend deps	2025-12-14T16:59:15.4987352Z Using cached pyparsing-3.2.5-py3-none-any.whl (113 kB)
+ci	Install backend deps	2025-12-14T16:59:15.5001312Z Using cached requests-2.32.5-py3-none-any.whl (64 kB)
+ci	Install backend deps	2025-12-14T16:59:15.5015873Z Using cached charset_normalizer-3.4.4-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (151 kB)
+ci	Install backend deps	2025-12-14T16:59:15.5029758Z Using cached idna-3.11-py3-none-any.whl (71 kB)
+ci	Install backend deps	2025-12-14T16:59:15.5043587Z Using cached rsa-4.9.1-py3-none-any.whl (34 kB)
+ci	Install backend deps	2025-12-14T16:59:15.5057412Z Using cached uritemplate-4.2.0-py3-none-any.whl (11 kB)
+ci	Install backend deps	2025-12-14T16:59:15.5070728Z Using cached urllib3-2.6.2-py3-none-any.whl (131 kB)
+ci	Install backend deps	2025-12-14T16:59:15.5085042Z Using cached google_auth_oauthlib-1.2.3-py3-none-any.whl (19 kB)
+ci	Install backend deps	2025-12-14T16:59:15.5098598Z Using cached google_auth-2.41.1-py2.py3-none-any.whl (221 kB)
+ci	Install backend deps	2025-12-14T16:59:15.5113445Z Using cached google_genai-1.55.0-py3-none-any.whl (703 kB)
+ci	Install backend deps	2025-12-14T16:59:15.5132220Z Using cached distro-1.9.0-py3-none-any.whl (20 kB)
+ci	Install backend deps	2025-12-14T16:59:15.5145985Z Using cached tenacity-9.1.2-py3-none-any.whl (28 kB)
+ci	Install backend deps	2025-12-14T16:59:15.5159469Z Using cached typing_extensions-4.15.0-py3-none-any.whl (44 kB)
+ci	Install backend deps	2025-12-14T16:59:15.5173970Z Using cached psycopg2_binary-2.9.11-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (4.2 MB)
+ci	Install backend deps	2025-12-14T16:59:15.5218875Z Using cached tiktoken-0.12.0-cp311-cp311-manylinux_2_28_x86_64.whl (1.2 MB)
+ci	Install backend deps	2025-12-14T16:59:15.5240937Z Using cached anthropic-0.75.0-py3-none-any.whl (388 kB)
+ci	Install backend deps	2025-12-14T16:59:15.5257283Z Using cached docstring_parser-0.17.0-py3-none-any.whl (36 kB)
+ci	Install backend deps	2025-12-14T16:59:15.5271480Z Using cached jiter-0.12.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (364 kB)
+ci	Install backend deps	2025-12-14T16:59:15.5288349Z Using cached pywebpush-2.1.2-py3-none-any.whl (22 kB)
+ci	Install backend deps	2025-12-14T16:59:15.5302540Z Using cached asyncpg-0.31.0-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (3.0 MB)
+ci	Install backend deps	2025-12-14T16:59:15.5338001Z Using cached midtransclient-1.4.2-py3-none-any.whl (22 kB)
+ci	Install backend deps	2025-12-14T16:59:15.5351855Z Using cached slowapi-0.1.9-py3-none-any.whl (14 kB)
+ci	Install backend deps	2025-12-14T16:59:15.5365819Z Using cached python_dateutil-2.9.0.post0-py2.py3-none-any.whl (229 kB)
+ci	Install backend deps	2025-12-14T16:59:15.5380563Z Using cached arq-0.26.3-py3-none-any.whl (25 kB)
+ci	Install backend deps	2025-12-14T16:59:15.5394103Z Using cached redis-5.3.1-py3-none-any.whl (272 kB)
+ci	Install backend deps	2025-12-14T16:59:15.5409464Z Using cached pytest-9.0.2-py3-none-any.whl (374 kB)
+ci	Install backend deps	2025-12-14T16:59:15.5425341Z Using cached pluggy-1.6.0-py3-none-any.whl (20 kB)
+ci	Install backend deps	2025-12-14T16:59:15.5439102Z Using cached pytest_asyncio-1.3.0-py3-none-any.whl (15 kB)
+ci	Install backend deps	2025-12-14T16:59:15.5452551Z Using cached annotated_doc-0.0.4-py3-none-any.whl (5.3 kB)
+ci	Install backend deps	2025-12-14T16:59:15.5466119Z Using cached annotated_types-0.7.0-py3-none-any.whl (13 kB)
+ci	Install backend deps	2025-12-14T16:59:15.5479557Z Using cached certifi-2025.11.12-py3-none-any.whl (159 kB)
+ci	Install backend deps	2025-12-14T16:59:15.5493836Z Using cached click-8.3.1-py3-none-any.whl (108 kB)
+ci	Install backend deps	2025-12-14T16:59:15.5508186Z Using cached cryptography-46.0.3-cp311-abi3-manylinux_2_34_x86_64.whl (4.5 MB)
+ci	Install backend deps	2025-12-14T16:59:15.5554454Z Using cached cffi-2.0.0-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (215 kB)
+ci	Install backend deps	2025-12-14T16:59:15.5569179Z Using cached deprecation-2.1.0-py2.py3-none-any.whl (11 kB)
+ci	Install backend deps	2025-12-14T16:59:15.5582803Z Using cached email_validator-2.3.0-py3-none-any.whl (35 kB)
+ci	Install backend deps	2025-12-14T16:59:15.5596856Z Using cached dnspython-2.8.0-py3-none-any.whl (331 kB)
+ci	Install backend deps	2025-12-14T16:59:15.5612894Z Using cached greenlet-3.3.0-cp311-cp311-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl (590 kB)
+ci	Install backend deps	2025-12-14T16:59:15.5630526Z Using cached h11-0.16.0-py3-none-any.whl (37 kB)
+ci	Install backend deps	2025-12-14T16:59:15.5644871Z Using cached hiredis-3.3.0-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (169 kB)
+ci	Install backend deps	2025-12-14T16:59:15.5659711Z Using cached httptools-0.7.1-cp311-cp311-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl (456 kB)
+ci	Install backend deps	2025-12-14T16:59:15.5676140Z Using cached iniconfig-2.3.0-py3-none-any.whl (7.5 kB)
+ci	Install backend deps	2025-12-14T16:59:15.5689647Z Using cached limits-5.6.0-py3-none-any.whl (60 kB)
+ci	Install backend deps	2025-12-14T16:59:15.5703671Z Using cached deprecated-1.3.1-py2.py3-none-any.whl (11 kB)
+ci	Install backend deps	2025-12-14T16:59:15.5717859Z Using cached wrapt-2.0.1-cp311-cp311-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl (114 kB)
+ci	Install backend deps	2025-12-14T16:59:15.5731826Z Using cached packaging-25.0-py3-none-any.whl (66 kB)
+ci	Install backend deps	2025-12-14T16:59:15.5746460Z Using cached py_vapid-1.9.2-py3-none-any.whl (21 kB)
+ci	Install backend deps	2025-12-14T16:59:15.5759902Z Using cached pyasn1-0.6.1-py3-none-any.whl (83 kB)
+ci	Install backend deps	2025-12-14T16:59:15.5774189Z Using cached pyasn1_modules-0.4.2-py3-none-any.whl (181 kB)
+ci	Install backend deps	2025-12-14T16:59:15.5788823Z Using cached pygments-2.19.2-py3-none-any.whl (1.2 MB)
+ci	Install backend deps	2025-12-14T16:59:15.5811217Z Using cached PyJWT-2.10.1-py3-none-any.whl (22 kB)
+ci	Install backend deps	2025-12-14T16:59:15.5825461Z Using cached pyyaml-6.0.3-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (806 kB)
+ci	Install backend deps	2025-12-14T16:59:15.5844876Z Using cached regex-2025.11.3-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (800 kB)
+ci	Install backend deps	2025-12-14T16:59:15.5863941Z Using cached requests_oauthlib-2.0.0-py2.py3-none-any.whl (24 kB)
+ci	Install backend deps	2025-12-14T16:59:15.5877562Z Using cached oauthlib-3.3.1-py3-none-any.whl (160 kB)
+ci	Install backend deps	2025-12-14T16:59:15.5891866Z Using cached six-1.17.0-py2.py3-none-any.whl (11 kB)
+ci	Install backend deps	2025-12-14T16:59:15.5905351Z Using cached StrEnum-0.4.15-py3-none-any.whl (8.9 kB)
+ci	Install backend deps	2025-12-14T16:59:15.5918662Z Using cached typing_inspection-0.4.2-py3-none-any.whl (14 kB)
+ci	Install backend deps	2025-12-14T16:59:15.5931941Z Using cached tzlocal-5.3.1-py3-none-any.whl (18 kB)
+ci	Install backend deps	2025-12-14T16:59:15.5946355Z Using cached uvloop-0.22.1-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (3.8 MB)
+ci	Install backend deps	2025-12-14T16:59:15.5988288Z Using cached watchfiles-1.1.1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (456 kB)
+ci	Install backend deps	2025-12-14T16:59:15.6006183Z Using cached yarl-1.22.0-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (365 kB)
+ci	Install backend deps	2025-12-14T16:59:15.6022036Z Using cached multidict-6.7.0-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (246 kB)
+ci	Install backend deps	2025-12-14T16:59:15.6037720Z Using cached propcache-0.4.1-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (210 kB)
+ci	Install backend deps	2025-12-14T16:59:15.6052590Z Using cached aiohttp-3.13.2-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (1.7 MB)
+ci	Install backend deps	2025-12-14T16:59:15.6078698Z Using cached aiohappyeyeballs-2.6.1-py3-none-any.whl (15 kB)
+ci	Install backend deps	2025-12-14T16:59:15.6092150Z Using cached aiosignal-1.4.0-py3-none-any.whl (7.5 kB)
+ci	Install backend deps	2025-12-14T16:59:15.6105957Z Using cached attrs-25.4.0-py3-none-any.whl (67 kB)
+ci	Install backend deps	2025-12-14T16:59:15.6120400Z Using cached frozenlist-1.8.0-cp311-cp311-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl (231 kB)
+ci	Install backend deps	2025-12-14T16:59:15.6160332Z Downloading aiosqlite-0.22.0-py3-none-any.whl (17 kB)
+ci	Install backend deps	2025-12-14T16:59:15.6256143Z Using cached pycparser-2.23-py3-none-any.whl (118 kB)
+ci	Install backend deps	2025-12-14T16:59:15.6270542Z Using cached sniffio-1.3.1-py3-none-any.whl (10 kB)
+ci	Install backend deps	2025-12-14T16:59:15.8951213Z Installing collected packages: strenum, wrapt, websockets, uvloop, urllib3, uritemplate, tzlocal, typing-extensions, tenacity, sniffio, six, regex, pyyaml, python-multipart, python-dotenv, pyparsing, pyjwt, pygments, pycparser, pyasn1, psycopg2-binary, protobuf, propcache, pluggy, packaging, oauthlib, multidict, jiter, iniconfig, idna, hyperframe, httptools, hpack, hiredis, h11, greenlet, frozenlist, docstring-parser, dnspython, distro, click, charset_normalizer, certifi, cachetools, attrs, asyncpg, annotated-types, annotated-doc, aiosqlite, aiohappyeyeballs, yarl, uvicorn, typing-inspection, sqlalchemy, rsa, requests, redis, python-dateutil, pytest, pydantic-core, pyasn1-modules, proto-plus, httplib2, httpcore, h2, googleapis-common-protos, email-validator, deprecation, deprecated, cffi, APScheduler, anyio, aiosignal, watchfiles, tiktoken, starlette, requests-oauthlib, pytest-asyncio, pydantic, midtransclient, limits, httpx, google-auth, databases, cryptography, aiohttp, slowapi, realtime, py-vapid, http-ece, google-auth-oauthlib, google-auth-httplib2, google-api-core, fastapi, arq, anthropic, supabase-functions, supabase-auth, storage3, pywebpush, postgrest, google-genai, google-api-python-client, supabase
+ci	Install backend deps	2025-12-14T16:59:23.1680969Z 
+ci	Install backend deps	2025-12-14T16:59:23.1739320Z Successfully installed APScheduler-3.11.1 aiohappyeyeballs-2.6.1 aiohttp-3.13.2 aiosignal-1.4.0 aiosqlite-0.22.0 annotated-doc-0.0.4 annotated-types-0.7.0 anthropic-0.75.0 anyio-4.12.0 arq-0.26.3 asyncpg-0.31.0 attrs-25.4.0 cachetools-6.2.3 certifi-2025.11.12 cffi-2.0.0 charset_normalizer-3.4.4 click-8.3.1 cryptography-46.0.3 databases-0.9.0 deprecated-1.3.1 deprecation-2.1.0 distro-1.9.0 dnspython-2.8.0 docstring-parser-0.17.0 email-validator-2.3.0 fastapi-0.124.4 frozenlist-1.8.0 google-api-core-2.28.1 google-api-python-client-2.187.0 google-auth-2.41.1 google-auth-httplib2-0.2.1 google-auth-oauthlib-1.2.3 google-genai-1.55.0 googleapis-common-protos-1.72.0 greenlet-3.3.0 h11-0.16.0 h2-4.3.0 hiredis-3.3.0 hpack-4.1.0 http-ece-1.2.1 httpcore-1.0.9 httplib2-0.31.0 httptools-0.7.1 httpx-0.28.1 hyperframe-6.1.0 idna-3.11 iniconfig-2.3.0 jiter-0.12.0 limits-5.6.0 midtransclient-1.4.2 multidict-6.7.0 oauthlib-3.3.1 packaging-25.0 pluggy-1.6.0 postgrest-2.25.1 propcache-0.4.1 proto-plus-1.26.1 protobuf-6.33.2 psycopg2-binary-2.9.11 py-vapid-1.9.2 pyasn1-0.6.1 pyasn1-modules-0.4.2 pycparser-2.23 pydantic-2.12.5 pydantic-core-2.41.5 pygments-2.19.2 pyjwt-2.10.1 pyparsing-3.2.5 pytest-9.0.2 pytest-asyncio-1.3.0 python-dateutil-2.9.0.post0 python-dotenv-1.2.1 python-multipart-0.0.20 pywebpush-2.1.2 pyyaml-6.0.3 realtime-2.25.1 redis-5.3.1 regex-2025.11.3 requests-2.32.5 requests-oauthlib-2.0.0 rsa-4.9.1 six-1.17.0 slowapi-0.1.9 sniffio-1.3.1 sqlalchemy-2.0.45 starlette-0.50.0 storage3-2.25.1 strenum-0.4.15 supabase-2.25.1 supabase-auth-2.25.1 supabase-functions-2.25.1 tenacity-9.1.2 tiktoken-0.12.0 typing-extensions-4.15.0 typing-inspection-0.4.2 tzlocal-5.3.1 uritemplate-4.2.0 urllib3-2.6.2 uvicorn-0.38.0 uvloop-0.22.1 watchfiles-1.1.1 websockets-15.0.1 wrapt-2.0.1 yarl-1.22.0
+ci	Run backend tests	﻿2025-12-14T16:59:24.1858127Z ##[group]Run python -m pytest backend/tests
+ci	Run backend tests	2025-12-14T16:59:24.1858717Z [36;1mpython -m pytest backend/tests[0m
+ci	Run backend tests	2025-12-14T16:59:24.1906998Z shell: /usr/bin/bash -e {0}
+ci	Run backend tests	2025-12-14T16:59:24.1907406Z env:
+ci	Run backend tests	2025-12-14T16:59:24.1907826Z   pythonLocation: /opt/hostedtoolcache/Python/3.11.14/x64
+ci	Run backend tests	2025-12-14T16:59:24.1908570Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.11.14/x64/lib/pkgconfig
+ci	Run backend tests	2025-12-14T16:59:24.1909274Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+ci	Run backend tests	2025-12-14T16:59:24.1909892Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+ci	Run backend tests	2025-12-14T16:59:24.1910539Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.14/x64
+ci	Run backend tests	2025-12-14T16:59:24.1911182Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.11.14/x64/lib
+ci	Run backend tests	2025-12-14T16:59:24.1911726Z ##[endgroup]
+ci	Run backend tests	2025-12-14T16:59:29.0230867Z ============================= test session starts ==============================
+ci	Run backend tests	2025-12-14T16:59:29.0233738Z platform linux -- Python 3.11.14, pytest-9.0.2, pluggy-1.6.0
+ci	Run backend tests	2025-12-14T16:59:29.0236389Z rootdir: /home/runner/work/gray/gray
+ci	Run backend tests	2025-12-14T16:59:29.0237091Z plugins: anyio-4.12.0, asyncio-1.3.0
+ci	Run backend tests	2025-12-14T16:59:29.0238275Z asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+ci	Run backend tests	2025-12-14T16:59:29.0239267Z collected 17 items / 5 errors
+ci	Run backend tests	2025-12-14T16:59:29.0239562Z 
+ci	Run backend tests	2025-12-14T16:59:29.0257282Z ==================================== ERRORS ====================================
+ci	Run backend tests	2025-12-14T16:59:29.0258111Z ________ ERROR collecting backend/tests/test_chat_history_migrations.py ________
+ci	Run backend tests	2025-12-14T16:59:29.0259346Z ImportError while importing test module '/home/runner/work/gray/gray/backend/tests/test_chat_history_migrations.py'.
+ci	Run backend tests	2025-12-14T16:59:29.0260745Z Hint: make sure your test modules/packages have valid Python names.
+ci	Run backend tests	2025-12-14T16:59:29.0261241Z Traceback:
+ci	Run backend tests	2025-12-14T16:59:29.0261599Z backend/main.py:211: in <module>
+ci	Run backend tests	2025-12-14T16:59:29.0262017Z     from backend.database import (
+ci	Run backend tests	2025-12-14T16:59:29.0262976Z E   ImportError: cannot import name 'plans' from 'backend.database' (/home/runner/work/gray/gray/backend/database.py)
+ci	Run backend tests	2025-12-14T16:59:29.0263836Z 
+ci	Run backend tests	2025-12-14T16:59:29.0264250Z During handling of the above exception, another exception occurred:
+ci	Run backend tests	2025-12-14T16:59:29.0265267Z /opt/hostedtoolcache/Python/3.11.14/x64/lib/python3.11/importlib/__init__.py:126: in import_module
+ci	Run backend tests	2025-12-14T16:59:29.0266111Z     return _bootstrap._gcd_import(name[level:], package, level)
+ci	Run backend tests	2025-12-14T16:59:29.0266675Z            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ci	Run backend tests	2025-12-14T16:59:29.0267305Z backend/tests/test_chat_history_migrations.py:13: in <module>
+ci	Run backend tests	2025-12-14T16:59:29.0267787Z     import main
+ci	Run backend tests	2025-12-14T16:59:29.0268145Z backend/main.py:238: in <module>
+ci	Run backend tests	2025-12-14T16:59:29.0268521Z     from database import (
+ci	Run backend tests	2025-12-14T16:59:29.0269373Z E   ImportError: cannot import name 'plans' from 'database' (/home/runner/work/gray/gray/backend/database.py)
+ci	Run backend tests	2025-12-14T16:59:29.0270419Z ________ ERROR collecting backend/tests/test_proactivity_integration.py ________
+ci	Run backend tests	2025-12-14T16:59:29.0271660Z ImportError while importing test module '/home/runner/work/gray/gray/backend/tests/test_proactivity_integration.py'.
+ci	Run backend tests	2025-12-14T16:59:29.0272718Z Hint: make sure your test modules/packages have valid Python names.
+ci	Run backend tests	2025-12-14T16:59:29.0273352Z Traceback:
+ci	Run backend tests	2025-12-14T16:59:29.0273703Z backend/main.py:211: in <module>
+ci	Run backend tests	2025-12-14T16:59:29.0274115Z     from backend.database import (
+ci	Run backend tests	2025-12-14T16:59:29.0275019Z E   ImportError: cannot import name 'plans' from 'backend.database' (/home/runner/work/gray/gray/backend/database.py)
+ci	Run backend tests	2025-12-14T16:59:29.0275638Z 
+ci	Run backend tests	2025-12-14T16:59:29.0276009Z During handling of the above exception, another exception occurred:
+ci	Run backend tests	2025-12-14T16:59:29.0276985Z /opt/hostedtoolcache/Python/3.11.14/x64/lib/python3.11/importlib/__init__.py:126: in import_module
+ci	Run backend tests	2025-12-14T16:59:29.0277821Z     return _bootstrap._gcd_import(name[level:], package, level)
+ci	Run backend tests	2025-12-14T16:59:29.0278366Z            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ci	Run backend tests	2025-12-14T16:59:29.0279256Z backend/tests/test_proactivity_integration.py:22: in <module>
+ci	Run backend tests	2025-12-14T16:59:29.0279755Z     import main
+ci	Run backend tests	2025-12-14T16:59:29.0280104Z backend/main.py:238: in <module>
+ci	Run backend tests	2025-12-14T16:59:29.0280466Z     from database import (
+ci	Run backend tests	2025-12-14T16:59:29.0281312Z E   ImportError: cannot import name 'plans' from 'database' (/home/runner/work/gray/gray/backend/database.py)
+ci	Run backend tests	2025-12-14T16:59:29.0282331Z ____________ ERROR collecting backend/tests/test_push_subscribe.py _____________
+ci	Run backend tests	2025-12-14T16:59:29.0283608Z ImportError while importing test module '/home/runner/work/gray/gray/backend/tests/test_push_subscribe.py'.
+ci	Run backend tests	2025-12-14T16:59:29.0284610Z Hint: make sure your test modules/packages have valid Python names.
+ci	Run backend tests	2025-12-14T16:59:29.0285109Z Traceback:
+ci	Run backend tests	2025-12-14T16:59:29.0285440Z backend/main.py:211: in <module>
+ci	Run backend tests	2025-12-14T16:59:29.0285842Z     from backend.database import (
+ci	Run backend tests	2025-12-14T16:59:29.0286772Z E   ImportError: cannot import name 'plans' from 'backend.database' (/home/runner/work/gray/gray/backend/database.py)
+ci	Run backend tests	2025-12-14T16:59:29.0287408Z 
+ci	Run backend tests	2025-12-14T16:59:29.0287781Z During handling of the above exception, another exception occurred:
+ci	Run backend tests	2025-12-14T16:59:29.0288787Z /opt/hostedtoolcache/Python/3.11.14/x64/lib/python3.11/importlib/__init__.py:126: in import_module
+ci	Run backend tests	2025-12-14T16:59:29.0289642Z     return _bootstrap._gcd_import(name[level:], package, level)
+ci	Run backend tests	2025-12-14T16:59:29.0290192Z            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ci	Run backend tests	2025-12-14T16:59:29.0290766Z backend/tests/test_push_subscribe.py:24: in <module>
+ci	Run backend tests	2025-12-14T16:59:29.0291220Z     import main  # noqa: E402
+ci	Run backend tests	2025-12-14T16:59:29.0291552Z     ^^^^^^^^^^^
+ci	Run backend tests	2025-12-14T16:59:29.0291906Z backend/main.py:238: in <module>
+ci	Run backend tests	2025-12-14T16:59:29.0292258Z     from database import (
+ci	Run backend tests	2025-12-14T16:59:29.0293499Z E   ImportError: cannot import name 'plans' from 'database' (/home/runner/work/gray/gray/backend/database.py)
+ci	Run backend tests	2025-12-14T16:59:29.0294490Z _______________ ERROR collecting backend/tests/test_reminders.py _______________
+ci	Run backend tests	2025-12-14T16:59:29.0295529Z ImportError while importing test module '/home/runner/work/gray/gray/backend/tests/test_reminders.py'.
+ci	Run backend tests	2025-12-14T16:59:29.0296481Z Hint: make sure your test modules/packages have valid Python names.
+ci	Run backend tests	2025-12-14T16:59:29.0296961Z Traceback:
+ci	Run backend tests	2025-12-14T16:59:29.0297295Z backend/main.py:211: in <module>
+ci	Run backend tests	2025-12-14T16:59:29.0297693Z     from backend.database import (
+ci	Run backend tests	2025-12-14T16:59:29.0298634Z E   ImportError: cannot import name 'plans' from 'backend.database' (/home/runner/work/gray/gray/backend/database.py)
+ci	Run backend tests	2025-12-14T16:59:29.0299257Z 
+ci	Run backend tests	2025-12-14T16:59:29.0299632Z During handling of the above exception, another exception occurred:
+ci	Run backend tests	2025-12-14T16:59:29.0300675Z /opt/hostedtoolcache/Python/3.11.14/x64/lib/python3.11/importlib/__init__.py:126: in import_module
+ci	Run backend tests	2025-12-14T16:59:29.0301527Z     return _bootstrap._gcd_import(name[level:], package, level)
+ci	Run backend tests	2025-12-14T16:59:29.0302078Z            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ci	Run backend tests	2025-12-14T16:59:29.0302645Z backend/tests/test_reminders.py:23: in <module>
+ci	Run backend tests	2025-12-14T16:59:29.0303086Z     import main  # noqa: E402
+ci	Run backend tests	2025-12-14T16:59:29.0303652Z     ^^^^^^^^^^^
+ci	Run backend tests	2025-12-14T16:59:29.0304004Z backend/main.py:238: in <module>
+ci	Run backend tests	2025-12-14T16:59:29.0304376Z     from database import (
+ci	Run backend tests	2025-12-14T16:59:29.0305226Z E   ImportError: cannot import name 'plans' from 'database' (/home/runner/work/gray/gray/backend/database.py)
+ci	Run backend tests	2025-12-14T16:59:29.0306262Z _________ ERROR collecting backend/tests/test_web_search_heuristics.py _________
+ci	Run backend tests	2025-12-14T16:59:29.0307433Z ImportError while importing test module '/home/runner/work/gray/gray/backend/tests/test_web_search_heuristics.py'.
+ci	Run backend tests	2025-12-14T16:59:29.0308478Z Hint: make sure your test modules/packages have valid Python names.
+ci	Run backend tests	2025-12-14T16:59:29.0308966Z Traceback:
+ci	Run backend tests	2025-12-14T16:59:29.0309297Z backend/main.py:211: in <module>
+ci	Run backend tests	2025-12-14T16:59:29.0309688Z     from backend.database import (
+ci	Run backend tests	2025-12-14T16:59:29.0310586Z E   ImportError: cannot import name 'plans' from 'backend.database' (/home/runner/work/gray/gray/backend/database.py)
+ci	Run backend tests	2025-12-14T16:59:29.0311383Z 
+ci	Run backend tests	2025-12-14T16:59:29.0311755Z During handling of the above exception, another exception occurred:
+ci	Run backend tests	2025-12-14T16:59:29.0312732Z /opt/hostedtoolcache/Python/3.11.14/x64/lib/python3.11/importlib/__init__.py:126: in import_module
+ci	Run backend tests	2025-12-14T16:59:29.0313758Z     return _bootstrap._gcd_import(name[level:], package, level)
+ci	Run backend tests	2025-12-14T16:59:29.0314303Z            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ci	Run backend tests	2025-12-14T16:59:29.0314897Z backend/tests/test_web_search_heuristics.py:20: in <module>
+ci	Run backend tests	2025-12-14T16:59:29.0315387Z     import main  # noqa: E402
+ci	Run backend tests	2025-12-14T16:59:29.0315703Z     ^^^^^^^^^^^
+ci	Run backend tests	2025-12-14T16:59:29.0316058Z backend/main.py:238: in <module>
+ci	Run backend tests	2025-12-14T16:59:29.0316427Z     from database import (
+ci	Run backend tests	2025-12-14T16:59:29.0317292Z E   ImportError: cannot import name 'plans' from 'database' (/home/runner/work/gray/gray/backend/database.py)
+ci	Run backend tests	2025-12-14T16:59:29.0318200Z =============================== warnings summary ===============================
+ci	Run backend tests	2025-12-14T16:59:29.0319116Z ../../../../../opt/hostedtoolcache/Python/3.11.14/x64/lib/python3.11/site-packages/storage3/types.py:20
+ci	Run backend tests	2025-12-14T16:59:29.0321648Z   /opt/hostedtoolcache/Python/3.11.14/x64/lib/python3.11/site-packages/storage3/types.py:20: PydanticDeprecatedSince20: `pydantic.config.Extra` is deprecated, use literal values instead (e.g. `extra='allow'`). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+ci	Run backend tests	2025-12-14T16:59:29.0324658Z     class BaseBucket(BaseModel, extra=Extra.ignore):
+ci	Run backend tests	2025-12-14T16:59:29.0324986Z 
+ci	Run backend tests	2025-12-14T16:59:29.0325615Z ../../../../../opt/hostedtoolcache/Python/3.11.14/x64/lib/python3.11/site-packages/storage3/types.py:130
+ci	Run backend tests	2025-12-14T16:59:29.0328281Z   /opt/hostedtoolcache/Python/3.11.14/x64/lib/python3.11/site-packages/storage3/types.py:130: PydanticDeprecatedSince20: `pydantic.config.Extra` is deprecated, use literal values instead (e.g. `extra='allow'`). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+ci	Run backend tests	2025-12-14T16:59:29.0330321Z     class SignedUrlJsonResponse(BaseModel, extra=Extra.ignore):
+ci	Run backend tests	2025-12-14T16:59:29.0330689Z 
+ci	Run backend tests	2025-12-14T16:59:29.0331296Z ../../../../../opt/hostedtoolcache/Python/3.11.14/x64/lib/python3.11/site-packages/storage3/types.py:134
+ci	Run backend tests	2025-12-14T16:59:29.0333893Z   /opt/hostedtoolcache/Python/3.11.14/x64/lib/python3.11/site-packages/storage3/types.py:134: PydanticDeprecatedSince20: `pydantic.config.Extra` is deprecated, use literal values instead (e.g. `extra='allow'`). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+ci	Run backend tests	2025-12-14T16:59:29.0336009Z     class SignedUrlsJsonItem(BaseModel, extra=Extra.ignore):
+ci	Run backend tests	2025-12-14T16:59:29.0336363Z 
+ci	Run backend tests	2025-12-14T16:59:29.0336965Z ../../../../../opt/hostedtoolcache/Python/3.11.14/x64/lib/python3.11/site-packages/storage3/types.py:143
+ci	Run backend tests	2025-12-14T16:59:29.0339412Z   /opt/hostedtoolcache/Python/3.11.14/x64/lib/python3.11/site-packages/storage3/types.py:143: PydanticDeprecatedSince20: `pydantic.config.Extra` is deprecated, use literal values instead (e.g. `extra='allow'`). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+ci	Run backend tests	2025-12-14T16:59:29.0341510Z     class CreateSignedUploadUrlOptions(BaseModel, extra=Extra.ignore):
+ci	Run backend tests	2025-12-14T16:59:29.0341932Z 
+ci	Run backend tests	2025-12-14T16:59:29.0342522Z ../../../../../opt/hostedtoolcache/Python/3.11.14/x64/lib/python3.11/site-packages/storage3/types.py:161
+ci	Run backend tests	2025-12-14T16:59:29.0345137Z   /opt/hostedtoolcache/Python/3.11.14/x64/lib/python3.11/site-packages/storage3/types.py:161: PydanticDeprecatedSince20: `pydantic.config.Extra` is deprecated, use literal values instead (e.g. `extra='allow'`). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+ci	Run backend tests	2025-12-14T16:59:29.0347187Z     class MetadataConfiguration(BaseModel, extra=Extra.ignore):
+ci	Run backend tests	2025-12-14T16:59:29.0347749Z 
+ci	Run backend tests	2025-12-14T16:59:29.0348378Z ../../../../../opt/hostedtoolcache/Python/3.11.14/x64/lib/python3.11/site-packages/storage3/types.py:167
+ci	Run backend tests	2025-12-14T16:59:29.0350782Z   /opt/hostedtoolcache/Python/3.11.14/x64/lib/python3.11/site-packages/storage3/types.py:167: PydanticDeprecatedSince20: `pydantic.config.Extra` is deprecated, use literal values instead (e.g. `extra='allow'`). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+ci	Run backend tests	2025-12-14T16:59:29.0352800Z     class ListIndexesOptions(BaseModel, extra=Extra.ignore):
+ci	Run backend tests	2025-12-14T16:59:29.0353155Z 
+ci	Run backend tests	2025-12-14T16:59:29.0353921Z ../../../../../opt/hostedtoolcache/Python/3.11.14/x64/lib/python3.11/site-packages/storage3/types.py:173
+ci	Run backend tests	2025-12-14T16:59:29.0356436Z   /opt/hostedtoolcache/Python/3.11.14/x64/lib/python3.11/site-packages/storage3/types.py:173: PydanticDeprecatedSince20: `pydantic.config.Extra` is deprecated, use literal values instead (e.g. `extra='allow'`). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+ci	Run backend tests	2025-12-14T16:59:29.0358489Z     class ListIndexesResponseItem(BaseModel, extra=Extra.ignore):
+ci	Run backend tests	2025-12-14T16:59:29.0358877Z 
+ci	Run backend tests	2025-12-14T16:59:29.0359465Z ../../../../../opt/hostedtoolcache/Python/3.11.14/x64/lib/python3.11/site-packages/storage3/types.py:177
+ci	Run backend tests	2025-12-14T16:59:29.0361931Z   /opt/hostedtoolcache/Python/3.11.14/x64/lib/python3.11/site-packages/storage3/types.py:177: PydanticDeprecatedSince20: `pydantic.config.Extra` is deprecated, use literal values instead (e.g. `extra='allow'`). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+ci	Run backend tests	2025-12-14T16:59:29.0372252Z     class ListVectorIndexesResponse(BaseModel, extra=Extra.ignore):
+ci	Run backend tests	2025-12-14T16:59:29.0372716Z 
+ci	Run backend tests	2025-12-14T16:59:29.0373503Z ../../../../../opt/hostedtoolcache/Python/3.11.14/x64/lib/python3.11/site-packages/storage3/types.py:182
+ci	Run backend tests	2025-12-14T16:59:29.0375928Z   /opt/hostedtoolcache/Python/3.11.14/x64/lib/python3.11/site-packages/storage3/types.py:182: PydanticDeprecatedSince20: `pydantic.config.Extra` is deprecated, use literal values instead (e.g. `extra='allow'`). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+ci	Run backend tests	2025-12-14T16:59:29.0377850Z     class VectorIndex(BaseModel, extra=Extra.ignore):
+ci	Run backend tests	2025-12-14T16:59:29.0378190Z 
+ci	Run backend tests	2025-12-14T16:59:29.0378782Z ../../../../../opt/hostedtoolcache/Python/3.11.14/x64/lib/python3.11/site-packages/storage3/types.py:194
+ci	Run backend tests	2025-12-14T16:59:29.0381102Z   /opt/hostedtoolcache/Python/3.11.14/x64/lib/python3.11/site-packages/storage3/types.py:194: PydanticDeprecatedSince20: `pydantic.config.Extra` is deprecated, use literal values instead (e.g. `extra='allow'`). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+ci	Run backend tests	2025-12-14T16:59:29.0383090Z     class GetVectorIndexResponse(BaseModel, extra=Extra.ignore):
+ci	Run backend tests	2025-12-14T16:59:29.0383652Z 
+ci	Run backend tests	2025-12-14T16:59:29.0384233Z ../../../../../opt/hostedtoolcache/Python/3.11.14/x64/lib/python3.11/site-packages/storage3/types.py:201
+ci	Run backend tests	2025-12-14T16:59:29.0386562Z   /opt/hostedtoolcache/Python/3.11.14/x64/lib/python3.11/site-packages/storage3/types.py:201: PydanticDeprecatedSince20: `pydantic.config.Extra` is deprecated, use literal values instead (e.g. `extra='allow'`). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+ci	Run backend tests	2025-12-14T16:59:29.0388450Z     class VectorData(BaseModel, extra=Extra.ignore):
+ci	Run backend tests	2025-12-14T16:59:29.0388767Z 
+ci	Run backend tests	2025-12-14T16:59:29.0389343Z ../../../../../opt/hostedtoolcache/Python/3.11.14/x64/lib/python3.11/site-packages/storage3/types.py:205
+ci	Run backend tests	2025-12-14T16:59:29.0391645Z   /opt/hostedtoolcache/Python/3.11.14/x64/lib/python3.11/site-packages/storage3/types.py:205: PydanticDeprecatedSince20: `pydantic.config.Extra` is deprecated, use literal values instead (e.g. `extra='allow'`). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+ci	Run backend tests	2025-12-14T16:59:29.0393893Z     class VectorObject(BaseModel, extra=Extra.ignore):
+ci	Run backend tests	2025-12-14T16:59:29.0394204Z 
+ci	Run backend tests	2025-12-14T16:59:29.0394773Z ../../../../../opt/hostedtoolcache/Python/3.11.14/x64/lib/python3.11/site-packages/storage3/types.py:211
+ci	Run backend tests	2025-12-14T16:59:29.0397061Z   /opt/hostedtoolcache/Python/3.11.14/x64/lib/python3.11/site-packages/storage3/types.py:211: PydanticDeprecatedSince20: `pydantic.config.Extra` is deprecated, use literal values instead (e.g. `extra='allow'`). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+ci	Run backend tests	2025-12-14T16:59:29.0398961Z     class VectorMatch(BaseModel, extra=Extra.ignore):
+ci	Run backend tests	2025-12-14T16:59:29.0399275Z 
+ci	Run backend tests	2025-12-14T16:59:29.0399836Z ../../../../../opt/hostedtoolcache/Python/3.11.14/x64/lib/python3.11/site-packages/storage3/types.py:218
+ci	Run backend tests	2025-12-14T16:59:29.0402165Z   /opt/hostedtoolcache/Python/3.11.14/x64/lib/python3.11/site-packages/storage3/types.py:218: PydanticDeprecatedSince20: `pydantic.config.Extra` is deprecated, use literal values instead (e.g. `extra='allow'`). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+ci	Run backend tests	2025-12-14T16:59:29.0404218Z     class GetVectorsResponse(BaseModel, extra=Extra.ignore):
+ci	Run backend tests	2025-12-14T16:59:29.0404579Z 
+ci	Run backend tests	2025-12-14T16:59:29.0405155Z ../../../../../opt/hostedtoolcache/Python/3.11.14/x64/lib/python3.11/site-packages/storage3/types.py:222
+ci	Run backend tests	2025-12-14T16:59:29.0407454Z   /opt/hostedtoolcache/Python/3.11.14/x64/lib/python3.11/site-packages/storage3/types.py:222: PydanticDeprecatedSince20: `pydantic.config.Extra` is deprecated, use literal values instead (e.g. `extra='allow'`). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+ci	Run backend tests	2025-12-14T16:59:29.0409543Z     class ListVectorsResponse(BaseModel, extra=Extra.ignore):
+ci	Run backend tests	2025-12-14T16:59:29.0409906Z 
+ci	Run backend tests	2025-12-14T16:59:29.0410473Z ../../../../../opt/hostedtoolcache/Python/3.11.14/x64/lib/python3.11/site-packages/storage3/types.py:227
+ci	Run backend tests	2025-12-14T16:59:29.0412742Z   /opt/hostedtoolcache/Python/3.11.14/x64/lib/python3.11/site-packages/storage3/types.py:227: PydanticDeprecatedSince20: `pydantic.config.Extra` is deprecated, use literal values instead (e.g. `extra='allow'`). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+ci	Run backend tests	2025-12-14T16:59:29.0414807Z     class QueryVectorsResponse(BaseModel, extra=Extra.ignore):
+ci	Run backend tests	2025-12-14T16:59:29.0415172Z 
+ci	Run backend tests	2025-12-14T16:59:29.0415732Z ../../../../../opt/hostedtoolcache/Python/3.11.14/x64/lib/python3.11/site-packages/storage3/types.py:231
+ci	Run backend tests	2025-12-14T16:59:29.0418036Z   /opt/hostedtoolcache/Python/3.11.14/x64/lib/python3.11/site-packages/storage3/types.py:231: PydanticDeprecatedSince20: `pydantic.config.Extra` is deprecated, use literal values instead (e.g. `extra='allow'`). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+ci	Run backend tests	2025-12-14T16:59:29.0419921Z     class AnalyticsBucket(BaseModel, extra=Extra.ignore):
+ci	Run backend tests	2025-12-14T16:59:29.0420262Z 
+ci	Run backend tests	2025-12-14T16:59:29.0420890Z ../../../../../opt/hostedtoolcache/Python/3.11.14/x64/lib/python3.11/site-packages/storage3/types.py:245
+ci	Run backend tests	2025-12-14T16:59:29.0423356Z   /opt/hostedtoolcache/Python/3.11.14/x64/lib/python3.11/site-packages/storage3/types.py:245: PydanticDeprecatedSince20: `pydantic.config.Extra` is deprecated, use literal values instead (e.g. `extra='allow'`). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+ci	Run backend tests	2025-12-14T16:59:29.0425370Z     class AnalyticsBucketDeleteResponse(BaseModel, extra=Extra.ignore):
+ci	Run backend tests	2025-12-14T16:59:29.0425797Z 
+ci	Run backend tests	2025-12-14T16:59:29.0426358Z ../../../../../opt/hostedtoolcache/Python/3.11.14/x64/lib/python3.11/site-packages/storage3/types.py:249
+ci	Run backend tests	2025-12-14T16:59:29.0428866Z   /opt/hostedtoolcache/Python/3.11.14/x64/lib/python3.11/site-packages/storage3/types.py:249: PydanticDeprecatedSince20: `pydantic.config.Extra` is deprecated, use literal values instead (e.g. `extra='allow'`). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+ci	Run backend tests	2025-12-14T16:59:29.0430852Z     class VectorBucketEncryptionConfiguration(BaseModel, extra=Extra.ignore):
+ci	Run backend tests	2025-12-14T16:59:29.0431308Z 
+ci	Run backend tests	2025-12-14T16:59:29.0431877Z ../../../../../opt/hostedtoolcache/Python/3.11.14/x64/lib/python3.11/site-packages/storage3/types.py:254
+ci	Run backend tests	2025-12-14T16:59:29.0434303Z   /opt/hostedtoolcache/Python/3.11.14/x64/lib/python3.11/site-packages/storage3/types.py:254: PydanticDeprecatedSince20: `pydantic.config.Extra` is deprecated, use literal values instead (e.g. `extra='allow'`). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+ci	Run backend tests	2025-12-14T16:59:29.0436190Z     class VectorBucket(BaseModel, extra=Extra.ignore):
+ci	Run backend tests	2025-12-14T16:59:29.0436512Z 
+ci	Run backend tests	2025-12-14T16:59:29.0437082Z ../../../../../opt/hostedtoolcache/Python/3.11.14/x64/lib/python3.11/site-packages/storage3/types.py:260
+ci	Run backend tests	2025-12-14T16:59:29.0439434Z   /opt/hostedtoolcache/Python/3.11.14/x64/lib/python3.11/site-packages/storage3/types.py:260: PydanticDeprecatedSince20: `pydantic.config.Extra` is deprecated, use literal values instead (e.g. `extra='allow'`). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+ci	Run backend tests	2025-12-14T16:59:29.0441596Z     class GetVectorBucketResponse(BaseModel, extra=Extra.ignore):
+ci	Run backend tests	2025-12-14T16:59:29.0441975Z 
+ci	Run backend tests	2025-12-14T16:59:29.0442536Z ../../../../../opt/hostedtoolcache/Python/3.11.14/x64/lib/python3.11/site-packages/storage3/types.py:264
+ci	Run backend tests	2025-12-14T16:59:29.0445003Z   /opt/hostedtoolcache/Python/3.11.14/x64/lib/python3.11/site-packages/storage3/types.py:264: PydanticDeprecatedSince20: `pydantic.config.Extra` is deprecated, use literal values instead (e.g. `extra='allow'`). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+ci	Run backend tests	2025-12-14T16:59:29.3418445Z     class ListVectorBucketsItem(BaseModel, extra=Extra.ignore):
+ci	Run backend tests	2025-12-14T16:59:29.3419411Z 
+ci	Run backend tests	2025-12-14T16:59:29.3421363Z ../../../../../opt/hostedtoolcache/Python/3.11.14/x64/lib/python3.11/site-packages/storage3/types.py:268
+ci	Run backend tests	2025-12-14T16:59:29.3426281Z   /opt/hostedtoolcache/Python/3.11.14/x64/lib/python3.11/site-packages/storage3/types.py:268: PydanticDeprecatedSince20: `pydantic.config.Extra` is deprecated, use literal values instead (e.g. `extra='allow'`). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+ci	Run backend tests	2025-12-14T16:59:29.3428684Z     class ListVectorBucketsResponse(BaseModel, extra=Extra.ignore):
+ci	Run backend tests	2025-12-14T16:59:29.3429350Z 
+ci	Run backend tests	2025-12-14T16:59:29.3429946Z -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+ci	Run backend tests	2025-12-14T16:59:29.3430988Z =========================== short test summary info ============================
+ci	Run backend tests	2025-12-14T16:59:29.3431725Z ERROR backend/tests/test_chat_history_migrations.py
+ci	Run backend tests	2025-12-14T16:59:29.3436586Z ERROR backend/tests/test_proactivity_integration.py
+ci	Run backend tests	2025-12-14T16:59:29.3437624Z ERROR backend/tests/test_push_subscribe.py
+ci	Run backend tests	2025-12-14T16:59:29.3438516Z ERROR backend/tests/test_reminders.py
+ci	Run backend tests	2025-12-14T16:59:29.3441533Z ERROR backend/tests/test_web_search_heuristics.py
+ci	Run backend tests	2025-12-14T16:59:29.3442266Z !!!!!!!!!!!!!!!!!!! Interrupted: 5 errors during collection !!!!!!!!!!!!!!!!!!!!
+ci	Run backend tests	2025-12-14T16:59:29.3442998Z ======================== 23 warnings, 5 errors in 4.10s ========================
+ci	Run backend tests	2025-12-14T16:59:29.6132624Z ##[error]Process completed with exit code 2.
+ci	Post Run actions/checkout@v4	﻿2025-12-14T16:59:29.6195176Z Post job cleanup.
+ci	Post Run actions/checkout@v4	2025-12-14T16:59:29.7144316Z [command]/usr/bin/git version
+ci	Post Run actions/checkout@v4	2025-12-14T16:59:29.7185471Z git version 2.52.0
+ci	Post Run actions/checkout@v4	2025-12-14T16:59:29.7233771Z Temporarily overriding HOME='/home/runner/work/_temp/b5cab982-e204-4cd2-b88d-5d7106b7873b' before making global git config changes
+ci	Post Run actions/checkout@v4	2025-12-14T16:59:29.7235674Z Adding repository directory to the temporary git global config as a safe directory
+ci	Post Run actions/checkout@v4	2025-12-14T16:59:29.7240722Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/gray/gray
+ci	Post Run actions/checkout@v4	2025-12-14T16:59:29.7290598Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+ci	Post Run actions/checkout@v4	2025-12-14T16:59:29.7327051Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+ci	Post Run actions/checkout@v4	2025-12-14T16:59:29.7564639Z fatal: No url found for submodule path 'supabase_docs' in .gitmodules
+ci	Post Run actions/checkout@v4	2025-12-14T16:59:29.7603387Z ##[warning]The process '/usr/bin/git' failed with exit code 128
+ci	Complete job	﻿2025-12-14T16:59:29.7684120Z Cleaning up orphan processes

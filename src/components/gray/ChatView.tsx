@@ -1397,6 +1397,7 @@ const ThinkingBlock = ({
   );
 };
 
+
 const ChatMessagesList = memo(
   ({
     messages,
@@ -2353,6 +2354,9 @@ export function GrayChatView({
   const [conversationUsage, setConversationUsage] = useState<ConversationUsage | null>(null);
   const isSubmittingRef = useRef(false);
   const streamAbortControllerRef = useRef<AbortController | null>(null);
+  // Track the most recent conversation ID synchronously to avoid React state update delays
+  // This ensures subsequent messages use the correct conversation ID even before state propagates
+  const streamedConversationIdRef = useRef<string | null>(null);
   // Track when thinking content (inside <thinking> tags) actually starts
   const [isActivelyThinking, setIsActivelyThinking] = useState(false);
   const [thinkingStartTime, setThinkingStartTime] = useState<number | null>(null);
@@ -2401,6 +2405,15 @@ export function GrayChatView({
     }
     return waitForUser();
   }, [user, waitForUser]);
+
+  // Sync the conversation ID ref when session changes
+  useEffect(() => {
+    const sessionConvId = session?.conversationId ?? null;
+    // Only reset if we're switching to a different session or the state has a newer value
+    if (sessionConvId) {
+      streamedConversationIdRef.current = sessionConvId;
+    }
+  }, [session?.id, session?.conversationId]);
 
   const messages = useMemo(() => session?.messages ?? [], [session?.messages]);
   const sessionAutoStreamId = session?.id ?? null;
@@ -2842,9 +2855,10 @@ export function GrayChatView({
       let accumulated = "";
       let capturedReminders: unknown[] = [];
       const isGeneralSession = session?.scope === "general";
+      // Use the ref for the most up-to-date conversation ID (avoids React state delays)
       let streamedConversationId: string | null = isGeneralSession
         ? null
-        : normalizeConversationIdValue(conversationId) ?? null;
+        : streamedConversationIdRef.current ?? normalizeConversationIdValue(conversationId) ?? null;
       if (!isGeneralSession && !streamedConversationId) {
         const normalizedFromSessionId = normalizeConversationIdValue(targetSessionId);
         if (normalizedFromSessionId) {
@@ -2945,6 +2959,10 @@ export function GrayChatView({
             if (!isGeneralSession) {
               streamedConversationId =
                 normalizeConversationIdValue(event.conversationId) ?? streamedConversationId;
+              // Update ref immediately so next message uses correct ID (sync, not async state)
+              if (streamedConversationId) {
+                streamedConversationIdRef.current = streamedConversationId;
+              }
             }
             const normalizedResponse = normalizeAssistantContent(event.response ?? accumulated, prompt);
             accumulated = normalizedResponse;

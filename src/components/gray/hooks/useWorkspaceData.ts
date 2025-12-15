@@ -69,7 +69,7 @@ export function useWorkspaceData(userId: number | null, variant: "general" | "da
 
     try {
       const [planResponse, habitResponse] = await Promise.all([
-        apiService.getUserPlans(userId),
+        apiService.getPlans(userId),
         apiService.getUserHabits(userId),
       ]);
 
@@ -185,7 +185,7 @@ export function useWorkspaceData(userId: number | null, variant: "general" | "da
           shouldLoadCalendarData
             ? apiService.getGoogleCalendars(userId)
             : Promise.resolve<GoogleCalendarInfo[]>([]),
-          apiService.getUserPlans(userId),
+          apiService.getPlans(userId),
           apiService.getUserHabits(userId),
           apiService.getUserReminders(userId, {
             limit: 50,

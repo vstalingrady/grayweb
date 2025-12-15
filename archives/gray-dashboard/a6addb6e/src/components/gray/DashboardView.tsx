@@ -24,7 +24,6 @@ import { formatPlanTimeLabel } from "./planUtils";
 import { requestNotificationPermission } from "@/lib/notificationUtils";
 import { useUser } from "@/contexts/UserContext";
 import { useI18n } from "@/contexts/I18nContext";
-import { greetingForDate } from "@/components/gray/utils/helperFunctions";
 
 import {
   CUSTOM_PROACTIVITY_ID,
@@ -432,12 +431,6 @@ export function GrayDashboardView({
   const [customSettings, setCustomSettings] = useState<CustomSettingsState>(() => ({
     times: activeProactivityTimes.length > 0 ? activeProactivityTimes : [...DEFAULT_CUSTOM_SETTINGS.times],
   }));
-  const customTimes = useMemo(
-    () => dedupeTimes(customSettings.times).filter((time) => time.trim().length > 0),
-    [customSettings.times]
-  );
-  const [editingCustomTimeIndex, setEditingCustomTimeIndex] = useState<number | null>(null);
-  const [editingCustomTimeDraft, setEditingCustomTimeDraft] = useState("");
   const resolveNotificationPermission = useCallback((): NotificationPermission | "unsupported" => {
     if (typeof window === "undefined" || typeof Notification === "undefined") {
       return "unsupported";
@@ -1125,18 +1118,19 @@ export function GrayDashboardView({
       onSelectedDateChange={onCalendarSelectedDateChange}
       hourHeight={CALENDAR_PANEL_HOUR_HEIGHT}
       onIntegrationAction={onIntegrationAction}
-      dashboardTab="calendar"
-      onSelectDashboardTab={() => { }}
+      dashboardTab={activeTab}
+      onSelectDashboardTab={onSelectTab}
       renderHeader={(headerProps) => (
         <DashboardHeader
           activeTab={headerProps.activeTab}
           onSelectTab={headerProps.onSelectTab}
-          showTabs={false}
-          onGoToday={undefined}
-          viewMode={undefined}
-          onViewModeChange={undefined}
-          viewModeOptions={[]}
+          onGoToday={headerProps.onGoToday}
+          viewMode={headerProps.viewMode}
+          onViewModeChange={headerProps.onViewModeChange}
+          viewModeOptions={headerProps.viewModeOptions}
+          rangeNavigationLabel={headerProps.rangeNavigationLabel}
           label={undefined}
+          title={undefined}
           rangeLabel={undefined}
           className={headerClassName}
           onUpgradeClick={onUpgradeClick}
@@ -1154,7 +1148,6 @@ export function GrayDashboardView({
       <DashboardHeader
         activeTab={activeTab}
         onSelectTab={onSelectTab}
-        showTabs={false}
         className={headerClassName}
         onUpgradeClick={onUpgradeClick}
         showUpgradeButton={showUpgradeButton}
@@ -1173,8 +1166,12 @@ export function GrayDashboardView({
     .join(" ");
 
   const surfaceContent = isCompactLayout
-    ? compactCalendarContent
-    : calendarContent;
+    ? activeTab === "pulse"
+      ? compactPulseContent
+      : compactCalendarContent
+    : activeTab === "pulse"
+      ? pulseContent
+      : calendarContent;
 
   return (
     <>

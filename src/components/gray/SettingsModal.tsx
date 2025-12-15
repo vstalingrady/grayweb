@@ -2,7 +2,7 @@
 
 /* eslint-disable react-hooks/set-state-in-effect */
 
-import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import {
@@ -27,7 +27,7 @@ import styles from "@/app/gray/GrayPageClient.module.css";
 import { useI18n } from "@/contexts/I18nContext";
 import { useUser } from "@/contexts/UserContext";
 import { useChatStore } from "@/components/gray/ChatProvider";
-import { GRAY_BRAND, ALL_PIONEER_MODEL_IDS, PIONEER_GROUPS, RECOMMENDED_PIONEER_MODEL_IDS } from "@/components/gray/modelCatalog";
+import { GRAY_BRAND, ALL_PIONEER_MODEL_IDS, PIONEER_GROUPS } from "@/components/gray/modelCatalog";
 import type { ContextUsageSummary } from "@/components/gray/types";
 import { clampPercent, getContextUsageUsedTokens, getContextUsageVisualizationLimit } from "@/components/gray/contextUsage";
 import { apiService } from "@/lib/api";
@@ -1210,24 +1210,6 @@ export function SettingsModal({
                         setModelsStatus(t("Upgrade to Voyager to customize models."));
                         return;
                       }
-                      const next = [...RECOMMENDED_PIONEER_MODEL_IDS];
-                      if (selectedModelId && ALL_PIONEER_MODEL_IDS.includes(selectedModelId) && !next.includes(selectedModelId)) {
-                        next.push(selectedModelId);
-                      }
-                      setVisibleModelIds(next.length === ALL_PIONEER_MODEL_IDS.length ? null : next);
-                      setModelsStatus(null);
-                    }}
-                  >
-                    {t("Select recommended")}
-                  </button>
-                  <button
-                    type="button"
-                    className={styles.settingsAction}
-                    onClick={() => {
-                      if (tierLevel < 1) {
-                        setModelsStatus(t("Upgrade to Voyager to customize models."));
-                        return;
-                      }
                       setVisibleModelIds(null);
                       setModelsStatus(null);
                     }}
@@ -1300,69 +1282,86 @@ export function SettingsModal({
                         {group.label}
                       </h3>
                     </div>
-                    {filteredModels.map((model) => {
-                      const isSelected = selectedModelId === model.id;
-                      const isEnabled = visibleModelIds === null || visibleIds.includes(model.id);
-                      const requiredTier = model.tierRequired ?? "voyager";
-                      const requiredLevel = requiredTier === "pioneer" ? 2 : 1;
-                      const isTierLocked = tierLevel < requiredLevel;
-                      const isScoutLocked = tierLevel < 1;
-                      const isLocked = isScoutLocked || isTierLocked;
-                      const tierNote =
-                        requiredTier === "pioneer"
-                          ? t("Upgrade to Pioneer to access.")
-                          : t("Upgrade to Voyager to access.");
+                    {(() => {
+                      const modelRows = filteredModels.map((model) => {
+                        const isSelected = selectedModelId === model.id;
+                        const isEnabled = visibleModelIds === null || visibleIds.includes(model.id);
+                        const requiredTier = model.tierRequired ?? "voyager";
+                        const requiredLevel = requiredTier === "pioneer" ? 2 : 1;
+                        const isTierLocked = tierLevel < requiredLevel;
+                        const isScoutLocked = tierLevel < 1;
+                        const isLocked = isScoutLocked || isTierLocked;
 
-                      return (
-                        <div key={model.id} className={styles.settingsRow} style={isLocked ? { opacity: 0.5, filter: "grayscale(1)" } : undefined}>
-                          <div className={styles.settingsLabelGroup}>
-                            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                              {renderLogo(group.iconPath, group.label, false)}
-                              <span className={styles.settingsLabel}>{model.label}</span>
+                        return { model, isSelected, isEnabled, requiredTier, isLocked };
+                      });
+
+                      const firstLockedIndex = modelRows.findIndex((row) => row.isLocked);
+                      const lockedRequiresPioneer = modelRows.some((row) => row.isLocked && row.requiredTier === "pioneer");
+                      const premiumNote = lockedRequiresPioneer
+                        ? t("Upgrade to Voyager or Pioneer to access.")
+                        : t("Upgrade to Voyager to access.");
+
+                      return modelRows.map((row, index) => (
+                        <Fragment key={row.model.id}>
+                          {index === firstLockedIndex ? (
+                            <div className={styles.settingsTierSeparator} role="separator" aria-label={t("Premium models")}>
+                              <div className={styles.settingsTierSeparatorTitle}>{t("Premium models")}</div>
+                              <div className={styles.settingsTierSeparatorSubtitle}>{premiumNote}</div>
                             </div>
-                            <span className={styles.settingsItemDescription}>
-                              {model.cost ? (
-                                <span className={styles.monoText}>{model.cost}</span>
-                              ) : (
-                                model.id
-                              )}
-                              {isSelected ? ` • ${t("Selected")}` : ""}
-                              {isLocked ? ` • ${tierNote}` : ""}
-                            </span>
+                          ) : null}
+
+                          <div
+                            className={styles.settingsRow}
+                            style={row.isLocked ? { opacity: 0.5, filter: "grayscale(1)" } : undefined}
+                          >
+                            <div className={styles.settingsLabelGroup}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                {renderLogo(group.iconPath, group.label, false)}
+                                <span className={styles.settingsLabel}>{row.model.label}</span>
+                              </div>
+                              <span className={styles.settingsItemDescription}>
+                                {row.model.cost ? (
+                                  <span className={styles.monoText}>{row.model.cost}</span>
+                                ) : (
+                                  row.model.id
+                                )}
+                                {row.isSelected ? ` • ${t("Selected")}` : ""}
+                              </span>
+                            </div>
+                            {row.isLocked ? (
+                              <div style={{ padding: "0 10px", opacity: 0.5 }}>
+                                <Lock size={16} />
+                              </div>
+                            ) : (
+                              renderToggle(
+                                row.isEnabled,
+                                () => {
+                                  if (row.isSelected) {
+                                    setModelsStatus(t("You can't hide the currently selected model."));
+                                    return;
+                                  }
+                                  if (visibleModelIds === null) {
+                                    const next = ALL_PIONEER_MODEL_IDS.filter((id) => id !== row.model.id);
+                                    setVisibleModelIds(next);
+                                    setModelsStatus(null);
+                                    return;
+                                  }
+                                  if (row.isEnabled) {
+                                    setVisibleModelIds(visibleModelIds.filter((id) => id !== row.model.id));
+                                    setModelsStatus(null);
+                                    return;
+                                  }
+                                  const next = Array.from(new Set([...visibleModelIds, row.model.id]));
+                                  setVisibleModelIds(next.length === ALL_PIONEER_MODEL_IDS.length ? null : next);
+                                  setModelsStatus(null);
+                                },
+                                t("Toggle {model}", { model: row.model.label })
+                              )
+                            )}
                           </div>
-                          {isLocked ? (
-                            <div style={{ padding: "0 10px", opacity: 0.5 }}>
-                              <Lock size={16} />
-                            </div>
-                          ) : (
-                            renderToggle(
-                              isEnabled,
-                              () => {
-                                if (isSelected) {
-                                  setModelsStatus(t("You can't hide the currently selected model."));
-                                  return;
-                                }
-                                if (visibleModelIds === null) {
-                                  const next = ALL_PIONEER_MODEL_IDS.filter((id) => id !== model.id);
-                                  setVisibleModelIds(next);
-                                  setModelsStatus(null);
-                                  return;
-                                }
-                                if (isEnabled) {
-                                  setVisibleModelIds(visibleModelIds.filter((id) => id !== model.id));
-                                  setModelsStatus(null);
-                                  return;
-                                }
-                                const next = Array.from(new Set([...visibleModelIds, model.id]));
-                                setVisibleModelIds(next.length === ALL_PIONEER_MODEL_IDS.length ? null : next);
-                                setModelsStatus(null);
-                              },
-                              t("Toggle {model}", { model: model.label })
-                            )
-                          )}
-                        </div>
-                      );
-                    })}
+                        </Fragment>
+                      ));
+                    })()}
                   </div>
                 );
               })}

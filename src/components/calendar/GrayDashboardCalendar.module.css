@@ -65,7 +65,7 @@
   flex-direction: column;
   gap: 22px;
   min-height: 0;
-  min-width: 210px;
+  min-width: auto;
   box-shadow: none;
   /* backdrop-filter: blur(8px); removed */
   overflow: hidden;
@@ -84,7 +84,7 @@
   background: transparent;
   border: none;
   border-radius: 0;
-  padding: 0;
+  padding: 12px 20px;
   box-shadow: none;
   min-width: 0;
   width: 100%;
@@ -202,6 +202,12 @@
   gap: var(--mini-month-day-gap, 2px);
   justify-items: center;
   justify-content: center;
+  transition: background 0.2s ease;
+}
+
+.miniMonthRow[data-active-week="true"] {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
 }
 
 .miniMonthCell {
@@ -209,7 +215,7 @@
   max-width: var(--mini-month-cell-max, 32px);
   aspect-ratio: 1;
   height: auto;
-  border-radius: var(--mini-month-cell-radius, 999px);
+  border-radius: 8px;
   border: 1px solid transparent;
   background: transparent;
   color: rgba(235, 235, 235, 0.72);
@@ -268,10 +274,7 @@
   cursor: pointer;
 }
 
-.calendarSidebarList ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
+.calendarSidebarListBody {
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -284,7 +287,7 @@
   gap: 18px;
 }
 
-.calendarSidebarList li {
+.calendarSidebarItemWrapper {
   display: flex;
 }
 
@@ -462,8 +465,8 @@
 }
 
 .calendarSurfaceBody[data-has-sidebar="true"] {
-  grid-template-columns: 210px 1fr;
-  column-gap: clamp(40px, 4vw, 56px);
+  grid-template-columns: max-content 1fr;
+  column-gap: 0;
 }
 
 .calendarSidebarColumn {
@@ -493,6 +496,7 @@
   margin-right: 0;
   align-self: stretch;
   flex-shrink: 0;
+  border-right: 1px solid rgba(255, 255, 255, 0.04);
 }
 
 .calendarBoard {
@@ -505,7 +509,7 @@
   height: 100%;
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
-  border-left: 1px solid rgba(255, 255, 255, 0.04);
+  border-left: none;
   padding-left: 0;
 }
 
@@ -533,6 +537,7 @@
   justify-content: space-between;
   gap: 18px;
   flex-wrap: wrap;
+  padding-bottom: 16px;
 }
 
 .calendarSurfaceHeaderLeft {
@@ -622,6 +627,12 @@
   margin: 2px 0 4px;
 }
 
+.calendarSurfaceTitleRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .calendarSurfaceRange {
   font-size: 0.72rem;
   letter-spacing: 0.3em;
@@ -631,7 +642,7 @@
 }
 
 .calendarViewSelect {
-  border-radius: 999px;
+  border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.16);
   background-color: rgba(12, 12, 12, 0.78);
   color: rgba(245, 245, 245, 0.88);
@@ -661,7 +672,7 @@
 }
 
 .calendarSurfaceButton {
-  border-radius: 999px;
+  border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.16);
   background: rgba(12, 12, 12, 0.8);
   color: rgba(245, 245, 245, 0.88);
@@ -689,24 +700,25 @@
 .calendarSurfaceNavArrows {
   display: inline-flex;
   align-items: center;
-  border-radius: 999px;
+  border-radius: 8px;
   border: none;
-  background: rgba(8, 8, 8, 0.85);
-  overflow: hidden;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
+  background: transparent;
+  overflow: visible;
+  box-shadow: none;
 }
 
 .calendarSurfaceNavArrows button {
   border: none;
   background: transparent;
-  width: 38px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   color: rgba(235, 235, 235, 0.88);
   font-size: 1.1rem;
   cursor: pointer;
+  border-radius: 6px;
   transition: background 0.2s ease;
 }
 
@@ -740,10 +752,10 @@
   width: 100%;
   box-sizing: border-box;
   position: sticky;
-  top: 0;
+  top: 44px;
   grid-column: 1 / -1;
   grid-row: 1;
-  background: rgba(6, 6, 6, 0.96);
+  background: transparent;
   backdrop-filter: none;
   padding: 10px 0 8px;
   margin-bottom: 0;
@@ -751,11 +763,43 @@
   border-bottom: 1px solid rgba(255, 255, 255, 0.04);
 }
 
+.calendarMonthRow {
+  display: grid;
+  grid-template-columns: var(--calendar-timeline-width, 56px) repeat(var(--calendar-grid-columns, 7), minmax(0, 1fr));
+  gap: 0;
+  align-items: center;
+  position: sticky;
+  top: 0;
+  grid-column: 1 / -1;
+  grid-row: 1;
+  z-index: 4;
+  height: 44px;
+  padding: 0;
+  background: transparent;
+}
+
+.calendarMonthTitleGroup {
+  grid-column: 1 / 3;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  padding-left: 10px;
+}
+
+.calendarMonthTitle {
+  font-size: 1.15rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: rgba(245, 245, 245, 0.92);
+  white-space: nowrap;
+}
+
 .calendarHeaderPlaceholder {
   height: 100%;
   display: flex;
   align-items: flex-end;
-  justify-content: flex-end;
+  justify-content: flex-start;
   padding: 1px 6px 0 0;
   border-right: 1px solid rgba(255, 255, 255, 0.08);
 }
@@ -763,9 +807,9 @@
 .calendarTimezoneLabel {
   display: inline-flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: flex-start;
   font-size: 0.58rem;
-  letter-spacing: 0.32em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: rgba(230, 230, 230, 0.58);
   margin-bottom: 6px;
@@ -773,32 +817,38 @@
 
 .calendarHeaderCell {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
+  gap: 6px;
   cursor: pointer;
   user-select: none;
 }
 
 .calendarHeaderCell span {
   color: rgba(230, 230, 230, 0.55);
-  font-size: 0.56rem;
-  letter-spacing: 0.32em;
+  font-size: 0.66rem;
+  letter-spacing: 0;
+  text-transform: uppercase;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  line-height: 1;
+  text-align: center;
 }
 
 .calendarHeaderCell strong {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 22px;
+  height: 22px;
   line-height: 1;
   padding: 0;
-  border-radius: 999px;
+  border-radius: 7px;
   border: 1px solid transparent;
-  font-size: 0.94rem;
-  letter-spacing: 0.08em;
-  color: rgba(6, 6, 6, 0.96);
+  font-size: 0.86rem;
+  letter-spacing: 0.02em;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  color: rgba(245, 245, 245, 0.9);
   transition:
     background 0.2s ease,
     color 0.2s ease,
@@ -806,16 +856,18 @@
     box-shadow 0.2s ease;
 }
 
-.calendarHeaderCell[data-selected="true"] strong {
+.calendarHeaderCell[data-selected="true"][data-today="false"] strong {
   background: rgba(245, 245, 245, 0.95);
   color: rgba(6, 6, 6, 0.96);
   border-color: rgba(255, 255, 255, 0.9);
   box-shadow: 0 10px 18px rgba(0, 0, 0, 0.45);
 }
 
-.calendarHeaderCell[data-today="true"][data-selected="false"] strong {
-  border-color: rgba(245, 245, 245, 0.45);
+.calendarHeaderCell[data-today="true"] strong {
+  background: rgba(245, 245, 245, 0.95);
+  border-color: rgba(255, 255, 255, 0.9);
   color: rgba(6, 6, 6, 0.96);
+  box-shadow: 0 10px 18px rgba(0, 0, 0, 0.45);
 }
 
 .calendarBody {
@@ -865,8 +917,9 @@
   position: relative;
   display: grid;
   grid-template-rows: repeat(24, var(--calendar-hour-height, 64px));
-  font-size: 0.58rem;
-  letter-spacing: 0.26em;
+  font-size: 0.56rem;
+  letter-spacing: 0.12em;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   color: rgba(225, 225, 225, 0.32);
   text-align: right;
   padding: 1px 6px 0 0;
@@ -962,7 +1015,10 @@
 
 .calendarWeekColumn[data-today="true"]::before,
 .calendarDayColumn[data-today="true"]::before {
-  opacity: 0.35;
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.035);
+  border-radius: 0;
+  inset: 0;
 }
 
 .calendarWeekColumn[data-selected="true"]::before,
@@ -973,7 +1029,7 @@
 .calendarColumnScroller {
   position: relative;
   min-height: calc(var(--calendar-hour-height, 64px) * 24);
-  padding: 0 12px 0 0;
+  padding: 0;
   z-index: 2;
   overflow-y: auto;
   overflow-x: hidden;
@@ -1192,7 +1248,7 @@
   position: absolute;
   top: 0;
   left: 0;
-  right: 12px;
+  right: 0;
   bottom: 24px;
   pointer-events: none;
   display: grid;
@@ -1239,7 +1295,7 @@
 .composerOverlay {
   position: fixed;
   inset: 0;
-  background: #050506;
+  background: rgba(0, 0, 0, 0.7);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1256,9 +1312,9 @@
 
 .composerCard {
   width: min(420px, 92vw);
-  background: #050506;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 18px;
+  background: rgba(24, 24, 24, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
   padding: 20px 20px 18px;
   box-shadow: none;
 }
@@ -1273,7 +1329,7 @@
 
 .composerEyebrow {
   margin: 0;
-  font-size: 0.68rem;
+  font-size: 0.66rem;
   letter-spacing: 0.32em;
   text-transform: uppercase;
   color: rgba(230, 230, 230, 0.52);
@@ -1281,7 +1337,7 @@
 
 .composerHeader h2 {
   margin: 4px 0 0;
-  font-size: 1.2rem;
+  font-size: 1.1rem;
   letter-spacing: 0.04em;
   color: rgba(247, 247, 247, 0.95);
 }
@@ -1321,30 +1377,30 @@
 }
 
 .composerTitleLabel {
-  font-size: 0.68rem;
+  font-size: 0.66rem;
   letter-spacing: 0.2em;
   text-transform: uppercase;
   color: rgba(220, 220, 220, 0.56);
 }
 
 .composerTitleInput {
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(12, 12, 12, 0.86);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  background: rgba(38, 38, 38, 0.92);
   color: rgba(248, 248, 248, 0.94);
   padding: 12px 16px;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
 }
 
 .composerSummary {
   width: 100%;
-  border-radius: 16px;
-  background: rgba(18, 18, 18, 0.9);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  background: rgba(42, 42, 42, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.07);
   padding: 12px 16px;
   color: rgba(240, 240, 240, 0.92);
   letter-spacing: 0.02em;
-  font-size: 0.92rem;
+  font-size: 0.88rem;
 }
 
 .composerField {
@@ -1354,7 +1410,7 @@
 }
 
 .composerField span {
-  font-size: 0.68rem;
+  font-size: 0.66rem;
   letter-spacing: 0.2em;
   text-transform: uppercase;
   color: rgba(220, 220, 220, 0.56);
@@ -1376,12 +1432,12 @@
 .composerField input[type="text"],
 .composerField select,
 .composerField input[type="time"] {
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(12, 12, 12, 0.86);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  background: rgba(38, 38, 38, 0.92);
   color: rgba(248, 248, 248, 0.94);
   padding: 12px 16px;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   transition:
     border-color 0.2s ease,
     box-shadow 0.2s ease;
@@ -1397,19 +1453,19 @@
   right: 14px;
   width: 8px;
   height: 8px;
-  border-right: 1.5px solid rgba(235, 235, 235, 0.86);
-  border-bottom: 1.5px solid rgba(235, 235, 235, 0.86);
+  border-right: 1px solid rgba(235, 235, 235, 0.86);
+  border-bottom: 1px solid rgba(235, 235, 235, 0.86);
   transform: translateY(1px) rotate(45deg);
   pointer-events: none;
 }
 
 .composerField textarea {
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(12, 12, 12, 0.86);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  background: rgba(38, 38, 38, 0.92);
   color: rgba(248, 248, 248, 0.94);
   padding: 12px 16px;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   min-height: 72px;
   resize: vertical;
 }
@@ -1443,12 +1499,12 @@
 }
 
 .composerTaskToggle {
-  border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(10, 10, 10, 0.72);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  background: rgba(34, 34, 34, 0.78);
   color: rgba(230, 230, 230, 0.8);
   padding: 10px 14px;
-  font-size: 0.9rem;
+  font-size: 0.86rem;
   text-align: left;
   cursor: pointer;
   transition:
@@ -1464,23 +1520,147 @@
 }
 
 .composerColors {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
 }
 
+.composerColorPopover {
+  position: fixed;
+  width: min(360px, 86vw);
+  padding: 12px 12px 14px;
+  border-radius: 12px;
+  background: rgba(28, 28, 28, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+  z-index: 2;
+  max-height: min(560px, calc(100vh - 24px));
+  overflow: auto;
+}
+
+.composerColorPopoverHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.composerColorPreview {
+  width: 28px;
+  height: 28px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  flex: 0 0 auto;
+}
+
+.composerColorHexLabel {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+}
+
+.composerColorHexLabel span {
+  font-size: 0.66rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(220, 220, 220, 0.6);
+}
+
+.composerColorHexLabel input {
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(44, 44, 44, 0.92);
+  color: rgba(248, 248, 248, 0.94);
+  padding: 8px 10px;
+  font-size: 0.85rem;
+  letter-spacing: 0.04em;
+}
+
+.composerColorSliders {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.composerColorSliders label {
+  display: grid;
+  grid-template-columns: 16px 1fr 42px;
+  gap: 10px;
+  align-items: center;
+}
+
+.composerColorSliders label span {
+  font-size: 0.75rem;
+  color: rgba(240, 240, 240, 0.8);
+}
+
+.composerColorSliders input[type="range"] {
+  width: 100%;
+  height: 18px;
+  background: transparent;
+}
+
+.composerColorSliders output {
+  font-size: 0.78rem;
+  color: rgba(240, 240, 240, 0.72);
+  text-align: right;
+}
+
+.composerColorPaletteSection {
+  margin-top: 12px;
+}
+
+.composerColorPaletteSection h3 {
+  margin: 0 0 8px;
+  font-size: 0.74rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(230, 230, 230, 0.62);
+}
+
+.composerColorPaletteGrid {
+  display: grid;
+  grid-template-columns: repeat(13, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.composerColorSwatch {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+  transition:
+    transform 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.composerColorSwatch:hover {
+  transform: translateY(-1px);
+  border-color: rgba(255, 255, 255, 0.26);
+}
+
+.composerColorSwatch[data-active="true"] {
+  border-color: rgba(255, 255, 255, 0.7);
+}
+
 .composerColorDot {
   width: 36px;
   height: 36px;
-  border-radius: 50%;
-  border: 2px solid transparent;
+  border-radius: 8px;
+  border: 1px solid transparent;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   font-size: 1.2rem;
   color: rgba(240, 240, 240, 0.9);
-  background: rgba(18, 18, 18, 0.8);
+  background: rgba(42, 42, 42, 0.9);
   cursor: pointer;
   transition:
     transform 0.2s ease,
@@ -1507,12 +1687,12 @@
 }
 
 .composerFooter button {
-  border-radius: 999px;
+  border-radius: 10px;
   padding: 10px 22px;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   letter-spacing: 0.04em;
   border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(12, 12, 12, 0.74);
+  background: rgba(42, 42, 42, 0.82);
   color: rgba(240, 240, 240, 0.88);
   cursor: pointer;
   transition:
@@ -1656,4 +1836,47 @@
 .eventCardDelete:hover {
   background: rgba(200, 50, 50, 0.9);
   color: white;
+}
+
+.calendarAllDayRow {
+  display: grid;
+  grid-template-columns: var(--calendar-timeline-width, 56px) repeat(var(--calendar-grid-columns, 7), minmax(0, 1fr));
+  gap: 0;
+  align-items: stretch;
+  position: sticky;
+  top: 88px;
+  grid-column: 1 / -1;
+  grid-row: 2;
+  background: rgba(18, 18, 18, 0.94);
+  z-index: 3;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  min-height: 20px;
+}
+
+.calendarAllDayLabel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.45rem;
+  color: rgba(225, 225, 225, 0.45);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  border-right: 1px solid rgba(255, 255, 255, 0.04);
+  padding: 0 4px;
+  text-align: center;
+  min-height: 20px;
+}
+
+.calendarAllDayCell {
+  border-right: 1px solid rgba(255, 255, 255, 0.04);
+  min-height: 20px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding: 2px;
+}
+
+.calendarAllDayCell:last-child {
+  border-right: none;
 }

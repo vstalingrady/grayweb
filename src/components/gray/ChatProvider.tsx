@@ -3084,6 +3084,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       questionnaireSession,
       startQuestionnaire,
       cancelQuestionnaire,
+      remoteConversationsLoaded,
     }),
     [
       appendMessage,

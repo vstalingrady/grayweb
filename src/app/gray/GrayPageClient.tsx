@@ -142,6 +142,8 @@ function GrayPageClientInner({
   variant = "general",
   activeChatId = null,
   initialDashboardTab = "pulse",
+  sidebarPreferenceKey = "gray:sidebarExpanded",
+  defaultSidebarExpandedDesktop = true,
 }: GrayPageClientProps) {
 
   const { user, loading: userLoading } = useUser();
@@ -219,6 +221,7 @@ function GrayPageClientInner({
     attachmentError,
     removeAttachment,
     pinSession,
+    remoteConversationsLoaded,
   } = useChatStore();
   const reminderEventKeysRef = useRef<Set<string>>(new Set());
   const supportsInlineChat = variant !== "chat";
@@ -274,7 +277,7 @@ function GrayPageClientInner({
 
   const [habitEditorTarget, setHabitEditorTarget] = useState<HabitItem | null>(null);
 
-  const [isSidebarExpanded, setIsSidebarExpanded] = useState<boolean>(false);
+  const [isSidebarExpanded, setIsSidebarExpanded] = useState<boolean>(defaultSidebarExpandedDesktop);
   const [hasLoadedSidebarPref, setHasLoadedSidebarPref] = useState(false);
   const [isMobileViewport, setIsMobileViewport] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
@@ -308,8 +311,6 @@ function GrayPageClientInner({
       return;
     }
 
-    const sidebarPrefKey = "gray:sidebarExpanded";
-
     const handleResize = () => {
       const width = window.innerWidth || 0;
       const shouldCollapseSidebar = width <= 768;
@@ -323,14 +324,14 @@ function GrayPageClientInner({
         if (!hasLoadedSidebarPref) {
           // On first load for desktop, read from localStorage
           try {
-            const stored = localStorage.getItem(sidebarPrefKey);
+            const stored = localStorage.getItem(sidebarPreferenceKey);
             if (stored !== null) {
               return stored === "true";
             }
           } catch {
             // localStorage may be unavailable
           }
-          return true; // Default to expanded on desktop
+          return defaultSidebarExpandedDesktop;
         }
         return previous;
       });
@@ -349,7 +350,7 @@ function GrayPageClientInner({
       window.removeEventListener("resize", handleResize);
       window.removeEventListener("orientationchange", handleResize);
     };
-  }, [hasLoadedSidebarPref]);
+  }, [defaultSidebarExpandedDesktop, hasLoadedSidebarPref, sidebarPreferenceKey]);
 
   // Persist sidebar preference to localStorage when it changes (desktop only)
   useEffect(() => {
@@ -357,11 +358,11 @@ function GrayPageClientInner({
       return;
     }
     try {
-      localStorage.setItem("gray:sidebarExpanded", isSidebarExpanded ? "true" : "false");
+      localStorage.setItem(sidebarPreferenceKey, isSidebarExpanded ? "true" : "false");
     } catch {
       // localStorage may be unavailable
     }
-  }, [isSidebarExpanded, isMobileViewport, hasLoadedSidebarPref]);
+  }, [isSidebarExpanded, isMobileViewport, hasLoadedSidebarPref, sidebarPreferenceKey]);
 
   const [dashboardTab, setDashboardTab] = useState<"pulse" | "calendar">(() => initialDashboardTab);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -954,6 +955,15 @@ function GrayPageClientInner({
     }
 
     if (navId === "reference") {
+      setManualViewMode(null);
+      const target = NAVIGATION_ROUTES[navId];
+      if (target) {
+        router.push(target);
+      }
+      return;
+    }
+
+    if (navId === "calendar") {
       setManualViewMode(null);
       const target = NAVIGATION_ROUTES[navId];
       if (target) {
@@ -2408,7 +2418,7 @@ function GrayPageClientInner({
     )
     : null;
   const effectiveIsMobileViewport = isMounted ? isMobileViewport : false;
-  const effectiveIsSidebarExpanded = isMounted ? isSidebarExpanded : true;
+  const effectiveIsSidebarExpanded = isMounted ? isSidebarExpanded : defaultSidebarExpandedDesktop;
 
   return (
     <>
@@ -2506,6 +2516,7 @@ function GrayPageClientInner({
               onRenameHistoryEntry={handleRenameHistoryEntry}
               onDeleteHistoryEntry={handleDeleteHistoryEntry}
               onPinHistoryEntry={handlePinHistoryEntry}
+              isLoadingHistory={!remoteConversationsLoaded}
             />
 
             {/* Mobile Sidebar Overlay */}

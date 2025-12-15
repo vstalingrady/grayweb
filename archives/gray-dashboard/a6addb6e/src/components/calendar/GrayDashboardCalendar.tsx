@@ -26,7 +26,6 @@ import {
 } from "./types";
 import { createSeedCalendars, createSeedEvents } from "./calendarSeed";
 import type { DashboardHeaderProps } from "@/components/gray/DashboardHeader";
-import { ViewModeSelect } from "@/components/gray/ViewModeSelect";
 import { useI18n } from "@/contexts/I18nContext";
 
 const HOURS = Array.from({ length: 24 }, (_, index) => index);
@@ -668,61 +667,13 @@ export function GrayDashboardCalendar({
     updateEvents((previous) => previous.filter((e) => e.id !== event.id));
   };
 
-  const calendarGridStyle = useMemo(
-    () => ({ "--calendar-grid-columns": viewMode === "week" ? "7" : "1" }) as CSSProperties,
-    [viewMode]
-  );
-
   const renderWeekView = () => (
-    <div className={styles.calendarGrid} style={calendarGridStyle}>
+    <div className={styles.calendarGrid}>
       <div className={styles.calendarBody}>
-        <div className={styles.calendarMonthRow}>
-          <div className={styles.calendarMonthTitleGroup}>
-            <span className={styles.calendarMonthTitle}>{monthLabel}</span>
-            <div className={styles.calendarSurfaceNavArrows}>
-              <button
-                type="button"
-                aria-label={t("Previous {range}", { range: rangeNavigationLabel })}
-                onClick={() => handleNavigateRange(-1)}
-              >
-                ‹
-              </button>
-              <button
-                type="button"
-                aria-label={t("Next {range}", { range: rangeNavigationLabel })}
-                onClick={() => handleNavigateRange(1)}
-              >
-                ›
-              </button>
-            </div>
-            {showTodayControl && (
-              <button
-                type="button"
-                className={styles.calendarSurfaceButton}
-                onClick={handleGoToday}
-                style={{ height: 32, padding: "0 12px", fontSize: "0.55rem" }}
-              >
-                {t("Today")}
-              </button>
-            )}
-            {showViewSelect && (
-              <div style={{ transform: "scale(0.9)", transformOrigin: "left center" }}>
-                <ViewModeSelect
-                  value={viewMode}
-                  options={[
-                    { value: "week", label: t("Week") },
-                    { value: "day", label: t("Day") },
-                  ]}
-                  onChange={(mode) => updateViewMode(mode)}
-                />
-              </div>
-            )}
-          </div>
-        </div>
         {showHeaderDates && (
           <div className={styles.calendarHeaderRow}>
             <div className={styles.calendarHeaderPlaceholder}>
-              <span className={styles.calendarTimezoneLabel}>+ {timeZoneLabel}</span>
+              <span className={styles.calendarTimezoneLabel}>{timeZoneLabel}</span>
             </div>
             {weekDays.map((day) => {
               const isSelectedDay = isSameDay(day, selectedDate);
@@ -741,16 +692,6 @@ export function GrayDashboardCalendar({
             })}
           </div>
         )}
-        <div className={styles.calendarAllDayRow}>
-          <div className={styles.calendarAllDayLabel}>
-            <span>{t("All-day")}</span>
-          </div>
-          {weekDays.map((day) => (
-            <div key={day.toISOString()} className={styles.calendarAllDayCell}>
-              {/* All-day events will go here later */}
-            </div>
-          ))}
-        </div>
         <div className={styles.calendarBodyScroll} ref={weekScrollRef}>
           <div className={styles.calendarTimesColumn}>
             {HOURS_LABEL.map((label, hour) => (
@@ -835,55 +776,12 @@ export function GrayDashboardCalendar({
   );
 
   const renderDayView = () => (
-    <div className={styles.calendarGrid} style={calendarGridStyle}>
+    <div className={styles.calendarGrid}>
       <div className={styles.calendarBody}>
-        <div className={styles.calendarMonthRow}>
-          <div className={styles.calendarMonthTitleGroup}>
-            <span className={styles.calendarMonthTitle}>{monthLabel}</span>
-            <div className={styles.calendarSurfaceNavArrows}>
-              <button
-                type="button"
-                aria-label={t("Previous {range}", { range: rangeNavigationLabel })}
-                onClick={() => handleNavigateRange(-1)}
-              >
-                ‹
-              </button>
-              <button
-                type="button"
-                aria-label={t("Next {range}", { range: rangeNavigationLabel })}
-                onClick={() => handleNavigateRange(1)}
-              >
-                ›
-              </button>
-            </div>
-            {showTodayControl && (
-              <button
-                type="button"
-                className={styles.calendarSurfaceButton}
-                onClick={handleGoToday}
-                style={{ height: 32, padding: "0 12px", fontSize: "0.55rem" }}
-              >
-                {t("Today")}
-              </button>
-            )}
-            {showViewSelect && (
-              <div style={{ transform: "scale(0.9)", transformOrigin: "left center" }}>
-                <ViewModeSelect
-                  value={viewMode}
-                  options={[
-                    { value: "week", label: t("Week") },
-                    { value: "day", label: t("Day") },
-                  ]}
-                  onChange={(mode) => updateViewMode(mode)}
-                />
-              </div>
-            )}
-          </div>
-        </div>
         {showHeaderDates && (
           <div className={styles.calendarHeaderRow}>
             <div className={styles.calendarHeaderPlaceholder}>
-              <span className={styles.calendarTimezoneLabel}>+ {timeZoneLabel}</span>
+              <span className={styles.calendarTimezoneLabel}>{timeZoneLabel}</span>
             </div>
             <div
               className={styles.calendarHeaderCell}
@@ -898,6 +796,7 @@ export function GrayDashboardCalendar({
         <div
           className={styles.calendarBodyScroll}
           ref={dayColumnRef}
+          style={{ "--calendar-grid-columns": "1" } as CSSProperties}
         >
           <div className={styles.calendarTimesColumn}>
             {HOURS_LABEL.map((label, hour) => (
@@ -1085,7 +984,6 @@ export function GrayDashboardCalendar({
     label: showSurfaceLabel ? t("Calendar") : undefined,
     title: monthLabel,
     rangeLabel: showHeaderDates ? rangeLabel : undefined,
-    timezoneLabel: timeZoneLabel,
     onPrevMonth: () => handleMonthNavigate(-1),
     onNextMonth: () => handleMonthNavigate(1),
     onPrevRange: () => handleNavigateRange(-1),
@@ -1098,14 +996,6 @@ export function GrayDashboardCalendar({
       { value: "day", label: t("Day") },
     ],
     rangeNavigationLabel,
-  };
-
-  const handleMainMonthNavigate = (offset: number) => {
-    updateSelectedDate((previous) => {
-      const next = new Date(previous);
-      next.setMonth(previous.getMonth() + offset);
-      return next;
-    });
   };
 
   const dashboardToggle = shouldShowDashboardToggle ? (
@@ -1145,27 +1035,7 @@ export function GrayDashboardCalendar({
                 {showSurfaceLabel && (
                   <span className={styles.calendarSurfaceLabel}>{t("Calendar")}</span>
                 )}
-                <div className={styles.calendarSurfaceTitleRow}>
-                  {showNavigationControls && (
-                    <div className={styles.calendarSurfaceNavArrows}>
-                      <button
-                        type="button"
-                        aria-label={t("Previous month")}
-                        onClick={() => handleMainMonthNavigate(-1)}
-                      >
-                        ‹
-                      </button>
-                      <button
-                        type="button"
-                        aria-label={t("Next month")}
-                        onClick={() => handleMainMonthNavigate(1)}
-                      >
-                        ›
-                      </button>
-                    </div>
-                  )}
-                  <h2 className={styles.calendarSurfaceTitle}>{monthLabel}</h2>
-                </div>
+                <h2 className={styles.calendarSurfaceTitle}>{monthLabel}</h2>
                 {showHeaderDates && (
                   <p className={styles.calendarSurfaceRange}>{rangeLabel}</p>
                 )}
@@ -1177,8 +1047,37 @@ export function GrayDashboardCalendar({
               <div className={styles.calendarSurfaceNav}>
                 {showNavigationControls && (
                   <>
-                    <div className={styles.calendarSurfaceNavArrows} style={{ display: 'none' }}>
-                      {/* Hidden here, moved to left */}
+                    <div className={styles.calendarSurfaceNavArrows}>
+                      <button
+                        type="button"
+                        aria-label={t("Previous month")}
+                        onClick={() => handleMonthNavigate(-1)}
+                      >
+                        ‹
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={t("Next month")}
+                        onClick={() => handleMonthNavigate(1)}
+                      >
+                        ›
+                      </button>
+                    </div>
+                    <div className={styles.calendarSurfaceNavArrows}>
+                      <button
+                        type="button"
+                        aria-label={t("Previous {range}", { range: rangeNavigationLabel })}
+                        onClick={() => handleNavigateRange(-1)}
+                      >
+                        ‹
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={t("Next {range}", { range: rangeNavigationLabel })}
+                        onClick={() => handleNavigateRange(1)}
+                      >
+                        ›
+                      </button>
                     </div>
                   </>
                 )}
@@ -1227,13 +1126,12 @@ export function GrayDashboardCalendar({
             monthDate={monthDate}
             selectedDate={selectedDate}
             onSelectDate={handleDaySelect}
-            onNavigate={handleMonthNavigate}
+            onNavigateMonth={handleMonthNavigate}
             calendars={calendars}
             onToggleCalendar={handleToggleCalendar}
-            showHeader={true}
-            showSelectedDateLabel={false}
+            showSelectedDateLabel={showSelectedDateLabel}
             className={styles.calendarSidebarIntegrated}
-            showMonthNavigation={true}
+            showMonthNavigation
             showCalendarList={showCalendarList}
             onIntegrationAction={onIntegrationAction}
           />

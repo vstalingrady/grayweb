@@ -1453,6 +1453,8 @@ def _serialize_user_row(row: Mapping[str, Any]) -> Dict[str, Any]:
         except Exception:
             pass  # Let validation fail naturally if JSON is invalid
 
+    return user_dict
+
 class ChatSessionBase(BaseModel):
     title: str
 
@@ -8182,7 +8184,7 @@ async def chat_stream(
             t0_hist = time.perf_counter()
             conversation_history = await _load_conversation_history(conversation_id, chat_request.user_id)
             t1_hist = time.perf_counter()
-            api_logger.info(f"History load time: {(t1_hist - t0_hist)*1000:.2f}ms", extra={"user_id": chat_request.user_id, "conversation_id": conversation_id})
+            api_logger.info(f"History load time: {(t1_hist - t0_hist)*1000:.2f}ms, loaded {len(conversation_history)} messages", extra={"user_id": chat_request.user_id, "conversation_id": conversation_id, "history_count": len(conversation_history)})
 
             # NOTE: Previously we injected General chat context into threads here.
             # Removed because: (1) adds ~2.5s latency, (2) threads should be independent contexts.

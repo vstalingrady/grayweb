@@ -74,30 +74,37 @@ export function MiniMonth({ referenceDate, selectedDate, onSelectDate }: MiniMon
         ))}
       </div>
       <div className={styles.miniMonthGrid}>
-        {grid.map((week, index) => (
-          <div key={index} className={styles.miniMonthRow}>
-            {week.map((date) => {
-              const inMonth = date.getMonth() === currentMonth;
-              const isSelected = isSameDay(date, selectedDate);
-              const isToday = isSameDay(date, today);
+        {grid.map((week, index) => {
+          const isSelectedWeek = week.some((d) => isSameDay(d, selectedDate));
+          return (
+            <div
+              key={index}
+              className={styles.miniMonthRow}
+              data-active-week={isSelectedWeek ? "true" : "false"}
+            >
+              {week.map((date) => {
+                const inMonth = date.getMonth() === currentMonth;
+                const isSelected = isSameDay(date, selectedDate);
+                const isToday = isSameDay(date, today);
 
-              return (
-                <button
-                  key={date.toISOString()}
-                  type="button"
-                  className={styles.miniMonthCell}
-                  data-active={inMonth ? "true" : "false"}
-                  data-selected={isSelected ? "true" : "false"}
-                  data-today={isToday ? "true" : "false"}
-                  onClick={() => onSelectDate(date)}
-                >
-                  {date.getDate()}
-                </button>
-              );
-            })}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
+                return (
+                  <button
+                    key={date.toISOString()}
+                    type="button"
+                    className={styles.miniMonthCell}
+                    data-active={inMonth ? "true" : "false"}
+                    data-selected={isSelected ? "true" : "false"}
+                    data-today={isToday ? "true" : "false"}
+                    onClick={() => onSelectDate(date)}
+                  >
+                    {date.getDate()}
+                  </button>
+                );
+	              })}
+	            </div>
+	          );
+	        })}
+	      </div>
+	    </div>
+	  );
 }

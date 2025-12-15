@@ -155,6 +155,7 @@ export type ChatContextValue = {
     questionnaireSession: QuestionnaireSession | null;
     startQuestionnaire: (mode: "quick" | "deep") => void;
     cancelQuestionnaire: () => void;
+    remoteConversationsLoaded: boolean;
 };
 
 export type GrayReminderEntityType = "plan" | "habit" | "reminder";

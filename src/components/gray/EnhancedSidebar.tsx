@@ -44,6 +44,7 @@ type GrayEnhancedSidebarProps = {
   onRenameHistoryEntry?: (id: string) => void;
   onDeleteHistoryEntry?: (id: string) => void;
   onPinHistoryEntry?: (id: string, pinned: boolean) => void;
+  isLoadingHistory?: boolean;
 };
 
 const normalizeNavLabel = (item: SidebarNavItem): string => {
@@ -169,6 +170,7 @@ function GrayEnhancedSidebarComponent(props: GrayEnhancedSidebarProps) {
     onRenameHistoryEntry,
     onDeleteHistoryEntry,
     onPinHistoryEntry,
+    isLoadingHistory = false,
   } = props;
   const { t } = useI18n();
   const { user } = useUser();
@@ -431,6 +433,14 @@ function GrayEnhancedSidebarComponent(props: GrayEnhancedSidebarProps) {
                         </ul>
                       </div>
                     ))
+                  ) : isLoadingHistory ? (
+                    <div className={styles.sidebarSkeletonGroup}>
+                      <div className={styles.sidebarSkeletonLine} style={{ width: "60%", marginBottom: 16 }} />
+                      <div className={styles.sidebarSkeletonLine} style={{ width: "80%" }} />
+                      <div className={styles.sidebarSkeletonLine} style={{ width: "70%" }} />
+                      <div className={styles.sidebarSkeletonLine} style={{ width: "50%" }} />
+                      <div className={styles.sidebarSkeletonLine} style={{ width: "65%" }} />
+                    </div>
                   ) : (
                     <span className={styles.sidebarHistoryEmpty}>{t("No conversations yet.")}</span>
                   )}
