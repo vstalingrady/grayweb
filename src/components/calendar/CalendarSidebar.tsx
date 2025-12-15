@@ -128,17 +128,18 @@ export function CalendarSidebar({
               onClick={onIntegrationAction}
             >
               <span className={styles.calendarSidebarIntegrationPlus} aria-hidden="true">
-                <img
-                  className={styles.calendarSidebarIntegrationLogo}
-                  src="/logos/icons8-google-calendar.svg"
-                  alt=""
-                  aria-hidden="true"
-                  loading="lazy"
-                />
+                +
               </span>
               <span className={styles.calendarSidebarIntegrationText}>
                 {t(integrationActionLabel)}
               </span>
+              <img
+                className={styles.calendarSidebarIntegrationLogo}
+                src="/logos/google-calendar.svg"
+                alt=""
+                aria-hidden="true"
+                loading="lazy"
+              />
             </button>
           </div>
         ) : null}

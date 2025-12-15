@@ -6330,19 +6330,19 @@ CRITICAL: When the user asks to "set a plan" or create any plan/reminder/habit, 
                 total_accumulated = ""
                 current_message = message
                 
-                for turn in range(max_tool_turns + 1):
-                    accumulated = ""
-                    t0_first_token = time.perf_counter()
-                    got_first_token = False
-                    onboarding_completed_this_turn = False
-                    
-                    # Buffer for detecting JSON tool calls (legacy text fallback for onboarding)
-                    tool_buffer = ""
-                    is_collecting_tool = False
-                    intercepted_legacy_tool_call = False
-                    
-                    # Native tool call accumulator: index -> {name, arguments_parts, id}
-                    pending_tool_calls = {}
+	                for turn in range(max_tool_turns + 1):
+	                    accumulated = ""
+	                    t0_first_token = time.perf_counter()
+	                    got_first_token = False
+	                    onboarding_completed_this_turn = False
+	                    
+	                    # Buffer for detecting JSON tool calls (legacy text fallback for onboarding)
+	                    tool_buffer = ""
+	                    is_collecting_tool = False
+	                    intercepted_legacy_tool_call = False
+	                    
+	                    # Native tool call accumulator: index -> {name, arguments_parts, id}
+	                    pending_tool_calls = {}
                     # Track if we've started streaming reasoning content (to wrap in <thinking> tags once)
                     reasoning_started = False
                     # DEBUG: Log what we're sending to OpenRouter
@@ -6447,24 +6447,24 @@ CRITICAL: When the user asks to "set a plan" or create any plan/reminder/habit, 
                                         
                                         if json_match:
                                             json_str = json_match.group(1)
-                                            tool_data = json.loads(json_str)
+	                                            tool_data = json.loads(json_str)
 
-                                            if tool_data.get("tool") == "complete_onboarding":
-                                                api_logger.info(f"Intercepted OpenRouter onboarding tool call (text-based) for user {user_id}")
-                                                tool_args = tool_data.get("params") or tool_data.get("arguments") or tool_data
-                                                pending_tool_calls[0] = {
-                                                    "name": "complete_onboarding",
-                                                    "arguments": [json.dumps(tool_args)],
-                                                    "id": f"legacy_complete_onboarding_{turn}",
-                                                }
-                                                tool_buffer = ""
-                                                is_collecting_tool = False
-                                                intercepted_legacy_tool_call = True
-                                                break
-                                    except Exception as e:
-                                        api_logger.warning(f"Failed to parse intercepted tool JSON: {e}")
-                                        yield ("delta", tool_buffer)
-                                        yielded_any_tokens = True
+	                                            if tool_data.get("tool") == "complete_onboarding":
+	                                                api_logger.info(f"Intercepted OpenRouter onboarding tool call (text-based) for user {user_id}")
+	                                                tool_args = tool_data.get("params") or tool_data.get("arguments") or tool_data
+	                                                pending_tool_calls[0] = {
+	                                                    "name": "complete_onboarding",
+	                                                    "arguments": [json.dumps(tool_args)],
+	                                                    "id": f"legacy_complete_onboarding_{turn}",
+	                                                }
+	                                                tool_buffer = ""
+	                                                is_collecting_tool = False
+	                                                intercepted_legacy_tool_call = True
+	                                                break
+	                                    except Exception as e:
+	                                        api_logger.warning(f"Failed to parse intercepted tool JSON: {e}")
+	                                        yield ("delta", tool_buffer)
+	                                        yielded_any_tokens = True
                                         accumulated += tool_buffer
                                         tool_buffer = ""
                                         is_collecting_tool = False
@@ -6481,14 +6481,19 @@ CRITICAL: When the user asks to "set a plan" or create any plan/reminder/habit, 
                                 yield ("delta", "</thinking>\n")
                                 accumulated += "</thinking>\n"
                                 reasoning_started = False  # Reset for potential future reasoning
-                            accumulated += chunk
-                            if chunk:
-                                yield ("delta", chunk)
-                                if not got_first_token:
-                                    got_first_token = True
-                                    first_token_ms = (time.perf_counter() - t0_first_token) * 1000
-                                    api_logger.info(f"[Timing] First token: {first_token_ms:.0f}ms")
-                                yielded_any_tokens = True
+	                            accumulated += chunk
+	                            if chunk:
+	                                yield ("delta", chunk)
+	                                if not got_first_token:
+	                                    got_first_token = True
+	                                    first_token_ms = (time.perf_counter() - t0_first_token) * 1000
+	                                    api_logger.info(f"[Timing] First token: {first_token_ms:.0f}ms")
+	                                yielded_any_tokens = True
+	                    
+	                    if intercepted_legacy_tool_call:
+	                        # Stop streaming the provider response early; we'll execute the tool and
+	                        # then do a follow-up model call (same as native tool_calls flow).
+	                        pass
                     
                     # Flush remaining buffer
                     if tool_buffer:
@@ -6528,9 +6533,9 @@ CRITICAL: When the user asks to "set a plan" or create any plan/reminder/habit, 
                         }
                         
                         tool_results = []
-                        for idx, call in pending_tool_calls.items():
-                            tool_name = call.get("name")
-                            handler = tool_handlers.get(tool_name)
+	                        for idx, call in pending_tool_calls.items():
+	                            tool_name = call.get("name")
+	                            handler = tool_handlers.get(tool_name)
                             
                             if not handler:
                                 api_logger.warning(f"Unknown tool call from OpenRouter: {tool_name}")
@@ -6539,21 +6544,21 @@ CRITICAL: When the user asks to "set a plan" or create any plan/reminder/habit, 
                             
                             api_logger.info(f"Executing OpenRouter tool call: {tool_name}")
                             try:
-                                args_str = "".join(call["arguments"])
-                                args = json.loads(args_str) if args_str.strip() else {}
-                                tool_result = await handler(user_id, args, db)
-                                tool_results.append({"tool": tool_name, "result": tool_result, "call_id": call.get("id", "")})
-                                if tool_name == "complete_onboarding" and isinstance(tool_result, dict):
-                                    onboarding_completed_this_turn = tool_result.get("status") == "success"
-                                
-                                # Yield reminder/plan/habit cards to frontend
-                                if isinstance(tool_result, dict) and tool_result.get("type") in {"gray.reminder", "gray.plan", "gray.habit"}:
-                                    yield ("reminders", [tool_result])
-                                    yielded_any_tokens = True
-                                   
-                            except Exception as e:
-                                api_logger.error(f"Failed to execute OpenRouter tool call {tool_name}: {e}", exc_info=True)
-                                tool_results.append({"tool": tool_name, "error": str(e), "call_id": call.get("id", "")})
+	                                args_str = "".join(call["arguments"])
+	                                args = json.loads(args_str) if args_str.strip() else {}
+	                                tool_result = await handler(user_id, args, db)
+	                                tool_results.append({"tool": tool_name, "result": tool_result, "call_id": call.get("id", "")})
+	                                if tool_name == "complete_onboarding" and isinstance(tool_result, dict):
+	                                    onboarding_completed_this_turn = tool_result.get("status") == "success"
+	                                
+	                                # Yield reminder/plan/habit cards to frontend
+	                                if isinstance(tool_result, dict) and tool_result.get("type") in {"gray.reminder", "gray.plan", "gray.habit"}:
+	                                    yield ("reminders", [tool_result])
+	                                    yielded_any_tokens = True
+	                                    
+	                            except Exception as e:
+	                                api_logger.error(f"Failed to execute OpenRouter tool call {tool_name}: {e}", exc_info=True)
+	                                tool_results.append({"tool": tool_name, "error": str(e), "call_id": call.get("id", "")})
                         
                         # Skip follow-up call for read-only list tools (optimization)
                         # These just return data - no need for LLM to summarize
@@ -6592,61 +6597,61 @@ CRITICAL: When the user asks to "set a plan" or create any plan/reminder/habit, 
                             ]
                         })
                         
-                        for tr in tool_results:
-                            result_content = json.dumps(tr.get("result", tr.get("error", {})))
-                            current_history.append({
-                                "role": "tool",
-                                "name": tr.get("tool"),
-                                "tool_call_id": tr.get("call_id", ""),
-                                "content": result_content
-                            })
+	                        for tr in tool_results:
+	                            result_content = json.dumps(tr.get("result", tr.get("error", {})))
+	                            current_history.append({
+	                                "role": "tool",
+	                                "name": tr.get("tool"),
+	                                "tool_call_id": tr.get("call_id", ""),
+	                                "content": result_content
+	                            })
 
-                        if onboarding_completed_this_turn:
-                            try:
-                                updated_user = await db.fetch_one(users.select().where(users.c.id == user_id))
-                            except Exception:
-                                updated_user = None
+	                        if onboarding_completed_this_turn:
+	                            try:
+	                                updated_user = await db.fetch_one(users.select().where(users.c.id == user_id))
+	                            except Exception:
+	                                updated_user = None
 
-                            nickname = _row_get(updated_user, "personalization_nickname") if updated_user else None
-                            occupation = _row_get(updated_user, "personalization_occupation") if updated_user else None
-                            about = _row_get(updated_user, "personalization_about") if updated_user else None
+	                            nickname = _row_get(updated_user, "personalization_nickname") if updated_user else None
+	                            occupation = _row_get(updated_user, "personalization_occupation") if updated_user else None
+	                            about = _row_get(updated_user, "personalization_about") if updated_user else None
 
-                            profile_lines: List[str] = []
-                            if nickname:
-                                profile_lines.append(f"Preferred name: {nickname}")
-                            if occupation:
-                                profile_lines.append(f"Occupation/focus: {occupation}")
-                            if about:
-                                profile_lines.append(f"About: {about}")
+	                            profile_lines: List[str] = []
+	                            if nickname:
+	                                profile_lines.append(f"Preferred name: {nickname}")
+	                            if occupation:
+	                                profile_lines.append(f"Occupation/focus: {occupation}")
+	                            if about:
+	                                profile_lines.append(f"About: {about}")
 
-                            profile_block = ""
-                            if profile_lines:
-                                profile_block = "User profile:\n- " + "\n- ".join(profile_lines)
+	                            profile_block = ""
+	                            if profile_lines:
+	                                profile_block = "User profile:\n- " + "\n- ".join(profile_lines)
 
-                            effective_system_prompt = "\n\n".join(
-                                p
-                                for p in [
-                                    DEFAULT_SYSTEM_PROMPT,
-                                    profile_block,
-                                    "Onboarding is complete. Continue naturally and respond to the user's last message.",
-                                ]
-                                if p
-                            )
+	                            effective_system_prompt = "\n\n".join(
+	                                p
+	                                for p in [
+	                                    DEFAULT_SYSTEM_PROMPT,
+	                                    profile_block,
+	                                    "Onboarding is complete. Continue naturally and respond to the user's last message.",
+	                                ]
+	                                if p
+	                            )
 
-                            # Prevent re-triggering onboarding inside the same request.
-                            is_onboarding_tool = False
-                            tool_list = [
-                                t
-                                for t in tool_list
-                                if not (
-                                    getattr(t, "function_declarations", None)
-                                    and any(fd.name == "complete_onboarding" for fd in t.function_declarations)
-                                )
-                            ]
-                        
-                        total_accumulated += accumulated
-                        current_message = ""  # Empty message, rely on history
-                        continue  # Loop back for model's response after tool execution
+	                            # Prevent re-triggering onboarding inside the same request.
+	                            is_onboarding_tool = False
+	                            tool_list = [
+	                                t
+	                                for t in tool_list
+	                                if not (
+	                                    getattr(t, "function_declarations", None)
+	                                    and any(fd.name == "complete_onboarding" for fd in t.function_declarations)
+	                                )
+	                            ]
+	                        
+	                        total_accumulated += accumulated
+	                        current_message = ""  # Empty message, rely on history
+	                        continue  # Loop back for model's response after tool execution
                     
                     # No tool calls - we're done with this turn
                     total_accumulated += accumulated

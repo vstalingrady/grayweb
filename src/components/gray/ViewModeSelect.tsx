@@ -1,25 +1,20 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Check } from "lucide-react";
 import styles from "@/components/calendar/GrayDashboardCalendar.module.css";
 
-export type ViewModeOption<TValue extends string> = {
-  value: TValue;
+export type ViewModeOption = {
+  value: "week" | "day";
   label: string;
 };
 
-type ViewModeSelectProps<TValue extends string> = {
-  value: TValue;
-  options: Array<ViewModeOption<TValue>>;
-  onChange: (mode: TValue) => void;
+type ViewModeSelectProps = {
+  value: "week" | "day";
+  options: ViewModeOption[];
+  onChange: (mode: "week" | "day") => void;
 };
 
-export function ViewModeSelect<TValue extends string>({
-  value,
-  options,
-  onChange,
-}: ViewModeSelectProps<TValue>) {
+export function ViewModeSelect({ value, options, onChange }: ViewModeSelectProps) {
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const [isOpen, setIsOpen] = useState(false);
 
@@ -37,7 +32,7 @@ export function ViewModeSelect<TValue extends string>({
   }, []);
 
   const handleOptionSelect = useCallback(
-    (nextValue: TValue) => {
+    (nextValue: "week" | "day") => {
       onChange(nextValue);
       closeMenu();
     },
@@ -96,13 +91,7 @@ export function ViewModeSelect<TValue extends string>({
               data-active={option.value === value ? "true" : "false"}
               onClick={() => handleOptionSelect(option.value)}
             >
-              <span className={styles.calendarViewMenuItemCheck} aria-hidden="true">
-                <Check
-                  size={14}
-                  style={{ opacity: option.value === value ? 1 : 0 }}
-                />
-              </span>
-              <span className={styles.calendarViewMenuItemLabel}>{option.label}</span>
+              {option.label}
             </button>
           ))}
         </div>

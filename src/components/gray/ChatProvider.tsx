@@ -431,9 +431,8 @@ const mapApiMessagesToChatMessages = (
       message.groundingMetadata ??
       null;
 
-    // Use the message's own timestamp if available and valid (> 0), otherwise fall back to the provided timestamp.
-    // The backend returns 0 for messages with missing or unparseable timestamps, so we treat 0 as invalid.
-    const messageTimestamp = typeof message.timestamp === 'number' && Number.isFinite(message.timestamp) && message.timestamp > 0
+    // Use the message's own timestamp if available, otherwise fall back to the provided timestamp
+    const messageTimestamp = typeof message.timestamp === 'number' && Number.isFinite(message.timestamp)
       ? message.timestamp
       : fallbackTimestamp;
 
