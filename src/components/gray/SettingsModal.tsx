@@ -201,6 +201,7 @@ export function SettingsModal({
     visibleModelIds,
     setVisibleModelIds,
     selectedModelId,
+    modelTier,
     clearAllConversations,
   } = useChatStore();
   const router = useRouter();
@@ -267,11 +268,12 @@ export function SettingsModal({
   }, [isOpen]);
 
   const tierLevel = useMemo(() => {
-    const raw = (user?.plan_tier ?? "scout").toLowerCase();
-    if (raw === "pioneer") return 2;
+    const raw = (user?.plan_tier ?? user?.role ?? "scout").trim().toLowerCase();
     if (raw === "voyager") return 1;
+    const premiumTokens = new Set(["pioneer", "depth", "pro", "premium", "operator", "admin"]);
+    if (premiumTokens.has(raw)) return 2;
     return 0;
-  }, [user?.plan_tier]);
+  }, [user?.plan_tier, user?.role]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -995,15 +997,53 @@ export function SettingsModal({
 
               <div className={styles.settingsSection}>
                 <h3 className={styles.settingsSectionTitle}>{t("Your Subscription")}</h3>
-                <div className={styles.settingsUpgradeCard}>
-                  <div className={styles.settingsUpgradeText}>
-                    <h4>Supercharge your experience</h4>
-                    <p>Unlock everything Gray has to offer.</p>
+                {tierLevel < 1 ? (
+                  <div className={styles.settingsUpgradeCard}>
+                    <div className={styles.settingsUpgradeText}>
+                      <h4>Supercharge your experience</h4>
+                      <p>Unlock everything Gray has to offer.</p>
+                    </div>
+                    <button
+                      type="button"
+                      className={`${styles.settingsAction} ${styles.settingsPrimaryButton}`}
+                      onClick={() => {
+                        onClose();
+                        router.push("/pricing");
+                      }}
+                    >
+                      {t("Upgrade plan")}
+                    </button>
                   </div>
-                  <button className={`${styles.settingsAction} ${styles.settingsPrimaryButton}`}>
-                    {t("Upgrade plan")}
-                  </button>
-                </div>
+                ) : (
+                  <div
+                    className={styles.settingsSubscriptionCard}
+                    data-variant={tierLevel >= 2 ? "primary" : "highlighted"}
+                  >
+                    <div className={styles.settingsUpgradeText}>
+                      <h4>
+                        {t("Current Plan")}: {tierLevel >= 2 ? "Pioneer" : "Voyager"}
+                      </h4>
+                      <p>
+                        {tierLevel >= 2
+                          ? "Top-tier models, top limits, and early access."
+                          : "More messages, longer memory, and calendar routines."}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className={`${styles.settingsSubscriptionButton} ${tierLevel >= 2
+                        ? styles.settingsSubscriptionButtonPrimary
+                        : styles.settingsSubscriptionButtonOutline
+                        }`}
+                      onClick={() => {
+                        onClose();
+                        router.push("/pricing");
+                      }}
+                    >
+                      View plan
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div className={styles.settingsSection}>
@@ -1306,7 +1346,7 @@ export function SettingsModal({
                         </div>
                         {(() => {
                           const modelRows = filteredModels.map((model) => {
-                            const isSelected = selectedModelId === model.id;
+                            const isSelected = modelTier === "pioneer" && selectedModelId === model.id;
                             const isEnabled = visibleModelIds === null || visibleIds.includes(model.id);
                             const requiredTier = model.tierRequired ?? "voyager";
                             const requiredLevel = requiredTier === "pioneer" ? 2 : 1;
