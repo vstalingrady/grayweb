@@ -2891,17 +2891,10 @@ async def _generate_chat_title_inline(
     return None
 
 
-def _merge_extra_contents(*lists: Optional[List[types.Content]]) -> Optional[List[types.Content]]:
-  merged: List[types.Content] = []
-  for candidate in lists:
-    if candidate:
-      merged.extend(candidate)
-  return merged or None
+# _merge_extra_contents is now imported from core.ai_utils
 
 
-def _normalize_conversation_history(history: Optional[List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
-    """Thin wrapper around core.chat_history.normalize_conversation_history."""
-    return normalize_conversation_history(history)
+# _normalize_conversation_history wrapper removed - use normalize_conversation_history directly
 
 
 async def _load_conversation_history(conversation_id: str, user_id: int) -> List[Dict[str, Any]]:
@@ -3871,7 +3864,7 @@ async def stream_ai_response(
 ) -> AsyncGenerator[Tuple[str, Any], None]:
     """Yield token chunks using the configured AI provider."""
 
-    conversation_history = _normalize_conversation_history(conversation_history)
+    conversation_history = normalize_conversation_history(conversation_history)
     history_token_budget = tier_conversation_token_limit(plan_tier)
 
     # Determine whether this turn is part of a reminder/plan/habit flow.
@@ -4976,7 +4969,7 @@ async def generate_ai_response(
             )
             return limit_msg, None
 
-    conversation_history = _normalize_conversation_history(conversation_history)
+    conversation_history = normalize_conversation_history(conversation_history)
     history_token_budget = tier_conversation_token_limit(plan_tier)
     if not (message or "").strip() and not conversation_history and not (attachments or []):
         message = "Let's get started."
@@ -6594,7 +6587,7 @@ async def _overwrite_conversation_history_logic(
                 "message_count": len(payload.messages),
             },
         )
-        normalized_history = _normalize_conversation_history(payload.messages)
+        normalized_history = normalize_conversation_history(payload.messages)
 
         general_user_id = _general_conversation_user_id(conversation_id)
         if general_user_id is not None:
