@@ -95,14 +95,128 @@ except Exception:
         apply_conversation_update,
         update_conversation_title,
     )
+
+# File handling utilities (extracted from main.py)
+try:
+    from backend.core.file_utils import (
+        MEDIA_UPLOAD_DIR,
+        MEDIA_UPLOAD_ROOT,
+        UPLOAD_READ_CHUNK_SIZE,
+        MAX_MEDIA_UPLOAD_SIZE_BYTES,
+        MAX_BACKGROUND_UPLOAD_SIZE_BYTES,
+        IMAGE_MIME_TYPES,
+        DOCUMENT_MIME_TYPES,
+        CHAT_UPLOAD_MIME_TYPES,
+        BACKGROUND_UPLOAD_MIME_TYPES,
+        IMAGE_EXTENSIONS,
+        CHAT_UPLOAD_EXTENSIONS,
+        BACKGROUND_UPLOAD_EXTENSIONS,
+        MIME_EXTENSION_MAP,
+        STORAGE_BASE_URL,
+        CLAMAV_SCAN_ENABLED,
+        CLAMAV_SCAN_BINARY,
+        CLAMAV_SCAN_TIMEOUT,
+        sanitize_filename as _sanitize_filename,
+        normalize_mime as _normalize_mime,
+        sniff_mime_type as _sniff_mime_type,
+        reject_if_suspicious as _reject_if_suspicious,
+        scan_file_for_malware as _scan_file_for_malware,
+        ensure_storage_path as _ensure_storage_path,
+        resolve_storage_path_from_record as _resolve_storage_path_from_record,
+        persist_upload_file as _persist_upload_file,
+    )
+except ImportError:
+    from core.file_utils import (  # type: ignore
+        MEDIA_UPLOAD_DIR,
+        MEDIA_UPLOAD_ROOT,
+        UPLOAD_READ_CHUNK_SIZE,
+        MAX_MEDIA_UPLOAD_SIZE_BYTES,
+        MAX_BACKGROUND_UPLOAD_SIZE_BYTES,
+        IMAGE_MIME_TYPES,
+        DOCUMENT_MIME_TYPES,
+        CHAT_UPLOAD_MIME_TYPES,
+        BACKGROUND_UPLOAD_MIME_TYPES,
+        IMAGE_EXTENSIONS,
+        CHAT_UPLOAD_EXTENSIONS,
+        BACKGROUND_UPLOAD_EXTENSIONS,
+        MIME_EXTENSION_MAP,
+        STORAGE_BASE_URL,
+        CLAMAV_SCAN_ENABLED,
+        CLAMAV_SCAN_BINARY,
+        CLAMAV_SCAN_TIMEOUT,
+        sanitize_filename as _sanitize_filename,
+        normalize_mime as _normalize_mime,
+        sniff_mime_type as _sniff_mime_type,
+        reject_if_suspicious as _reject_if_suspicious,
+        scan_file_for_malware as _scan_file_for_malware,
+        ensure_storage_path as _ensure_storage_path,
+        resolve_storage_path_from_record as _resolve_storage_path_from_record,
+        persist_upload_file as _persist_upload_file,
+    )
+
+# SQLite migration helpers (extracted from main.py)
+try:
+    from backend.core.sqlite_helpers import (
+        ensure_sqlite_columns as _ensure_sqlite_columns,
+        ensure_sqlite_table as _ensure_sqlite_table,
+        ensure_sqlite_index as _ensure_sqlite_index,
+        drop_sqlite_table as _drop_sqlite_table,
+        rebuild_sqlite_table_without_columns as _rebuild_sqlite_table_without_columns,
+    )
+except ImportError:
+    from core.sqlite_helpers import (  # type: ignore
+        ensure_sqlite_columns as _ensure_sqlite_columns,
+        ensure_sqlite_table as _ensure_sqlite_table,
+        ensure_sqlite_index as _ensure_sqlite_index,
+        drop_sqlite_table as _drop_sqlite_table,
+        rebuild_sqlite_table_without_columns as _rebuild_sqlite_table_without_columns,
+    )
+
+# Prompt loading utilities (extracted from main.py)
+try:
+    from backend.core.prompt_utils import (
+        load_prompt_from_file,
+        load_prompt_from_json,
+        normalize_prompt_locale as _normalize_prompt_locale,
+        prompt_locale_from_request as _prompt_locale_from_request,
+    )
+except ImportError:
+    from core.prompt_utils import (  # type: ignore
+        load_prompt_from_file,
+        load_prompt_from_json,
+        normalize_prompt_locale as _normalize_prompt_locale,
+        prompt_locale_from_request as _prompt_locale_from_request,
+    )
+
+# CORS utilities (extracted from main.py)
+try:
+    from backend.core.cors_utils import (
+        IS_PRODUCTION,
+        DEFAULT_DEV_ORIGIN_PORTS,
+        LOCAL_NETWORK_ORIGIN_PATTERN,
+        split_env_list as _split_env_list,
+        origin_variants as _origin_variants,
+        local_network_origins as _local_network_origins,
+        local_network_origin_regex as _local_network_origin_regex,
+        build_allowed_origins as _build_allowed_origins,
+    )
+except ImportError:
+    from core.cors_utils import (  # type: ignore
+        IS_PRODUCTION,
+        DEFAULT_DEV_ORIGIN_PORTS,
+        LOCAL_NETWORK_ORIGIN_PATTERN,
+        split_env_list as _split_env_list,
+        origin_variants as _origin_variants,
+        local_network_origins as _local_network_origins,
+        local_network_origin_regex as _local_network_origin_regex,
+        build_allowed_origins as _build_allowed_origins,
+    )
+
 from uuid import UUID, uuid4
 from pathlib import Path
 from urllib.parse import urlparse
 
-# Environment flags used across CORS and rate limiting defaults
-NODE_ENV = os.getenv("NODE_ENV", "").strip().lower()
-ENVIRONMENT = os.getenv("ENVIRONMENT", "").strip().lower()
-IS_PRODUCTION = NODE_ENV == "production" or ENVIRONMENT == "production"
+# NODE_ENV, ENVIRONMENT, IS_PRODUCTION now imported from core.cors_utils
 
 # Enhanced logging imports
 try:
@@ -435,96 +549,8 @@ def _int_env(var_name: str, default: int) -> int:
         return default
 
 
-def load_prompt_from_file(path: Path, fallback: str) -> str:
-    """Load a plain-text prompt from disk, falling back to the provided default."""
-    try:
-        content = path.read_text(encoding="utf-8").strip()
-        if content:
-            return content
-        app_logger.warning("Prompt file is empty; using fallback", extra={"prompt_path": str(path)})
-    except FileNotFoundError:
-        app_logger.warning("Prompt file missing; using fallback", extra={"prompt_path": str(path)})
-    except Exception as exc:
-        app_logger.error(
-            "Failed to load prompt file; using fallback",
-            extra={"prompt_path": str(path), "error": str(exc)},
-        )
-    return fallback.strip()
-
-
-def _normalize_prompt_locale(locale: Optional[str]) -> str:
-    normalized = (locale or "").strip().lower()
-    if not normalized:
-        return "en"
-    return normalized.split("-")[0]
-
-
-def load_prompt_from_json(path: Path, key: str, fallback: str = "", locale: Optional[str] = None) -> str:
-    """
-    Load a prompt string from a JSON config file, using a dotted key path like
-    "chat" or "proactivity.daily". Raises RuntimeError if prompt can't be loaded.
-    
-    If the key is missing/empty and a fallback is provided, the fallback is returned.
-    """
-    fallback_value = (fallback or "").strip()
-    try:
-        raw = path.read_text(encoding="utf-8")
-        data: Any = json.loads(raw)
-    except FileNotFoundError:
-        if fallback_value:
-            app_logger.warning(
-                "Prompt file missing; using fallback",
-                extra={"prompt_path": str(path), "prompt_key": key},
-            )
-            return fallback_value
-        raise
-    except Exception as exc:
-        if fallback_value:
-            app_logger.warning(
-                "Failed to load prompt JSON; using fallback",
-                extra={"prompt_path": str(path), "prompt_key": key, "error": str(exc)},
-            )
-            return fallback_value
-        raise
-    value: Any = data
-    for segment in key.split("."):
-        if not isinstance(value, dict) or segment not in value:
-            if fallback_value:
-                app_logger.warning(
-                    "Prompt key missing; using fallback",
-                    extra={"prompt_path": str(path), "prompt_key": key},
-                )
-                return fallback_value
-            raise RuntimeError(f"Prompt key '{key}' not found in {path}")
-        value = value[segment]
-    if isinstance(value, str) and value.strip():
-        return value.strip()
-    if isinstance(value, dict):
-        normalized_locale = _normalize_prompt_locale(locale)
-        candidate = value.get(normalized_locale)
-        if not isinstance(candidate, str) or not candidate.strip():
-            candidate = value.get("en")
-        if isinstance(candidate, str) and candidate.strip():
-            return candidate.strip()
-    if fallback_value:
-        app_logger.warning(
-            "Prompt key empty; using fallback",
-            extra={"prompt_path": str(path), "prompt_key": key},
-        )
-        return fallback_value
-    raise RuntimeError(f"Prompt key '{key}' is empty in {path}")
-
-
-def _prompt_locale_from_request(request: Request) -> str:
-    header_value = (request.headers.get("accept-language") or "").strip()
-    if not header_value:
-        return "en"
-    first = header_value.split(",")[0].strip()
-    if not first:
-        return "en"
-    return _normalize_prompt_locale(first)
-
-
+# load_prompt_from_file, load_prompt_from_json, _normalize_prompt_locale, _prompt_locale_from_request
+# are now imported from core.prompt_utils
 
 AI_PROVIDER = (os.getenv("AI_PROVIDER") or "openrouter").strip().lower()
 # Default lite tier provider - using OpenRouter for all models
@@ -637,242 +663,9 @@ SUSPICIOUS_PATTERNS = (b"<script", b"javascript:", b"onerror=", b"<?php", b"#!/"
 STORAGE_BASE_URL = os.getenv("STORAGE_BASE_URL") or None
 
 
-def _sanitize_filename(filename: Optional[str]) -> str:
-  candidate = (filename or "upload").strip()
-  candidate = Path(candidate).name
-  candidate = re.sub(r"[^A-Za-z0-9._-]", "_", candidate)
-  while ".." in candidate:
-    candidate = candidate.replace("..", "")
-  if not candidate or candidate.startswith("."):
-    candidate = "upload"
-  return candidate[:255]
-
-
-def _normalize_mime(mime: Optional[str]) -> str:
-  if not mime:
-    return ""
-  normalized = mime.split(";")[0].strip().lower()
-  if normalized == "image/jpg":
-    return "image/jpeg"
-  return normalized
-
-
-def _sniff_mime_type(file_start: bytes) -> Optional[str]:
-  if file_start[:4] == b"%PDF":
-    return "application/pdf"
-  if file_start[:4] == b"\x89PNG":
-    return "image/png"
-  if file_start[:2] == b"\xff\xd8":
-    return "image/jpeg"
-  if file_start[:6] in (b"GIF87a", b"GIF89a"):
-    return "image/gif"
-  if file_start[:4] == b"RIFF" and file_start[8:12] == b"WEBP":
-    return "image/webp"
-  if file_start[:2] == b"BM":
-    return "image/bmp"
-  lowered = file_start.lower()
-  if lowered.lstrip().startswith(b"<svg"):
-    return "image/svg+xml"
-  return None
-
-
-def _reject_if_suspicious(chunk: bytes) -> None:
-  lowered = chunk.lower()
-  for pattern in SUSPICIOUS_PATTERNS:
-    if pattern in lowered:
-      raise HTTPException(
-          status_code=status.HTTP_400_BAD_REQUEST,
-          detail="File contains suspicious or executable content.",
-      )
-
-
-def _scan_file_for_malware(storage_path: Path) -> None:
-  if not CLAMAV_SCAN_ENABLED or not CLAMAV_SCAN_BINARY:
-    return
-
-  try:
-    result = subprocess.run(
-        [CLAMAV_SCAN_BINARY, "--no-summary", str(storage_path)],
-        capture_output=True,
-        text=True,
-        timeout=CLAMAV_SCAN_TIMEOUT,
-        check=False,
-    )
-  except FileNotFoundError:
-    return
-  except subprocess.TimeoutExpired:
-    storage_path.unlink(missing_ok=True)
-    raise HTTPException(
-        status_code=status.HTTP_504_GATEWAY_TIMEOUT,
-        detail="Antivirus scan timed out.",
-    )
-
-  if result.returncode == 0:
-    return
-
-  storage_path.unlink(missing_ok=True)
-
-  if result.returncode == 1:
-    raise HTTPException(
-        status_code=status.HTTP_400_BAD_REQUEST,
-        detail="Upload failed antivirus scan.",
-    )
-
-  file_logger.warning(
-      "Antivirus scan failed",
-      extra={
-          "event_type": "upload_scan_error",
-          "path": str(storage_path),
-          "stdout": result.stdout,
-          "stderr": result.stderr,
-          "returncode": result.returncode,
-      },
-  )
-  raise HTTPException(
-      status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-      detail="Failed to scan file for malware.",
-  )
-
-
-def _ensure_storage_path(storage_name: str) -> Path:
-  candidate = MEDIA_UPLOAD_ROOT / storage_name
-  resolved_candidate = candidate.resolve()
-  if not resolved_candidate.is_relative_to(MEDIA_UPLOAD_ROOT):
-    raise HTTPException(
-        status_code=status.HTTP_400_BAD_REQUEST,
-        detail="Invalid storage target.",
-    )
-  if resolved_candidate.is_dir():
-    raise HTTPException(
-        status_code=status.HTTP_400_BAD_REQUEST,
-        detail="Invalid storage path.",
-    )
-  return resolved_candidate
-
-
-def _resolve_storage_path_from_record(raw_path: str) -> Path:
-  if not raw_path:
-    raise HTTPException(
-        status_code=status.HTTP_400_BAD_REQUEST,
-        detail="Attachment path is missing.",
-    )
-  candidate = Path(raw_path)
-  if candidate.is_absolute():
-    resolved = candidate.resolve()
-  else:
-    resolved = (MEDIA_UPLOAD_ROOT / candidate).resolve()
-  if not resolved.is_relative_to(MEDIA_UPLOAD_ROOT):
-    raise HTTPException(
-        status_code=status.HTTP_400_BAD_REQUEST,
-        detail="Attachment path is invalid.",
-    )
-  if resolved.is_symlink():
-    raise HTTPException(
-        status_code=status.HTTP_410_GONE,
-        detail="Attachment file is no longer available.",
-    )
-  return resolved
-
-
-async def _persist_upload_file(
-    file: UploadFile,
-    *,
-    allowed_mime_types: Set[str],
-    allowed_extensions: Set[str],
-    max_size_bytes: int,
-) -> Tuple[Path, str, int, str, str]:
-  content_type = _normalize_mime(file.content_type)
-  if not content_type or content_type not in allowed_mime_types:
-    raise HTTPException(
-        status_code=status.HTTP_400_BAD_REQUEST,
-        detail="Unsupported or missing content type.",
-    )
-
-  sanitized_name = _sanitize_filename(file.filename)
-  extension = Path(sanitized_name).suffix.lower()
-  if extension not in allowed_extensions:
-    raise HTTPException(
-        status_code=status.HTTP_400_BAD_REQUEST,
-        detail=f"Invalid file extension: {extension or 'none provided'}",
-    )
-
-  storage_name = f"{uuid4().hex}{extension}"
-  storage_path = _ensure_storage_path(storage_name)
-
-  first_chunk = await file.read(UPLOAD_READ_CHUNK_SIZE)
-  if not first_chunk:
-    raise HTTPException(
-        status_code=status.HTTP_400_BAD_REQUEST,
-        detail="Uploaded file is empty.",
-    )
-
-  sniffed_type = _normalize_mime(_sniff_mime_type(first_chunk))
-  resolved_mime = content_type
-  if sniffed_type:
-    if sniffed_type not in allowed_mime_types:
-      raise HTTPException(
-          status_code=status.HTTP_400_BAD_REQUEST,
-          detail="File content type is not allowed.",
-      )
-    expected_exts = MIME_EXTENSION_MAP.get(sniffed_type)
-    if expected_exts and extension not in expected_exts:
-      raise HTTPException(
-          status_code=status.HTTP_400_BAD_REQUEST,
-          detail="File extension does not match content.",
-      )
-    if content_type and content_type != sniffed_type:
-      raise HTTPException(
-          status_code=status.HTTP_400_BAD_REQUEST,
-          detail="Declared content type does not match file contents.",
-      )
-    resolved_mime = sniffed_type
-
-  _reject_if_suspicious(first_chunk[:4096])
-
-  bytes_written = 0
-  inspect_remaining = max(0, 4096 - len(first_chunk))
-  try:
-    with storage_path.open("wb") as buffer:
-      if len(first_chunk) > max_size_bytes:
-        raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=f"File too large. Maximum size is {max_size_bytes // (1024 * 1024)}MB.",
-        )
-      buffer.write(first_chunk)
-      bytes_written += len(first_chunk)
-
-      while True:
-        chunk = await file.read(UPLOAD_READ_CHUNK_SIZE)
-        if not chunk:
-          break
-        if bytes_written + len(chunk) > max_size_bytes:
-          raise HTTPException(
-              status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-              detail=f"File too large. Maximum size is {max_size_bytes // (1024 * 1024)}MB.",
-          )
-        if inspect_remaining > 0:
-          _reject_if_suspicious(chunk[:inspect_remaining])
-          inspect_remaining = max(0, inspect_remaining - len(chunk))
-        buffer.write(chunk)
-        bytes_written += len(chunk)
-  except HTTPException:
-    storage_path.unlink(missing_ok=True)
-    raise
-  except Exception as error:
-    storage_path.unlink(missing_ok=True)
-    raise HTTPException(
-        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        detail=f"Failed to store upload: {error}",
-    ) from error
-  finally:
-    try:
-      await file.close()
-    except Exception:
-      pass
-
-  _scan_file_for_malware(storage_path)
-
-  return storage_path, resolved_mime, bytes_written, sanitized_name, storage_name
+# File utility functions (_sanitize_filename, _normalize_mime, _sniff_mime_type, _reject_if_suspicious,
+# _scan_file_for_malware, _ensure_storage_path, _resolve_storage_path_from_record, _persist_upload_file)
+# are now imported from core.file_utils
 
 SEARCH_TOOL = types.Tool(
     google_search=types.GoogleSearch(),
@@ -914,195 +707,9 @@ GLOBAL_SYSTEM_PROMPTS_PATH = ROOT_DIR / "public" / "system-prompts.json"
 ONBOARDING_PROMPT_PATH = PROMPTS_DIR / "onboarding.txt"
 
 
-def _ensure_sqlite_columns(
-    table: str,
-    columns: List[Tuple[str, str, Optional[str]]],
-    backfill_nulls: Optional[Dict[str, str]] = None,
-) -> None:
-    """
-    Add missing columns to a SQLite table.
 
-    Args:
-        table: Table name
-        columns: List of (column_name, column_type, default_value) tuples
-        backfill_nulls: Optional dict of {column: default_value} for NULL backfill
-    """
-    if not DATABASE_URL.startswith("sqlite"):
-        return
-    db_path = DATABASE_URL.replace("sqlite:///", "", 1)
-    if not db_path:
-        return
-    try:
-        conn = sqlite3.connect(db_path)
-        try:
-            cursor = conn.execute(f"PRAGMA table_info({table})")
-            existing = {row[1] for row in cursor.fetchall()}
-            added = False
-            for col_name, col_type, default in columns:
-                if col_name not in existing:
-                    default_clause = f" DEFAULT {default}" if default is not None else ""
-                    conn.execute(f"ALTER TABLE {table} ADD COLUMN {col_name} {col_type}{default_clause}")
-                    added = True
-            if added:
-                conn.commit()
-            # Backfill NULLs if specified
-            if backfill_nulls:
-                updates = ", ".join(f"{col} = COALESCE({col}, {val})" for col, val in backfill_nulls.items())
-                conn.execute(f"UPDATE {table} SET {updates}")
-                conn.commit()
-        finally:
-            conn.close()
-    except sqlite3.Error as exc:
-        app_logger.error(
-            "SQLite migration failed",
-            extra={"event_type": "sqlite_migration_error", "table": table, "error": str(exc)},
-        )
-
-
-def _ensure_sqlite_table(table: str, create_sql: str) -> None:
-    """Create a SQLite table if it doesn't exist."""
-    if not DATABASE_URL.startswith("sqlite"):
-        return
-    db_path = DATABASE_URL.replace("sqlite:///", "", 1)
-    if not db_path:
-        return
-    try:
-        conn = sqlite3.connect(db_path)
-        try:
-            cursor = conn.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name='{table}'")
-            if not cursor.fetchone():
-                conn.execute(create_sql)
-                conn.commit()
-        finally:
-            conn.close()
-    except sqlite3.Error as exc:
-        app_logger.error(
-            "SQLite table creation failed",
-            extra={"event_type": "sqlite_migration_error", "table": table, "error": str(exc)},
-        )
-
-
-def _ensure_sqlite_index(table: str, index_name: str, column: str) -> None:
-    """Create a SQLite index if it doesn't exist."""
-    if not DATABASE_URL.startswith("sqlite"):
-        return
-    db_path = DATABASE_URL.replace("sqlite:///", "", 1)
-    if not db_path:
-        return
-    try:
-        conn = sqlite3.connect(db_path)
-        try:
-            # Check if table exists first
-            cursor = conn.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name='{table}'")
-            if not cursor.fetchone():
-                app_logger.info(f"Skipping index check; {table} table does not exist")
-                return
-            cursor = conn.execute(f"PRAGMA index_list({table})")
-            indices = {row[1] for row in cursor.fetchall()}
-            if index_name not in indices:
-                app_logger.info(f"Creating missing index {index_name} on {table}.{column}")
-                conn.execute(f"CREATE INDEX {index_name} ON {table} ({column})")
-                conn.commit()
-        finally:
-            conn.close()
-    except sqlite3.Error as exc:
-        app_logger.error(
-            "SQLite index creation failed",
-            extra={"event_type": "sqlite_migration_error", "table": table, "error": str(exc)},
-        )
-
-
-def _drop_sqlite_table(table: str) -> None:
-    """Drop a SQLite table if it exists (best effort)."""
-    if not DATABASE_URL.startswith("sqlite"):
-        return
-    db_path = DATABASE_URL.replace("sqlite:///", "", 1)
-    if not db_path:
-        return
-    quoted = '"' + table.replace('"', '""') + '"'
-    try:
-        conn = sqlite3.connect(db_path)
-        try:
-            conn.execute(f"DROP TABLE IF EXISTS {quoted}")
-            conn.commit()
-        finally:
-            conn.close()
-    except sqlite3.Error as exc:
-        app_logger.error(
-            "SQLite table drop failed",
-            extra={"event_type": "sqlite_migration_error", "table": table, "error": str(exc)},
-        )
-
-
-def _rebuild_sqlite_table_without_columns(table: str, columns_to_drop: set[str]) -> None:
-    """Rebuild a SQLite table without selected columns (best effort)."""
-    if not DATABASE_URL.startswith("sqlite"):
-        return
-    db_path = DATABASE_URL.replace("sqlite:///", "", 1)
-    if not db_path:
-        return
-
-    def quote(ident: str) -> str:
-        return '"' + ident.replace('"', '""') + '"'
-
-    try:
-        conn = sqlite3.connect(db_path)
-        try:
-            cursor = conn.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name={quote(table)}")
-            if not cursor.fetchone():
-                return
-
-            table_info = list(conn.execute(f"PRAGMA table_info({quote(table)})"))
-            if not table_info:
-                return
-
-            existing_columns = {row[1] for row in table_info}
-            if not (existing_columns & columns_to_drop):
-                return
-
-            keep_columns = [row for row in table_info if row[1] not in columns_to_drop]
-            if not keep_columns:
-                return
-
-            temp_table = f"{table}__tmp_{uuid4().hex[:8]}"
-
-            column_defs: List[str] = []
-            pk_columns: List[str] = []
-            for _, name, col_type, notnull, default, pk in keep_columns:
-                col_sql_parts = [quote(str(name)), str(col_type or "TEXT")]
-                if int(notnull) == 1:
-                    col_sql_parts.append("NOT NULL")
-                if default is not None:
-                    col_sql_parts.append(f"DEFAULT {default}")
-                if int(pk) > 0:
-                    pk_columns.append(str(name))
-                column_defs.append(" ".join(col_sql_parts))
-
-            pk_sql = ""
-            if pk_columns:
-                pk_sql = f", PRIMARY KEY ({', '.join(quote(name) for name in pk_columns)})"
-
-            conn.execute("BEGIN")
-            conn.execute(f"CREATE TABLE {quote(temp_table)} ({', '.join(column_defs)}{pk_sql})")
-
-            keep_column_names = [row[1] for row in keep_columns]
-            select_cols = ", ".join(quote(name) for name in keep_column_names)
-            conn.execute(
-                f"INSERT INTO {quote(temp_table)} ({select_cols}) SELECT {select_cols} FROM {quote(table)}"
-            )
-            conn.execute(f"DROP TABLE {quote(table)}")
-            conn.execute(f"ALTER TABLE {quote(temp_table)} RENAME TO {quote(table)}")
-            conn.commit()
-        except Exception:
-            conn.rollback()
-            raise
-        finally:
-            conn.close()
-    except sqlite3.Error as exc:
-        app_logger.error(
-            "SQLite table rebuild failed",
-            extra={"event_type": "sqlite_migration_error", "table": table, "error": str(exc)},
-        )
+# SQLite helper functions (_ensure_sqlite_columns, _ensure_sqlite_table, _ensure_sqlite_index,
+# _drop_sqlite_table, _rebuild_sqlite_table_without_columns) are now imported from core.sqlite_helpers
 
 
 # Run all SQLite migrations using the unified helpers
@@ -1344,10 +951,8 @@ def _should_enable_search(message: str) -> bool:
     return _should_use_web_search(message, model=None)
 
 
-def _split_env_list(value: Optional[str]) -> List[str]:
-    if not value:
-        return []
-    return [item.strip() for item in value.split(",") if item.strip()]
+# CORS utility functions (_split_env_list, _origin_variants, _local_network_origins,
+# _build_allowed_origins, _local_network_origin_regex) are now imported from core.cors_utils
 
 
 def _prefers_gemini_model(normalized_model: str) -> bool:
@@ -1400,77 +1005,6 @@ def _materialize_structured_reminders(raw_text: str) -> Tuple[str, Optional[List
     if reminders is not None and not isinstance(reminders, list):
         return message, None
     return message, reminders if isinstance(reminders, list) else None
-
-
-def _origin_variants(origin: str) -> List[str]:
-    cleaned = origin.strip().rstrip("/")
-    if not cleaned:
-        return []
-
-    variants = {cleaned}
-    if cleaned.startswith("http://"):
-        variants.add(cleaned.replace("http://", "https://", 1))
-    elif cleaned.startswith("https://"):
-        variants.add(cleaned.replace("https://", "http://", 1))
-    return list(variants)
-
-
-def _local_network_origins(ports: Iterable[int]) -> Set[str]:
-    # Security: Do not automatically allow other devices on the local network
-    return set()
-
-
-def _build_allowed_origins() -> List[str]:
-    explicit = _split_env_list(os.getenv("CORS_ALLOW_ORIGINS"))
-    if explicit:
-        return explicit
-
-    default_origins = {
-        "http://localhost:3000",
-        "https://localhost:3000",
-        "http://gray.localhost:3000",
-        "https://gray.localhost:3000",
-        "http://127.0.0.1:3000",
-        "https://127.0.0.1:3000",
-        "http://localhost:5173",
-        "https://localhost:5173",
-        "http://127.0.0.1:5173",
-        "https://127.0.0.1:5173",
-    }
-
-    # In production, do not include default localhost origins unless explicitly allowed
-    if IS_PRODUCTION:
-        default_origins = set()
-
-    candidate_env_vars = [
-        os.getenv("NEXT_PUBLIC_SITE_URL"),
-        os.getenv("SITE_URL"),
-        os.getenv("NEXT_PUBLIC_AUTH_REDIRECT"),
-        os.getenv("FRONTEND_URL"),
-    ]
-
-    for candidate in candidate_env_vars:
-        for variant in _origin_variants(candidate or ""):
-            default_origins.add(variant)
-
-    if not IS_PRODUCTION:
-        for origin in _local_network_origins(DEFAULT_DEV_ORIGIN_PORTS):
-            default_origins.add(origin)
-
-    return sorted(default_origins)
-
-
-LOCAL_NETWORK_ORIGIN_PATTERN = (
-    r"^https?://(?:(?:localhost|(?:[a-z0-9-]+\.)+localhost|127\.0\.0\.1)"
-    r"|(?:10(?:\.\d{1,3}){3})"
-    r"|(?:192\.168(?:\.\d{1,3}){2})"
-    r"|(?:172\.(?:1[6-9]|2\d|3[0-1])(?:\.\d{1,3}){2}))(?::\d+)?$"
-)
-
-
-def _local_network_origin_regex() -> Optional[str]:
-    # Security: Do not allow wildcard local network matching
-    return None
 
 
 def _row_get(row: Any, key: str, default: Any = None) -> Any:
@@ -9689,1029 +9223,7 @@ async def list_user_conversations(
 
 # Payment routes are now in backend/api/payments.py
 
-# Proactivity API endpoints
-@app.get("/users/{user_id}/proactivity", response_model=List[ProactivityLog])
-async def get_user_proactivity(
-    user_id: int,
-    db: databases.Database = Depends(get_database),
-    current_user: Dict[str, Any] = Depends(get_current_user),
-):
-    """Get user's proactivity logs"""
-    require_same_user(user_id, current_user)
-    from datetime import datetime
 
-    query = proactivity_logs.select().where(proactivity_logs.c.user_id == user_id).order_by(proactivity_logs.c.activity_date.desc())
-    results = await db.fetch_all(query)
-
-    # Fix null timestamps for response
-    formatted_results = []
-    for result in results:
-        formatted_results.append({
-            "id": result.id,
-            "user_id": result.user_id,
-            "activity_date": result.activity_date,
-            "tasks_completed": result.tasks_completed,
-            "total_tasks": result.total_tasks,
-            "score": result.score,
-            "notes": result.notes,
-            "created_at": result.created_at if result.created_at else utcnow(),
-            "updated_at": result.updated_at if result.updated_at else utcnow()
-        })
-
-    return formatted_results
-
-
-class PushSubscriptionCreate(BaseModel):
-    endpoint: str
-    p256dh: str
-    auth: str
-
-
-async def get_user_from_query_token(
-    token: Optional[str] = Query(None),
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(HTTPBearer(auto_error=False)),
-) -> Optional[Dict[str, Any]]:
-    """
-    Get authenticated user from either query parameter token or Authorization header.
-    This is needed for SSE endpoints where EventSource doesn't support custom headers.
-    """
-    # Try query parameter first (for SSE)
-    if token:
-        try:
-            from backend.auth import verify_supabase_token
-        except ImportError:
-            from auth import verify_supabase_token
-        
-        try:
-            payload = await verify_supabase_token(token)
-            auth_user_id = payload.get("sub")
-            if not auth_user_id:
-                return None
-            
-            user = await database.fetch_one(users.select().where(users.c.auth_user_id == auth_user_id))
-            email = payload.get("email")
-            
-            if not user and email:
-                user = await database.fetch_one(users.select().where(users.c.email == email))
-            
-            return dict(user) if user else None
-        except Exception:
-            return None
-    
-    # Fallback to Authorization header
-    if credentials:
-        try:
-            return await get_current_user(credentials)
-        except HTTPException:
-            return None
-    
-    return None
-
-
-async def _upsert_push_subscription(
-    db: databases.Database,
-    user_id: int,
-    subscription: PushSubscriptionCreate,
-) -> Dict[str, str]:
-    existing = await db.fetch_one(
-        proactivity_push_subscriptions.select().where(
-            proactivity_push_subscriptions.c.endpoint == subscription.endpoint
-        )
-    )
-
-    now = utcnow()
-    if existing:
-        await db.execute(
-            proactivity_push_subscriptions.update()
-            .where(proactivity_push_subscriptions.c.id == existing.id)
-            .values(
-                p256dh=subscription.p256dh,
-                auth=subscription.auth,
-                updated_at=now,
-            )
-        )
-        return {"status": "updated"}
-
-    try:
-        await db.execute(
-            proactivity_push_subscriptions.insert().values(
-                user_id=user_id,
-                endpoint=subscription.endpoint,
-                p256dh=subscription.p256dh,
-                auth=subscription.auth,
-                created_at=now,
-                updated_at=now,
-            )
-        )
-        return {"status": "created"}
-    except (sqlite3.IntegrityError, sqlalchemy.exc.IntegrityError) as exc:
-        # Browsers may call subscribe multiple times concurrently; treat unique violations as an update.
-        message = str(exc).lower()
-        if "unique" not in message and "duplicate" not in message:
-            raise
-
-        await db.execute(
-            proactivity_push_subscriptions.update()
-            .where(proactivity_push_subscriptions.c.endpoint == subscription.endpoint)
-            .values(
-                user_id=user_id,
-                p256dh=subscription.p256dh,
-                auth=subscription.auth,
-                updated_at=now,
-            )
-        )
-        return {"status": "updated"}
-
-
-@app.post("/users/{user_id}/push/subscribe", status_code=status.HTTP_201_CREATED)
-@limiter.limit("30/minute")
-async def subscribe_push_notifications(
-    request: Request,
-    user_id: int,
-    subscription: PushSubscriptionCreate,
-    db: databases.Database = Depends(get_database),
-    current_user: Optional[Dict[str, Any]] = Depends(get_user_from_query_token),
-):
-    """Register a Web Push subscription for the user."""
-    if not current_user:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
-    require_same_user(user_id, current_user)
-    return await _upsert_push_subscription(db=db, user_id=user_id, subscription=subscription)
-
-
-@app.get("/users/{user_id}/proactivity/stream")
-async def stream_user_proactivity(
-    user_id: int,
-    current_user: Optional[Dict[str, Any]] = Depends(get_user_from_query_token),
-):
-    """
-    SSE endpoint used by /g so active sessions can trigger evaluations and get notified.
-    """
-    global proactivity_engine, proactivity_realtime_broker
-
-    if not current_user:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
-    user_id = int(current_user["id"])
-    if not proactivity_engine:
-        raise HTTPException(status_code=503, detail="Proactivity engine not initialized")
-
-    queue = await proactivity_realtime_broker.register(user_id)
-
-    async def event_stream() -> AsyncGenerator[str, None]:
-        try:
-            yield _sse_event("ready", {"user_id": user_id})
-            # For realtime sessions, respect the duplicate guard so reconnects
-            # (e.g., on backend restarts) don't re-send the same ping each time.
-            # We run this in the background so we don't block the yield of the "ready" event
-            # or the loop entry.
-            asyncio.create_task(proactivity_engine.dispatch_user_if_due(user_id, source="realtime"))
-
-            while True:
-                try:
-                    payload = await asyncio.wait_for(queue.get(), timeout=25)
-                except asyncio.TimeoutError:
-                    yield _sse_event("ping", {"user_id": user_id})
-                    continue
-
-                if not isinstance(payload, dict):
-                    continue
-                event_name = payload.get("event") or "message"
-                yield _sse_event(event_name, payload)
-        finally:
-            await proactivity_realtime_broker.unregister(user_id, queue)
-
-    headers = {
-        "Cache-Control": "no-cache",
-        "Connection": "keep-alive",
-        "X-Accel-Buffering": "no",
-    }
-
-    return StreamingResponse(event_stream(), media_type="text/event-stream", headers=headers)
-
-
-@app.get("/users/{user_id}/proactivity/status")
-async def get_proactivity_status(
-    user_id: int,
-    current_user: Dict[str, Any] = Depends(get_current_user),
-):
-    """
-    Get the current configuration and status of proactivity for a user.
-    """
-    global proactivity_engine
-    user_id = int(current_user["id"])
-    if not proactivity_engine:
-        raise HTTPException(status_code=503, detail="Proactivity engine not initialized")
-    
-    return await proactivity_engine.get_user_status(user_id)
-
-
-@app.put("/users/{user_id}/proactivity/settings", response_model=ProactivitySettings)
-async def update_proactivity_settings(
-    user_id: int,
-    settings_update: ProactivitySettingsUpdate,
-    db: databases.Database = Depends(get_database),
-    current_user: Dict[str, Any] = Depends(get_current_user),
-):
-    """
-    Update a user's proactivity settings.
-    """
-    global proactivity_engine, proactivity_scheduler
-    user_id = int(current_user["id"])
-
-    if not proactivity_engine:
-        raise HTTPException(status_code=503, detail="Proactivity engine not initialized")
-    if not proactivity_scheduler:
-        raise HTTPException(status_code=503, detail="Proactivity scheduler not initialized")
-
-    # Fetch existing settings or initialize a new payload
-    existing_record = await db.fetch_one(
-        proactivity_settings.select().where(proactivity_settings.c.user_id == user_id)
-    )
-    current_payload = proactivity_engine._deserialize_payload(existing_record.payload) if existing_record else {}
-
-    # Apply updates from the request model
-    updated_payload = current_payload.copy()
-    if settings_update.cadence is not None:
-        updated_payload["cadence"] = settings_update.cadence
-    if settings_update.time is not None:
-        updated_payload["time"] = settings_update.time
-    if settings_update.times is not None:
-        updated_payload["times"] = settings_update.times
-    if settings_update.channels is not None:
-        updated_payload["channels"] = settings_update.channels
-    if settings_update.timezone is not None:
-        updated_payload["timezone"] = settings_update.timezone
-
-    # Ensure consistent data types for 'times' if both 'time' and 'times' are present
-    if updated_payload.get("cadence", "").lower() == "daily" and updated_payload.get("time") and not updated_payload.get("times"):
-        updated_payload["times"] = [updated_payload["time"]]
-    elif updated_payload.get("cadence", "").lower() == "frequent" and updated_payload.get("times"):
-        # Ensure 'time' is consistent with the first 'times' entry for old clients
-        updated_payload["time"] = updated_payload["times"][0] if updated_payload["times"] else None
-    
-    now = utcnow()
-    try:
-        if existing_record:
-            update_query = (
-                proactivity_settings.update()
-                .where(proactivity_settings.c.user_id == user_id)
-                .values(payload=updated_payload, updated_at=now)
-            )
-            await db.execute(update_query)
-        else:
-            insert_query = proactivity_settings.insert().values(
-                user_id=user_id,
-                payload=updated_payload,
-                created_at=now,
-                updated_at=now,
-            )
-            await db.execute(insert_query)
-    except Exception as db_error:
-        api_logger.error(
-            f"Database error saving proactivity settings for user {user_id}: {db_error}",
-            exc_info=True,
-            extra={
-                "event_type": "proactivity_settings_db_error",
-                "user_id": user_id,
-                "error": str(db_error),
-                **_payload_log_summary(updated_payload),
-            },
-        )
-        raise HTTPException(status_code=500, detail="Failed to save proactivity settings")
-
-    # Refresh scheduler jobs
-    try:
-        await proactivity_scheduler.refresh_jobs(user_id)
-    except Exception as scheduler_error:
-        api_logger.warning(
-            f"Failed to refresh proactivity scheduler jobs for user {user_id}: {scheduler_error}",
-            extra={
-                "event_type": "proactivity_scheduler_refresh_error",
-                "user_id": user_id,
-                "error": str(scheduler_error),
-            },
-        )
-    
-    # Return the newly saved settings, including the ID from the DB
-    saved_settings = await db.fetch_one(
-        proactivity_settings.select().where(proactivity_settings.c.user_id == user_id)
-    )
-    if not saved_settings:
-        raise HTTPException(status_code=500, detail="Failed to retrieve saved proactivity settings")
-
-    # Ensure the returned payload matches ProactivitySettings model
-    return ProactivitySettings(
-        id=str(saved_settings.id),
-        label=updated_payload.get("label"),
-        description=updated_payload.get("description"),
-        cadence=updated_payload.get("cadence"),
-        time=updated_payload.get("time"),
-        times=updated_payload.get("times"),
-        channels=updated_payload.get("channels"),
-        timezone=updated_payload.get("timezone"),
-    )
-
-
-@app.post("/users/{user_id}/proactivity", response_model=ProactivityLog, status_code=status.HTTP_201_CREATED)
-async def create_proactivity_log(
-    user_id: int,
-    proactivity: ProactivityLogCreate,
-    current_user: Dict[str, Any] = Depends(get_current_user),
-    db: databases.Database = Depends(get_database)
-):
-    require_same_user(user_id, current_user)
-    """Create a new proactivity log entry"""
-    # Calculate score based on tasks completed vs total tasks
-    score = min(100, (proactivity.tasks_completed / max(proactivity.total_tasks, 1)) * 100) if proactivity.total_tasks > 0 else 0
-    query = proactivity_logs.insert().values(
-        user_id=user_id,
-        activity_date=utcnow(),
-        tasks_completed=proactivity.tasks_completed,
-        total_tasks=proactivity.total_tasks,
-        score=score,
-        notes=proactivity.notes
-    )
-    log_id = await db.execute(query)
-    result = await db.fetch_one(proactivity_logs.select().where(proactivity_logs.c.id == log_id))
-    return {
-        "id": result.id,
-        "user_id": result.user_id,
-        "activity_date": result.activity_date,
-        "tasks_completed": result.tasks_completed,
-        "total_tasks": result.total_tasks,
-        "score": result.score,
-        "notes": result.notes,
-        "created_at": result.created_at,
-        "updated_at": result.updated_at,
-    }
-
-
-@app.get("/users/{user_id}/proactivity/deliveries")
-async def list_proactivity_deliveries(
-    user_id: int,
-    db: databases.Database = Depends(get_database),
-    current_user: Dict[str, Any] = Depends(get_current_user),
-):
-    """
-    Return recent proactivity deliveries for a user so the client can hydrate
-    which time slots have already fired.
-    """
-    require_same_user(user_id, current_user)
-    now = utcnow()
-    since = now - timedelta(days=1)
-
-    # Local SQLite only.
-    query = """
-        SELECT sent_at
-        FROM proactive_notifications
-        WHERE user_id = :user_id
-          AND type = :type
-          AND sent_at >= :since
-        ORDER BY sent_at ASC
-    """
-    rows = await db.fetch_all(query, {"user_id": user_id, "type": "check_in", "since": since})
-    sent_at_values = []
-    for row in rows:
-        value = row["sent_at"]
-        if isinstance(value, datetime):
-            sent_at_values.append(value.isoformat())
-        elif isinstance(value, str):
-            sent_at_values.append(value)
-    return {"sent_at": sent_at_values}
-
-
-@app.post("/users/{user_id}/proactivity/subscription", status_code=status.HTTP_204_NO_CONTENT)
-async def upsert_proactivity_push_subscription(
-    user_id: int,
-    subscription: Dict[str, Any],
-    db: databases.Database = Depends(get_database),
-    current_user: Dict[str, Any] = Depends(get_current_user),
-):
-    require_same_user(user_id, current_user)
-    endpoint = subscription.get("endpoint")
-    keys = subscription.get("keys") or {}
-    p256dh = keys.get("p256dh")
-    auth_key = keys.get("auth")
-
-    if not endpoint or not p256dh or not auth_key:
-        raise HTTPException(status_code=400, detail="Invalid subscription payload")
-
-    query_existing = proactivity_push_subscriptions.select().where(
-        (proactivity_push_subscriptions.c.user_id == user_id)
-        & (proactivity_push_subscriptions.c.endpoint == endpoint)
-    )
-    existing = await db.fetch_one(query_existing)
-
-    if existing:
-        update_query = (
-            proactivity_push_subscriptions.update()
-            .where(proactivity_push_subscriptions.c.id == existing["id"])
-            .values(p256dh=p256dh, auth=auth_key, updated_at=utcnow())
-        )
-        await db.execute(update_query)
-    else:
-        insert_query = proactivity_push_subscriptions.insert().values(
-            user_id=user_id,
-            endpoint=endpoint,
-            p256dh=p256dh,
-            auth=auth_key,
-            created_at=utcnow(),
-            updated_at=utcnow(),
-        )
-        await db.execute(insert_query)
-
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
-
-@app.post("/users/{user_id}/proactivity/daily-checkin", response_model=ProactivityLog)
-async def daily_proactivity_checkin(
-    user_id: int,
-    checkin: DailyCheckIn,
-    db: databases.Database = Depends(get_database),
-    current_user: Dict[str, Any] = Depends(get_current_user),
-):
-    """Daily proactivity check-in - creates or updates today's proactivity log"""
-    require_same_user(user_id, current_user)
-    from datetime import datetime, time
-
-    today = utcnow().date()
-    
-    from sqlalchemy import func
-    existing_log_query = proactivity_logs.select().where(
-        (proactivity_logs.c.user_id == user_id) &
-        (func.date(proactivity_logs.c.activity_date) == today)
-    )
-    existing_log = await db.fetch_one(existing_log_query)
-
-    if existing_log:
-        # Update existing log with new data
-        score = min(100, (checkin.tasks_completed / max(checkin.total_tasks, 1)) * 100) if checkin.total_tasks > 0 else 0
-        await db.execute(
-            proactivity_logs.update()
-            .where(proactivity_logs.c.id == existing_log.id)
-            .values(
-                tasks_completed=checkin.tasks_completed,
-                total_tasks=checkin.total_tasks,
-                score=score,
-                notes=checkin.notes
-            )
-        )
-        result = await db.fetch_one(proactivity_logs.select().where(proactivity_logs.c.id == existing_log.id))
-        return {
-            "id": result.id,
-            "user_id": result.user_id,
-            "activity_date": result.activity_date,
-            "tasks_completed": result.tasks_completed,
-            "total_tasks": result.total_tasks,
-            "score": result.score,
-            "notes": result.notes,
-            "created_at": result.created_at if result.created_at else utcnow(),
-            "updated_at": utcnow()
-        }
-    else:
-        # Create new log for today
-        score = min(100, (checkin.tasks_completed / max(checkin.total_tasks, 1)) * 100) if checkin.total_tasks > 0 else 0
-        query = proactivity_logs.insert().values(
-            user_id=user_id,
-            activity_date=utcnow(),
-            tasks_completed=checkin.tasks_completed,
-            total_tasks=checkin.total_tasks,
-            score=score,
-            notes=checkin.notes
-        )
-        log_id = await db.execute(query)
-        result = await db.fetch_one(proactivity_logs.select().where(proactivity_logs.c.id == log_id))
-        return {
-            "id": result.id,
-            "user_id": result.user_id,
-            "activity_date": result.activity_date,
-            "tasks_completed": result.tasks_completed,
-            "total_tasks": result.total_tasks,
-            "score": result.score,
-            "notes": result.notes,
-            "created_at": utcnow(),
-            "updated_at": utcnow()
-        }
-
-@app.get(
-    "/users/{user_id}/proactivity/notifications",
-    response_model=List[ProactivityNotification]
-)
-async def get_proactivity_notifications(
-    user_id: int,
-    limit: Optional[int] = Query(None, ge=1),
-    unread_only: bool = Query(False),
-    db: databases.Database = Depends(get_database),
-    current_user: Dict[str, Any] = Depends(get_current_user),
-) -> List[ProactivityNotification]:
-    """Fetch proactivity notifications for a user."""
-    require_same_user(user_id, current_user)
-    # Local SQLite only.
-    query = proactive_notifications.select().where(proactive_notifications.c.user_id == user_id)
-    if unread_only:
-        query = query.where(proactive_notifications.c.read_at.is_(None))
-    query = query.order_by(proactive_notifications.c.sent_at.desc())
-    if limit:
-        query = query.limit(limit)
-    rows = await db.fetch_all(query)
-    return [
-        ProactivityNotification.model_validate(
-            _serialize_proactivity_notification(row)
-        )
-        for row in rows
-    ]
-
-
-@app.post(
-    "/users/{user_id}/proactivity/notifications/{notification_id}/read",
-    response_model=ProactivityNotification
-)
-async def mark_proactivity_notification_read(
-    user_id: int,
-    notification_id: int,
-    db: databases.Database = Depends(get_database),
-    current_user: Dict[str, Any] = Depends(get_current_user),
-) -> ProactivityNotification:
-    """Mark a notification as read and return the updated record."""
-    require_same_user(user_id, current_user)
-    # Local SQLite only.
-    select_query = proactive_notifications.select().where(
-        (proactive_notifications.c.user_id == user_id)
-        & (proactive_notifications.c.id == notification_id)
-    )
-    record = await db.fetch_one(select_query)
-    if not record:
-        raise HTTPException(status_code=404, detail="Notification not found.")
-
-    await db.execute(
-        proactive_notifications.update()
-        .where(proactive_notifications.c.id == notification_id)
-        .values(read_at=utcnow())
-    )
-    updated = await db.fetch_one(select_query)
-    return ProactivityNotification.model_validate(
-        _serialize_proactivity_notification(updated)
-    )
-
-
-@app.get("/users/{user_id}/proactivity/settings", response_model=Optional[ProactivitySettings])
-async def get_proactivity_settings_route(
-    user_id: int,
-    db: databases.Database = Depends(get_database),
-    current_user: Dict[str, Any] = Depends(get_current_user),
-):
-    user_id = int(current_user["id"])
-    record = await db.fetch_one(
-        proactivity_settings.select().where(proactivity_settings.c.user_id == user_id)
-    )
-    if not record:
-        api_logger.debug(f"No proactivity settings found for user {user_id}", extra={
-            "event_type": "proactivity_settings_not_found",
-            "user_id": user_id
-        })
-        return None
-    payload = _row_get(record, "payload")
-    api_logger.debug(
-        f"Retrieved proactivity settings payload from database for user {user_id}",
-        extra={
-            "event_type": "proactivity_settings_retrieved_db",
-            "user_id": user_id,
-            **_payload_log_summary(payload)
-        }
-    )
-    settings = _deserialize_proactivity_settings_payload(payload)
-    return settings
-
-
-@app.api_route(
-    "/users/{user_id}/proactivity/settings",
-    methods=["POST", "PUT"],
-    response_model=ProactivitySettings
-)
-async def update_proactivity_settings_route(
-    request: Request,
-    user_id: int,
-    settings: ProactivitySettings,
-    db: databases.Database = Depends(get_database),
-    current_user: Dict[str, Any] = Depends(get_current_user),
-):
-    user_id = int(current_user["id"])
-    payload = settings.model_dump(exclude_none=True)
-    now = utcnow()
-
-    api_logger.debug(
-        f"Saving proactivity settings for user {user_id}",
-        extra={
-            "event_type": "proactivity_settings_save_start",
-            "user_id": user_id,
-            **_payload_log_summary(payload)
-        }
-    )
-
-    try:
-        existing = await db.fetch_one(
-            proactivity_settings.select().where(proactivity_settings.c.user_id == user_id)
-        )
-        if existing:
-            await db.execute(
-                proactivity_settings.update()
-                .where(proactivity_settings.c.user_id == user_id)
-                .values(payload=payload, updated_at=now)
-            )
-        else:
-            await db.execute(
-                proactivity_settings.insert().values(
-                    user_id=user_id,
-                    payload=payload,
-                    created_at=now,
-                    updated_at=now,
-                )
-            )
-    except Exception as db_error:
-        api_logger.error(
-            f"Database error saving proactivity settings: {db_error}",
-            exc_info=True,
-            extra={
-                "event_type": "proactivity_settings_db_error",
-                "user_id": user_id,
-                "error": str(db_error),
-            },
-        )
-        raise HTTPException(status_code=500, detail=f"Failed to save proactivity settings: {str(db_error)}")
-
-    api_logger.debug(f"Successfully saved proactivity settings for user {user_id}", extra={
-        "event_type": "proactivity_settings_save_success",
-        "user_id": user_id
-    })
-
-    if proactivity_scheduler:
-        try:
-            await proactivity_scheduler.refresh_jobs(user_id)
-        except Exception as scheduler_error:
-            api_logger.warning(f"Failed to refresh proactivity scheduler jobs: {scheduler_error}", extra={
-                "event_type": "proactivity_scheduler_refresh_error",
-                "user_id": user_id,
-                "error": str(scheduler_error)
-            })
-
-
-
-    return ProactivitySettings.model_validate(payload)
-
-
-@app.get("/api/workspace-backgrounds", response_model=List[WorkspaceBackground])
-async def list_workspace_backgrounds():
-    return WORKSPACE_BACKGROUNDS
-
-
-@app.post("/api/workspace-backgrounds", response_model=WorkspaceBackground)
-async def create_workspace_background(background: WorkspaceBackground):
-    new_id = len(WORKSPACE_BACKGROUNDS) + 1
-    payload = background.model_dump(exclude_none=True)
-    return WorkspaceBackground(**{**payload, "id": new_id})
-
-
-@app.post("/api/workspace-backgrounds/assets")
-async def upload_workspace_background_asset(file: UploadFile = File(...)):
-  storage_path, mime_type, size, sanitized_name, storage_name = await _persist_upload_file(
-      file,
-      allowed_mime_types=BACKGROUND_UPLOAD_MIME_TYPES,
-      allowed_extensions=BACKGROUND_UPLOAD_EXTENSIONS,
-      max_size_bytes=MAX_BACKGROUND_UPLOAD_SIZE_BYTES,
-  )
-
-  asset_path = f"/uploads/{storage_name}"
-  if STORAGE_BASE_URL:
-    asset_path = f"{STORAGE_BASE_URL.rstrip('/')}/{storage_name}"
-
-  return {
-      "filename": sanitized_name,
-      "asset_path": asset_path,
-      "content_type": mime_type,
-      "size": size,
-  }
-
-# Google Calendar helpers
-
-def _serialize_scopes(scopes: List[str]) -> str:
-    try:
-        return json.dumps(scopes)
-    except (TypeError, ValueError):
-        return json.dumps([])
-
-
-def _hydrate_scopes(raw_scopes):
-    if isinstance(raw_scopes, list):
-        return raw_scopes
-    if isinstance(raw_scopes, str):
-        try:
-            loaded = json.loads(raw_scopes)
-            if isinstance(loaded, list):
-                return loaded
-        except json.JSONDecodeError:
-            return [scope.strip() for scope in raw_scopes.split() if scope.strip()]
-    return []
-
-
-def map_google_credentials(record) -> GoogleCalendarCredentials:
-    if not record:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Google Calendar not connected. Please authorize first."
-        )
-
-    record_dict = dict(record)
-    scopes = _hydrate_scopes(record_dict.get("scopes"))
-    refresh_token = decrypt_refresh_token(record_dict["refresh_token"]) if record_dict.get("refresh_token") else None
-    return GoogleCalendarCredentials(
-        user_id=record_dict["user_id"],
-        access_token=record_dict["access_token"],
-        refresh_token=refresh_token,
-        token_uri=record_dict["token_uri"],
-        client_id=record_dict["client_id"],
-        client_secret=None,
-        scopes=scopes,
-        expires_at=record_dict.get("expires_at"),
-        created_at=record_dict.get("created_at", utcnow()),
-        updated_at=record_dict.get("updated_at", utcnow()),
-    )
-
-
-async def persist_google_calendar_state(db: databases.Database, state_token: str, state_payload: dict) -> None:
-    """Persist OAuth state to enforce one-time use."""
-    expires_ts = state_payload.get("exp")
-    expires_at = datetime.utcfromtimestamp(expires_ts) if expires_ts else None
-
-    if not isinstance(state_payload.get("user_id"), int):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid OAuth state payload")
-    if not isinstance(state_payload.get("nonce"), str):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid OAuth state payload")
-    if not isinstance(state_payload.get("redirect_uri"), str):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid OAuth state payload")
-
-    await db.execute(
-        google_calendar_states.delete().where(google_calendar_states.c.state_token == state_token)
-    )
-
-    await db.execute(
-        google_calendar_states.insert().values(
-            state_token=state_token,
-            user_id=state_payload.get("user_id"),
-            nonce=state_payload.get("nonce"),
-            redirect_uri=state_payload.get("redirect_uri"),
-            expires_at=expires_at,
-            created_at=utcnow(),
-        )
-    )
-
-
-async def consume_google_calendar_state(
-    db: databases.Database, state_token: str, state_payload: dict
-) -> None:
-    """Validate and mark the OAuth state as consumed to prevent replay."""
-    record = await db.fetch_one(
-        google_calendar_states.select().where(google_calendar_states.c.state_token == state_token)
-    )
-
-    if not record:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="OAuth state is not recognized or has expired",
-        )
-
-    if record["consumed_at"]:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OAuth state already used")
-
-    expires_at = record.get("expires_at")
-    if expires_at and expires_at < utcnow():
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OAuth state has expired")
-
-    if record.get("user_id") != state_payload.get("user_id") or record.get("nonce") != state_payload.get("nonce"):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OAuth state mismatch")
-
-    redirect_from_state = (state_payload.get("redirect_uri") or "").strip()
-    if record.get("redirect_uri") != redirect_from_state:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OAuth state redirect mismatch")
-
-    await db.execute(
-        google_calendar_states
-        .update()
-        .where(google_calendar_states.c.id == record["id"])
-        .values(consumed_at=utcnow())
-    )
-
-
-async def upsert_google_calendar_credentials(db: databases.Database, creds: GoogleCalendarCredentials) -> None:
-    existing = await db.fetch_one(
-        google_calendar_credentials.select().where(google_calendar_credentials.c.user_id == creds.user_id)
-    )
-
-    existing_refresh_token: Optional[str] = None
-    if existing:
-        existing_dict = dict(existing)
-        raw_refresh = existing_dict.get("refresh_token")
-        existing_refresh_token = decrypt_refresh_token(raw_refresh) if raw_refresh else None
-
-    refresh_token = creds.refresh_token or existing_refresh_token or ""
-
-    payload = {
-        "user_id": creds.user_id,
-        "access_token": creds.access_token,
-        "refresh_token": encrypt_refresh_token(refresh_token) if refresh_token else "",
-        "token_uri": creds.token_uri,
-        "client_id": creds.client_id,
-        # Client secret is always sourced from env; store placeholder to satisfy non-null schemas.
-        "client_secret": "",
-        "scopes": _serialize_scopes(creds.scopes),
-        "expires_at": creds.expires_at,
-        "created_at": creds.created_at,
-        "updated_at": utcnow(),
-    }
-
-    if existing:
-        await db.execute(
-            google_calendar_credentials
-            .update()
-            .where(google_calendar_credentials.c.user_id == creds.user_id)
-            .values(payload)
-        )
-    else:
-        await db.execute(google_calendar_credentials.insert().values(payload))
-
-
-# Google Calendar endpoints
-@app.post("/users/{user_id}/google-calendar/auth", response_model=GoogleAuthResponse)
-@limiter.limit("10/minute")
-async def google_calendar_auth(
-    request: Request,
-    user_id: int,
-    auth_request: GoogleAuthRequest,
-    current_user: Dict[str, Any] = Depends(get_current_user),
-    db: databases.Database = Depends(get_database)
-):
-    require_same_user(user_id, current_user)
-    try:
-        """Generate Google Calendar authorization URL."""
-        if auth_request.user_id and auth_request.user_id != user_id:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Mismatched user identifier for Google Calendar auth request")
-        auth = get_google_auth_url(user_id, auth_request.redirect_uri)
-        state_payload = decode_state_token(auth.state)
-        await persist_google_calendar_state(db, auth.state, state_payload)
-        return auth
-    except HTTPException as e:
-        raise e
-
-@app.post("/google-calendar/oauth/callback", status_code=status.HTTP_204_NO_CONTENT)
-async def google_calendar_callback(
-    request: GoogleAuthCallbackRequest,
-    db: databases.Database = Depends(get_database),
-    current_user: Optional[Dict[str, Any]] = Depends(get_current_user_optional),
-):
-    """Handle Google Calendar OAuth callback."""
-    try:
-        state_payload = decode_state_token(request.state)
-        state_user_id = state_payload.get("user_id") if isinstance(state_payload, dict) else None
-        if current_user is not None and state_user_id is not None:
-            require_same_user(int(state_user_id), current_user)
-        await consume_google_calendar_state(db, request.state, state_payload)
-        credentials = await exchange_code_for_tokens(request.code, request.state, request.redirect_uri)
-        await upsert_google_calendar_credentials(db, credentials)
-        return Response(status_code=status.HTTP_204_NO_CONTENT)
-    except HTTPException as e:
-        raise e
-
-@app.get("/users/{user_id}/google-calendars", response_model=List[GoogleCalendarInfo])
-async def get_google_calendars(
-    user_id: int,
-    current_user: Dict[str, Any] = Depends(get_current_user),
-    db: databases.Database = Depends(get_database)
-):
-    require_same_user(user_id, current_user)
-    """Get user's Google Calendars."""
-    try:
-        # Get user's Google Calendar credentials from database
-        query = google_calendar_credentials.select().where(google_calendar_credentials.c.user_id == user_id)
-        stored_creds = await db.fetch_one(query)
-        creds = map_google_credentials(stored_creds)
-        service = await get_google_calendar_service(creds)
-        calendars = await list_google_calendars(service)
-        return calendars
-    except HTTPException as e:
-        raise e
-
-@app.get("/users/{user_id}/google-calendars/{calendar_id}/events", response_model=List[GoogleCalendarEvent])
-async def get_google_calendar_events(
-    user_id: int,
-    calendar_id: str,
-    current_user: Dict[str, Any] = Depends(get_current_user),
-    time_min: Optional[datetime] = None,
-    time_max: Optional[datetime] = None,
-    db: databases.Database = Depends(get_database)
-):
-    require_same_user(user_id, current_user)
-    """Get events from a Google Calendar."""
-    try:
-        # Get user's Google Calendar credentials from database
-        query = google_calendar_credentials.select().where(google_calendar_credentials.c.user_id == user_id)
-        stored_creds = await db.fetch_one(query)
-
-        creds = map_google_credentials(stored_creds)
-        service = await get_google_calendar_service(creds)
-        events = await list_google_events(service, calendar_id, time_min, time_max)
-        return events
-    except HTTPException as e:
-        raise e
-
-@app.post("/users/{user_id}/google-calendars/{calendar_id}/events", response_model=GoogleCalendarEvent)
-async def create_google_calendar_event(
-    user_id: int,
-    calendar_id: str,
-    event_data: dict,
-    db: databases.Database = Depends(get_database),
-    current_user: Dict[str, Any] = Depends(get_current_user),
-):
-    require_same_user(user_id, current_user)
-    """Create a new event in Google Calendar."""
-    try:
-        # Get user's Google Calendar credentials from database
-        query = google_calendar_credentials.select().where(google_calendar_credentials.c.user_id == user_id)
-        stored_creds = await db.fetch_one(query)
-
-        creds = map_google_credentials(stored_creds)
-        service = await get_google_calendar_service(creds)
-        event = await create_google_event(service, calendar_id, event_data)
-        return event
-    except HTTPException as e:
-        raise e
-
-
-# Proactivity scheduler endpoints
-@app.post("/api/proactivity/evaluate")
-@limiter.limit("5/minute")
-async def trigger_proactivity_evaluation(
-    request: Request,
-    current_user: Dict[str, Any] = Depends(get_current_user),
-):
-    """
-    Manually trigger proactivity evaluation for all users.
-    Returns a summary of actions taken.
-    """
-    global proactivity_engine
-
-    require_admin(current_user)
-    if not proactivity_engine:
-        raise HTTPException(status_code=503, detail="Proactivity engine not initialized")
-
-    try:
-        results = await proactivity_engine.dispatch_all_due(source="manual")
-        return {"status": "success", "evaluation_results": results}
-    except Exception as e:
-        api_logger.error(
-            f"Error evaluating proactivity: {e}",
-            exc_info=True,
-            extra={
-                "event_type": "proactivity_evaluation_manual_error",
-                "error": str(e),
-            },
-        )
-        raise HTTPException(status_code=500, detail=f"Evaluation failed: {str(e)}")
-
-
-@app.post("/users/{user_id}/proactivity/evaluate")
-@limiter.limit("5/minute")
-async def trigger_proactivity_for_user(
-    request: Request,
-    user_id: int,
-    current_user: Dict[str, Any] = Depends(get_current_user),
-):
-    """
-    Manually trigger proactivity message generation for a specific user.
-    """
-    global proactivity_engine
-
-    require_same_user(user_id, current_user)
-    if not proactivity_engine:
-        raise HTTPException(status_code=503, detail="Proactivity engine not initialized")
-
-    try:
-        result = await proactivity_engine.dispatch_user_if_due(user_id, source="manual", force=True)
-        if result:
-            return {"status": "success", "message": "Proactivity message sent"}
-        raise HTTPException(status_code=404, detail="No proactivity settings found for user")
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        api_logger.error(
-            f"Error triggering proactivity for user {user_id}: {e}",
-            exc_info=True,
-            extra={
-                "event_type": "proactivity_user_manual_error",
-                "user_id": user_id,
-                "error": str(e),
-            },
-        )
-        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
-
-
+# Proactivity routes are now in backend/api/proactivity.py
 
 # Calendar event routes are now in backend/api/calendars.py
