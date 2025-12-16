@@ -5,8 +5,10 @@ COMPLETE_ONBOARDING_TOOL = types.Tool(
         types.FunctionDeclaration(
             name="complete_onboarding",
             description=(
-                "Complete the onboarding process by saving the user's basics for personalization "
-                "and optionally their preferred proactivity cadence."
+                "Save onboarding progress (preferred name, occupation, and about blurb) and optionally "
+                "the user's preferred proactivity cadence. This tool can be called multiple times as "
+                "new details are learned; onboarding is considered complete once nickname, occupation, "
+                "and about are all present."
             ),
             parameters=types.Schema(
                 type="OBJECT",
@@ -31,7 +33,6 @@ COMPLETE_ONBOARDING_TOOL = types.Tool(
                         ),
                     ),
                 },
-                required=["nickname", "occupation", "about"],
             ),
         ),
     ]

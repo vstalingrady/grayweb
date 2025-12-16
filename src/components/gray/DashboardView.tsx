@@ -24,6 +24,7 @@ import { formatPlanTimeLabel } from "./planUtils";
 import { requestNotificationPermission } from "@/lib/notificationUtils";
 import { useUser } from "@/contexts/UserContext";
 import { useI18n } from "@/contexts/I18nContext";
+import { useNotificationPreferences } from "@/contexts/NotificationPreferencesContext";
 import { greetingForDate } from "@/components/gray/utils/helperFunctions";
 import { PlanHabitInlineEditor } from "./PlanHabitInlineEditor";
 
@@ -196,6 +197,7 @@ export function GrayDashboardView({
   isOverlay = false,
 }: GrayDashboardViewProps) {
   const { t } = useI18n();
+  const { notificationPreferences, setNotificationPreference } = useNotificationPreferences();
   const hasPulseData = Boolean(currentPulse && pulseEntries.length > 0);
   const displayPlans = useMemo(() => {
     const fallbackPlans = currentPulse?.plans ?? [];
@@ -520,8 +522,13 @@ export function GrayDashboardView({
     const permission = await requestNotificationPermission();
     if (permission) {
       setNotificationPermission(permission);
+      if (permission === "granted") {
+        setNotificationPreference("device", true);
+      } else {
+        setNotificationPreference("device", false);
+      }
     }
-  }, []);
+  }, [setNotificationPreference]);
   const [selectedPresetId, setSelectedPresetId] = useState<string>(() => {
     if (activeProactivityId && PROACTIVITY_PRESETS.some((preset) => preset.id === activeProactivityId)) {
       return activeProactivityId;
@@ -571,8 +578,12 @@ export function GrayDashboardView({
     onProactivityRemove && (displayProactivity ?? proactivityFallback)
   );
   const modalRemoveLabel = displayProactivity ? t("Remove proactivity") : t("Skip for now");
+  const shouldPromptForProactivityAlerts =
+    activeProactivityId === "proactivity-daily" || activeProactivityId === "proactivity-frequent";
   const shouldShowNotificationBanner =
-    notificationPermission !== "granted" && notificationPermission !== "unsupported";
+    shouldPromptForProactivityAlerts &&
+    notificationPermission !== "unsupported" &&
+    (!notificationPreferences.device || notificationPermission !== "granted");
   const notificationBannerLabel =
     notificationPermission === "denied"
       ? t("Desktop alerts are off. Allow notifications in your browser settings to get nudges.")

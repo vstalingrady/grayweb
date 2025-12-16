@@ -259,6 +259,19 @@ async def ensure_user_data_record(user_identifier: int) -> Optional[int]:
             return user_data_id
 
     except Exception as error:  # pragma: no cover - defensive logging
+        # Race condition: another request might have created the record between our check and insert.
+        # Re-fetch once before surfacing the failure.
+        try:
+            row = await database.fetch_one(
+                user_data.select().where(user_data.c.user_identifier == user_identifier)
+            )
+            if row:
+                user_data_id = row["id"]
+                _USER_DATA_CACHE[user_identifier] = user_data_id
+                return user_data_id
+        except Exception:
+            pass
+
         logger.error(
             "Error ensuring user data record: %s",
             error,

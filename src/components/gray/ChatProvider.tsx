@@ -70,6 +70,7 @@ import {
 } from "./chat/utils";
 import { extractGrayRemindersFromText, buildReminderConfirmationText, buildReminderKey, coerceReminderPayload } from "./chat/reminderUtils";
 import { ALL_PIONEER_MODEL_IDS, PIONEER_ONLY_MODEL_IDS } from "./modelCatalog";
+import { normalizePlanTier } from "./utils/helperFunctions";
 import {
   GENERAL_CHAT_SESSION_ID,
   GENERAL_CONVERSATION_PREFIX,
@@ -898,7 +899,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
   // Enforce plan-tier model access on the client to avoid stale localStorage
   // keeping a user on a higher-tier model after downgrade.
   useEffect(() => {
-    const normalizedTier = (user?.plan_tier ?? "scout").toLowerCase();
+    const normalizedTier = normalizePlanTier(user);
 
     if (normalizedTier === "scout") {
       if (modelTier !== "lite") {
@@ -919,7 +920,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
         setModelTier("lite");
       }
     }
-  }, [modelTier, reasoningMode, selectedModelId, user?.plan_tier]);
+  }, [modelTier, reasoningMode, selectedModelId, user?.plan_tier, user?.role]);
 
   // Restore visible models per user (or anon)
   useEffect(() => {
@@ -1472,8 +1473,20 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
     try {
       const serializable = _next.map((session) => ({
         ...session,
-        // Don't persist large properties if not needed, but for now we accept full state.
-        // We might want to trim messages in the future if quota is an issue.
+        messages: session.messages.map((message) => {
+          if (!message.attachments?.length) {
+            return message;
+          }
+          return {
+            ...message,
+            attachments: message.attachments.map((attachment) => {
+              // Strip blob URLs (previewUrl) before saving so we don't load expired ones later
+              // eslint-disable-next-line @typescript-eslint/no-unused-vars
+              const { previewUrl, ...rest } = attachment;
+              return rest;
+            }),
+          };
+        }),
       }));
       window.localStorage.setItem(key, JSON.stringify(serializable));
     } catch (error) {
@@ -2529,20 +2542,20 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
               updateSession(generalSession.id, { isGeneratingTitle: true });
             }
 
-	            const conversationMemoryEnabled = (() => {
-	              if (typeof resolvedUser.conversation_memory_enabled === "boolean") {
-	                return resolvedUser.conversation_memory_enabled;
-	              }
-	              if (typeof window === "undefined") {
-	                return true;
-	              }
-	              const storageKey = `${CONVERSATION_MEMORY_STORAGE_PREFIX}:${streamingUserId ?? "anon"}`;
-	              try {
-	                return window.localStorage.getItem(storageKey) !== "0";
-	              } catch {
-	                return true;
-	              }
-	            })();
+            const conversationMemoryEnabled = (() => {
+              if (typeof resolvedUser.conversation_memory_enabled === "boolean") {
+                return resolvedUser.conversation_memory_enabled;
+              }
+              if (typeof window === "undefined") {
+                return true;
+              }
+              const storageKey = `${CONVERSATION_MEMORY_STORAGE_PREFIX}:${streamingUserId ?? "anon"}`;
+              try {
+                return window.localStorage.getItem(storageKey) !== "0";
+              } catch {
+                return true;
+              }
+            })();
 
             for await (const event of apiService.sendMessageStream({
               message: trimmed,

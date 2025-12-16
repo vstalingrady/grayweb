@@ -36,6 +36,7 @@ import {
 } from "@/components/gray/chat/constants";
 import { EventComposerPayload } from "@/components/calendar/EventComposer";
 import { useI18n } from "@/contexts/I18nContext";
+import { useNotificationPreferences } from "@/contexts/NotificationPreferencesContext";
 import {
   type ChatSession,
 } from "@/components/gray/chat/types";
@@ -141,6 +142,7 @@ function GrayPageClientInner({
 }: GrayPageClientProps) {
   const { t } = useI18n();
   const { user, loading: userLoading } = useUser();
+  const { notificationPreferences, setNotificationPreference } = useNotificationPreferences();
   const usageStatus = user?.usage_status;
   const isUsageLimitReached = usageStatus?.is_monthly_limit_reached || usageStatus?.is_six_hour_limit_reached;
   const router = useRouter();
@@ -182,7 +184,6 @@ function GrayPageClientInner({
     setCalendarCalendars,
     calendarEvents,
     setCalendarEvents,
-    streakCount,
     refreshPlansAndHabits
   } = useWorkspaceData(userId, variant);
 
@@ -261,7 +262,6 @@ function GrayPageClientInner({
 
     await apiService.createHabit(user.id, {
       label: payload.title,
-      streak_label: "0",
       previous_label: t("No history yet"),
       description: payload.description || null,
     });
@@ -414,7 +414,7 @@ function GrayPageClientInner({
     }
   }, [isSidebarExpanded, isMobileViewport, sidebarPreferenceKey]);
 
-  const isCalendarPage = pathname.startsWith("/cal");
+  const isCalendarPage = pathname === "/pulse" || pathname.startsWith("/cal");
 
   useEffect(() => {
     if (isCalendarPage) {
@@ -431,6 +431,10 @@ function GrayPageClientInner({
   const [calendarSelectedDate, setCalendarSelectedDate] = useState<Date>(() => new Date(initialTimestamp));
 
   const [isHistoryOverlayOpen, setIsHistoryOverlayOpen] = useState(false);
+
+  useEffect(() => {
+    setDashboardTab(initialDashboardTab);
+  }, [initialDashboardTab]);
 
   // Anonymous user state for limiting messages before sign-up
   const isAnonymousUser = !user?.id && !userLoading;
@@ -579,7 +583,6 @@ function GrayPageClientInner({
           isCompactLayout={isCompactLayout}
           userId={userId}
           proactivityDeliveryKeys={deliveredProactivityKeys}
-          streakCount={streakCount}
           onUpgradeClick={handleUpgradePlan}
           showUpgradeButton={shouldShowUpgradeButton}
         />
@@ -638,7 +641,6 @@ function GrayPageClientInner({
         >
           {!shouldHideDesktopWorkspaceChrome ? (
             <GrayWorkspaceHeader
-              streakCount={streakCount}
               planLabel={viewerPlanLabel}
               onUpgradeClick={handleUpgradePlan}
               showUpgradeButton={shouldShowUpgradeButton}
@@ -661,17 +663,16 @@ function GrayPageClientInner({
           {/* Welcome overlay for the main "/" (threads) surface */}
           {pathname === "/" && activeNav === "threads" ? (
             <div className={styles.mobileWelcomeScreen} aria-hidden="true">
-              <div className={styles.mobileWelcomeContent}>
-                <div className={styles.mobileWelcomeLogo}>
-                  <img src="/grayaiwhitenotspinning.svg" alt="" />
+                <div className={styles.mobileWelcomeContent}>
+                  <div className={styles.mobileWelcomeLogo}>
+                  <img src="/grayaiwhitenotspinning.svg" alt="" className={styles.uiIconImage} />
+                  </div>
+                  <p className={styles.mobileWelcomeGreeting}>Ready when you are.</p>
                 </div>
-                <p className={styles.mobileWelcomeGreeting}>Ready when you are.</p>
-              </div>
             </div>
           ) : null}
           {!shouldHideDesktopWorkspaceChrome ? (
             <GrayWorkspaceHeader
-              streakCount={streakCount}
               planLabel={viewerPlanLabel}
               onUpgradeClick={handleUpgradePlan}
               showUpgradeButton={shouldShowUpgradeButton}
@@ -1044,6 +1045,8 @@ function GrayPageClientInner({
   );
   const isDashboardView = viewMode === "dashboard";
   const isChatView = viewMode === "chat";
+  const isPulseRoute =
+    pathname === "/pulse" || pathname.startsWith("/cal") || pathname.startsWith("/gray/dashboard");
 
   const handleNavigate = (navId: SidebarNavKey) => {
     if (navId === "search") {
@@ -1418,33 +1421,11 @@ function GrayPageClientInner({
       return;
     }
 
-    const parseStreakCount = (label: string | null | undefined) => {
-      if (!label) {
-        return 0;
-      }
-      const match = label.match(/(\d+)/);
-      if (!match) {
-        return 0;
-      }
-      const parsed = Number.parseInt(match[1], 10);
-      return Number.isNaN(parsed) ? 0 : parsed;
-    };
-
-    const formatStreakLabel = (count: number) => {
-      const safeCount = Math.max(0, Math.trunc(count));
-      return `${safeCount} day${safeCount === 1 ? "" : "s"}`;
-    };
-
     const updatedHabits = previousHabits.map((habit) =>
       habit.id === id
         ? {
           ...habit,
           completed: !habit.completed,
-          streakLabel: formatStreakLabel(
-            habit.completed
-              ? Math.max(0, parseStreakCount(habit.streakLabel) - 1)
-              : parseStreakCount(habit.streakLabel) + 1
-          ),
         }
         : habit
     );
@@ -1464,7 +1445,6 @@ function GrayPageClientInner({
             return {
               ...h,
               completed: updatedH.completed,
-              streakLabel: updatedH.streakLabel,
             };
           }
         }
@@ -1486,7 +1466,6 @@ function GrayPageClientInner({
           habits: newActivePulse.habits.map((h) => ({
             id: h.id,
             label: h.label,
-            streak_label: h.streakLabel,
             previous_label: h.previousLabel,
             completed: h.completed,
           })),
@@ -1584,6 +1563,24 @@ function GrayPageClientInner({
     };
     setProactivity(normalized);
     void persistProactivitySettings(normalized);
+
+    const shouldPromptForNotifications =
+      normalized.id === "proactivity-daily" || normalized.id === "proactivity-frequent";
+
+    if (
+      shouldPromptForNotifications &&
+      typeof window !== "undefined" &&
+      typeof Notification !== "undefined" &&
+      window.isSecureContext !== false &&
+      Notification.permission === "default" &&
+      !notificationPreferences.device
+    ) {
+      void requestNotificationPermission().then((permission) => {
+        if (permission === "granted") {
+          setNotificationPreference("device", true);
+        }
+      });
+    }
   };
 
   const removeProactivity = () => {
@@ -2336,9 +2333,19 @@ function GrayPageClientInner({
             <div className={styles.mobileHeaderToggle}>
               <div className={styles.mobileToggle}>
                 <button
+                  type="button"
                   className={styles.mobileToggleOption}
-                  data-active={activeNav === "threads" ? "true" : "false"}
-                  onClick={() => handleMobileNavigate("threads")}
+                  data-active={!isPulseRoute ? "true" : "false"}
+                  onClick={() => {
+                    setManualViewMode(null);
+                    if (pathname !== "/") {
+                      router.push("/");
+                    }
+                    if (isMobileViewport) {
+                      setIsSidebarExpanded(false);
+                      setIsCalendarSidebarExpanded(false);
+                    }
+                  }}
                 >
                   <span className={styles.mobileToggleIcon}>
                     <MessageCircle size={16} />
@@ -2346,9 +2353,19 @@ function GrayPageClientInner({
                   <span>Chat</span>
                 </button>
                 <button
+                  type="button"
                   className={styles.mobileToggleOption}
-                  data-active={activeNav === "general" ? "true" : "false"}
-                  onClick={() => handleMobileNavigate("general")}
+                  data-active={isPulseRoute ? "true" : "false"}
+                  onClick={() => {
+                    setManualViewMode(null);
+                    if (pathname !== "/pulse") {
+                      router.push("/pulse");
+                    }
+                    if (isMobileViewport) {
+                      setIsSidebarExpanded(false);
+                      setIsCalendarSidebarExpanded(false);
+                    }
+                  }}
                 >
                   <span className={styles.mobileToggleIcon}>
                     <Zap size={16} />
@@ -2358,16 +2375,7 @@ function GrayPageClientInner({
               </div>
             </div>
 
-            {!sidebarExpandedForLayout ? (
-              <div className={styles.mobileHeaderRight}>
-                {streakCount > 0 && activeNav !== "dashboard" && (
-                  <div className={styles.streakBadge} aria-label={`Streak ${streakCount}`}>
-                    <Zap size={14} />
-                    <span>{streakCount}</span>
-                  </div>
-                )}
-              </div>
-            ) : null}
+            {null}
           </div>
         )}
 

@@ -44,7 +44,6 @@ export function useWorkspaceData(userId: number | null, variant: "general" | "da
   const [habits, setHabits] = useState<HabitItem[]>([]);
   const [calendarCalendars, setCalendarCalendars] = useState<CalendarInfo[]>([]);
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
-  const [streakCount, setStreakCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<unknown>(null);
 
@@ -76,7 +75,6 @@ export function useWorkspaceData(userId: number | null, variant: "general" | "da
         ? habitResponse.map((habit) => ({
           id: habit.id.toString(),
           label: habit.label,
-          streakLabel: habit.streak_label,
           previousLabel: habit.previous_label,
           completed: false,
           createdAt: habit.created_at,
@@ -144,7 +142,6 @@ export function useWorkspaceData(userId: number | null, variant: "general" | "da
             : Promise.resolve<GoogleCalendarInfo[]>([]),
           apiService.getPlans(userId),
           apiService.getUserHabits(userId),
-          apiService.getUserStreak(userId),
         ]);
 
         if (!isMounted) {
@@ -157,7 +154,6 @@ export function useWorkspaceData(userId: number | null, variant: "general" | "da
           googleCalendarsResult,
           planResult,
           habitResult,
-          streakResult,
         ] = results;
 
         const calendarResponse = calendarResult.status === 'fulfilled' ? calendarResult.value : [];
@@ -181,9 +177,6 @@ export function useWorkspaceData(userId: number | null, variant: "general" | "da
 
         const habitResponse = habitResult.status === 'fulfilled' ? habitResult.value : [];
         if (habitResult.status === 'rejected') console.error('Failed to load habits:', habitResult.reason);
-
-        const streakResponse = streakResult.status === 'fulfilled' ? streakResult.value : null;
-        if (streakResult.status === 'rejected') console.error('Failed to load streak:', streakResult.reason);
 
 
 
@@ -307,7 +300,6 @@ export function useWorkspaceData(userId: number | null, variant: "general" | "da
           ? habitResponse.map((habit) => ({
             id: habit.id.toString(),
             label: habit.label,
-            streakLabel: habit.streak_label,
             previousLabel: habit.previous_label,
             completed: false,
             createdAt: habit.created_at,
@@ -321,7 +313,6 @@ export function useWorkspaceData(userId: number | null, variant: "general" | "da
         setCalendarEvents([...mappedEvents, ...mappedGoogleEvents]);
         setPlans(mappedPlans);
         setHabits(mappedHabits);
-        setStreakCount(streakResponse?.current_streak ?? 0);
       } catch (err) {
         console.error("Failed to load workspace data:", err);
         setError(err);
@@ -346,7 +337,6 @@ export function useWorkspaceData(userId: number | null, variant: "general" | "da
     setCalendarCalendars,
     calendarEvents,
     setCalendarEvents,
-    streakCount,
     loading,
     error,
     refreshPlansAndHabits,

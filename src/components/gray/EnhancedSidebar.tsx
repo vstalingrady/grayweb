@@ -339,7 +339,7 @@ function GrayEnhancedSidebarComponent(props: GrayEnhancedSidebarProps) {
             width={24}
             height={24}
             priority
-            className={styles.sidebarRailLogoImage}
+            className={`${styles.sidebarRailLogoImage} ${styles.uiIconImage}`}
           />
         </button>
         <nav aria-label={t("Sidebar quick actions")} className={styles.railNav}>
@@ -385,7 +385,7 @@ function GrayEnhancedSidebarComponent(props: GrayEnhancedSidebarProps) {
                   />
                 </>
               ) : (
-                null
+                viewerInitials
               )}
             </span>
             <span className={styles.sidebarRailAvatarIcon} aria-hidden="true">
@@ -413,7 +413,7 @@ function GrayEnhancedSidebarComponent(props: GrayEnhancedSidebarProps) {
                 width={28}
                 height={28}
                 priority
-                className={styles.sidebarLogoImage}
+                className={`${styles.sidebarLogoImage} ${styles.uiIconImage}`}
               />
             </button>
             <div className={styles.sidebarAnchored}>
@@ -543,7 +543,7 @@ function GrayEnhancedSidebarComponent(props: GrayEnhancedSidebarProps) {
                           />
                         </>
                       ) : (
-                        null
+                        viewerInitials
                       )}
                     </span>
                     <span className={styles.profileDetails}>

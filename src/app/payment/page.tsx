@@ -151,7 +151,7 @@ function PaymentContent() {
     // State
     const [billingCycle, setBillingCycle] = useState<"monthly" | "annual">((cycleParam as "monthly" | "annual") || "monthly");
     const [selectedMethodId, setSelectedMethodId] = useState<string>("gopay");
-    const [methodGroup, setMethodGroup] = useState<"wallet" | "va">("wallet");
+    const [methodGroup, setMethodGroup] = useState<"wallet" | "va" | "card">("wallet");
     const [bankSearch, setBankSearch] = useState<string>("");
     const [isIndonesia, setIsIndonesia] = useState<boolean | null>(null);
     const [isPaddleReady, setIsPaddleReady] = useState(false);

@@ -131,6 +131,30 @@ export const isGenericSessionTitle = (title: string | null | undefined): boolean
 
 export type PlanCarrierUser = User & { plan_tier?: string | null };
 
+const PREMIUM_PLAN_TIER_TOKENS = new Set(["depth", "pro", "premium", "operator", "admin"]);
+
+export type NormalizedPlanTier = "scout" | "voyager" | "pioneer";
+
+export const normalizePlanTier = (candidate?: PlanCarrierUser | null): NormalizedPlanTier => {
+    if (!candidate) {
+        return "scout";
+    }
+    const rawTier = (candidate.plan_tier ?? candidate.role ?? "scout").trim().toLowerCase();
+    if (rawTier === "voyager") {
+        return "voyager";
+    }
+    if (rawTier === "pioneer") {
+        return "pioneer";
+    }
+    if (rawTier === "scout") {
+        return "scout";
+    }
+    if (PREMIUM_PLAN_TIER_TOKENS.has(rawTier)) {
+        return "pioneer";
+    }
+    return "scout";
+};
+
 export const derivePlanTierLabel = (candidate?: PlanCarrierUser | null): string => {
     if (!candidate) {
         return "Scout";

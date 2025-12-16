@@ -9,6 +9,7 @@ from fastapi import FastAPI, HTTPException, Depends, status, File, Form, Query, 
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import StreamingResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 from typing import Optional, List, Dict, Any, AsyncGenerator, Tuple, Union, Iterable, Set, Mapping
 import databases
@@ -992,7 +993,15 @@ _ensure_sqlite_columns("users", [
     ("last_daily_gemini_pro_reset", "TEXT", None),
     ("workspace_background_id", "TEXT", None),
     ("personalization_show_calendar", "BOOLEAN", "1"),
+    ("personalization_system_prompt_override", "TEXT", None),
     ("preferred_model", "TEXT", None),
+    ("theme_mode", "TEXT", None),
+    ("ui_locale", "TEXT", None),
+    ("preferred_response_language", "TEXT", None),
+    ("notification_preferences", "TEXT", None),
+    ("conversation_memory_enabled", "BOOLEAN", "1"),
+    ("auto_web_search_enabled", "BOOLEAN", "0"),
+    ("visible_model_ids", "TEXT", None),
 ], backfill_nulls={
     "has_seen_general_chat": "0",
     "maps_enabled": "0",
@@ -1002,6 +1011,8 @@ _ensure_sqlite_columns("users", [
     "weekly_cost_usage": "0",
     "six_hour_cost_usage": "0",
     "daily_gemini_pro_usage": "0",
+    "conversation_memory_enabled": "1",
+    "auto_web_search_enabled": "0",
 })
 
 _ensure_sqlite_columns("user_data", [
@@ -1478,6 +1489,7 @@ class UserBase(BaseModel):
     personalization_occupation: Optional[str] = None
     personalization_about: Optional[str] = None
     personalization_custom_instructions: Optional[str] = None
+    personalization_system_prompt_override: Optional[str] = None
 
     personalization_show_calendar: Optional[bool] = True
     personalization_location: Optional[str] = None
@@ -1512,6 +1524,7 @@ class UserUpdate(BaseModel):
     personalization_occupation: Optional[str] = None
     personalization_about: Optional[str] = None
     personalization_custom_instructions: Optional[str] = None
+    personalization_system_prompt_override: Optional[str] = None
 
     personalization_show_calendar: Optional[bool] = None
     personalization_location: Optional[str] = None
@@ -2284,6 +2297,19 @@ async def _ensure_user_data_record(user_identifier: int) -> Optional[int]:
             return user_data_id
             
     except Exception as error:
+        # Race condition: another request might have created the record between our check and insert
+        # Try to fetch it one more time before failing
+        try:
+            row = await database.fetch_one(
+                user_data.select().where(user_data.c.user_identifier == user_identifier)
+            )
+            if row:
+                user_data_id = row["id"]
+                _USER_DATA_CACHE[user_identifier] = user_data_id
+                return user_data_id
+        except Exception:
+            pass
+            
         app_logger.error(f"Error ensuring user data record: {error}", extra={"event_type": "user_data_ensure_failed"})
         return None
     
@@ -2793,6 +2819,11 @@ async def _ensure_paddle_columns():
 
 
 app = FastAPI(title="User Profile API with AI Chat", version="1.0.0", lifespan=lifespan)
+
+# Mount media upload directory to serve files statically
+# This allows access to uploaded images via /uploads/<filename>
+if MEDIA_UPLOAD_DIR.exists():
+    app.mount("/uploads", StaticFiles(directory=MEDIA_UPLOAD_DIR), name="uploads")
 app.include_router(paddle_router)
 
 # Security Headers Middleware
@@ -2926,6 +2957,13 @@ async def _run_basic_migrations():
             ("visible_model_ids", "TEXT", "NULL"),
             ("personalization_location", "TEXT", "NULL"),
             ("personalization_time_zone", "TEXT", "NULL"),
+            ("personalization_system_prompt_override", "TEXT", "NULL"),
+            ("theme_mode", "TEXT", "NULL"),
+            ("ui_locale", "TEXT", "NULL"),
+            ("preferred_response_language", "TEXT", "NULL"),
+            ("notification_preferences", "TEXT", "NULL"),
+            ("conversation_memory_enabled", "BOOLEAN", "1"),
+            ("auto_web_search_enabled", "BOOLEAN", "0"),
         ],
     )
     if DATABASE_URL.startswith("postgres"):
@@ -2938,6 +2976,27 @@ async def _run_basic_migrations():
             )
             await database.execute(
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS personalization_time_zone TEXT"
+            )
+            await database.execute(
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS personalization_system_prompt_override TEXT"
+            )
+            await database.execute(
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS theme_mode TEXT"
+            )
+            await database.execute(
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS ui_locale TEXT"
+            )
+            await database.execute(
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS preferred_response_language TEXT"
+            )
+            await database.execute(
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS notification_preferences JSONB"
+            )
+            await database.execute(
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS conversation_memory_enabled BOOLEAN DEFAULT TRUE"
+            )
+            await database.execute(
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS auto_web_search_enabled BOOLEAN DEFAULT FALSE"
             )
         except Exception as exc:  # pragma: no cover - best effort migration
             app_logger.warning(
@@ -4212,33 +4271,42 @@ async def _generate_chat_title_inline(
         return candidate or None
     
     try:
-        # Prefer OpenRouter when available so title generation works even when Gemini isn't configured.
+        if GEMINI_SERVICE and GEMINI_SERVICE.available:
+            try:
+                # Use user-requested model: models/gemini-flash-lite-latest
+                response = await GEMINI_SERVICE.generate(
+                    message=transcript,
+                    conversation_history=None,
+                    workspace_context=None,
+                    system_prompt=prompt_template,
+                    time_context=None,
+                    model="models/gemini-flash-lite-latest",  # Explicitly requested Lite model
+                )
+                if response and response.candidates:
+                    return _clean_title(_candidate_text(response.candidates[0]))
+            except Exception as e:
+                api_logger.warning(f"Gemini title generation failed: {e}")
+
+        # Fallback to OpenRouter if Gemini fails (or if we want to keep it as backup)
         if OPENROUTER_SERVICE and OPENROUTER_SERVICE.available:
+            # Use a fast, reliable model for tltles.
+            title_model = os.getenv("OPENROUTER_TITLE_MODEL", "google/gemini-2.5-flash-preview-09-2025")
+            
             raw_title = await OPENROUTER_SERVICE.generate(
                 transcript,
                 conversation_history=None,
                 workspace_context=None,
                 system_prompt=prompt_template,
                 time_context=None,
-                model=OPENROUTER_LITE_MODEL,
+                model=title_model,
                 include_usage=False,
                 response_format=None,
                 tools=None,
                 tool_choice=None,
             )
-            return _clean_title(raw_title)
-
-        if GEMINI_SERVICE and GEMINI_SERVICE.available:
-            response = await GEMINI_SERVICE.generate(
-                message=transcript,
-                conversation_history=None,
-                workspace_context=None,
-                system_prompt=prompt_template,
-                time_context=None,
-                model=GEMINI_LIGHT_MODEL,
-            )
-            if response and response.candidates:
-                return _clean_title(_candidate_text(response.candidates[0]))
+            cleaned = _clean_title(raw_title)
+            if cleaned:
+                return cleaned
 
     except Exception as e:
         api_logger.warning(
@@ -5465,20 +5533,47 @@ async def _complete_onboarding(
     # onboarding prompts / tool schemas still map correctly.
     about = clean(args.get("about") or args.get("about_you") or args.get("blurb"))
 
-    # If the tool was invoked with no meaningful fields at all (e.g. a
-    # malformed or empty arguments object), ignore it instead of marking
-    # onboarding complete with a blank profile.
-    if not any([nickname, occupation, about]):
+    # Optional: initialize proactivity settings from onboarding responses.
+    def normalize_cadence(raw: Optional[str]) -> Optional[str]:
+        if not raw:
+            return None
+        text = raw.strip().lower()
+        if not text:
+            return None
+        if "frequent" in text or "3x" in text or "3 times" in text:
+            return "frequent"
+        if "daily" in text or "every day" in text or "weekly" in text or "once a week" in text:
+            # Weekly is mapped to daily (weekly cadence removed)
+            return "daily"
+        if "manual" in text or "off" in text or "never" in text:
+            return "manual"
+        return "custom"
+
+    raw_cadence = clean(args.get("proactivity_cadence") or args.get("cadence"))
+    cadence = normalize_cadence(raw_cadence)
+
+    # If the tool was invoked with no meaningful fields at all (e.g. a malformed
+    # or empty arguments object), ignore it instead of marking onboarding complete
+    # or clobbering state.
+    if not any([nickname, occupation, about, cadence]):
         api_logger.warning(
-            "complete_onboarding called without core fields; ignoring",
+            "complete_onboarding called without any usable fields; ignoring",
             extra={"event_type": "onboarding_tool_ignored", "user_id": user_id},
         )
-        return {"status": "ignored", "message": "Onboarding tool called without any profile details."}
+        return {"status": "ignored", "message": "Onboarding tool called without any usable profile/proactivity details."}
 
-    updates: Dict[str, Any] = {
-        "has_seen_general_chat": True,
-        "updated_at": utcnow(),
-    }
+    existing = await db.fetch_one(users.select().where(users.c.id == user_id))
+    existing_nickname = clean(_row_get(existing, "personalization_nickname"))
+    existing_occupation = clean(_row_get(existing, "personalization_occupation"))
+    existing_about = clean(_row_get(existing, "personalization_about"))
+
+    effective_nickname = nickname or existing_nickname
+    effective_occupation = occupation or existing_occupation
+    effective_about = about or existing_about
+
+    updates: Dict[str, Any] = {"updated_at": utcnow()}
+    # Mark onboarding as started/seen if the model is saving onboarding details.
+    updates["has_seen_general_chat"] = True
     if nickname is not None:
         updates["personalization_nickname"] = nickname
     if occupation is not None:
@@ -5501,24 +5596,6 @@ async def _complete_onboarding(
     except Exception as exc:
         api_logger.warning(f"Failed to invalidate auth cache for user {user_id}: {exc}")
 
-    # Optional: initialize proactivity settings from onboarding responses.
-    def normalize_cadence(raw: Optional[str]) -> Optional[str]:
-        if not raw:
-            return None
-        text = raw.strip().lower()
-        if not text:
-            return None
-        if "frequent" in text or "3x" in text or "3 times" in text:
-            return "frequent"
-        if "daily" in text or "every day" in text or "weekly" in text or "once a week" in text:
-            # Weekly is mapped to daily (weekly cadence removed)
-            return "daily"
-        if "manual" in text or "off" in text or "never" in text:
-            return "manual"
-        return "custom"
-
-    raw_cadence = clean(args.get("proactivity_cadence") or args.get("cadence"))
-    cadence = normalize_cadence(raw_cadence)
     if cadence:
         time_value = clean(
             args.get("proactivity_time")
@@ -5600,7 +5677,23 @@ async def _complete_onboarding(
                         },
                     )
 
-    return {"status": "success"}
+    def _is_present(value: Optional[str]) -> bool:
+        return bool((value or "").strip())
+
+    onboarding_complete = all(
+        _is_present(value) for value in (effective_nickname, effective_occupation, effective_about)
+    )
+    if onboarding_complete:
+        return {"status": "success"}
+
+    missing: List[str] = []
+    if not _is_present(effective_nickname):
+        missing.append("nickname")
+    if not _is_present(effective_occupation):
+        missing.append("occupation")
+    if not _is_present(effective_about):
+        missing.append("about")
+    return {"status": "partial", "missing": missing}
 
 async def _execute_function_call(
     function_call: types.FunctionCall,
@@ -5835,9 +5928,9 @@ async def _execute_tools_with_gemini_flash(
                 }:
                     tool_cards.append(tool_result)
                 
-                # Check if onboarding was completed
-                if tool_name == "complete_onboarding":
-                    onboarding_completed = True
+                # Check if onboarding was completed (partial saves should not disable onboarding)
+                if tool_name == "complete_onboarding" and isinstance(tool_result, dict):
+                    onboarding_completed = onboarding_completed or tool_result.get("status") == "success"
                 
                 # Build contents for next iteration
                 tool_contents = _build_function_call_contents(function_call, tool_result)
@@ -6594,6 +6687,7 @@ async def stream_ai_response(
     reminders_enabled: bool = False,
     tools: Optional[List[types.Tool]] = None,
     plan_tier: Optional[str] = None,
+    provider_routing: Optional[Dict[str, Any]] = None,
 ) -> AsyncGenerator[Tuple[str, Any], None]:
     """Yield token chunks using the configured AI provider."""
 
@@ -7053,6 +7147,7 @@ CRITICAL: When the user asks to create/update a plan or habit, you MUST call the
                         reasoning_mode=reasoning_mode,
                         attachments=media_attachments,
                         history_token_budget=history_token_budget,
+                        provider_routing=provider_routing,
                     ):
                         if isinstance(chunk, dict):
                             # Handle usage statistics
@@ -8284,6 +8379,7 @@ async def upload_to_file_search_store(
             store_name,
             display_name,
             chunk_config,
+            file.content_type,
         )
         result = await _wait_for_operation(operation)
     finally:
@@ -8347,6 +8443,9 @@ async def upload_media(
   public_url = None
   if STORAGE_BASE_URL:
       public_url = f"{STORAGE_BASE_URL.rstrip('/')}/{storage_name}"
+  else:
+      # Fallback to local serving via the mounted /uploads static route
+      public_url = f"/uploads/{sanitized_name}"
 
   now = utcnow()
   query = media_uploads.insert().values(
@@ -8359,7 +8458,7 @@ async def upload_media(
   )
   media_record_id = await db.execute(query)
   if FILE_SEARCH_ENABLED and FILE_SEARCH_SERVICE:
-      background_tasks.add_task(_background_file_search_upload, db, user_id, storage_path, sanitized_name)
+      background_tasks.add_task(_background_file_search_upload, db, user_id, storage_path, sanitized_name, mime_type)
 
   return MediaUpload(
       id=media_record_id,
@@ -8443,9 +8542,14 @@ async def get_upload_file(
         headers={"Cache-Control": "private, max-age=86400"},
     )
 
-async def _background_file_search_upload(db: databases.Database, user_id: str, storage_path: Path, sanitized_name: str):
+async def _background_file_search_upload(db: databases.Database, user_id: str, storage_path: Path, sanitized_name: str, mime_type: str):
     """Helper to handle file search upload in background."""
     try:
+        # Filter out non-document types (e.g. images) from File Search
+        # File Search Store primarily supports text-heavy documents (PDFs, etc.)
+        if mime_type not in DOCUMENT_MIME_TYPES:
+            return
+
         # We need to re-verify service availability in background context
         if not FILE_SEARCH_SERVICE:
             return
@@ -8946,26 +9050,51 @@ async def chat_stream(
 
         # If force_onboarding_mode is active, or if explicitly requested and needed, enforce onboarding settings.
         if force_onboarding_mode or (user_record and wants_onboarding and needs_personalization):
-            # Always use onboarding prompt and tools in onboarding mode
+            # Always use onboarding prompt and tools in onboarding mode.
             effective_system_prompt = onboarding_system_prompt
             tool_list = list(ONBOARDING_TOOLS) + list(PLAN_TOOLS)
-            
-            # Force a capable model for onboarding tools (already handled by stream_ai_response based on tools)
-            # effective_model = "models/gemini-flash-latest"
-            
+
             # If this is the very first interaction (triggered by frontend with empty message usually)
             if not effective_message or not effective_message.strip():
                 effective_message = ""
-            
+
             api_logger.info(
                 f"User {chat_request.user_id} is in onboarding flow (forced: {force_onboarding_mode})",
                 extra={
                     "event_type": "onboarding_flow",
                     "requested": wants_onboarding,
                     "needs_personalization": needs_personalization,
-                    "force_onboarding_mode": force_onboarding_mode
+                    "force_onboarding_mode": force_onboarding_mode,
                 },
             )
+
+        # The forced onboarding branch can overwrite the system prompt after we already
+        # performed template substitution, so run {{date}} substitution again.
+        if effective_system_prompt and "{{date}}" in effective_system_prompt:
+            effective_system_prompt = effective_system_prompt.replace(
+                "{{date}}",
+                datetime.now().strftime("%Y-%m-%d"),
+            )
+
+        # During onboarding, inject any already-saved profile fields into the system prompt
+        # so onboarding continues seamlessly across separate chat threads.
+        if is_onboarding or force_onboarding_mode:
+            known_lines: List[str] = []
+            if _has_personalization(user_nickname):
+                known_lines.append(f"- preferred name: {str(user_nickname).strip()}")
+            if _has_personalization(user_occupation):
+                known_lines.append(f"- occupation/focus: {str(user_occupation).strip()}")
+            if _has_personalization(user_about):
+                known_lines.append(f"- about blurb: {str(user_about).strip()}")
+            if known_lines:
+                effective_system_prompt = "\n\n".join(
+                    [
+                        (effective_system_prompt or "").strip(),
+                        "Already saved (persisted across chats):",
+                        "\n".join(known_lines),
+                        "Do NOT ask again for any field listed above. If the user provides any new or corrected onboarding details, call `complete_onboarding` immediately (it can be called multiple times).",
+                    ]
+                ).strip()
 
         # Infer timezone from time_context if not explicitly provided
         if not chat_request.timezone and chat_request.time_context:
@@ -9987,6 +10116,7 @@ async def update_user(
 
     # Normalize optional text fields
     for field_name, max_length in (
+        ("personalization_system_prompt_override", 8000),
         ("personalization_location", 160),
         ("personalization_time_zone", 64),
     ):
@@ -11384,7 +11514,7 @@ async def create_payment_charge(
 
 @app.post("/api/payment/notification")
 @app.post("/payment/notification", include_in_schema=False)
-async def handle_payment_notification(notification: MidtransNotification):
+async def handle_payment_notification(notification: MidtransNotification, background_tasks: BackgroundTasks):
     """
     Handle Midtrans HTTP Notification (Webhook).
     """
@@ -11414,6 +11544,11 @@ async def handle_payment_notification(notification: MidtransNotification):
         raise HTTPException(status_code=400, detail="Invalid signature")
 
     # 2. Update Transaction Status
+    existing_transaction = await database.fetch_one(
+        transactions.select().where(transactions.c.order_id == notification.order_id)
+    )
+    previous_status = existing_transaction["status"] if existing_transaction else None
+
     status_mapping = {
         "capture": "success",
         "settlement": "success", 
@@ -11428,6 +11563,8 @@ async def handle_payment_notification(notification: MidtransNotification):
     # Check for credit card fraud
     if notification.transaction_status == "capture" and notification.fraud_status == "challenge":
         new_status = "challenge"
+
+    should_notify_success = new_status == "success" and previous_status != "success"
 
     try:
         # Update transaction
@@ -11448,7 +11585,9 @@ async def handle_payment_notification(notification: MidtransNotification):
             if transaction:
                 user_id = transaction["user_id"]
                 plan_tier = transaction["plan_tier"]
-                billing_cycle = transaction.get("billing_cycle", "monthly")
+                # Safely get billing_cycle - Record might not support .get() in older versions
+                # billing_cycle = transaction.get("billing_cycle", "monthly") 
+                # ^ REMOVED to avoid 'get' error if Record doesn't support it or if it behaves unexpectedly
                 
                 # Calculate subscription period end (extends active subscriptions).
                 from backend.subscription_utils import calculate_subscription_period
@@ -11456,6 +11595,11 @@ async def handle_payment_notification(notification: MidtransNotification):
                 now = utcnow()
                 user_record = await database.fetch_one(users.select().where(users.c.id == user_id))
                 existing_expires_at = user_record["subscription_expires_at"] if user_record else None
+                
+                # Fix: Handle Record objects safely - explicitly access by key or convert to dict
+                billing_val = transaction["billing_cycle"] if "billing_cycle" in transaction else None
+                billing_cycle = billing_val or "monthly"
+                
                 subscription_starts_at, subscription_expires_at = calculate_subscription_period(
                     billing_cycle=billing_cycle,
                     existing_expires_at=existing_expires_at,
@@ -11511,6 +11655,45 @@ async def handle_payment_notification(notification: MidtransNotification):
                         },
                         severity="info"
                     )
+
+                if should_notify_success:
+                    try:
+                        from backend.discord_notifier import notify_payment_success
+                    except Exception:  # pragma: no cover - fallback for direct backend/ execution
+                        from discord_notifier import notify_payment_success  # type: ignore
+                    background_tasks.add_task(
+                        notify_payment_success,
+                        provider="midtrans",
+                        status=notification.transaction_status,
+                        order_id=notification.order_id,
+                        amount=notification.gross_amount,
+                        currency=notification.currency,
+                        user_id=user_id,
+                        plan_tier=plan_tier,
+                        billing_cycle=billing_cycle,
+                        extra={
+                            "payment_type": notification.payment_type,
+                            "transaction_id": notification.transaction_id,
+                        },
+                    )
+            elif should_notify_success:
+                try:
+                    from backend.discord_notifier import notify_payment_success
+                except Exception:  # pragma: no cover - fallback for direct backend/ execution
+                    from discord_notifier import notify_payment_success  # type: ignore
+                background_tasks.add_task(
+                    notify_payment_success,
+                    provider="midtrans",
+                    status=notification.transaction_status,
+                    order_id=notification.order_id,
+                    amount=notification.gross_amount,
+                    currency=notification.currency,
+                    extra={
+                        "payment_type": notification.payment_type,
+                        "transaction_id": notification.transaction_id,
+                        "note": "No matching local transaction row",
+                    },
+                )
         elif new_status in ("failed", "deny", "expired", "cancelled"):
             # Audit log failed payment
             if audit:

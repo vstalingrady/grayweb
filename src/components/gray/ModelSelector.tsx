@@ -8,6 +8,7 @@ import { useUser } from "@/contexts/UserContext";
 import { useI18n } from "@/contexts/I18nContext";
 import styles from "./ModelSelector.module.css";
 import { PIONEER_GROUPS } from "./modelCatalog";
+import { normalizePlanTier } from "@/components/gray/utils/helperFunctions";
 
 type ModelOption = {
   id: string;
@@ -49,10 +50,9 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
   const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const planTierRaw = (user?.plan_tier || "scout").toLowerCase();
-  const currentTier = planTierRaw;
+  const currentTier = normalizePlanTier(user);
   const currentLevel = TIER_LEVELS[currentTier] ?? 0;
-  const isReasoningLocked = currentTier === "scout" || modelTier === "lite";
+  const isReasoningLocked = currentTier === "scout";
 
   const filteredPioneerGroups = useMemo(() => {
     const isVisible = (modelId: string) =>
@@ -310,7 +310,7 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
                         <Grid size={16} />
                       </div>
                       <div className={styles.itemInfo}>
-                        <div className={styles.itemLabel}>{t("Manual web search")}</div>
+                        <div className={styles.itemLabel}>{t("Web search")}</div>
                       </div>
                       <div className={`${styles.toggle} ${webSearchEnabled ? styles.toggleOn : ""}`}>
                         <div className={styles.toggleKnob} />

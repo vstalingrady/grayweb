@@ -60,6 +60,9 @@ GOOGLE_TOKEN_ENCRYPTION_KEY=your_fernet_key
 # Set this flag to false if you want to fall back to the curated localhost list.
 # CORS_ALLOW_ALL_ORIGINS=false
 # Switch providers by setting AI_PROVIDER=anthropic and providing ANTHROPIC_API_KEY
+# Optional: Discord notifications for successful payments (Midtrans + Paddle webhooks)
+# DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
+# (or) DISCORD_PAYMENTS_WEBHOOK_URL=https://discord.com/api/webhooks/...
 ```
 
 By default responses now stream as quickly as Gemini returns them. If you ever need to

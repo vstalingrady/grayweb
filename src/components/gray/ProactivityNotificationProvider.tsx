@@ -5,7 +5,6 @@ import {
   useCallback,
   useContext,
   useEffect,
-  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -13,8 +12,7 @@ import {
 import { useUser } from "@/contexts/UserContext";
 import { useChatStore } from "./ChatProvider";
 import { GENERAL_CHAT_SESSION_ID } from "./chat/constants";
-import { resolveApiBaseUrl, type ProactivityNotification } from "@/lib/api";
-import { requestNotificationPermission } from "@/lib/notificationUtils";
+import { resolveApiBaseUrl } from "@/lib/api";
 import { useI18n } from "@/contexts/I18nContext";
 import { useNotificationPreferences } from "@/contexts/NotificationPreferencesContext";
 
@@ -25,64 +23,6 @@ type ProactivityNotificationContextValue = {
 const ProactivityNotificationContext = createContext<ProactivityNotificationContextValue>({
   deliveredKeys: new Set<string>(),
 });
-
-const PROACTIVITY_NOTIFICATION_ICON = "/grayaiwhite.svg";
-
-const toDateKey = (date: Date) => {
-  const year = date.getFullYear();
-  const month = `${date.getMonth() + 1}`.padStart(2, "0");
-  const day = `${date.getDate()}`.padStart(2, "0");
-  return `${year}-${month}-${day}`;
-};
-
-const showBrowserNotification = (
-  notification: ProactivityNotification,
-  permission: NotificationPermission
-) => {
-  if (
-    permission !== "granted" ||
-    typeof window === "undefined" ||
-    !notification ||
-    (typeof window !== "undefined" && !window.isSecureContext)
-  ) {
-    return;
-  }
-  const title = "Gray";
-  const parts: string[] = [];
-  if (notification.message?.trim()) {
-    parts.push(notification.message.trim());
-  }
-  if (notification.due_at) {
-    const dueDate = new Date(notification.due_at);
-    if (!Number.isNaN(dueDate.getTime())) {
-      parts.push(
-        `Due ${dueDate.toLocaleString([], {
-          weekday: "short",
-          month: "short",
-          day: "numeric",
-          hour: "numeric",
-          minute: "2-digit",
-        })}`
-      );
-    }
-  }
-  const body = parts.join("\n") || "You have a reminder waiting. Just say the word.";
-  try {
-    const browserNotification = new Notification(title, {
-      body,
-      icon: PROACTIVITY_NOTIFICATION_ICON,
-      badge: PROACTIVITY_NOTIFICATION_ICON,
-      tag: `gray-reminder-${notification.id}`,
-      requireInteraction: true,
-    });
-    browserNotification.onclick = () => {
-      window.focus();
-      browserNotification.close();
-    };
-  } catch (error) {
-    console.error("Failed to show reminder browser notification:", error);
-  }
-};
 
 const urlBase64ToUint8Array = (base64String: string): Uint8Array => {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
@@ -103,10 +43,10 @@ export function ProactivityNotificationProvider({ children }: ProactivityNotific
   const { t } = useI18n();
   const { user } = useUser();
   const userId = typeof user?.id === "number" ? user.id : null;
-  const { appendMessage, generalSessionId, ensureSession } = useChatStore();
+  const { appendMessage } = useChatStore();
   const { notificationPreferences } = useNotificationPreferences();
   const [deliveredKeys, setDeliveredKeys] = useState<Set<string>>(new Set());
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const pushSetupRef = useRef<Promise<void> | null>(null);
 
   const handleProactivityMessage = useCallback(
     (payload: { session_id?: string; message?: string; delivery_key?: string }) => {
@@ -126,8 +66,7 @@ export function ProactivityNotificationProvider({ children }: ProactivityNotific
         });
       }
 
-      // 3. Show in-app toast
-      setToastMessage(payload.message || t("New message"));
+      // 3. In-app toast could be surfaced here if needed.
     },
     [appendMessage, t, notificationPreferences.device, notificationPreferences.proactivity]
   );
@@ -149,67 +88,6 @@ export function ProactivityNotificationProvider({ children }: ProactivityNotific
       if (!token) {
         console.warn('[Proactivity] No auth token available');
         return;
-      }
-
-      // Register service worker for push notifications
-      if ("serviceWorker" in navigator && "PushManager" in window) {
-        navigator.serviceWorker
-          .register("/sw-proactivity.js")
-          .then(async (registration) => {
-            try {
-              const subscribeOptions = {
-                userVisibleOnly: true,
-                applicationServerKey: urlBase64ToUint8Array(
-                  process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "BNoW7-tQZ8XwYt7-tQZ8XwY"
-                ) as BufferSource,
-              };
-
-              let subscription: PushSubscription | null = null;
-              try {
-                subscription = await registration.pushManager.subscribe(subscribeOptions);
-              } catch (err: unknown) {
-                const isInvalidState = err instanceof Error && (
-                  err.name === 'InvalidStateError' || err.message?.includes('different applicationServerKey')
-                );
-                if (isInvalidState) {
-                  console.log('[Proactivity] VAPID key changed, renewing subscription...');
-                  const existing = await registration.pushManager.getSubscription();
-                  if (existing) {
-                    await existing.unsubscribe();
-                  }
-                  subscription = await registration.pushManager.subscribe(subscribeOptions);
-                } else {
-                  throw err;
-                }
-              }
-
-              if (subscription) {
-                // Send subscription to backend
-                const endpoint = subscription.endpoint;
-                const p256dh = subscription.getKey("p256dh");
-                const auth = subscription.getKey("auth");
-
-                if (p256dh && auth) {
-                  const apiBase = resolveApiBaseUrl();
-                  await fetch(`${apiBase}/users/${userId}/push/subscribe?token=${encodeURIComponent(token)}`, {
-                    method: "POST",
-                    headers: {
-                      "Content-Type": "application/json",
-                      "Authorization": `Bearer ${token}`,
-                    },
-                    body: JSON.stringify({
-                      endpoint,
-                      p256dh: btoa(String.fromCharCode(...new Uint8Array(p256dh))),
-                      auth: btoa(String.fromCharCode(...new Uint8Array(auth))),
-                    }),
-                  });
-                }
-              }
-            } catch (err) {
-              console.error("Failed to subscribe to push:", err);
-            }
-          })
-          .catch((err) => console.error("Service Worker registration failed:", err));
       }
 
       const url = resolveApiBaseUrl();
@@ -269,6 +147,64 @@ export function ProactivityNotificationProvider({ children }: ProactivityNotific
       cleanup.then(fn => fn?.());
     };
   }, [userId, handleProactivityMessage]);
+
+  useEffect(() => {
+    if (!userId || typeof window === "undefined") return;
+    if (!notificationPreferences.device || !notificationPreferences.proactivity) return;
+    if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+    if (window.isSecureContext === false) return;
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
+
+    if (pushSetupRef.current) return;
+
+    const setup = async () => {
+      const supabase = (await import("@/lib/supabaseClient")).getSupabaseClient();
+      if (!supabase) return;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data } = await (supabase.auth as any).getSession();
+      const token: string | null = data.session?.access_token ?? null;
+      if (!token) return;
+
+      const registration = await navigator.serviceWorker.register("/sw-proactivity.js");
+      const subscribeOptions = {
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(
+          process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "BNoW7-tQZ8XwYt7-tQZ8XwY"
+        ) as BufferSource,
+      };
+
+      let subscription = await registration.pushManager.getSubscription();
+      if (!subscription) {
+        subscription = await registration.pushManager.subscribe(subscribeOptions);
+      }
+
+      const p256dh = subscription.getKey("p256dh");
+      const auth = subscription.getKey("auth");
+      if (!p256dh || !auth) return;
+
+      const apiBase = resolveApiBaseUrl();
+      await fetch(`${apiBase}/users/${userId}/push/subscribe?token=${encodeURIComponent(token)}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          endpoint: subscription.endpoint,
+          p256dh: btoa(String.fromCharCode(...new Uint8Array(p256dh))),
+          auth: btoa(String.fromCharCode(...new Uint8Array(auth))),
+        }),
+      });
+    };
+
+    pushSetupRef.current = setup()
+      .catch((error) => {
+        console.error("[Proactivity] Failed to register push subscription:", error);
+      })
+      .finally(() => {
+        pushSetupRef.current = null;
+      });
+  }, [notificationPreferences.device, notificationPreferences.proactivity, userId]);
 
   return (
     <ProactivityNotificationContext.Provider value={{ deliveredKeys }}>

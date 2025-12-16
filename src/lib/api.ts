@@ -147,7 +147,6 @@ export interface Habit {
   id: number;
   user_id: number;
   label: string;
-  streak_label: string;
   previous_label: string;
   description?: string | null;
   reminder_at?: string | null;
@@ -164,7 +163,6 @@ export interface DashboardPulsePlanItem {
 export interface DashboardPulseHabitItem {
   id: string;
   label: string;
-  streak_label?: string | null;
   previous_label?: string | null;
   completed: boolean;
 }
@@ -260,15 +258,6 @@ export interface ProactivityNotification {
   read_at?: string | null;
   completed_at?: string | null;
   created_at: string;
-}
-
-export interface UserStreak {
-  id: number;
-  user_id: number;
-  current_streak: number;
-  last_activity_date: string | null;
-  created_at: string;
-  updated_at: string;
 }
 
 export interface ApiKey {
@@ -1133,7 +1122,6 @@ class ApiService {
     userId: number,
     habitData: {
       label: string;
-      streak_label?: string | null;
       previous_label?: string | null;
       description?: string | null;
       reminderAt?: string | null;
@@ -1141,7 +1129,6 @@ class ApiService {
   ): Promise<Habit> {
     const payload = {
       label: habitData.label,
-      streak_label: habitData.streak_label ?? "0",
       previous_label: habitData.previous_label ?? "No history yet",
       description: habitData.description ?? null,
       reminder_at: habitData.reminderAt ?? null,
@@ -1158,7 +1145,6 @@ class ApiService {
     habitId: number,
     updateData: {
       label?: string;
-      streak_label?: string | null;
       previous_label?: string | null;
       description?: string | null;
       reminderAt?: string | null;
@@ -1167,9 +1153,6 @@ class ApiService {
     const payload: Record<string, unknown> = {};
     if (typeof updateData.label === "string") {
       payload.label = updateData.label;
-    }
-    if ("streak_label" in updateData) {
-      payload.streak_label = updateData.streak_label ?? null;
     }
     if ("previous_label" in updateData) {
       payload.previous_label = updateData.previous_label ?? null;
@@ -1369,16 +1352,6 @@ class ApiService {
         file_name: payload.fileName,
         chunking_config: payload.chunkingConfig ?? undefined,
       }),
-    });
-  }
-
-  async getUserStreak(userId: number): Promise<UserStreak> {
-    return this.fetch<UserStreak>(`/users/${userId}/streak`);
-  }
-
-  async touchUserStreak(userId: number): Promise<UserStreak> {
-    return this.fetch<UserStreak>(`/users/${userId}/streak`, {
-      method: 'POST',
     });
   }
 

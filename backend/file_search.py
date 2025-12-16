@@ -25,6 +25,7 @@ class FileSearchService:
         store_name: str,
         display_name: Optional[str] = None,
         chunking_config: Optional[Dict[str, Any]] = None,
+        mime_type: Optional[str] = None,
     ) -> types.Operation:
         path_obj = Path(file_path)
         if not path_obj.exists() or not path_obj.is_file():
@@ -38,6 +39,8 @@ class FileSearchService:
             config["display_name"] = display_name
         if chunking_config:
             config["chunking_config"] = chunking_config
+        if mime_type:
+            config["mime_type"] = mime_type
 
         # Retry logic for transient 5xx errors
         for attempt in range(3):

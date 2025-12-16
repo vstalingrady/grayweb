@@ -59,7 +59,6 @@ export type PlanUpdates = {
 export type HabitItem = {
   id: string;
   label: string;
-  streakLabel: string;
   previousLabel: string;
   completed?: boolean;
   details?: string | null;
@@ -71,7 +70,6 @@ export type HabitItem = {
 export type HabitUpdates = {
   label: string;
   details?: string | null;
-  streakLabel?: string | null;
   previousLabel?: string | null;
   reminderAt?: string | null;
 };

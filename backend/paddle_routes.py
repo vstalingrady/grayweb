@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request, HTTPException, Header, status
+from fastapi import APIRouter, Request, HTTPException, Header, status, BackgroundTasks
 import logging
 import json
 import os
@@ -39,7 +39,11 @@ def _parse_paddle_datetime(value: str | None) -> datetime | None:
     return parsed.astimezone(timezone.utc).replace(tzinfo=None)
 
 @router.post("/api/webhooks/paddle")
-async def paddle_webhook(request: Request, paddle_signature: str = Header(None)):
+async def paddle_webhook(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    paddle_signature: str = Header(None),
+):
     """
     Handle Paddle Webhooks.
     """
@@ -70,7 +74,7 @@ async def paddle_webhook(request: Request, paddle_signature: str = Header(None))
         elif event_type == "subscription.canceled":
             await handle_subscription_cancel(payload)
         elif event_type == "transaction.completed":
-            await handle_transaction_completed(payload)
+            await handle_transaction_completed(payload, background_tasks=background_tasks)
         
         return {"status": "success"}
 
@@ -158,7 +162,7 @@ async def handle_subscription_cancel(data: dict):
     # Usually 'subscription.updated' handles the status change to 'canceled', but explicit event allows hooks.
     await handle_subscription_update(data)
 
-async def handle_transaction_completed(data: dict):
+async def handle_transaction_completed(data: dict, *, background_tasks: BackgroundTasks | None = None):
     """
     Record transaction.
     """
@@ -186,6 +190,7 @@ async def handle_transaction_completed(data: dict):
 
     txn_id = data.get("id")
     amount = data.get("details", {}).get("totals", {}).get("grand_total", "0")
+    currency_code = data.get("details", {}).get("totals", {}).get("currency_code")
     # Amount is string like "1000" (cents? no, Paddle V2 uses string decimal usually? Check docs.)
     # Docs say: "totals": { "grand_total": "1000", "currency_code": "USD" } 
     # Actually wait, Paddle uses integer strings for cents in some places or strings for decimals?
@@ -246,5 +251,22 @@ async def handle_transaction_completed(data: dict):
     else:
         try:
              await database.execute(transactions.insert().values(**values))
+             if background_tasks:
+                 try:
+                     from backend.discord_notifier import notify_payment_success
+                 except Exception:  # pragma: no cover - fallback for direct backend/ execution
+                     from discord_notifier import notify_payment_success  # type: ignore
+                 background_tasks.add_task(
+                     notify_payment_success,
+                     provider="paddle",
+                     status=str(data.get("status") or "completed"),
+                     order_id=str(txn_id),
+                     amount=str(amount) if amount is not None else None,
+                     currency=str(currency_code) if currency_code else None,
+                     user_id=user_id if isinstance(user_id, int) else None,
+                     plan_tier=values.get("plan_tier"),
+                     billing_cycle=values.get("billing_cycle"),
+                     extra={"subscription_id": subscription_id},
+                 )
         except Exception as e:
             logger.error(f"Failed to insert transaction: {e}")

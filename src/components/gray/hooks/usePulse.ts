@@ -68,7 +68,6 @@ const mapDashboardPulseToEntry = (pulse: DashboardPulse): PulseEntry => ({
   habits: pulse.habits.map((habit) => ({
     id: habit.id,
     label: habit.label,
-    streakLabel: habit.streak_label ?? "",
     previousLabel: habit.previous_label ?? "",
     completed: habit.completed,
   })),
@@ -100,7 +99,6 @@ const cloneHabits = (habits: HabitItem[]): HabitItem[] =>
   habits.map((habit) => ({
     id: habit.id,
     label: habit.label,
-    streakLabel: habit.streakLabel,
     previousLabel: habit.previousLabel,
     completed: Boolean(habit.completed),
     details: habit.details ?? null,
@@ -144,7 +142,6 @@ const areHabitListsEqual = (a: HabitItem[], b: HabitItem[]) =>
       other !== undefined &&
       habit.id === other.id &&
       habit.label === other.label &&
-      habit.streakLabel === other.streakLabel &&
       habit.previousLabel === other.previousLabel &&
       Boolean(habit.completed) === Boolean(other.completed)
     );
@@ -228,7 +225,7 @@ export function usePulse(
       const existingIndex = previous.findIndex((entry) => entry.dateKey === snapshotBase.dateKey);
       const stableId = existingIndex >= 0 ? previous[existingIndex].id : snapshotBase.id;
 
-      // Preserve completion status and streak info from existing pulse entry if available
+      // Preserve completion status from existing pulse entry if available
       // because snapshotBase is derived from 'currentHabits' which typically defaults to uncompleted
       let mergedSnapshot = snapshotBase;
       if (existingIndex >= 0) {
@@ -241,7 +238,6 @@ export function usePulse(
               return {
                 ...h,
                 completed: match.completed,
-                streakLabel: match.streakLabel,
                 previousLabel: match.previousLabel,
               };
             }

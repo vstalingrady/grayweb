@@ -6,6 +6,7 @@ import styles from "@/app/gray/GrayPageClient.module.css";
 import { useUser } from "@/contexts/UserContext";
 import { useChatStore } from "./ChatProvider";
 import { ModelSelector } from "./ModelSelector";
+import { normalizePlanTier } from "@/components/gray/utils/helperFunctions";
 
 type GrayChatComposerProps = GrayChatBarProps & {
   showUnderline?: boolean;
@@ -18,11 +19,11 @@ const GrayChatComposerBase = ({
   ...rest
 }: GrayChatComposerProps) => {
   const { user } = useUser();
-  const { reasoningMode, setReasoningMode, modelTier, autoWebSearchEnabled, webSearchEnabled, toggleWebSearchEnabled } =
+  const { reasoningMode, setReasoningMode, autoWebSearchEnabled, webSearchEnabled, toggleWebSearchEnabled } =
     useChatStore();
 
-  const planTier = (user?.plan_tier || "scout").toLowerCase();
-  const isReasoningLocked = planTier === "scout" || modelTier === "lite";
+  const planTier = normalizePlanTier(user);
+  const isReasoningLocked = planTier === "scout";
   const isWebSearchEnabled = autoWebSearchEnabled || webSearchEnabled;
 
   return (

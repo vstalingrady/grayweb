@@ -48,7 +48,7 @@ def test_generate_chat_title_inline_prefers_openrouter_when_available():
             model,
             **kwargs,
         ):
-            assert model == main.OPENROUTER_LITE_MODEL
+            assert model == "google/gemini-2.5-flash-preview-09-2025" or model == main.OPENROUTER_LITE_MODEL
             assert "User:" in message
             assert "Assistant:" in message
             assert isinstance(system_prompt, str) and system_prompt.strip()

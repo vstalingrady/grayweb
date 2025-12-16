@@ -530,6 +530,7 @@ class OpenRouterService:
         plugins: Optional[List[Dict[str, Any]]] = None,
         reasoning_mode: bool = False,
         attachments: Optional[List[Any]] = None,
+        provider_routing: Optional[Dict[str, Any]] = None,
         *,
         history_token_budget: Optional[int] = None,
     ) -> AsyncIterator[str | Dict[str, Any]]:
@@ -584,7 +585,10 @@ class OpenRouterService:
         if "deepseek" in resolved_lower:
             provider_preferences["order"] = ["DeepSeek"]
         elif "moonshot" in resolved_lower or "kimi" in resolved_lower:
-            provider_preferences["order"] = ["Fireworks"]
+            provider_preferences["order"] = ["Novita", "DeepInfra"]
+
+        if provider_routing:
+            provider_preferences.update(provider_routing)
 
         # Build request payload
         payload: Dict[str, Any] = {

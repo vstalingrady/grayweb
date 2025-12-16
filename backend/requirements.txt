@@ -6,6 +6,7 @@ pydantic[email]
 python-dotenv
 python-multipart
 supabase
+httpx
 APScheduler
 # Google Calendar API
 google-api-python-client

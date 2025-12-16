@@ -373,7 +373,7 @@ const MobileWelcomeScreen = memo(() => {
     <div className={styles.mobileWelcomeScreen}>
       <div className={styles.mobileWelcomeContent}>
         <div className={styles.mobileWelcomeLogo}>
-          <img src="/grayaiwhitenotspinning.svg" alt="" />
+          <img src="/grayaiwhitenotspinning.svg" alt="" className={styles.uiIconImage} />
         </div>
         <p className={styles.mobileWelcomeGreeting}>{greeting}</p>
       </div>
@@ -2447,14 +2447,6 @@ export function GrayChatView({
   const shouldShowAttachmentTray =
     session?.scope === "general" &&
     (attachments.length > 0 || isAttachmentUploading || Boolean(attachmentError));
-  const topAttachmentTray = shouldShowAttachmentTray ? (
-    <AttachmentTray
-      attachments={attachments}
-      isUploading={isAttachmentUploading}
-      error={attachmentError}
-      onRemoveAttachment={removeAttachment}
-    />
-  ) : null;
   const attachmentTrayNode = shouldShowAttachmentTray ? (
     <AttachmentTray
       attachments={attachments}
@@ -3879,7 +3871,6 @@ export function GrayChatView({
         {messages.length === 0 && sessionId && sessionId !== GENERAL_CHAT_SESSION_ID && (
           <MobileWelcomeScreen />
         )}
-        {topAttachmentTray}
         {showIntro ? (
           <div className={styles.chatIntro}>
             {introContent}

@@ -184,20 +184,9 @@ export function GrayChatBar({
             placeholder={resolvedPlaceholder}
             className={styles.chatInput}
             aria-label={resolvedPlaceholder}
+            rows={1}
             minRows={1}
             maxRows={5}
-            cacheMeasurements
-            style={{
-              resize: "none",
-              background: "transparent",
-              border: "none",
-              outline: "none",
-              overflowY: "auto",
-              flex: "1 1 auto",
-              width: "100%",
-              boxSizing: "border-box",
-              lineHeight: "1.5",
-            }}
           />
         </div>
 
@@ -210,7 +199,7 @@ export function GrayChatBar({
               aria-hidden="true"
               width={18}
               height={18}
-              className={styles.chatSearchSpinner}
+              className={`${styles.chatSearchSpinner} ${styles.uiIconImage}`}
             />
           ) : null}
           <div className={styles.chatModelSelectorDirect}>
@@ -254,7 +243,7 @@ export function GrayChatBar({
               aria-hidden="true"
               width={18}
               height={18}
-              className={styles.chatSearchSpinner}
+              className={`${styles.chatSearchSpinner} ${styles.uiIconImage}`}
             />
           ) : null}
           <div className={styles.chatModelSelectorDirect}>
