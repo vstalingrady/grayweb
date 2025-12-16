@@ -2574,19 +2574,7 @@ async def dev_analytics_summary(
 # _timestamp_ms_to_datetime, _datetime_to_ms are now imported from core.env_helpers
 
 
-
-# Normalization and serialization functions (_normalize_plan_items, _normalize_habit_items,
-# _serialize_habit_record, _normalize_proactivity, _serialize_proactivity_notification,
-# _serialize_context_cache) are now imported from core.serializers
-
-# _serialize_dashboard_pulse_record is now imported from core.dashboard_helpers
-
-
-
-
-# AI candidate extraction functions (_candidate_grounding_payload, _candidate_text,
-# _candidate_thought) are now imported from core.ai_utils
-# Web search detection (_should_use_web_search) is imported from core.message_detection
+# Serialization, AI utils, and web search detection functions are now imported from core modules
 
 # _gemini_web_search_summary removed (dead code - never called)
 
@@ -2723,15 +2711,9 @@ async def _generate_chat_title_inline(
             f"Inline title generation failed: {e}",
             extra={"event_type": "title_generation_error"}
         )
-
     return None
 
-
-# _merge_extra_contents is now imported from core.ai_utils
-
-
-# _normalize_conversation_history wrapper removed - use normalize_conversation_history directly
-
+# Helper functions extracted to core modules: _merge_extra_contents (ai_utils), normalize_conversation_history (chat_history)
 
 async def _load_conversation_history(conversation_id: str, user_id: int) -> List[Dict[str, Any]]:
   """Load a conversation's messages.
@@ -3426,14 +3408,7 @@ async def _generate_image_descriptions(
         return f"{header}\n" + "\n".join(descriptions) + f"\n{footer}\n\n"
     return ""
 
-
-# _carry_forward_dashboard_entries is now imported from core.dashboard_helpers
-
-# _load_dashboard_pulse_by_date and _load_previous_dashboard_pulse removed (dead code - never called)
-
-# _coerce_activity_day is now imported from core.dashboard_helpers
-
-
+# Dashboard helpers extracted to core.dashboard_helpers
 
 # API Routes
 
