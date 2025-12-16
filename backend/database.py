@@ -467,3 +467,13 @@ habits = sqlalchemy.Table(
     sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
     sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
 )
+
+
+# Database dependency for FastAPI routes
+async def get_database():
+    """
+    Dependency to get the database connection.
+    Connection is managed globally by startup/shutdown events.
+    """
+    yield database
+
