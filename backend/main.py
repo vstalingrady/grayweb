@@ -761,6 +761,12 @@ except ImportError:
         ensure_user_data_record as _ensure_user_data_record,
     )
 
+# Onboarding handler (extracted from main.py)
+try:
+    from backend.core.onboarding_handler import complete_onboarding as _complete_onboarding
+except ImportError:
+    from core.onboarding_handler import complete_onboarding as _complete_onboarding  # type: ignore
+
 load_dotenv(ROOT_DIR / ".env")
 
 SUPABASE_POOLER_HOST = os.getenv("SUPABASE_POOLER_HOST", "aws-1-ap-south-1.pooler.supabase.com")
@@ -2491,192 +2497,8 @@ async def _fetch_proactivity_summary(user_id: int, info_type: Optional[str], db:
 # Calendar event handlers (_list_calendar_events, _create_calendar_event,
 # _update_calendar_event, _delete_calendar_event) are now imported from core.tool_handlers
 
+# _complete_onboarding is now imported from core.onboarding_handler
 
-async def _complete_onboarding(
-    user_id: int,
-    args: Dict[str, Any],
-    db: databases.Database,
-    *,
-    user_timezone: Optional[str] = None,
-) -> Dict[str, Any]:
-    # Some providers wrap tool arguments (e.g. {"tool": "...", "arguments": {...}})
-    # or use a "params" key. Normalize to the innermost argument dict.
-    if isinstance(args, dict):
-        nested = args.get("arguments") or args.get("params")
-        if isinstance(nested, dict):
-            args = nested
-
-    def clean(value: Any) -> Optional[str]:
-        if value is None:
-            return None
-        text = str(value).strip()
-        return text or None
-
-    nickname = clean(args.get("nickname") or args.get("name"))
-    occupation = clean(args.get("occupation"))
-    # Accept multiple synonyms for the user's self-description so different
-    # onboarding prompts / tool schemas still map correctly.
-    about = clean(args.get("about") or args.get("about_you") or args.get("blurb"))
-
-    # Optional: initialize proactivity settings from onboarding responses.
-    def normalize_cadence(raw: Optional[str]) -> Optional[str]:
-        if not raw:
-            return None
-        text = raw.strip().lower()
-        if not text:
-            return None
-        if "frequent" in text or "3x" in text or "3 times" in text:
-            return "frequent"
-        if "daily" in text or "every day" in text or "weekly" in text or "once a week" in text:
-            # Weekly is mapped to daily (weekly cadence removed)
-            return "daily"
-        if "manual" in text or "off" in text or "never" in text:
-            return "manual"
-        return "custom"
-
-    raw_cadence = clean(args.get("proactivity_cadence") or args.get("cadence"))
-    cadence = normalize_cadence(raw_cadence)
-
-    # If the tool was invoked with no meaningful fields at all (e.g. a malformed
-    # or empty arguments object), ignore it instead of marking onboarding complete
-    # or clobbering state.
-    if not any([nickname, occupation, about, cadence]):
-        api_logger.warning(
-            "complete_onboarding called without any usable fields; ignoring",
-            extra={"event_type": "onboarding_tool_ignored", "user_id": user_id},
-        )
-        return {"status": "ignored", "message": "Onboarding tool called without any usable profile/proactivity details."}
-
-    existing = await db.fetch_one(users.select().where(users.c.id == user_id))
-    existing_nickname = clean(_row_get(existing, "personalization_nickname"))
-    existing_occupation = clean(_row_get(existing, "personalization_occupation"))
-    existing_about = clean(_row_get(existing, "personalization_about"))
-
-    effective_nickname = nickname or existing_nickname
-    effective_occupation = occupation or existing_occupation
-    effective_about = about or existing_about
-
-    updates: Dict[str, Any] = {"updated_at": utcnow()}
-    # Mark onboarding as started/seen if the model is saving onboarding details.
-    updates["has_seen_general_chat"] = True
-    if nickname is not None:
-        updates["personalization_nickname"] = nickname
-    if occupation is not None:
-        updates["personalization_occupation"] = occupation
-    if about is not None:
-        updates["personalization_about"] = about
-
-    await db.execute(users.update().where(users.c.id == user_id).values(**updates))
-
-    # Invalidate cache so the new has_seen_general_chat status is picked up immediately
-    USER_CACHE.invalidate(f"user_{user_id}")
-    
-    # Also invalidate auth cache to prevent stale current_user in subsequent requests
-    try:
-        updated_user = await db.fetch_one(users.select().where(users.c.id == user_id))
-        if updated_user and updated_user["auth_user_id"]:
-            auth_user_id = str(updated_user["auth_user_id"])
-            invalidate_user_cache(auth_user_id)
-            await invalidate_user_cache_redis(auth_user_id)
-    except Exception as exc:
-        api_logger.warning(f"Failed to invalidate auth cache for user {user_id}: {exc}")
-
-    if cadence:
-        time_value = clean(
-            args.get("proactivity_time")
-            or args.get("proactivity_time_of_day")
-            or args.get("checkin_time")
-        )
-        timezone = clean(args.get("proactivity_timezone")) or clean(user_timezone)
-
-        # Default to a reasonable morning check-in if no time is provided and cadence is active.
-        if cadence != "manual" and not time_value:
-            time_value = "09:00"
-
-        settings_payload: Dict[str, Any] = {
-            "id": "proactivity-1",
-            "label": "Check-ins",
-            "description": "Onboarding check-ins",
-            "cadence": cadence,
-        }
-        
-        # Set check-in times based on cadence
-        if cadence == "frequent":
-            # Frequent: 9am, 15pm, 18pm
-            settings_payload["times"] = ["09:00", "15:00", "18:00"]
-        elif cadence == "daily":
-            # Daily: 9am (or user-specified time)
-            settings_payload["time"] = time_value or "09:00"
-        elif time_value:
-            # Custom or other cadences: use provided time
-            settings_payload["time"] = time_value
-            
-        if timezone:
-            settings_payload["timezone"] = timezone
-
-        now = utcnow()
-        try:
-            existing = await db.fetch_one(
-                proactivity_settings.select().where(proactivity_settings.c.user_id == user_id)
-            )
-            if existing:
-                await db.execute(
-                    proactivity_settings.update()
-                    .where(proactivity_settings.c.user_id == user_id)
-                    .values(payload=settings_payload, updated_at=now)
-                )
-            else:
-                await db.execute(
-                    proactivity_settings.insert().values(
-                        user_id=user_id,
-                        payload=settings_payload,
-                        created_at=now,
-                        updated_at=now,
-                    )
-                )
-        except Exception as db_error:
-            api_logger.error(
-                f"Database error saving proactivity settings from onboarding: {db_error}",
-                exc_info=True,
-                extra={
-                    "event_type": "proactivity_settings_onboarding_db_error",
-                    "user_id": user_id,
-                    "error": str(db_error),
-                    **_payload_log_summary(settings_payload),
-                },
-            )
-        else:
-            # Keep scheduler in sync with onboarding decisions.
-            if proactivity_scheduler:
-                try:
-                    await proactivity_scheduler.refresh_jobs(user_id)
-                except Exception as scheduler_error:
-                    api_logger.warning(
-                        f"Failed to refresh proactivity scheduler jobs after onboarding: {scheduler_error}",
-                        extra={
-                            "event_type": "proactivity_scheduler_onboarding_refresh_error",
-                            "user_id": user_id,
-                            "error": str(scheduler_error),
-                        },
-                    )
-
-    def _is_present(value: Optional[str]) -> bool:
-        return bool((value or "").strip())
-
-    onboarding_complete = all(
-        _is_present(value) for value in (effective_nickname, effective_occupation, effective_about)
-    )
-    if onboarding_complete:
-        return {"status": "success"}
-
-    missing: List[str] = []
-    if not _is_present(effective_nickname):
-        missing.append("nickname")
-    if not _is_present(effective_occupation):
-        missing.append("occupation")
-    if not _is_present(effective_about):
-        missing.append("about")
-    return {"status": "partial", "missing": missing}
 
 async def _execute_function_call(
     function_call: types.FunctionCall,
@@ -2690,7 +2512,7 @@ async def _execute_function_call(
         "create_calendar_event": lambda u, a, d: _create_calendar_event(u, a, d),
         "update_calendar_event": lambda u, a, d: _update_calendar_event(u, a, d),
         "delete_calendar_event": lambda u, a, d: _delete_calendar_event(u, a, d),
-        "complete_onboarding": lambda u, a, d: _complete_onboarding(u, a, d, user_timezone=user_timezone),
+        "complete_onboarding": lambda u, a, d: _complete_onboarding(u, a, d, user_timezone=user_timezone, proactivity_scheduler=proactivity_scheduler),
         "list_plans": lambda u, a, d: _list_plans_tool(u, a, d),
         "create_plan": lambda u, a, d: _create_plan_tool(u, a, d),
         "update_plan": lambda u, a, d: _update_plan_tool(u, a, d),
