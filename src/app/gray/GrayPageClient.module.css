@@ -3525,8 +3525,8 @@
   justify-content: flex-start;
   gap: 24px;
   min-height: min-content;
-  padding: clamp(4px, 1vh, 10px) 0 8px 24px;
-  /* Reduced bottom padding - overlay padding handled by chatViewport */
+  padding: clamp(4px, 1vh, 10px) 24px 8px 24px;
+  /* Symmetric padding */
   overflow: visible;
   width: 100%;
   max-width: min(calc(1.1 * var(--chat-bubble-max-width, var(--chat-column-max-width, 840px))), 100%);
@@ -9601,7 +9601,7 @@ h1.greeting {
   margin: 0 auto;
   border-radius: 26px;
   border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(40, 40, 42, 0.95);
+  background: rgba(18, 18, 20, 0.98);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   padding: 8px;
@@ -9683,17 +9683,17 @@ h1.greeting {
 }
 
 .chatBarRounded:focus-within {
-  border-color: rgba(255, 255, 255, 0.1);
-  background: rgba(40, 40, 42, 0.95);
+  border-color: rgba(255, 255, 255, 0.15);
+  background: rgba(18, 18, 20, 0.98);
 }
 
 .layout[data-view="general"] .chatBarRounded {
-  background: rgba(32, 32, 34, 0.95);
+  background: rgba(18, 18, 20, 0.98);
   backdrop-filter: blur(16px);
 }
 
 .layout[data-view="general"] .chatBarRounded:focus-within {
-  background: rgba(32, 32, 34, 0.95);
+  background: rgba(18, 18, 20, 0.98);
 }
 
 .chatView {
