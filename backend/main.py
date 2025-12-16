@@ -226,6 +226,8 @@ try:
         USER_CACHE,
         CONVERSATION_OWNER_CACHE,
         CONVERSATION_HISTORY_CACHE,
+        load_context_cache as _load_context_cache,
+        context_cache_contents as _context_cache_contents,
     )
 except ImportError:
     from core.cache import (  # type: ignore
@@ -234,6 +236,8 @@ except ImportError:
         USER_CACHE,
         CONVERSATION_OWNER_CACHE,
         CONVERSATION_HISTORY_CACHE,
+        load_context_cache as _load_context_cache,
+        context_cache_contents as _context_cache_contents,
     )
 
 # Message detection utilities (extracted from main.py)
@@ -2328,31 +2332,7 @@ async def dev_analytics_summary(
 
 # _build_maps_tool_and_config is now imported from core.tool_handlers
 
-
-async def _load_context_cache(cache_id: int, user_id: int, db: databases.Database) -> Optional[Dict[str, Any]]:
-    if cache_id is None:
-        return None
-    record = await db.fetch_one(
-        context_cache.select().where(
-            (context_cache.c.id == cache_id)
-            & (context_cache.c.user_id == user_id)
-        )
-    )
-    return record
-
-
-def _context_cache_contents(record: Optional[Dict[str, Any]]) -> Optional[List[types.Content]]:
-    if not record:
-        return None
-    content_text = _row_get(record, "content")
-    if not isinstance(content_text, str) or not content_text.strip():
-        return None
-    return [
-        types.Content(
-            role="user",
-            parts=[types.Part.from_text(text=content_text)],
-        )
-    ]
+# _load_context_cache and _context_cache_contents are now imported from core.cache
 
 
 
