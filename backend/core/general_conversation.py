@@ -1,0 +1,344 @@
+"""General conversation CRUD operations.
+
+This module extracts general chat message handling from main.py to improve
+modularity and reduce main.py's size.
+"""
+from __future__ import annotations
+
+import json
+from typing import Any, Dict, List, Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import databases
+
+# Lazy imports to avoid circular dependencies
+_database = None
+_general_chat_messages = None
+_user_data = None
+_app_logger = None
+
+
+def _get_database():
+    """Lazily get database connection."""
+    global _database, _general_chat_messages, _user_data
+    if _database is None:
+        try:
+            from backend.database import database, general_chat_messages, user_data
+        except ImportError:
+            from database import database, general_chat_messages, user_data
+        _database = database
+        _general_chat_messages = general_chat_messages
+        _user_data = user_data
+    return _database, _general_chat_messages, _user_data
+
+
+def _get_logger():
+    """Lazily get app logger."""
+    global _app_logger
+    if _app_logger is None:
+        try:
+            from backend.logging_config import create_logger
+        except ImportError:
+            from logging_config import create_logger
+        _app_logger = create_logger("backend.general_conversation")
+    return _app_logger
+
+
+def _get_utcnow():
+    """Lazily get utcnow function."""
+    try:
+        from backend.time_utils import utcnow
+    except ImportError:
+        from time_utils import utcnow
+    return utcnow
+
+
+def _parse_json_field(value: Any) -> Any:
+    """Parse a JSON field."""
+    try:
+        from backend.core.serializers import parse_json_field
+    except ImportError:
+        from core.serializers import parse_json_field
+    return parse_json_field(value)
+
+
+def _datetime_to_ms(dt) -> int:
+    """Convert datetime to milliseconds timestamp."""
+    try:
+        from backend.core.serializers import datetime_to_ms
+    except ImportError:
+        from core.serializers import datetime_to_ms
+    return datetime_to_ms(dt)
+
+
+# User data cache
+_USER_DATA_CACHE: Dict[int, int] = {}
+
+
+async def ensure_user_data_record(user_identifier: int) -> Optional[int]:
+    """Return the user_data.id for the provided identifier, creating it if needed."""
+    if user_identifier is None:
+        return None
+
+    database, _, user_data = _get_database()
+    utcnow = _get_utcnow()
+    logger = _get_logger()
+
+    cached = _USER_DATA_CACHE.get(user_identifier)
+    if cached is not None:
+        # Ensure the cached record still exists (e.g., after DB resets)
+        existing_cached = await database.fetch_one(user_data.select().where(user_data.c.id == cached))
+        if existing_cached:
+            return cached
+        _USER_DATA_CACHE.pop(user_identifier, None)
+
+    try:
+        # Try to fetch existing record
+        query = user_data.select().where(user_data.c.user_identifier == user_identifier)
+        row = await database.fetch_one(query)
+        
+        if row:
+            user_data_id = row["id"]
+            _USER_DATA_CACHE[user_identifier] = user_data_id
+            return user_data_id
+            
+        # Create new record
+        insert_query = user_data.insert().values(
+            user_identifier=user_identifier,
+            created_at=utcnow(),
+            updated_at=utcnow()
+        )
+        user_data_id = await database.execute(insert_query)
+        
+        if user_data_id:
+            _USER_DATA_CACHE[user_identifier] = user_data_id
+            return user_data_id
+            
+    except Exception as error:
+        # Race condition: another request might have created the record between our check and insert.
+        import asyncio
+
+        for delay_seconds in (0.0, 0.01, 0.02, 0.05):
+            if delay_seconds:
+                await asyncio.sleep(delay_seconds)
+            try:
+                row = await database.fetch_one(
+                    user_data.select().where(user_data.c.user_identifier == user_identifier)
+                )
+            except Exception:
+                row = None
+            if row:
+                user_data_id = row["id"]
+                _USER_DATA_CACHE[user_identifier] = user_data_id
+                return user_data_id
+            
+        logger.error(
+            f"Error ensuring user data record: {error}",
+            extra={"event_type": "user_data_ensure_failed"},
+        )
+        return None
+    
+    return None
+
+
+async def load_general_conversation_history(user_id: int) -> List[Dict[str, Any]]:
+    """Load general chat history from SQLite for given user."""
+    database, general_chat_messages, _ = _get_database()
+    logger = _get_logger()
+    
+    try:
+        query = general_chat_messages.select().where(
+            general_chat_messages.c.user_id == user_id
+        ).order_by(general_chat_messages.c.created_at.desc()).limit(100)
+        rows = await database.fetch_all(query)
+        
+        local_history = []
+        for row in reversed(rows):
+            entry = {
+                "role": row["role"],
+                "text": row["content"],
+            }
+            if row["grounding_metadata"]:
+                entry["grounding_metadata"] = _parse_json_field(row["grounding_metadata"]) if isinstance(row["grounding_metadata"], str) else row["grounding_metadata"]
+            
+            if row["created_at"]:
+                entry["timestamp"] = _datetime_to_ms(row["created_at"])
+            else:
+                entry["timestamp"] = 0
+
+            # Include reminders if present (use try/except since older DB may not have column)
+            try:
+                reminders_value = row["reminders"]
+                if reminders_value:
+                    entry["reminders"] = _parse_json_field(reminders_value) if isinstance(reminders_value, str) else reminders_value
+            except (KeyError, IndexError):
+                pass  # Column doesn't exist or not accessible
+            
+            local_history.append(entry)
+            
+        return local_history
+    except Exception as error:
+        logger.error(
+            "Failed to load general chat history from SQLite",
+            extra={"event_type": "sqlite_history_load_error", "error": str(error)},
+        )
+        return []
+
+
+async def insert_general_conversation_message(
+    *,
+    user_id: int,
+    role: str,
+    text: str,
+    grounding_metadata: Optional[Any] = None,
+    attachments: Optional[Any] = None,
+    reminders: Optional[Any] = None,
+) -> Optional[int]:
+    """Insert a single message to general chat history."""
+    database, general_chat_messages, _ = _get_database()
+    logger = _get_logger()
+    utcnow = _get_utcnow()
+    
+    logger.debug(
+        f"Inserting general chat message for user {user_id}, role={role}, text_len={len(text)}",
+        extra={"event_type": "general_message_insert_start", "user_id": user_id, "role": role}
+    )
+    user_data_id = await ensure_user_data_record(user_id)
+
+    # Insert into SQLite
+    try:
+        effective_user_data_id = user_data_id if user_data_id is not None else user_id
+        now = utcnow()
+        values: Dict[str, Any] = {
+            "user_id": user_id,
+            "user_data_id": effective_user_data_id,
+            "role": role,
+            "content": text,
+            "grounding_metadata": json.dumps(grounding_metadata)
+            if grounding_metadata
+            else None,
+            "created_at": now,
+        }
+        if attachments is not None:
+            values["attachments"] = json.dumps(attachments) if attachments else None
+        if reminders is not None:
+            values["reminders"] = json.dumps(reminders) if reminders else None
+
+        try:
+            result = await database.execute(general_chat_messages.insert().values(**values))
+        except Exception as insert_error:
+            # Retry without reminders for older DB schemas (pre-migration).
+            if "reminders" in values:
+                values.pop("reminders", None)
+                result = await database.execute(
+                    general_chat_messages.insert().values(**values)
+                )
+            else:
+                raise insert_error
+        logger.info(
+            f"Successfully saved general chat message for user {user_id}, role={role}, id={result}",
+            extra={"event_type": "general_message_insert_success", "user_id": user_id, "role": role, "message_id": result}
+        )
+        return result
+    except Exception as error:
+        logger.error(
+            "Error saving general conversation message (SQLite)",
+            extra={"event_type": "sqlite_message_insert_error", "error": str(error), "user_id": user_id},
+        )
+        return None
+
+
+async def replace_general_conversation_history(user_id: int, history: List[Dict[str, Any]]) -> None:
+    """Replace general chat history atomically with safeguards against data loss.
+    
+    SAFETY: This function now:
+    1. Rejects empty payloads to prevent accidental data wipe
+    2. Uses a transaction so if insert fails, the delete is rolled back
+    """
+    database, general_chat_messages, _ = _get_database()
+    logger = _get_logger()
+    utcnow = _get_utcnow()
+    
+    # SAFEGUARD 1: Reject empty payloads to prevent accidental data loss
+    if not history:
+        logger.warning(
+            f"Refusing to replace general history with empty payload for user {user_id}",
+            extra={"event_type": "general_history_replace_rejected_empty", "user_id": user_id}
+        )
+        return
+    
+    logger.info(f"Replacing general history for user {user_id}", extra={"event_type": "general_history_replace_start", "history_length": len(history)})
+    user_data_id = await ensure_user_data_record(user_id)
+
+    # SAFEGUARD 2: Use transaction for atomicity - if insert fails, delete is rolled back
+    try:
+        async with database.transaction():
+            # Delete existing (will be rolled back if insert fails)
+            await database.execute(
+                general_chat_messages.delete().where(general_chat_messages.c.user_id == user_id)
+            )
+            
+            # Insert new messages
+            effective_user_data_id = user_data_id if user_data_id is not None else user_id
+            values_list = []
+            for entry in history:
+                values_list.append({
+                    "user_id": user_id,
+                    "user_data_id": effective_user_data_id,
+                    "role": entry.get("role"),
+                    "content": entry.get("text") or "",
+                    "grounding_metadata": json.dumps(entry.get("grounding_metadata")) if entry.get("grounding_metadata") else None,
+                    "reminders": json.dumps(entry.get("reminders")) if entry.get("reminders") else None,
+                    "created_at": utcnow(),
+                })
+
+            if values_list:
+                # SQLite has a 999-parameter limit; chunk to avoid "too many SQL variables"
+                query = general_chat_messages.insert()
+                chunk_size = 140  # 140 * 7 columns = 980 params (< 999)
+                for i in range(0, len(values_list), chunk_size):
+                    chunk = values_list[i:i + chunk_size]
+                    await database.execute_many(query, chunk)
+                    
+        logger.info(
+            f"Successfully replaced general history for user {user_id}",
+            extra={"event_type": "general_history_replace_success", "message_count": len(history)}
+        )
+    except Exception as error:
+        # Transaction will auto-rollback on exception, preserving original data
+        logger.error(
+            "Error replacing general conversation history (SQLite) - transaction rolled back, data preserved",
+            exc_info=error,
+            extra={
+                "event_type": "sqlite_history_replace_error",
+                "error": str(error),
+                "history_length": len(history) if history else 0,
+            },
+        )
+        raise  # Re-raise so caller knows the operation failed
+
+    # Invalidate Redis cache for General conversation
+    try:
+        from chat_cache import invalidate_conversation_cache
+        import asyncio
+        general_conv_id = f"general:{user_id}"
+        asyncio.create_task(invalidate_conversation_cache(general_conv_id))
+    except ImportError:
+        pass  # Redis cache module not available
+
+
+async def delete_general_conversation_history(
+    user_id: int, db: "databases.Database | None" = None
+) -> None:
+    """Delete all general chat messages for a user."""
+    database, general_chat_messages, _ = _get_database()
+    logger = _get_logger()
+    
+    try:
+        query = general_chat_messages.delete().where(general_chat_messages.c.user_id == user_id)
+        await (db or database).execute(query)
+    except Exception as error:
+        logger.error(
+            "Error deleting general conversation history (SQLite)",
+            extra={"event_type": "sqlite_history_delete_error", "error": str(error)},
+        )

@@ -743,6 +743,24 @@ try:
 except ImportError:
     from core.log_utils import payload_log_summary as _payload_log_summary  # type: ignore
 
+# General conversation handlers (extracted from main.py)
+try:
+    from backend.core.general_conversation import (
+        load_general_conversation_history as _load_general_conversation_history,
+        insert_general_conversation_message as _insert_general_conversation_message,
+        replace_general_conversation_history as _replace_general_conversation_history,
+        delete_general_conversation_history as _delete_general_conversation_history,
+        ensure_user_data_record as _ensure_user_data_record,
+    )
+except ImportError:
+    from core.general_conversation import (  # type: ignore
+        load_general_conversation_history as _load_general_conversation_history,
+        insert_general_conversation_message as _insert_general_conversation_message,
+        replace_general_conversation_history as _replace_general_conversation_history,
+        delete_general_conversation_history as _delete_general_conversation_history,
+        ensure_user_data_record as _ensure_user_data_record,
+    )
+
 load_dotenv(ROOT_DIR / ".env")
 
 SUPABASE_POOLER_HOST = os.getenv("SUPABASE_POOLER_HOST", "aws-1-ap-south-1.pooler.supabase.com")
@@ -806,71 +824,14 @@ VALIDATE_GEMINI_ON_STARTUP = os.getenv("VALIDATE_GEMINI_ON_STARTUP", "true").str
 
 AI_MESSAGE_GENERATOR = AIMessageGenerator()
 
-CLAMAV_SCAN_ENABLED = os.getenv("ENABLE_CLAMAV_SCAN", "false").strip().lower() in {"1", "true", "yes", "on"}
-CLAMAV_SCAN_BINARY = (
-    os.getenv("CLAMAV_SCAN_BINARY")
-    or shutil.which("clamdscan")
-    or shutil.which("clamscan")
-)
-CLAMAV_SCAN_TIMEOUT = _int_env("CLAMAV_SCAN_TIMEOUT_SECONDS", 30)
-
-MEDIA_UPLOAD_DIR = Path(
-    os.getenv("MEDIA_UPLOAD_DIR")
-    or Path(__file__).resolve().parent / "media_uploads"
-)
+# File upload constants (CLAMAV_*, MEDIA_UPLOAD_*, IMAGE_MIME_TYPES, etc.)
+# are imported from core.file_utils. Ensure upload directory exists:
 MEDIA_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-MEDIA_UPLOAD_ROOT = MEDIA_UPLOAD_DIR.resolve()
-if MEDIA_UPLOAD_ROOT.is_symlink():
-    raise RuntimeError("MEDIA_UPLOAD_DIR must not be a symlink.")
-
-UPLOAD_READ_CHUNK_SIZE = 1024 * 1024
-MAX_MEDIA_UPLOAD_SIZE_BYTES = 10 * 1024 * 1024  # 10MB
-MAX_BACKGROUND_UPLOAD_SIZE_BYTES = 10 * 1024 * 1024  # Keep parity with chat uploads
-
-IMAGE_MIME_TYPES: Set[str] = {
-    "image/jpeg",
-    "image/jpg",
-    "image/png",
-    "image/gif",
-    "image/webp",
-    "image/bmp",
-}
-DOCUMENT_MIME_TYPES: Set[str] = {
-    "application/pdf",
-}
-CHAT_UPLOAD_MIME_TYPES: Set[str] = IMAGE_MIME_TYPES | DOCUMENT_MIME_TYPES
-BACKGROUND_UPLOAD_MIME_TYPES: Set[str] = IMAGE_MIME_TYPES
-
-IMAGE_EXTENSIONS: Set[str] = {
-    ".jpg",
-    ".jpeg",
-    ".png",
-    ".gif",
-    ".webp",
-    ".bmp",
-}
-CHAT_UPLOAD_EXTENSIONS: Set[str] = IMAGE_EXTENSIONS | {".pdf"}
-BACKGROUND_UPLOAD_EXTENSIONS: Set[str] = IMAGE_EXTENSIONS
-
-MIME_EXTENSION_MAP: Dict[str, Set[str]] = {
-    "image/jpeg": {".jpg", ".jpeg"},
-    "image/jpg": {".jpg", ".jpeg"},
-    "image/png": {".png"},
-    "image/gif": {".gif"},
-    "image/webp": {".webp"},
-    "image/bmp": {".bmp"},
-    "application/pdf": {".pdf"},
-}
-
-SUSPICIOUS_PATTERNS = (b"<script", b"javascript:", b"onerror=", b"<?php", b"#!/")
-
-# Optional base URL for serving uploaded media (e.g., CDN or site URL)
-STORAGE_BASE_URL = os.getenv("STORAGE_BASE_URL") or None
-
 
 # File utility functions (_sanitize_filename, _normalize_mime, _sniff_mime_type, _reject_if_suspicious,
 # _scan_file_for_malware, _ensure_storage_path, _resolve_storage_path_from_record, _persist_upload_file)
 # are now imported from core.file_utils
+
 
 SEARCH_TOOL = types.Tool(
     google_search=types.GoogleSearch(),
@@ -1262,250 +1223,12 @@ async def _require_conversation_owner(conversation_id: str, current_user: Dict[s
     return
 
 
-async def _load_general_conversation_history(user_id: int) -> List[Dict[str, Any]]:
-    # Only load from SQLite
-    try:
-        query = general_chat_messages.select().where(general_chat_messages.c.user_id == user_id).order_by(general_chat_messages.c.created_at.desc()).limit(100)
-        rows = await database.fetch_all(query)
-        
-        local_history = []
-        for row in reversed(rows):
-            entry = {
-                "role": row["role"],
-                "text": row["content"],
-            }
-            if row["grounding_metadata"]:
-                entry["grounding_metadata"] = _parse_json_field(row["grounding_metadata"]) if isinstance(row["grounding_metadata"], str) else row["grounding_metadata"]
-            
-            if row["created_at"]:
-                entry["timestamp"] = _datetime_to_ms(row["created_at"])
-            else:
-                entry["timestamp"] = 0
-
-            
-            # Include reminders if present (use try/except since older DB may not have column)
-            try:
-                reminders_value = row["reminders"]
-                if reminders_value:
-                    entry["reminders"] = _parse_json_field(reminders_value) if isinstance(reminders_value, str) else reminders_value
-            except (KeyError, IndexError):
-                pass  # Column doesn't exist or not accessible
-            
-            local_history.append(entry)
-            
-        return local_history
-    except Exception as error:
-        app_logger.error(
-            "Failed to load general chat history from SQLite",
-            extra={"event_type": "sqlite_history_load_error", "error": str(error)},
-        )
-        return []
-
-
-async def _insert_general_conversation_message(
-    *,
-    user_id: int,
-    role: str,
-    text: str,
-    grounding_metadata: Optional[Any] = None,
-    attachments: Optional[Any] = None,
-    reminders: Optional[Any] = None,
-) -> Optional[int]:
-    app_logger.debug(
-        f"Inserting general chat message for user {user_id}, role={role}, text_len={len(text)}",
-        extra={"event_type": "general_message_insert_start", "user_id": user_id, "role": role}
-    )
-    user_data_id = await _ensure_user_data_record(user_id)
-
-    # Insert into SQLite
-    try:
-        effective_user_data_id = user_data_id if user_data_id is not None else user_id
-        now = utcnow()
-        values: Dict[str, Any] = {
-            "user_id": user_id,
-            "user_data_id": effective_user_data_id,
-            "role": role,
-            "content": text,
-            "grounding_metadata": json.dumps(grounding_metadata)
-            if grounding_metadata
-            else None,
-            "created_at": now,
-        }
-        if attachments is not None:
-            values["attachments"] = json.dumps(attachments) if attachments else None
-        if reminders is not None:
-            values["reminders"] = json.dumps(reminders) if reminders else None
-
-        try:
-            result = await database.execute(general_chat_messages.insert().values(**values))
-        except Exception as insert_error:
-            # Retry without reminders for older DB schemas (pre-migration).
-            if "reminders" in values:
-                values.pop("reminders", None)
-                result = await database.execute(
-                    general_chat_messages.insert().values(**values)
-                )
-            else:
-                raise insert_error
-        app_logger.info(
-            f"Successfully saved general chat message for user {user_id}, role={role}, id={result}",
-            extra={"event_type": "general_message_insert_success", "user_id": user_id, "role": role, "message_id": result}
-        )
-        return result
-    except Exception as error:
-        app_logger.error(
-            "Error saving general conversation message (SQLite)",
-            extra={"event_type": "sqlite_message_insert_error", "error": str(error), "user_id": user_id},
-        )
-        return None
-
-
-async def _replace_general_conversation_history(user_id: int, history: List[Dict[str, Any]]) -> None:
-    """Replace general chat history atomically with safeguards against data loss.
-    
-    SAFETY: This function now:
-    1. Rejects empty payloads to prevent accidental data wipe
-    2. Uses a transaction so if insert fails, the delete is rolled back
-    """
-    # SAFEGUARD 1: Reject empty payloads to prevent accidental data loss
-    if not history:
-        app_logger.warning(
-            f"Refusing to replace general history with empty payload for user {user_id}",
-            extra={"event_type": "general_history_replace_rejected_empty", "user_id": user_id}
-        )
-        return
-    
-    app_logger.info(f"Replacing general history for user {user_id}", extra={"event_type": "general_history_replace_start", "history_length": len(history)})
-    user_data_id = await _ensure_user_data_record(user_id)
-
-    # SAFEGUARD 2: Use transaction for atomicity - if insert fails, delete is rolled back
-    try:
-        async with database.transaction():
-            # Delete existing (will be rolled back if insert fails)
-            await database.execute(
-                general_chat_messages.delete().where(general_chat_messages.c.user_id == user_id)
-            )
-            
-            # Insert new messages
-            effective_user_data_id = user_data_id if user_data_id is not None else user_id
-            values_list = []
-            for entry in history:
-                values_list.append({
-                    "user_id": user_id,
-                    "user_data_id": effective_user_data_id,
-                    "role": entry.get("role"),
-                    "content": entry.get("text") or "",
-                    "grounding_metadata": json.dumps(entry.get("grounding_metadata")) if entry.get("grounding_metadata") else None,
-                    "reminders": json.dumps(entry.get("reminders")) if entry.get("reminders") else None,
-                    "created_at": utcnow(),
-                })
-
-            if values_list:
-                # SQLite has a 999-parameter limit; chunk to avoid "too many SQL variables"
-                query = general_chat_messages.insert()
-                chunk_size = 140  # 140 * 7 columns = 980 params (< 999)
-                for i in range(0, len(values_list), chunk_size):
-                    chunk = values_list[i:i + chunk_size]
-                    await database.execute_many(query, chunk)
-                    
-        app_logger.info(
-            f"Successfully replaced general history for user {user_id}",
-            extra={"event_type": "general_history_replace_success", "message_count": len(history)}
-        )
-    except Exception as error:
-        # Transaction will auto-rollback on exception, preserving original data
-        app_logger.error(
-            "Error replacing general conversation history (SQLite) - transaction rolled back, data preserved",
-            exc_info=error,
-            extra={
-                "event_type": "sqlite_history_replace_error",
-                "error": str(error),
-                "history_length": len(history) if history else 0,
-            },
-        )
-        raise  # Re-raise so caller knows the operation failed
-
-    # Invalidate Redis cache for General conversation
-    try:
-        from chat_cache import invalidate_conversation_cache
-        import asyncio
-        general_conv_id = f"general:{user_id}"
-        asyncio.create_task(invalidate_conversation_cache(general_conv_id))
-    except ImportError:
-        pass  # Redis cache module not available
-
-# Conversation store helpers now imported directly from core modules
-
-async def _ensure_user_data_record(user_identifier: int) -> Optional[int]:
-    """Return the user_data.id for the provided identifier, creating it if needed."""
-    if user_identifier is None:
-        return None
-
-    # Import here to avoid circular dependency
-    try:
-        from backend.database import user_data, database
-    except ImportError:
-        from database import user_data, database
-
-    cached = _USER_DATA_CACHE.get(user_identifier)
-    if cached is not None:
-        # Ensure the cached record still exists (e.g., after DB resets)
-        existing_cached = await database.fetch_one(user_data.select().where(user_data.c.id == cached))
-        if existing_cached:
-            return cached
-        _USER_DATA_CACHE.pop(user_identifier, None)
-
-    try:
-        # Try to fetch existing record
-        query = user_data.select().where(user_data.c.user_identifier == user_identifier)
-        row = await database.fetch_one(query)
-        
-        if row:
-            user_data_id = row["id"]
-            _USER_DATA_CACHE[user_identifier] = user_data_id
-            return user_data_id
-            
-        # Create new record
-        insert_query = user_data.insert().values(
-            user_identifier=user_identifier,
-            created_at=utcnow(),
-            updated_at=utcnow()
-        )
-        user_data_id = await database.execute(insert_query)
-        
-        if user_data_id:
-            _USER_DATA_CACHE[user_identifier] = user_data_id
-            return user_data_id
-            
-    except Exception as error:
-        # Race condition: another request might have created the record between our check and insert.
-        # On SQLite, the winning transaction might also still be committing/holding a write lock.
-        # Retry a few times with a small backoff before failing.
-        import asyncio
-
-        for delay_seconds in (0.0, 0.01, 0.02, 0.05):
-            if delay_seconds:
-                await asyncio.sleep(delay_seconds)
-            try:
-                row = await database.fetch_one(
-                    user_data.select().where(user_data.c.user_identifier == user_identifier)
-                )
-            except Exception:
-                row = None
-            if row:
-                user_data_id = row["id"]
-                _USER_DATA_CACHE[user_identifier] = user_data_id
-                return user_data_id
-            
-        app_logger.error(
-            f"Error ensuring user data record: {error}",
-            extra={"event_type": "user_data_ensure_failed"},
-        )
-        return None
-    
-    return None
+# General conversation functions (_load_general_conversation_history,
+# _insert_general_conversation_message, _replace_general_conversation_history,
+# _ensure_user_data_record) are now imported from core.general_conversation
 
 # Utility functions imported from core modules
+
 
 async def _should_enable_reminder_tools_semantic(message: str) -> bool:
     """
@@ -6177,19 +5900,7 @@ async def create_conversation(
     except Exception as error:
         raise HTTPException(status_code=500, detail=f"Error creating conversation: {str(error)}")
 
-
-async def _delete_general_conversation_history(
-    user_id: int, db: "databases.Database | None" = None
-) -> None:
-    # Local SQLite only.
-    try:
-        query = general_chat_messages.delete().where(general_chat_messages.c.user_id == user_id)
-        await (db or database).execute(query)
-    except Exception as error:
-        app_logger.error(
-            "Error deleting general conversation history (SQLite)",
-            extra={"event_type": "sqlite_history_delete_error", "error": str(error)},
-        )
+# _delete_general_conversation_history is now imported from core.general_conversation
 
 @app.delete("/api/conversation/{conversation_id}", status_code=status.HTTP_204_NO_CONTENT)
 @limiter.limit("20/minute")
