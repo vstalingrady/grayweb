@@ -70,7 +70,7 @@ export interface User {
   id: number;
   email: string;
   full_name: string;
-  profile_picture_url?: string;
+  profile_picture_url?: string | null;
   role: string;
   plan_tier?: string | null;
   initials: string;

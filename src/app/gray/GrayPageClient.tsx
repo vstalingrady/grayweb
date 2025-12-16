@@ -131,6 +131,8 @@ type GrayPageClientProps = {
   defaultSidebarExpandedDesktop?: boolean;
 };
 
+type ViewMode = "chat" | "dashboard" | "general" | "history";
+
 function GrayPageClientInner({
   initialTimestamp,
   activeNav = "general",
@@ -754,7 +756,7 @@ function GrayPageClientInner({
       "#4f46e5",
     ] as const;
 
-    const seed = user?.id ?? user?.email ?? user?.full_name ?? viewerName ?? "gray";
+    const seed = String(user?.id ?? user?.email ?? user?.full_name ?? viewerName ?? "gray");
     let hash = 0;
     for (let index = 0; index < seed.length; index += 1) {
       hash = (hash * 31 + seed.charCodeAt(index)) >>> 0;
@@ -1467,9 +1469,15 @@ function GrayPageClientInner({
             id: h.id,
             label: h.label,
             previous_label: h.previousLabel,
-            completed: h.completed,
+            completed: Boolean(h.completed),
           })),
-          proactivity: newActivePulse.proactivity,
+          proactivity: {
+            id: newActivePulse.proactivity?.id ?? "proactivity-1",
+            label: newActivePulse.proactivity?.label ?? "Check-ins",
+            description: newActivePulse.proactivity?.description ?? null,
+            cadence: newActivePulse.proactivity?.cadence ?? "Manual",
+            time: newActivePulse.proactivity?.time ?? "09:00",
+          },
           carry_forward: false,
         });
       } catch (err) {
@@ -2283,17 +2291,16 @@ function GrayPageClientInner({
   const generalAttachmentsActive =
     viewMode === "general" && (attachments.length > 0 || isAttachmentUploading);
   const generalAttachmentsFlag = generalAttachmentsActive;
-  const generalAttachmentTray = viewMode === "general"
-    ? (
-      <AttachmentTray
-        attachments={attachments}
-        isUploading={isAttachmentUploading}
-        error={attachmentError}
-        onAddAttachment={openAttachmentPicker}
-        onRemoveAttachment={removeAttachment}
-      />
-    )
-    : null;
+	  const generalAttachmentTray = viewMode === "general"
+	    ? (
+	      <AttachmentTray
+	        attachments={attachments}
+	        isUploading={isAttachmentUploading}
+	        error={attachmentError}
+	        onRemoveAttachment={removeAttachment}
+	      />
+	    )
+	    : null;
   const effectiveIsMobileViewport = isMobileViewport;
   const effectiveIsSidebarExpanded = isSidebarExpanded;
   const sidebarExpandedForLayout = isCalendarPage ? isCalendarSidebarExpanded : effectiveIsSidebarExpanded;

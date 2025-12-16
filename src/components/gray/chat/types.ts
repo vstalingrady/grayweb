@@ -38,6 +38,7 @@ export type ChatSession = {
     isResponding: boolean;
     scope: ChatSessionScope;
     conversationId?: string;
+    metadata?: Record<string, unknown>;
     pendingAutoStream?: boolean;
     isGeneratingTitle?: boolean;
 };
@@ -78,6 +79,7 @@ export type ChatContextValue = {
     clearAllConversations: () => void;
     getSession: (sessionId: string) => ChatSession | undefined;
     ensureSession: (sessionId: string, initializer: () => ChatSession) => ChatSession;
+    markHasSeenGeneralChat: () => Promise<void>;
     generalSessionId: string | null;
     workspaceContext: string | null;
     setWorkspaceContext: (context: string | null) => void;

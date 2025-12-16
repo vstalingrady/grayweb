@@ -1,6 +1,6 @@
 "use client";
 
-import { Session, User } from "@supabase/supabase-js";
+import type { AuthSession, AuthUser } from "@supabase/supabase-js";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabaseClient";
@@ -38,7 +38,7 @@ const sanitizeRedirect = (value: string | null): string | null => {
 
 const sanitizeAbsoluteRedirect = (
   value: string | null,
-  allowedOrigins: string[]
+  allowedOrigins: Array<string | null | undefined>
 ): string | null => {
   if (!value) {
     return null;
@@ -55,7 +55,9 @@ const sanitizeAbsoluteRedirect = (
       return null;
     }
 
-    const allowed = new Set(allowedOrigins.filter(Boolean));
+    const allowed = new Set(
+      allowedOrigins.filter((origin): origin is string => Boolean(origin))
+    );
     if (!allowed.has(parsed.origin)) {
       return null;
     }
@@ -220,7 +222,7 @@ export default function CallbackPage() {
           console.log("[AUTH DEBUG] Pre-extracted code verifier:", codeVerifier ? "Found" : "Not found");
         }
 
-        let data: { session?: Session | null; user?: User | null } | null = null;
+        let data: { session?: AuthSession | null; user?: AuthUser | null } | null = null;
 
         try {
           const { data: primaryData, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);

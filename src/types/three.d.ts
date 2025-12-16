@@ -16,7 +16,7 @@ declare module 'three' {
   class WebGLRenderer {
     constructor(params: any);
     setPixelRatio(pixelRatio: number): void;
-    setSize(width: number, height: number): void;
+    setSize(width: number, height: number, updateStyle?: boolean): void;
     setClearColor(color: number, alpha: number): void;
     render(scene: Scene, camera: any): void;
     dispose(): void;
@@ -155,4 +155,31 @@ declare module 'three' {
     Clock,
     MathUtils,
   };
+}
+
+declare module 'three/examples/jsm/postprocessing/EffectComposer.js' {
+  import type { WebGLRenderer } from 'three';
+
+  export class EffectComposer {
+    constructor(renderer: WebGLRenderer);
+    addPass(pass: unknown): void;
+    render(): void;
+    setSize(width: number, height: number): void;
+  }
+}
+
+declare module 'three/examples/jsm/postprocessing/RenderPass.js' {
+  import type { Scene, PerspectiveCamera, OrthographicCamera } from 'three';
+
+  export class RenderPass {
+    constructor(scene: Scene, camera: PerspectiveCamera | OrthographicCamera);
+  }
+}
+
+declare module 'three/examples/jsm/postprocessing/UnrealBloomPass.js' {
+  import type { Vector2 } from 'three';
+
+  export class UnrealBloomPass {
+    constructor(resolution: Vector2, strength: number, radius: number, threshold: number);
+  }
 }

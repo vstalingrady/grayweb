@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowRight, Check } from "lucide-react";
 import { motion } from "framer-motion";
@@ -20,8 +20,13 @@ type GrayMarketingClientProps = {
 export default function GrayMarketingClient({
   tryGrayUrl,
 }: GrayMarketingClientProps) {
-  const { t } = useI18n();
+  const { t, locale, setLocale } = useI18n();
   const [showFinalCta, setShowFinalCta] = useState(false);
+  const toggleLanguage = useCallback(() => {
+    setLocale(locale === "en" ? "id" : "en");
+  }, [locale, setLocale]);
+  const languageLabel = locale === "en" ? t("English") : t("Bahasa");
+  const regionLabel = locale === "en" ? "EN" : "ID";
 
   useEffect(() => {
     // Defer the final CTA so the hero is the first thing rendered on mount.
