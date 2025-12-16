@@ -168,8 +168,8 @@ class AIMessageGenerator:
             f"{base_prompt}"
         )
 
-        if not self.gemini or not self.gemini.available:
-            raise RuntimeError("Gemini is not configured for proactive messaging")
+        if not self.openrouter or not self.openrouter.available:
+            raise RuntimeError("OpenRouter is not configured for proactive messaging")
 
         if db:
             tracker = UsageTracker(db)
@@ -191,31 +191,18 @@ class AIMessageGenerator:
                 "Respond as if it's that local time and avoid referencing UTC unless the user asks."
             )
 
-            gemini_response = await self.gemini.generate(
+            # Use OpenRouter Grok (Lite tier) for proactive messaging
+            response = await self.openrouter.generate(
                 message=user_context,
                 conversation_history=None,
                 workspace_context=None,
                 system_prompt=system_prompt,
                 time_context=time_context,
-                model="models/gemini-flash-latest"
+                model="x-ai/grok-4.1-fast",  # Gray Lite tier
             )
-            
-            # Extract text from Gemini response
-            if gemini_response and gemini_response.candidates:
-                response = gemini_response.text
-            else:
-                raise RuntimeError("Empty response from Gemini")
-
-            if db and hasattr(gemini_response, "usage_metadata"):
-                tracker = UsageTracker(db)
-                await tracker.track_usage(
-                    user_id,
-                    gemini_response.usage_metadata.prompt_token_count or 0,
-                    gemini_response.usage_metadata.candidates_token_count or 0
-                )
 
         except Exception as error:
-            raise RuntimeError(f"Gemini proactive message generation failed: {error}") from error
+            raise RuntimeError(f"OpenRouter proactive message generation failed: {error}") from error
 
         if isinstance(response, str):
             text = response
