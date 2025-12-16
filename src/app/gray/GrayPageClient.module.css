@@ -9601,7 +9601,7 @@ h1.greeting {
   margin: 0 auto;
   border-radius: 26px;
   border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(18, 18, 20, 0.98);
+  background: rgba(28, 28, 28, 0.98);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   padding: 8px;
@@ -9684,16 +9684,16 @@ h1.greeting {
 
 .chatBarRounded:focus-within {
   border-color: rgba(255, 255, 255, 0.15);
-  background: rgba(18, 18, 20, 0.98);
+  background: rgba(28, 28, 28, 0.98);
 }
 
 .layout[data-view="general"] .chatBarRounded {
-  background: rgba(18, 18, 20, 0.98);
+  background: rgba(28, 28, 28, 0.98);
   backdrop-filter: blur(16px);
 }
 
 .layout[data-view="general"] .chatBarRounded:focus-within {
-  background: rgba(18, 18, 20, 0.98);
+  background: rgba(28, 28, 28, 0.98);
 }
 
 .chatView {
