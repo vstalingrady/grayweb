@@ -1478,7 +1478,7 @@ class UserBase(BaseModel):
     personalization_occupation: Optional[str] = None
     personalization_about: Optional[str] = None
     personalization_custom_instructions: Optional[str] = None
-    personalization_system_prompt_override: Optional[str] = None
+
     personalization_show_calendar: Optional[bool] = True
     personalization_location: Optional[str] = None
     personalization_time_zone: Optional[str] = None
@@ -1512,7 +1512,7 @@ class UserUpdate(BaseModel):
     personalization_occupation: Optional[str] = None
     personalization_about: Optional[str] = None
     personalization_custom_instructions: Optional[str] = None
-    personalization_system_prompt_override: Optional[str] = None
+
     personalization_show_calendar: Optional[bool] = None
     personalization_location: Optional[str] = None
     personalization_time_zone: Optional[str] = None
