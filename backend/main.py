@@ -6560,17 +6560,9 @@ async def overwrite_conversation_history(
     """
     return await _overwrite_conversation_history_logic(conversation_id, payload, current_user)
 
-def _normalize_conversation_title(payload: ConversationUpdateRequest) -> str | None:
-    """Compatibility wrapper that reuses core.chat_history logic."""
-    return normalize_conversation_title(payload)
+# _normalize_conversation_title and _apply_conversation_update wrappers removed
+# Use normalize_conversation_title and apply_conversation_update directly from core.chat_history
 
-
-async def _apply_conversation_update(
-    conversation_id: str,
-    payload: ConversationUpdateRequest,
-    current_user: Dict[str, Any],
-) -> Dict[str, Any]:
-    return await apply_conversation_update(conversation_id, payload, current_user)
 
 
 @app.patch("/api/conversation/{conversation_id}/metadata")
@@ -6582,7 +6574,7 @@ async def update_conversation(
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     """Update conversation metadata such as its title."""
-    return await _apply_conversation_update(conversation_id, payload, current_user)
+    return await apply_conversation_update(conversation_id, payload, current_user)
 
 
 @app.post("/api/conversation/{conversation_id}/metadata")
@@ -6594,7 +6586,7 @@ async def update_conversation_metadata(
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     """Update metadata via POST for clients that cannot rely on PATCH."""
-    return await _apply_conversation_update(conversation_id, payload, current_user)
+    return await apply_conversation_update(conversation_id, payload, current_user)
 
 @app.get("/api/conversation/{conversation_id}/usage")
 @limiter.limit("60/minute")

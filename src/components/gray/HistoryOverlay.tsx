@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo, useRef } from "react";
-import { Search, Plus, ExternalLink, Pencil, Trash2, X, ArrowRight, CornerDownLeft } from "lucide-react";
+import { Search, Plus, ExternalLink, Pencil, Trash2, CornerDownLeft } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import styles from "./HistoryOverlay.module.css";
 import { type SidebarHistorySection, type SidebarHistoryEntry } from "./types";
@@ -46,10 +46,13 @@ export function HistoryOverlay({
     // Reset query when opening
     useEffect(() => {
         if (isOpen) {
-            setQuery("");
-            setActiveIndex(0);
+            void Promise.resolve().then(() => {
+                setQuery("");
+                setActiveIndex(0);
+            });
             // Small timeout to ensure DOM is ready for focus
-            setTimeout(() => inputRef.current?.focus(), 50);
+            const focusTimer = setTimeout(() => inputRef.current?.focus(), 50);
+            return () => clearTimeout(focusTimer);
         }
     }, [isOpen]);
 
@@ -102,7 +105,7 @@ export function HistoryOverlay({
                         } else {
                             meta = new Date(entry.createdAt).toLocaleDateString();
                         }
-                    } catch (e) {
+                    } catch {
                         // ignore invalid dates
                     }
 
@@ -203,7 +206,7 @@ export function HistoryOverlay({
                                             <div className={styles.sectionHeader}>
                                                 <span className={styles.sectionTitle}>{t("Actions")}</span>
                                             </div>
-                                            {flatItems.filter(i => i.type === "action").map((item, idx) => {
+                                            {flatItems.filter(i => i.type === "action").map((item) => {
                                                 // Find actual index in flatItems for active state
                                                 const realIndex = flatItems.indexOf(item);
                                                 return (
