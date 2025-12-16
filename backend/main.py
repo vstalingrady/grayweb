@@ -785,7 +785,22 @@ except ImportError:
         generate_image_descriptions as _generate_image_descriptions,
     )
 
+# Conversation manager (extracted from main.py)
+try:
+    from backend.core.conversation_manager import (
+        load_conversation_history as _load_conversation_history,
+        get_or_create_conversation,
+        save_conversation_message,
+    )
+except ImportError:
+    from core.conversation_manager import (  # type: ignore
+        load_conversation_history as _load_conversation_history,
+        get_or_create_conversation,
+        save_conversation_message,
+    )
+
 load_dotenv(ROOT_DIR / ".env")
+
 
 
 SUPABASE_POOLER_HOST = os.getenv("SUPABASE_POOLER_HOST", "aws-1-ap-south-1.pooler.supabase.com")
@@ -2362,26 +2377,7 @@ def _context_cache_contents(record: Optional[Dict[str, Any]]) -> Optional[List[t
 
 # Helper functions extracted to core modules: _merge_extra_contents (ai_utils), normalize_conversation_history (chat_history)
 
-
-async def _load_conversation_history(conversation_id: str, user_id: int) -> List[Dict[str, Any]]:
-  """Load a conversation's messages.
-
-  General-chat IDs are handled via the local general_chat_messages store;
-  thread conversations delegate to the shared chat_history module.
-  """
-  general_user_id = _general_conversation_user_id(conversation_id)
-  if general_user_id is not None:
-    # Enforce ownership for general chat
-    if general_user_id != user_id:
-        app_logger.warning(
-            f"Access denied for general chat: user {user_id} tried to access {conversation_id}",
-            extra={"event_type": "security_violation_general_chat"}
-        )
-        return []
-    return await _load_general_conversation_history(general_user_id)
-
-  # Thread conversations handled by shared chat_history module.
-  return await load_thread_history(conversation_id, user_id)
+# _load_conversation_history is now imported from core.conversation_manager
 
 
 async def _fetch_proactivity_summary(user_id: int, info_type: Optional[str], db: databases.Database) -> Dict[str, Any]:
@@ -2810,141 +2806,7 @@ async def get_admin_metrics(
     }
 
 # AI Chat helper functions
-async def get_or_create_conversation(
-  conversation_id: Optional[str],
-  user_id: int,
-  *,
-  title: Optional[str] = None,
-) -> str:
-  """Get existing conversation or create a new one in Supabase."""
-  # Import here to avoid circular dependency
-  try:
-      from backend.database import user_chat_threads, database
-  except ImportError:
-      from database import user_chat_threads, database
-
-  valid_id = conversation_id if _is_valid_uuid(conversation_id) else None
-  if valid_id:
-    cached_owner = CONVERSATION_OWNER_CACHE.get(valid_id)
-    if cached_owner == user_id:
-      return valid_id
-    try:
-      # Check if conversation exists and belongs to this user
-      query = user_chat_threads.select().where(
-          (user_chat_threads.c.id == valid_id) & 
-          (user_chat_threads.c.user_identifier == user_id)
-      )
-      row = await database.fetch_one(query)
-      if row:
-        CONVERSATION_OWNER_CACHE.set(valid_id, user_id)
-        return valid_id
-    except Exception as error:
-      _handle_conversation_store_error("Error checking conversation", error)
-      # Fallback or re-raise depending on strictness; here we re-raise to match original behavior
-      raise HTTPException(status_code=503, detail="Conversation storage is not available.")
-
-  user_data_id: Optional[int] = None
-  try:
-    user_data_id = await _ensure_user_data_record(user_id)
-    if user_data_id is None:
-      raise HTTPException(status_code=503, detail="User metadata storage is not available.")
-    
-    # Create new conversation
-    import uuid
-    new_id = str(uuid.uuid4())
-    now = utcnow()
-    insert_query = user_chat_threads.insert().values(
-        id=new_id,
-        title=title or "New Conversation",
-        user_identifier=user_id,
-        user_data_id=user_data_id,
-        context_snapshot=[],
-        metadata={},
-        created_at=now,
-        updated_at=now,
-        last_message_at=now,
-    )
-    await database.execute(insert_query)
-    CONVERSATION_OWNER_CACHE.set(new_id, user_id)
-    return new_id
-
-  except Exception as error:
-    _handle_conversation_store_error("Error creating conversation", error)
-    raise HTTPException(status_code=503, detail="Conversation storage is not available.")
-
-  raise HTTPException(status_code=500, detail="Failed to create conversation.")
-
-
-async def save_conversation_message(
-  conversation_id: str,
-  message: Dict[str, Any],
-  *,
-  user_id: Optional[int] = None,
-) -> Optional[int]:
-  """Persist a single message for a conversation."""
-  # Import here to avoid circular dependency
-  try:
-      from backend.database import user_chat_messages, user_chat_threads, database
-  except ImportError:
-      from database import user_chat_messages, user_chat_threads, database
-
-  # Normalize the payload we write to storage so that rows are tidy and
-  # consistent.
-  raw_role = message.get("role")
-  if not raw_role:
-    return
-  role = "model" if raw_role == "assistant" else raw_role
-  if role not in {"user", "model"}:
-    return
-  text = message.get("text") or ""
-  grounding_metadata = message.get("grounding_metadata") or message.get("groundingMetadata")
-
-  general_user_id = _general_conversation_user_id(conversation_id)
-  if general_user_id is not None:
-      return await _insert_general_conversation_message(
-          user_id=general_user_id,
-          role=role,
-          text=text,
-          grounding_metadata=grounding_metadata,
-          attachments=message.get("attachments"),
-      )
-
-  # Regular thread message
-  try:
-      # Insert message
-      insert_query = user_chat_messages.insert().values(
-          thread_id=conversation_id,
-          role=role,
-          text=text,
-          grounding_metadata=grounding_metadata,
-          attachments=message.get("attachments"),
-          created_at=utcnow(),
-      )
-      message_id = await database.execute(insert_query)
-      
-      # Update thread timestamp
-      update_query = (
-          user_chat_threads.update()
-          .where(user_chat_threads.c.id == conversation_id)
-          .values(last_message_at=utcnow(), updated_at=utcnow())
-      )
-      await database.execute(update_query)
-      append_to_conversation_cache(
-          conversation_id,
-          user_id,
-          {
-              "role": role,
-              "text": text,
-              "grounding_metadata": grounding_metadata,
-              "attachments": message.get("attachments"),
-          },
-      )
-      return message_id
-      
-  except Exception as error:
-      _handle_conversation_store_error("Error saving message", error)
-      # Non-critical, log and continue
-      app_logger.error(f"Failed to save message to thread {conversation_id}: {error}")
+# get_or_create_conversation and save_conversation_message are now imported from core.conversation_manager
 
 
 # _format_structured_ai_reply removed (dead code - never called)
