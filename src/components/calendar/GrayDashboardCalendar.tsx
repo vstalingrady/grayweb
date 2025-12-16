@@ -1306,16 +1306,15 @@ export function GrayDashboardCalendar({
             monthDate={monthDate}
             selectedDate={selectedDate}
             onSelectDate={handleDaySelect}
-            onNavigate={handleMonthNavigate}
-            calendars={calendars}
-            onToggleCalendar={handleToggleCalendar}
-            showHeader={true}
-            showSelectedDateLabel={false}
-            className={styles.calendarSidebarIntegrated}
-            showMonthNavigation={true}
-            showCalendarList={showCalendarList}
-            onIntegrationAction={onIntegrationAction}
-          />
+	            onNavigate={handleMonthNavigate}
+	            calendars={calendars}
+	            onToggleCalendar={handleToggleCalendar}
+	            showHeader={true}
+	            className={styles.calendarSidebarIntegrated}
+	            showMonthNavigation={true}
+	            showCalendarList={showCalendarList}
+	            onIntegrationAction={onIntegrationAction}
+	          />
         </div>
       )}
       <div

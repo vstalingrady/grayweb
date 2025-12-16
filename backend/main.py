@@ -2690,9 +2690,6 @@ def _context_cache_contents(record: Optional[Dict[str, Any]]) -> Optional[List[t
     ]
 
 
-SYSTEM_PROMPT_PATH = GLOBAL_SYSTEM_PROMPTS_PATH
-
-
 async def _generate_chat_title_async(
     conversation_id: str,
     message: str,

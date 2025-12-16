@@ -15,14 +15,15 @@ export function ChatMessageAttachments({ attachments, t }: ChatMessageAttachment
 
   return (
     <div className={styles.chatMessageAttachments}>
-      {attachments.map((attachment, index) => (
-        <div key={attachment.id || index} className={styles.chatMessageAttachment}>
-          {attachment.mime_type?.startsWith("image/") ? (
-            <img
-              src={
-                attachment.previewUrl ||
-                (typeof attachment.id === "number" ? `/api/uploads/${attachment.id}/file` : attachment.public_url)
-              }
+	      {attachments.map((attachment, index) => (
+	        <div key={attachment.id || index} className={styles.chatMessageAttachment}>
+	          {attachment.mime_type?.startsWith("image/") ? (
+	            // eslint-disable-next-line @next/next/no-img-element -- Attachments may be user-provided URLs and need runtime fallback handling.
+	            <img
+	              src={
+	                attachment.previewUrl ||
+	                (typeof attachment.id === "number" ? `/api/uploads/${attachment.id}/file` : attachment.public_url)
+	              }
               alt={t("Attachment")}
               onError={(event) => {
                 if (typeof attachment.id !== "number") {
@@ -45,4 +46,3 @@ export function ChatMessageAttachments({ attachments, t }: ChatMessageAttachment
     </div>
   );
 }
-

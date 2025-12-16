@@ -109,6 +109,7 @@ export function ChatMessageGroundingPanel({
                         >
                           {initials}
                         </span>
+                        {/* eslint-disable-next-line @next/next/no-img-element -- Favicon URLs are arbitrary; prefer a plain img with graceful fallback. */}
                         <img
                           src={faviconUrl}
                           alt=""
@@ -192,4 +193,3 @@ export function ChatMessageGroundingPanel({
     </div>
   );
 }
-

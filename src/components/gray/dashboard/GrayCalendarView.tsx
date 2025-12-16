@@ -136,6 +136,21 @@ export function GrayCalendarView() {
         { id: "1", label: "Personal", color: "#4e7cff", isVisible: true },
         { id: "2", label: "Work", color: "#ff6f61", isVisible: true },
     ]);
+    const eventsRef = useRef<Partial<EventObject>[]>(events);
+    const calendarsRef = useRef<CalendarInfo[]>(calendars);
+    const viewRef = useRef(view);
+
+    useEffect(() => {
+        eventsRef.current = events;
+    }, [events]);
+
+    useEffect(() => {
+        calendarsRef.current = calendars;
+    }, [calendars]);
+
+    useEffect(() => {
+        viewRef.current = view;
+    }, [view]);
 
     // Custom Creation Modal State
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -187,7 +202,7 @@ export function GrayCalendarView() {
                 ];
 
                 const instance = new ToastUiCalendar(calendarContainerRef.current, {
-                    defaultView: view,
+                    defaultView: viewRef.current,
                     theme: NOIR_THEME,
                     template: TEMPLATE,
                     calendars,
@@ -214,7 +229,13 @@ export function GrayCalendarView() {
                     instance.clearGridSelections();
                 });
 
-                syncCalendarEvents(events);
+                const visibleCalendarIds = new Set(
+                    calendarsRef.current.filter((calendar) => calendar.isVisible).map((calendar) => calendar.id)
+                );
+                const filteredEvents = eventsRef.current.filter(
+                    (event) => event.calendarId && visibleCalendarIds.has(String(event.calendarId))
+                );
+                syncCalendarEvents(filteredEvents);
             } catch (err) {
                 console.error("Failed to initialize calendar", err);
             }
@@ -230,7 +251,7 @@ export function GrayCalendarView() {
                 calendarInstanceRef.current = null;
             }
         };
-    }, []);
+    }, [syncCalendarEvents]);
 
     useEffect(() => {
         const visibleCalendarIds = new Set(calendars.filter(c => c.isVisible).map(c => c.id));

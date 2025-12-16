@@ -1,6 +1,7 @@
 "use client";
 
 import { type ReactNode } from "react";
+import Image from "next/image";
 import { ChevronUp, ChevronDown } from "lucide-react";
 import { CalendarInfo } from "./types";
 import styles from "./GrayDashboardCalendar.module.css";
@@ -16,7 +17,6 @@ type CalendarSidebarProps = {
   onToggleCalendar: (calendarId: string) => void;
   isCollapsed?: boolean;
   showHeader?: boolean;
-  showSelectedDateLabel?: boolean;
   showMonthNavigation?: boolean;
   showTodayButton?: boolean;
   onGoToday?: () => void;
@@ -43,7 +43,6 @@ export function CalendarSidebar({
   onToggleCalendar,
   isCollapsed,
   showHeader = true,
-  showSelectedDateLabel = true,
   showMonthNavigation = false,
   showTodayButton = false,
   onGoToday,
@@ -132,12 +131,14 @@ export function CalendarSidebar({
               className={styles.calendarSidebarIntegrationButton}
               onClick={onIntegrationAction}
             >
-              <img
+              <Image
                 className={styles.calendarSidebarIntegrationLogo}
                 src="/logos/google-calendar.svg"
                 alt=""
                 aria-hidden="true"
                 loading="lazy"
+                width={20}
+                height={20}
               />
               <span className={styles.calendarSidebarIntegrationText}>
                 {t(integrationActionLabel)}
