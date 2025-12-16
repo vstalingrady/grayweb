@@ -1,7 +1,5 @@
 "use client";
 
-/* eslint-disable react-hooks/set-state-in-effect */
-
 import {
   Fragment,
   useEffect,
@@ -31,13 +29,10 @@ import styles from "@/app/gray/GrayPageClient.module.css";
 import { useI18n } from "@/contexts/I18nContext";
 import { useUser } from "@/contexts/UserContext";
 import { useChatStore } from "@/components/gray/ChatProvider";
-import { GRAY_BRAND, ALL_PIONEER_MODEL_IDS, PIONEER_GROUPS } from "@/components/gray/modelCatalog";
 import { clampPercent, getContextUsageUsedTokens, getContextUsageVisualizationLimit } from "@/components/gray/contextUsage";
 import { apiService } from "@/lib/api";
-import type { Locale } from "@/lib/i18n";
 import { requestNotificationPermission } from "@/lib/notificationUtils";
 import { clearGrayLocalCache } from "@/lib/localCache";
-import { SettingsSelect } from "./components/SettingsSelect";
 import { AccountSection } from "./sections/AccountSection";
 import { ApiKeysSection } from "./sections/ApiKeysSection";
 import { DataControlsSection } from "./sections/DataControlsSection";
@@ -357,6 +352,7 @@ export function SettingsModal({
     modelImprovementStorageKey,
     notificationsStorageKey,
     isOpen,
+    user?.improve_model_for_everyone,
     onClose,
   ]);
 
@@ -548,51 +544,6 @@ export function SettingsModal({
       <Icon className={styles.settingsNavItemIcon} />
       <span>{label}</span>
     </button>
-  );
-
-  const renderToggle = (checked: boolean, onChange: () => void, label?: string, disabled = false) => (
-    <button
-      type="button"
-      className={styles.settingsToggle}
-      role="switch"
-      aria-checked={checked ? "true" : "false"}
-      aria-disabled={disabled ? "true" : "false"}
-      disabled={disabled}
-      onClick={() => {
-        if (disabled) return;
-        onChange();
-      }}
-      aria-label={label}
-    >
-      <span className={styles.settingsToggleThumb} />
-    </button>
-  );
-
-  const renderLogo = (src: string, alt: string, muted: boolean) => (
-    <span
-      aria-hidden="true"
-      style={{
-        width: 22,
-        height: 22,
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        borderRadius: 6,
-        overflow: "hidden",
-        flexShrink: 0,
-      }}
-    >
-      <Image
-        src={src}
-        alt={alt}
-        width={18}
-        height={18}
-        style={{
-          filter: "brightness(0.85) saturate(0.95)",
-          opacity: 0.9,
-        }}
-      />
-    </span>
   );
 
   const handleOverlayPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -895,892 +846,126 @@ export function SettingsModal({
           )}
 
           {activeSection === "account" && (
-            <>
-              <div className={styles.settingsPageHeader}>
-                <h2 className={styles.settingsPageTitle}>{t("Account")}</h2>
-              </div>
-
-              <div className={styles.userProfileCard}>
-                <div className={styles.avatarLarge}>
-                  {user?.profile_picture_url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={user.profile_picture_url} alt="" />
-                  ) : (
-                    <UserCircle size={40} />
-                  )}
-                </div>
-                <div>
-                  <div className={styles.userName}>
-                    {user?.full_name || "Gray User"}
-                  </div>
-                  {user?.email ? (
-                    <div className={`${styles.settingsItemDescription} ${styles.userEmail}`}>
-                      {user.email}
-                    </div>
-                  ) : null}
-                </div>
-                <div className={styles.userProfileActions}>
-                  <input
-                    ref={avatarFileInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={handleAvatarFileChange}
-                    style={{ display: "none" }}
-                  />
-                  <button
-                    type="button"
-                    className={styles.settingsAction}
-                    onClick={() => avatarFileInputRef.current?.click()}
-                    disabled={avatarUploadState === "uploading"}
-                  >
-                    {avatarUploadState === "uploading" ? t("Uploading…") : t("Change avatar")}
-                  </button>
-                  <button className={styles.settingsAction} style={{ marginLeft: 8 }}>{t("Sign out")}</button>
-                </div>
-              </div>
-              {avatarUploadError ? (
-                <p className={styles.settingsItemDescription} style={{ color: "#fca5a5", marginTop: 10 }}>
-                  {avatarUploadError}
-                </p>
-              ) : null}
-
-              <div className={styles.settingsSection}>
-                <h3 className={styles.settingsSectionTitle}>{t("Your Subscription")}</h3>
-                {tierLevel < 1 ? (
-                  <div className={styles.settingsUpgradeCard}>
-                    <div className={styles.settingsUpgradeText}>
-                      <h4>Supercharge your experience</h4>
-                      <p>Unlock everything Gray has to offer.</p>
-                    </div>
-                    <button
-                      type="button"
-                      className={`${styles.settingsAction} ${styles.settingsPrimaryButton}`}
-                      onClick={() => {
-                        onClose();
-                        router.push("/pricing");
-                      }}
-                    >
-                      {t("Upgrade plan")}
-                    </button>
-                  </div>
-                ) : (
-                  <div
-                    className={styles.settingsSubscriptionCard}
-                    data-variant={tierLevel >= 2 ? "primary" : "highlighted"}
-                  >
-                    <div className={styles.settingsUpgradeText}>
-                      <h4>
-                        {t("Current Plan")}: {tierLevel >= 2 ? "Pioneer" : "Voyager"}
-                      </h4>
-                      <p>
-                        {tierLevel >= 2
-                          ? "Top-tier models, top limits, and early access."
-                          : "More messages, longer memory, and calendar routines."}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      className={`${styles.settingsSubscriptionButton} ${tierLevel >= 2
-                        ? styles.settingsSubscriptionButtonPrimary
-                        : styles.settingsSubscriptionButtonOutline
-                        }`}
-                      onClick={() => {
-                        onClose();
-                        router.push("/pricing");
-                      }}
-                    >
-                      View plan
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              <div className={styles.settingsSection}>
-
-
-                <div className={styles.settingsDangerCard}>
-                  <div className={styles.settingsLabelGroup}>
-                    <span className={styles.settingsLabel}>{t("Delete account")}</span>
-                    <span className={styles.deleteAccountHelper}>
-                      {t("Permanently delete your account and data")}
-                    </span>
-                  </div>
-                  <button
-                    className={`${styles.settingsAction} ${styles.settingsActionDanger}`}
-                    onClick={handleDeleteAccount}
-                  >
-                    {t("Delete")}
-                  </button>
-                </div>
-              </div>
-            </>
+            <AccountSection
+              t={t}
+              user={user}
+              tierLevel={tierLevel}
+              avatarFileInputRef={avatarFileInputRef}
+              avatarUploadState={avatarUploadState}
+              avatarUploadError={avatarUploadError}
+              onAvatarFileChange={handleAvatarFileChange}
+              onNavigateToPricing={() => {
+                onClose();
+                router.push("/pricing");
+              }}
+              onDeleteAccount={handleDeleteAccount}
+            />
           )}
 
           {activeSection === "preferences" && (
-            <>
-              <div className={styles.settingsPageHeader}>
-                <h2 className={styles.settingsPageTitle}>{t("Preferences")}</h2>
-              </div>
-
-              <div className={styles.settingsSection}>
-                <div className={styles.settingsRow}>
-                  <div className={styles.settingsLabelGroup}>
-                    <span className={styles.settingsLabel}>{t("Appearance")}</span>
-                    <span className={styles.settingsItemDescription}>{t("How Gray looks on your device")}</span>
-                  </div>
-                  <SettingsSelect
-                    value={theme}
-                    onChange={(val) => applyTheme(val as ThemeMode)}
-                    icon={theme === "light" ? Sun : Moon}
-                    options={[
-                      { value: "system", label: t("System (Dark)") },
-                      { value: "dark", label: t("Dark") },
-                      { value: "light", label: t("Light") },
-                    ]}
-                  />
-                </div>
-
-                <div className={styles.settingsRow}>
-                  <div className={styles.settingsLabelGroup}>
-                    <span className={styles.settingsLabel}>{t("Language")}</span>
-                    <span className={styles.settingsItemDescription}>{t("The language used in the user interface")}</span>
-                  </div>
-                  <SettingsSelect
-                    value={activeLocale}
-                    onChange={(val) => setLocale(val as Locale)}
-                    options={[
-                      { value: "en", label: "English" },
-                      { value: "id", label: "Bahasa Indonesia" },
-                    ]}
-                  />
-                </div>
-
-                <div className={styles.settingsRow}>
-                  <div className={styles.settingsLabelGroup}>
-                    <span className={styles.settingsLabel}>{t("Preferred response language")}</span>
-                    <span className={styles.settingsItemDescription}>{t("The language used for AI responses")}</span>
-                  </div>
-                  <SettingsSelect
-                    value={responseLanguage}
-                    onChange={handleResponseLanguageChange}
-                    options={[
-                      { value: "auto", label: t("Automatic (detect input)") },
-                      { value: "en", label: "English" },
-                      { value: "id", label: "Bahasa Indonesia" },
-                    ]}
-                  />
-                </div>
-
-              </div>
-            </>
+            <PreferencesSection
+              t={t}
+              theme={theme}
+              onThemeChange={applyTheme}
+              activeLocale={activeLocale}
+              onLocaleChange={setLocale}
+              responseLanguage={responseLanguage}
+              onResponseLanguageChange={handleResponseLanguageChange}
+            />
           )}
 
           {activeSection === "personalization" && (
-            <>
-              <div className={styles.settingsPageHeader}>
-                <h2 className={styles.settingsPageTitle}>{t("Personalization")}</h2>
-              </div>
-
-              <div className={styles.settingsSection}>
-                <h3 className={styles.settingsSectionTitle}>{t("Quick toggles")}</h3>
-
-                <div className={styles.settingsRow}>
-                  <div className={styles.settingsLabelGroup}>
-                    <span className={styles.settingsLabel}>{t("Automatic web search")}</span>
-                    <span className={styles.settingsItemDescription}>
-                      {t("Let Gray search for answers automatically.")}
-                    </span>
-                  </div>
-                  {renderToggle(
-                    autoWebSearchEnabled,
-                    () => setAutoWebSearchEnabled(!autoWebSearchEnabled),
-                    t("Toggle automatic web search")
-                  )}
-                </div>
-
-              </div>
-
-              <div className={styles.settingsSection}>
-                <div className={styles.settingsFormGrid}>
-                  <div className={styles.settingsFormField}>
-                    <label className={styles.settingsFormLabel} htmlFor="settings-nickname">
-                      {t("Nickname")}
-                    </label>
-                    <input
-                      id="settings-nickname"
-                      className={styles.settingsInput}
-                      value={nickname}
-                      onChange={(e) => setNickname(e.target.value)}
-                      placeholder={t("What should Gray call you?")}
-                    />
-                  </div>
-
-                  <div className={styles.settingsFormField}>
-                    <label className={styles.settingsFormLabel} htmlFor="settings-occupation">
-                      {t("Occupation")}
-                    </label>
-                    <input
-                      id="settings-occupation"
-                      className={styles.settingsInput}
-                      value={occupation}
-                      onChange={(e) => setOccupation(e.target.value)}
-                      placeholder={t("Role, industry, or focus")}
-                    />
-                  </div>
-                </div>
-
-                <label className={styles.settingsFormLabel} htmlFor="settings-about" style={{ marginTop: 12 }}>
-                  {t("About")}
-                </label>
-                <textarea
-                  id="settings-about"
-                  className={styles.settingsTextarea}
-                  value={about}
-                  onChange={(e) => setAbout(e.target.value)}
-                  placeholder={t("Share anything that helps Gray personalize responses.")}
-                />
-                <div className={styles.settingsButtonGroup}>
-                  <button
-                    type="button"
-                    className={`${styles.settingsAction} ${styles.settingsPrimaryButton}`}
-                    onClick={handleSaveBio}
-                  >
-                    {aboutSaveState === "saving" ? t("Saving...") :
-                      aboutSaveState === "success" ? t("Saved") : t("Save")}
-                  </button>
-                </div>
-              </div>
-
-              <div className={styles.settingsSection}>
-                <h3 className={styles.settingsSectionTitle}>{t("Location & time")}</h3>
-                <div className={styles.settingsFormGrid}>
-                  <div className={styles.settingsFormField}>
-                    <label className={styles.settingsFormLabel} htmlFor="settings-location">
-                      {t("Location")}
-                    </label>
-                    <input
-                      id="settings-location"
-                      className={styles.settingsInput}
-                      value={location}
-                      onChange={(e) => setLocation(e.target.value)}
-                      placeholder={t("City, region, and/or country")}
-                    />
-                  </div>
-
-                  <div className={styles.settingsFormField}>
-                    <label className={styles.settingsFormLabel} htmlFor="settings-timezone">
-                      {t("Time zone")}
-                    </label>
-                    <input
-                      id="settings-timezone"
-                      className={styles.settingsInput}
-                      value={timeZone}
-                      onChange={(e) => setTimeZone(e.target.value)}
-                      placeholder={resolvedDeviceTimeZone}
-                      list={supportedTimeZones.length > 0 ? "settings-timezone-options" : undefined}
-                    />
-                    {supportedTimeZones.length > 0 ? (
-                      <datalist id="settings-timezone-options">
-                        {supportedTimeZones.map((zone) => (
-                          <option key={zone} value={zone} />
-                        ))}
-                      </datalist>
-                    ) : null}
-                  </div>
-                </div>
-
-                <div className={styles.settingsButtonGroup}>
-                  <button
-                    type="button"
-                    className={styles.settingsSecondaryButton}
-                    onClick={() => {
-                      setLocation("");
-                      setTimeZone("");
-                    }}
-                  >
-                    <Trash2 size={14} />
-                    {t("Clear")}
-                  </button>
-                  <button
-                    type="button"
-                    className={styles.settingsSecondaryButton}
-                    onClick={() => setTimeZone(resolvedDeviceTimeZone)}
-                  >
-                    <Check size={14} />
-                    {t("Use device time zone")}
-                  </button>
-                  <button
-                    type="button"
-                    className={`${styles.settingsAction} ${styles.settingsPrimaryButton}`}
-                    onClick={handleSaveLocale}
-                  >
-                    {localeSaveState === "saving" ? t("Saving...") :
-                      localeSaveState === "success" ? t("Saved") : t("Save")}
-                  </button>
-                </div>
-              </div>
-
-              <div className={styles.settingsSection}>
-                <h3 className={styles.settingsSectionTitle}>{t("Custom instructions")}</h3>
-                <textarea
-                  className={styles.settingsTextarea}
-                  value={customInstructions}
-                  onChange={(e) => setCustomInstructions(e.target.value)}
-                  placeholder={t("Paste instructions here if you prefer to edit them manually.")}
-                />
-                <div className={styles.settingsButtonGroup}>
-                  <button
-                    type="button"
-                    className={styles.settingsSecondaryButton}
-                    onClick={handleClearCustomInstructions}
-                  >
-                    <Trash2 size={14} />
-                    {t("Clear")}
-                  </button>
-                  <button
-                    type="button"
-                    className={`${styles.settingsAction} ${styles.settingsPrimaryButton}`}
-                    onClick={handleSaveCustomInstructions}
-                  >
-                    {customSaveState === "saving" ? t("Saving...") :
-                      customSaveState === "success" ? t("Saved") : t("Save")}
-                  </button>
-                </div>
-              </div>
-
-            </>
+            <PersonalizationSection
+              t={t}
+              autoWebSearchEnabled={autoWebSearchEnabled}
+              onToggleAutoWebSearch={() => setAutoWebSearchEnabled(!autoWebSearchEnabled)}
+              nickname={nickname}
+              onNicknameChange={setNickname}
+              occupation={occupation}
+              onOccupationChange={setOccupation}
+              about={about}
+              onAboutChange={setAbout}
+              aboutSaveState={aboutSaveState}
+              onSaveBio={handleSaveBio}
+              location={location}
+              onLocationChange={setLocation}
+              timeZone={timeZone}
+              onTimeZoneChange={setTimeZone}
+              resolvedDeviceTimeZone={resolvedDeviceTimeZone}
+              supportedTimeZones={supportedTimeZones}
+              localeSaveState={localeSaveState}
+              onClearLocationAndTimeZone={() => {
+                setLocation("");
+                setTimeZone("");
+              }}
+              onUseDeviceTimeZone={() => setTimeZone(resolvedDeviceTimeZone)}
+              onSaveLocale={handleSaveLocale}
+              customInstructions={customInstructions}
+              onCustomInstructionsChange={setCustomInstructions}
+              customSaveState={customSaveState}
+              onClearCustomInstructions={handleClearCustomInstructions}
+              onSaveCustomInstructions={handleSaveCustomInstructions}
+            />
           )}
 
           {activeSection === "models" && (
-            <>
-              <div className={styles.settingsPageHeader}>
-                <h2 className={styles.settingsPageTitle}>{t("Models")}</h2>
-              </div>
-
-              <div className={styles.settingsSection}>
-                <p className={styles.settingsItemDescription} style={{ marginTop: 0, marginBottom: 16 }}>
-                  {t("Choose which models appear in your model selector. This won't affect existing conversations.")}
-                </p>
-
-                {modelsStatus ? (
-                  <p className={styles.settingsItemDescription} style={{ marginTop: 0, marginBottom: 16 }}>
-                    {modelsStatus}
-                  </p>
-                ) : null}
-
-                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
-                  <button
-                    type="button"
-                    className={styles.settingsAction}
-                    onClick={() => {
-                      if (tierLevel < 1) {
-                        setModelsStatus(t("Upgrade to Voyager to customize models."));
-                        return;
-                      }
-                      setVisibleModelIds(null);
-                      setModelsStatus(null);
-                    }}
-                  >
-                    {t("Show all")}
-                  </button>
-                  <button
-                    type="button"
-                    className={styles.settingsAction}
-                    onClick={() => {
-                      if (tierLevel < 1) {
-                        setModelsStatus(t("Upgrade to Voyager to customize models."));
-                        return;
-                      }
-                      if (selectedModelId && ALL_PIONEER_MODEL_IDS.includes(selectedModelId)) {
-                        setVisibleModelIds([selectedModelId]);
-                      } else {
-                        setVisibleModelIds([]);
-                      }
-                      setModelsStatus(null);
-                    }}
-                  >
-                    {t("Unselect all")}
-                  </button>
-                </div>
-
-                <input
-                  className={styles.settingsInput}
-                  value={modelSearchQuery}
-                  onChange={(event) => setModelSearchQuery(event.target.value)}
-                  placeholder={t("Search models...")}
-                  aria-label={t("Search models")}
-                />
-              </div>
-
-              <div className={styles.settingsSection}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
-                  {renderLogo(GRAY_BRAND.iconPath, GRAY_BRAND.label, false)}
-                  <h3 className={styles.settingsSectionTitle} style={{ margin: 0 }}>
-                    {t("Gray")}
-                  </h3>
-                </div>
-                <div className={styles.settingsRow}>
-                  <div className={styles.settingsLabelGroup}>
-                    <span className={styles.settingsLabel}>{t("Gray Lite")}</span>
-                    <span className={styles.settingsItemDescription}>{t("Always available.")}</span>
-                  </div>
-                </div>
-              </div>
-
-              {(() => {
-                const normalizedQuery = modelSearchQuery.trim().toLowerCase();
-                const visibleIds = visibleModelIds ?? ALL_PIONEER_MODEL_IDS;
-
-                const groupsToRender = PIONEER_GROUPS.flatMap((group) => {
-                  const matchesGroup = !normalizedQuery || group.label.toLowerCase().includes(normalizedQuery);
-                  const filteredModels = group.models.filter((model) => {
-                    if (!normalizedQuery) return true;
-                    const haystack = `${group.label} ${model.label} ${model.id}`.toLowerCase();
-                    return matchesGroup || haystack.includes(normalizedQuery);
-                  });
-
-                  return filteredModels.length ? [{ group, filteredModels }] : [];
-                });
-
-                const lockedRequiresPioneerOverall = groupsToRender.some(({ filteredModels }) =>
-                  filteredModels.some((model) => (model.tierRequired ?? "voyager") === "pioneer")
-                );
-                const premiumNote = lockedRequiresPioneerOverall
-                  ? t("Upgrade to Voyager or Pioneer to access.")
-                  : t("Upgrade to Voyager to access.");
-
-                return (
-                  <>
-                    {tierLevel < 1 && groupsToRender.length > 0 ? (
-                      <div className={styles.settingsTierSeparator} role="separator" aria-label={t("Premium models")}>
-                        <div className={styles.settingsTierSeparatorTitle}>{t("Premium models")}</div>
-                        <div className={styles.settingsTierSeparatorSubtitle}>{premiumNote}</div>
-                      </div>
-                    ) : null}
-
-                    {groupsToRender.map(({ group, filteredModels }) => (
-                      <div key={group.id} className={styles.settingsSection}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
-                          {renderLogo(group.iconPath, group.label, tierLevel < 1)}
-                          <h3 className={styles.settingsSectionTitle} style={{ margin: 0 }}>
-                            {group.label}
-                          </h3>
-                        </div>
-                        {(() => {
-                          const modelRows = filteredModels.map((model) => {
-                            const isSelected = modelTier === "pioneer" && selectedModelId === model.id;
-                            const isEnabled = visibleModelIds === null || visibleIds.includes(model.id);
-                            const requiredTier = model.tierRequired ?? "voyager";
-                            const requiredLevel = requiredTier === "pioneer" ? 2 : 1;
-                            const isTierLocked = tierLevel < requiredLevel;
-                            const isScoutLocked = tierLevel < 1;
-                            const isLocked = isScoutLocked || isTierLocked;
-
-                            return { model, isSelected, isEnabled, requiredTier, isLocked };
-                          });
-
-                          const firstLockedIndex = modelRows.findIndex((row) => row.isLocked);
-                          const lockedRequiresPioneer = modelRows.some(
-                            (row) => row.isLocked && row.requiredTier === "pioneer"
-                          );
-                          const groupPremiumNote = lockedRequiresPioneer
-                            ? t("Upgrade to Voyager or Pioneer to access.")
-                            : t("Upgrade to Voyager to access.");
-
-                          return modelRows.map((row, index) => (
-                            <Fragment key={row.model.id}>
-                              {tierLevel >= 1 && index === firstLockedIndex ? (
-                                <div className={styles.settingsTierSeparator} role="separator" aria-label={t("Premium models")}>
-                                  <div className={styles.settingsTierSeparatorTitle}>{t("Premium models")}</div>
-                                  <div className={styles.settingsTierSeparatorSubtitle}>{groupPremiumNote}</div>
-                                </div>
-                              ) : null}
-
-                              <div
-                                className={styles.settingsRow}
-                                style={row.isLocked ? { opacity: 0.5, filter: "grayscale(1)" } : undefined}
-                              >
-                                <div className={styles.settingsLabelGroup}>
-                                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                                    {renderLogo(group.iconPath, group.label, false)}
-                                    <span className={styles.settingsLabel}>{row.model.label}</span>
-                                  </div>
-                                  <span className={styles.settingsItemDescription}>
-                                    {row.model.cost ? <span className={styles.monoText}>{row.model.cost}</span> : row.model.id}
-                                    {row.isSelected ? ` • ${t("Selected")}` : ""}
-                                  </span>
-                                </div>
-                                {row.isLocked ? (
-                                  <div style={{ padding: "0 10px", opacity: 0.5 }}>
-                                    <Lock size={16} />
-                                  </div>
-                                ) : (
-                                  renderToggle(
-                                    row.isEnabled,
-                                    () => {
-                                      if (row.isSelected) {
-                                        setModelsStatus(t("You can't hide the currently selected model."));
-                                        return;
-                                      }
-                                      if (visibleModelIds === null) {
-                                        const next = ALL_PIONEER_MODEL_IDS.filter((id) => id !== row.model.id);
-                                        setVisibleModelIds(next);
-                                        setModelsStatus(null);
-                                        return;
-                                      }
-                                      if (row.isEnabled) {
-                                        setVisibleModelIds(visibleModelIds.filter((id) => id !== row.model.id));
-                                        setModelsStatus(null);
-                                        return;
-                                      }
-                                      const next = Array.from(new Set([...visibleModelIds, row.model.id]));
-                                      setVisibleModelIds(next.length === ALL_PIONEER_MODEL_IDS.length ? null : next);
-                                      setModelsStatus(null);
-                                    },
-                                    t("Toggle {model}", { model: row.model.label })
-                                  )
-                                )}
-                              </div>
-                            </Fragment>
-                          ));
-                        })()}
-                      </div>
-                    ))}
-                  </>
-                );
-              })()}
-            </>
+            <ModelsSection
+              t={t}
+              tierLevel={tierLevel}
+              selectedModelId={selectedModelId}
+              modelTier={modelTier}
+              visibleModelIds={visibleModelIds}
+              onVisibleModelIdsChange={setVisibleModelIds}
+              modelSearchQuery={modelSearchQuery}
+              onModelSearchQueryChange={setModelSearchQuery}
+              modelsStatus={modelsStatus}
+              onModelsStatusChange={setModelsStatus}
+            />
           )}
 
           {activeSection === "api_keys" && (
-            <>
-              <div className={styles.settingsPageHeader}>
-                <h2 className={styles.settingsPageTitle}>{t("API Keys")}</h2>
-              </div>
-
-              <div className={styles.settingsSection}>
-                <p className={styles.settingsItemDescription} style={{ marginTop: 0 }}>
-                  {t("Bring your own API keys for select models. Keys are stored locally in your browser.")}
-                </p>
-              </div>
-
-              {tierLevel < 1 ? (
-                <div
-                  className={styles.settingsSection}
-                  style={{
-                    borderRadius: 16,
-                    padding: 24,
-                    border: "1px solid rgba(255, 255, 255, 0.08)",
-                    background:
-                      "radial-gradient(120% 120% at 50% 0%, rgba(255, 255, 255, 0.08), rgba(10, 10, 10, 0.9))",
-                  }}
-                >
-                  <h3 className={styles.settingsSectionTitle} style={{ marginBottom: 8 }}>
-                    {t("Voyager feature")}
-                  </h3>
-                  <p className={styles.settingsItemDescription} style={{ marginTop: 0, marginBottom: 16 }}>
-                    {t("Upgrade to Voyager to access this feature.")}
-                  </p>
-                  <button type="button" className={styles.settingsAction} onClick={() => router.push("/pricing")}>
-                    {t("Upgrade")}
-                  </button>
-                </div>
-              ) : (
-                <div className={styles.settingsSection}>
-                  {apiKeyStatus ? (
-                    <p className={styles.settingsItemDescription} style={{ marginTop: 0, marginBottom: 16 }}>
-                      {apiKeyStatus}
-                    </p>
-                  ) : null}
-
-                  {API_KEY_PROVIDERS.map((provider) => {
-                    const draft = apiKeyDrafts[provider.id] ?? "";
-                    const isVisible = Boolean(apiKeyVisibility[provider.id]);
-                    const isSaved = Boolean(apiKeys[provider.id]);
-                    return (
-                      <div key={provider.id} className={styles.settingsSection} style={{ marginBottom: 20 }}>
-                        <h3 className={styles.settingsSectionTitle} style={{ marginBottom: 10 }}>
-                          {provider.label}
-                        </h3>
-                        <p className={styles.settingsItemDescription} style={{ marginTop: 0, marginBottom: 10 }}>
-                          {t(provider.helper)}
-                          {isSaved ? ` • ${t("Saved")}` : ""}
-                        </p>
-                        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-                          <input
-                            className={styles.settingsInput}
-                            style={{ flex: "1 1 360px" }}
-                            type={isVisible ? "text" : "password"}
-                            value={draft}
-                            onChange={(event) => {
-                              const next = event.target.value;
-                              setApiKeyDrafts((prev) => ({ ...prev, [provider.id]: next }));
-                              setApiKeyStatus(null);
-                            }}
-                            placeholder={t("Enter API key")}
-                            aria-label={t("{provider} API key", { provider: provider.label })}
-                            autoComplete="off"
-                            spellCheck={false}
-                          />
-                          <button
-                            type="button"
-                            className={styles.settingsAction}
-                            onClick={() =>
-                              setApiKeyVisibility((prev) => ({ ...prev, [provider.id]: !Boolean(prev[provider.id]) }))
-                            }
-                          >
-                            {isVisible ? t("Hide") : t("Show")}
-                          </button>
-                          <button
-                            type="button"
-                            className={styles.settingsAction}
-                            onClick={() => {
-                              const nextKey = draft.trim();
-                              const nextStored: Record<string, string> = { ...apiKeys };
-                              if (nextKey) {
-                                nextStored[provider.id] = nextKey;
-                              } else {
-                                delete nextStored[provider.id];
-                              }
-                              if (typeof window !== "undefined") {
-                                window.localStorage.setItem(apiKeysStorageKey, JSON.stringify(nextStored));
-                              }
-                              setApiKeys(nextStored);
-                              setApiKeyStatus(t("Saved."));
-                            }}
-                          >
-                            {t("Save")}
-                          </button>
-                          <button
-                            type="button"
-                            className={styles.settingsAction}
-                            onClick={() => {
-                              const nextStored: Record<string, string> = { ...apiKeys };
-                              delete nextStored[provider.id];
-                              if (typeof window !== "undefined") {
-                                window.localStorage.setItem(apiKeysStorageKey, JSON.stringify(nextStored));
-                              }
-                              setApiKeys(nextStored);
-                              setApiKeyDrafts((prev) => ({ ...prev, [provider.id]: "" }));
-                              setApiKeyStatus(t("Cleared."));
-                            }}
-                          >
-                            {t("Clear")}
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </>
+            <ApiKeysSection
+              t={t}
+              tierLevel={tierLevel}
+              apiKeysStorageKey={apiKeysStorageKey}
+              apiKeys={apiKeys}
+              setApiKeys={setApiKeys}
+              apiKeyDrafts={apiKeyDrafts}
+              setApiKeyDrafts={setApiKeyDrafts}
+              apiKeyVisibility={apiKeyVisibility}
+              setApiKeyVisibility={setApiKeyVisibility}
+              apiKeyStatus={apiKeyStatus}
+              setApiKeyStatus={setApiKeyStatus}
+              onUpgradeClick={() => router.push("/pricing")}
+            />
           )}
 
           {activeSection === "data_controls" && (
-            <>
-              <div className={styles.settingsPageHeader}>
-                <h2 className={styles.settingsPageTitle}>{t("Data Controls")}</h2>
-              </div>
-
-              <div className={styles.settingsSection}>
-                <div className={styles.settingsRow}>
-                  <div className={styles.settingsLabelGroup}>
-                    <span className={styles.settingsLabel}>{t("Improve the model for everyone")}</span>
-                  </div>
-                  <button
-                    type="button"
-                    className={styles.settingsRowLink}
-                    aria-pressed={modelImprovementEnabled}
-                    aria-label={t("Toggle Improve the model for everyone")}
-                    onClick={() => {
-                      const previous = modelImprovementEnabled;
-                      const next = !previous;
-                      setModelImprovementEnabled(next);
-                      if (typeof window !== "undefined") {
-                        try {
-                          window.localStorage.setItem(modelImprovementStorageKey, next ? "1" : "0");
-                        } catch {
-                          // ignore storage failures
-                        }
-                      }
-                      if (!user?.id) {
-                        return;
-                      }
-                      void updateUser({ improve_model_for_everyone: next }).catch((error) => {
-                        console.error("Failed to update model improvement preference:", error);
-                        setModelImprovementEnabled(previous);
-                        if (typeof window !== "undefined") {
-                          try {
-                            window.localStorage.setItem(modelImprovementStorageKey, previous ? "1" : "0");
-                          } catch {
-                            // ignore storage failures
-                          }
-                        }
-                      });
-                    }}
-                  >
-                    <span className={styles.settingsValue}>{modelImprovementEnabled ? t("On") : t("Off")}</span>
-                    <ChevronRight size={16} aria-hidden="true" />
-                  </button>
-                </div>
-
-                <div className={styles.settingsRow}>
-                  <div className={styles.settingsLabelGroup}>
-                    <span className={styles.settingsLabel}>{t("Conversation memory")}</span>
-                    <span className={styles.settingsItemDescription}>
-                      {t("Allow Gray to remember details from your previous conversations.")}
-                    </span>
-                  </div>
-                  {renderToggle(
-                    conversationMemoryEnabled,
-                    () => {
-                      const next = !conversationMemoryEnabled;
-                      setConversationMemoryEnabled(next);
-                      if (typeof window !== "undefined") {
-                        try {
-                          window.localStorage.setItem(conversationMemoryStorageKey, next ? "1" : "0");
-                        } catch {
-                          // ignore storage failures
-                        }
-                      }
-                    },
-                    t("Toggle Conversation memory")
-                  )}
-                </div>
-              </div>
-
-              <div className={styles.settingsSection}>
-                <div className={styles.settingsRow}>
-                  <div className={styles.settingsLabelGroup}>
-                    <span className={styles.settingsLabel}>{t("Clear local cache")}</span>
-                    <span className={styles.settingsItemDescription}>
-                      {t("Reset local preferences and cached state on this device.")}
-                    </span>
-                  </div>
-                  <button className={styles.settingsAction} type="button" onClick={handleClearLocalCache}>
-                    {t("Clear")}
-                  </button>
-                </div>
-
-                <div className={styles.settingsRow}>
-                  <div className={styles.settingsLabelGroup}>
-                    <span className={styles.settingsLabel}>{t("Delete All Conversations")}</span>
-                    <span className={styles.settingsItemDescription}>
-                      {t("Delete all of your conversation data.")}
-                    </span>
-                  </div>
-                  <button
-                    className={styles.settingsAction}
-                    type="button"
-                    disabled={isDeletingAllConversations}
-                    onClick={async () => {
-                      if (!confirm(t("Are you sure you want to delete ALL conversations? This cannot be undone."))) {
-                        return;
-                      }
-
-                      setIsDeletingAllConversations(true);
-                      try {
-                        if (user?.id) {
-                          await apiService.deleteAllConversations(user.id);
-                        }
-                        clearAllConversations();
-                      } catch (error) {
-                        console.error("Failed to delete all conversations:", error);
-                        alert(t("Failed to delete conversations. Please try again."));
-                      } finally {
-                        setIsDeletingAllConversations(false);
-                      }
-                    }}
-                  >
-                    {isDeletingAllConversations ? t("Deleting…") : t("Delete")}
-                  </button>
-                </div>
-              </div>
-            </>
+            <DataControlsSection
+              t={t}
+              userId={typeof user?.id === "number" ? user.id : null}
+              updateUser={updateUser}
+              modelImprovementEnabled={modelImprovementEnabled}
+              setModelImprovementEnabled={setModelImprovementEnabled}
+              modelImprovementStorageKey={modelImprovementStorageKey}
+              conversationMemoryEnabled={conversationMemoryEnabled}
+              setConversationMemoryEnabled={setConversationMemoryEnabled}
+              conversationMemoryStorageKey={conversationMemoryStorageKey}
+              onClearLocalCache={handleClearLocalCache}
+              isDeletingAllConversations={isDeletingAllConversations}
+              setIsDeletingAllConversations={setIsDeletingAllConversations}
+              clearAllConversations={clearAllConversations}
+            />
           )}
 
           {activeSection === "notifications" && (
-            <>
-              <div className={styles.settingsPageHeader}>
-                <h2 className={styles.settingsPageTitle}>{t("Notifications")}</h2>
-              </div>
-
-              <div className={styles.settingsSection}>
-                <h3 className={styles.settingsSectionTitle}>{t("Device notifications")}</h3>
-
-                <div className={styles.settingsRow}>
-                  <div className={styles.settingsLabelGroup}>
-                    <span className={styles.settingsLabel}>{t("Desktop & mobile")}</span>
-                    <span className={styles.settingsItemDescription}>
-                      {notificationPermission === "unsupported"
-                        ? t("Notifications are not supported on this device.")
-                        : notificationPermission === "denied"
-                          ? t("Notifications are blocked in your browser settings.")
-                          : t("Show notifications on this device.")}
-                    </span>
-                  </div>
-                  {renderToggle(
-                    notificationPreferences.device && notificationPermission === "granted",
-                    () => void handleToggleDeviceNotifications(),
-                    t("Toggle device notifications")
-                  )}
-                </div>
-              </div>
-
-              <div className={styles.settingsSection}>
-                <h3 className={styles.settingsSectionTitle}>{t("What to notify")}</h3>
-
-                <div className={styles.settingsRow}>
-                  <div className={styles.settingsLabelGroup}>
-                    <span className={styles.settingsLabel}>{t("Tasks")}</span>
-                    <span className={styles.settingsItemDescription}>
-                      {t("Reminders and updates about your tasks.")}
-                    </span>
-                  </div>
-                  {renderToggle(
-                    notificationPreferences.tasks,
-                    () => setNotificationPreference("tasks", !notificationPreferences.tasks),
-                    t("Toggle task notifications")
-                  )}
-                </div>
-
-                <div className={styles.settingsRow}>
-                  <div className={styles.settingsLabelGroup}>
-                    <span className={styles.settingsLabel}>{t("Proactivity")}</span>
-                    <span className={styles.settingsItemDescription}>
-                      {t("Daily check-ins and proactive summaries.")}
-                    </span>
-                  </div>
-                  {renderToggle(
-                    notificationPreferences.proactivity,
-                    () =>
-                      setNotificationPreference(
-                        "proactivity",
-                        !notificationPreferences.proactivity
-                      ),
-                    t("Toggle proactivity notifications")
-                  )}
-                </div>
-
-                <div className={styles.settingsRow}>
-                  <div className={styles.settingsLabelGroup}>
-                    <span className={styles.settingsLabel}>{t("Calendar events")}</span>
-                    <span className={styles.settingsItemDescription}>
-                      {t("Upcoming event reminders and changes.")}
-                    </span>
-                  </div>
-                  {renderToggle(
-                    notificationPreferences.calendarEvents,
-                    () =>
-                      setNotificationPreference(
-                        "calendarEvents",
-                        !notificationPreferences.calendarEvents
-                      ),
-                    t("Toggle calendar event notifications")
-                  )}
-                </div>
-              </div>
-            </>
+            <NotificationsSection
+              t={t}
+              notificationPermission={notificationPermission}
+              notificationPreferences={notificationPreferences}
+              onToggleDeviceNotifications={handleToggleDeviceNotifications}
+              setNotificationPreference={setNotificationPreference}
+            />
           )}
         </main>
       </div>

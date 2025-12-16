@@ -695,6 +695,38 @@ try:
 except ImportError:
     from env_utils import ROOT_DIR
 
+# Environment helpers (extracted from main.py)
+try:
+    from backend.core.env_helpers import (
+        float_env as _float_env,
+        int_env as _int_env,
+        is_valid_uuid as _is_valid_uuid,
+        timestamp_ms_to_datetime as _timestamp_ms_to_datetime,
+        datetime_to_ms as _datetime_to_ms,
+    )
+except ImportError:
+    from core.env_helpers import (  # type: ignore
+        float_env as _float_env,
+        int_env as _int_env,
+        is_valid_uuid as _is_valid_uuid,
+        timestamp_ms_to_datetime as _timestamp_ms_to_datetime,
+        datetime_to_ms as _datetime_to_ms,
+    )
+
+# Dashboard helpers (extracted from main.py)
+try:
+    from backend.core.dashboard_helpers import (
+        serialize_dashboard_pulse_record as _serialize_dashboard_pulse_record,
+        carry_forward_dashboard_entries as _carry_forward_dashboard_entries,
+        coerce_activity_day as _coerce_activity_day,
+    )
+except ImportError:
+    from core.dashboard_helpers import (  # type: ignore
+        serialize_dashboard_pulse_record as _serialize_dashboard_pulse_record,
+        carry_forward_dashboard_entries as _carry_forward_dashboard_entries,
+        coerce_activity_day as _coerce_activity_day,
+    )
+
 load_dotenv(ROOT_DIR / ".env")
 
 SUPABASE_POOLER_HOST = os.getenv("SUPABASE_POOLER_HOST", "aws-1-ap-south-1.pooler.supabase.com")
@@ -721,21 +753,7 @@ logging.getLogger("uvicorn.access").disabled = True
 app_logger.info(f"Backend starting (env={os.getenv('ENVIRONMENT', 'development')}, provider={os.getenv('AI_PROVIDER', 'openrouter')})")
 
 
-def _float_env(var_name: str, default: float) -> float:
-    try:
-        return float(os.getenv(var_name, default))
-    except (TypeError, ValueError):
-        return default
-
-
-def _int_env(var_name: str, default: int) -> int:
-    try:
-        value = os.getenv(var_name)
-        if value is None or value.strip() == "":
-            return default
-        return int(value)
-    except (TypeError, ValueError):
-        return default
+# _float_env, _int_env are now imported from core.env_helpers
 
 
 # load_prompt_from_file, load_prompt_from_json, _normalize_prompt_locale, _prompt_locale_from_request
@@ -1893,15 +1911,7 @@ async def _create_reminders_from_actions(
     return results
 
 
-def _is_valid_uuid(val: Optional[Any]) -> bool:
-    """Safely validate UUID strings without raising on None or non-string values."""
-    if not isinstance(val, str) or not val:
-        return False
-    try:
-        uuid_obj = UUID(val)
-        return str(uuid_obj) == val
-    except (ValueError, TypeError, AttributeError):
-        return False
+# _is_valid_uuid is now imported from core.env_helpers
 
 
 
@@ -2656,38 +2666,7 @@ async def dev_analytics_summary(
 # Helper functions
 
 
-def _timestamp_ms_to_datetime(timestamp_ms: Optional[int]) -> datetime:
-    if timestamp_ms is None:
-        return utcnow()
-    try:
-        normalized = datetime.fromtimestamp(int(timestamp_ms) / 1000, tz=timezone.utc)
-    except (OSError, OverflowError, ValueError):
-        normalized = utcnow_aware()
-    return normalized.replace(tzinfo=None)
-
-
-def _datetime_to_ms(value: Optional[datetime]) -> int:
-    base: datetime
-    if isinstance(value, datetime):
-        base = value
-    elif isinstance(value, str):
-        candidate = value.strip()
-        if candidate:
-            try:
-                # Use dateutil for robust parsing of various formats (ISO, space-separated, etc.)
-                base = date_parser.parse(candidate)
-            except (ValueError, TypeError):
-                # Fallback to current time if parsing fails completely
-                base = utcnow()
-        else:
-            base = utcnow()
-    else:
-        base = utcnow()
-    if base.tzinfo is None:
-        aware = base.replace(tzinfo=timezone.utc)
-    else:
-        aware = base.astimezone(timezone.utc)
-    return int(aware.timestamp() * 1000)
+# _timestamp_ms_to_datetime, _datetime_to_ms are now imported from core.env_helpers
 
 
 
@@ -2695,25 +2674,9 @@ def _datetime_to_ms(value: Optional[datetime]) -> int:
 # _serialize_habit_record, _normalize_proactivity, _serialize_proactivity_notification,
 # _serialize_context_cache) are now imported from core.serializers
 
-# _serialize_dashboard_pulse_record uses imported functions
-def _serialize_dashboard_pulse_record(record: Any) -> Optional[Dict[str, Any]]:
-    if not record:
-        return None
-    plans = _normalize_plan_items(record["plans"])
-    habits = _normalize_habit_items(record["habits"])
-    proactivity = _normalize_proactivity(record["proactivity"])
-    timestamp_ms = _datetime_to_ms(record["timestamp"])
-    return {
-        "id": record["id"],
-        "user_id": record["user_id"],
-        "date_key": record["date_key"],
-        "timestamp": timestamp_ms,
-        "plans": plans,
-        "habits": habits,
-        "proactivity": proactivity,
-        "created_at": record["created_at"],
-        "updated_at": record["updated_at"],
-}
+# _serialize_dashboard_pulse_record is now imported from core.dashboard_helpers
+
+
 
 
 # AI candidate extraction functions (_candidate_grounding_payload, _candidate_text,
@@ -3688,66 +3651,11 @@ async def _generate_image_descriptions(
     return ""
 
 
-def _carry_forward_dashboard_entries(
-    previous: Optional[Dict[str, Any]],
-    plans: List[Dict[str, Any]],
-    habits: List[Dict[str, Any]],
-) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
-    if not previous:
-        return plans, habits
-
-    carry_plans = list(plans)
-    carry_habits = list(habits)
-
-    existing_plan_ids = {item["id"] for item in carry_plans}
-    existing_plan_labels = {item["label"].lower() for item in carry_plans}
-
-    for entry in previous.get("plans", []):
-        if entry.get("completed"):
-            continue
-        identifier = str(entry.get("id") or "").strip()
-        label = str(entry.get("label") or "").strip()
-        if not label:
-            continue
-        if identifier and identifier in existing_plan_ids:
-            continue
-        if label.lower() in existing_plan_labels:
-            continue
-        carry_plans.append(
-            {
-                "id": identifier or f"plan-{uuid4().hex[:8]}",
-                "label": label,
-                "completed": False,
-            }
-        )
-        if identifier:
-            existing_plan_ids.add(identifier)
-        existing_plan_labels.add(label.lower())
-
-    existing_habit_ids = {item["id"] for item in carry_habits}
-    for entry in previous.get("habits", []):
-        identifier = str(entry.get("id") or "").strip()
-        label = str(entry.get("label") or "").strip()
-        if not label:
-            continue
-        if identifier and identifier in existing_habit_ids:
-            continue
-        carry_habits.append(
-            {
-                "id": identifier or f"habit-{uuid4().hex[:8]}",
-                "label": label,
-                "previous_label": str(entry.get("previous_label") or ""),
-                "completed": False,
-            }
-        )
-        if identifier:
-            existing_habit_ids.add(identifier)
-
-    return carry_plans, carry_habits
+# _carry_forward_dashboard_entries is now imported from core.dashboard_helpers
 
 
 async def _load_dashboard_pulse_by_date(db: databases.Database, user_id: int, date_key: str):
-    # Prefer Supabase when available.
+    """Wrapper that calls the extracted helper with the dashboard_pulses table."""
     query = (
         dashboard_pulses.select()
         .where(
@@ -3760,7 +3668,7 @@ async def _load_dashboard_pulse_by_date(db: databases.Database, user_id: int, da
 
 
 async def _load_previous_dashboard_pulse(db: databases.Database, user_id: int, date_key: str):
-    # Prefer Supabase when available.
+    """Wrapper that calls the extracted helper with the dashboard_pulses table."""
     query = (
         dashboard_pulses.select()
         .where(
@@ -3773,24 +3681,8 @@ async def _load_previous_dashboard_pulse(db: databases.Database, user_id: int, d
     return await db.fetch_one(query)
 
 
-def _coerce_activity_day(value: Any) -> Optional[date]:
-    if value is None:
-        return None
-    if isinstance(value, datetime):
-        return value.date()
-    if isinstance(value, str):
-        candidate = value.strip()
-        if not candidate:
-            return None
-        try:
-            parsed = datetime.fromisoformat(candidate.replace("Z", "+00:00"))
-        except ValueError:
-            try:
-                parsed = datetime.strptime(candidate.split(".")[0], "%Y-%m-%dT%H:%M:%S")
-            except ValueError:
-                return None
-        return parsed.date()
-    return None
+# _coerce_activity_day is now imported from core.dashboard_helpers
+
 
 
 # API Routes
