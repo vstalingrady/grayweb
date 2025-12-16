@@ -1,5 +1,8 @@
+import asyncio
+import contextlib
 import os
 import sys
+import weakref
 import databases
 import sqlalchemy
 from pathlib import Path
@@ -8,9 +11,9 @@ from datetime import datetime
 
 # Use centralized environment detection
 try:
-    from backend.env_utils import ROOT_DIR
+    from backend.env_utils import ROOT_DIR, IN_DOCKER
 except ImportError:
-    from env_utils import ROOT_DIR
+    from env_utils import ROOT_DIR, IN_DOCKER
 
 if "pytest" in sys.modules:
     # Tests should not inherit NODE_ENV/ENVIRONMENT from a developer's local .env.
@@ -50,7 +53,12 @@ def _select_database_url() -> str:
     
     # Support Docker volume mount via SQLITE_DB_PATH
     sqlite_path = os.getenv("SQLITE_DB_PATH")
-    default_fallback = f"sqlite:///{sqlite_path}" if sqlite_path else "sqlite:///./backend/users.db"
+    
+    # Docker uses /app/data, local uses project_root/backend/users.db
+    if IN_DOCKER:
+         default_fallback = f"sqlite:///{sqlite_path}" if sqlite_path else "sqlite:///data/users.db"
+    else:
+         default_fallback = f"sqlite:///{sqlite_path}" if sqlite_path else f"sqlite:///{ROOT_DIR}/backend/users.db"
 
     chosen: str
     if db_mode == "remote":
@@ -73,6 +81,57 @@ if DATABASE_URL.startswith("postgresql"):
 
 database = databases.Database(DATABASE_URL, **db_args)
 metadata = sqlalchemy.MetaData()
+
+_PYTEST_TICKER_TASKS: "weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Task]" = weakref.WeakKeyDictionary()
+
+
+async def _pytest_event_loop_ticker() -> None:
+    """
+    Keep the event loop from sleeping indefinitely under pytest.
+
+    In some environments, `aiosqlite`/`databases` can wedge if the loop is idle and
+    the self-pipe wakeup gets dropped; a small periodic timer prevents hangs.
+    """
+    try:
+        while True:
+            await asyncio.sleep(0.05)
+    except asyncio.CancelledError:
+        return
+
+
+_database_connect = database.connect
+_database_disconnect = database.disconnect
+
+
+async def _connect_with_pytest_ticker(*args, **kwargs):  # type: ignore[no-untyped-def]
+    await _database_connect(*args, **kwargs)
+    if "pytest" not in sys.modules:
+        return
+    if not DATABASE_URL.startswith("sqlite"):
+        return
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        return
+    task = _PYTEST_TICKER_TASKS.get(loop)
+    if task is None or task.done():
+        _PYTEST_TICKER_TASKS[loop] = loop.create_task(_pytest_event_loop_ticker())
+
+
+async def _disconnect_with_pytest_ticker(*args, **kwargs):  # type: ignore[no-untyped-def]
+    if "pytest" in sys.modules and DATABASE_URL.startswith("sqlite"):
+        with contextlib.suppress(RuntimeError):
+            loop = asyncio.get_running_loop()
+            task = _PYTEST_TICKER_TASKS.pop(loop, None)
+            if task is not None and not task.done():
+                task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await task
+    await _database_disconnect(*args, **kwargs)
+
+
+database.connect = _connect_with_pytest_ticker  # type: ignore[method-assign]
+database.disconnect = _disconnect_with_pytest_ticker  # type: ignore[method-assign]
 
 # Define users table
 users = sqlalchemy.Table(

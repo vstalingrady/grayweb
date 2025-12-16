@@ -11,9 +11,9 @@ import logging
 
 # Use centralized environment detection
 try:
-    from backend.env_utils import ROOT_DIR, UVICORN_APP_MODULE
+    from backend.env_utils import ROOT_DIR, UVICORN_APP_MODULE, IN_DOCKER
 except ImportError:
-    from env_utils import ROOT_DIR, UVICORN_APP_MODULE
+    from env_utils import ROOT_DIR, UVICORN_APP_MODULE, IN_DOCKER
 
 # Ensure the repository root is on the Python path so `import backend` works.
 sys.path.insert(0, str(ROOT_DIR))
@@ -98,12 +98,19 @@ if __name__ == "__main__":
         db_mode = (os.getenv("DB_MODE") or "").lower()
         primary_url = os.getenv("DATABASE_URL")
         local_url = os.getenv("LOCAL_DATABASE_URL")
-        if db_mode == "remote":
-            chosen = primary_url or local_url or "sqlite:///./users.db"
-        elif db_mode == "local":
-            chosen = local_url or primary_url or "sqlite:///./users.db"
+        
+        if IN_DOCKER:
+            fallback = "sqlite:///data/users.db"
         else:
-            chosen = primary_url or local_url or "sqlite:///./users.db"
+            fallback = f"sqlite:///{ROOT_DIR}/backend/users.db"
+
+
+        if db_mode == "remote":
+            chosen = primary_url or local_url or fallback
+        elif db_mode == "local":
+            chosen = local_url or primary_url or fallback
+        else:
+            chosen = primary_url or local_url or fallback
         return _normalize_sqlite_url(chosen)
 
     DATABASE_URL = _select_database_url()

@@ -563,8 +563,7 @@ function GrayEnhancedSidebarComponent(props: GrayEnhancedSidebarProps) {
                           role="menuitem"
                         >
                           <span className={styles.profileMenuUpgradeCard}>
-                            <span className={styles.profileMenuUpgradeTitle}>{t("Upgrade")}</span>
-                            <span className={styles.profileMenuUpgradeSubtext}>{t("Unlock more messages")}</span>
+                            <span className={styles.profileMenuUpgradeSubtext}>{t("Unlock full access")}</span>
                             <span className={styles.profileMenuUpgradePill}>{t("View Plans")}</span>
                           </span>
                         </button>
@@ -579,7 +578,7 @@ function GrayEnhancedSidebarComponent(props: GrayEnhancedSidebarProps) {
                           <span className={styles.profileMenuUpgradeCard} data-variant={isPioneer ? "pioneer" : "voyager"}>
                             <span className={styles.profileMenuUpgradeSubtext}>{t("Current Plan")}</span>
                             <span className={styles.profileMenuUpgradeTitle}>{normalizedPlan}</span>
-                            <StarfieldCanvas className={styles.starfieldCanvas} density={0.008} minStars={12} maxStars={40} speed={2} orbitMode />
+                            <StarfieldCanvas className={styles.starfieldCanvas} density={0.008} minStars={12} maxStars={40} speed={16} orbitMode />
                           </span>
                         </div>
                         <span className={styles.profileMenuDivider} aria-hidden="true" />

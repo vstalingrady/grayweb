@@ -194,6 +194,10 @@ Visit [http://localhost:8000/docs](http://localhost:8000/docs) for the automatic
 - The Next.js login form uses the helper in `src/lib/supabaseClient.ts` to create a browser client.
 - The FastAPI service uses Supabase for authentication only (token validation fallback + account deletion in Supabase Auth).
 
+## Production migration (Supabase → SQLite)
+
+If you previously stored application data in Supabase public tables, migrate it into SQLite before deploying the auth-only change and/or dropping those tables. See `docs/SUPABASE_TO_SQLITE_MIGRATION.md`.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:
