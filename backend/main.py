@@ -332,8 +332,10 @@ try:
         update_reminder_tool as _update_reminder_tool,
         delete_reminder_tool as _delete_reminder_tool,
         delete_latest_reminder_tool as _delete_latest_reminder_tool,
+        build_maps_tool_and_config as _build_maps_tool_and_config,
     )
 except ImportError:
+
     from core.tool_handlers import (  # type: ignore
         set_reminder_scheduler as _set_tool_reminder_scheduler,
         parse_iso_datetime as _parse_iso_datetime,
@@ -352,9 +354,11 @@ except ImportError:
         update_reminder_tool as _update_reminder_tool,
         delete_reminder_tool as _delete_reminder_tool,
         delete_latest_reminder_tool as _delete_latest_reminder_tool,
+        build_maps_tool_and_config as _build_maps_tool_and_config,
     )
 
 # Entity reminder operations (extracted from main.py)
+
 try:
     from backend.core.entity_reminders import (
         set_reminder_scheduler as _set_entity_reminder_scheduler,
@@ -2315,34 +2319,7 @@ async def dev_analytics_summary(
 
 # _gemini_web_search_summary removed (dead code - never called)
 
-
-def _build_maps_tool_and_config(
-    maps_enabled: bool,
-    maps_latitude: Optional[float],
-    maps_longitude: Optional[float],
-    maps_widget: bool,
-) -> Tuple[List[types.Tool], Optional[types.ToolConfig]]:
-    if not maps_enabled:
-        return [], None
-
-    tool = types.Tool(
-        google_maps=types.GoogleMaps(enable_widget=maps_widget)
-    )
-
-    retrieval_config = None
-    if maps_latitude is not None and maps_longitude is not None:
-        retrieval_config = types.RetrievalConfig(
-            lat_lng=types.LatLng(latitude=maps_latitude, longitude=maps_longitude)
-        )
-
-    tool_config = types.ToolConfig(
-        retrieval_config=retrieval_config,
-        function_calling_config=types.FunctionCallingConfig(
-            mode=types.FunctionCallingConfigMode.NONE
-        ),
-    )
-
-    return [tool], tool_config
+# _build_maps_tool_and_config is now imported from core.tool_handlers
 
 
 async def _load_context_cache(cache_id: int, user_id: int, db: databases.Database) -> Optional[Dict[str, Any]]:

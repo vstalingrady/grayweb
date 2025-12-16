@@ -5,7 +5,7 @@ This module contains handlers for calendar, habit, plan, and reminder tool calls
 that are invoked by the AI during chat interactions.
 """
 from datetime import datetime, date, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 import databases
 from fastapi import HTTPException
 
@@ -879,3 +879,53 @@ async def get_workspace_state_tool(
         "habits": habits_list,
         "reminders": reminders_list,
     }
+
+
+# ==============================================================================
+# Maps Tool Builder
+# ==============================================================================
+
+
+def build_maps_tool_and_config(
+    maps_enabled: bool,
+    maps_latitude: Optional[float],
+    maps_longitude: Optional[float],
+    maps_widget: bool,
+) -> Tuple[List[Any], Optional[Any]]:
+    """Build Google Maps tool and config for Gemini.
+    
+    Args:
+        maps_enabled: Whether maps functionality is enabled
+        maps_latitude: User's latitude coordinate
+        maps_longitude: User's longitude coordinate
+        maps_widget: Whether to enable the widget
+        
+    Returns:
+        Tuple of (tools_list, tool_config) for Gemini API
+    """
+    if not maps_enabled:
+        return [], None
+
+    try:
+        from google.genai import types
+    except ImportError:
+        return [], None
+
+    tool = types.Tool(
+        google_maps=types.GoogleMaps(enable_widget=maps_widget)
+    )
+
+    retrieval_config = None
+    if maps_latitude is not None and maps_longitude is not None:
+        retrieval_config = types.RetrievalConfig(
+            lat_lng=types.LatLng(latitude=maps_latitude, longitude=maps_longitude)
+        )
+
+    tool_config = types.ToolConfig(
+        retrieval_config=retrieval_config,
+        function_calling_config=types.FunctionCallingConfig(
+            mode=types.FunctionCallingConfigMode.NONE
+        ),
+    )
+
+    return [tool], tool_config
