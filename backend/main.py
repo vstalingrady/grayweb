@@ -212,6 +212,24 @@ except ImportError:
         build_allowed_origins as _build_allowed_origins,
     )
 
+# Cache utilities (extracted from main.py)
+try:
+    from backend.core.cache import (
+        TTLCache,
+        AsyncTTLCache,
+        USER_CACHE,
+        CONVERSATION_OWNER_CACHE,
+        CONVERSATION_HISTORY_CACHE,
+    )
+except ImportError:
+    from core.cache import (  # type: ignore
+        TTLCache,
+        AsyncTTLCache,
+        USER_CACHE,
+        CONVERSATION_OWNER_CACHE,
+        CONVERSATION_HISTORY_CACHE,
+    )
+
 from uuid import UUID, uuid4
 from pathlib import Path
 from urllib.parse import urlparse
@@ -7706,66 +7724,8 @@ DEFAULT_SYSTEM_PROMPT = load_prompt_from_json(
     "You are Gray.",
 )
 
-
-class AsyncTTLCache:
-    def __init__(self, ttl_seconds: int = 300):
-        self.ttl_seconds = ttl_seconds
-        self.cache = {}
-
-    async def get(self, key: str, fetch_func):
-        now = time.time()
-        if key in self.cache:
-            value, timestamp = self.cache[key]
-            if now - timestamp < self.ttl_seconds:
-                return value
-        
-        value = await fetch_func()
-        self.cache[key] = (value, now)
-        return value
-
-    def clear(self):
-        self.cache = {}
-
-    def invalidate(self, key: str):
-        if key in self.cache:
-            del self.cache[key]
-
-USER_CACHE = AsyncTTLCache(ttl_seconds=300)
-
-
-class TTLCache:
-  def __init__(self, ttl_seconds: int = 600, max_size: int = 256):
-    self.ttl_seconds = ttl_seconds
-    self.max_size = max_size
-    self.cache: Dict[str, tuple[Any, float]] = {}
-
-  def get(self, key: str):
-    now = time.time()
-    entry = self.cache.get(key)
-    if not entry:
-      return None
-    value, ts = entry
-    if now - ts > self.ttl_seconds:
-      self.cache.pop(key, None)
-      return None
-    return value
-
-  def set(self, key: str, value: Any) -> None:
-    if len(self.cache) >= self.max_size:
-      # Evict the oldest entry to keep memory bounded
-      oldest = min(self.cache.items(), key=lambda item: item[1][1])[0]
-      self.cache.pop(oldest, None)
-    self.cache[key] = (value, time.time())
-
-  def invalidate(self, key: str) -> None:
-    self.cache.pop(key, None)
-
-  def clear(self) -> None:
-    self.cache.clear()
-
-
-CONVERSATION_OWNER_CACHE = TTLCache(ttl_seconds=900, max_size=512)
-CONVERSATION_HISTORY_CACHE = TTLCache(ttl_seconds=900, max_size=256)
+# Cache classes (AsyncTTLCache, TTLCache) and instances (USER_CACHE, CONVERSATION_OWNER_CACHE,
+# CONVERSATION_HISTORY_CACHE) are now imported from core.cache
 
 
 async def _get_cached_user(user_id: int, db: databases.Database):
