@@ -9266,53 +9266,6 @@ async def create_user(request: Request, user: UserCreate, db: databases.Database
     )
     user_id = await db.execute(query)
 
-    # Seed default calendars (disabled – calendars are user generated now)
-    default_calendars: List[Dict[str, str | bool]] = []
-
-    calendar_ids: Dict[str, int] = {}
-    for calendar in default_calendars:
-        calendar_id = await db.execute(
-            calendars.insert().values(
-                user_id=user_id,
-                label=calendar["label"],
-                color=calendar["color"],
-                is_visible=calendar["is_visible"],
-                created_at=now,
-                updated_at=now,
-            )
-        )
-        calendar_ids[calendar["label"]] = calendar_id
-
-    # Seed default calendar events (disabled – events are user generated now)
-    default_events: List[Dict[str, str]] = []
-
-    for event in default_events:
-        calendar_id = calendar_ids.get(event["calendar_label"])
-        if calendar_id is None:
-            continue
-        try:
-            start_time = datetime.fromisoformat(event["start"])
-            end_time = datetime.fromisoformat(event["end"])
-        except ValueError:
-            # Skip invalid event definitions rather than breaking user creation
-            continue
-
-        await db.execute(
-            calendar_events.insert().values(
-                user_id=user_id,
-                calendar_id=calendar_id,
-                title=event["title"],
-                description=None,
-                start_time=start_time,
-                end_time=end_time,
-                created_at=now,
-            )
-        )
-
-    # Plans: no default placeholder data - users create their own
-
-    # Habits: no default placeholder data - users create their own
-
     return _serialize_user_row({
         **user.dict(),
         "id": user_id,
