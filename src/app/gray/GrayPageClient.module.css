@@ -3426,22 +3426,15 @@
 }
 
 .chatView {
+  /* Clean flex column layout */
   display: flex;
   flex-direction: column;
-  gap: 0;
   width: 100%;
-  min-height: 0;
-  flex: 1 1 auto;
   height: 100%;
-  align-self: stretch;
-  padding: 0;
-  background: transparent;
-  box-shadow: none;
-  position: relative;
-  --chat-bubble-max-width: var(--chat-column-max-width);
-  --chat-composer-overlap: calc(var(--gray-chat-bar-clearance) + clamp(10px, 2vh, 18px));
-  --chat-composer-height: clamp(64px, 10vh, 120px);
+  min-height: 0;
   overflow: hidden;
+  background: transparent;
+  position: relative;
 }
 
 .chatHeaderControls {
@@ -3477,18 +3470,14 @@
 }
 
 .chatViewport {
-  position: relative;
+  /* Scrollable message container */
   flex: 1;
+  min-height: 0;
+  width: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
-  justify-content: flex-start;
-  width: 100%;
-  min-height: 0;
-  overflow-y: auto;
-  /* scrollbar-width: none; */
-  overflow-anchor: auto;
-  padding-bottom: 0;
-  scroll-padding-bottom: 0;
 }
 
 .chatViewport::-webkit-scrollbar {
@@ -3518,20 +3507,15 @@
 
 
 .chatMessages {
-  flex: 1 0 auto;
+  /* Message list container */
+  flex: 1;
   display: flex;
   flex-direction: column;
-  /* Messages should start from top and grow downward */
-  justify-content: flex-start;
-  gap: 24px;
-  min-height: min-content;
-  padding: clamp(4px, 1vh, 10px) 24px 8px 24px;
-  /* Symmetric padding */
-  overflow: visible;
+  gap: 20px;
+  padding: 16px 24px;
   width: 100%;
-  max-width: min(calc(1.1 * var(--chat-bubble-max-width, var(--chat-column-max-width, 840px))), 100%);
+  max-width: 840px;
   margin: 0 auto;
-  align-items: stretch;
 }
 
 .chatIntro {
@@ -4947,24 +4931,15 @@
 }
 
 .chatComposerDock {
-  position: relative;
-  bottom: auto;
-  left: auto;
-  right: auto;
+  /* Input bar container at bottom */
+  flex-shrink: 0;
+  width: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0;
-  padding: 0;
-  margin-top: auto;
-  padding-bottom: env(safe-area-inset-bottom, 0px);
-  background: transparent;
-  z-index: 40;
-  width: 100%;
-  box-shadow: none;
-  overflow: visible;
-  flex-shrink: 0;
-  pointer-events: auto;
+  padding: 8px 16px 16px;
+  padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  background: var(--background, #121212);
 }
 
 
