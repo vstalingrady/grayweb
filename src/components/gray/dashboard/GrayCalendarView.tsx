@@ -4,7 +4,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import "@toast-ui/calendar/dist/toastui-calendar.min.css";
 
-import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useUser } from "@/contexts/UserContext";
 import { apiService } from "@/lib/api";
 import { CalendarSidebar } from "@/components/calendar/CalendarSidebar";
@@ -129,7 +129,6 @@ export function GrayCalendarView() {
     const { user } = useUser();
     const [currentDate, setCurrentDate] = useState(new Date());
     const [view, setView] = useState<"week" | "day" | "month">("week");
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const [events, setEvents] = useState<Partial<EventObject>[]>([]);
 
     const [monthDate, setMonthDate] = useState(new Date());
@@ -231,7 +230,6 @@ export function GrayCalendarView() {
                 calendarInstanceRef.current = null;
             }
         };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     useEffect(() => {
@@ -257,7 +255,6 @@ export function GrayCalendarView() {
         try {
             const fetched = await apiService.getCalendarEvents(user.id);
             // Transform backend events to TUI format
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const tuiEvents = fetched.map((evt: any) => ({
                 id: String(evt.id),
                 calendarId: evt.calendar_id ? String(evt.calendar_id) : "1",
@@ -274,11 +271,9 @@ export function GrayCalendarView() {
         } catch (err) {
             console.error("Failed to fetch events", err);
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [user?.id]);
 
     useEffect(() => {
-        // eslint-disable-next-line
         void fetchEvents();
     }, [fetchEvents]);
 

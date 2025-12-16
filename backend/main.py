@@ -3743,18 +3743,7 @@ async def save_conversation_message(
       app_logger.error(f"Failed to save message to thread {conversation_id}: {error}")
 
 
-def _format_structured_ai_reply(user_message: str, thinking: str, ai_reply: str) -> str:
-    """Return a response that matches the user/thinking/ai template expected by the client."""
-    user_section = (user_message or "").strip() or "(no message provided)"
-    thinking_section = (thinking or "").strip() or "Considering how to respond helpfully."
-    ai_section = (ai_reply or "").strip() or "Let me know how I can assist further."
-    return "\n\n".join(
-        [
-            f"user:\n{user_section}",
-            f"thinking (not visible):\n<thinking>{thinking_section}</thinking>",
-            f"ai:\n{ai_section}",
-        ]
-    )
+# _format_structured_ai_reply removed (dead code - never called)
 
 async def generate_chat_title_suggestion(message: str) -> Optional[str]:
     """Generate a concise chat title locally."""
