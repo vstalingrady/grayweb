@@ -2588,51 +2588,7 @@ async def dev_analytics_summary(
 # _candidate_thought) are now imported from core.ai_utils
 # Web search detection (_should_use_web_search) is imported from core.message_detection
 
-async def _gemini_web_search_summary(
-    question: str,
-    workspace_context: Optional[str],
-    time_context: Optional[str],
-) -> Tuple[str, Optional[Dict[str, Any]]]:
-    """Use Gemini Flash Lite + Google Search to build a concise web summary."""
-    if not GEMINI_SERVICE or not GEMINI_SERVICE.available:
-        return "", None
-
-    summary_system_prompt = load_prompt_from_json(
-        GLOBAL_SYSTEM_PROMPTS_PATH,
-        "web_search_summary",
-        "Summarize the key facts from the search results."
-    )
-
-    try:
-        response = await GEMINI_SERVICE.generate(
-            question,
-            conversation_history=None,
-            workspace_context=workspace_context,
-            system_prompt=summary_system_prompt,
-            time_context=time_context,
-            model=GEMINI_LIGHT_MODEL,
-            attachments=None,
-            extra_contents=None,
-            response_schema=None,
-            response_mime_type=None,
-            tools=[SEARCH_TOOL],
-            tool_config=None,
-            reasoning_mode=False,
-        )
-    except Exception as error:  # pragma: no cover - best effort logging
-        api_logger.warning(
-            "Gemini web search summary failed; continuing without web context",
-            extra={"event_type": "gemini_web_search_error", "error": str(error)},
-        )
-        return "", None
-
-    if not response.candidates:
-        return "", None
-
-    candidate = response.candidates[0]
-    summary_text = _candidate_text(candidate)
-    grounding = _candidate_grounding_payload(candidate)
-    return summary_text.strip(), grounding
+# _gemini_web_search_summary removed (dead code - never called)
 
 
 def _build_maps_tool_and_config(
