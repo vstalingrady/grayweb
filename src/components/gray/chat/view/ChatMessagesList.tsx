@@ -99,8 +99,7 @@ export const ChatMessagesList = memo(
 
     return (
       <div className={styles.chatMessages} data-streaming={shouldShowPendingStreamIndicator ? "true" : undefined}>
-        {/* eslint-disable-next-line react-hooks/rules-of-hooks -- Refs are intentionally accessed in render for edit mode */}
-	        {messages.map((message, messageIndex) => {
+        {messages.map((message, messageIndex) => {
 	          const isUser = message.role === "user";
 	          const isAssistant = !isUser;
 	          const rawContent = message.content ?? "";

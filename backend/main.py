@@ -5802,12 +5802,7 @@ DEFAULT_SYSTEM_PROMPT = load_prompt_from_json(
 # Cache classes (AsyncTTLCache, TTLCache) and instances (USER_CACHE, CONVERSATION_OWNER_CACHE,
 # CONVERSATION_HISTORY_CACHE) are now imported from core.cache
 
-
-async def _get_cached_user(user_id: int, db: databases.Database):
-    async def fetch():
-        return await db.fetch_one(users.select().where(users.c.id == user_id))
-    
-    return await USER_CACHE.get(f"user_{user_id}", fetch)
+# _get_cached_user removed - use get_cached_user from core.conversation_store directly
 
 
 # _cache_conversation_history, _append_to_conversation_cache, _invalidate_conversation_cache
@@ -5845,7 +5840,7 @@ async def chat_stream(
     try:
         # 1. Start User Lookup (Async + Cached)
         t0_user = time.perf_counter()
-        user_task = asyncio.create_task(_get_cached_user(chat_request.user_id, db))
+        user_task = asyncio.create_task(get_cached_user(chat_request.user_id))
 
         # 2. Prepare Session Title (Sync, fast)
         effective_message = chat_request.message
