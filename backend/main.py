@@ -2518,6 +2518,30 @@ except ImportError:
 
 app.include_router(plans_router)
 
+# Calendar routes
+try:
+    from backend.api.calendars import router as calendars_router
+except ImportError:
+    from api.calendars import router as calendars_router  # type: ignore
+
+app.include_router(calendars_router)
+
+# Reminder routes
+try:
+    from backend.api.reminders import router as reminders_router
+except ImportError:
+    from api.reminders import router as reminders_router  # type: ignore
+
+app.include_router(reminders_router)
+
+# Dashboard routes
+try:
+    from backend.api.dashboard import router as dashboard_router
+except ImportError:
+    from api.dashboard import router as dashboard_router  # type: ignore
+
+app.include_router(dashboard_router)
+
 # Initialize audit logger with database
 try:
     from backend.audit_logger import init_audit_logger
@@ -9692,236 +9716,7 @@ async def list_user_conversations(
         return []
 
 
-# Dashboard API endpoints
-@app.get("/users/{user_id}/dashboard/pulses", response_model=List[DashboardPulse])
-async def list_dashboard_pulses(
-    user_id: int,
-    limit: int = MAX_DASHBOARD_PULSE_HISTORY,
-    db: databases.Database = Depends(get_database),
-    current_user: Dict[str, Any] = Depends(get_current_user),
-):
-    user_id = current_user["id"]
-    require_same_user(user_id, current_user)
-    safe_limit = max(1, min(limit, MAX_DASHBOARD_PULSE_HISTORY))
-
-    records: List[Any] = []
-    # Prefer Supabase when available.
-    if not records:
-        query = (
-            dashboard_pulses.select()
-            .where(dashboard_pulses.c.user_id == user_id)
-            .order_by(dashboard_pulses.c.date_key.desc())
-            .limit(safe_limit)
-        )
-        records = await db.fetch_all(query)
-    pulses: List[DashboardPulse] = []
-    for record in records:
-        payload = _serialize_dashboard_pulse_record(record)
-        if not payload:
-            continue
-        pulses.append(DashboardPulse(**payload))
-    return pulses
-
-
-@app.get("/users/{user_id}/dashboard/pulses/{date_key}", response_model=DashboardPulse)
-async def get_dashboard_pulse(
-    request: Request,
-    user_id: int,
-    date_key: str,
-    db: databases.Database = Depends(get_database),
-    current_user: Dict[str, Any] = Depends(get_current_user),
-):
-    user_id = current_user["id"]
-    require_same_user(user_id, current_user)
-    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date_key):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid date key; expected YYYY-MM-DD")
-
-    record = await _load_dashboard_pulse_by_date(db, user_id, date_key)
-    payload = _serialize_dashboard_pulse_record(record)
-    if not payload:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pulse entry not found")
-    return DashboardPulse(**payload)
-
-
-@app.post("/users/{user_id}/dashboard/pulses", response_model=DashboardPulse, status_code=status.HTTP_201_CREATED)
-async def create_dashboard_pulse(
-    user_id: int,
-    pulse: DashboardPulseCreate,
-    current_user: Dict[str, Any] = Depends(get_current_user),
-    db: databases.Database = Depends(get_database),
-):
-    user_id = current_user["id"]
-    require_same_user(user_id, current_user)
-    timestamp_dt = _timestamp_ms_to_datetime(pulse.timestamp)
-    plans_payload = _normalize_plan_items([item.dict() for item in pulse.plans])
-    habits_payload = _normalize_habit_items([item.dict() for item in pulse.habits])
-    proactivity_payload = _normalize_proactivity(pulse.proactivity.dict())
-
-    if pulse.carry_forward:
-        previous_record = await _load_previous_dashboard_pulse(db, user_id, pulse.date_key)
-        previous_serialized = _serialize_dashboard_pulse_record(previous_record)
-        plans_payload, habits_payload = _carry_forward_dashboard_entries(
-            previous_serialized or {"plans": [], "habits": []},
-            plans_payload,
-            habits_payload,
-        )
-
-    now = utcnow()
-
-    # Supabase-first implementation.
-    # Fallback to local SQLite.
-    existing = await _load_dashboard_pulse_by_date(db, user_id, pulse.date_key)
-
-    if existing:
-        await db.execute(
-            dashboard_pulses.update()
-            .where(dashboard_pulses.c.id == existing["id"])
-            .values(
-                timestamp=timestamp_dt,
-                plans=plans_payload,
-                habits=habits_payload,
-                proactivity=proactivity_payload,
-                updated_at=now,
-            )
-        )
-        record = await db.fetch_one(
-            dashboard_pulses.select().where(dashboard_pulses.c.id == existing["id"])
-        )
-    else:
-        pulse_id = await db.execute(
-            dashboard_pulses.insert().values(
-                user_id=user_id,
-                date_key=pulse.date_key,
-                timestamp=timestamp_dt,
-                plans=plans_payload,
-                habits=habits_payload,
-                proactivity=proactivity_payload,
-                created_at=now,
-                updated_at=now,
-            )
-        )
-        record = await db.fetch_one(
-            dashboard_pulses.select().where(dashboard_pulses.c.id == pulse_id)
-        )
-
-    payload = _serialize_dashboard_pulse_record(record)
-    if not payload:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to persist dashboard pulse")
-    return DashboardPulse(**payload)
-
-
-@app.put("/users/{user_id}/dashboard/pulses/{pulse_id}", response_model=DashboardPulse)
-async def update_dashboard_pulse(
-    user_id: int,
-    pulse_id: int,
-    pulse_update: DashboardPulseUpdate,
-    db: databases.Database = Depends(get_database),
-    current_user: Dict[str, Any] = Depends(get_current_user),
-):
-    user_id = current_user["id"]
-    require_same_user(user_id, current_user)
-    existing: Any = None
-    # Supabase-first lookup.
-    # Local SQLite implementation
-    update_data["updated_at"] = utcnow()
-    await db.execute(
-        dashboard_pulses.update()
-        .where(dashboard_pulses.c.id == pulse_id)
-        .values(**update_data)
-    )
-    record = await db.fetch_one(dashboard_pulses.select().where(dashboard_pulses.c.id == pulse_id))
-    payload = _serialize_dashboard_pulse_record(record)
-    if not payload:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to update dashboard pulse")
-    return DashboardPulse(**payload)
-
-
-@app.delete("/users/{user_id}/dashboard/pulses/{pulse_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_dashboard_pulse(
-    user_id: int,
-    pulse_id: int,
-    db: databases.Database = Depends(get_database),
-    current_user: Dict[str, Any] = Depends(get_current_user),
-):
-    user_id = current_user["id"]
-    require_same_user(user_id, current_user)
-    # Supabase-first delete.
-    existing = await db.fetch_one(
-        dashboard_pulses.select().where(
-            (dashboard_pulses.c.id == pulse_id) & (dashboard_pulses.c.user_id == user_id)
-        )
-    )
-    if not existing:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pulse entry not found")
-
-    await db.execute(
-        dashboard_pulses.delete().where(dashboard_pulses.c.id == pulse_id)
-    )
-    return None
-
-
-@app.get("/users/{user_id}/dashboard/summary", response_model=DashboardSummary)
-async def get_dashboard_summary(
-    user_id: int,
-    current_user: Dict[str, Any] = Depends(get_current_user),
-    db: databases.Database = Depends(get_database),
-):
-    require_same_user(user_id, current_user)
-    pulse_records: List[Any] = []
-    # Supabase-first for dashboard pulses.
-    if not pulse_records:
-        pulses_query = (
-            dashboard_pulses.select()
-            .where(dashboard_pulses.c.user_id == user_id)
-            .order_by(dashboard_pulses.c.date_key.desc())
-            .limit(MAX_DASHBOARD_PULSE_HISTORY)
-        )
-        pulse_records = await db.fetch_all(pulses_query)
-
-    pulse_items: List[DashboardPulse] = []
-    for record in pulse_records:
-        payload = _serialize_dashboard_pulse_record(record)
-        if not payload:
-            continue
-        pulse_items.append(DashboardPulse(**payload))
-
-    today_key = utcnow().strftime("%Y-%m-%d")
-    today_entry = next((pulse for pulse in pulse_items if pulse.date_key == today_key), None)
-    recent_entries = pulse_items[:7]
-
-    # Supabase-first for proactivity logs.
-    proactivity_records: List[Any] = []
-
-    if not proactivity_records:
-        proactivity_records = await db.fetch_all(
-            proactivity_logs.select()
-            .where(proactivity_logs.c.user_id == user_id)
-            .order_by(proactivity_logs.c.activity_date.desc())
-            .limit(10)
-        )
-    proactivity_logs_payload: List[ProactivityLog] = []
-    for record in proactivity_records:
-        proactivity_logs_payload.append(
-            ProactivityLog(
-                id=record["id"],
-                user_id=record["user_id"],
-                activity_date=record["activity_date"],
-                tasks_completed=record["tasks_completed"],
-                total_tasks=record["total_tasks"],
-                score=record["score"],
-                notes=record["notes"],
-                created_at=record["created_at"],
-                updated_at=record["updated_at"],
-            )
-        )
-
-    return DashboardSummary(
-        today=today_entry,
-        recent=recent_entries,
-        pulses=pulse_items,
-        proactivity=DashboardProactivitySummary(logs=proactivity_logs_payload),
-    )
-
+# Dashboard routes are now in backend/api/dashboard.py
 
 # --- Payment Endpoints ---
 
