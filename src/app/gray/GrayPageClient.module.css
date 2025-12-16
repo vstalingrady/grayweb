@@ -4956,8 +4956,6 @@
   align-items: center;
   gap: 0;
   padding: 0;
-  /* Match the chat viewport's 6px scrollbar so the composer stays centered with messages. */
-  padding-right: 6px;
   margin-top: auto;
   padding-bottom: env(safe-area-inset-bottom, 0px);
   background: transparent;
@@ -4967,12 +4965,6 @@
   overflow: visible;
   flex-shrink: 0;
   pointer-events: none;
-}
-
-@media (max-width: 768px) {
-  .chatComposerDock {
-    padding-right: 0;
-  }
 }
 
 
