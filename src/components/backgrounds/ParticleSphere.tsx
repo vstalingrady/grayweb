@@ -91,7 +91,7 @@ export function ParticleSphere() {
                 gl={{ antialias: true }}
             >
                 <color attach="background" args={["#030205"]} />
-                <fog attach="fog" args={["#020205", 8, 35]} />
+                <fog attach="fog" args={[0x020205, 8, 35]} />
                 <ambientLight intensity={0.5} />
                 <pointLight position={[10, 10, 15]} intensity={1.4} />
                 <Particles />

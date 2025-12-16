@@ -94,7 +94,6 @@ export function CreateEventModal({ isOpen, onClose, onSuccess, initialDate, init
                     label: title,
                     description,
                     remind_at: startDateTime.toISOString(),
-                    status: "pending"
                 });
             }
 

@@ -60,15 +60,11 @@ function DepthParticles() {
       <bufferGeometry>
         <bufferAttribute
           attach="attributes.position"
-          array={positions}
-          count={PARTICLE_COUNT}
-          itemSize={3}
+          args={[positions, 3]}
         />
         <bufferAttribute
           attach="attributes.color"
-          array={colors}
-          count={PARTICLE_COUNT}
-          itemSize={3}
+          args={[colors, 3]}
         />
       </bufferGeometry>
       <pointsMaterial
@@ -92,7 +88,7 @@ export function DepthParticleBackground() {
         gl={{ antialias: true }}
       >
         <color attach="background" args={["#030205"]} />
-        <fog attach="fog" args={["#020205", 8, 55]} />
+        <fog attach="fog" args={[0x020205, 8, 55]} />
         <ambientLight intensity={0.5} />
         <pointLight position={[10, 10, 15]} intensity={1.4} />
         <DepthParticles />

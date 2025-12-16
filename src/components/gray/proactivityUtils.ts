@@ -1,3 +1,4 @@
+import type { ProactivityItem } from "./types";
 
 export const DEFAULT_PROACTIVITY_TIME = "09:00";
 

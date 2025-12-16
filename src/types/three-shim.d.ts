@@ -1,5 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 declare module "three" {
+  export class Object3D {
+    position: Vector3;
+    rotation: { x: number; y: number; z: number };
+    scale: Vector3;
+  }
+
   export class Vector2 {
     constructor(x?: number, y?: number);
     x: number;
@@ -23,8 +29,11 @@ declare module "three" {
     w: number;
   }
 
+  export type ColorRepresentation = string | number | Color;
+
   export class Color {
-    constructor(r?: number, g?: number, b?: number);
+    constructor(color?: ColorRepresentation);
+    constructor(r: number, g: number, b: number);
   }
 
   export class BufferAttribute {
@@ -60,7 +69,7 @@ declare module "three" {
     scale: Vector3;
   }
 
-  export class Scene {
+  export class Scene extends Object3D {
     constructor();
     add(object: any): void;
   }
@@ -72,15 +81,45 @@ declare module "three" {
     updateProjectionMatrix(): void;
   }
 
-  export class Group {
+  export class Group extends Object3D {
     constructor();
     add(object: any): void;
-    rotation: { x: number; y: number; z: number };
-    scale: { set(x: number, y: number, z: number): void };
   }
 
-  export class Points {
-    rotation: { x: number; y: number; z: number };
+  export class Mesh extends Object3D {
+    constructor(geometry?: any, material?: any);
+  }
+
+  export class Points extends Object3D {
+    constructor(geometry?: any, material?: any);
+  }
+
+  export class SphereGeometry {
+    constructor(radius?: number, widthSegments?: number, heightSegments?: number);
+  }
+
+  export class MeshBasicMaterial extends Material {
+    constructor(parameters?: any);
+  }
+
+  export class PointsMaterial extends Material {
+    constructor(parameters?: any);
+  }
+
+  export class Fog {
+    constructor(color: any, near?: number, far?: number);
+  }
+
+  export class Light extends Object3D {
+    intensity: number;
+  }
+
+  export class AmbientLight extends Light {
+    constructor(color?: any, intensity?: number);
+  }
+
+  export class PointLight extends Light {
+    constructor(color?: any, intensity?: number);
   }
 
   export class WebGLRenderer {
@@ -93,4 +132,3 @@ declare module "three" {
     domElement: HTMLElement;
   }
 }
-

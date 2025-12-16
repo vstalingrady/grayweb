@@ -216,7 +216,7 @@ export function PlanHabitInlineEditor({
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [color, setColor] = useState<string>(QUICK_COLOR_SWATCHES[1]);
   const [isColorPickerOpen, setIsColorPickerOpen] = useState(false);
-  const [hexDraft, setHexDraft] = useState(QUICK_COLOR_SWATCHES[1]);
+  const [hexDraft, setHexDraft] = useState<string>(QUICK_COLOR_SWATCHES[1]);
   const [colorPickerPosition, setColorPickerPosition] = useState<{ top: number; left: number } | null>(null);
   const [reminderPreset, setReminderPreset] = useState<ReminderPreset>("none");
   const [isReminderMenuOpen, setIsReminderMenuOpen] = useState(false);

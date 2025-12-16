@@ -64,7 +64,8 @@ export type ChatContextValue = {
         role: ChatRole,
         content: string,
         tempId?: string,
-        metadata?: GroundingMetadata
+        metadata?: GroundingMetadata,
+        attachments?: MediaUpload[]
     ) => ChatMessage | null;
     updateMessage: (
         sessionId: string,

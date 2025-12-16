@@ -589,6 +589,7 @@ export interface UserUpdate {
   personalization_occupation?: string | null;
   personalization_about?: string | null;
   personalization_custom_instructions?: string | null;
+  personalization_system_prompt_override?: string | null;
   personalization_location?: string | null;
   personalization_time_zone?: string | null;
   preferred_model?: string | null;

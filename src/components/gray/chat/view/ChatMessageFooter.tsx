@@ -53,7 +53,8 @@ export function ChatMessageFooter({
   t,
 }: ChatMessageFooterProps) {
   const isMetadataAvailable = isAssistant && metadataRows.length > 0;
-  const hasVariants = isAssistant && Array.isArray(message.variants) && message.variants.length > 1;
+  const variants = isAssistant && Array.isArray(message.variants) ? message.variants : [];
+  const hasVariants = variants.length > 1;
   const copyText = isAssistant ? fullText : rawContent;
   const isCopyDisabled = !copyText.trim();
 
@@ -70,7 +71,7 @@ export function ChatMessageFooter({
                 <ChevronLeft size={14} />
               </button>
               <span className={styles.chatMessageVariantLabel}>
-                {(message.activeVariantIndex ?? message.variants.length - 1) + 1} / {message.variants.length}
+                {(message.activeVariantIndex ?? variants.length - 1) + 1} / {variants.length}
               </span>
               <button type="button" aria-label={t("Next response")} onClick={() => onCycleVariant("next")}>
                 <ChevronRight size={14} />
@@ -126,4 +127,3 @@ export function ChatMessageFooter({
     </div>
   );
 }
-

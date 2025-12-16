@@ -23,7 +23,7 @@ import {
 type ProactivityInlineMenuProps = {
   isOpen: boolean;
   onClose: () => void;
-  anchorRef: React.RefObject<HTMLElement>;
+  anchorRef: React.RefObject<HTMLElement | null>;
   activeProactivity?: ProactivityItem | null;
   activeProactivityTimes: string[];
   onSelectProactivity: (next: ProactivityItem) => void;

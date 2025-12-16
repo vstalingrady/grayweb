@@ -19,6 +19,8 @@ export type ReminderConfig = {
     reminder: GrayReminderCreatedPayload;
 };
 
+type ParsedReminderBlock = ReminderConfig;
+
 const REMINDER_STATUS_VALUES: GrayReminderStatus[] = ["created", "updated", "completed", "deleted"];
 const REMINDER_TYPE_VALUES: GrayReminderPayloadType[] = ["gray.reminder", "gray.plan", "gray.habit"];
 
@@ -75,17 +77,21 @@ const normalizeReminderEntity = (
     return "reminder";
 };
 
-const isFullReminderPayload = (candidate: Partial<GrayReminderCreatedPayload>): candidate is GrayReminderCreatedPayload => {
-    const type = normalizeReminderType(candidate?.type);
-    const status = normalizeReminderStatus(candidate?.status);
-    const source = normalizeReminderSource(candidate?.source);
-    if (!candidate || !type || !status || !source) {
+const isFullReminderPayload = (candidate: unknown): candidate is GrayReminderCreatedPayload => {
+    if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
         return false;
     }
-    if (!(candidate.entity === "plan" || candidate.entity === "habit" || candidate.entity === "reminder")) {
+    const partial = candidate as Partial<GrayReminderCreatedPayload>;
+    const type = normalizeReminderType(partial?.type);
+    const status = normalizeReminderStatus(partial?.status);
+    const source = normalizeReminderSource(partial?.source);
+    if (!type || !status || !source) {
         return false;
     }
-    const data = candidate.data;
+    if (!(partial.entity === "plan" || partial.entity === "habit" || partial.entity === "reminder")) {
+        return false;
+    }
+    const data = partial.data;
     return (
         data != null &&
         typeof data.id !== "undefined" &&
@@ -168,8 +174,8 @@ const coerceLegacyReminderPayload = (candidate: Record<string, unknown>): GrayRe
 };
 
 const coerceStructuredReminderPayload = (candidate: Record<string, unknown>): GrayReminderCreatedPayload | null => {
-    if (isFullReminderPayload(candidate as Partial<GrayReminderCreatedPayload>)) {
-        return candidate as GrayReminderCreatedPayload;
+    if (isFullReminderPayload(candidate)) {
+        return candidate;
     }
 
     const type = normalizeReminderType(candidate.type);
@@ -179,41 +185,43 @@ const coerceStructuredReminderPayload = (candidate: Record<string, unknown>): Gr
         return null;
     }
 
-    const label = typeof (data as Record<string, unknown>).label === "string"
-        ? (data as Record<string, unknown>).label
-        : null;
-    const reminderId =
-        (data as Record<string, unknown>).id ?? (data as Record<string, unknown>).reminder_id;
-    const userId = toNumber((data as Record<string, unknown>).user_id);
-    if (!label || typeof reminderId === "undefined" || typeof userId !== "number") {
+    const record = data as Record<string, unknown>;
+    const label = typeof record.label === "string" ? record.label : null;
+    const reminderIdCandidate = record.id ?? record.reminder_id;
+    const normalizedReminderId =
+        typeof reminderIdCandidate === "string" || typeof reminderIdCandidate === "number"
+            ? reminderIdCandidate
+            : null;
+    const userId = toNumber(record.user_id);
+    if (!label || !normalizedReminderId || typeof userId !== "number") {
         return null;
     }
 
     const entity = normalizeReminderEntity(
-        candidate.entity ?? (data as Record<string, unknown>).entity ?? (data as Record<string, unknown>).entity_type,
+        candidate.entity ?? record.entity ?? record.entity_type,
         type
     );
     const deliveryMode =
         typeof candidate.delivery_mode === "string"
             ? candidate.delivery_mode
-            : typeof (data as Record<string, unknown>).delivery_mode === "string"
-                ? (data as Record<string, unknown>).delivery_mode as string
+            : typeof record.delivery_mode === "string"
+                ? record.delivery_mode
                 : entity;
     const reminderStatus =
-        typeof (data as Record<string, unknown>).reminder_status === "string"
-            ? (data as Record<string, unknown>).reminder_status
+        typeof record.reminder_status === "string"
+            ? record.reminder_status
             : status;
     const reminderRecord =
-        typeof (data as Record<string, unknown>).reminder === "object" &&
-            (data as Record<string, unknown>).reminder !== null
-            ? (data as Record<string, unknown>).reminder as Record<string, unknown>
+        typeof record.reminder === "object" && record.reminder !== null
+            ? (record.reminder as Record<string, unknown>)
             : null;
     const timeIso =
-        typeof (data as Record<string, unknown>).time_iso === "string"
-            ? (data as Record<string, unknown>).time_iso
-            : typeof (data as Record<string, unknown>).remind_at === "string"
-                ? (data as Record<string, unknown>).remind_at
+        typeof record.time_iso === "string"
+            ? record.time_iso
+            : typeof record.remind_at === "string"
+                ? record.remind_at
                 : null;
+    const summary = typeof record.summary === "string" ? record.summary : null;
 
     return {
         type,
@@ -222,14 +230,15 @@ const coerceStructuredReminderPayload = (candidate: Record<string, unknown>): Gr
         entity,
         delivery_mode: deliveryMode,
         data: {
-            ...(data as Record<string, unknown>),
-            id: reminderId as string | number,
+            id: normalizedReminderId,
             user_id: userId,
             label,
             time_iso: timeIso,
+            raw: candidate,
             delivery_mode: deliveryMode,
-            reminder_id: (data as Record<string, unknown>).reminder_id ?? reminderId,
-            reminder_status: reminderStatus,
+            ...(summary ? { summary } : {}),
+            reminder_id: normalizedReminderId,
+            reminder_status: reminderStatus ?? null,
             reminder: reminderRecord,
         },
     };

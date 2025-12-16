@@ -2235,8 +2235,7 @@ function GrayPageClientInner({
     window.open(entry.href, "_blank", "noopener,noreferrer");
   };
 
-  const handleRenameHistoryEntry = useCallback((entry: SidebarHistoryEntry) => {
-    const id = entry.id;
+  const handleRenameHistoryEntry = useCallback((id: string) => {
     const session = sessions.find((s) => s.id === id);
     if (!session) return;
     const nextTitle = window.prompt("Rename conversation", session.title || "New Conversation");
@@ -2246,8 +2245,7 @@ function GrayPageClientInner({
     renameSession(id, nextTitle);
   }, [sessions, renameSession]);
 
-  const handleDeleteHistoryEntry = useCallback((entry: SidebarHistoryEntry) => {
-    const id = entry.id;
+  const handleDeleteHistoryEntry = useCallback((id: string) => {
     const confirmed = window.confirm("Delete this conversation? This cannot be undone.");
     if (!confirmed) {
       return;
@@ -2266,6 +2264,16 @@ function GrayPageClientInner({
       }
     }
   }, [deleteSession, activeChatId, generalSessionId, router, sessions]);
+
+  const handleRenameHistoryOverlayEntry = useCallback(
+    (entry: SidebarHistoryEntry) => handleRenameHistoryEntry(entry.id),
+    [handleRenameHistoryEntry]
+  );
+
+  const handleDeleteHistoryOverlayEntry = useCallback(
+    (entry: SidebarHistoryEntry) => handleDeleteHistoryEntry(entry.id),
+    [handleDeleteHistoryEntry]
+  );
 
   const handlePinHistoryEntry = useCallback((id: string, pinned: boolean) => {
     void pinSession(id, pinned);
@@ -2532,21 +2540,21 @@ function GrayPageClientInner({
         )}
 
 
-        <HistoryOverlay
-          isOpen={isHistoryOverlayOpen}
-          onClose={() => setIsHistoryOverlayOpen(false)}
-          sections={historySections}
-          onOpenEntry={handleOpenHistoryEntry}
-          onOpenEntryExternal={handleOpenHistoryEntryExternal}
-          onRenameEntry={handleRenameHistoryEntry}
-          onDeleteEntry={handleDeleteHistoryEntry}
-          onCreateNewChat={() => {
-            getOrCreateGeneralSessionId();
-            handleNavigate("general");
-            setManualViewMode(null);
-            router.push("/");
-          }}
-        />
+	        <HistoryOverlay
+	          isOpen={isHistoryOverlayOpen}
+	          onClose={() => setIsHistoryOverlayOpen(false)}
+	          sections={historySections}
+	          onOpenEntry={handleOpenHistoryEntry}
+	          onOpenEntryExternal={handleOpenHistoryEntryExternal}
+	          onRenameEntry={handleRenameHistoryOverlayEntry}
+	          onDeleteEntry={handleDeleteHistoryOverlayEntry}
+	          onCreateNewChat={() => {
+	            getOrCreateGeneralSessionId();
+	            handleNavigate("general");
+	            setManualViewMode(null);
+	            router.push("/");
+	          }}
+	        />
       </div>
     </>
   );

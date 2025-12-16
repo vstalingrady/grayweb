@@ -366,6 +366,44 @@ except ImportError:
         upsert_entity_reminder as _upsert_entity_reminder,
     )
 
+# Workspace tool handlers (extracted from main.py)
+try:
+    from backend.core.workspace_tools import (
+        set_reminder_scheduler as _set_workspace_reminder_scheduler,
+        list_plans_tool as _list_plans_tool,
+        create_plan_tool as _create_plan_tool,
+        update_plan_tool as _update_plan_tool,
+        delete_plan_tool as _delete_plan_tool,
+        list_habits_tool as _list_habits_tool,
+        create_habit_tool as _create_habit_tool,
+        update_habit_tool as _update_habit_tool,
+        delete_habit_tool as _delete_habit_tool,
+        list_reminders_tool as _list_reminders_tool,
+        create_reminder_tool as _create_reminder_tool,
+        update_reminder_tool as _update_reminder_tool,
+        delete_reminder_tool as _delete_reminder_tool,
+        delete_latest_reminder_tool as _delete_latest_reminder_tool,
+        get_workspace_state_tool as _get_workspace_state_tool,
+    )
+except ImportError:
+    from core.workspace_tools import (  # type: ignore
+        set_reminder_scheduler as _set_workspace_reminder_scheduler,
+        list_plans_tool as _list_plans_tool,
+        create_plan_tool as _create_plan_tool,
+        update_plan_tool as _update_plan_tool,
+        delete_plan_tool as _delete_plan_tool,
+        list_habits_tool as _list_habits_tool,
+        create_habit_tool as _create_habit_tool,
+        update_habit_tool as _update_habit_tool,
+        delete_habit_tool as _delete_habit_tool,
+        list_reminders_tool as _list_reminders_tool,
+        create_reminder_tool as _create_reminder_tool,
+        update_reminder_tool as _update_reminder_tool,
+        delete_reminder_tool as _delete_reminder_tool,
+        delete_latest_reminder_tool as _delete_latest_reminder_tool,
+        get_workspace_state_tool as _get_workspace_state_tool,
+    )
+
 from uuid import UUID, uuid4
 from pathlib import Path
 from urllib.parse import urlparse

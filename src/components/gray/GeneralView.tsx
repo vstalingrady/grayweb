@@ -116,11 +116,11 @@ export function GrayGeneralView({
         const aTime =
           toTimestamp(a.item.updatedAt) ||
           toTimestamp(a.item.createdAt) ||
-          toTimestamp(a.item.deadline);
+          (a.kind === "plan" ? toTimestamp(a.item.deadline) : 0);
         const bTime =
           toTimestamp(b.item.updatedAt) ||
           toTimestamp(b.item.createdAt) ||
-          toTimestamp(b.item.deadline);
+          (b.kind === "plan" ? toTimestamp(b.item.deadline) : 0);
         return bTime - aTime;
       });
 
