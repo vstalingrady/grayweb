@@ -46,9 +46,7 @@ export function HistoryOverlay({
     // Reset query when opening
     useEffect(() => {
         if (isOpen) {
-            // eslint-disable-next-line react-hooks/set-state-in-effect -- Intentional: reset state on open
             setQuery("");
-            // eslint-disable-next-line react-hooks/set-state-in-effect -- Intentional: reset state on open
             setActiveIndex(0);
             // Small timeout to ensure DOM is ready for focus
             setTimeout(() => inputRef.current?.focus(), 50);

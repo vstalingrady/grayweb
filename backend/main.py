@@ -3751,7 +3751,7 @@ async def save_conversation_message(
           .values(last_message_at=utcnow(), updated_at=utcnow())
       )
       await database.execute(update_query)
-      _append_to_conversation_cache(
+      append_to_conversation_cache(
           conversation_id,
           user_id,
           {
@@ -5810,34 +5810,8 @@ async def _get_cached_user(user_id: int, db: databases.Database):
     return await USER_CACHE.get(f"user_{user_id}", fetch)
 
 
-def _cache_conversation_history(conversation_id: str, user_id: Optional[int], history: List[Dict[str, Any]]) -> None:
-  if user_id is not None:
-    CONVERSATION_OWNER_CACHE.set(conversation_id, user_id)
-  CONVERSATION_HISTORY_CACHE.set(conversation_id, history)
-
-
-def _append_to_conversation_cache(conversation_id: str, user_id: Optional[int], message: Dict[str, Any]) -> None:
-  cached_history = CONVERSATION_HISTORY_CACHE.get(conversation_id)
-  if cached_history is None:
-    return
-  owner = CONVERSATION_OWNER_CACHE.get(conversation_id) or user_id
-  if user_id is not None and owner is not None and owner != user_id:
-    return
-  normalized = {
-    "role": message.get("role"),
-    "text": message.get("text") or "",
-    "grounding_metadata": message.get("grounding_metadata") or message.get("groundingMetadata"),
-    "attachments": message.get("attachments"),
-  }
-  new_history = cached_history + [normalized]
-  if owner is not None:
-    CONVERSATION_OWNER_CACHE.set(conversation_id, owner)
-  CONVERSATION_HISTORY_CACHE.set(conversation_id, new_history)
-
-
-def _invalidate_conversation_cache(conversation_id: str) -> None:
-  CONVERSATION_OWNER_CACHE.invalidate(conversation_id)
-  CONVERSATION_HISTORY_CACHE.invalidate(conversation_id)
+# _cache_conversation_history, _append_to_conversation_cache, _invalidate_conversation_cache
+# are now imported directly from core.conversation_store - removed duplicate implementations
 
 
 @app.post("/api/chat/stream")
@@ -6450,7 +6424,7 @@ async def delete_conversation(
         general_user_id = _general_conversation_user_id(conversation_id)
         if general_user_id is not None:
             await _delete_general_conversation_history(general_user_id)
-            _invalidate_conversation_cache(conversation_id)
+            invalidate_conversation_cache(conversation_id)
             return
 
         if _is_valid_uuid(conversation_id):
@@ -6467,7 +6441,7 @@ async def delete_conversation(
                 await database.execute(_user_chat_threads.delete().where(_user_chat_threads.c.id == conversation_id))
             except Exception as error:
                 _handle_conversation_store_error("Error deleting conversation", error)
-        _invalidate_conversation_cache(conversation_id)
+        invalidate_conversation_cache(conversation_id)
         # When storage is unavailable or the ID is not a UUID, there is nothing to delete.
     except Exception as error:
         raise HTTPException(status_code=500, detail=f"Error deleting conversation: {str(error)}")
@@ -6493,7 +6467,7 @@ async def delete_all_conversations(
 
         # 1. Delete General Chat History
         await _delete_general_conversation_history(user_id, db=db)
-        _invalidate_conversation_cache(f"general:{user_id}")
+        invalidate_conversation_cache(f"general:{user_id}")
 
         # 2. Delete All Named Threads (and their messages)
         try:
@@ -6518,7 +6492,7 @@ async def delete_all_conversations(
                 await db.execute(_user_chat_threads.delete().where(_user_chat_threads.c.id.in_(thread_ids)))
 
                 for thread_id in thread_ids:
-                    _invalidate_conversation_cache(thread_id)
+                    invalidate_conversation_cache(thread_id)
 
         except Exception as db_error:
             app_logger.error(f"Error checking/deleting named threads: {db_error}")
@@ -6550,7 +6524,7 @@ async def _overwrite_conversation_history_logic(
             await _replace_general_conversation_history(
                 general_user_id, normalized_history
             )
-            _invalidate_conversation_cache(conversation_id)
+            invalidate_conversation_cache(conversation_id)
             return {
                 "id": conversation_id,
                 "message_count": len(normalized_history),
@@ -6560,7 +6534,7 @@ async def _overwrite_conversation_history_logic(
         result = await overwrite_thread_history(
             conversation_id, normalized_history, current_user["id"]
         )
-        _invalidate_conversation_cache(conversation_id)
+        invalidate_conversation_cache(conversation_id)
         return result
     except HTTPException:
         raise

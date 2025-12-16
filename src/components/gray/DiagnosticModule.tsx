@@ -1,7 +1,5 @@
 "use client";
 
-/* eslint-disable react/no-unescaped-entities */
-import { useState } from "react";
 import styles from './DiagnosticModule.module.css';
 import { X, Check } from 'lucide-react';
 import { useI18n } from "@/contexts/I18nContext";
