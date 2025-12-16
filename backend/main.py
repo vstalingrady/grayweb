@@ -767,6 +767,12 @@ try:
 except ImportError:
     from core.onboarding_handler import complete_onboarding as _complete_onboarding  # type: ignore
 
+# Title generator (extracted from main.py)
+try:
+    from backend.core.title_generator import generate_chat_title_inline as _generate_chat_title_inline
+except ImportError:
+    from core.title_generator import generate_chat_title_inline as _generate_chat_title_inline  # type: ignore
+
 load_dotenv(ROOT_DIR / ".env")
 
 SUPABASE_POOLER_HOST = os.getenv("SUPABASE_POOLER_HOST", "aws-1-ap-south-1.pooler.supabase.com")
@@ -2337,86 +2343,12 @@ def _context_cache_contents(record: Optional[Dict[str, Any]]) -> Optional[List[t
     ]
 
 
-# _generate_chat_title_async removed (dead code - never called)
 
-async def _generate_chat_title_inline(
-    message: str,
-    response_text: str,
-    prompt_locale: str = "en",
-) -> Optional[str]:
-    """
-    Generate a concise title for the conversation using a lightweight model.
-    Returns the generated title or None if generation fails.
-    This is called inline (blocking) so the SSE end event can include the title.
-    """
-    # Load prompt from JSON or fallback
-    prompt_template = load_prompt_from_json(
-        GLOBAL_SYSTEM_PROMPTS_PATH,
-        "title_generation",
-        "Analyze the following conversation and generate a concise, descriptive title (under 25 characters, 3-5 words max). Output ONLY the title text, no tags or quotes."
-        ,
-        locale=prompt_locale,
-    )
 
-    # Construct a minimal transcript for the title model
-    transcript = f"User: {message}\nAssistant: {response_text}"
-
-    def _clean_title(raw_title: str) -> Optional[str]:
-        candidate = (raw_title or "").strip()
-        if not candidate:
-            return None
-        candidate = re.sub(r'^["\']|["\']$', "", candidate).strip()
-        candidate = re.sub(r"<[^>]+>", "", candidate).strip()
-        candidate = re.sub(r"^title\\s*:\\s*", "", candidate, flags=re.IGNORECASE).strip()
-        candidate = re.sub(r"\\s+", " ", candidate).strip()
-        return candidate or None
-    
-    try:
-        if GEMINI_SERVICE and GEMINI_SERVICE.available:
-            try:
-                # Use user-requested model: models/gemini-flash-lite-latest
-                response = await GEMINI_SERVICE.generate(
-                    message=transcript,
-                    conversation_history=None,
-                    workspace_context=None,
-                    system_prompt=prompt_template,
-                    time_context=None,
-                    model="models/gemini-flash-lite-latest",  # Explicitly requested Lite model
-                )
-                if response and response.candidates:
-                    return _clean_title(_candidate_text(response.candidates[0]))
-            except Exception as e:
-                api_logger.warning(f"Gemini title generation failed: {e}")
-
-        # Fallback to OpenRouter if Gemini fails (or if we want to keep it as backup)
-        if OPENROUTER_SERVICE and OPENROUTER_SERVICE.available:
-            # Use a fast, reliable model for tltles.
-            title_model = os.getenv("OPENROUTER_TITLE_MODEL", "google/gemini-2.5-flash-preview-09-2025")
-            
-            raw_title = await OPENROUTER_SERVICE.generate(
-                transcript,
-                conversation_history=None,
-                workspace_context=None,
-                system_prompt=prompt_template,
-                time_context=None,
-                model=title_model,
-                include_usage=False,
-                response_format=None,
-                tools=None,
-                tool_choice=None,
-            )
-            cleaned = _clean_title(raw_title)
-            if cleaned:
-                return cleaned
-
-    except Exception as e:
-        api_logger.warning(
-            f"Inline title generation failed: {e}",
-            extra={"event_type": "title_generation_error"}
-        )
-    return None
+# _generate_chat_title_inline is now imported from core.title_generator
 
 # Helper functions extracted to core modules: _merge_extra_contents (ai_utils), normalize_conversation_history (chat_history)
+
 
 async def _load_conversation_history(conversation_id: str, user_id: int) -> List[Dict[str, Any]]:
   """Load a conversation's messages.

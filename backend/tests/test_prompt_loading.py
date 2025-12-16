@@ -33,7 +33,7 @@ def test_load_prompt_from_json_uses_fallback_when_key_empty():
 
 
 def test_generate_chat_title_inline_prefers_openrouter_when_available():
-    import backend.main as main
+    from backend.core.title_generator import generate_chat_title_inline
 
     class StubOpenRouter:
         available = True
@@ -48,7 +48,7 @@ def test_generate_chat_title_inline_prefers_openrouter_when_available():
             model,
             **kwargs,
         ):
-            assert model == "google/gemini-2.5-flash-preview-09-2025" or model == main.OPENROUTER_LITE_MODEL
+            assert model == "google/gemini-2.5-flash-preview-09-2025"
             assert "User:" in message
             assert "Assistant:" in message
             assert isinstance(system_prompt, str) and system_prompt.strip()
@@ -58,18 +58,17 @@ def test_generate_chat_title_inline_prefers_openrouter_when_available():
             assert kwargs.get("tool_choice") is None
             return "Test Title"
 
-    original_openrouter = main.OPENROUTER_SERVICE
-    original_gemini = main.GEMINI_SERVICE
-    try:
-        main.OPENROUTER_SERVICE = StubOpenRouter()
-        main.GEMINI_SERVICE = type("StubGemini", (), {"available": False})()
+    class StubGemini:
+        available = False
 
-        async def run():
-            title = await main._generate_chat_title_inline("hi", "hello", prompt_locale="en")
-            assert title == "Test Title"
+    async def run():
+        title = await generate_chat_title_inline(
+            "hi", 
+            "hello", 
+            prompt_locale="en",
+            gemini_service=StubGemini(),
+            openrouter_service=StubOpenRouter(),
+        )
+        assert title == "Test Title"
 
-        asyncio.run(run())
-    finally:
-        main.OPENROUTER_SERVICE = original_openrouter
-        main.GEMINI_SERVICE = original_gemini
-
+    asyncio.run(run())

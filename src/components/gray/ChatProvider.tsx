@@ -49,12 +49,10 @@ import {
   shouldIncludeWorkspaceContext,
   resolveClientTimezone,
   buildSessionStorageKeyCandidates,
-  deriveTitleFromMessage,
   shouldRequestAutoTitleForSession,
   normalizeConversationIdValue,
   isGenericSessionTitle as isGenericTitle,
   parseGrayTitleMarkers,
-  formatConversationTitle,
   coerceConversationIdForRequest,
   buildConversationHistoryPayload,
   toTimestamp,
@@ -193,7 +191,6 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
   const pendingThreadSeedsRef = useRef<Map<string, { sessionId: string; createdAt: number }>>(
     new Map()
   );
-  const debouncedUpdateTimeoutsRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
   const [workspaceContextValue, setWorkspaceContextValue] = useState<string | null>(
     workspaceContext ?? null
   );
@@ -258,7 +255,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
     mapPayload.maps_latitude != null && mapPayload.maps_longitude != null
   );
 
-  const getGeolocation = (): Promise<{ latitude: number; longitude: number } | null> => {
+  const getGeolocation = useCallback((): Promise<{ latitude: number; longitude: number } | null> => {
     return new Promise((resolve) => {
       if (typeof window === "undefined" || !window.navigator?.geolocation) {
         resolve(null);
@@ -274,10 +271,10 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
         () => resolve(null)
       );
     });
-  };
+  }, []);
 
   // Helper to manually request location (e.g. from the Tools menu)
-  const requestLocationCoordinates = async () => {
+  const requestLocationCoordinates = useCallback(async () => {
     const coords = await getGeolocation();
     if (coords) {
       setMapsLatitude(coords.latitude.toString());
@@ -286,7 +283,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       return true;
     }
     return false;
-  };
+  }, [getGeolocation]);
 
   const toggleMapsEnabled = useCallback(async () => {
     const nextState = !mapsEnabled;
@@ -296,7 +293,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
     if (nextState && !hasLocationCoordinates) {
       await requestLocationCoordinates();
     }
-  }, [mapsEnabled, hasLocationCoordinates]);
+  }, [hasLocationCoordinates, mapsEnabled, requestLocationCoordinates]);
 
   const toggleWebSearchEnabled = useCallback(() => {
     setWebSearchEnabled((prev) => !prev);
@@ -436,7 +433,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
         setModelTier("lite");
       }
     }
-  }, [modelTier, reasoningMode, selectedModelId, user?.plan_tier, user?.role]);
+  }, [modelTier, reasoningMode, selectedModelId, user]);
 
   // Restore visible models per user (or anon)
   useEffect(() => {
@@ -575,12 +572,6 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
 
   const autoStreamTriggeredRef = useRef<Set<string>>(new Set());
   const pendingHistorySyncRef = useRef<Set<string>>(new Set());
-  const sessionStorageKeyCandidates = useMemo(
-    () => buildSessionStorageKeyCandidates(user?.id ?? null, user?.email ?? null),
-    [user?.id, user?.email]
-  );
-  const sessionStorageKey = sessionStorageKeyCandidates[0] ?? null;
-  const previousSessionStorageKeyRef = useRef<string | null>(null);
   const reminderDeliveryCacheRef = useRef<Set<number>>(new Set());
   const markAutoStreamTriggered = useCallback((sessionId: string, messageId?: string | null) => {
     if (!sessionId || !messageId) {
@@ -637,9 +628,10 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
   );
 
   useEffect(() => {
+    const timers = historySyncTimersRef.current;
     return () => {
-      historySyncTimersRef.current.forEach((timer) => clearTimeout(timer));
-      historySyncTimersRef.current.clear();
+      timers.forEach((timer) => clearTimeout(timer));
+      timers.clear();
     };
   }, []);
 
@@ -761,7 +753,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       return;
     }
     // Only load if we haven't already (though this component should only mount once per app life ideally)
-    if (hasLoadedFromStorageRef.current && sessions.length > 0) {
+    if (hasLoadedFromStorageRef.current) {
       return;
     }
 
@@ -779,7 +771,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       });
     }
     hasLoadedFromStorageRef.current = true;
-  }, [user?.id, user?.email]);
+  }, [setSessions, user?.email, user?.id]);
 
   const persistSessions = useCallback((_next: ChatSession[]) => {
     if (typeof window === "undefined") {
@@ -935,7 +927,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
         return ordered;
       });
     },
-    [persistSessions]
+    [persistSessions, setSessions]
   );
 
   const applyAutoTitle = useCallback(
@@ -1026,7 +1018,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
         applyAutoTitle(sessionId, assistantAutoTitle);
       }
     },
-    [applyAutoTitle, persistSessions]
+    [applyAutoTitle, persistSessions, setSessions]
   );
 
   // Throttled version of updateMessage for streaming (ensures updates every ~30ms)
@@ -1058,9 +1050,10 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
 
   // Cleanup timeouts on unmount
   useEffect(() => {
+    const timeouts = throttledUpdateTimeoutsRef.current;
     return () => {
-      throttledUpdateTimeoutsRef.current.forEach((timeout) => clearTimeout(timeout));
-      throttledUpdateTimeoutsRef.current.clear();
+      timeouts.forEach((timeout) => clearTimeout(timeout));
+      timeouts.clear();
     };
   }, []);
 
@@ -1115,7 +1108,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
         enqueueHistorySync(conversationIdForSync, historyPayload);
       }
     },
-    [enqueueHistorySync, persistSessions, user?.id]
+    [enqueueHistorySync, persistSessions, setSessions]
   );
 
   const renameSession = useCallback(
@@ -1245,7 +1238,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
 
       return createdMessage;
     },
-    [applyAutoTitle, persistSessions]
+    [applyAutoTitle, persistSessions, setSessions]
   );
 
   const deleteSession = useCallback(
@@ -1283,7 +1276,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
         })();
       }
     },
-    [persistSessions, resetAutoStreamState]
+    [persistSessions, resetAutoStreamState, setSessions]
   );
 
   const clearAllConversations = useCallback(() => {
@@ -1307,7 +1300,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       persistSessions(ordered);
       return ordered;
     });
-  }, [persistSessions, resetAutoStreamState, user?.email, user?.id]);
+  }, [persistSessions, resetAutoStreamState, setSessions, user?.email, user?.id]);
 
   const ensureGeneralSession = useCallback((): ChatSession => {
     const existing = sessionsRef.current.find((session) => session.scope === "general");
@@ -1321,7 +1314,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       return next;
     });
     return created;
-  }, [persistSessions]);
+  }, [persistSessions, setSessions]);
 
   const mergeRemoteConversations = useCallback(
     (conversations: ConversationSummary[]) => {
@@ -1509,7 +1502,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
         return ordered;
       });
     },
-    [persistSessions]
+    [persistSessions, setSessions]
   );
 
   useEffect(() => {
