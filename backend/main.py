@@ -847,26 +847,6 @@ URL_CONTEXT_TOOL = types.Tool(
     url_context=types.UrlContext(),
 )
 
-# Pattern to extract URLs from messages (excludes localhost/internal URLs)
-URL_EXTRACTION_PATTERN = re.compile(r'https?://[^\s<>"{}|\\^`\[\]\(\)]+')
-URL_CONTEXT_MODEL = "models/gemini-flash-lite-latest"  # Fast model for URL fetching
-
-def _extract_urls_from_message(message: str) -> List[str]:
-    """Extract URLs from a message for URL context processing.
-    
-    Returns up to 20 URLs (API limit), filtered to exclude internal/localhost URLs.
-    """
-    if not message:
-        return []
-    
-    urls = URL_EXTRACTION_PATTERN.findall(message)
-    # Filter out internal/localhost URLs
-    filtered = [
-        url for url in urls 
-        if not any(x in url.lower() for x in ['localhost', '127.0.0.1', '0.0.0.0'])
-    ]
-    # API supports up to 20 URLs per request
-    return filtered[:20]
 
 # PLAN_TOOLS not included by default - added conditionally based on message intent
 # CALENDAR_TOOLS removed from default - tool definitions add ~2s latency to OpenRouter
@@ -1080,13 +1060,6 @@ if IS_PRODUCTION and not ALLOWED_ORIGINS and not ALLOWED_ORIGIN_REGEX:
     )
     raise RuntimeError("CORS configuration missing in production")
 
-def _fallback_title_from_message(message: str) -> str:
-    trimmed = (message or "").strip()
-    if not trimmed:
-        return "New Chat"
-    if len(trimmed) <= 30:
-        return trimmed
-    return f"{trimmed[:27].rstrip()}…"
 
 MAX_DASHBOARD_PULSE_HISTORY = 30
 DEFAULT_DASHBOARD_PROACTIVITY = {
@@ -2681,14 +2654,6 @@ async def dev_analytics_summary(
     }
 
 # Helper functions
-def generate_initials(full_name: str) -> str:
-    """Generate initials from full name."""
-    parts = full_name.strip().split()
-    if len(parts) >= 2:
-        return (parts[0][0] + parts[-1][0]).upper()
-    elif len(parts) == 1:
-        return parts[0][:2].upper()
-    return "U"
 
 
 def _timestamp_ms_to_datetime(timestamp_ms: Optional[int]) -> datetime:

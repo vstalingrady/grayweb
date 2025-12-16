@@ -12,24 +12,19 @@ import {
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
-import Image from "next/image";
 import { useRouter } from "next/navigation";
 import {
   ChevronLeft,
-  ChevronDown,
   ChevronRight,
-  Check,
   UserCircle,
   Settings as SettingsIcon,
   Palette,
   Moon,
   Sun,
-  Trash2,
   Database,
   Bell,
   Brain,
   KeyRound,
-  Lock,
   Pencil,
 } from "lucide-react";
 import styles from "@/app/gray/GrayPageClient.module.css";
@@ -37,151 +32,33 @@ import { useI18n } from "@/contexts/I18nContext";
 import { useUser } from "@/contexts/UserContext";
 import { useChatStore } from "@/components/gray/ChatProvider";
 import { GRAY_BRAND, ALL_PIONEER_MODEL_IDS, PIONEER_GROUPS } from "@/components/gray/modelCatalog";
-import type { ContextUsageSummary } from "@/components/gray/types";
 import { clampPercent, getContextUsageUsedTokens, getContextUsageVisualizationLimit } from "@/components/gray/contextUsage";
 import { apiService } from "@/lib/api";
 import type { Locale } from "@/lib/i18n";
 import { requestNotificationPermission } from "@/lib/notificationUtils";
 import { clearGrayLocalCache } from "@/lib/localCache";
+import { SettingsSelect } from "./components/SettingsSelect";
+import { AccountSection } from "./sections/AccountSection";
+import { ApiKeysSection } from "./sections/ApiKeysSection";
+import { DataControlsSection } from "./sections/DataControlsSection";
+import { ModelsSection } from "./sections/ModelsSection";
+import { NotificationsSection } from "./sections/NotificationsSection";
+import { PersonalizationSection } from "./sections/PersonalizationSection";
+import { PreferencesSection } from "./sections/PreferencesSection";
+import {
+  API_KEY_PROVIDERS,
+  DEFAULT_NOTIFICATION_PREFERENCES,
+  type NotificationPreferences,
+  type SettingsModalProps,
+  type SettingsSection,
+  type ThemeMode,
+} from "./types";
 
-type SelectOption = { value: string; label: string };
-
-type SettingsSelectProps = {
-  value: string;
-  options: SelectOption[];
-  onChange: (value: string) => void;
-  icon?: React.ElementType;
-};
-
-function SettingsSelect({ value, options, onChange, icon: Icon }: SettingsSelectProps) {
-  const [isOpen, setIsOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const activeLabel = useMemo(() => {
-    const match = options.find((option) => option.value === value);
-    return match?.label ?? value;
-  }, [options, value]);
-
-  useEffect(() => {
-    if (!isOpen) {
-      return;
-    }
-    const handlePointerDown = (event: PointerEvent) => {
-      const target = event.target as Node;
-      if (containerRef.current && !containerRef.current.contains(target)) {
-        setIsOpen(false);
-      }
-    };
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setIsOpen(false);
-      }
-    };
-    document.addEventListener("pointerdown", handlePointerDown, true);
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.removeEventListener("pointerdown", handlePointerDown, true);
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [isOpen]);
-
-  return (
-    <div className={styles.settingsSelectButton} style={{ position: "relative" }} ref={containerRef}>
-      <button
-        type="button"
-        className={styles.settingsSelectTrigger}
-        onClick={() => setIsOpen((prev) => !prev)}
-        aria-haspopup="listbox"
-        aria-expanded={isOpen ? "true" : "false"}
-      >
-        {Icon ? <Icon size={14} /> : null}
-        <span className={styles.settingsSelectValue}>{activeLabel}</span>
-        <ChevronDown
-          size={14}
-          className={styles.settingsSelectChevron}
-          aria-hidden="true"
-          data-open={isOpen ? "true" : "false"}
-        />
-      </button>
-
-      {isOpen ? (
-        <div className={styles.settingsSelectMenu} role="listbox">
-          {options.map((option) => {
-            const selected = option.value === value;
-            return (
-              <button
-                key={option.value}
-                type="button"
-                role="option"
-                aria-selected={selected ? "true" : "false"}
-                className={styles.settingsSelectOption}
-                data-selected={selected ? "true" : "false"}
-                onClick={() => {
-                  onChange(option.value);
-                  setIsOpen(false);
-                }}
-              >
-                <span>{option.label}</span>
-                {selected ? <Check size={14} aria-hidden="true" /> : null}
-              </button>
-            );
-          })}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-type SettingsModalProps = {
-  isOpen: boolean;
-  onClose: () => void;
-  initialSection?: SettingsSection;
-  contextUsage?: ContextUsageSummary | null;
-};
-
-type SettingsSection =
-  | "account"
-  | "preferences"
-  | "personalization"
-  | "models"
-  | "api_keys"
-  | "data_controls"
-  | "notifications";
-
-type ThemeMode = "dark" | "light" | "system";
 const THEME_STORAGE_KEY = "gray_theme";
 const NOTIFICATIONS_STORAGE_PREFIX = "gray_notifications";
 const CONVERSATION_MEMORY_STORAGE_PREFIX = "gray_conversation_memory";
 const MODEL_IMPROVEMENT_STORAGE_PREFIX = "gray_model_improvement";
 const API_KEYS_STORAGE_PREFIX = "gray_api_keys";
-
-type ApiKeyProvider = {
-  id: string;
-  label: string;
-  helper: string;
-};
-
-const API_KEY_PROVIDERS: ApiKeyProvider[] = [
-  { id: "openrouter", label: "OpenRouter", helper: "Routes to all models. Get key at openrouter.ai" },
-  { id: "anthropic", label: "Anthropic", helper: "Direct API for Claude models" },
-  { id: "openai", label: "OpenAI", helper: "Direct API for GPT models" },
-  { id: "google", label: "Google", helper: "Direct API for Gemini models" },
-  { id: "deepseek", label: "DeepSeek", helper: "Direct API for DeepSeek models" },
-  { id: "x-ai", label: "xAI", helper: "Direct API for Grok models" },
-];
-
-type NotificationPreferences = {
-  device: boolean;
-  tasks: boolean;
-  proactivity: boolean;
-  calendarEvents: boolean;
-};
-
-const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
-  device: false,
-  tasks: true,
-  proactivity: true,
-  calendarEvents: true,
-};
 
 const resolveInitialTheme = (): ThemeMode => {
   if (typeof window === "undefined") {
