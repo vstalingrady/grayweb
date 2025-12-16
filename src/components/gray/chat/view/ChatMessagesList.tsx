@@ -174,7 +174,7 @@ export const ChatMessagesList = memo(
               <div className={messageBodyClassName}>
                 {editingMessageId === message.id ? (
                   <ChatMessageEditor
-                    defaultValue={editContentRef.current}
+                    defaultValue={rawContent}
                     textareaRef={editTextareaRef}
                     onCancel={cancelEditing}
                     onSave={() => saveEditing(message.id)}

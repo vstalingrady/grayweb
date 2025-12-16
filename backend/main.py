@@ -3551,33 +3551,7 @@ async def _generate_image_descriptions(
 
 # _carry_forward_dashboard_entries is now imported from core.dashboard_helpers
 
-
-async def _load_dashboard_pulse_by_date(db: databases.Database, user_id: int, date_key: str):
-    """Wrapper that calls the extracted helper with the dashboard_pulses table."""
-    query = (
-        dashboard_pulses.select()
-        .where(
-            (dashboard_pulses.c.user_id == user_id)
-            & (dashboard_pulses.c.date_key == date_key)
-        )
-        .limit(1)
-    )
-    return await db.fetch_one(query)
-
-
-async def _load_previous_dashboard_pulse(db: databases.Database, user_id: int, date_key: str):
-    """Wrapper that calls the extracted helper with the dashboard_pulses table."""
-    query = (
-        dashboard_pulses.select()
-        .where(
-            (dashboard_pulses.c.user_id == user_id)
-            & (dashboard_pulses.c.date_key < date_key)
-        )
-        .order_by(dashboard_pulses.c.date_key.desc())
-        .limit(1)
-    )
-    return await db.fetch_one(query)
-
+# _load_dashboard_pulse_by_date and _load_previous_dashboard_pulse removed (dead code - never called)
 
 # _coerce_activity_day is now imported from core.dashboard_helpers
 
