@@ -1183,17 +1183,7 @@ google_calendar_states = sqlalchemy.Table(
 
 # Pydantic models are now imported from backend.models
 
-def _extract_project_ref(url_value: Optional[str]) -> Optional[str]:
-    if not url_value:
-        return None
-    try:
-        parsed = urlparse(url_value)
-        host = parsed.hostname or ""
-        if host.endswith(".supabase.co"):
-            return host.split(".")[0]
-    except Exception:
-        return None
-    return None
+# _extract_project_ref removed (dead code - never used)
 
 
 # Removed _ensure_supabase_chat_tables helper as Supabase data usage is deprecated.
@@ -1220,8 +1210,7 @@ def _conversation_store_available() -> bool:
   return conversation_store._conversation_store_available()
 
 
-def _disable_conversation_store(reason: str) -> None:
-  conversation_store._disable_conversation_store(reason)
+# _disable_conversation_store removed (dead code - never called)
 
 
 def _handle_conversation_store_error(context: str, error: Exception) -> None:
@@ -1458,9 +1447,7 @@ async def _replace_general_conversation_history(user_id: int, history: List[Dict
         pass  # Redis cache module not available
 
 
-def _delete_general_conversation_history(user_id: int) -> None:
-    # Local only; Supabase deletion no longer supported directly.
-    pass
+# _delete_general_conversation_history stub removed (async version is the real implementation)
 
 
 def _delete_supabase_user_records(user_id: int) -> None:

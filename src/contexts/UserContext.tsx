@@ -5,7 +5,6 @@ import React, {
   useContext,
   useState,
   useEffect,
-  useMemo,
   useRef,
   useCallback,
   ReactNode,
@@ -35,10 +34,6 @@ interface UserProviderProps {
   userEmail?: string;
 }
 
-const USER_CACHE_KEY_PREFIX = 'gray-user-cache:';
-const USER_CACHE_VERSION = 1;
-const USER_CACHE_MAX_AGE_MS = 1000 * 60 * 60 * 12;
-
 const isMissingUserError = (error: unknown): boolean => {
   if (!error || typeof error !== 'object') {
     return false;
@@ -61,125 +56,15 @@ const isMissingUserError = (error: unknown): boolean => {
   return false;
 };
 
-type CachedUserPayload = {
-  version: number;
-  timestamp: number;
-  user: User;
-};
-
-const sanitizeCachedUser = (value: unknown): { user: User; timestamp: number } | null => {
-  if (!value || typeof value !== 'object') {
-    return null;
-  }
-
-  const payload = value as Partial<CachedUserPayload>;
-
-  if (payload.version !== USER_CACHE_VERSION) {
-    return null;
-  }
-
-  if (typeof payload.timestamp !== 'number' || !Number.isFinite(payload.timestamp)) {
-    return null;
-  }
-
-  const userValue = payload.user;
-  if (!userValue || typeof userValue !== 'object') {
-    return null;
-  }
-  const raw = userValue as Partial<User>;
-
-  if (typeof raw.id !== 'number' || !Number.isFinite(raw.id)) {
-    return null;
-  }
-  if (typeof raw.email !== 'string' || raw.email.trim().length === 0) {
-    return null;
-  }
-  if (typeof raw.full_name !== 'string' || raw.full_name.trim().length === 0) {
-    return null;
-  }
-
-  const user: User = {
-    id: raw.id,
-    email: raw.email,
-    full_name: raw.full_name,
-    profile_picture_url:
-      typeof raw.profile_picture_url === 'string' && raw.profile_picture_url.trim().length > 0
-        ? raw.profile_picture_url
-        : undefined,
-    role: typeof raw.role === 'string' && raw.role.trim().length > 0 ? raw.role : 'user',
-    initials: typeof raw.initials === 'string' && raw.initials.trim().length > 0 ? raw.initials : 'OP',
-    workspace_background_id:
-      typeof raw.workspace_background_id === 'string' && raw.workspace_background_id.length > 0
-        ? raw.workspace_background_id
-        : null,
-    maps_enabled: typeof raw.maps_enabled === 'boolean' ? raw.maps_enabled : false,
-    improve_model_for_everyone:
-      typeof raw.improve_model_for_everyone === 'boolean' ? raw.improve_model_for_everyone : false,
-    personalization_nickname:
-      typeof raw.personalization_nickname === 'string' && raw.personalization_nickname.length > 0
-        ? raw.personalization_nickname
-        : null,
-    personalization_occupation:
-      typeof raw.personalization_occupation === 'string' && raw.personalization_occupation.length > 0
-        ? raw.personalization_occupation
-        : null,
-    personalization_about:
-      typeof raw.personalization_about === 'string' && raw.personalization_about.length > 0
-        ? raw.personalization_about
-        : null,
-    personalization_custom_instructions:
-      typeof raw.personalization_custom_instructions === 'string' &&
-        raw.personalization_custom_instructions.length > 0
-        ? raw.personalization_custom_instructions
-        : null,
-    personalization_system_prompt_override:
-      typeof raw.personalization_system_prompt_override === 'string' &&
-        raw.personalization_system_prompt_override.length > 0
-        ? raw.personalization_system_prompt_override
-        : null,
-    personalization_location:
-      typeof raw.personalization_location === 'string' && raw.personalization_location.length > 0
-        ? raw.personalization_location
-        : null,
-    personalization_time_zone:
-      typeof raw.personalization_time_zone === 'string' && raw.personalization_time_zone.length > 0
-        ? raw.personalization_time_zone
-        : null,
-    created_at:
-      typeof raw.created_at === 'string' && raw.created_at.trim().length > 0
-        ? raw.created_at
-        : new Date(payload.timestamp).toISOString(),
-    updated_at:
-      typeof raw.updated_at === 'string' && raw.updated_at.trim().length > 0
-        ? raw.updated_at
-        : new Date(payload.timestamp).toISOString(),
-  };
-
-  return { user, timestamp: payload.timestamp };
-};
-
-const getUserCacheKey = (email: string) => `${USER_CACHE_KEY_PREFIX}${email.toLowerCase()}`;
-
-const readCachedUser = (_email?: string | null): { user: User; timestamp: number } | null => null;
-
-const persistCachedUser = (_email: string, _user: User) => {
-  // User profile caching is now handled exclusively by the backend.
-};
-
-const removeCachedUser = (_email?: string | null) => {
-  // No-op: user cache is not stored in browser storage anymore.
-};
+const deriveNameFromEmail = (email: string) => humanizeIdentifier(email) ?? 'Operator';
 
 export function UserProvider({ children, userEmail }: UserProviderProps) {
-  const cachedUser = useMemo(() => readCachedUser(userEmail ?? null)?.user ?? null, [userEmail]);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(() => Boolean(userEmail));
   const [error, setError] = useState<string | null>(null);
   const isMountedRef = useRef(true);
   const activeRequestIdRef = useRef(0);
   const pendingUserResolversRef = useRef<Set<(value: User | null) => void>>(new Set());
-
-  const deriveNameFromEmail = (email: string) => humanizeIdentifier(email) ?? 'Operator';
 
   const fetchSupabaseProfile = async (): Promise<{ fullName: string | null; avatarUrl: string | null; planTier: string | null } | null> => {
     try {
@@ -384,7 +269,8 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
         if (Object.keys(updates).length > 0) {
           try {
             // console.log('loadUser: Updating user profile with:', updates);
-            const updatedUser = await apiService.updateUser(userData.id, updates); if (isStale()) {
+            const updatedUser = await apiService.updateUser(userData.id, updates);
+            if (isStale()) {
               return;
             }
             const hydratedUser = {
@@ -392,7 +278,6 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
               profile_picture_url: preferredAvatar ?? updatedUser.profile_picture_url ?? null,
             };
             setUser(hydratedUser);
-            persistCachedUser(hydratedUser.email, hydratedUser);
           } catch (updateError) {
             console.debug('[v2] Error updating user profile:', updateError);
             if (!isStale()) {
@@ -401,7 +286,6 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
                 profile_picture_url: preferredAvatar ?? userData.profile_picture_url ?? null,
               };
               setUser(hydratedUserFallback);
-              persistCachedUser(hydratedUserFallback.email, hydratedUserFallback);
             }
           }
         } else {
@@ -411,7 +295,6 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
               profile_picture_url: preferredAvatar ?? userData.profile_picture_url ?? null,
             };
             setUser(hydratedUser);
-            persistCachedUser(hydratedUser.email, hydratedUser);
           }
         }
       } catch (userError) {
@@ -434,7 +317,6 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
               profile_picture_url: preferredAvatar ?? newUser.profile_picture_url ?? null,
             };
             setUser(hydratedUser);
-            persistCachedUser(hydratedUser.email, hydratedUser);
           }
         } else {
           console.debug('[v2] loadUser: Unexpected error getting user:', userError);
@@ -462,7 +344,6 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
     try {
       const newUser = await apiService.createUser(userData);
       setUser(newUser);
-      persistCachedUser(newUser.email, newUser);
       return newUser;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to create user';
@@ -556,7 +437,6 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
       // Ensure local state reflects latest profile so viewerName and panel baselines
       // immediately pick up nickname / full_name changes.
       setUser(updatedUser);
-      persistCachedUser(updatedUser.email, updatedUser);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to update user';
       setError(errorMessage);
@@ -570,7 +450,6 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
     try {
       const updatedUser = await apiService.getUser(user.id);
       setUser(updatedUser);
-      persistCachedUser(updatedUser.email, updatedUser);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to refresh user');
     }
@@ -593,7 +472,6 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
       }
       clearAuthCookies();
       clearSupabaseAuthStorage();
-      removeCachedUser(user.email);
       setUser(null);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to delete user account';
@@ -660,14 +538,8 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
       // console.log('[v2] UserContext: No userEmail provided');
       setUser(null);
       setLoading(false);
-      removeCachedUser(null);
     }
   }, [userEmail]);
-  useEffect(() => {
-    if (user && userEmail) {
-      persistCachedUser(userEmail, user);
-    }
-  }, [user, userEmail]);
 
   const value: UserContextType = {
     user,
