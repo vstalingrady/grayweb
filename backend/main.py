@@ -3681,71 +3681,9 @@ async def _delete_latest_reminder_tool(user_id: int, args: Dict[str, Any], db: d
         return {"status": "success", "message": f"Deleted {len(records)} reminder(s)", "details": deleted_messages}
     return {"status": "success", "message": deleted_messages[0]}
 
-def _build_reminder_payload(reminder: Dict[str, Any], user_id: int, status: str, entity: str = "plan") -> Dict[str, Any]:
-    """Build a gray.reminder payload compatible with the frontend."""
-    reminder_id = reminder.get("id")
-    label = reminder.get("label", "Reminder")
-    remind_at = reminder.get("remind_at") or reminder.get("deadline")
-    description = reminder.get("description")
-    
-    # Convert remind_at to ISO string if it's a datetime
-    time_iso = None
-    if remind_at:
-        if isinstance(remind_at, datetime):
-            if remind_at.tzinfo is None:
-                remind_at = remind_at.replace(tzinfo=timezone.utc)
-            time_iso = remind_at.isoformat()
-        elif isinstance(remind_at, str):
-            time_iso = remind_at
-    
-    # Convert any remaining datetime objects in raw data to strings for JSON safety
-    safe_raw = {}
-    for k, v in reminder.items():
-        if isinstance(v, (datetime, date)):
-             safe_raw[k] = v.isoformat()
-        else:
-             safe_raw[k] = v
 
-    return {
-        "type": "gray.reminder",
-        "source": "native/backend",
-        "status": status,
-        "entity": entity,
-        "delivery_mode": reminder.get("delivery_mode", entity),
-        "data": {
-            "id": reminder_id,
-            "user_id": user_id,
-            "label": label,
-            "time_iso": time_iso,
-            "raw": safe_raw,
-        },
-    }
-
-
-def _normalize_remind_at(remind_at: Optional[datetime]) -> Optional[datetime]:
-    if remind_at is None:
-        return None
-    if remind_at.tzinfo is None:
-        # Backend stores naive UTC timestamps.
-        return remind_at
-    return remind_at.astimezone(timezone.utc).replace(tzinfo=None)
-
-
-def _parse_remind_at(value: Any) -> Optional[datetime]:
-    if value is None:
-        return None
-    if isinstance(value, datetime):
-        return _normalize_remind_at(value)
-    if isinstance(value, str):
-        trimmed = value.strip()
-        if not trimmed:
-            return None
-        try:
-            parsed = datetime.fromisoformat(trimmed.replace("Z", "+00:00"))
-        except Exception:
-            return None
-        return _normalize_remind_at(parsed)
-    return None
+# Reminder utilities (_build_reminder_payload, _normalize_remind_at, _parse_remind_at)
+# are now imported from core.tool_handlers
 
 
 async def _get_pending_entity_reminder_map(
