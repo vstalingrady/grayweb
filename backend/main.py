@@ -6806,6 +6806,13 @@ async def stream_ai_response(
         workspace_with_cache = "\n\n".join(filter(None, [workspace_with_cache, calendar_context_block]))
 
     effective_system_prompt = system_prompt
+    if not reminders_enabled:
+        effective_system_prompt = (effective_system_prompt or "") + "\n\n" + (
+            "CAPABILITY NOTE:\n"
+            "- Reminders & plans are disabled for this session unless explicitly enabled.\n"
+            "- Do not claim that you scheduled/set reminders or created plans/habits.\n"
+            "- If the user wants reminders/plans, ask them to enable the Reminders & Plans toggle."
+        )
 
     # Prepare tools for all providers
     t0_media = time.perf_counter()
@@ -7011,6 +7018,13 @@ CRITICAL: When the user asks to create/update a plan or habit, you MUST call the
                     api_logger.info(f"[OpenRouter Call] search_enabled={search_enabled}, tools={num_tools} ({tool_names}), history={hist_len}, model={model}, reasoning_mode={reasoning_mode}")
 
                     run_system_prompt = effective_system_prompt
+                    if needs_structured_tools and tool_list:
+                        run_system_prompt = (run_system_prompt or "") + "\n\n" + (
+                            "TOOLS REQUIRED:\n"
+                            "- When the user asks to create/update/delete a plan, habit, or reminder, you MUST call the appropriate tool.\n"
+                            "- Do NOT claim 'reminders set', 'scheduled', or similar unless you actually invoked the tool and it succeeded.\n"
+                            "- If the user intent is ambiguous, ask a clarifying question before calling tools."
+                        )
                     if search_enabled:
                         # Track web search cost ($10/K = $0.01 per search)
                         # We charge if the search capability is enabled and passed to the provider

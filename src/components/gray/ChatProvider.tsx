@@ -88,6 +88,7 @@ import { WORKSPACE_REFRESH_EVENT } from "./hooks/useWorkspaceData";
 const WORKSPACE_CONTEXT_COOLDOWN_MS = 600000; // 10 minutes
 const CONVERSATION_MEMORY_STORAGE_PREFIX = "gray_conversation_memory";
 const VISIBLE_MODEL_IDS_STORAGE_PREFIX = "gray_visible_model_ids";
+const REMINDERS_ENABLED_STORAGE_PREFIX = "gray_reminders_enabled";
 
 declare global {
   interface Window {
@@ -745,10 +746,48 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
     setWebSearchEnabled((prev) => !prev);
   }, []);
 
-  const [remindersEnabled, setRemindersEnabled] = useState(false);
+  const remindersEnabledStorageKey = useMemo(
+    () => `${REMINDERS_ENABLED_STORAGE_PREFIX}:${user?.id ?? "anon"}`,
+    [user?.id]
+  );
+  const [remindersEnabled, setRemindersEnabled] = useState(true);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    try {
+      const stored = window.localStorage.getItem(remindersEnabledStorageKey);
+      if (stored === null) {
+        setRemindersEnabled(true);
+        return;
+      }
+      setRemindersEnabled(stored !== "0");
+    } catch {
+      setRemindersEnabled(true);
+    }
+  }, [remindersEnabledStorageKey]);
+
+  const setRemindersEnabledPersisted = useCallback(
+    (updater: boolean | ((prev: boolean) => boolean)) => {
+      setRemindersEnabled((prev) => {
+        const nextValue = typeof updater === "function" ? updater(prev) : updater;
+        if (typeof window !== "undefined") {
+          try {
+            window.localStorage.setItem(remindersEnabledStorageKey, nextValue ? "1" : "0");
+          } catch {
+            // Best-effort persistence.
+          }
+        }
+        return nextValue;
+      });
+    },
+    [remindersEnabledStorageKey]
+  );
+
   const toggleRemindersEnabled = useCallback(() => {
-    setRemindersEnabled((prev) => !prev);
-  }, []);
+    setRemindersEnabledPersisted((prev) => !prev);
+  }, [setRemindersEnabledPersisted]);
 
   // Deprecated: No longer blocks execution.
   const promptForLocationConsent = (message: string, sendAction: () => void) => {
