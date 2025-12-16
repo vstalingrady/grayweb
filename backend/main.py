@@ -2550,6 +2550,14 @@ except ImportError:
 
 app.include_router(payments_router)
 
+# Proactivity routes
+try:
+    from backend.api.proactivity import router as proactivity_router
+except ImportError:
+    from api.proactivity import router as proactivity_router  # type: ignore
+
+app.include_router(proactivity_router)
+
 # Initialize audit logger with database
 try:
     from backend.audit_logger import init_audit_logger
@@ -10752,181 +10760,5 @@ async def trigger_proactivity_for_user(
         raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
 
 
-# Calendar Routes (Restored)
-@app.get("/users/{user_id}/calendar_events", response_model=List[CalendarEvent])
-async def get_user_calendar_events(
-    user_id: int,
-    calendar_id: Optional[int] = None,
-    db: databases.Database = Depends(get_database),
-    current_user: Dict[str, Any] = Depends(get_current_user),
-):
-    user_id = current_user["id"]
-    require_same_user(user_id, current_user)
-    query = calendar_events.select().where(calendar_events.c.user_id == user_id)
-    if calendar_id:
-        query = query.where(calendar_events.c.calendar_id == calendar_id)
-    
-    # Order by start time
-    query = query.order_by(calendar_events.c.start_time)
-    
-    return await db.fetch_all(query)
 
-@app.post("/users/{user_id}/calendar_events", response_model=CalendarEvent, status_code=status.HTTP_201_CREATED)
-async def create_user_calendar_event(
-    user_id: int,
-    event: CalendarEventCreate,
-    db: databases.Database = Depends(get_database),
-    current_user: Dict[str, Any] = Depends(get_current_user),
-):
-    user_id = current_user["id"]
-    require_same_user(user_id, current_user)
-    
-    values = {
-        "user_id": user_id,
-        "calendar_id": event.calendar_id,
-        "title": event.title,
-        "description": event.description,
-        "start_time": event.start_time,
-        "end_time": event.end_time,
-        "color": event.color,
-        "reminder_minutes_before": event.reminder_minutes_before,
-        "created_at": utcnow(),
-    }
-    
-    event_id = await db.execute(calendar_events.insert().values(**values))
-    if event.reminder_minutes_before is not None:
-        remind_at = event.start_time - timedelta(minutes=max(0, event.reminder_minutes_before))
-        reminder_values = {
-            "user_id": user_id,
-            "label": event.title,
-            "description": event.description,
-            "remind_at": remind_at,
-            "entity_type": "calendar_event",
-            "entity_id": event_id,
-            "status": "pending",
-            "created_at": utcnow(),
-            "updated_at": utcnow(),
-        }
-        await db.execute(reminders.insert().values(**reminder_values))
-    query = calendar_events.select().where(calendar_events.c.id == event_id)
-    return await db.fetch_one(query)
-
-@app.patch("/users/{user_id}/calendar_events/{event_id}", response_model=CalendarEvent)
-async def update_user_calendar_event(
-    user_id: int,
-    event_id: int,
-    event_update: CalendarEventUpdate,
-    db: databases.Database = Depends(get_database),
-    current_user: Dict[str, Any] = Depends(get_current_user),
-):
-    user_id = current_user["id"]
-    require_same_user(user_id, current_user)
-    
-    query = calendar_events.select().where(
-        (calendar_events.c.id == event_id) & (calendar_events.c.user_id == user_id)
-    )
-    existing = await db.fetch_one(query)
-    if not existing:
-        raise HTTPException(status_code=404, detail="Event not found")
-        
-    values = event_update.dict(exclude_unset=True)
-    if not values:
-        return existing
-
-    next_start_time = values.get("start_time", existing["start_time"])
-    next_title = values.get("title", existing["title"])
-    next_description = values.get("description", existing.get("description"))
-    next_reminder_minutes_before = values.get(
-        "reminder_minutes_before",
-        existing.get("reminder_minutes_before"),
-    )
-        
-    await db.execute(
-        calendar_events.update()
-        .where((calendar_events.c.id == event_id) & (calendar_events.c.user_id == user_id))
-        .values(**values)
-    )
-
-    reminder_query = reminders.select().where(
-        (reminders.c.user_id == user_id)
-        & (reminders.c.entity_type == "calendar_event")
-        & (reminders.c.entity_id == event_id)
-    )
-    existing_reminder = await db.fetch_one(reminder_query)
-
-    if next_reminder_minutes_before is None:
-        if existing_reminder:
-            await db.execute(
-                reminders.delete().where(
-                    (reminders.c.user_id == user_id)
-                    & (reminders.c.entity_type == "calendar_event")
-                    & (reminders.c.entity_id == event_id)
-                )
-            )
-    else:
-        remind_at = next_start_time - timedelta(minutes=max(0, next_reminder_minutes_before))
-        reminder_payload = {
-            "label": next_title,
-            "description": next_description,
-            "remind_at": remind_at,
-            "status": "pending",
-            "updated_at": utcnow(),
-        }
-        if existing_reminder:
-            await db.execute(
-                reminders.update()
-                .where(
-                    (reminders.c.user_id == user_id)
-                    & (reminders.c.entity_type == "calendar_event")
-                    & (reminders.c.entity_id == event_id)
-                )
-                .values(**reminder_payload)
-            )
-        else:
-            await db.execute(
-                reminders.insert().values(
-                    **{
-                        "user_id": user_id,
-                        "entity_type": "calendar_event",
-                        "entity_id": event_id,
-                        "created_at": utcnow(),
-                        **reminder_payload,
-                    }
-                )
-            )
-    
-    return await db.fetch_one(query)
-
-@app.delete("/users/{user_id}/calendar_events/{event_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_user_calendar_event(
-    user_id: int,
-    event_id: int,
-    db: databases.Database = Depends(get_database),
-    current_user: Dict[str, Any] = Depends(get_current_user),
-):
-    user_id = current_user["id"]
-    require_same_user(user_id, current_user)
-    
-    query = calendar_events.select().where(
-        (calendar_events.c.id == event_id) & (calendar_events.c.user_id == user_id)
-    )
-    existing = await db.fetch_one(query)
-    if not existing:
-        raise HTTPException(status_code=404, detail="Event not found")
-        
-    await db.execute(
-        calendar_events.delete()
-        .where((calendar_events.c.id == event_id) & (calendar_events.c.user_id == user_id))
-    )
-    await db.execute(
-        reminders.delete().where(
-            (reminders.c.user_id == user_id)
-            & (reminders.c.entity_type == "calendar_event")
-            & (reminders.c.entity_id == event_id)
-        )
-    )
-    return None
-
-
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000, access_log=False)
+# Calendar event routes are now in backend/api/calendars.py
