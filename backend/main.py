@@ -1015,171 +1015,28 @@ REMINDER_FUNCTION_NAMES = (
     "complete_onboarding",
 )
 
-# Shared keyword sets for tool/reminder detection
-REMINDER_KEYWORDS = frozenset({
-    "reminder", "remind", "ping", "nudge", "notify", "timer", "alarm", "alert",
-    "goal", "plan", "habit", "schedule", "deadline", "due", "task", "todo",
-})
+# Message detection keywords and functions (REMINDER_KEYWORDS, TOOL_TRIGGER_KEYWORDS,
+# _needs_structured_tools, _should_request_structured_reminders, _should_enable_search,
+# _should_use_web_search) are now imported from core.message_detection
 
-TOOL_TRIGGER_KEYWORDS = REMINDER_KEYWORDS | frozenset({
-    "meeting", "appointment", "call", "checkin", "check-in", "check in",
-    "sync", "standup", "doctor", "dentist", "gym", "workout", "project", "routine",
-    "at", "tomorrow", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
-    # Time expressions to catch conversational follow-ups like "in 2 hours"
-    "pm", "am", "hour", "hours", "minute", "minutes", "oclock", "o'clock",
-})
-
-
-def _needs_structured_tools(message: str) -> bool:
-    """Check if message likely requires tool execution (reminders, calendar, etc).
-    
-    Uses word boundary matching to avoid false positives like 'at' matching 'cat'.
-    """
-    import re
-    normalized = (message or "").lower()
-    if not normalized:
-        return False
-    # Use word boundaries to match whole words only
-    for kw in TOOL_TRIGGER_KEYWORDS:
-        if re.search(rf'\b{re.escape(kw)}\b', normalized):
-            return True
-    return False
-
-
-def _should_request_structured_reminders(message: str) -> bool:
-    """Check if message specifically relates to reminder functionality.
-    
-    Uses word boundary matching to avoid false positives.
-    """
-    import re
-    normalized = (message or "").lower()
-    if not normalized:
-        return False
-    for kw in REMINDER_KEYWORDS:
-        if re.search(rf'\b{re.escape(kw)}\b', normalized):
-            return True
-    return False
-
-
-def _should_enable_search(message: str) -> bool:
-    """Check if message implies a need for web search.
-    
-    Uses word boundary matching for specific keywords to avoid over-triggering.
-    """
-    import re
-    normalized = (message or "").lower()
-    if not normalized:
-        return False
-
-    # Explicit request cues; keep conservative because enabling search can incur cost.
-    explicit_patterns = [
-        r"\bsearch\b",
-        r"\bgoogle\b",
-        r"\bweb\s*search\b",
-        r"\blook\s*up\b",
-        r"\blookup\b",
-        r"\bfind\s+on\s+the\s+web\b",
-    ]
-    if any(re.search(pattern, normalized) for pattern in explicit_patterns):
-        return True
-
-    # Live/recency-oriented queries.
-    return _should_use_web_search(message, model=None)
-
+# Use imported versions with consistent naming
+REMINDER_KEYWORDS = _REMINDER_KEYWORDS
+TOOL_TRIGGER_KEYWORDS = _TOOL_TRIGGER_KEYWORDS
 
 # CORS utility functions (_split_env_list, _origin_variants, _local_network_origins,
 # _build_allowed_origins, _local_network_origin_regex) are now imported from core.cors_utils
 
+# AI utility functions (_prefers_gemini_model, _materialize_structured_reminders,
+# _candidate_text, _candidate_thought, _candidate_grounding_payload, _merge_extra_contents,
+# _clean_title, _fallback_title_from_message) are now imported from core.ai_utils
 
-def _prefers_gemini_model(normalized_model: str) -> bool:
-    """
-    Determine if the requested model should route to Gemini.
-
-    The frontend passes tier labels like "lite" and "pro" that we map to concrete
-    Gemini models inside GeminiService. Treat those as Gemini hints so we don't
-    accidentally send them to OpenRouter.
-    """
-    if not normalized_model:
-        return False
-    if normalized_model.startswith("models/") or normalized_model.startswith("gemini"):
-        return True
-    return normalized_model in {
-        "pro",
-        "gray-pro",
-    }
-
-
-def _materialize_structured_reminders(raw_text: str) -> Tuple[str, Optional[List[Dict[str, Any]]]]:
-    """
-    Attempt to parse a structured reminder payload of the form:
-    { "message": "...", "reminders": [ { ...gray.reminder... } ] }
-    OR a direct gray.reminder payload (single or list).
-    Returns (text, reminders) where reminders is None on failure.
-    """
-    try:
-        payload = json.loads(raw_text)
-    except Exception:
-        return raw_text, None
-
-    # Handle list of gray.reminders
-    if isinstance(payload, list):
-        if payload and isinstance(payload[0], dict) and payload[0].get("type") == "gray.reminder":
-            return "", payload
-        return raw_text, None
-
-    if not isinstance(payload, dict):
-        return raw_text, None
-
-    # Handle direct gray.reminder payload (single)
-    if payload.get("type") == "gray.reminder":
-        return "", [payload]
-
-    message = payload.get("message")
-    reminders = payload.get("reminders")
-    if not isinstance(message, str):
-        return raw_text, None
-    if reminders is not None and not isinstance(reminders, list):
-        return message, None
-    return message, reminders if isinstance(reminders, list) else None
-
-
-def _row_get(row: Any, key: str, default: Any = None) -> Any:
-    """Safely retrieve a column from SQLAlchemy Row objects or dictionaries."""
-    if row is None:
-        return default
-    if isinstance(row, dict):
-        return row.get(key, default)
-    mapping = getattr(row, "_mapping", None)
-    if isinstance(mapping, Mapping):
-        return mapping.get(key, default)
-    try:
-        return row[key]  # type: ignore[index]
-    except (KeyError, TypeError):
-        return default
-
-
-def _parse_json_field(value: Optional[str]) -> Optional[Dict[str, Any]]:
-    if not value:
-        return None
-    try:
-        return json.loads(value)
-    except json.JSONDecodeError:
-        return None
-
-
-def _serialize_reminder_row(row: Any) -> Dict[str, Any]:
-    """Serialize a reminder row to a dictionary with ISO formatted dates."""
-    record = dict(row)
-    for key in ("remind_at", "created_at", "updated_at", "delivered_at"):
-        value = record.get(key)
-        if isinstance(value, datetime):
-            if value.tzinfo is None:
-                value = value.replace(tzinfo=timezone.utc)
-            record[key] = value.isoformat()
-    return record
-
+# Serialization functions (_row_get, _parse_json_field, _serialize_reminder_row,
+# _serialize_habit_record, _normalize_plan_items, _normalize_habit_items, 
+# _normalize_proactivity, _datetime_to_ms, _parse_iso_timestamp, _serialize_proactivity_notification,
+# _serialize_context_cache) are now imported from core.serializers
 
 ALLOWED_ORIGIN_REGEX = _local_network_origin_regex()
+
 ALLOWED_ORIGINS = _build_allowed_origins()
 
 if IS_PRODUCTION and not ALLOWED_ORIGINS and not ALLOWED_ORIGIN_REGEX:
