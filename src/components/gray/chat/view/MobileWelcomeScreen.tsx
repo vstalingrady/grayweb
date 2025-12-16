@@ -1,6 +1,7 @@
 "use client";
 
 import { memo, useMemo } from "react";
+import Image from "next/image";
 import styles from "@/app/gray/GrayPageClient.module.css";
 import { useI18n } from "@/contexts/I18nContext";
 
@@ -80,7 +81,13 @@ export const MobileWelcomeScreen = memo(() => {
     <div className={styles.mobileWelcomeScreen}>
       <div className={styles.mobileWelcomeContent}>
         <div className={styles.mobileWelcomeLogo}>
-          <img src="/grayaiwhitenotspinning.svg" alt="" className={styles.uiIconImage} />
+          <Image
+            src="/grayaiwhitenotspinning.svg"
+            alt=""
+            width={40}
+            height={40}
+            className={styles.uiIconImage}
+          />
         </div>
         <p className={styles.mobileWelcomeGreeting}>{greeting}</p>
       </div>
@@ -88,4 +95,3 @@ export const MobileWelcomeScreen = memo(() => {
   );
 });
 MobileWelcomeScreen.displayName = "MobileWelcomeScreen";
-
