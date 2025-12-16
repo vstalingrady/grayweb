@@ -2789,7 +2789,7 @@ async def _generate_chat_title_async(
                 generated_title = _clean_title(_candidate_text(response.candidates[0]))
 
         if generated_title:
-            await _update_conversation_title(conversation_id, generated_title)
+            await update_conversation_title(conversation_id, generated_title)
 
     except Exception as e:
         api_logger.warning(
@@ -3818,9 +3818,7 @@ async def generate_chat_title_suggestion(message: str) -> Optional[str]:
     return _fallback_title_from_message(trimmed)
 
 
-async def _update_conversation_title(conversation_id: str, title: str) -> None:
-    """Compatibility wrapper around core.chat_history.update_conversation_title."""
-    await update_conversation_title(conversation_id, title)
+# _update_conversation_title wrapper removed - use update_conversation_title directly
 
 
 async def stream_ai_response(
@@ -5791,7 +5789,7 @@ async def chat_endpoint(
                     final_title = generated_title
                     # Store in DB in background (non-blocking)
                     background_tasks.add_task(
-                        _update_conversation_title,
+                        update_conversation_title,
                         conversation_id,
                         generated_title,
                     )
@@ -6269,7 +6267,7 @@ async def chat_stream(
                             final_title = generated_title
                             # Store in DB in background (non-blocking)
                             background_tasks.add_task(
-                                _update_conversation_title,
+                                update_conversation_title,
                                 conversation_id,
                                 generated_title,
                             )

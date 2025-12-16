@@ -1429,7 +1429,6 @@ class ApiService {
     const shouldLogVerbose = process.env.NEXT_PUBLIC_ENABLE_API_LOGGING === 'true';
 
     if (shouldLogVerbose) {
-      // eslint-disable-next-line no-console
       console.debug('[ApiService.sendMessageStream:start]', {
         requestId,
         endpoint,
@@ -1479,7 +1478,6 @@ class ApiService {
         // Best effort - non JSON payloads fall back to default message.
       }
       if (shouldLogVerbose) {
-        // eslint-disable-next-line no-console
         console.error('[ApiService.sendMessageStream:response-error]', {
           requestId,
           endpoint,

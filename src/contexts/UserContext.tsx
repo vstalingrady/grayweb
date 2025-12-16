@@ -65,8 +65,13 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
   const isMountedRef = useRef(true);
   const activeRequestIdRef = useRef(0);
   const pendingUserResolversRef = useRef<Set<(value: User | null) => void>>(new Set());
+  const userRef = useRef<User | null>(null);
 
-  const fetchSupabaseProfile = async (): Promise<{ fullName: string | null; avatarUrl: string | null; planTier: string | null } | null> => {
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
+
+  const fetchSupabaseProfile = useCallback(async (): Promise<{ fullName: string | null; avatarUrl: string | null; planTier: string | null } | null> => {
     try {
       const supabase = getSupabaseClient();
       if (!supabase) {
@@ -166,9 +171,9 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
       }
       return null;
     }
-  };
+  }, []);
 
-  const loadUser = async (email: string, options?: { silent?: boolean }) => {
+  const loadUser = useCallback(async (email: string, options?: { silent?: boolean }) => {
     const silent = Boolean(options?.silent);
     const requestId = ++activeRequestIdRef.current;
     const isStale = () => !isMountedRef.current || activeRequestIdRef.current !== requestId;
@@ -338,7 +343,7 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
         setLoading(false);
       }
     }
-  };
+  }, [fetchSupabaseProfile]);
 
   const createUser = async (userData: { email: string; full_name: string; profile_picture_url?: string }) => {
     try {
@@ -513,10 +518,11 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
 
   useEffect(() => {
     isMountedRef.current = true;
+    const pendingUserResolvers = pendingUserResolversRef.current;
     return () => {
       isMountedRef.current = false;
-      const pending = Array.from(pendingUserResolversRef.current);
-      pendingUserResolversRef.current.clear();
+      const pending = Array.from(pendingUserResolvers);
+      pendingUserResolvers.clear();
       pending.forEach((resolve) => resolve(null));
     };
   }, []);
@@ -524,7 +530,7 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
   useEffect(() => {
     if (userEmail) {
       // console.log('[v2] UserContext: Loading user with email:', userEmail);
-      loadUser(userEmail, { silent: Boolean(user) }).catch((err) => {
+      loadUser(userEmail, { silent: Boolean(userRef.current) }).catch((err) => {
         if (isApiNetworkError(err)) {
           if (process.env.NODE_ENV !== 'production') {
             console.debug('[v2] User profile API unreachable while bootstrapping:', err);
@@ -539,7 +545,7 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
       setUser(null);
       setLoading(false);
     }
-  }, [userEmail]);
+  }, [loadUser, userEmail]);
 
   const value: UserContextType = {
     user,
