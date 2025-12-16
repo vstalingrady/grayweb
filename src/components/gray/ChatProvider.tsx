@@ -8,8 +8,6 @@ import {
   useMemo,
   useRef,
   useState,
-  type ChangeEvent,
-  type RefObject,
   type ReactNode,
   type SetStateAction,
 } from "react";
@@ -19,18 +17,13 @@ import { useI18n } from "@/contexts/I18nContext";
 import {
   apiService,
   isApiNetworkError,
-  type ChatStreamTiming,
   type ConversationSummary,
-  type ContextCache,
-  type ContextCacheBase,
   type GroundingMetadata,
   type MediaUpload,
   type Reminder,
   type ReminderCreatePayload,
-  type User,
 } from "@/lib/api";
 import { buildLocalTimeContextWithOverrides } from "@/lib/timeContext";
-import { formatReminderDateLabel, formatReminderSlotLabel } from "./reminderTimeUtils";
 import { type QuestionnaireSession } from "@/lib/questionnaire";
 
 import { compressImage } from "@/lib/imageCompression";
@@ -60,7 +53,6 @@ import {
   shouldRequestAutoTitleForSession,
   normalizeConversationIdValue,
   isGenericSessionTitle as isGenericTitle,
-  stripGrayTitleMarkers,
   parseGrayTitleMarkers,
   formatConversationTitle,
   coerceConversationIdForRequest,
@@ -73,18 +65,25 @@ import { ALL_PIONEER_MODEL_IDS, PIONEER_ONLY_MODEL_IDS } from "./modelCatalog";
 import { normalizePlanTier } from "./utils/helperFunctions";
 import {
   GENERAL_CHAT_SESSION_ID,
-  GENERAL_CONVERSATION_PREFIX,
   SHARED_CHAT_PLACEHOLDER_TITLE,
-  GREETING_PATTERN,
   SELF_CONTEXT_PATTERNS,
-  WORKSPACE_CONTEXT_KEYWORDS,
-  LOW_SIGNAL_TITLE_WORDS,
   DUPLICATE_THREAD_WINDOW_MS,
   REMOTE_SESSION_MERGE_WINDOW_MS,
   REMINDER_POLL_MIN_INTERVAL,
   REMINDER_POLL_SHORT_INTERVAL,
 } from "./chat/constants";
 import { WORKSPACE_REFRESH_EVENT } from "./hooks/useWorkspaceData";
+import { buildReminderPingMessage, sendReminderNotification } from "./chat/provider/reminderNotifications";
+import { useDefaultSystemPrompt } from "./chat/provider/useDefaultSystemPrompt";
+import {
+  GENERAL_SESSION_TITLE,
+  createEmptyGeneralSession,
+  dedupeSessionsByConversation,
+  loadStoredSessions,
+  makeMessage,
+  mapApiMessagesToChatMessages,
+  normalizeSessionsList,
+} from "./chat/provider/sessionStore";
 
 const WORKSPACE_CONTEXT_COOLDOWN_MS = 600000; // 10 minutes
 const CONVERSATION_MEMORY_STORAGE_PREFIX = "gray_conversation_memory";
@@ -104,358 +103,7 @@ const endSearchTracking = () => {
   window.endSearchTracking?.();
 };
 
-
-
-type SaveContextCacheOptions = {
-  skipMessage?: boolean;
-  skipReset?: boolean;
-};
-
 const ChatContext = createContext<ChatContextValue | null>(null);
-
-
-const INITIAL_SESSIONS: ChatSession[] = [];
-const PLACEHOLDER_SESSION_IDS = new Set([
-  "session-subjective-attractiveness",
-  "session-mobile-fade-effect",
-  "session-chat-log-analysis",
-]);
-const PLACEHOLDER_TITLES = new Set([
-  "Subjective Attractiveness",
-  "Mobile-Friendly Fade Effect",
-  "Chat Log Analysis Techniques",
-]);
-const FALLBACK_ASSISTANT_DELAY_MS = 150;
-const GENERAL_SESSION_ID = "general-session";
-const GENERAL_SESSION_TITLE = "General Chat";
-
-
-const normalizeReminderLabel = (label?: string | null) => {
-  if (!label) {
-    return "that thing we planned";
-  }
-  const trimmed = label.trim();
-  return trimmed.length > 0 ? trimmed : "that thing we planned";
-};
-
-const formatReminderScheduleLabel = (iso?: string | null) => {
-  return formatReminderDateLabel(iso) ?? iso ?? "sometime soon";
-};
-
-const buildReminderPingMessage = (reminder: Reminder): string => {
-  const label = normalizeReminderLabel(reminder.label);
-  const note = reminder.summary ?? reminder.description ?? null;
-
-  // Use a cleaner, less "bot-like" format for delivered reminders
-  const parts = [`🔔 ${label}`];
-  if (note) {
-    parts.push(note);
-  }
-  return parts.join("\n\n");
-};
-const REMINDER_NOTIFICATION_ICON = "/grayaiwhite.svg";
-
-const buildReminderNotificationTitle = (reminder: Reminder) =>
-  `Reminder: ${normalizeReminderLabel(reminder.label)}`;
-
-const buildReminderNotificationBody = (reminder: Reminder) => {
-  const scheduleLabel = formatReminderScheduleLabel(reminder.remind_at);
-  const note = reminder.summary ?? reminder.description ?? null;
-  const segments: string[] = [];
-  if (scheduleLabel) {
-    segments.push(`Scheduled for ${scheduleLabel}`);
-  }
-  if (note) {
-    segments.push(note);
-  }
-  return segments.length > 0 ? segments.join(" • ") : "Tap to view details.";
-};
-
-const sendReminderNotification = (reminder: Reminder) => {
-  if (
-    typeof window === "undefined" ||
-    typeof Notification === "undefined" ||
-    (typeof window !== "undefined" && !window.isSecureContext)
-  ) {
-    return;
-  }
-  if (!reminder.id) {
-    return;
-  }
-  if (Notification.permission !== "granted") {
-    return;
-  }
-  try {
-    const notification = new Notification(buildReminderNotificationTitle(reminder), {
-      body: buildReminderNotificationBody(reminder),
-      icon: REMINDER_NOTIFICATION_ICON,
-      badge: REMINDER_NOTIFICATION_ICON,
-      tag: `gray-reminder-${reminder.id}`,
-      requireInteraction: true,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any);
-    notification.addEventListener("click", () => {
-      if (typeof window !== "undefined" && window.focus) {
-        window.focus();
-      }
-      notification.close();
-    });
-  } catch (error) {
-    console.error("Failed to show reminder notification:", error);
-  }
-};
-
-/**
- * Create a new ChatMessage object with proper id and timestamp.
- */
-const makeMessage = (
-  role: ChatRole,
-  content: string,
-  tempId?: string,
-  metadata?: GroundingMetadata,
-  attachments?: MediaUpload[]
-): ChatMessage => {
-  const now = Date.now();
-  return {
-    id:
-      tempId ??
-      (typeof crypto !== "undefined" && "randomUUID" in crypto
-        ? crypto.randomUUID()
-        : `msg-${role}-${now}-${Math.random().toString(36).slice(2, 10)}`),
-    role,
-    content,
-    createdAt: now,
-
-    groundingMetadata: metadata ?? undefined,
-    attachments: attachments ?? undefined,
-  };
-};
-
-
-const createEmptyGeneralSession = (timestamp?: number, conversationId?: string | null): ChatSession => {
-  const now = timestamp ?? Date.now();
-  return {
-    id: GENERAL_SESSION_ID,
-    title: GENERAL_SESSION_TITLE,
-    titleMode: "manual",
-    createdAt: now,
-    updatedAt: now,
-    messages: [],
-    isResponding: false,
-    scope: "general",
-    conversationId: conversationId ?? undefined,
-    pendingAutoStream: false,
-  };
-};
-
-const cloneSession = (session: ChatSession): ChatSession => ({
-  ...session,
-  titleMode: session.titleMode ?? (session.scope === "general" ? "manual" : "auto"),
-  messages: session.messages.map((message) => ({
-    ...message,
-  })),
-});
-
-const defaultSessions = () => {
-  if (!INITIAL_SESSIONS.length) {
-    return [createEmptyGeneralSession()];
-  }
-  const cloned = INITIAL_SESSIONS.map(cloneSession);
-  const hasGeneral = cloned.some((session) => session.scope === "general");
-  return hasGeneral ? cloned : [createEmptyGeneralSession(), ...cloned];
-};
-
-const withGeneralFirst = (sessions: ChatSession[]): ChatSession[] => {
-  const generalIndex = sessions.findIndex((session) => session.scope === "general");
-  if (generalIndex <= 0) {
-    return sessions;
-  }
-  const copy = [...sessions];
-  const [general] = copy.splice(generalIndex, 1);
-  copy.unshift(general);
-  return copy;
-};
-
-const getSessionSeedFingerprint = (session: ChatSession): { fingerprint: string; createdAt: number } | null => {
-  if (session.scope !== "thread" || session.messages.length === 0) {
-    return null;
-  }
-  const firstUserMessage = session.messages.find(
-    (message) => message.role === "user" && message.content.trim().length > 0
-  );
-  if (!firstUserMessage) {
-    return null;
-  }
-  const normalized = firstUserMessage.content.trim().toLowerCase();
-  if (!normalized) {
-    return null;
-  }
-  const createdAt =
-    typeof firstUserMessage.createdAt === "number" ? firstUserMessage.createdAt : session.createdAt;
-  return {
-    fingerprint: normalized,
-    createdAt,
-  };
-};
-
-const dedupeSessionsByConversation = (sessions: ChatSession[]): ChatSession[] => {
-  const map = new Map<string, ChatSession>();
-  sessions.forEach((session) => {
-    const normalizedConversationId = normalizeConversationIdValue(session.conversationId);
-    const key =
-      session.scope === "general"
-        ? GENERAL_SESSION_ID
-        : normalizedConversationId ?? `session:${session.id}`;
-
-    const existing = map.get(key);
-    if (!existing) {
-      map.set(key, session);
-      return;
-    }
-    const existingScore = existing.messages.length;
-    const currentScore = session.messages.length;
-    const shouldReplace =
-      currentScore > existingScore ||
-      (currentScore === existingScore && session.updatedAt > existing.updatedAt);
-    if (shouldReplace) {
-      map.set(key, session);
-    }
-  });
-  return Array.from(map.values());
-};
-
-const dedupeSessionsByTitleWindow = (sessions: ChatSession[]): ChatSession[] => {
-  const titleMap = new Map<string, { index: number; session: ChatSession }>();
-  const result: ChatSession[] = [];
-
-  sessions.forEach((session) => {
-    const normalizedTitle = session.title?.trim().toLowerCase() ?? "";
-    if (!normalizedTitle) {
-      result.push(session);
-      return;
-    }
-    const existingEntry = titleMap.get(normalizedTitle);
-    if (!existingEntry) {
-      titleMap.set(normalizedTitle, { index: result.length, session });
-      result.push(session);
-      return;
-    }
-    const existing = existingEntry.session;
-    const withinWindow =
-      Math.abs(session.updatedAt - existing.updatedAt) <= REMOTE_SESSION_MERGE_WINDOW_MS;
-    const isRemoteShell =
-      withinWindow &&
-      ((session.messages.length === 0 && existing.messages.length > 0) ||
-        (existing.messages.length === 0 && session.messages.length > 0));
-    if (isRemoteShell) {
-      if (existing.messages.length === 0 && session.messages.length > 0) {
-        result[existingEntry.index] = session;
-        titleMap.set(normalizedTitle, { index: existingEntry.index, session });
-      }
-      return;
-    }
-    result.push(session);
-  });
-
-  return result;
-};
-
-const normalizeSessionsList = (sessions: ChatSession[]): ChatSession[] =>
-  withGeneralFirst(dedupeSessionsByTitleWindow(dedupeSessionsByConversation(sessions)));
-
-const loadStoredSessions = (
-  _storageKeys: readonly string[]
-): { key: string | null; sessions: ChatSession[] } => {
-  if (typeof window === "undefined") {
-    return { key: null, sessions: defaultSessions() };
-  }
-
-  for (const key of _storageKeys) {
-    try {
-      const raw = window.localStorage.getItem(key);
-      if (!raw) {
-        continue;
-      }
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        // Basic schema validation / migration could go here
-        const sessions = parsed.slice(0, 50) as ChatSession[]; // Limit to 50 recent
-        // Ensure data shapes are correct (e.g. dates are timestamps)
-        const validSessions = sessions.filter(
-          (s) =>
-            s &&
-            typeof s.id === "string" &&
-            Array.isArray(s.messages)
-        );
-        if (validSessions.length > 0) {
-          return { key, sessions: validSessions };
-        }
-      }
-    } catch (error) {
-      console.warn(`Failed to parse stored sessions for key "${key}":`, error);
-    }
-  }
-
-  return { key: null, sessions: defaultSessions() };
-};
-
-const mapApiMessagesToChatMessages = (
-  history: { role: string; text: string; timestamp?: number; grounding_metadata?: GroundingMetadata | null; groundingMetadata?: GroundingMetadata | null; reminders?: unknown[] | null }[],
-  conversationId: string,
-  fallbackTimestamp: number = Date.now()
-): ChatMessage[] => {
-  // Deduplicate consecutive identical backend messages to keep the
-  // rendered history tidy.
-  const dedupedHistory = history.filter((message, index, arr) => {
-    if (index === 0) {
-      return true;
-    }
-    const prev = arr[index - 1];
-    return !(prev.role === message.role && (prev.text ?? "") === (message.text ?? ""));
-  });
-
-  return dedupedHistory.map((message, index) => {
-    const role: ChatRole = message.role === "model" ? "assistant" : "user";
-    const rawText = message.text ?? "";
-    const normalizedText = role === "assistant" ? stripGrayTitleMarkers(rawText) : rawText;
-
-    // Prefer reminders from API (database-persisted) over text extraction
-    const apiReminders = Array.isArray(message.reminders) && message.reminders.length > 0
-      ? message.reminders.map((r) => coerceReminderPayload(r)).filter((r): r is GrayReminderCreatedPayload => Boolean(r))
-      : null;
-
-    const reminderExtraction =
-      role === "assistant" && !apiReminders
-        ? extractGrayRemindersFromText(normalizedText)
-        : { cleanText: normalizedText, reminders: [] };
-
-    const normalizedMetadata =
-      message.grounding_metadata ??
-      message.groundingMetadata ??
-      null;
-
-    // Use the message's own timestamp if available, otherwise fall back to the provided timestamp
-    const messageTimestamp = typeof message.timestamp === 'number' && Number.isFinite(message.timestamp)
-      ? message.timestamp
-      : fallbackTimestamp;
-
-    return {
-      id:
-        typeof crypto !== "undefined" && "randomUUID" in crypto
-          ? crypto.randomUUID()
-          : `${conversationId}-${index}-${messageTimestamp}`,
-      role,
-      content: reminderExtraction.cleanText,
-      createdAt: messageTimestamp,
-      reminders:
-        apiReminders ??
-        (role === "assistant" && reminderExtraction.reminders.length
-          ? reminderExtraction.reminders
-          : undefined),
-      groundingMetadata: normalizedMetadata ?? undefined,
-    };
-  });
-};
 
 type ChatProviderProps = {
   children: ReactNode;
@@ -465,88 +113,9 @@ type ChatProviderProps = {
 export function ChatProvider({ children, workspaceContext }: ChatProviderProps) {
   const { user, waitForUser, updateUser, refreshUser } = useUser();
   const { locale } = useI18n();
-  const [defaultSystemPrompt, setDefaultSystemPrompt] = useState<string | null>(null);
-  const [, setShowIntro] = useState(false);
+  const defaultSystemPrompt = useDefaultSystemPrompt(locale);
   const onboardingSeenRef = useRef(false);
-  const onboardingKickoffRef = useRef(false);
   const hasLoadedFromStorageRef = useRef(false);
-
-  useEffect(() => {
-    let isMounted = true;
-    let controller = new AbortController();
-
-    const resolvePromptString = (value: unknown, activeLocale: string): string => {
-      if (typeof value === "string") {
-        return value;
-      }
-      if (!value || typeof value !== "object") {
-        return "";
-      }
-      const record = value as Record<string, unknown>;
-      const baseLocale = String(activeLocale || "en").split("-")[0];
-      const direct = record[activeLocale];
-      if (typeof direct === "string") {
-        return direct;
-      }
-      const base = record[baseLocale];
-      if (typeof base === "string") {
-        return base;
-      }
-      const fallback = record["en"];
-      if (typeof fallback === "string") {
-        return fallback;
-      }
-      return "";
-    };
-
-    const loadSystemPrompt = async () => {
-      try {
-        controller.abort();
-        controller = new AbortController();
-        const response = await fetch("/system-prompts.json", {
-          signal: controller.signal,
-          cache: "no-store",
-        });
-        if (!response.ok) {
-          return;
-        }
-        const data = (await response.json()) as { chat?: unknown } | null;
-        if (!isMounted) {
-          return;
-        }
-        const raw = resolvePromptString(data?.chat, locale);
-        const trimmed = raw.trim();
-        setDefaultSystemPrompt(trimmed.length > 0 ? trimmed : null);
-      } catch (error) {
-        if (error instanceof DOMException && error.name === "AbortError") {
-          return;
-        }
-        console.error("Failed to load system prompt:", error);
-      }
-    };
-
-    void loadSystemPrompt();
-
-    if (typeof window !== "undefined" && typeof document !== "undefined") {
-      const handleVisibilityChange = () => {
-        if (document.visibilityState === "visible") {
-          void loadSystemPrompt();
-        }
-      };
-      window.addEventListener("visibilitychange", handleVisibilityChange);
-
-      return () => {
-        isMounted = false;
-        controller.abort();
-        window.removeEventListener("visibilitychange", handleVisibilityChange);
-      };
-    }
-
-    return () => {
-      isMounted = false;
-      controller.abort();
-    };
-  }, [locale]);
 
   // Sync selected model from user profile on load
   useEffect(() => {
@@ -577,15 +146,6 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
   useEffect(() => {
     if (user?.has_seen_general_chat) {
       onboardingSeenRef.current = true;
-      onboardingKickoffRef.current = true;
-      // Also ensure state is synced if it was somehow set to true
-      setShowIntro(false);
-    } else {
-      // Only allow reset if user is loaded and explicitly has it false
-      // This prevents flashing if user is momentarily null/loading
-      if (user && !user.has_seen_general_chat) {
-        onboardingKickoffRef.current = false;
-      }
     }
   }, [user?.has_seen_general_chat, user?.id, user]);
 
@@ -603,7 +163,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
     }
   }, [updateUser, user]);
 
-  const [sessionsState, setSessionsState] = useState<ChatSession[]>(defaultSessions);
+  const [sessionsState, setSessionsState] = useState<ChatSession[]>(() => [createEmptyGeneralSession()]);
   const sessionsRef = useRef<ChatSession[]>(sessionsState);
   const setSessions = useCallback(
     (updater: SetStateAction<ChatSession[]>) => {
@@ -670,11 +230,6 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
   const [mapsWidgetEnabled, setMapsWidgetEnabled] = useState(false);
   const [mapsLatitude, setMapsLatitude] = useState("");
   const [mapsLongitude, setMapsLongitude] = useState("");
-
-  // Removed: pendingLocationRequestMessage, isHandlingLocationRequest, pendingLocationRequestActionRef
-  // as we no longer block sending for location consent.
-  const pendingLocationRequestMessage = null;
-  const isHandlingLocationRequest = false;
 
   const mapPayload = useMemo(() => {
     const normalizedLatitude = mapsLatitude.trim();
@@ -790,53 +345,14 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
     setRemindersEnabledPersisted((prev) => !prev);
   }, [setRemindersEnabledPersisted]);
 
-  // Deprecated: No longer blocks execution.
-  const promptForLocationConsent = (message: string, sendAction: () => void) => {
-    // Always proceed immediately. 
-    // We strictly rely on the manual "Maps" toggle or backend inference (without blocking).
-    void sendAction();
-    return true;
-  };
-
-  const requestLocationShare = () => {
-    // No-op or manual trigger if needed
-    void requestLocationCoordinates();
-  };
-
-  const skipLocationShare = () => {
-    // No-op
-  };
-
-  const [contextCaches, setContextCaches] = useState<ContextCache[]>([]);
-  const [contextCacheLabel, setContextCacheLabel] = useState("");
-  const [contextCacheContent, setContextCacheContent] = useState("");
-  const [selectedContextCacheId, setSelectedContextCacheId] = useState<number | null>(null);
-  const [contextCacheMessage, setContextCacheMessage] = useState<string | null>(null);
-  const [isContextCacheSaving, setIsContextCacheSaving] = useState(false);
   const [autoWebSearchEnabled, setAutoWebSearchEnabledState] = useState(false);
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
-  const [fileSearchStores, setFileSearchStores] = useState<{ name: string; display_name?: string }[]>([]);
-  const [fileSearchDisplayName, setFileSearchDisplayName] = useState("");
-  const [fileSearchStatus, setFileSearchStatus] = useState<string | null>(null);
-  const [isCreatingFileSearchStore, setIsCreatingFileSearchStore] = useState(false);
-  const [selectedFileSearchStore, setSelectedFileSearchStore] = useState("");
-  const [fileSearchUploadFile, setFileSearchUploadFile] = useState<File | null>(null);
-  const [fileSearchUploadStatus, setFileSearchUploadStatus] = useState<string | null>(null);
-  const [fileSearchChunking, setFileSearchChunking] = useState({
-    maxTokensPerChunk: "",
-    maxOverlapTokens: "",
-  });
-  const [fileSearchImportName, setFileSearchImportName] = useState("");
-  const [fileSearchImportStatus, setFileSearchImportStatus] = useState<string | null>(null);
-  const [fileSearchUploadInputRef] = useState<RefObject<HTMLInputElement | null>>({ current: null });
   const [reasoningMode, setReasoningMode] = useState(false);
   const [modelTier, setModelTier] = useState<"lite" | "pro" | "pioneer">("lite");
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
   const [visibleModelIds, setVisibleModelIds] = useState<string[] | null>(null);
   const visibleModelIdsHydratedRef = useRef(false);
   const lastPersistedVisibleModelIdsRef = useRef<string | null>(null);
-  const lastAutoCachedWorkspaceRef = useRef<string | null>(null);
-  const autoCacheInFlightRef = useRef(false);
   // Track profile hash to only send full profile when it changes
   const lastSentProfileHashRef = useRef<string>("");
   // Track when reasoning mode starts to calculate reasoning duration
@@ -1056,201 +572,6 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
     },
     [workspaceContextValue]
   );
-
-  const saveContextCache = useCallback(
-    async (
-      payload: ContextCacheBase,
-      options: SaveContextCacheOptions = {}
-    ): Promise<ContextCache | null> => {
-      if (!user?.id) {
-        if (!options.skipMessage) {
-          setContextCacheMessage("Sign in to cache context.");
-        }
-        return null;
-      }
-      const trimmedContent = payload.content.trim();
-      if (!trimmedContent) {
-        if (!options.skipMessage) {
-          setContextCacheMessage("Add context content before saving.");
-        }
-        return null;
-      }
-
-      const normalizedPayload: ContextCacheBase = {
-        content: trimmedContent,
-      };
-      const label = payload.label?.trim();
-      if (label) {
-        normalizedPayload.label = label;
-      }
-      if (payload.conversation_id) {
-        normalizedPayload.conversation_id = payload.conversation_id;
-      }
-
-      setIsContextCacheSaving(true);
-      if (!options.skipMessage) {
-        setContextCacheMessage(null);
-      }
-      try {
-        const created = await apiService.createContextCache(user.id, normalizedPayload);
-        setContextCaches((prev) => [created, ...prev]);
-        setSelectedContextCacheId(created.id);
-        if (!options.skipMessage) {
-          setContextCacheMessage("Context cached for reuse.");
-        }
-        if (!options.skipReset) {
-          setContextCacheLabel("");
-          setContextCacheContent("");
-        }
-        return created;
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "Failed to cache context.";
-        if (!options.skipMessage) {
-          setContextCacheMessage(message);
-        }
-        console.error("Failed to cache context:", error);
-        return null;
-      } finally {
-        setIsContextCacheSaving(false);
-      }
-    },
-    [user?.id]
-  );
-
-  const createContextCache = useCallback(
-    async (conversationId?: string) => {
-      const normalizedConversationId = normalizeConversationIdValue(conversationId ?? undefined);
-      const payload: ContextCacheBase = {
-        content: contextCacheContent,
-      };
-      if (contextCacheLabel.trim()) {
-        payload.label = contextCacheLabel.trim();
-      }
-      if (normalizedConversationId) {
-        payload.conversation_id = normalizedConversationId;
-      }
-      await saveContextCache(payload);
-    },
-    [contextCacheContent, contextCacheLabel, saveContextCache]
-  );
-
-  useEffect(() => {
-    if (!user?.id) {
-      lastAutoCachedWorkspaceRef.current = null;
-      return;
-    }
-    const trimmedWorkspace = workspaceContextValue?.trim();
-    if (!trimmedWorkspace) {
-      lastAutoCachedWorkspaceRef.current = null;
-      return;
-    }
-    if (lastAutoCachedWorkspaceRef.current === trimmedWorkspace) {
-      return;
-    }
-    if (autoCacheInFlightRef.current) {
-      return;
-    }
-    autoCacheInFlightRef.current = true;
-    (async () => {
-      try {
-        const cached = await saveContextCache(
-          { content: trimmedWorkspace, label: "Workspace context" },
-          { skipMessage: true, skipReset: true }
-        );
-        if (cached) {
-          lastAutoCachedWorkspaceRef.current = trimmedWorkspace;
-        }
-      } catch (error) {
-        console.error("Failed to auto-cache workspace context:", error);
-      } finally {
-        autoCacheInFlightRef.current = false;
-      }
-    })();
-  }, [saveContextCache, user?.id, workspaceContextValue]);
-
-  const selectContextCacheId = useCallback((cacheId: number | null) => {
-    setSelectedContextCacheId(cacheId);
-  }, []);
-  const fileSearchChunkingConfig = useMemo(() => {
-    const maxTokens = Number(fileSearchChunking.maxTokensPerChunk);
-    const maxOverlap = Number(fileSearchChunking.maxOverlapTokens);
-    const whiteSpaceConfig: Record<string, number> = {};
-    if (!Number.isNaN(maxTokens) && maxTokens > 0) {
-      whiteSpaceConfig.max_tokens_per_chunk = maxTokens;
-    }
-    if (!Number.isNaN(maxOverlap) && maxOverlap >= 0) {
-      whiteSpaceConfig.max_overlap_tokens = maxOverlap;
-    }
-    if (!Object.keys(whiteSpaceConfig).length) {
-      return undefined;
-    }
-    return { white_space_config: whiteSpaceConfig };
-  }, [fileSearchChunking.maxTokensPerChunk, fileSearchChunking.maxOverlapTokens]);
-
-  const handleCreateFileSearchStore = useCallback(async () => {
-    setIsCreatingFileSearchStore(true);
-    setFileSearchStatus(null);
-    try {
-      const store = await apiService.createFileSearchStore(
-        fileSearchDisplayName.trim() || undefined
-      );
-      setFileSearchStores((prev) => [store, ...prev]);
-      setSelectedFileSearchStore(store.name);
-      setFileSearchDisplayName("");
-      setFileSearchStatus(
-        `Created ${store.display_name ?? store.name}.`
-      );
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to create file store.";
-      setFileSearchStatus(message);
-    } finally {
-      setIsCreatingFileSearchStore(false);
-    }
-  }, [fileSearchDisplayName]);
-
-  const handleFileSearchUpload = useCallback(async () => {
-    if (!selectedFileSearchStore || !fileSearchUploadFile) {
-      setFileSearchUploadStatus("Select a store and file first.");
-      return;
-    }
-    setFileSearchUploadStatus("Uploading...");
-    try {
-      await apiService.uploadToFileSearchStore({
-        storeName: selectedFileSearchStore,
-        file: fileSearchUploadFile,
-        displayName: fileSearchUploadFile.name,
-        chunkingConfig: fileSearchChunkingConfig,
-      });
-      setFileSearchUploadStatus("Upload queued.");
-      setFileSearchUploadFile(null);
-      if (fileSearchUploadInputRef.current) {
-        fileSearchUploadInputRef.current.value = "";
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "File Search upload failed.";
-      setFileSearchUploadStatus(message);
-    }
-  }, [fileSearchChunkingConfig, fileSearchUploadFile, selectedFileSearchStore]);
-
-  const handleFileSearchImport = useCallback(async () => {
-    if (!selectedFileSearchStore || !fileSearchImportName.trim()) {
-      setFileSearchImportStatus("Select store and specify file name.");
-      return;
-    }
-    setFileSearchImportStatus("Importing...");
-    try {
-      await apiService.importFileSearch({
-        storeName: selectedFileSearchStore,
-        fileName: fileSearchImportName.trim(),
-        chunkingConfig: fileSearchChunkingConfig,
-      });
-      setFileSearchImportStatus("Import started.");
-      setFileSearchImportName("");
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "File Search import failed.";
-      setFileSearchImportStatus(message);
-    }
-  }, [fileSearchChunkingConfig, fileSearchImportName, selectedFileSearchStore]);
 
   const autoStreamTriggeredRef = useRef<Set<string>>(new Set());
   const pendingHistorySyncRef = useRef<Set<string>>(new Set());
@@ -1890,7 +1211,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
           return ordered;
         }
 
-        const fallbackScope = sessionId === GENERAL_SESSION_ID ? "general" : "thread";
+        const fallbackScope = sessionId === GENERAL_CHAT_SESSION_ID ? "general" : "thread";
         const fallbackSession: ChatSession =
           fallbackScope === "general"
             ? {
@@ -2316,8 +1637,6 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       schedulePendingSeedCleanup,
       personalizedSystemPrompt,
       markAutoStreamTriggered,
-
-      promptForLocationConsent,
       shouldAttachWorkspaceContextForSession,
       webSearchEnabled,
       ensureGeneralSession
@@ -2419,28 +1738,14 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       const trimmed = content.trim();
       const generalSession = ensureGeneralSession();
 
-      // Prevent overlapping general streams (e.g., onboarding auto-trigger + manual submit).
-      if (!trimmed && generalSession.isResponding) {
-        return generalSession.id;
-      }
       if (!trimmed) {
-        // Avoid triggering the onboarding kick-off twice while the intro overlay is finishing
-        if (onboardingKickoffRef.current) {
-          return generalSession.id;
-        }
-        onboardingKickoffRef.current = true;
+        return generalSession.id;
       }
       const isGeneralScope = generalSession.scope === "general";
       const resolvedGeneralConversationId =
         coerceConversationIdForRequest(generalSession.conversationId) ??
         coerceConversationIdForRequest(generalConversationIdRef.current);
       let requestConversationId = resolvedGeneralConversationId;
-
-      // Allow empty message only if it's the start of a session (e.g. onboarding trigger)
-      if (!trimmed && generalSession.messages.length > 0) {
-        void markHasSeenGeneralChat();
-        return generalSession.id;
-      }
 
       const attachmentPayloads = attachmentsRef.current.map((attachment) => ({
         id: attachment.id,
@@ -2567,7 +1872,6 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
               timezone: effectiveTimeZone,
               conversation_memory_enabled: conversationMemoryEnabled,
               attachments: attachmentPayloads,
-              context_cache_id: selectedContextCacheId ?? undefined,
               should_generate_title: shouldGenerateTitle,
               web_search_enabled: shouldUseWebSearch,
               ...mapPayload,
@@ -2726,10 +2030,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
         })();
       };
 
-      if (!promptForLocationConsent(trimmed, streamGeneralResponse)) {
-        return generalSession.id;
-      }
-
+      streamGeneralResponse();
       return generalSession.id;
     },
     [
@@ -2743,8 +2044,6 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       applyAutoTitle,
       clearAttachments,
       mapPayload, // Replaced buildAutoMapPayload
-      promptForLocationConsent,
-      selectedContextCacheId,
       shouldAttachWorkspaceContextForSession,
       autoWebSearchEnabled,
       webSearchEnabled,
@@ -2830,7 +2129,6 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
     return general?.id ?? null;
   }, [sessions]);
 
-  const generalGreetingRef = useRef(false);
   const generalHistoryHydratedRef = useRef(false);
   const pathname = usePathname();
 
@@ -2960,42 +2258,6 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       cancelled = true;
     };
   }, [pathname, persistSessions, setSessions, user?.id]);
-
-  useEffect(() => {
-    const general = sessionsRef.current.find((session) => session.scope === "general");
-    const generalHasMessages = Boolean(general?.messages && general.messages.length > 0);
-    if (!general || !user?.id || pathname !== "/g") {
-      return;
-    }
-
-    // Only show the intro overlay when the user clearly needs onboarding:
-    // missing any personalization fields and has not completed general chat.
-    const needsOnboarding =
-      !user.personalization_nickname ||
-      !user.personalization_occupation ||
-      !user.personalization_about;
-
-    if (
-      generalGreetingRef.current ||
-      generalHasMessages ||
-      !needsOnboarding ||
-      user.has_seen_general_chat
-    ) {
-      return;
-    }
-
-    generalGreetingRef.current = true;
-    setShowIntro(true);
-  }, [
-    pathname,
-    user?.id,
-    user?.has_seen_general_chat,
-    user?.personalization_nickname,
-    user?.personalization_occupation,
-    user?.personalization_about,
-  ]);
-
-
 
   useEffect(() => {
     if (!user?.id || !generalSessionId) {
@@ -3140,46 +2402,10 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       remindersEnabled,
       toggleRemindersEnabled,
       mapPayload,
-      pendingLocationRequestMessage: null,
-      isHandlingLocationRequest: false,
-      requestLocationShare,
-      skipLocationShare,
-      // Context Cache
-      contextCaches,
-      contextCacheLabel,
-      contextCacheContent,
-      selectedContextCacheId,
-      contextCacheMessage,
-      isContextCacheSaving,
-      createContextCache,
-      selectContextCacheId: setSelectedContextCacheId,
-      setContextCacheLabel,
-      setContextCacheContent,
-      // Web Search (with toggles above)
+      // Web Search
       autoWebSearchEnabled,
       setAutoWebSearchEnabled,
       webSearchEnabled,
-      setWebSearchEnabled,
-      // File Search / Stores
-      fileSearchStores,
-      fileSearchDisplayName,
-      setFileSearchDisplayName,
-      fileSearchStatus,
-      isCreatingFileSearchStore,
-      handleCreateFileSearchStore,
-      selectedFileSearchStore,
-      setSelectedFileSearchStore,
-      fileSearchUploadFile,
-      setFileSearchUploadFile,
-      fileSearchUploadStatus,
-      handleFileSearchUpload,
-      fileSearchChunking,
-      setFileSearchChunking,
-      fileSearchImportName,
-      setFileSearchImportName,
-      fileSearchImportStatus,
-      handleFileSearchImport,
-      fileSearchUploadInputRef,
       loadConversationMessages,
       reasoningMode,
       setReasoningMode,
@@ -3229,45 +2455,14 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       setMapsWidgetEnabled,
       setMapsLatitude,
       setMapsLongitude,
+      toggleMapsEnabled,
+      toggleWebSearchEnabled,
+      remindersEnabled,
+      toggleRemindersEnabled,
       mapPayload,
-      pendingLocationRequestMessage,
-      isHandlingLocationRequest,
-      requestLocationShare,
-      skipLocationShare,
-      contextCaches,
-      contextCacheLabel,
-      contextCacheContent,
-      selectedContextCacheId,
-      contextCacheMessage,
-      isContextCacheSaving,
-      createContextCache,
-      selectContextCacheId,
-      setContextCacheLabel,
-      setContextCacheContent,
       autoWebSearchEnabled,
       setAutoWebSearchEnabled,
       webSearchEnabled,
-      setWebSearchEnabled,
-      fileSearchStores,
-      fileSearchDisplayName,
-      setFileSearchDisplayName,
-      fileSearchStatus,
-      isCreatingFileSearchStore,
-      handleCreateFileSearchStore,
-      selectedFileSearchStore,
-      setSelectedFileSearchStore,
-      fileSearchUploadFile,
-      setFileSearchUploadFile,
-      fileSearchUploadStatus,
-      handleFileSearchUpload,
-      fileSearchChunking,
-      setFileSearchChunking,
-      fileSearchImportName,
-      setFileSearchImportName,
-      fileSearchImportStatus,
-      handleFileSearchImport,
-      fileSearchUploadInputRef,
-      fileSearchUploadInputRef,
       loadConversationMessages,
       reasoningMode,
       setReasoningMode,
@@ -3277,6 +2472,10 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       handleSetSelectedModelId,
       visibleModelIds,
       setVisibleModelIds,
+      questionnaireSession,
+      startQuestionnaire,
+      cancelQuestionnaire,
+      remoteConversationsLoaded,
       pinSession,
     ]
   );

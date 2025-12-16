@@ -230,6 +230,124 @@ except ImportError:
         CONVERSATION_HISTORY_CACHE,
     )
 
+# Message detection utilities (extracted from main.py)
+try:
+    from backend.core.message_detection import (
+        REMINDER_KEYWORDS as _REMINDER_KEYWORDS,
+        TOOL_TRIGGER_KEYWORDS as _TOOL_TRIGGER_KEYWORDS,
+        needs_structured_tools as _needs_structured_tools,
+        should_request_structured_reminders as _should_request_structured_reminders,
+        should_use_web_search as _should_use_web_search,
+        should_enable_search as _should_enable_search,
+    )
+except ImportError:
+    from core.message_detection import (  # type: ignore
+        REMINDER_KEYWORDS as _REMINDER_KEYWORDS,
+        TOOL_TRIGGER_KEYWORDS as _TOOL_TRIGGER_KEYWORDS,
+        needs_structured_tools as _needs_structured_tools,
+        should_request_structured_reminders as _should_request_structured_reminders,
+        should_use_web_search as _should_use_web_search,
+        should_enable_search as _should_enable_search,
+    )
+
+# Serialization utilities (extracted from main.py)
+try:
+    from backend.core.serializers import (
+        row_get as _row_get,
+        parse_json_field as _parse_json_field,
+        serialize_reminder_row as _serialize_reminder_row,
+        serialize_habit_record as _serialize_habit_record,
+        serialize_proactivity_notification as _serialize_proactivity_notification,
+        serialize_context_cache as _serialize_context_cache,
+        normalize_plan_items as _normalize_plan_items,
+        normalize_habit_items as _normalize_habit_items,
+        normalize_proactivity as _normalize_proactivity,
+        datetime_to_ms as _datetime_to_ms,
+        parse_iso_timestamp as _parse_iso_timestamp,
+        DEFAULT_DASHBOARD_PROACTIVITY,
+    )
+except ImportError:
+    from core.serializers import (  # type: ignore
+        row_get as _row_get,
+        parse_json_field as _parse_json_field,
+        serialize_reminder_row as _serialize_reminder_row,
+        serialize_habit_record as _serialize_habit_record,
+        serialize_proactivity_notification as _serialize_proactivity_notification,
+        serialize_context_cache as _serialize_context_cache,
+        normalize_plan_items as _normalize_plan_items,
+        normalize_habit_items as _normalize_habit_items,
+        normalize_proactivity as _normalize_proactivity,
+        datetime_to_ms as _datetime_to_ms,
+        parse_iso_timestamp as _parse_iso_timestamp,
+        DEFAULT_DASHBOARD_PROACTIVITY,
+    )
+
+# AI utilities (extracted from main.py)
+try:
+    from backend.core.ai_utils import (
+        prefers_gemini_model as _prefers_gemini_model,
+        candidate_text as _candidate_text,
+        candidate_thought as _candidate_thought,
+        candidate_grounding_payload as _candidate_grounding_payload,
+        merge_extra_contents as _merge_extra_contents,
+        materialize_structured_reminders as _materialize_structured_reminders,
+        clean_title as _clean_title,
+        fallback_title_from_message as _fallback_title_from_message,
+    )
+except ImportError:
+    from core.ai_utils import (  # type: ignore
+        prefers_gemini_model as _prefers_gemini_model,
+        candidate_text as _candidate_text,
+        candidate_thought as _candidate_thought,
+        candidate_grounding_payload as _candidate_grounding_payload,
+        merge_extra_contents as _merge_extra_contents,
+        materialize_structured_reminders as _materialize_structured_reminders,
+        clean_title as _clean_title,
+        fallback_title_from_message as _fallback_title_from_message,
+    )
+
+# Tool handlers (extracted from main.py)
+try:
+    from backend.core.tool_handlers import (
+        set_reminder_scheduler as _set_tool_reminder_scheduler,
+        parse_iso_datetime as _parse_iso_datetime,
+        normalize_remind_at as _normalize_remind_at,
+        parse_remind_at as _parse_remind_at,
+        build_reminder_payload as _build_reminder_payload,
+        list_calendar_events as _list_calendar_events,
+        create_calendar_event as _create_calendar_event,
+        update_calendar_event as _update_calendar_event,
+        delete_calendar_event as _delete_calendar_event,
+        list_plans_tool as _list_plans_tool,
+        list_habits_tool as _list_habits_tool,
+        list_reminders_tool as _list_reminders_tool,
+        get_workspace_state_tool as _get_workspace_state_tool,
+        create_reminder_tool as _create_reminder_tool,
+        update_reminder_tool as _update_reminder_tool,
+        delete_reminder_tool as _delete_reminder_tool,
+        delete_latest_reminder_tool as _delete_latest_reminder_tool,
+    )
+except ImportError:
+    from core.tool_handlers import (  # type: ignore
+        set_reminder_scheduler as _set_tool_reminder_scheduler,
+        parse_iso_datetime as _parse_iso_datetime,
+        normalize_remind_at as _normalize_remind_at,
+        parse_remind_at as _parse_remind_at,
+        build_reminder_payload as _build_reminder_payload,
+        list_calendar_events as _list_calendar_events,
+        create_calendar_event as _create_calendar_event,
+        update_calendar_event as _update_calendar_event,
+        delete_calendar_event as _delete_calendar_event,
+        list_plans_tool as _list_plans_tool,
+        list_habits_tool as _list_habits_tool,
+        list_reminders_tool as _list_reminders_tool,
+        get_workspace_state_tool as _get_workspace_state_tool,
+        create_reminder_tool as _create_reminder_tool,
+        update_reminder_tool as _update_reminder_tool,
+        delete_reminder_tool as _delete_reminder_tool,
+        delete_latest_reminder_tool as _delete_latest_reminder_tool,
+    )
+
 from uuid import UUID, uuid4
 from pathlib import Path
 from urllib.parse import urlparse

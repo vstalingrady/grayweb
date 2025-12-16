@@ -47,7 +47,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.backend
-    command: arq job_scheduler.WorkerSettings
+    command: python arq_worker_entrypoint.py
     env_file:
       - .env
     environment:

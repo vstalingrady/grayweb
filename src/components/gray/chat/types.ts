@@ -1,9 +1,7 @@
-import type { RefObject, ReactNode } from "react";
 import type {
     ChatStreamTiming,
     GroundingMetadata,
     MediaUpload,
-    ContextCache,
 } from "@/lib/api";
 import type { QuestionnaireSession } from "@/lib/questionnaire";
 
@@ -105,46 +103,11 @@ export type ChatContextValue = {
     mapPayload: Record<string, number | boolean | undefined>;
     toggleMapsEnabled: () => void;
     toggleWebSearchEnabled: () => void;
-    // Deprecated properties kept for compatibility if needed, but effectively unused
-    pendingLocationRequestMessage: string | null;
-    isHandlingLocationRequest: boolean;
-    requestLocationShare: () => void;
-    skipLocationShare: () => void;
-    contextCaches: ContextCache[];
-    contextCacheLabel: string;
-    contextCacheContent: string;
-    selectedContextCacheId: number | null;
-    contextCacheMessage: string | null;
-    isContextCacheSaving: boolean;
-    createContextCache: (conversationId?: string) => Promise<void>;
-    selectContextCacheId: (cacheId: number | null) => void;
-    setContextCacheLabel: (value: string) => void;
-    setContextCacheContent: (value: string) => void;
     autoWebSearchEnabled: boolean;
     setAutoWebSearchEnabled: (value: boolean) => void;
     webSearchEnabled: boolean;
-    setWebSearchEnabled: (value: boolean) => void;
     remindersEnabled: boolean;
     toggleRemindersEnabled: () => void;
-    fileSearchStores: { name: string; display_name?: string }[];
-    fileSearchDisplayName: string;
-    setFileSearchDisplayName: (value: string) => void;
-    fileSearchStatus: string | null;
-    isCreatingFileSearchStore: boolean;
-    handleCreateFileSearchStore: () => Promise<void>;
-    selectedFileSearchStore: string;
-    setSelectedFileSearchStore: (value: string) => void;
-    fileSearchUploadFile: File | null;
-    setFileSearchUploadFile: (value: File | null) => void;
-    fileSearchUploadStatus: string | null;
-    handleFileSearchUpload: () => Promise<void>;
-    fileSearchChunking: { maxTokensPerChunk: string; maxOverlapTokens: string };
-    setFileSearchChunking: (value: { maxTokensPerChunk: string; maxOverlapTokens: string }) => void;
-    fileSearchImportName: string;
-    setFileSearchImportName: (value: string) => void;
-    fileSearchImportStatus: string | null;
-    handleFileSearchImport: () => Promise<void>;
-    fileSearchUploadInputRef: RefObject<HTMLInputElement | null>;
     loadConversationMessages: (sessionId: string) => Promise<void>;
     reasoningMode: boolean;
     setReasoningMode: (value: boolean) => void;
@@ -184,8 +147,3 @@ export interface GrayReminderCreatedPayload {
         reminder?: Record<string, unknown> | null;
     };
 }
-
-export type SaveContextCacheOptions = {
-    skipMessage?: boolean;
-    skipReset?: boolean;
-};

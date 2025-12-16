@@ -1,0 +1,168 @@
+"""
+Message detection utilities for determining tool/search requirements.
+
+This module provides keyword matching and heuristics to determine whether
+a user message requires tool execution, web search, or reminder functionality.
+"""
+import re
+from typing import Optional
+
+# ==============================================================================
+# Keyword Sets
+# ==============================================================================
+
+REMINDER_KEYWORDS = frozenset({
+    "reminder", "remind", "ping", "nudge", "notify", "timer", "alarm", "alert",
+    "goal", "plan", "habit", "schedule", "deadline", "due", "task", "todo",
+})
+
+TOOL_TRIGGER_KEYWORDS = REMINDER_KEYWORDS | frozenset({
+    "meeting", "appointment", "call", "checkin", "check-in", "check in",
+    "sync", "standup", "doctor", "dentist", "gym", "workout", "project", "routine",
+    "at", "tomorrow", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
+    # Time expressions to catch conversational follow-ups like "in 2 hours"
+    "pm", "am", "hour", "hours", "minute", "minutes", "oclock", "o'clock",
+})
+
+# Live/recency-oriented keywords for web search detection
+LIVE_KEYWORDS = [
+    "news", "breaking news", "latest news", "recent news", "current events", "today's news",
+    "stock price", "stock prices", "stock market",
+    "crypto price", "bitcoin price", "btc price", "eth price",
+    "exchange rate", "currency rate", "interest rate", "inflation rate",
+    "weather", "forecast", "temperature today",
+    "traffic", "flight status", "train status",
+    "nba score", "nfl score", "soccer score", "game score",
+    "release date", "new version", "new update", "patch notes",
+]
+
+RECENCY_TOKENS = [
+    "today", "right now", "currently",
+    "this week", "this month", "this year",
+    "latest", "recent", "up to date", "up-to-date",
+]
+
+
+# ==============================================================================
+# Detection Functions
+# ==============================================================================
+
+
+def needs_structured_tools(message: str) -> bool:
+    """Check if message likely requires tool execution (reminders, calendar, etc).
+    
+    Uses word boundary matching to avoid false positives like 'at' matching 'cat'.
+    """
+    normalized = (message or "").lower()
+    if not normalized:
+        return False
+    
+    for kw in TOOL_TRIGGER_KEYWORDS:
+        if re.search(rf'\b{re.escape(kw)}\b', normalized):
+            return True
+    return False
+
+
+def should_request_structured_reminders(message: str) -> bool:
+    """Check if message specifically relates to reminder functionality.
+    
+    Uses word boundary matching to avoid false positives.
+    """
+    normalized = (message or "").lower()
+    if not normalized:
+        return False
+    
+    for kw in REMINDER_KEYWORDS:
+        if re.search(rf'\b{re.escape(kw)}\b', normalized):
+            return True
+    return False
+
+
+def should_use_web_search(message: str, model: Optional[str] = None) -> bool:
+    """
+    Use lightweight local heuristics to decide whether this message likely
+    needs up-to-date information from the public web.
+
+    Uses local keyword matching for fast classification without network calls.
+    """
+    trimmed = (message or "").strip()
+    if not trimmed:
+        return False
+
+    normalized = trimmed.lower()
+
+    # Obvious "live data" phrases – news, markets, prices, weather, etc.
+    if any(keyword in normalized for keyword in LIVE_KEYWORDS):
+        return True
+
+    # Generic recency cues ("today", "right now", "this week", etc.).
+    if any(token in normalized for token in RECENCY_TOKENS):
+        return True
+
+    # Questions explicitly about something "happening" now.
+    if "what's happening" in normalized or "whats happening" in normalized:
+        return True
+
+    # Simple year-based heuristic: questions that mention a near-future or
+    # current year along with "news" or "update" are likely live.
+    if re.search(r"\b(202[3-9]|203[0-9])\b", normalized) and any(
+        phrase in normalized for phrase in ("news", "update", "updates", "trending")
+    ):
+        return True
+
+    return False
+
+
+def should_enable_search(message: str) -> bool:
+    """Check if message implies a need for web search.
+    
+    Uses word boundary matching for specific keywords to avoid over-triggering.
+    """
+    normalized = (message or "").lower()
+    if not normalized:
+        return False
+
+    # Explicit request cues; keep conservative because enabling search can incur cost.
+    explicit_patterns = [
+        r"\bsearch\b",
+        r"\bgoogle\b",
+        r"\bweb\s*search\b",
+        r"\blook\s*up\b",
+        r"\blookup\b",
+        r"\bfind\s+on\s+the\s+web\b",
+    ]
+    if any(re.search(pattern, normalized) for pattern in explicit_patterns):
+        return True
+
+    # Live/recency-oriented queries.
+    return should_use_web_search(message, model=None)
+
+
+def extract_urls_from_message(message: str, max_urls: int = 20) -> list:
+    """
+    Extract URLs from a message for URL context processing.
+    
+    Returns up to max_urls URLs, filtered to exclude internal/localhost URLs.
+    """
+    if not message:
+        return []
+    
+    # Simple URL pattern
+    url_pattern = re.compile(
+        r'https?://[^\s<>"{}|\\^`\[\]]+',
+        re.IGNORECASE
+    )
+    
+    urls = url_pattern.findall(message)
+    
+    # Filter out localhost/internal URLs
+    filtered = []
+    for url in urls:
+        lower_url = url.lower()
+        if "localhost" in lower_url or "127.0.0.1" in lower_url:
+            continue
+        filtered.append(url)
+        if len(filtered) >= max_urls:
+            break
+    
+    return filtered

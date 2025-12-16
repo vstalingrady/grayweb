@@ -260,17 +260,23 @@ async def ensure_user_data_record(user_identifier: int) -> Optional[int]:
 
     except Exception as error:  # pragma: no cover - defensive logging
         # Race condition: another request might have created the record between our check and insert.
-        # Re-fetch once before surfacing the failure.
-        try:
-            row = await database.fetch_one(
-                user_data.select().where(user_data.c.user_identifier == user_identifier)
-            )
+        # On SQLite, the winning transaction might also still be committing/holding a write lock.
+        # Retry a few times with a small backoff before surfacing the failure.
+        import asyncio
+
+        for delay_seconds in (0.0, 0.01, 0.02, 0.05):
+            if delay_seconds:
+                await asyncio.sleep(delay_seconds)
+            try:
+                row = await database.fetch_one(
+                    user_data.select().where(user_data.c.user_identifier == user_identifier)
+                )
+            except Exception:
+                row = None
             if row:
                 user_data_id = row["id"]
                 _USER_DATA_CACHE[user_identifier] = user_data_id
                 return user_data_id
-        except Exception:
-            pass
 
         logger.error(
             "Error ensuring user data record: %s",
