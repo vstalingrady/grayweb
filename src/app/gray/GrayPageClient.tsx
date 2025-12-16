@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -72,7 +73,6 @@ import {
   ANON_MESSAGE_LIMIT_VALUE,
 } from "@/lib/anonymousSession";
 import { SignUpPromptModal } from "@/components/gray/SignUpPromptModal";
-import { StarfieldCanvas } from "@/components/gray/StarfieldCanvas";
 
 // Lazy load all heavy components for better code splitting
 const GrayEnhancedSidebar = dynamic(
@@ -667,7 +667,13 @@ function GrayPageClientInner({
             <div className={styles.mobileWelcomeScreen} aria-hidden="true">
                 <div className={styles.mobileWelcomeContent}>
                   <div className={styles.mobileWelcomeLogo}>
-                  <img src="/grayaiwhitenotspinning.svg" alt="" className={styles.uiIconImage} />
+                  <Image
+                    src="/grayaiwhitenotspinning.svg"
+                    alt=""
+                    width={40}
+                    height={40}
+                    className={styles.uiIconImage}
+                  />
                   </div>
                   <p className={styles.mobileWelcomeGreeting}>Ready when you are.</p>
                 </div>
@@ -1036,15 +1042,6 @@ function GrayPageClientInner({
         };
       });
   }, [sessions]);
-  const workspaceDateLabel = useMemo(
-    () =>
-      now.toLocaleDateString([], {
-        weekday: "long",
-        month: "long",
-        day: "numeric",
-      }),
-    [now]
-  );
   const isDashboardView = viewMode === "dashboard";
   const isChatView = viewMode === "chat";
   const isPulseRoute =
@@ -1489,7 +1486,7 @@ function GrayPageClientInner({
 
   const handleHabitModalSubmit = useCallback(
     async (habitId: string | null, updates: HabitUpdates) => {
-      if (!user) {
+      if (typeof userId !== "number") {
         throw new Error("You need to be signed in to update habits.");
       }
       if (!habitId) {
@@ -1507,7 +1504,7 @@ function GrayPageClientInner({
       );
       setHabits(updatedHabits);
       try {
-        await apiService.updateHabit(user.id, numericId, {
+        await apiService.updateHabit(userId, numericId, {
           label: updates.label,
           description: updates.details ?? null,
         });
@@ -1517,7 +1514,7 @@ function GrayPageClientInner({
         throw (error instanceof Error ? error : new Error("Failed to update habit."));
       }
     },
-    [habits, user?.id]
+    [habits, setHabits, userId]
   );
 
   const editHabit = (habitToEdit: HabitItem) => {
@@ -2208,7 +2205,7 @@ function GrayPageClientInner({
     if (pathname !== targetPath) {
       router.replace(targetPath);
     }
-  }, [currentChatId, generalSessionId, manualViewMode, sessions, supportsInlineChat]);
+  }, [currentChatId, generalSessionId, manualViewMode, router, sessions, supportsInlineChat]);
 
   const handleOpenHistoryEntry = (entry: SidebarHistoryEntry) => {
     if (!entry.href || entry.href === "#") {
@@ -2263,7 +2260,7 @@ function GrayPageClientInner({
         router.push("/");
       }
     }
-  }, [deleteSession, activeChatId, generalSessionId, router, sessions]);
+  }, [deleteSession, activeChatId, generalSessionId, router, lastDeletedChatIdStorageKey]);
 
   const handleRenameHistoryOverlayEntry = useCallback(
     (entry: SidebarHistoryEntry) => handleRenameHistoryEntry(entry.id),

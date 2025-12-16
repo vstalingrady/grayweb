@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, Check } from "lucide-react";
 import { motion } from "framer-motion";
@@ -169,7 +170,13 @@ export default function GrayMarketingClient({
                 rel="noreferrer"
                 className="site-footer__social-link"
               >
-                <img src="/logos/xwhite.svg" alt="" className="site-footer__social-icon" />
+                <Image
+                  src="/logos/xwhite.svg"
+                  alt=""
+                  width={18}
+                  height={18}
+                  className="site-footer__social-icon"
+                />
                 <span className="sr-only">X</span>
               </a>
               <a
@@ -178,7 +185,13 @@ export default function GrayMarketingClient({
                 rel="noreferrer"
                 className="site-footer__social-link"
               >
-                <img src="/logos/youtubewhite.svg" alt="" className="site-footer__social-icon" />
+                <Image
+                  src="/logos/youtubewhite.svg"
+                  alt=""
+                  width={18}
+                  height={18}
+                  className="site-footer__social-icon"
+                />
                 <span className="sr-only">YouTube</span>
               </a>
               <a
@@ -187,7 +200,13 @@ export default function GrayMarketingClient({
                 rel="noreferrer"
                 className="site-footer__social-link"
               >
-                <img src="/logos/instagramwhite.svg" alt="" className="site-footer__social-icon" />
+                <Image
+                  src="/logos/instagramwhite.svg"
+                  alt=""
+                  width={18}
+                  height={18}
+                  className="site-footer__social-icon"
+                />
                 <span className="sr-only">Instagram</span>
               </a>
               <a
@@ -196,7 +215,13 @@ export default function GrayMarketingClient({
                 rel="noreferrer"
                 className="site-footer__social-link"
               >
-                <img src="/logos/discordwhite.svg" alt="" className="site-footer__social-icon" />
+                <Image
+                  src="/logos/discordwhite.svg"
+                  alt=""
+                  width={18}
+                  height={18}
+                  className="site-footer__social-icon"
+                />
                 <span className="sr-only">Discord</span>
               </a>
             </div>

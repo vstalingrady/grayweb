@@ -727,6 +727,12 @@ except ImportError:
         coerce_activity_day as _coerce_activity_day,
     )
 
+# Log utilities (extracted from main.py)
+try:
+    from backend.core.log_utils import payload_log_summary as _payload_log_summary
+except ImportError:
+    from core.log_utils import payload_log_summary as _payload_log_summary  # type: ignore
+
 load_dotenv(ROOT_DIR / ".env")
 
 SUPABASE_POOLER_HOST = os.getenv("SUPABASE_POOLER_HOST", "aws-1-ap-south-1.pooler.supabase.com")
@@ -1558,21 +1564,8 @@ def _deserialize_proactivity_settings_payload(payload: Any) -> Optional[Proactiv
         return None
 
 
-def _payload_log_summary(payload: Any) -> Dict[str, Any]:
-    """Summarize potentially sensitive payloads for safe logging."""
-    if payload is None:
-        return {"payload_present": False}
-    if isinstance(payload, dict):
-        return {
-            "payload_present": True,
-            "payload_keys": sorted(str(key) for key in payload.keys()),
-            "payload_size": len(payload),
-        }
-    if isinstance(payload, list):
-        return {"payload_present": True, "payload_size": len(payload)}
-    if isinstance(payload, str):
-        return {"payload_present": True, "payload_length": len(payload)}
-    return {"payload_present": True, "payload_type": type(payload).__name__}
+# _payload_log_summary is now imported from core.log_utils
+
 
 
 def _timezone_from_time_context(time_context: str) -> Tuple[Optional[str], Optional[timezone]]:

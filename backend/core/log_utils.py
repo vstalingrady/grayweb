@@ -14,6 +14,40 @@ from typing import Any, Dict, Iterable, List, Optional
 ROOT_DIR = Path(__file__).resolve().parent.parent
 
 
+# ==============================================================================
+# Payload Logging Utilities
+# ==============================================================================
+
+
+def payload_log_summary(payload: Any) -> Dict[str, Any]:
+    """Summarize potentially sensitive payloads for safe logging.
+    
+    Returns a dictionary with payload metadata without exposing actual content.
+    """
+    if payload is None:
+        return {"payload_present": False}
+    if isinstance(payload, dict):
+        return {
+            "payload_present": True,
+            "payload_keys": sorted(str(key) for key in payload.keys()),
+            "payload_size": len(payload),
+        }
+    if isinstance(payload, list):
+        return {"payload_present": True, "payload_size": len(payload)}
+    if isinstance(payload, str):
+        return {"payload_present": True, "payload_length": len(payload)}
+    return {"payload_present": True, "payload_type": type(payload).__name__}
+
+
+# Backwards compatibility alias
+_payload_log_summary = payload_log_summary
+
+
+# ==============================================================================
+# Timestamp Parsing
+# ==============================================================================
+
+
 def parse_iso_timestamp(value: Optional[str]) -> Optional[datetime]:
     """Parse an ISO 8601 timestamp string to a naive UTC datetime."""
     if not value:
