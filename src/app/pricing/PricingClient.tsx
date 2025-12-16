@@ -8,7 +8,6 @@ import { useRouter } from "next/navigation";
 import { X } from "lucide-react";
 import styles from "./page.module.css";
 import { PricingPlansSection } from "./PricingPlansSection";
-import { useUser } from "@/contexts/UserContext";
 import { useI18n } from "@/contexts/I18nContext";
 
 const ParticleSphere = dynamic(
@@ -16,15 +15,8 @@ const ParticleSphere = dynamic(
   { ssr: false },
 );
 
-interface PricingClientProps {
-  storeId?: string;
-  voyagerVariantId?: string;
-  pioneerVariantId?: string;
-}
-
-export default function PricingClient({ storeId, voyagerVariantId, pioneerVariantId }: PricingClientProps) {
+export default function PricingClient() {
   const router = useRouter();
-  const { user } = useUser();
   const { t } = useI18n();
 
   const handleDismiss = useCallback(() => {
@@ -44,12 +36,7 @@ export default function PricingClient({ storeId, voyagerVariantId, pioneerVarian
           >
             <X size={20} />
           </button>
-          <PricingPlansSection
-            storeId={storeId}
-            voyagerVariantId={voyagerVariantId}
-            pioneerVariantId={pioneerVariantId}
-            userId={user?.id}
-          />
+          <PricingPlansSection />
         </div>
       </div>
     </div>

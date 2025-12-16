@@ -9,12 +9,6 @@ const PricingClient = dynamic(() => import("./PricingClient"), {
   loading: () => <div style={{ minHeight: "60vh" }} />,
 });
 
-interface PricingClientWrapperProps {
-  storeId?: string;
-  voyagerVariantId?: string;
-  pioneerVariantId?: string;
-}
-
-export default function PricingClientWrapper(props: PricingClientWrapperProps) {
-  return <PricingClient {...props} />;
+export default function PricingClientWrapper() {
+  return <PricingClient />;
 }

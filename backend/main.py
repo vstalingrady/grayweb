@@ -348,9 +348,28 @@ except ImportError:
         delete_latest_reminder_tool as _delete_latest_reminder_tool,
     )
 
+# Entity reminder operations (extracted from main.py)
+try:
+    from backend.core.entity_reminders import (
+        set_reminder_scheduler as _set_entity_reminder_scheduler,
+        get_pending_entity_reminder_map as _get_pending_entity_reminder_map,
+        delete_pending_entity_reminders as _delete_pending_entity_reminders,
+        delete_all_entity_reminders as _delete_all_entity_reminders,
+        upsert_entity_reminder as _upsert_entity_reminder,
+    )
+except ImportError:
+    from core.entity_reminders import (  # type: ignore
+        set_reminder_scheduler as _set_entity_reminder_scheduler,
+        get_pending_entity_reminder_map as _get_pending_entity_reminder_map,
+        delete_pending_entity_reminders as _delete_pending_entity_reminders,
+        delete_all_entity_reminders as _delete_all_entity_reminders,
+        upsert_entity_reminder as _upsert_entity_reminder,
+    )
+
 from uuid import UUID, uuid4
 from pathlib import Path
 from urllib.parse import urlparse
+
 
 # NODE_ENV, ENVIRONMENT, IS_PRODUCTION now imported from core.cors_utils
 
@@ -3685,249 +3704,12 @@ async def _delete_latest_reminder_tool(user_id: int, args: Dict[str, Any], db: d
 # Reminder utilities (_build_reminder_payload, _normalize_remind_at, _parse_remind_at)
 # are now imported from core.tool_handlers
 
-
-async def _get_pending_entity_reminder_map(
-    *,
-    user_id: int,
-    entity_type: str,
-    entity_ids: List[int],
-    db: databases.Database,
-) -> Dict[int, datetime]:
-    if not entity_ids:
-        return {}
-
-    rows = await db.fetch_all(
-        reminders.select()
-        .where(
-            (reminders.c.user_id == user_id)
-            & (reminders.c.entity_type == entity_type)
-            & (reminders.c.entity_id.in_(entity_ids))
-            & (reminders.c.status == "pending")
-        )
-        .order_by(reminders.c.entity_id.asc(), reminders.c.created_at.desc(), reminders.c.id.desc())
-    )
-
-    reminder_map: Dict[int, datetime] = {}
-    for row in rows:
-        raw_entity_id = row.get("entity_id")
-        if raw_entity_id is None:
-            continue
-        try:
-            entity_id = int(raw_entity_id)
-        except Exception:
-            continue
-        if entity_id in reminder_map:
-            continue
-        remind_at = row.get("remind_at")
-        if isinstance(remind_at, datetime):
-            reminder_map[entity_id] = remind_at
-    return reminder_map
-
-
-async def _delete_pending_entity_reminders(
-    *,
-    user_id: int,
-    entity_type: str,
-    entity_id: int,
-    db: databases.Database,
-) -> None:
-    rows = await db.fetch_all(
-        reminders.select().where(
-            (reminders.c.user_id == user_id)
-            & (reminders.c.entity_type == entity_type)
-            & (reminders.c.entity_id == entity_id)
-            & (reminders.c.status == "pending")
-        )
-    )
-    if not rows:
-        return
-
-    for row in rows:
-        reminder_id = int(row["id"])
-        try:
-            global reminder_scheduler
-            if reminder_scheduler is not None:
-                await reminder_scheduler.cancel_job(user_id=user_id, reminder_id=reminder_id)
-        except Exception:  # pragma: no cover
-            pass
-        await db.execute(
-            reminders.delete().where(
-                (reminders.c.id == reminder_id) & (reminders.c.user_id == user_id)
-            )
-        )
-
-
-async def _delete_all_entity_reminders(
-    *,
-    user_id: int,
-    entity_type: str,
-    entity_id: int,
-    db: databases.Database,
-) -> None:
-    rows = await db.fetch_all(
-        reminders.select().where(
-            (reminders.c.user_id == user_id)
-            & (reminders.c.entity_type == entity_type)
-            & (reminders.c.entity_id == entity_id)
-        )
-    )
-    if not rows:
-        return
-
-    for row in rows:
-        reminder_id = int(row["id"])
-        try:
-            global reminder_scheduler
-            if reminder_scheduler is not None:
-                await reminder_scheduler.cancel_job(user_id=user_id, reminder_id=reminder_id)
-        except Exception:  # pragma: no cover
-            pass
-        await db.execute(
-            reminders.delete().where(
-                (reminders.c.id == reminder_id) & (reminders.c.user_id == user_id)
-            )
-        )
-
-
-async def _upsert_entity_reminder(
-    *,
-    user_id: int,
-    entity_type: str,
-    entity_id: int,
-    label: str,
-    description: Optional[str],
-    remind_at: Optional[datetime],
-    metadata: Optional[Dict[str, Any]],
-    color: Optional[str],
-    db: databases.Database,
-) -> Optional[int]:
-    global reminder_scheduler
-    normalized_remind_at = _normalize_remind_at(remind_at)
-    if normalized_remind_at is None:
-        await _delete_pending_entity_reminders(
-            user_id=user_id,
-            entity_type=entity_type,
-            entity_id=entity_id,
-            db=db,
-        )
-        return None
-
-    existing_pending = await db.fetch_one(
-        reminders.select()
-        .where(
-            (reminders.c.user_id == user_id)
-            & (reminders.c.entity_type == entity_type)
-            & (reminders.c.entity_id == entity_id)
-            & (reminders.c.status == "pending")
-        )
-        .order_by(reminders.c.created_at.desc(), reminders.c.id.desc())
-        .limit(1)
-    )
-
-    now = utcnow()
-    base_values: Dict[str, Any] = {
-        "label": label,
-        "description": description,
-        "summary": description,
-        "remind_at": normalized_remind_at,
-        "delivery_mode": entity_type,
-        "metadata": metadata,
-        "color": color,
-        "updated_at": now,
-    }
-
-    if existing_pending:
-        reminder_id = int(existing_pending["id"])
-        await db.execute(
-            reminders.update()
-            .where((reminders.c.id == reminder_id) & (reminders.c.user_id == user_id))
-            .values(**base_values)
-        )
-        try:
-            if reminder_scheduler is not None:
-                await reminder_scheduler.refresh_job(
-                    user_id=user_id,
-                    reminder_id=reminder_id,
-                    remind_at=normalized_remind_at,
-                )
-        except Exception as exc:  # pragma: no cover
-            api_logger.warning(
-                "Failed to reschedule entity reminder",
-                extra={
-                    "event_type": "entity_reminder_reschedule_failed",
-                    "user_id": user_id,
-                    "entity_type": entity_type,
-                    "entity_id": entity_id,
-                    "reminder_id": reminder_id,
-                    "error": str(exc),
-                },
-            )
-        return reminder_id
-
-    existing_delivered = await db.fetch_one(
-        reminders.select()
-        .where(
-            (reminders.c.user_id == user_id)
-            & (reminders.c.entity_type == entity_type)
-            & (reminders.c.entity_id == entity_id)
-            & (reminders.c.status == "delivered")
-        )
-        .order_by(reminders.c.created_at.desc(), reminders.c.id.desc())
-        .limit(1)
-    )
-
-    # If the latest reminder already fired and the requested time is still in the past,
-    # avoid re-creating a new pending reminder (common when editing an event after the
-    # reminder delivered).
-    if existing_delivered and normalized_remind_at <= now:
-        reminder_id = int(existing_delivered["id"])
-        await db.execute(
-            reminders.update()
-            .where((reminders.c.id == reminder_id) & (reminders.c.user_id == user_id))
-            .values(
-                label=label,
-                description=description,
-                summary=description,
-                metadata=metadata,
-                color=color,
-                updated_at=now,
-            )
-        )
-        return reminder_id
-
-    insert_values: Dict[str, Any] = {
-        "user_id": user_id,
-        "entity_type": entity_type,
-        "entity_id": entity_id,
-        "status": "pending",
-        "created_at": now,
-        **base_values,
-    }
-    reminder_id = await db.execute(reminders.insert().values(**insert_values))
-    try:
-        if reminder_scheduler is not None:
-            await reminder_scheduler.refresh_job(
-                user_id=user_id,
-                reminder_id=int(reminder_id),
-                remind_at=normalized_remind_at,
-            )
-    except Exception as exc:  # pragma: no cover
-        api_logger.warning(
-            "Failed to schedule entity reminder",
-            extra={
-                "event_type": "entity_reminder_schedule_failed",
-                "user_id": user_id,
-                "entity_type": entity_type,
-                "entity_id": entity_id,
-                "reminder_id": reminder_id,
-                "error": str(exc),
-            },
-        )
-    return int(reminder_id)
-
+# Entity reminder operations (_get_pending_entity_reminder_map, _delete_pending_entity_reminders,
+# _delete_all_entity_reminders, _upsert_entity_reminder) are now imported from core.entity_reminders
 
 
 async def _list_reminders_tool(user_id: int, args: Dict[str, Any], db: databases.Database) -> Dict[str, Any]:
+
     status_filter = args.get("status")
     limit = args.get("limit")
     delivery_mode = args.get("delivery_mode")

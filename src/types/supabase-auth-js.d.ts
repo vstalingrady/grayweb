@@ -30,6 +30,12 @@ declare module '@supabase/auth-js' {
   }
 
   export class AuthClient {
+    signInWithOAuth(options: any): Promise<{ data: { url?: string | null }; error: AuthError | null }>;
+    signInWithPassword(options: any): Promise<{ data: { session?: Session | null; user?: User | null }; error: AuthError | null }>;
+    signUp(options: any): Promise<{ data: { session?: Session | null; user?: User | null }; error: AuthError | null }>;
+    resend(options: any): Promise<{ data?: any; error: AuthError | null }>;
+    resetPasswordForEmail(email: string, options?: any): Promise<{ data?: any; error: AuthError | null }>;
+    updateUser(attributes: any): Promise<{ data?: { user?: User | null }; error: AuthError | null }>;
     exchangeCodeForSession(
       authCode: string
     ): Promise<{ data: { session: Session | null; user: User | null }; error: AuthError | null }>;
@@ -49,4 +55,3 @@ declare module '@supabase/auth-js' {
   export const GoTrueAdminApi: any;
   export const AuthAdminApi: any;
 }
-

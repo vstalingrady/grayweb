@@ -11,7 +11,7 @@ import React, {
   ReactNode,
 } from 'react';
 import { AuthApiError } from '@supabase/supabase-js';
-import { apiService, User, isApiNetworkError } from '@/lib/api';
+import { apiService, isApiNetworkError, type User, type UserUpdate } from '@/lib/api';
 import { humanizeIdentifier } from '@/lib/names';
 import { getSupabaseClient } from '@/lib/supabaseClient';
 import { clearSupabaseAuthStorage } from '@/lib/supabaseStorage';
@@ -22,23 +22,7 @@ interface UserContextType {
   loading: boolean;
   error: string | null;
   createUser: (userData: { email: string; full_name: string; profile_picture_url?: string }) => Promise<User>;
-  updateUser: (userData: {
-    full_name?: string;
-    profile_picture_url?: string;
-    role?: string;
-    plan_tier?: string | null;
-    personalization_nickname?: string | null;
-    personalization_occupation?: string | null;
-    personalization_about?: string | null;
-    personalization_custom_instructions?: string | null;
-    personalization_system_prompt_override?: string | null;
-    personalization_location?: string | null;
-    personalization_time_zone?: string | null;
-    maps_enabled?: boolean;
-    improve_model_for_everyone?: boolean;
-    visible_model_ids?: string[] | null;
-    has_seen_general_chat?: boolean;
-  }) => Promise<void>;
+  updateUser: (userData: UserUpdate) => Promise<void>;
   refreshUser: () => Promise<void>;
   waitForUser: () => Promise<User | null>;
   deleteUserAccount: () => Promise<void>;
@@ -487,43 +471,11 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
     }
   };
 
-  const updateUser = async (userData: {
-    full_name?: string;
-    profile_picture_url?: string;
-    role?: string;
-    plan_tier?: string | null;
-    personalization_nickname?: string | null;
-    personalization_occupation?: string | null;
-    personalization_about?: string | null;
-    personalization_custom_instructions?: string | null;
-    personalization_system_prompt_override?: string | null;
-    personalization_location?: string | null;
-    personalization_time_zone?: string | null;
-    maps_enabled?: boolean;
-    improve_model_for_everyone?: boolean;
-    visible_model_ids?: string[] | null;
-    has_seen_general_chat?: boolean;
-  }) => {
+  const updateUser = async (userData: UserUpdate) => {
     if (!user) throw new Error('No user logged in');
 
     // Build a sanitized payload restricted to fields the backend schema knows.
-    const payload: {
-      full_name?: string;
-      profile_picture_url?: string;
-      role?: string;
-      plan_tier?: string | null;
-      personalization_nickname?: string | null;
-      personalization_occupation?: string | null;
-      personalization_about?: string | null;
-      personalization_custom_instructions?: string | null;
-      personalization_system_prompt_override?: string | null;
-      personalization_location?: string | null;
-      personalization_time_zone?: string | null;
-      maps_enabled?: boolean;
-      improve_model_for_everyone?: boolean;
-      visible_model_ids?: string[] | null;
-      has_seen_general_chat?: boolean;
-    } = {};
+    const payload: UserUpdate = {};
 
     if (typeof userData.full_name === 'string') {
       payload.full_name = userData.full_name;
@@ -571,6 +523,27 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
     }
     if (typeof userData.has_seen_general_chat === 'boolean') {
       payload.has_seen_general_chat = userData.has_seen_general_chat;
+    }
+    if (Object.prototype.hasOwnProperty.call(userData, 'workspace_background_id')) {
+      payload.workspace_background_id = userData.workspace_background_id ?? null;
+    }
+    if (Object.prototype.hasOwnProperty.call(userData, 'theme_mode')) {
+      payload.theme_mode = userData.theme_mode ?? null;
+    }
+    if (Object.prototype.hasOwnProperty.call(userData, 'ui_locale')) {
+      payload.ui_locale = userData.ui_locale ?? null;
+    }
+    if (Object.prototype.hasOwnProperty.call(userData, 'preferred_response_language')) {
+      payload.preferred_response_language = userData.preferred_response_language ?? null;
+    }
+    if (Object.prototype.hasOwnProperty.call(userData, 'notification_preferences')) {
+      payload.notification_preferences = userData.notification_preferences ?? null;
+    }
+    if (Object.prototype.hasOwnProperty.call(userData, 'conversation_memory_enabled')) {
+      payload.conversation_memory_enabled = userData.conversation_memory_enabled ?? null;
+    }
+    if (Object.prototype.hasOwnProperty.call(userData, 'auto_web_search_enabled')) {
+      payload.auto_web_search_enabled = userData.auto_web_search_enabled ?? null;
     }
 
     if (Object.keys(payload).length === 0) {

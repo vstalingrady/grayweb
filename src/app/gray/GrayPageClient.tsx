@@ -2235,7 +2235,8 @@ function GrayPageClientInner({
     window.open(entry.href, "_blank", "noopener,noreferrer");
   };
 
-  const handleRenameHistoryEntry = useCallback((id: string) => {
+  const handleRenameHistoryEntry = useCallback((entry: SidebarHistoryEntry) => {
+    const id = entry.id;
     const session = sessions.find((s) => s.id === id);
     if (!session) return;
     const nextTitle = window.prompt("Rename conversation", session.title || "New Conversation");
@@ -2245,7 +2246,8 @@ function GrayPageClientInner({
     renameSession(id, nextTitle);
   }, [sessions, renameSession]);
 
-  const handleDeleteHistoryEntry = useCallback((id: string) => {
+  const handleDeleteHistoryEntry = useCallback((entry: SidebarHistoryEntry) => {
+    const id = entry.id;
     const confirmed = window.confirm("Delete this conversation? This cannot be undone.");
     if (!confirmed) {
       return;
