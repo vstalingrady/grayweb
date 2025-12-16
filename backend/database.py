@@ -376,17 +376,6 @@ google_calendar_credentials = sqlalchemy.Table(
     sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
 )
 
-file_search_stores = sqlalchemy.Table(
-    "file_search_stores",
-    metadata,
-    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
-    sqlalchemy.Column("user_id", sqlalchemy.Integer, unique=True, nullable=False),
-    sqlalchemy.Column("store_name", sqlalchemy.String, unique=True, nullable=False),
-    sqlalchemy.Column("display_name", sqlalchemy.String, nullable=True),
-    sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
-    sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
-)
-
 media_uploads = sqlalchemy.Table(
     "media_uploads",
     metadata,

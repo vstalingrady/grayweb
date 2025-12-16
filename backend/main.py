@@ -434,11 +434,9 @@ except ImportError:
 try:
     from backend.calendar_tools import CALENDAR_TOOLS
     from backend.calendar_context import build_calendar_context
-    from backend.file_search import FileSearchService
 except ImportError:
     from calendar_tools import CALENDAR_TOOLS
     from calendar_context import build_calendar_context
-    from file_search import FileSearchService
 try:
     from backend.onboarding_tools import ONBOARDING_TOOLS
     from backend.plan_tools import PLAN_TOOLS
@@ -552,7 +550,6 @@ try:
         proactivity_settings,
         proactivity_push_subscriptions,
         proactivity_logs,
-        file_search_stores,
         media_uploads,
         context_cache,
         proactive_notifications,
@@ -578,7 +575,6 @@ except ImportError:
         proactivity_settings,
         proactivity_push_subscriptions,
         proactivity_logs,
-        file_search_stores,
         media_uploads,
         context_cache,
         proactive_notifications,
@@ -735,14 +731,6 @@ VALIDATE_GEMINI_ON_STARTUP = os.getenv("VALIDATE_GEMINI_ON_STARTUP", "true").str
     "no",
     "off",
 }
-FILE_SEARCH_SERVICE: Optional[FileSearchService] = None
-FILE_SEARCH_ENABLED = bool(os.getenv("ENABLE_FILE_SEARCH", "false").lower() == "true")
-if FILE_SEARCH_ENABLED:
-    try:
-        FILE_SEARCH_SERVICE = FileSearchService(os.getenv("GEMINI_API_KEY"))
-    except ValueError as exc:
-        print(f"[FileSearch] Disabled: {exc}")
-
 
 AI_MESSAGE_GENERATOR = AIMessageGenerator()
 
@@ -753,16 +741,6 @@ CLAMAV_SCAN_BINARY = (
     or shutil.which("clamscan")
 )
 CLAMAV_SCAN_TIMEOUT = _int_env("CLAMAV_SCAN_TIMEOUT_SECONDS", 30)
-
-
-FILE_SEARCH_MAX_TOKENS_PER_CHUNK = _int_env("FILE_SEARCH_MAX_TOKENS_PER_CHUNK", 200)
-FILE_SEARCH_MAX_OVERLAP_TOKENS = _int_env("FILE_SEARCH_MAX_OVERLAP_TOKENS", 20)
-FILE_SEARCH_CHUNKING_CONFIG: Optional[Dict[str, Any]] = {
-    "white_space_config": {
-        "max_tokens_per_chunk": FILE_SEARCH_MAX_TOKENS_PER_CHUNK,
-        "max_overlap_tokens": FILE_SEARCH_MAX_OVERLAP_TOKENS,
-    }
-}
 
 MEDIA_UPLOAD_DIR = Path(
     os.getenv("MEDIA_UPLOAD_DIR")
@@ -2441,7 +2419,6 @@ async def dev_analytics_summary(
         "proactivity_push_subscriptions": proactivity_push_subscriptions,
         "proactive_notifications": proactive_notifications,
         "context_cache": context_cache,
-        "file_search_stores": file_search_stores,
         "media_uploads": media_uploads,
         "google_calendar_credentials": google_calendar_credentials,
     }
@@ -3174,117 +3151,6 @@ async def _load_conversation_history(conversation_id: str, user_id: int) -> List
 
   # Thread conversations handled by shared chat_history module.
   return await load_thread_history(conversation_id, user_id)
-
-
-async def _ensure_user_file_search_store(
-    db: databases.Database,
-    user_id: int,
-) -> Optional[str]:
-    if not FILE_SEARCH_ENABLED or not FILE_SEARCH_SERVICE:
-        return None
-
-    query = file_search_stores.select().where(file_search_stores.c.user_id == user_id)
-    existing = await db.fetch_one(query)
-    if existing:
-        return existing["store_name"]
-
-    display_name = f"Gray uploads for user {user_id}"
-    try:
-        store = await FILE_SEARCH_SERVICE.create_store(display_name=display_name)
-    except Exception as error:  # pragma: no cover - best effort logging
-        print(f"[FileSearch] Failed to create store for user {user_id}: {error}")
-        return None
-
-    try:
-        await db.execute(
-            file_search_stores.insert().values(
-                user_id=user_id,
-                store_name=store.name,
-                display_name=store.display_name,
-                created_at=utcnow(),
-                updated_at=utcnow(),
-            )
-        )
-    except sqlalchemy.exc.IntegrityError:
-        existing = await db.fetch_one(query)
-        if existing:
-            return existing["store_name"]
-        raise
-
-    return store.name
-
-
-async def _upload_file_search_document(
-    store_name: str,
-    file_path: Path,
-    display_name: Optional[str] = None,
-) -> None:
-  if not FILE_SEARCH_ENABLED or not FILE_SEARCH_SERVICE:
-    return
-
-  safe_path = _resolve_storage_path_from_record(str(file_path))
-  if not safe_path.exists():
-    raise HTTPException(
-        status_code=status.HTTP_400_BAD_REQUEST,
-        detail="File no longer available for search indexing.",
-    )
-
-  def _log_failure(suffix: str, error: Exception) -> None:
-    print(f"[FileSearch] Failed to upload {safe_path.name} to {store_name}{suffix}: {error}")
-
-  last_error: Optional[Exception] = None
-  for chunking_config in (FILE_SEARCH_CHUNKING_CONFIG, None):
-    try:
-      operation = await FILE_SEARCH_SERVICE.upload_to_store(
-          file_path=str(safe_path),
-          store_name=store_name,
-          display_name=display_name,
-          chunking_config=chunking_config,
-      )
-      await _wait_for_operation(operation)
-      return
-    except Exception as error:  # pragma: no cover - best effort logging
-      last_error = error
-      # Try fallback config; suppress noisy duplicate logs
-      continue
-
-  if last_error:
-    _log_failure(" (upload failed after retries)", last_error)
-
-
-async def _get_user_file_search_store_names(
-    db: Optional[databases.Database],
-    user_id: Optional[int],
-) -> List[str]:
-    if (
-        not FILE_SEARCH_ENABLED
-        or db is None
-        or user_id is None
-        or not FILE_SEARCH_SERVICE
-    ):
-        return []
-
-    rows = await db.fetch_all(
-        file_search_stores.select().where(file_search_stores.c.user_id == user_id)
-    )
-
-    return [row["store_name"] for row in rows if row and _row_get(row, "store_name")]
-
-
-async def _build_file_search_tools(
-    db: Optional[databases.Database],
-    user_id: Optional[int],
-) -> List[types.Tool]:
-    store_names = await _get_user_file_search_store_names(db, user_id)
-    if not store_names:
-        return []
-    return [
-        types.Tool(
-            file_search=types.FileSearch(
-                file_search_store_names=store_names,
-            )
-        )
-    ]
 
 
 async def _fetch_proactivity_summary(user_id: int, info_type: Optional[str], db: databases.Database) -> Dict[str, Any]:
@@ -4840,7 +4706,6 @@ async def stream_ai_response(
     maps_longitude: Optional[float] = None,
     maps_widget: bool = False,
     search_enabled: bool = True,
-    file_search_enabled: bool = False,
     should_generate_title: bool = False,
     reasoning_mode: bool = False,
     reminders_enabled: bool = False,
@@ -5080,13 +4945,6 @@ async def stream_ai_response(
         maps_longitude,
         maps_widget,
     )
-    file_search_tools = []
-    if file_search_enabled:
-        t0_fs = time.perf_counter()
-        file_search_tools = await _build_file_search_tools(db, user_id)
-        fs_ms = (time.perf_counter() - t0_fs) * 1000
-        if fs_ms > 50:
-            api_logger.info(f"[Timing] File search tools: {fs_ms:.1f}ms")
 
     if tools is not None:
         base_tools = tools
@@ -5096,7 +4954,7 @@ async def stream_ai_response(
             base_tools = [t for t in base_tools if t != SEARCH_TOOL]
     
     # Common tool list
-    tool_list = [*base_tools, *maps_tools, *file_search_tools]
+    tool_list = [*base_tools, *maps_tools]
     # Add PLAN_TOOLS and CALENDAR_TOOLS only when message intent suggests scheduling operations
     # BUT skip for onboarding flow - it only needs complete_onboarding tool, extra tools add latency
     if needs_structured_tools and not is_onboarding_tool:
@@ -5939,7 +5797,6 @@ async def generate_ai_response(
     maps_longitude: Optional[float] = None,
     maps_widget: bool = False,
     search_enabled: bool = True,
-    file_search_enabled: bool = False,
     should_generate_title: bool = False,
     reasoning_mode: bool = False,
     tools: Optional[List[types.Tool]] = None,
@@ -6091,9 +5948,6 @@ async def generate_ai_response(
         maps_longitude,
         maps_widget,
     )
-    file_search_tools = []
-    if file_search_enabled:
-         file_search_tools = await _build_file_search_tools(db, user_id)
 
     if tools is not None:
         base_tools = tools
@@ -6101,7 +5955,7 @@ async def generate_ai_response(
         base_tools = DEFAULT_CHAT_TOOLS
         if not search_enabled:
             base_tools = [t for t in base_tools if t != SEARCH_TOOL]
-    tool_list = [*base_tools, *maps_tools, *file_search_tools]
+    tool_list = [*base_tools, *maps_tools]
     # Add PLAN_TOOLS and CALENDAR_TOOLS only when message intent suggests scheduling operations
     # BUT skip for onboarding flow - it only needs complete_onboarding tool, extra tools add latency
     # Check for onboarding tools so we can route through a provider that supports
@@ -6475,106 +6329,6 @@ async def get_context_cache(
     return ContextCache(**payload)
 
 
-class FileSearchStoreCreate(BaseModel):
-    display_name: Optional[str] = None
-
-
-class FileSearchUploadResponse(BaseModel):
-    operation_name: str
-    done: bool
-    result: Optional[Dict[str, Any]] = None
-
-
-class FileSearchImportPayload(BaseModel):
-    file_search_store_name: str
-    file_name: str
-    chunking_config: Optional[Dict[str, Any]] = None
-
-
-def _ensure_file_search_enabled():
-    if not FILE_SEARCH_ENABLED or not FILE_SEARCH_SERVICE:
-        raise HTTPException(status_code=503, detail="File Search is not enabled.")
-
-
-async def _wait_for_operation(operation: types.Operation) -> types.Operation:
-    while not operation.done:
-        await sleep(2)
-        operation = await FILE_SEARCH_SERVICE.get_operation(operation.name)
-    return operation
-
-
-@app.post("/api/file-search/stores", response_model=Dict[str, Any])
-@limiter.limit("10/minute")
-async def create_file_search_store(
-    request: Request,
-    payload: FileSearchStoreCreate,
-    current_user: Dict[str, Any] = Depends(get_current_user),
-):
-    _ = current_user  # Auth enforced via dependency
-    _ensure_file_search_enabled()
-    store = await FILE_SEARCH_SERVICE.create_store(payload.display_name)
-    return {"name": store.name, "display_name": store.display_name}
-
-
-@app.post("/api/file-search/upload", response_model=FileSearchUploadResponse)
-@limiter.limit("10/minute")
-async def upload_to_file_search_store(
-    request: Request,
-    store_name: str = Form(...),
-    file: UploadFile = File(...),
-    display_name: Optional[str] = Form(None),
-    chunking_config: Optional[str] = Form(None),
-    current_user: Dict[str, Any] = Depends(get_current_user),
-):
-    _ = current_user  # Auth enforced via dependency
-    _ensure_file_search_enabled()
-    chunk_config = _parse_json_field(chunking_config)
-    temp_path = MEDIA_UPLOAD_DIR / f"filesearch-{uuid4().hex}{Path(file.filename or 'upload').suffix}"
-    data = await file.read()
-    temp_path.write_bytes(data)
-    try:
-        operation = await FILE_SEARCH_SERVICE.upload_to_store(
-            str(temp_path),
-            store_name,
-            display_name,
-            chunk_config,
-            file.content_type,
-        )
-        result = await _wait_for_operation(operation)
-    finally:
-        try:
-            temp_path.unlink()
-        except OSError:
-            pass
-    return FileSearchUploadResponse(
-        operation_name=result.name,
-        done=result.done,
-        result=result.result.model_dump() if result.result else None,
-    )
-
-
-@app.post("/api/file-search/import", response_model=FileSearchUploadResponse)
-@limiter.limit("5/minute")
-async def import_file_search(
-    request: Request,
-    payload: FileSearchImportPayload,
-    current_user: Dict[str, Any] = Depends(get_current_user),
-):
-    _ = current_user  # Auth enforced via dependency
-    _ensure_file_search_enabled()
-    operation = await FILE_SEARCH_SERVICE.import_file(
-        payload.file_search_store_name,
-        payload.file_name,
-        payload.chunking_config,
-    )
-    result = await _wait_for_operation(operation)
-    return FileSearchUploadResponse(
-        operation_name=result.name,
-        done=result.done,
-        result=result.result.model_dump() if result.result else None,
-    )
-
-
 @app.post("/api/uploads", response_model=MediaUpload)
 @limiter.limit("5/minute")
 async def upload_media(
@@ -6617,9 +6371,6 @@ async def upload_media(
       # Use the same-origin authenticated route so the Next.js frontend can load files
       # even when it only proxies `/api/*` to the backend.
       public_url = f"/api/uploads/{media_record_id}/file"
-
-  if FILE_SEARCH_ENABLED and FILE_SEARCH_SERVICE:
-      background_tasks.add_task(_background_file_search_upload, db, user_id, storage_path, sanitized_name, mime_type)
 
   return MediaUpload(
       id=media_record_id,
@@ -6704,25 +6455,6 @@ async def get_upload_file(
         filename=filename,
         headers={"Cache-Control": "private, max-age=86400"},
     )
-
-async def _background_file_search_upload(db: databases.Database, user_id: str, storage_path: Path, sanitized_name: str, mime_type: str):
-    """Helper to handle file search upload in background."""
-    try:
-        # Filter out non-document types (e.g. images) from File Search
-        # File Search Store primarily supports text-heavy documents (PDFs, etc.)
-        if mime_type not in DOCUMENT_MIME_TYPES:
-            return
-
-        # We need to re-verify service availability in background context
-        if not FILE_SEARCH_SERVICE:
-            return
-            
-        store_name = await _ensure_user_file_search_store(db, user_id)
-        if store_name:
-            await _upload_file_search_document(store_name, storage_path, sanitized_name)
-    except Exception as exc:
-        file_logger.error(f"Background upload to file search failed: {exc}")
-
 
 async def chat_endpoint(
     request: Request,
@@ -6883,7 +6615,6 @@ async def chat_endpoint(
             maps_longitude=chat_request.maps_longitude,
             maps_widget=chat_request.maps_widget,
             search_enabled=chat_request.web_search_enabled,
-            file_search_enabled=chat_request.file_search_enabled,
             should_generate_title=chat_request.should_generate_title,
             reasoning_mode=effective_reasoning_mode,
             tools=tool_list,
@@ -7317,7 +7048,6 @@ async def chat_stream(
                     maps_longitude=chat_request.maps_longitude,
                     maps_widget=chat_request.maps_widget,
                     search_enabled=chat_request.web_search_enabled,
-                    file_search_enabled=chat_request.file_search_enabled,
                     should_generate_title=chat_request.should_generate_title,
                     reasoning_mode=effective_reasoning_mode,
                     reminders_enabled=chat_request.reminders_enabled,
@@ -8313,7 +8043,6 @@ async def delete_user_account(
         reminders,
         dashboard_pulses,
         context_cache,
-        file_search_stores,
         media_uploads,
         proactivity_logs,
         proactivity_settings,

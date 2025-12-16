@@ -360,17 +360,6 @@ if __name__ == "__main__":
         sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=sqlalchemy.func.now()),
     )
 
-    file_search_stores = sqlalchemy.Table(
-        "file_search_stores",
-        metadata,
-        sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True, index=True),
-        sqlalchemy.Column("user_id", sqlalchemy.ForeignKey("users.id"), unique=True),
-        sqlalchemy.Column("store_name", sqlalchemy.String, unique=True),
-        sqlalchemy.Column("display_name", sqlalchemy.String, nullable=True),
-        sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=sqlalchemy.func.now()),
-        sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=sqlalchemy.func.now(), onupdate=sqlalchemy.func.now()),
-    )
-
     media_uploads = sqlalchemy.Table(
         "media_uploads",
         metadata,

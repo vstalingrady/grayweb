@@ -41,7 +41,6 @@ class ChatRequest(BaseModel):
     maps_longitude: Optional[float] = None
     maps_widget: bool = False
     web_search_enabled: bool = False  # Disabled by default - adds ~7s latency to OpenRouter
-    file_search_enabled: bool = False
     should_generate_title: bool = False
     reasoning_mode: bool = False
     reminders_enabled: bool = False
