@@ -1526,7 +1526,6 @@ async def _ensure_user_data_record(user_identifier: int) -> Optional[int]:
         return None
     
     return None
-    return None
 
 
 # Removed _resolve_supabase_user_data_id and _require_supabase_user_data_id.
