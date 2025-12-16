@@ -8821,6 +8821,12 @@ async def chat_stream(
         # 4. Start Conversation Setup (Async)
         t0_conv = time.perf_counter()
         requested_conversation_id = chat_request.conversation_id
+        
+        # FIX: If no conversation_id provided, default to General Chat format
+        # This prevents creating UUID threads when frontend hasn't loaded user yet
+        if not requested_conversation_id:
+            requested_conversation_id = f"general:{chat_request.user_id}"
+        
         valid_requested_conversation_id = _is_valid_uuid(requested_conversation_id)
         
         async def _setup_conversation():
