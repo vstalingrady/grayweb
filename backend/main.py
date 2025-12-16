@@ -62,6 +62,9 @@ try:
         delete_supabase_user_records,
         CONVERSATION_OWNER_CACHE,
         GENERAL_CONVERSATION_PREFIX,
+        _conversation_store_available,
+        _handle_conversation_store_error,
+        _general_conversation_user_id,
     )
 except Exception:  # When running with backend/ on sys.path directly (tests)
     from core import conversation_store  # type: ignore
@@ -76,6 +79,9 @@ except Exception:  # When running with backend/ on sys.path directly (tests)
         delete_supabase_user_records,
         CONVERSATION_OWNER_CACHE,
         GENERAL_CONVERSATION_PREFIX,
+        _conversation_store_available,
+        _handle_conversation_store_error,
+        _general_conversation_user_id,
     )
 try:
     from backend.core.chat_history import (
@@ -1206,19 +1212,8 @@ if SUPABASE_URL and SUPABASE_KEY and SUPABASE_URL != "your_supabase_url_here":
 _USER_DATA_CACHE: Dict[int, int] = {}
 
 
-def _conversation_store_available() -> bool:
-  return conversation_store._conversation_store_available()
-
-
-# _disable_conversation_store removed (dead code - never called)
-
-
-def _handle_conversation_store_error(context: str, error: Exception) -> None:
-  conversation_store._handle_conversation_store_error(context, error)
-
-
-def _general_conversation_user_id(conversation_id: Optional[str]) -> Optional[int]:
-    return conversation_store._general_conversation_user_id(conversation_id)
+# _conversation_store_available, _handle_conversation_store_error, _general_conversation_user_id
+# are now imported directly from core.conversation_store
 
 
 async def _require_conversation_owner(conversation_id: str, current_user: Dict[str, Any]) -> None:

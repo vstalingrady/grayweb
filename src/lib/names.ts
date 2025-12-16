@@ -143,58 +143,6 @@ const looksLikeSurname = (segment: string) => {
   return Array.from(SURNAME_PREFIXES).some((prefix) => lower.startsWith(prefix));
 };
 
-const splitCompactName = (token: string): [string, string] | null => {
-  if (token.length < 6) {
-    return null;
-  }
-
-  const lower = token.toLowerCase();
-  let bestSplitIndex = -1;
-  let bestScore = Number.POSITIVE_INFINITY;
-  let bestLeftLength = 0;
-
-  for (let index = 2; index <= lower.length - 3; index += 1) {
-    const left = lower.slice(0, index);
-    const right = lower.slice(index);
-
-    if (!hasVowel(left) || !hasVowel(right)) {
-      continue;
-    }
-
-    if (!looksLikeSurname(right)) {
-      continue;
-    }
-
-    let score = Math.abs(left.length - right.length);
-
-    const boundaryPair = lower.slice(index - 1, index + 1);
-    if (boundaryPair === "in") {
-      score += 2.5;
-    }
-
-    const rightPair = right.slice(0, 2);
-    if (rightPair === "ng" && right.length > 2) {
-      score += 3;
-    }
-
-    if (/^[bcdfghjklmnpqrstvwxyz]/.test(right)) {
-      score -= 0.25;
-    }
-
-    if (score < bestScore - 1e-3 || (Math.abs(score - bestScore) < 1e-3 && index > bestLeftLength)) {
-      bestScore = score;
-      bestSplitIndex = index;
-      bestLeftLength = index;
-    }
-  }
-
-  if (bestSplitIndex > 0 && bestScore <= 3.5) {
-    return [token.slice(0, bestSplitIndex), token.slice(bestSplitIndex)];
-  }
-
-  return null;
-};
-
 export const humanizeIdentifier = (input?: string | null): string | null => {
   if (!input) {
     return null;
@@ -222,7 +170,7 @@ export const humanizeIdentifier = (input?: string | null): string | null => {
 
 export const formatDisplayName = (
   primary?: string | null,
-  fallbackIdentifier?: string | null
+  _fallbackIdentifier?: string | null
 ): string => {
   const primaryName = humanizeIdentifier(primary);
   if (primaryName) {

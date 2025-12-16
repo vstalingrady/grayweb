@@ -22,7 +22,7 @@ export async function compressImage(
 
     const { maxWidth = 1920, maxHeight = 1920, quality = 0.8 } = options;
 
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
         const img = new Image();
         const url = URL.createObjectURL(file);
 
