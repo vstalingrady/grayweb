@@ -4964,7 +4964,7 @@
   box-shadow: none;
   overflow: visible;
   flex-shrink: 0;
-  pointer-events: none;
+  pointer-events: auto;
 }
 
 
