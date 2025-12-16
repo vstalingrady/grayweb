@@ -4931,15 +4931,15 @@
 }
 
 .chatComposerDock {
-  /* Input bar container at bottom */
+  /* Input bar container - minimal layout */
   flex-shrink: 0;
   width: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 8px 16px;
-  padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
-  background: var(--background, #121212);
+  padding: 4px 16px;
+  padding-bottom: calc(6px + env(safe-area-inset-bottom, 0px));
+  background: transparent;
 }
 
 
