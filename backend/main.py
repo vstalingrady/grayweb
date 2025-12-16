@@ -1187,14 +1187,7 @@ google_calendar_states = sqlalchemy.Table(
     extend_existing=True,
 )
 
-# Pydantic models are now imported from backend.models
-
-# _extract_project_ref removed (dead code - never used)
-
-
-# Removed _ensure_supabase_chat_tables helper as Supabase data usage is deprecated.
-
-# Supabase setup
+# Supabase setup (Auth only - conversation store is now strictly local SQLite/Postgres)
 SUPABASE_URL, SUPABASE_KEY, SUPABASE_KEY_SOURCE = resolve_supabase_credentials()
 
 # Initialize Supabase using unified helper (Auth only)
@@ -1441,12 +1434,7 @@ async def _replace_general_conversation_history(user_id: int, history: List[Dict
     except ImportError:
         pass  # Redis cache module not available
 
-
-# _delete_general_conversation_history stub removed (async version is the real implementation)
-
-
-# _delete_supabase_user_records wrapper is now imported directly from core.conversation_store
-
+# Conversation store helpers now imported directly from core modules
 
 async def _ensure_user_data_record(user_identifier: int) -> Optional[int]:
     """Return the user_data.id for the provided identifier, creating it if needed."""
@@ -1517,21 +1505,7 @@ async def _ensure_user_data_record(user_identifier: int) -> Optional[int]:
     
     return None
 
-
-# Removed _resolve_supabase_user_data_id and _require_supabase_user_data_id.
-
-
-# Removed _ensure_supabase_thread_exists as Supabase data usage is deprecated.
-
-# _deserialize_proactivity_settings_payload removed (dead code - never used)
-
-
-# _payload_log_summary is now imported from core.log_utils
-
-
-
-# _timezone_from_time_context is now imported from core.env_helpers
-
+# Utility functions imported from core modules
 
 async def _should_enable_reminder_tools_semantic(message: str) -> bool:
     """
