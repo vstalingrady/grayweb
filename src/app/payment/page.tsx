@@ -75,7 +75,6 @@ const PADDLE_PRICE_IDS: Record<string, Record<string, string>> = {
 
 // Paddle config
 const PADDLE_CLIENT_TOKEN = process.env.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN || "";
-const PADDLE_SANDBOX = process.env.NEXT_PUBLIC_PADDLE_SANDBOX !== "false";
 
 
 const PAYMENT_METHODS = [
@@ -207,22 +206,19 @@ function PaymentContent() {
 
 
     // Derived Data
-    const planName = planParam === "pioneer" ? "Gray Pioneer" : "Gray Voyager"; // eslint-disable-line @typescript-eslint/no-unused-vars
     const shortPlanName = planParam === "pioneer" ? "Pioneer" : "Voyager";
     const planCardVariant = planParam === "pioneer" ? "primary" : "highlighted";
 
     // Fallback if pricing data is missing/invalid param
-    const pricingData = (planParam === "pioneer" ? PIONEER_PRICING : VOYAGER_PRICING);
+    const pricingData =
+        isIndonesia === false
+            ? (planParam === "pioneer" ? PIONEER_PRICING_USD : VOYAGER_PRICING_USD)
+            : (planParam === "pioneer" ? PIONEER_PRICING : VOYAGER_PRICING);
     const currentPriceDisplay = pricingData[billingCycle].price;
     const fullPriceDisplay = pricingData[billingCycle].fullPrice;
 
     // Choose features
     const features = planParam === "pioneer" ? PIONEER_FEATURES : VOYAGER_FEATURES;
-
-    // Calculate precise amount for API
-    const amountForApi = planParam === "pioneer" // eslint-disable-line @typescript-eslint/no-unused-vars
-        ? (billingCycle === "annual" ? 3777000 : 377000)
-        : (billingCycle === "annual" ? 1777000 : 177000);
 
     const handlePayment = async () => {
         setStatus("loading");

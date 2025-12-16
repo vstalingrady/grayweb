@@ -1,7 +1,6 @@
-/* eslint-disable react-hooks/set-state-in-effect */
 "use client";
 
-import { useEffect, useRef, useState, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 // Number of data points to show on screen
 const POINTS_COUNT = 100;
@@ -10,6 +9,7 @@ export default function PerformanceChart() {
   const [data, setData] = useState<number[]>([]);
   const requestRef = useRef<number | null>(null);
   const frameRef = useRef(0);
+  const updateDataRef = useRef<() => void>(() => undefined);
   const [isSheared, setIsSheared] = useState(false);
 
   // Refs for "Trend" system - keeps the graph moving in one direction for longer
@@ -40,14 +40,15 @@ export default function PerformanceChart() {
       value += velocity;
       initialData.push(value);
     }
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Initialize after mount to avoid hydration mismatches.
     setData(initialData);
   }, []);
 
-  const updateData = () => {
+  const updateData = useCallback(() => {
     // Throttle: Only update every 2nd frame to slow it down
     frameRef.current++;
     if (frameRef.current % 2 !== 0) {
-      requestRef.current = requestAnimationFrame(updateData);
+      requestRef.current = requestAnimationFrame(() => updateDataRef.current());
       return;
     }
 
@@ -79,15 +80,19 @@ export default function PerformanceChart() {
       return newData;
     });
 
-    requestRef.current = requestAnimationFrame(updateData);
-  };
+    requestRef.current = requestAnimationFrame(() => updateDataRef.current());
+  }, []);
+
+  useEffect(() => {
+    updateDataRef.current = updateData;
+  }, [updateData]);
 
   useEffect(() => {
     requestRef.current = requestAnimationFrame(updateData);
     return () => {
       if (requestRef.current) cancelAnimationFrame(requestRef.current);
     };
-  }, []);
+  }, [updateData]);
 
   // Trigger shear animation after mount
   useEffect(() => {

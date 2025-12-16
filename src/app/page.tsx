@@ -17,7 +17,6 @@ export default async function HomePage() {
       redirect(`/login?redirect=${encodeURIComponent("/")}`);
     }
 
-    // eslint-disable-next-line react-hooks/purity
     const initialTimestamp = Date.now();
     return (
       <GrayPageClient

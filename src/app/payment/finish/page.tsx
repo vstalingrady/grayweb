@@ -10,7 +10,6 @@ function FinishContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const orderId = searchParams.get("order_id");
-    const status = searchParams.get("transaction_status");
 
     return (
         <div className={styles.page}>

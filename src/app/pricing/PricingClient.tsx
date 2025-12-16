@@ -1,9 +1,7 @@
-/* eslint-disable react-hooks/purity */
-/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import dynamic from "next/dynamic";
-import React, { useCallback } from "react";
+import { useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { X } from "lucide-react";
 import styles from "./page.module.css";

@@ -703,6 +703,8 @@ try:
         is_valid_uuid as _is_valid_uuid,
         timestamp_ms_to_datetime as _timestamp_ms_to_datetime,
         datetime_to_ms as _datetime_to_ms,
+        timezone_from_time_context as _timezone_from_time_context,
+        ensure_datetime_value as _ensure_datetime_value,
     )
 except ImportError:
     from core.env_helpers import (  # type: ignore
@@ -711,6 +713,8 @@ except ImportError:
         is_valid_uuid as _is_valid_uuid,
         timestamp_ms_to_datetime as _timestamp_ms_to_datetime,
         datetime_to_ms as _datetime_to_ms,
+        timezone_from_time_context as _timezone_from_time_context,
+        ensure_datetime_value as _ensure_datetime_value,
     )
 
 # Dashboard helpers (extracted from main.py)
@@ -1568,27 +1572,7 @@ def _deserialize_proactivity_settings_payload(payload: Any) -> Optional[Proactiv
 
 
 
-def _timezone_from_time_context(time_context: str) -> Tuple[Optional[str], Optional[timezone]]:
-    """
-    Extract timezone information from a time_context string.
-    Expected format: "... (timezone: Region/City, UTC+HH:MM) ..."
-    Returns (timezone_label, timezone_object) or (None, timezone.utc)
-    """
-    if not time_context:
-        return None, timezone.utc
-        
-    match = re.search(r"\(timezone:\s*([^,]+),", time_context)
-    if match:
-        tz_label = match.group(1).strip()
-        try:
-            # Try to load the timezone using zoneinfo
-            tz = ZoneInfo(tz_label)
-            return tz_label, tz
-        except Exception:
-            pass
-            
-    # Fallback/default
-    return None, timezone.utc
+# _timezone_from_time_context is now imported from core.env_helpers
 
 
 async def _should_enable_reminder_tools_semantic(message: str) -> bool:
@@ -1638,37 +1622,7 @@ async def _should_enable_reminder_tools_semantic(message: str) -> bool:
     return first_token == "REMINDERS"
 
 
-def _ensure_datetime_value(value: Any) -> Optional[datetime]:
-    """
-    Normalize a datetime-like value to a naive UTC datetime for comparisons.
-    Accepts datetime instances or ISO 8601 strings (with or without a trailing 'Z').
-    """
-    if value is None:
-        return None
-    if isinstance(value, datetime):
-        dt = value
-    elif isinstance(value, str):
-        text = value.strip()
-        if not text:
-            return None
-        try:
-            # Support a trailing 'Z' suffix as UTC.
-            if text.endswith("Z"):
-                dt = datetime.fromisoformat(text.replace("Z", "+00:00"))
-            else:
-                dt = datetime.fromisoformat(text)
-        except Exception:
-            # Best-effort fallback: drop subseconds/timezone if present.
-            try:
-                dt = datetime.fromisoformat(text.split(".")[0])
-            except Exception as exc:
-                raise ValueError(f"Unsupported datetime value: {value}") from exc
-    else:
-        raise TypeError(f"Unsupported datetime type: {type(value)!r}")
-
-    if dt.tzinfo is not None:
-        return dt.astimezone(timezone.utc).replace(tzinfo=None)
-    return dt
+# _ensure_datetime_value is now imported from core.env_helpers
 
 
 async def _maybe_enrich_actions_with_reminder_time(

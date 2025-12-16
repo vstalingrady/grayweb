@@ -4,9 +4,11 @@ Environment and utility helper functions.
 Extracted from main.py to improve modularity.
 """
 import os
+import re
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any, Optional, Tuple
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from dateutil import parser as date_parser
 
@@ -102,9 +104,72 @@ def datetime_to_ms(value: Optional[datetime]) -> int:
     return int(aware.timestamp() * 1000)
 
 
+# ==============================================================================
+# Timezone Utilities
+# ==============================================================================
+
+
+def timezone_from_time_context(time_context: str) -> Tuple[Optional[str], Any]:
+    """Extract timezone information from a time_context string.
+    
+    Expected format: "... (timezone: Region/City, UTC+HH:MM) ..."
+    Returns (timezone_label, timezone_object) or (None, timezone.utc)
+    """
+    if not time_context:
+        return None, timezone.utc
+        
+    match = re.search(r"\(timezone:\s*([^,]+),", time_context)
+    if match:
+        tz_label = match.group(1).strip()
+        try:
+            # Try to load the timezone using zoneinfo
+            tz = ZoneInfo(tz_label)
+            return tz_label, tz
+        except Exception:
+            pass
+            
+    # Fallback/default
+    return None, timezone.utc
+
+
+def ensure_datetime_value(value: Any) -> Optional[datetime]:
+    """Normalize a datetime-like value to a naive UTC datetime for comparisons.
+    
+    Accepts datetime instances or ISO 8601 strings (with or without a trailing 'Z').
+    """
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        dt = value
+    elif isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return None
+        try:
+            # Support a trailing 'Z' suffix as UTC.
+            if text.endswith("Z"):
+                dt = datetime.fromisoformat(text.replace("Z", "+00:00"))
+            else:
+                dt = datetime.fromisoformat(text)
+        except Exception:
+            # Best-effort fallback: drop subseconds/timezone if present.
+            try:
+                dt = datetime.fromisoformat(text.split(".")[0])
+            except Exception as exc:
+                raise ValueError(f"Unsupported datetime value: {value}") from exc
+    else:
+        raise TypeError(f"Unsupported datetime type: {type(value)!r}")
+
+    if dt.tzinfo is not None:
+        return dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt
+
+
 # Backwards compatibility aliases (with underscore prefix for internal use)
 _float_env = float_env
 _int_env = int_env
 _is_valid_uuid = is_valid_uuid
 _timestamp_ms_to_datetime = timestamp_ms_to_datetime
 _datetime_to_ms = datetime_to_ms
+_timezone_from_time_context = timezone_from_time_context
+_ensure_datetime_value = ensure_datetime_value

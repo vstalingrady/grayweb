@@ -1,4 +1,3 @@
-/* eslint-disable react/no-unescaped-entities */
 import Link from "next/link";
 import { tServer } from "@/lib/i18nServer";
 export default async function NotFound() {
