@@ -2,9 +2,10 @@ FROM python:3.14.2-slim
 
 WORKDIR /app
 
-# Install system dependencies
+# Install system dependencies (g++ needed for pyroaring)
 RUN apt-get update && apt-get install -y \
     gcc \
+    g++ \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
