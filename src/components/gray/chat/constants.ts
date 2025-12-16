@@ -41,7 +41,6 @@ export const WORKSPACE_CONTEXT_KEYWORDS = [
     "project",
     "focus",
     "pulse",
-    "streak",
     "history",
     "reminder",
 ];

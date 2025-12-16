@@ -19,7 +19,6 @@ Gray uses a **hybrid database approach** to optimize for both reliability and pe
 │  │   PostgreSQL         │      │                       │    │
 │  ├──────────────────────┤      ├──────────────────────┤    │
 │  │ • users              │      │ • chat_sessions      │    │
-│  │ • user_streaks       │      │ • general_chat_msgs  │    │
 │  │ • push_subscriptions │      │ • plans              │    │
 │  │ • google_credentials │      │ • habits             │    │
 │  │                      │      │ • reminders          │    │
@@ -39,7 +38,6 @@ Gray uses a **hybrid database approach** to optimize for both reliability and pe
 ### Remote Tables (Supabase)
 **Critical data that needs backup and remote access:**
 - `users` - User accounts and profiles
-- `user_streaks` - User activity streaks
 - `proactivity_push_subscriptions` - Web push notification subscriptions
 - `google_calendar_credentials` - OAuth tokens for Google Calendar
 

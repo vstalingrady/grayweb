@@ -49,7 +49,6 @@ from backend.database import (
     user_chat_messages,
     user_chat_threads,
     user_data,
-    user_streaks,
     users,
 )
 from backend.supabase_utils import create_supabase_service_client, resolve_supabase_credentials
@@ -64,7 +63,6 @@ class TableSpec:
 TABLE_SPECS: Tuple[TableSpec, ...] = (
     TableSpec("users", users),
     TableSpec("user_data", user_data),
-    TableSpec("user_streaks", user_streaks),
     TableSpec("user_chat_threads", user_chat_threads),
     TableSpec("user_chat_messages", user_chat_messages),
     TableSpec("general_chat_messages", general_chat_messages),

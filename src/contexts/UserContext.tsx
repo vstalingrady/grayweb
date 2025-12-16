@@ -186,24 +186,6 @@ const removeCachedUser = (_email?: string | null) => {
   // No-op: user cache is not stored in browser storage anymore.
 };
 
-const touchDailyStreakOnce = (userId: number) => {
-  if (typeof window === 'undefined') {
-    return;
-  }
-  try {
-    const todayKey = new Date().toISOString().slice(0, 10);
-    const storageKey = `gray-streak-last-touch:${userId}`;
-    const last = window.localStorage.getItem(storageKey);
-    if (last === todayKey) {
-      return;
-    }
-    window.localStorage.setItem(storageKey, todayKey);
-    void apiService.touchUserStreak(userId).catch(() => undefined);
-  } catch {
-    // If localStorage or the API fails, silently skip; streaks are non-critical.
-  }
-};
-
 export function UserProvider({ children, userEmail }: UserProviderProps) {
   const cachedUser = useMemo(() => readCachedUser(userEmail ?? null)?.user ?? null, [userEmail]);
   const [user, setUser] = useState<User | null>(null);
@@ -427,7 +409,6 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
             };
             setUser(hydratedUser);
             persistCachedUser(hydratedUser.email, hydratedUser);
-            touchDailyStreakOnce(hydratedUser.id);
           } catch (updateError) {
             console.debug('[v2] Error updating user profile:', updateError);
             if (!isStale()) {
@@ -437,7 +418,6 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
               };
               setUser(hydratedUserFallback);
               persistCachedUser(hydratedUserFallback.email, hydratedUserFallback);
-              touchDailyStreakOnce(hydratedUserFallback.id);
             }
           }
         } else {
@@ -448,7 +428,6 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
             };
             setUser(hydratedUser);
             persistCachedUser(hydratedUser.email, hydratedUser);
-            touchDailyStreakOnce(hydratedUser.id);
           }
         }
       } catch (userError) {
@@ -472,7 +451,6 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
             };
             setUser(hydratedUser);
             persistCachedUser(hydratedUser.email, hydratedUser);
-            touchDailyStreakOnce(hydratedUser.id);
           }
         } else {
           console.debug('[v2] loadUser: Unexpected error getting user:', userError);

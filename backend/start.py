@@ -230,7 +230,6 @@ if __name__ == "__main__":
         sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True, index=True),
         sqlalchemy.Column("user_id", sqlalchemy.ForeignKey("users.id")),
         sqlalchemy.Column("label", sqlalchemy.String),
-        sqlalchemy.Column("streak_label", sqlalchemy.String),
         sqlalchemy.Column("previous_label", sqlalchemy.String),
         sqlalchemy.Column("description", sqlalchemy.String, nullable=True),
         sqlalchemy.Column("color", sqlalchemy.String, nullable=True),
@@ -314,16 +313,6 @@ if __name__ == "__main__":
         sqlalchemy.Column("endpoint", sqlalchemy.String, nullable=False, unique=True),
         sqlalchemy.Column("p256dh", sqlalchemy.String, nullable=False),
         sqlalchemy.Column("auth", sqlalchemy.String, nullable=False),
-        sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=sqlalchemy.func.now()),
-        sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=sqlalchemy.func.now(), onupdate=sqlalchemy.func.now()),
-    )
-    user_streaks = sqlalchemy.Table(
-        "user_streaks",
-        metadata,
-        sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True, index=True),
-        sqlalchemy.Column("user_id", sqlalchemy.ForeignKey("users.id"), unique=True),
-        sqlalchemy.Column("current_streak", sqlalchemy.Integer, default=0),
-        sqlalchemy.Column("last_activity_date", sqlalchemy.DateTime, nullable=True),
         sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=sqlalchemy.func.now()),
         sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=sqlalchemy.func.now(), onupdate=sqlalchemy.func.now()),
     )

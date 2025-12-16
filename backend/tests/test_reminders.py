@@ -75,8 +75,6 @@ async def test_maybe_enrich_actions_with_relative_time():
             "description": None,
             "time_iso": None,
             "schedule_slot": None,
-            "streak_label": None,
-            "previous_label": None,
         }
     ]
     time_context = (
@@ -105,8 +103,6 @@ async def test_repeat_request_reschedules_existing_reminder(connected_db):
         "description": "eat in 2 minutes",
         "time_iso": base_time.isoformat(),
         "schedule_slot": None,
-        "streak_label": None,
-        "previous_label": None,
     }
     second_action = {
         **first_action,

@@ -1548,8 +1548,23 @@ const ChatMessagesList = memo(
                     <div key={attachment.id || index} className={styles.chatMessageAttachment}>
                       {attachment.mime_type?.startsWith("image/") ? (
                         <img
-                          src={attachment.previewUrl || attachment.public_url}
+                          src={
+                            attachment.previewUrl ||
+                            (typeof attachment.id === "number"
+                              ? `/api/uploads/${attachment.id}/file`
+                              : attachment.public_url)
+                          }
                           alt={t("Attachment")}
+                          onError={(event) => {
+                            if (typeof attachment.id !== "number") {
+                              return;
+                            }
+                            const fallback = `/api/uploads/${attachment.id}/file`;
+                            if (event.currentTarget.getAttribute("src") === fallback) {
+                              return;
+                            }
+                            event.currentTarget.src = fallback;
+                          }}
                         />
                       ) : (
                         <div className={styles.chatMessageAttachmentFile}>

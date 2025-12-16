@@ -127,10 +127,6 @@ PLAN_TOOL = types.Tool(
                         type="STRING",
                         description="Optional description of the habit.",
                     ),
-                    "streak_days": types.Schema(
-                        type="INTEGER",
-                        description="Optional streak count in consecutive days (integer only).",
-                    ),
                     "reminder_at": types.Schema(
                         type="STRING",
                         description="Optional reminder time (ISO 8601 with timezone offset). Leave empty or omit for no reminder.",
@@ -156,10 +152,6 @@ PLAN_TOOL = types.Tool(
                     "description": types.Schema(
                         type="STRING",
                         description="New description.",
-                    ),
-                    "streak_days": types.Schema(
-                        type="INTEGER",
-                        description="New streak count in consecutive days (integer).",
                     ),
                     "reminder_at": types.Schema(
                         type="STRING",

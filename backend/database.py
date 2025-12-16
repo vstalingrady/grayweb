@@ -399,18 +399,6 @@ media_uploads = sqlalchemy.Table(
     sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
 )
 
-user_streaks = sqlalchemy.Table(
-    "user_streaks",
-    metadata,
-    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
-    sqlalchemy.Column("user_id", sqlalchemy.Integer, unique=True, nullable=False, index=True),
-    sqlalchemy.Column("current_streak", sqlalchemy.Integer, default=0),
-    sqlalchemy.Column("longest_streak", sqlalchemy.Integer, default=0),
-    sqlalchemy.Column("last_activity_date", sqlalchemy.String, nullable=True),
-    sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
-    sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
-)
-
 general_chat_messages = sqlalchemy.Table(
     "general_chat_messages",
     metadata,
@@ -474,8 +462,6 @@ habits = sqlalchemy.Table(
     sqlalchemy.Column("user_id", sqlalchemy.Integer, nullable=False, index=True),
     sqlalchemy.Column("label", sqlalchemy.String, nullable=False),
     sqlalchemy.Column("completed", sqlalchemy.Boolean, default=False),
-    sqlalchemy.Column("streak_id", sqlalchemy.String, nullable=True),
-    sqlalchemy.Column("streak_label", sqlalchemy.String, nullable=True),
     sqlalchemy.Column("previous_label", sqlalchemy.String, nullable=True),
     sqlalchemy.Column("description", sqlalchemy.String, nullable=True),
     sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),

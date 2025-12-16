@@ -621,7 +621,6 @@ export function PlanHabitInlineEditor({
         } else {
           await apiService.createHabit(user.id, {
             label: payload.label,
-            streak_label: "0",
             previous_label: t("No history yet"),
             description: payload.details ?? null,
             reminderAt: payload.reminderAt ?? null,

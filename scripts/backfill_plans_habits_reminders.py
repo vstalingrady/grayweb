@@ -94,7 +94,6 @@ def _normalize_habit_rows(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
                 "id": row["id"],
                 "user_id": row["user_id"],
                 "label": row["label"],
-                "streak_label": row["streak_label"],
                 "previous_label": row["previous_label"],
                 "description": row.get("description"),
                 "created_at": _ensure_iso(row.get("created_at")),

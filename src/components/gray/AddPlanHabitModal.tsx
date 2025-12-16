@@ -290,8 +290,6 @@ export function AddPlanHabitModal({
 
             label: trimmed,
 
-            streak_label: "0",
-
             previous_label: t("No history yet"),
 
             description: details.length > 0 ? details : null,

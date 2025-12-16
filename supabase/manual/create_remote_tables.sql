@@ -78,15 +78,6 @@ BEGIN
 END $$;
 
 -- Create other tables
-CREATE TABLE IF NOT EXISTS public.user_streaks (
-    id BIGSERIAL PRIMARY KEY,
-    user_id BIGINT UNIQUE REFERENCES public.users(id) ON DELETE CASCADE,
-    current_streak INTEGER DEFAULT 0,
-    last_activity_date TIMESTAMPTZ,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
 CREATE TABLE IF NOT EXISTS public.proactivity_push_subscriptions (
     id BIGSERIAL PRIMARY KEY,
     user_id BIGINT NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
@@ -100,22 +91,18 @@ CREATE TABLE IF NOT EXISTS public.proactivity_push_subscriptions (
 -- Create indexes
 CREATE INDEX IF NOT EXISTS idx_users_auth_user_id ON public.users(auth_user_id);
 CREATE INDEX IF NOT EXISTS idx_users_email ON public.users(email);
-CREATE INDEX IF NOT EXISTS idx_user_streaks_user_id ON public.user_streaks(user_id);
 CREATE INDEX IF NOT EXISTS idx_proactivity_push_user_id ON public.proactivity_push_subscriptions(user_id);
 
 -- Enable RLS
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.user_streaks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.proactivity_push_subscriptions ENABLE ROW LEVEL SECURITY;
 
 -- Drop existing policies
 DROP POLICY IF EXISTS "users_service_role_full_access" ON public.users;
-DROP POLICY IF EXISTS "user_streaks_service_role_full_access" ON public.user_streaks;
 DROP POLICY IF EXISTS "proactivity_push_service_role_full_access" ON public.proactivity_push_subscriptions;
 
 -- Create service role policies (backend full access)
 CREATE POLICY "users_service_role_full_access" ON public.users FOR ALL TO service_role USING (true) WITH CHECK (true);
-CREATE POLICY "user_streaks_service_role_full_access" ON public.user_streaks FOR ALL TO service_role USING (true) WITH CHECK (true);
 CREATE POLICY "proactivity_push_service_role_full_access" ON public.proactivity_push_subscriptions FOR ALL TO service_role USING (true) WITH CHECK (true);
 
 -- Create update trigger function
@@ -128,11 +115,9 @@ $$ LANGUAGE plpgsql;
 
 -- Create triggers
 DROP TRIGGER IF EXISTS update_users_updated_at ON public.users;
-DROP TRIGGER IF EXISTS update_user_streaks_updated_at ON public.user_streaks;
 DROP TRIGGER IF EXISTS update_proactivity_push_updated_at ON public.proactivity_push_subscriptions;
 
 CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON public.users FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-CREATE TRIGGER update_user_streaks_updated_at BEFORE UPDATE ON public.user_streaks FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_proactivity_push_updated_at BEFORE UPDATE ON public.proactivity_push_subscriptions FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 SELECT 'Remote database migration completed successfully!' AS status;

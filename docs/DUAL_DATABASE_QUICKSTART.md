@@ -44,10 +44,9 @@ You should see:
 ```
 ✅ Connected successfully!
 ✅ Migration applied successfully!
-📊 Created 4 remote tables:
+📊 Created 3 remote tables:
    ✓ google_calendar_credentials
    ✓ proactivity_push_subscriptions
-   ✓ user_streaks
    ✓ users
 🎉 Remote database setup complete!
 ```

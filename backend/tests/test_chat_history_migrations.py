@@ -20,9 +20,6 @@ async def test_basic_migrations_add_chat_reminders_columns(tmp_path: Path):
     # Create an intentionally older schema (no `reminders` columns).
     conn = sqlite3.connect(db_path)
     try:
-        conn.execute(
-            "CREATE TABLE user_streaks (id INTEGER PRIMARY KEY, user_id INTEGER)"
-        )
         conn.execute("CREATE TABLE reminders (id INTEGER PRIMARY KEY, user_id INTEGER)")
         conn.execute(
             """
@@ -68,7 +65,6 @@ async def test_basic_migrations_add_chat_reminders_columns(tmp_path: Path):
         def cols(table: str) -> set[str]:
             return {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
 
-        assert "longest_streak" in cols("user_streaks")
         assert "reminders" in cols("user_chat_messages")
         assert "reminders" in cols("general_chat_messages")
     finally:

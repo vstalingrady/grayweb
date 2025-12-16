@@ -1179,11 +1179,6 @@
   min-width: 0;
 }
 
-/* Keep streak/upgrade visible even when sidebar is open on mobile */
-.page[data-sidebar-expanded="true"] .mobileHeaderRight {
-  display: flex;
-}
-
 /* Show mobile header on mobile screens */
 @media (max-width: 768px) {
   .mobileHeader {
@@ -5903,18 +5898,6 @@
 .configTrigger:focus-visible {
   border-color: rgba(255, 255, 255, 0.22);
   color: rgba(255, 255, 255, 0.95);
-}
-
-.streakBadge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.06);
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: rgba(248, 248, 248, 0.92);
 }
 
 .notificationChip {
@@ -10754,10 +10737,7 @@ h1.greeting {
     display: none !important;
   }
 
-  /* Explicitly hide desktop streak badge on mobile */
-  .headerRight .streakBadge {
-    display: none !important;
-  }
+  /* Explicitly hide desktop chrome on mobile */
 }
 
 @media (max-width: 768px) {
@@ -10871,13 +10851,6 @@ h1.greeting {
   }
 }
 
-.mobileHeaderRight {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  justify-self: end;
-}
-
 .upgradePill {
   display: flex;
   align-items: center;
@@ -10890,21 +10863,6 @@ h1.greeting {
   font-weight: 600;
   border: none;
   cursor: pointer;
-}
-
-/* Ensure streak badge matches upgrade pill style on mobile if needed, 
-   though .streakBadge is likely shared. We can override specifically for mobile header context if required. */
-.mobileHeaderRight .streakBadge {
-  background: rgba(255, 255, 255, 0.1);
-  border: none;
-  height: 28px;
-  /* Match typical button height */
-}
-
-.mobileHeaderRight .upgradePill {
-  height: 28px;
-  background: rgba(255, 255, 255, 0.1);
-  border: none;
 }
 
 /* Usage Limit Banner */

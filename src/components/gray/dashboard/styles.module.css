@@ -245,14 +245,7 @@
   text-decoration: line-through;
 }
 
-.gray-pulse__list-item.is-complete .gray-pulse__streak-pill,
-.gray-pulse__list-item.is-complete .gray-pulse__streak-pill span {
-  color: rgba(255, 196, 140, 0.78);
-  text-decoration: none;
-}
-
-.gray-pulse__list-item.is-complete .gray-pulse__list-note,
-.gray-pulse__list-item.is-complete .gray-pulse__streak-history {
+.gray-pulse__list-item.is-complete .gray-pulse__list-note {
   color: rgba(195, 195, 195, 0.48);
   text-decoration: none;
 }
@@ -362,27 +355,6 @@
 
 .gray-pulse__list-line-text {
   display: inline-block;
-}
-
-.gray-pulse__streak-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  font-size: 0.75rem;
-  letter-spacing: 0.04em;
-  text-transform: none;
-  line-height: 1;
-  white-space: nowrap;
-  color: rgba(255, 196, 140, 0.85);
-}
-
-.gray-pulse__streak-history {
-  display: block;
-  margin-top: 0.1rem;
-  font-size: 0.72rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: rgba(208, 208, 208, 0.58);
 }
 
 .gray-pulse__list-note {

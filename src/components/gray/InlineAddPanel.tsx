@@ -111,7 +111,6 @@ export function InlineAddPanel({ activeType, onTypeChange, onClose, onSuccess, d
       } else if (activeType === "habit") {
         await apiService.createHabit(user.id, {
           label: trimmedLabel,
-          streak_label: "0",
           previous_label: t("No history yet"),
           description: trimmedDetails.length > 0 ? trimmedDetails : null,
         });
@@ -357,4 +356,3 @@ export function InlineAddPanel({ activeType, onTypeChange, onClose, onSuccess, d
     </section>
   );
 }
-

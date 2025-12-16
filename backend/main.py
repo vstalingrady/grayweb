@@ -202,6 +202,48 @@ try:
 except ImportError:
     from tier_utils import normalize_plan_tier  # type: ignore
 
+# Pydantic models
+try:
+    from backend.models import (
+        UserBase, UserCreate, UserUpdate, UsageStatus, User,
+        CalendarBase, CalendarCreate, CalendarUpdate, Calendar,
+        CalendarEventBase, CalendarEventCreate, CalendarEventUpdate, CalendarEvent,
+        PlanBase, PlanCreate, PlanUpdate, Plan,
+        HabitBase, HabitCreate, HabitUpdate, Habit,
+        ReminderBase, ReminderCreate, ReminderUpdate,
+        ProactivitySettings, ProactivitySettingsUpdate,
+        ProactivityLogBase, ProactivityLogCreate, ProactivityLog, DailyCheckIn,
+        ProactivityNotification,
+        DashboardPulsePlanItem, DashboardPulseHabitItem, DashboardPulseProactivity,
+        DashboardPulseBase, DashboardPulseCreate, DashboardPulseUpdate, DashboardPulse,
+        DashboardProactivitySummary, DashboardSummary,
+        ChatSessionBase, ChatSessionCreate, ChatSession,
+        WorkspaceBackground, ContextCacheBase, ContextCache,
+        MediaUploadBase, MediaUpload, ChatAttachment,
+        PaymentRequest, PaymentChargeResponse, MidtransNotification,
+    )
+    from backend.models.user import serialize_user_row as _serialize_user_row
+except ImportError:
+    from models import (  # type: ignore
+        UserBase, UserCreate, UserUpdate, UsageStatus, User,
+        CalendarBase, CalendarCreate, CalendarUpdate, Calendar,
+        CalendarEventBase, CalendarEventCreate, CalendarEventUpdate, CalendarEvent,
+        PlanBase, PlanCreate, PlanUpdate, Plan,
+        HabitBase, HabitCreate, HabitUpdate, Habit,
+        ReminderBase, ReminderCreate, ReminderUpdate,
+        ProactivitySettings, ProactivitySettingsUpdate,
+        ProactivityLogBase, ProactivityLogCreate, ProactivityLog, DailyCheckIn,
+        ProactivityNotification,
+        DashboardPulsePlanItem, DashboardPulseHabitItem, DashboardPulseProactivity,
+        DashboardPulseBase, DashboardPulseCreate, DashboardPulseUpdate, DashboardPulse,
+        DashboardProactivitySummary, DashboardSummary,
+        ChatSessionBase, ChatSessionCreate, ChatSession,
+        WorkspaceBackground, ContextCacheBase, ContextCache,
+        MediaUploadBase, MediaUpload, ChatAttachment,
+        PaymentRequest, PaymentChargeResponse, MidtransNotification,
+    )
+    from models.user import serialize_user_row as _serialize_user_row  # type: ignore
+
 # Authentication module
 try:
     from backend.auth import (
@@ -251,7 +293,6 @@ try:
         archived_chat_messages,
         user_chat_threads,
         user_chat_messages,
-        user_streaks,
         reminders,
         plans,
         habits,
@@ -278,7 +319,6 @@ except ImportError:
         archived_chat_messages,
         user_chat_threads,
         user_chat_messages,
-        user_streaks,
         reminders,
         plans,
         habits,
@@ -972,6 +1012,99 @@ def _ensure_sqlite_index(table: str, index_name: str, column: str) -> None:
         )
 
 
+def _drop_sqlite_table(table: str) -> None:
+    """Drop a SQLite table if it exists (best effort)."""
+    if not DATABASE_URL.startswith("sqlite"):
+        return
+    db_path = DATABASE_URL.replace("sqlite:///", "", 1)
+    if not db_path:
+        return
+    quoted = '"' + table.replace('"', '""') + '"'
+    try:
+        conn = sqlite3.connect(db_path)
+        try:
+            conn.execute(f"DROP TABLE IF EXISTS {quoted}")
+            conn.commit()
+        finally:
+            conn.close()
+    except sqlite3.Error as exc:
+        app_logger.error(
+            "SQLite table drop failed",
+            extra={"event_type": "sqlite_migration_error", "table": table, "error": str(exc)},
+        )
+
+
+def _rebuild_sqlite_table_without_columns(table: str, columns_to_drop: set[str]) -> None:
+    """Rebuild a SQLite table without selected columns (best effort)."""
+    if not DATABASE_URL.startswith("sqlite"):
+        return
+    db_path = DATABASE_URL.replace("sqlite:///", "", 1)
+    if not db_path:
+        return
+
+    def quote(ident: str) -> str:
+        return '"' + ident.replace('"', '""') + '"'
+
+    try:
+        conn = sqlite3.connect(db_path)
+        try:
+            cursor = conn.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name={quote(table)}")
+            if not cursor.fetchone():
+                return
+
+            table_info = list(conn.execute(f"PRAGMA table_info({quote(table)})"))
+            if not table_info:
+                return
+
+            existing_columns = {row[1] for row in table_info}
+            if not (existing_columns & columns_to_drop):
+                return
+
+            keep_columns = [row for row in table_info if row[1] not in columns_to_drop]
+            if not keep_columns:
+                return
+
+            temp_table = f"{table}__tmp_{uuid4().hex[:8]}"
+
+            column_defs: List[str] = []
+            pk_columns: List[str] = []
+            for _, name, col_type, notnull, default, pk in keep_columns:
+                col_sql_parts = [quote(str(name)), str(col_type or "TEXT")]
+                if int(notnull) == 1:
+                    col_sql_parts.append("NOT NULL")
+                if default is not None:
+                    col_sql_parts.append(f"DEFAULT {default}")
+                if int(pk) > 0:
+                    pk_columns.append(str(name))
+                column_defs.append(" ".join(col_sql_parts))
+
+            pk_sql = ""
+            if pk_columns:
+                pk_sql = f", PRIMARY KEY ({', '.join(quote(name) for name in pk_columns)})"
+
+            conn.execute("BEGIN")
+            conn.execute(f"CREATE TABLE {quote(temp_table)} ({', '.join(column_defs)}{pk_sql})")
+
+            keep_column_names = [row[1] for row in keep_columns]
+            select_cols = ", ".join(quote(name) for name in keep_column_names)
+            conn.execute(
+                f"INSERT INTO {quote(temp_table)} ({select_cols}) SELECT {select_cols} FROM {quote(table)}"
+            )
+            conn.execute(f"DROP TABLE {quote(table)}")
+            conn.execute(f"ALTER TABLE {quote(temp_table)} RENAME TO {quote(table)}")
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+    except sqlite3.Error as exc:
+        app_logger.error(
+            "SQLite table rebuild failed",
+            extra={"event_type": "sqlite_migration_error", "table": table, "error": str(exc)},
+        )
+
+
 # Run all SQLite migrations using the unified helpers
 _ensure_sqlite_columns("users", [
     ("auth_user_id", "TEXT", None),
@@ -1431,7 +1564,6 @@ habits = sqlalchemy.Table(
     sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
     sqlalchemy.Column("user_id", sqlalchemy.ForeignKey("users.id")),
     sqlalchemy.Column("label", sqlalchemy.String),
-    sqlalchemy.Column("streak_label", sqlalchemy.String),
     sqlalchemy.Column("previous_label", sqlalchemy.String),
     sqlalchemy.Column("description", sqlalchemy.String, nullable=True),
     sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
@@ -1474,498 +1606,8 @@ google_calendar_states = sqlalchemy.Table(
     extend_existing=True,
 )
 
-# Pydantic models
-class UserBase(BaseModel):
-    email: EmailStr
-    full_name: str
-    profile_picture_url: Optional[str] = None
-    role: str = "user"
-    plan_tier: Optional[str] = None
-    workspace_background_id: Optional[str] = None
-    maps_enabled: Optional[bool] = False
-    improve_model_for_everyone: Optional[bool] = False
-    has_seen_general_chat: Optional[bool] = False
-    personalization_nickname: Optional[str] = None
-    personalization_occupation: Optional[str] = None
-    personalization_about: Optional[str] = None
-    personalization_custom_instructions: Optional[str] = None
-    personalization_system_prompt_override: Optional[str] = None
+# Pydantic models are now imported from backend.models
 
-    personalization_show_calendar: Optional[bool] = True
-    personalization_location: Optional[str] = None
-    personalization_time_zone: Optional[str] = None
-    auth_user_id: Optional[str] = None  # Link to Supabase Auth UUID
-    daily_token_usage: Optional[int] = 0
-    monthly_cost_usage: Optional[float] = 0.0
-    weekly_cost_usage: Optional[float] = 0.0
-    six_hour_cost_usage: Optional[float] = 0.0
-    preferred_model: Optional[str] = None
-    visible_model_ids: Optional[List[str]] = None
-    theme_mode: Optional[str] = None
-    ui_locale: Optional[str] = None
-    preferred_response_language: Optional[str] = None
-    notification_preferences: Optional[Dict[str, bool]] = None
-    conversation_memory_enabled: Optional[bool] = True
-    auto_web_search_enabled: Optional[bool] = False
-
-class UserCreate(UserBase):
-    pass
-
-class UserUpdate(BaseModel):
-    full_name: Optional[str] = None
-    profile_picture_url: Optional[str] = None
-    role: Optional[str] = None
-    plan_tier: Optional[str] = None
-    workspace_background_id: Optional[str] = None
-    maps_enabled: Optional[bool] = None
-    improve_model_for_everyone: Optional[bool] = None
-    has_seen_general_chat: Optional[bool] = None
-    personalization_nickname: Optional[str] = None
-    personalization_occupation: Optional[str] = None
-    personalization_about: Optional[str] = None
-    personalization_custom_instructions: Optional[str] = None
-    personalization_system_prompt_override: Optional[str] = None
-
-    personalization_show_calendar: Optional[bool] = None
-    personalization_location: Optional[str] = None
-    personalization_time_zone: Optional[str] = None
-    preferred_model: Optional[str] = None
-    visible_model_ids: Optional[List[str]] = None
-    theme_mode: Optional[str] = None
-    ui_locale: Optional[str] = None
-    preferred_response_language: Optional[str] = None
-    notification_preferences: Optional[Dict[str, bool]] = None
-    conversation_memory_enabled: Optional[bool] = None
-    auto_web_search_enabled: Optional[bool] = None
-
-class UsageStatus(BaseModel):
-    tier: str
-    monthly_usage: float
-    monthly_limit: float
-    is_monthly_limit_reached: bool
-    next_monthly_reset: str
-    six_hour_usage: float
-    six_hour_limit: float
-    is_six_hour_limit_reached: bool
-    next_six_hour_reset: str
-
-class User(UserBase):
-    id: int
-    initials: str
-    created_at: datetime
-    updated_at: Optional[datetime] = None
-    usage_status: Optional[UsageStatus] = None
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-def _serialize_user_row(row: Mapping[str, Any]) -> Dict[str, Any]:
-    """Normalize DB user rows for Pydantic response models."""
-    user_dict = dict(row)
-    if user_dict.get("auth_user_id") is not None:
-        user_dict["auth_user_id"] = str(user_dict["auth_user_id"])
-    
-    # Parse JSON fields that SQLite might return as strings
-    if isinstance(user_dict.get("visible_model_ids"), str):
-        try:
-            import json
-            user_dict["visible_model_ids"] = json.loads(user_dict["visible_model_ids"])
-        except Exception:
-            pass  # Let validation fail naturally if JSON is invalid
-
-    if isinstance(user_dict.get("notification_preferences"), str):
-        try:
-            import json
-            user_dict["notification_preferences"] = json.loads(user_dict["notification_preferences"])
-        except Exception:
-            pass  # Let validation fail naturally if JSON is invalid
-
-    return user_dict
-
-class ChatSessionBase(BaseModel):
-    title: str
-
-class ChatSessionCreate(ChatSessionBase):
-    pass
-
-class ChatSession(ChatSessionBase):
-    id: int
-    user_id: int
-    created_at: datetime
-    updated_at: Optional[datetime] = None
-
-    model_config = ConfigDict(from_attributes=True)
-
-class CalendarBase(BaseModel):
-    label: str
-    color: str
-    is_visible: bool = True
-
-class CalendarCreate(CalendarBase):
-    pass
-
-class CalendarUpdate(BaseModel):
-    label: Optional[str] = None
-    color: Optional[str] = None
-    is_visible: Optional[bool] = None
-
-class Calendar(CalendarBase):
-    id: int
-    user_id: int
-    created_at: datetime
-    updated_at: Optional[datetime] = None
-
-    model_config = ConfigDict(from_attributes=True)
-
-class CalendarEventBase(BaseModel):
-    title: str
-    description: Optional[str] = None
-    start_time: datetime
-    end_time: datetime
-    calendar_id: Optional[int] = None
-    color: Optional[str] = None
-    reminder_minutes_before: Optional[int] = None
-
-class CalendarEventCreate(CalendarEventBase):
-    pass
-
-class CalendarEventUpdate(BaseModel):
-    title: Optional[str] = None
-    description: Optional[str] = None
-    start_time: Optional[datetime] = None
-    end_time: Optional[datetime] = None
-    calendar_id: Optional[int] = None
-    color: Optional[str] = None
-    reminder_minutes_before: Optional[int] = None
-
-class CalendarEvent(CalendarEventBase):
-    id: int
-    user_id: int
-    created_at: datetime
-
-    model_config = ConfigDict(from_attributes=True)
-
-class WorkspaceBackground(BaseModel):
-    slug: str
-    label: str
-    preview_css: str
-    backdrop_css: str
-    description: Optional[str] = None
-    id: Optional[int] = None
-
-WORKSPACE_BACKGROUNDS: List[WorkspaceBackground] = [
-    WorkspaceBackground(**{**payload, "id": index + 1})
-    for index, payload in enumerate(DEFAULT_WORKSPACE_BACKGROUNDS)
-]
-
-class ProactivitySettings(BaseModel):
-    id: Optional[str] = None
-    label: Optional[str] = None
-    description: Optional[str] = None
-    cadence: Optional[str] = None
-    time: Optional[str] = None
-    times: Optional[List[str]] = None
-    channels: Optional[List[str]] = None
-    timezone: Optional[str] = None
-
-
-class ProactivitySettingsUpdate(BaseModel):
-    cadence: Optional[str] = None
-    time: Optional[str] = None
-    times: Optional[List[str]] = None
-    channels: Optional[List[str]] = None
-    timezone: Optional[str] = None
-
-class PlanBase(BaseModel):
-    label: str
-    completed: bool = False
-    deadline: Optional[str] = None
-    schedule_slot: Optional[str] = None
-    description: Optional[str] = None
-    color: Optional[str] = None
-    reminder_at: Optional[datetime] = None
-
-class PlanCreate(PlanBase):
-    pass
-
-class Plan(PlanBase):
-    id: int
-    user_id: int
-    created_at: datetime
-    updated_at: Optional[datetime] = None
-
-    model_config = ConfigDict(from_attributes=True)
-
-class UserStreakBase(BaseModel):
-    current_streak: int = 0
-    last_activity_date: Optional[datetime] = None
-
-class UserStreakCreate(UserStreakBase):
-    pass
-
-class UserStreak(UserStreakBase):
-    id: int
-    user_id: int
-    created_at: datetime
-    updated_at: Optional[datetime] = None
-
-    model_config = ConfigDict(from_attributes=True)
-
-# Proactivity models
-class ProactivityLogBase(BaseModel):
-    activity_date: datetime
-    tasks_completed: int = 0
-    total_tasks: int = 0
-    score: int = 0
-    notes: Optional[str] = None
-
-class ProactivityLogCreate(ProactivityLogBase):
-    pass
-
-class DailyCheckIn(BaseModel):
-    tasks_completed: int
-    total_tasks: int
-    notes: Optional[str] = None
-
-class ProactivityLog(ProactivityLogBase):
-    id: int
-    user_id: int
-    activity_date: datetime
-    tasks_completed: int
-    total_tasks: int
-    score: int
-    notes: Optional[str] = None
-    created_at: datetime
-    updated_at: Optional[datetime] = None
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class ContextCacheBase(BaseModel):
-    label: Optional[str] = None
-    conversation_id: Optional[str] = None
-    content: str
-
-
-class ContextCache(ContextCacheBase):
-    id: int
-    user_id: int
-    created_at: datetime
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class MediaUploadBase(BaseModel):
-    filename: str
-    mime_type: str
-    size: int
-
-
-class MediaUpload(MediaUploadBase):
-    id: int
-    user_id: int
-    created_at: datetime
-    public_url: Optional[str] = None
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class ChatAttachment(BaseModel):
-    id: int
-
-
-class ProactivityNotification(BaseModel):
-    id: int
-    user_id: int
-    type: str
-    title: str
-    message: str
-    metadata: Optional[Dict[str, Any]] = None
-    due_at: Optional[datetime] = None
-    sent_at: datetime
-    read_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
-    created_at: datetime
-
-
-class ReminderBase(BaseModel):
-    label: str
-    remind_at: datetime
-    description: Optional[str] = None
-    entity_type: Optional[str] = None
-    entity_id: Optional[int] = None
-    delivery_mode: Optional[str] = None
-    summary: Optional[str] = None
-    metadata: Optional[Dict[str, Any]] = None
-    color: Optional[str] = None
-
-
-class ReminderCreate(ReminderBase):
-    pass
-
-
-class ReminderUpdate(BaseModel):
-    label: Optional[str] = None
-    description: Optional[str] = None
-    remind_at: Optional[datetime] = None
-    status: Optional[str] = None
-    delivery_mode: Optional[str] = None
-    summary: Optional[str] = None
-    metadata: Optional[Dict[str, Any]] = None
-    color: Optional[str] = None
-
-    model_config = ConfigDict(from_attributes=True)
-
-class PlanUpdate(BaseModel):
-    label: Optional[str] = None
-    completed: Optional[bool] = None
-    deadline: Optional[str] = None
-    schedule_slot: Optional[str] = None
-    description: Optional[str] = None
-    color: Optional[str] = None
-    reminder_at: Optional[datetime] = None
-
-class HabitBase(BaseModel):
-    label: str
-    streak_label: str
-    previous_label: str
-    description: Optional[str] = None
-    reminder_at: Optional[datetime] = None
-
-class HabitCreate(HabitBase):
-    pass
-
-class Habit(HabitBase):
-    id: int
-    user_id: int
-    created_at: datetime
-    updated_at: Optional[datetime] = None
-
-    model_config = ConfigDict(from_attributes=True)
-
-class HabitUpdate(BaseModel):
-    label: Optional[str] = None
-    streak_label: Optional[str] = None
-    previous_label: Optional[str] = None
-    description: Optional[str] = None
-    reminder_at: Optional[datetime] = None
-
-
-class DashboardPulsePlanItem(BaseModel):
-    id: str
-    label: str
-    completed: bool = False
-
-
-class DashboardPulseHabitItem(BaseModel):
-    id: str
-    label: str
-    streak_label: Optional[str] = None
-    previous_label: Optional[str] = None
-    completed: bool = False
-
-
-class DashboardPulseProactivity(BaseModel):
-    id: str
-    label: str
-    description: Optional[str] = None
-    cadence: str
-    time: str
-
-
-class DashboardPulseBase(BaseModel):
-    date_key: str = Field(..., pattern=r"^\d{4}-\d{2}-\d{2}$")
-    timestamp: Optional[int] = Field(default=None, validate_default=True)
-    plans: List[DashboardPulsePlanItem] = []
-    habits: List[DashboardPulseHabitItem] = []
-    proactivity: DashboardPulseProactivity
-
-    @field_validator("timestamp", mode="before")
-    @classmethod
-    def _validate_timestamp(cls, value):
-        if value is None:
-            return int(utcnow_aware().timestamp() * 1000)
-        if isinstance(value, datetime):
-            return int(value.replace(tzinfo=timezone.utc).timestamp() * 1000)
-        if isinstance(value, (int, float)):
-            return int(value)
-        if isinstance(value, str) and value.strip():
-            try:
-                return int(float(value))
-            except ValueError as exc:
-                raise ValueError("timestamp must be milliseconds since epoch") from exc
-        raise ValueError("timestamp must be milliseconds since epoch")
-
-
-class DashboardPulseCreate(DashboardPulseBase):
-    carry_forward: bool = False
-
-
-class DashboardPulseUpdate(BaseModel):
-    timestamp: Optional[int] = None
-    plans: Optional[List[DashboardPulsePlanItem]] = None
-    habits: Optional[List[DashboardPulseHabitItem]] = None
-    proactivity: Optional[DashboardPulseProactivity] = None
-
-
-class DashboardPulse(DashboardPulseBase):
-    id: int
-    user_id: int
-    timestamp: int
-    created_at: datetime
-    updated_at: datetime
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class DashboardProactivitySummary(BaseModel):
-    logs: List[ProactivityLog] = Field(default_factory=list)
-    streak: Dict[str, int] = Field(default_factory=dict)
-
-
-class DashboardSummary(BaseModel):
-    today: Optional[DashboardPulse] = None
-    recent: List[DashboardPulse] = Field(default_factory=list)
-    pulses: List[DashboardPulse] = Field(default_factory=list)
-    proactivity: DashboardProactivitySummary = Field(default_factory=DashboardProactivitySummary)
-
-# --- Payment Models ---
-class PaymentRequest(BaseModel):
-    plan_tier: str  # "voyager" or "pioneer"
-    payment_type: str = "gopay" # gopay, bank_transfer, credit_card, echannel
-    bank: Optional[str] = None # bca, bni, bri, permata (required if payment_type is bank_transfer)
-    token_id: Optional[str] = None # required if payment_type is credit_card
-    billing_cycle: Optional[str] = "monthly"  # "monthly" or "annual"
-
-class PaymentChargeResponse(BaseModel):
-    order_id: str
-    status: str
-    actions: Optional[List[Dict[str, Any]]] = None
-    qr_code_url: Optional[str] = None
-    deeplink_url: Optional[str] = None
-    va_numbers: Optional[List[Dict[str, Any]]] = None
-    redirect_url: Optional[str] = None # for 3DS
-    bill_key: Optional[str] = None # for Mandiri
-    biller_code: Optional[str] = None # for Mandiri
-
-
-class MidtransNotification(BaseModel):
-    transaction_time: str
-    transaction_status: str
-    transaction_id: str
-    status_message: str
-    status_code: str
-    signature_key: str
-    payment_type: str
-    order_id: str
-    merchant_id: str
-    gross_amount: str
-    fraud_status: str
-    currency: str
-    # Bank transfer specific
-    va_numbers: Optional[List[Dict[str, Any]]] = None
-    payment_amounts: Optional[List[Dict[str, Any]]] = None
-    
 def _extract_project_ref(url_value: Optional[str]) -> Optional[str]:
     if not url_value:
         return None
@@ -1997,7 +1639,6 @@ if SUPABASE_URL and SUPABASE_KEY and SUPABASE_URL != "your_supabase_url_here":
 
 
 _USER_DATA_CACHE: Dict[int, int] = {}
-_USER_TIMEZONE_CACHE: Dict[int, Optional[str]] = {}
 
 
 def _conversation_store_available() -> bool:
@@ -2358,68 +1999,6 @@ def _payload_log_summary(payload: Any) -> Dict[str, Any]:
     if isinstance(payload, str):
         return {"payload_present": True, "payload_length": len(payload)}
     return {"payload_present": True, "payload_type": type(payload).__name__}
-
-
-async def _resolve_user_timezone_for_streak(user_id: int, db: databases.Database) -> Optional[str]:
-    """
-    Best-effort resolution of a user's timezone for streak calculations.
-
-    Preference order:
-      1. In-memory cache.
-      2. User personalization_time_zone (explicit profile field).
-      3. Local proactivity_settings payload (SQLite).
-    Falls back to UTC when no setting is available or parsing fails.
-    """
-    cached = _USER_TIMEZONE_CACHE.get(user_id)
-    if cached is not None:
-        return cached
-
-    timezone_name: Optional[str] = None
-
-    if timezone_name is None:
-        try:
-            record = await db.fetch_one(
-                users.select()
-                .with_only_columns(users.c.personalization_time_zone)
-                .where(users.c.id == user_id)
-            )
-            if record:
-                candidate = _row_get(record, "personalization_time_zone")
-                if isinstance(candidate, str) and candidate.strip():
-                    timezone_name = candidate.strip()
-        except Exception as error:  # pragma: no cover - defensive logging
-            api_logger.debug(
-                f"Failed to resolve timezone from user profile for user {user_id}: {error}",
-                extra={
-                    "event_type": "user_timezone_profile_error",
-                    "user_id": user_id,
-                    "error": str(error),
-                },
-            )
-
-    if timezone_name is None:
-        try:
-            record = await db.fetch_one(
-                proactivity_settings.select().where(proactivity_settings.c.user_id == user_id)
-            )
-            if record:
-                payload = _row_get(record, "payload")
-                local_settings = _deserialize_proactivity_settings_payload(payload)
-                if local_settings and local_settings.timezone:
-                    timezone_name = local_settings.timezone
-        except Exception as error:  # pragma: no cover - defensive logging
-            api_logger.debug(
-                f"Failed to resolve timezone from local DB for user {user_id}: {error}",
-                extra={
-                    "event_type": "user_timezone_db_error",
-                    "user_id": user_id,
-                    "error": str(error),
-                },
-            )
-
-    # Cache even when None so we don't repeatedly query.
-    _USER_TIMEZONE_CACHE[user_id] = timezone_name
-    return timezone_name
 
 
 def _timezone_from_time_context(time_context: str) -> Tuple[Optional[str], Optional[timezone]]:
@@ -2951,6 +2530,10 @@ async def _connect_database():
 
 async def _run_basic_migrations():
     """Ensure critical SQLite columns exist."""
+    _drop_sqlite_table("user_streaks")
+    _rebuild_sqlite_table_without_columns("habits", {"streak_label", "streak_id"})
+    _ensure_sqlite_index("habits", "ix_habits_user_id", "user_id")
+
     _ensure_sqlite_columns(
         "users",
         [
@@ -3003,12 +2586,6 @@ async def _run_basic_migrations():
                 "Postgres migration failed",
                 extra={"event_type": "postgres_migration_error", "table": "users", "error": str(exc)},
             )
-    _ensure_sqlite_columns(
-        "user_streaks",
-        [
-            ("longest_streak", "INTEGER", "0"),
-        ]
-    )
     _ensure_sqlite_columns(
         "user_chat_messages",
         [
@@ -3420,25 +2997,14 @@ async def dev_analytics_summary(
     # ========== RETENTION METRICS ==========
     retention: Dict[str, Any] = {}
     try:
-        # Average and max streak
-        avg_streak = await db.fetch_val(
-            sqlalchemy.select(sqlalchemy.func.avg(user_streaks.c.current_streak))
-        )
-        max_streak = await db.fetch_val(
-            sqlalchemy.select(sqlalchemy.func.max(user_streaks.c.current_streak))
-        )
-        retention["avg_streak"] = round(float(avg_streak or 0), 1)
-        retention["max_streak"] = int(max_streak or 0)
-
-        # Users active today (from streaks)
         today_str = utcnow_aware().strftime("%Y-%m-%d")
         active_today = await db.fetch_val(
-            sqlalchemy.select(sqlalchemy.func.count()).select_from(user_streaks)
-            .where(user_streaks.c.last_activity_date == today_str)
+            sqlalchemy.select(sqlalchemy.func.count(sqlalchemy.distinct(general_chat_messages.c.user_id)))
+            .where(sqlalchemy.func.date(general_chat_messages.c.created_at) == today_str)
         )
         retention["active_today"] = int(active_today or 0)
     except Exception:
-        retention = {"avg_streak": 0.0, "max_streak": 0, "active_today": 0}
+        retention = {"active_today": 0}
 
     # ========== REVENUE METRICS ==========
     revenue: Dict[str, Any] = {}
@@ -3730,41 +3296,11 @@ def _normalize_habit_items(raw: Any) -> List[Dict[str, Any]]:
             {
                 "id": identifier,
                 "label": label,
-                "streak_label": str(entry.get("streak_label") or ""),
                 "previous_label": str(entry.get("previous_label") or ""),
                 "completed": bool(entry.get("completed")),
             }
         )
     return normalized
-
-
-def _coerce_streak_label_value(*, streak_days: Any = None, streak_label: Any = None) -> str:
-    """Force streak labels to a numeric string (e.g., '3') to keep bot outputs consistent."""
-
-    def _parse_candidate(value: Any) -> Optional[int]:
-        if value is None:
-            return None
-        if isinstance(value, bool):
-            return None
-        if isinstance(value, (int, float)):
-            return int(value)
-        if isinstance(value, str):
-            trimmed = value.strip()
-            if not trimmed:
-                return None
-            match = re.search(r"-?\d+", trimmed)
-            if match:
-                try:
-                    return int(match.group(0))
-                except ValueError:
-                    return None
-        return None
-
-    for candidate in (streak_days, streak_label):
-        parsed = _parse_candidate(candidate)
-        if parsed is not None:
-            return str(max(parsed, 0))
-    return "0"
 
 
 def _serialize_habit_record(record: Any) -> Dict[str, Any]:
@@ -3786,7 +3322,6 @@ def _serialize_habit_record(record: Any) -> Dict[str, Any]:
         "id": record.get("id"),
         "user_id": record.get("user_id"),
         "label": _as_str(record.get("label")),
-        "streak_label": _as_str(record.get("streak_label")),
         "previous_label": _as_str(record.get("previous_label")),
         "description": record.get("description"),
         "created_at": record.get("created_at"),
@@ -4677,18 +4212,12 @@ async def _create_habit_tool(user_id: int, args: Dict[str, Any], db: databases.D
         return {"error": "label is required"}
 
     reminder_at = _parse_remind_at(args.get("reminder_at"))
-    
-    streak_value = _coerce_streak_label_value(
-        streak_days=args.get("streak_days"),
-        streak_label=args.get("streak_label"),
-    )
 
     now = utcnow()
     base_values = {
         "user_id": user_id,
         "label": str(label),
         "description": args.get("description"),
-        "streak_label": streak_value,
         "previous_label": args.get("previous_label") or "",
     }
     
@@ -4730,11 +4259,6 @@ async def _update_habit_tool(user_id: int, args: Dict[str, Any], db: databases.D
         updates["label"] = args["label"]
     if "description" in args:
         updates["description"] = args["description"]
-    if "streak_days" in args or "streak_label" in args:
-        updates["streak_label"] = _coerce_streak_label_value(
-            streak_days=args.get("streak_days"),
-            streak_label=args.get("streak_label"),
-        )
         
     if not updates and not reminder_at_provided:
         return {"status": "no_change", "message": "No updates provided."}
@@ -5661,9 +5185,7 @@ async def _complete_onboarding(
                 },
             )
         else:
-            # Keep timezone cache and scheduler in sync with onboarding decisions.
-            if timezone:
-                _USER_TIMEZONE_CACHE[user_id] = timezone
+            # Keep scheduler in sync with onboarding decisions.
             if proactivity_scheduler:
                 try:
                     await proactivity_scheduler.refresh_jobs(user_id)
@@ -6171,7 +5693,6 @@ def _carry_forward_dashboard_entries(
             {
                 "id": identifier or f"habit-{uuid4().hex[:8]}",
                 "label": label,
-                "streak_label": str(entry.get("streak_label") or ""),
                 "previous_label": str(entry.get("previous_label") or ""),
                 "completed": False,
             }
@@ -6228,228 +5749,6 @@ def _coerce_activity_day(value: Any) -> Optional[date]:
         return parsed.date()
     return None
 
-
-async def _compute_proactivity_streak(db: databases.Database, user_id: int) -> Dict[str, int]:
-    try:
-        query = (
-            proactivity_logs.select()
-            .where(proactivity_logs.c.user_id == user_id)
-            .order_by(proactivity_logs.c.activity_date.desc())
-        )
-        rows = await db.fetch_all(query)
-    except Exception as error:
-        logger.error(f"Failed to fetch proactivity logs from SQLite for user {user_id}: {error}")
-        return {"current_streak": 0, "best_streak": 0}
-
-    qualifying_days: List[date] = []
-    seen: set[date] = set()
-
-    for row in rows:
-        score = row["score"]
-        activity_date_val = row["activity_date"]
-
-        if score is not None and score < 70:
-            continue
-        day = _coerce_activity_day(activity_date_val)
-        if day is None or day in seen:
-            continue
-        seen.add(day)
-        qualifying_days.append(day)
-
-    if not qualifying_days:
-        return {"current_streak": 0, "best_streak": 0}
-
-    qualifying_days_sorted = sorted(qualifying_days)
-    best_streak = 0
-    streak = 0
-    previous_day: Optional[date] = None
-
-    for day in qualifying_days_sorted:
-        if previous_day is None:
-            streak = 1
-        else:
-            delta = (day - previous_day).days
-            if delta == 0:
-                continue
-            if delta == 1:
-                streak += 1
-            else:
-                streak = 1
-        previous_day = day
-        best_streak = max(best_streak, streak)
-
-    qualifying_days_desc = sorted(qualifying_days, reverse=True)
-    current_streak = 0
-    previous_day = None
-    for day in qualifying_days_desc:
-        if previous_day is None:
-            current_streak = 1
-        else:
-            delta = (previous_day - day).days
-            if delta == 0:
-                continue
-            if delta == 1:
-                current_streak += 1
-            else:
-                break
-        previous_day = day
-
-    best_streak = max(best_streak, current_streak)
-    return {"current_streak": current_streak, "best_streak": best_streak}
-
-
-# Streak helper functions
-async def _ensure_supabase_user_exists(user_id: int, db: databases.Database) -> bool:
-    # Supabase is now auth-only. Data is stored in local SQLite.
-    return True
-
-
-async def get_or_create_user_streak(user_id: int, db: databases.Database) -> UserStreak:
-    """Get existing user streak or create new one using local SQLite."""
-    try:
-        try:
-            from backend.database import user_streaks
-        except ImportError:
-            from database import user_streaks
-
-        query = user_streaks.select().where(user_streaks.c.user_id == user_id)
-        row = await db.fetch_one(query)
-        
-        if row:
-            return UserStreak(
-                id=row["id"],
-                user_id=row["user_id"],
-                current_streak=row["current_streak"],
-                last_activity_date=row["last_activity_date"],
-                created_at=row["created_at"],
-                updated_at=row["updated_at"],
-            )
-            
-        now = utcnow()
-        insert_query = user_streaks.insert().values(
-            user_id=user_id,
-            current_streak=0,
-            longest_streak=0,
-            last_activity_date=None,
-            created_at=now,
-            updated_at=now,
-        )
-        streak_id = await db.execute(insert_query)
-        
-        return UserStreak(
-            id=streak_id,
-            user_id=user_id,
-            current_streak=0,
-            last_activity_date=None,
-            created_at=now,
-            updated_at=now,
-        )
-    except Exception as e:
-        api_logger.error(f"Failed to get/create user streak for user {user_id}: {e}")
-        now = utcnow()
-        # Return transient fallback
-        return UserStreak(
-            id=0,
-            user_id=user_id,
-            current_streak=0,
-            last_activity_date=None,
-            created_at=now,
-            updated_at=now
-        )
-
-async def update_user_streak(
-    user_id: int,
-    db: databases.Database,
-    user_timezone: Optional[str] = None,
-):
-    """Update user streak based on daily activity using local SQLite."""
-    from datetime import datetime, date
-    try:
-        from zoneinfo import ZoneInfo
-    except ImportError:
-        from backports.zoneinfo import ZoneInfo  # type: ignore
-
-    try:
-        from backend.database import user_streaks
-    except ImportError:
-        from database import user_streaks
-
-    # Use the client's reported timezone when available, falling back
-    # to stored user preferences and finally UTC.
-    timezone_name = user_timezone or await _resolve_user_timezone_for_streak(user_id, db)
-    if timezone_name:
-        try:
-            # Only use valid timezone strings
-            user_tz = ZoneInfo(timezone_name)
-            today = utcnow_aware().astimezone(user_tz).date()
-        except Exception:
-            today = utcnow().date()
-    else:
-        today = utcnow().date()
-
-    query = user_streaks.select().where(user_streaks.c.user_id == user_id)
-    row = await db.fetch_one(query)
-
-    if not row:
-        # Should persist now via SQLite
-        await get_or_create_user_streak(user_id, db)
-        row = await db.fetch_one(query)
-        if not row:
-            api_logger.error(f"Failed to ensure streak record for user {user_id}")
-            # Return fake object to not crash
-            now = utcnow()
-            return {
-                "id": 0,
-                "user_id": user_id,
-                "current_streak": 1,
-                "last_activity_date": today.isoformat(),
-                "created_at": now,
-                "updated_at": now,
-            }
-
-    last_activity_date_str = row["last_activity_date"]
-    current_streak = row["current_streak"] or 0
-    longest_streak = row["longest_streak"] or 0
-    
-    last_activity = _coerce_activity_day(last_activity_date_str) if last_activity_date_str else None
-
-    # Determine new streak
-    new_streak = current_streak
-    if last_activity == today:
-        # Already credited today
-        return dict(row)
-    elif last_activity:
-        yesterday = date.fromordinal(today.toordinal() - 1)
-        if last_activity == yesterday:
-            new_streak += 1
-        else:
-            new_streak = 1
-    else:
-        new_streak = 1
-
-    now_ts = utcnow()
-    # Update SQLite
-    try:
-        update_q = user_streaks.update().where(user_streaks.c.id == row["id"]).values(
-            current_streak=new_streak,
-            longest_streak=max(longest_streak, new_streak),
-            last_activity_date=today.isoformat(),
-            updated_at=now_ts
-        )
-        await db.execute(update_q)
-        
-        return {
-            "id": row["id"],
-            "user_id": user_id,
-            "current_streak": new_streak,
-            "longest_streak": max(longest_streak, new_streak),
-            "last_activity_date": today.isoformat(),
-            "created_at": row["created_at"],
-            "updated_at": now_ts
-        }
-    except Exception as e:
-        api_logger.error(f"Failed to update streak for user {user_id}: {e}")
-        return dict(row)
 
 # API Routes
 
@@ -8440,13 +7739,6 @@ async def upload_media(
   except Exception:
       storage_path_for_db = Path(storage_name)
 
-  public_url = None
-  if STORAGE_BASE_URL:
-      public_url = f"{STORAGE_BASE_URL.rstrip('/')}/{storage_name}"
-  else:
-      # Fallback to local serving via the mounted /uploads static route
-      public_url = f"/uploads/{sanitized_name}"
-
   now = utcnow()
   query = media_uploads.insert().values(
       user_id=user_id,
@@ -8457,6 +7749,15 @@ async def upload_media(
       created_at=now,
   )
   media_record_id = await db.execute(query)
+
+  public_url: str | None
+  if STORAGE_BASE_URL:
+      public_url = f"{STORAGE_BASE_URL.rstrip('/')}/{storage_name}"
+  else:
+      # Use the same-origin authenticated route so the Next.js frontend can load files
+      # even when it only proxies `/api/*` to the backend.
+      public_url = f"/api/uploads/{media_record_id}/file"
+
   if FILE_SEARCH_ENABLED and FILE_SEARCH_SERVICE:
       background_tasks.add_task(_background_file_search_upload, db, user_id, storage_path, sanitized_name, mime_type)
 
@@ -8497,6 +7798,8 @@ async def list_user_uploads(
         if STORAGE_BASE_URL and record["storage_path"]:
             storage_name = Path(record["storage_path"]).name
             public_url = f"{STORAGE_BASE_URL.rstrip('/')}/{storage_name}"
+        else:
+            public_url = f"/api/uploads/{record['id']}/file"
         
         result.append(MediaUpload(
             id=record["id"],
@@ -10134,9 +9437,8 @@ async def update_user(
             continue
         update_data[field_name] = normalized[:max_length]
 
-    # Keep per-user timezone caches in sync when the user updates their time zone.
+    # Keep proactivity settings in sync when the user updates their time zone.
     if "personalization_time_zone" in update_data:
-        _USER_TIMEZONE_CACHE[user_id] = update_data.get("personalization_time_zone")
         try:
             record = await db.fetch_one(
                 proactivity_settings.select().where(proactivity_settings.c.user_id == user_id)
@@ -10255,7 +9557,6 @@ async def delete_user_account(
         habits,
         reminders,
         dashboard_pulses,
-        user_streaks,
         context_cache,
         file_search_stores,
         media_uploads,
@@ -10581,7 +9882,6 @@ async def create_habit(
     base_values = {
         "user_id": user_id,
         "label": habit.label,
-        "streak_label": habit.streak_label,
         "previous_label": habit.previous_label,
         "description": habit.description,
     }
@@ -10705,27 +10005,6 @@ async def delete_habit(
     )
     await db.execute(delete_query)
     return None
-
-@app.get("/users/{user_id}/streak", response_model=UserStreak)
-async def get_user_streak(
-    user_id: int,
-    current_user: Dict[str, Any] = Depends(get_current_user),
-    db: databases.Database = Depends(get_database)
-):
-    user_id = current_user["id"]
-    require_same_user(user_id, current_user)
-    streak = await get_or_create_user_streak(user_id, db)
-    return streak
-
-@app.post("/users/{user_id}/streak", response_model=UserStreak)
-async def touch_user_streak(
-    user_id: int,
-    current_user: Dict[str, Any] = Depends(get_current_user),
-    db: databases.Database = Depends(get_database)
-):
-    user_id = current_user["id"]
-    require_same_user(user_id, current_user)
-    return await update_user_streak(user_id, db)
 
 @app.get("/users/{user_id}/calendar-events", response_model=List[CalendarEvent])
 async def get_user_calendar_events(
@@ -11360,13 +10639,11 @@ async def get_dashboard_summary(
             )
         )
 
-    streak = await _compute_proactivity_streak(db, user_id)
-
     return DashboardSummary(
         today=today_entry,
         recent=recent_entries,
         pulses=pulse_items,
-        proactivity=DashboardProactivitySummary(logs=proactivity_logs_payload, streak=streak),
+        proactivity=DashboardProactivitySummary(logs=proactivity_logs_payload),
     )
 
 
@@ -12220,17 +11497,6 @@ async def daily_proactivity_checkin(
             "updated_at": utcnow()
         }
 
-@app.get("/users/{user_id}/proactivity/streak", response_model=dict)
-async def get_proactivity_streak(
-    user_id: int,
-    db: databases.Database = Depends(get_database),
-    current_user: Dict[str, Any] = Depends(get_current_user),
-):
-    """Get user's current proactivity streak"""
-    require_same_user(user_id, current_user)
-    return await _compute_proactivity_streak(db, user_id)
-
-
 @app.get(
     "/users/{user_id}/proactivity/notifications",
     response_model=List[ProactivityNotification]
@@ -12381,10 +11647,6 @@ async def update_proactivity_settings_route(
         "event_type": "proactivity_settings_save_success",
         "user_id": user_id
     })
-
-    # Keep the in-memory timezone cache in sync so streak calculations
-    # immediately respect updated user preferences.
-    _USER_TIMEZONE_CACHE[user_id] = settings.timezone
 
     if proactivity_scheduler:
         try:

@@ -1,4 +1,3 @@
-import { Zap } from "lucide-react";
 import styles from "@/app/gray/GrayPageClient.module.css";
 import calendarStyles from "@/components/calendar/GrayDashboardCalendar.module.css";
 import { ViewModeSelect } from "./ViewModeSelect";
@@ -24,7 +23,6 @@ export type DashboardHeaderProps = {
   rangeNavigationLabel?: string;
   className?: string;
   todayButtonLabel?: string;
-  streakCount?: number;
   onUpgradeClick?: () => void;
   showUpgradeButton?: boolean;
 };
@@ -54,7 +52,6 @@ export function DashboardHeader({
   rangeNavigationLabel = "range",
   className,
   todayButtonLabel = "Today",
-  streakCount = 0,
   onUpgradeClick,
   showUpgradeButton = false,
 }: DashboardHeaderProps) {
@@ -84,10 +81,6 @@ export function DashboardHeader({
     showRangeNavigation ||
     showTodayButton ||
     showViewSelect;
-
-  const normalizedStreak = Number.isFinite(streakCount)
-    ? Math.max(0, Math.trunc(streakCount))
-    : 0;
 
   return (
     <header className={headerClassName}>
@@ -160,15 +153,7 @@ export function DashboardHeader({
         )}
       </div>
       <div className={calendarStyles.calendarSurfaceHeaderRight}>
-        {normalizedStreak > 0 ? (
-          <div
-            className={styles.streakBadge}
-            aria-label={t("{count} day streak", { count: normalizedStreak })}
-          >
-            <Zap size={12} />
-            <span>{normalizedStreak}</span>
-          </div>
-        ) : null}
+        {null}
         {shouldRenderControls && (
           <div className={calendarStyles.calendarSurfaceNav}>
             {showMonthNavigation && (

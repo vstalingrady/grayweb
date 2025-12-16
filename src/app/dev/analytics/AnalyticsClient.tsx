@@ -34,8 +34,6 @@ type FeatureAdoption = {
 };
 
 type Retention = {
-  avg_streak: number;
-  max_streak: number;
   active_today: number;
 };
 
@@ -349,17 +347,6 @@ export default function AnalyticsClient() {
           {/* Retention */}
           {data.retention && (
             <Section title="🔥 Retention">
-              <MetricCard
-                label="Avg Streak"
-                value={data.retention.avg_streak.toFixed(1)}
-                sublabel="days"
-              />
-              <MetricCard
-                label="Max Streak"
-                value={data.retention.max_streak}
-                sublabel="days"
-                color="#059669"
-              />
               <MetricCard
                 label="Active Today"
                 value={data.retention.active_today}

@@ -10,7 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
-import { Check, Square, Zap, X, Plus, ChevronDown, Pencil, Trash2 } from "lucide-react";
+import { Check, Square, X, Plus, ChevronDown, Pencil, Trash2 } from "lucide-react";
 import styles from "@/app/gray/GrayPageClient.module.css";
 import { GrayDashboardCalendar } from "@/components/calendar/GrayDashboardCalendar";
 import type { CalendarEvent, CalendarInfo, PositionedEvent } from "@/components/calendar/types";
@@ -142,8 +142,8 @@ type GrayDashboardViewProps = {
   onCalendarEventsChange: (events: CalendarEvent[]) => void;
   calendarSelectedDate?: Date;
   onCalendarSelectedDateChange?: (date: Date) => void;
-  onEditHabit?: (habit: { id: string; label: string; previousLabel: string; streakLabel: string }) => void;
-  onDeleteHabit?: (habit: { id: string; label: string; previousLabel: string; streakLabel: string }) => void;
+  onEditHabit?: (habit: { id: string; label: string; previousLabel: string }) => void;
+  onDeleteHabit?: (habit: { id: string; label: string; previousLabel: string }) => void;
   onCreatePlan?: (plan: EventComposerPayload) => Promise<void> | void;
   onCreateHabit?: (habit: EventComposerPayload) => Promise<void> | void;
   onIntegrationAction?: () => void;
@@ -152,7 +152,6 @@ type GrayDashboardViewProps = {
   isCompactLayout?: boolean;
   userId?: number | null;
   proactivityDeliveryKeys?: ReadonlySet<string>;
-  streakCount?: number;
   onUpgradeClick?: () => void;
   showUpgradeButton?: boolean;
   isOverlay?: boolean;
@@ -191,7 +190,6 @@ export function GrayDashboardView({
   isCompactLayout = false,
   userId,
   proactivityDeliveryKeys,
-  streakCount = 0,
   onUpgradeClick,
   showUpgradeButton = false,
   isOverlay = false,
@@ -1091,15 +1089,7 @@ export function GrayDashboardView({
           </div>
         </div>
         <div className={styles.dashboardHeaderSide}>
-          {streakCount > 0 ? (
-            <div
-              className={styles.streakBadge}
-              aria-label={t("{count} day streak", { count: streakCount })}
-            >
-              <Zap size={12} />
-              <span>{streakCount}</span>
-            </div>
-          ) : null}
+          {null}
         </div>
       </div>
 

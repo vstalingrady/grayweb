@@ -79,7 +79,7 @@ async def apply_remote_migration():
             SELECT table_name 
             FROM information_schema.tables 
             WHERE table_schema = 'public' 
-            AND table_name IN ('users', 'user_streaks', 'proactivity_push_subscriptions', 'google_calendar_credentials')
+            AND table_name IN ('users', 'proactivity_push_subscriptions', 'google_calendar_credentials')
             ORDER BY table_name;
         """
         
