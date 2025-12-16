@@ -803,7 +803,14 @@ except ImportError:
         save_conversation_message,
     )
 
+# Proactivity helpers (extracted from main.py)
+try:
+    from backend.core.proactivity_helpers import fetch_proactivity_summary as _fetch_proactivity_summary
+except ImportError:
+    from core.proactivity_helpers import fetch_proactivity_summary as _fetch_proactivity_summary  # type: ignore
+
 load_dotenv(ROOT_DIR / ".env")
+
 
 
 
@@ -2356,60 +2363,7 @@ def _context_cache_contents(record: Optional[Dict[str, Any]]) -> Optional[List[t
 
 # _load_conversation_history is now imported from core.conversation_manager
 
-
-async def _fetch_proactivity_summary(user_id: int, info_type: Optional[str], db: databases.Database) -> Dict[str, Any]:
-    """
-    Build a lightweight proactivity summary based only on the current plans and habits
-    stored for this user, not on any local dashboard snapshots.
-
-    This avoids leaking or double-counting historical/local data and keeps the
-    assistant's view aligned with the canonical per-user records.
-    """
-    plan_labels: List[str] = []
-    # Supabase data loading for proactivity summary removed.
-    # Relying on local data fallbacks below.
-
-    # Fallback: use the local relational tables only if Supabase isn't configured.
-    if not plan_labels:
-        rows = await db.fetch_all(
-            plans.select()
-            .where(plans.c.user_id == user_id)
-            .order_by(plans.c.created_at)
-        )
-        for row in rows:
-            label = str(_row_get(row, "label") or "").strip()
-            if label:
-                plan_labels.append(label)
-
-    if not habit_labels:
-        rows = await db.fetch_all(
-            habits.select()
-            .where(habits.c.user_id == user_id)
-            .order_by(habits.c.created_at)
-        )
-        for row in rows:
-            label = str(_row_get(row, "label") or "").strip()
-            if label:
-                habit_labels.append(label)
-
-    plan_labels = plan_labels[:6]
-    habit_labels = habit_labels[:6]
-
-    summary_parts: List[str] = []
-    if plan_labels:
-        summary_parts.append(f"{len(plan_labels)} active plans")
-    if habit_labels:
-        summary_parts.append(f"{len(habit_labels)} tracked habits")
-    if not summary_parts:
-        summary_parts.append("No recorded plan or habit data yet.")
-
-    return {
-        "summary": " | ".join(summary_parts),
-        "focus": info_type or "general",
-        "plans": plan_labels,
-        "habits": habit_labels,
-        "latest_date": None,
-    }
+# _fetch_proactivity_summary is now imported from core.proactivity_helpers
 
 
 # Calendar event handlers (_list_calendar_events, _create_calendar_event,
