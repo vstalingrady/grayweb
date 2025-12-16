@@ -1497,6 +1497,18 @@ def _parse_json_field(value: Optional[str]) -> Optional[Dict[str, Any]]:
         return None
 
 
+def _serialize_reminder_row(row: Any) -> Dict[str, Any]:
+    """Serialize a reminder row to a dictionary with ISO formatted dates."""
+    record = dict(row)
+    for key in ("remind_at", "created_at", "updated_at", "delivered_at"):
+        value = record.get(key)
+        if isinstance(value, datetime):
+            if value.tzinfo is None:
+                value = value.replace(tzinfo=timezone.utc)
+            record[key] = value.isoformat()
+    return record
+
+
 ALLOWED_ORIGIN_REGEX = _local_network_origin_regex()
 ALLOWED_ORIGINS = _build_allowed_origins()
 
@@ -1938,20 +1950,29 @@ async def _ensure_user_data_record(user_identifier: int) -> Optional[int]:
             return user_data_id
             
     except Exception as error:
-        # Race condition: another request might have created the record between our check and insert
-        # Try to fetch it one more time before failing
-        try:
-            row = await database.fetch_one(
-                user_data.select().where(user_data.c.user_identifier == user_identifier)
-            )
+        # Race condition: another request might have created the record between our check and insert.
+        # On SQLite, the winning transaction might also still be committing/holding a write lock.
+        # Retry a few times with a small backoff before failing.
+        import asyncio
+
+        for delay_seconds in (0.0, 0.01, 0.02, 0.05):
+            if delay_seconds:
+                await asyncio.sleep(delay_seconds)
+            try:
+                row = await database.fetch_one(
+                    user_data.select().where(user_data.c.user_identifier == user_identifier)
+                )
+            except Exception:
+                row = None
             if row:
                 user_data_id = row["id"]
                 _USER_DATA_CACHE[user_identifier] = user_data_id
                 return user_data_id
-        except Exception:
-            pass
             
-        app_logger.error(f"Error ensuring user data record: {error}", extra={"event_type": "user_data_ensure_failed"})
+        app_logger.error(
+            f"Error ensuring user data record: {error}",
+            extra={"event_type": "user_data_ensure_failed"},
+        )
         return None
     
     return None
@@ -9593,16 +9614,9 @@ async def delete_user_account(
     
     api_logger.info(f"User account {user_id} deleted successfully", extra={"user_id": user_id, "event_type": "account_deletion_complete"})
 
-@app.get("/users/{user_id}/calendars", response_model=List[Calendar])
-async def get_user_calendars(
-    user_id: int,
-    current_user: Dict[str, Any] = Depends(get_current_user),
-    db: databases.Database = Depends(get_database)
-):
-    user_id = current_user["id"]
-    require_same_user(user_id, current_user)
-    query = calendars.select().where(calendars.c.user_id == user_id).order_by(calendars.c.created_at.desc())
-    return await db.fetch_all(query)
+# Calendar, Calendar Events, and Reminder routes are now in:
+# - backend/api/calendars.py
+# - backend/api/reminders.py
 
 @app.post("/users/{user_id}/chat-sessions", response_model=ChatSession, status_code=status.HTTP_201_CREATED)
 async def create_chat_session(
@@ -9621,323 +9635,7 @@ async def create_chat_session(
     session_id = await db.execute(query)
     return {**session.dict(), "id": session_id, "user_id": user_id}
 
-
-
-@app.post("/users/{user_id}/calendars", response_model=Calendar, status_code=status.HTTP_201_CREATED)
-async def create_calendar(
-    user_id: int,
-    calendar: CalendarCreate,
-    current_user: Dict[str, Any] = Depends(get_current_user),
-    db: databases.Database = Depends(get_database)
-):
-    user_id = current_user["id"]
-    require_same_user(user_id, current_user)
-    now = utcnow()
-    calendar_id = await db.execute(
-        calendars.insert().values(
-            user_id=user_id,
-            label=calendar.label,
-            color=calendar.color,
-            is_visible=calendar.is_visible,
-            created_at=now,
-            updated_at=now,
-        )
-    )
-    query = calendars.select().where(calendars.c.id == calendar_id)
-    return await db.fetch_one(query)
-
-@app.patch("/users/{user_id}/calendars/{calendar_id}", response_model=Calendar)
-async def update_calendar(
-    user_id: int,
-    calendar_id: int,
-    calendar_update: CalendarUpdate,
-    current_user: Dict[str, Any] = Depends(get_current_user),
-    db: databases.Database = Depends(get_database)
-):
-    user_id = current_user["id"]
-    require_same_user(user_id, current_user)
-    existing = await db.fetch_one(
-        calendars.select().where(
-            (calendars.c.id == calendar_id) & (calendars.c.user_id == user_id)
-        )
-    )
-    if not existing:
-        raise HTTPException(status_code=404, detail="Calendar not found")
-
-    update_data = calendar_update.dict(exclude_unset=True)
-    if not update_data:
-        return existing
-
-    update_data["updated_at"] = utcnow()
-
-    await db.execute(
-        calendars.update()
-        .where((calendars.c.id == calendar_id) & (calendars.c.user_id == user_id))
-        .values(**update_data)
-    )
-    query = calendars.select().where(calendars.c.id == calendar_id)
-    return await db.fetch_one(query)
-
 # Plans and Habits routes are now in backend/api/plans.py
-
-@app.get("/users/{user_id}/calendar-events", response_model=List[CalendarEvent])
-async def get_user_calendar_events(
-
-    user_id: int,
-    current_user: Dict[str, Any] = Depends(get_current_user),
-    start_date: Optional[str] = Query(None),
-    end_date: Optional[str] = Query(None),
-    db: databases.Database = Depends(get_database)
-
-):
-    user_id = current_user["id"]
-    require_same_user(user_id, current_user)
-    
-    # Use local SQLite.
-    query = calendar_events.select().where(calendar_events.c.user_id == user_id)
-    
-    if start_date:
-        try:
-            start_dt = datetime.fromisoformat(start_date.replace("Z", "+00:00"))
-            query = query.where(calendar_events.c.start_time >= start_dt)
-        except ValueError:
-            pass
-            
-    if end_date:
-        try:
-            end_dt = datetime.fromisoformat(end_date.replace("Z", "+00:00"))
-            query = query.where(calendar_events.c.end_time <= end_dt)
-        except ValueError:
-            pass
-
-    query = query.order_by(calendar_events.c.start_time)
-    rows = await db.fetch_all(query)
-    now = utcnow()
-    normalized = []
-    for row in rows:
-        record = dict(row)
-        if record.get("created_at") is None:
-            record["created_at"] = now
-        normalized.append(record)
-    return normalized
-
-
-def _serialize_reminder_row(row: Any) -> Dict[str, Any]:
-  record = dict(row)
-  for key in ("remind_at", "created_at", "updated_at", "delivered_at"):
-      value = record.get(key)
-      if isinstance(value, datetime):
-          if value.tzinfo is None:
-              value = value.replace(tzinfo=timezone.utc)
-          record[key] = value.isoformat()
-  return record
-
-
-@app.get("/users/{user_id}/reminders", response_model=List[Dict[str, Any]])
-async def list_user_reminders(
-    user_id: int,
-    limit: Optional[int] = Query(None, ge=1),
-    status_filter: Optional[str] = None,
-    delivery_mode: Optional[str] = None,
-    entity_type: Optional[str] = None,
-    include_archived: bool = Query(False),
-    db: databases.Database = Depends(get_database),
-    current_user: Dict[str, Any] = Depends(get_current_user),
-):
-    user_id = current_user["id"]
-    require_same_user(user_id, current_user)
-    try:
-        query = reminders.select().where(reminders.c.user_id == user_id)
-
-        if status_filter:
-            query = query.where(reminders.c.status == status_filter)
-        elif not include_archived:
-            query = query.where(reminders.c.status.in_(["pending", "delivered"]))
-
-        if delivery_mode:
-            query = query.where(reminders.c.delivery_mode == delivery_mode)
-
-        if entity_type:
-            query = query.where(reminders.c.entity_type == entity_type)
-
-        query = query.order_by(reminders.c.remind_at.asc())
-
-        if limit is not None:
-            query = query.limit(limit)
-
-        rows = await db.fetch_all(query)
-        
-        # Reminder delivery is handled by the reminder scheduler. Do not mutate reminder
-        # state on read here (older versions deleted "stale" rows, which could drop
-        # legitimate overdue reminders if the scheduler was temporarily offline).
-
-        return [_serialize_reminder_row(row) for row in rows]
-    except Exception as e:
-        api_logger.error(f"Failed to fetch reminders from local database: {e}", exc_info=True, extra={"user_id": user_id})
-        raise HTTPException(status_code=500, detail="Failed to fetch reminders from local database.")
-
-
-@app.post(
-    "/users/{user_id}/reminders",
-    response_model=Dict[str, Any],
-    status_code=status.HTTP_201_CREATED,
-)
-async def create_user_reminder(
-    user_id: int,
-    payload: ReminderCreate,
-    db: databases.Database = Depends(get_database),
-    current_user: Dict[str, Any] = Depends(get_current_user),
-):
-    user_id = current_user["id"]
-    require_same_user(user_id, current_user)
-    now = utcnow()
-    values = {
-        "user_id": user_id,
-        "label": payload.label,
-        "description": payload.description,
-        "summary": payload.summary,
-        "remind_at": payload.remind_at.isoformat(),
-        "entity_type": payload.entity_type,
-        "entity_id": payload.entity_id,
-        "delivery_mode": payload.delivery_mode,
-        "metadata": payload.metadata,
-        "status": "pending",
-        "created_at": now.isoformat(),
-        "updated_at": now.isoformat(),
-    }
-    sqlite_values = {
-        **values,
-        "remind_at": payload.remind_at,
-        "created_at": now,
-        "updated_at": now,
-    }
-    reminder_id = await db.execute(reminders.insert().values(sqlite_values))
-    row = await db.fetch_one(reminders.select().where(reminders.c.id == reminder_id))
-    if not row:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to create reminder")
-    try:
-        global reminder_scheduler
-        if reminder_scheduler is not None:
-            await reminder_scheduler.refresh_job(user_id=user_id, reminder_id=int(reminder_id), remind_at=payload.remind_at)
-    except Exception as exc:  # pragma: no cover
-        api_logger.warning(
-            "Failed to schedule reminder",
-            extra={"event_type": "reminder_schedule_failed", "user_id": user_id, "reminder_id": reminder_id, "error": str(exc)},
-        )
-    return _serialize_reminder_row(row)
-
-
-@app.patch("/users/{user_id}/reminders/{reminder_id}", response_model=Dict[str, Any])
-async def update_user_reminder(
-    user_id: int,
-    reminder_id: int,
-    payload: ReminderUpdate,
-    db: databases.Database = Depends(get_database),
-    current_user: Dict[str, Any] = Depends(get_current_user),
-):
-    user_id = current_user["id"]
-    require_same_user(user_id, current_user)
-    update_values: Dict[str, Any] = {}
-    if payload.label is not None:
-        update_values["label"] = payload.label
-    if payload.description is not None:
-        update_values["description"] = payload.description
-    if payload.summary is not None:
-        update_values["summary"] = payload.summary
-    if payload.remind_at is not None:
-        update_values["remind_at"] = payload.remind_at
-    if payload.status is not None:
-        update_values["status"] = payload.status
-    if payload.delivery_mode is not None:
-        update_values["delivery_mode"] = payload.delivery_mode
-    if payload.metadata is not None:
-        update_values["metadata"] = payload.metadata
-
-    existing = await db.fetch_one(
-        reminders.select().where(
-            reminders.c.id == reminder_id,
-            reminders.c.user_id == user_id,
-        )
-    )
-    if not existing:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reminder not found")
-
-    if not update_values:
-        return _serialize_reminder_row(existing)
-
-    update_values["updated_at"] = utcnow()
-
-    await db.execute(
-        reminders.update()
-        .where(reminders.c.id == reminder_id, reminders.c.user_id == user_id)
-        .values(**update_values)
-    )
-    row = await db.fetch_one(
-        reminders.select().where(
-            reminders.c.id == reminder_id,
-            reminders.c.user_id == user_id,
-        )
-    )
-    if not row:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reminder not found after update")
-    try:
-        global reminder_scheduler
-        if reminder_scheduler is not None:
-            normalized_status = (update_values.get("status") or existing.get("status") or "").strip().lower()
-            if normalized_status != "pending":
-                await reminder_scheduler.cancel_job(user_id=user_id, reminder_id=reminder_id)
-            else:
-                remind_at_value = update_values.get("remind_at") or existing.get("remind_at")
-                if isinstance(remind_at_value, str):
-                    try:
-                        remind_at_value = datetime.fromisoformat(remind_at_value.replace("Z", "+00:00"))
-                    except Exception:
-                        remind_at_value = None
-                await reminder_scheduler.refresh_job(user_id=user_id, reminder_id=reminder_id, remind_at=remind_at_value)
-    except Exception as exc:  # pragma: no cover
-        api_logger.warning(
-            "Failed to reschedule reminder",
-            extra={"event_type": "reminder_reschedule_failed", "user_id": user_id, "reminder_id": reminder_id, "error": str(exc)},
-        )
-    return _serialize_reminder_row(row)
-
-
-@app.delete(
-    "/users/{user_id}/reminders/{reminder_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-)
-async def delete_user_reminder(
-    user_id: int,
-    reminder_id: int,
-    db: databases.Database = Depends(get_database),
-    current_user: Dict[str, Any] = Depends(get_current_user),
-):
-    user_id = current_user["id"]
-    require_same_user(user_id, current_user)
-    api_logger.info(f"DELETE reminder request: user_id={user_id}, reminder_id={reminder_id}")
-    existing = await db.fetch_one(
-        reminders.select().where(
-            reminders.c.id == reminder_id,
-            reminders.c.user_id == user_id,
-        )
-    )
-    if not existing:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reminder not found")
-
-    try:
-        global reminder_scheduler
-        if reminder_scheduler is not None:
-            await reminder_scheduler.cancel_job(user_id=user_id, reminder_id=reminder_id)
-    except Exception:  # pragma: no cover
-        pass
-
-    await db.execute(
-        reminders.delete().where(
-            reminders.c.id == reminder_id,
-            reminders.c.user_id == user_id,
-        )
-    )
-
 
 @app.get("/users/{user_id}/conversations", response_model=List[Dict[str, Any]])
 async def list_user_conversations(
@@ -9992,102 +9690,6 @@ async def list_user_conversations(
     except Exception as error:
         api_logger.error(f"Failed to list conversations from local database: {error}", exc_info=True)
         return []
-
-
-@app.post("/users/{user_id}/calendar-events", response_model=CalendarEvent, status_code=status.HTTP_201_CREATED)
-async def create_calendar_event(
-    user_id: int,
-    event: CalendarEventCreate,
-    current_user: Dict[str, Any] = Depends(get_current_user),
-    db: databases.Database = Depends(get_database)
-):
-    user_id = current_user["id"]
-    require_same_user(user_id, current_user)
-    now = utcnow()
-    # Supabase-first create.
-    # Fallback to local SQLite.
-    event_id = await db.execute(
-        calendar_events.insert().values(
-            user_id=user_id,
-            calendar_id=event.calendar_id,
-            title=event.title,
-            description=event.description,
-            start_time=event.start_time,
-            end_time=event.end_time,
-            color=event.color,
-            created_at=now,
-        )
-    )
-    query = calendar_events.select().where(calendar_events.c.id == event_id)
-    return await db.fetch_one(query)
-
-
-@app.patch("/users/{user_id}/calendar-events/{event_id}", response_model=CalendarEvent)
-async def update_calendar_event(
-    user_id: int,
-    event_id: int,
-    event_update: CalendarEventUpdate,
-    db: databases.Database = Depends(get_database),
-    current_user: Dict[str, Any] = Depends(get_current_user),
-):
-    user_id = current_user["id"]
-    require_same_user(user_id, current_user)
-    update_data = event_update.dict(exclude_unset=True)
-
-    sqlite_update_data: Dict[str, Any] = {}
-    if update_data:
-         # Filter out fields that don't exist on the local SQLite table
-        allowed_sqlite_keys = set(calendar_events.c.keys())
-        sqlite_update_data = {
-            key: value for key, value in update_data.items() if key in allowed_sqlite_keys
-        }
-
-    existing = await db.fetch_one(
-        calendar_events.select().where(
-            (calendar_events.c.id == event_id) & (calendar_events.c.user_id == user_id)
-        )
-    )
-    if not existing:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
-
-    if not sqlite_update_data:
-        return existing
-
-    await db.execute(
-        calendar_events.update()
-        .where((calendar_events.c.id == event_id) & (calendar_events.c.user_id == user_id))
-        .values(**sqlite_update_data)
-    )
-    query = calendar_events.select().where(calendar_events.c.id == event_id)
-    updated = await db.fetch_one(query)
-    if not updated:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
-    return updated
-
-
-@app.delete("/users/{user_id}/calendar-events/{event_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_calendar_event(
-    user_id: int,
-    event_id: int,
-    db: databases.Database = Depends(get_database),
-    current_user: Dict[str, Any] = Depends(get_current_user),
-):
-    user_id = current_user["id"]
-    require_same_user(user_id, current_user)
-    existing = await db.fetch_one(
-        calendar_events.select().where(
-            (calendar_events.c.id == event_id) & (calendar_events.c.user_id == user_id)
-        )
-    )
-    if not existing:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
-
-    await db.execute(
-        calendar_events.delete().where(
-            (calendar_events.c.id == event_id) & (calendar_events.c.user_id == user_id)
-        )
-    )
-    return None
 
 
 # Dashboard API endpoints
@@ -10580,8 +10182,14 @@ async def handle_payment_notification(notification: MidtransNotification, backgr
                 # (e.g., conversation token budget and model access).
                 try:
                     updated_user = await database.fetch_one(users.select().where(users.c.id == user_id))
-                    if updated_user and updated_user.get("auth_user_id"):
-                        auth_user_id = str(updated_user["auth_user_id"])
+                    auth_user_id_value = None
+                    if updated_user:
+                        try:
+                            auth_user_id_value = updated_user["auth_user_id"]
+                        except Exception:
+                            auth_user_id_value = None
+                    if auth_user_id_value:
+                        auth_user_id = str(auth_user_id_value)
                         invalidate_user_cache(auth_user_id)
                         await invalidate_user_cache_redis(auth_user_id)
                 except Exception as exc:
