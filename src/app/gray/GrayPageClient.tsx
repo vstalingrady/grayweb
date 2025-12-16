@@ -740,8 +740,8 @@ function GrayPageClientInner({
     if (nickname && nickname.length > 0) {
       return nickname;
     }
-    return formatDisplayName(user?.full_name, user?.email);
-  }, [userLoading, user?.email, user?.full_name, user?.personalization_nickname]);
+    return formatDisplayName(user?.full_name);
+  }, [userLoading, user?.full_name, user?.personalization_nickname]);
 
   const viewerAvatarUrl =
     user?.profile_picture_url && user.profile_picture_url.trim().length > 0

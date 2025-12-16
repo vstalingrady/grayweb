@@ -1445,12 +1445,7 @@ async def _replace_general_conversation_history(user_id: int, history: List[Dict
 # _delete_general_conversation_history stub removed (async version is the real implementation)
 
 
-def _delete_supabase_user_records(user_id: int) -> None:
-    """
-    Backwards-compatible wrapper that delegates to the shared conversation_store
-    implementation. Kept here so callers in main.py do not need to change.
-    """
-    delete_supabase_user_records(user_id)
+# _delete_supabase_user_records wrapper is now imported directly from core.conversation_store
 
 
 async def _ensure_user_data_record(user_identifier: int) -> Optional[int]:
@@ -1528,25 +1523,7 @@ async def _ensure_user_data_record(user_identifier: int) -> Optional[int]:
 
 # Removed _ensure_supabase_thread_exists as Supabase data usage is deprecated.
 
-
-def _deserialize_proactivity_settings_payload(payload: Any) -> Optional[ProactivitySettings]:
-    if payload is None:
-        return None
-    candidate: Any = payload
-    if isinstance(candidate, str):
-        candidate = _parse_json_field(candidate)
-    if not isinstance(candidate, dict):
-        return None
-    try:
-        return ProactivitySettings.model_validate(candidate)
-    except Exception as e:
-        # Log deserialization errors for debugging
-        api_logger.warning(f"Failed to deserialize proactivity settings: {e}", extra={
-            "event_type": "proactivity_settings_deserialization_error",
-            "error": str(e),
-            **_payload_log_summary(candidate)
-        })
-        return None
+# _deserialize_proactivity_settings_payload removed (dead code - never used)
 
 
 # _payload_log_summary is now imported from core.log_utils
@@ -7119,7 +7096,7 @@ async def delete_user_account(
     
     api_logger.info(f"Processing account deletion for user {user_id} ({user_email})", extra={"user_id": user_id, "email": user_email, "event_type": "account_deletion_start"})
 
-    _delete_supabase_user_records(user_id)
+    delete_supabase_user_records(user_id)
 
     # Delete from Supabase Auth using a service-role client when available
     admin_client = supabase_admin or supabase

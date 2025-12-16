@@ -30,9 +30,7 @@ export async function updateSession(request: NextRequest) {
     // IMPORTANT: Do NOT use getSession() here - it doesn't validate the JWT.
     // Use getUser() which calls getClaims() internally for secure validation.
     // https://supabase.com/docs/guides/auth/server-side/creating-a-client
-    const {
-        data: { user },
-    } = await supabase.auth.getUser()
+    await supabase.auth.getUser()
 
     return supabaseResponse
 }
