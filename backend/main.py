@@ -773,7 +773,20 @@ try:
 except ImportError:
     from core.title_generator import generate_chat_title_inline as _generate_chat_title_inline  # type: ignore
 
+# Media attachments (extracted from main.py)
+try:
+    from backend.core.media_attachments import (
+        resolve_media_attachments as _resolve_media_attachments,
+        generate_image_descriptions as _generate_image_descriptions,
+    )
+except ImportError:
+    from core.media_attachments import (  # type: ignore
+        resolve_media_attachments as _resolve_media_attachments,
+        generate_image_descriptions as _generate_image_descriptions,
+    )
+
 load_dotenv(ROOT_DIR / ".env")
+
 
 SUPABASE_POOLER_HOST = os.getenv("SUPABASE_POOLER_HOST", "aws-1-ap-south-1.pooler.supabase.com")
 SUPABASE_POOLER_PORT = int(os.getenv("SUPABASE_POOLER_PORT", "6543"))
@@ -2742,124 +2755,11 @@ def _format_tool_results_for_context(tool_results: List[Dict[str, Any]]) -> str:
     
     return "\n".join(parts)
 
-
-async def _resolve_media_attachments(
-    db: databases.Database,
-    attachment_specs: Optional[List[ChatAttachment]],
-    user_id: int,
-) -> List[GeminiAttachment]:
-    if not attachment_specs:
-        return []
-
-    attachment_ids = [attachment.id for attachment in attachment_specs]
-    if not attachment_ids:
-        return []
-
-    query = media_uploads.select().where(
-        (media_uploads.c.id.in_(attachment_ids))
-        & (media_uploads.c.user_id == user_id)
-    )
-    rows = await db.fetch_all(query)
-    records = {row["id"]: row for row in rows}
-
-    missing = [str(attachment_id) for attachment_id in attachment_ids if attachment_id not in records]
-    if missing:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Attachment(s) not found: {', '.join(missing)}",
-        )
-
-    attachments: List[GeminiAttachment] = []
-    for attachment_id in attachment_ids:
-        record = records[attachment_id]
-        storage_path_value = record["storage_path"]
-        storage_path = _resolve_storage_path_from_record(str(storage_path_value))
-        if not storage_path.exists():
-            raise HTTPException(
-                status_code=status.HTTP_410_GONE,
-                detail="Attachment file is no longer available.",
-            )
-        try:
-            data = storage_path.read_bytes()
-        except OSError as error:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to read attachment: {error}",
-            ) from error
-
-        attachments.append(
-            GeminiAttachment(
-                data=data,
-                mime_type=record["mime_type"],
-                filename=record["filename"],
-            )
-        )
-
-    return attachments
-
-
-async def _generate_image_descriptions(
-    attachments: List[GeminiAttachment],
-) -> str:
-    """Generate text descriptions of images using Gemini Flash Lite.
-    
-    This is used when sending messages to non-vision models (like DeepSeek)
-    so they can understand what images the user sent.
-    
-    Args:
-        attachments: List of GeminiAttachment objects with image data
-        
-    Returns:
-        A formatted string with image descriptions, or empty string if no images
-    """
-    if not attachments or not GEMINI_SERVICE.available:
-        return ""
-    
-    # Filter to only image attachments
-    image_attachments = [
-        a for a in attachments 
-        if a.mime_type and a.mime_type.startswith("image/")
-    ]
-    if not image_attachments:
-        return ""
-    
-    descriptions = []
-    for i, attachment in enumerate(image_attachments, 1):
-        try:
-            # Use Gemini Flash Lite for fast, cheap description
-            response = await GEMINI_SERVICE.generate(
-                message="1. Describe this image in 1-2 sentences. 2. If there is ANY text in the image, transcribe it verbatim. Format: [Description]: <text> [Transcription]: <text>",
-                conversation_history=None,
-                workspace_context=None,
-                system_prompt="You are an image analysis assistant. Always separate your response into Description and Transcription sections. If no text is visible, write 'None' for Transcription.",
-                time_context=None,
-                model=GEMINI_LIGHT_MODEL,
-                attachments=[attachment],
-            )
-            
-            if response.candidates:
-                text = _candidate_text(response.candidates[0])
-                if text:
-                    filename = attachment.filename or f"Image {i}"
-                    descriptions.append(f"[{filename} Analysis]:\n{text.strip()}")
-                    api_logger.info(
-                        f"Generated image description for {filename}",
-                        extra={"event_type": "image_description_generated", "image_filename": filename}
-                    )
-        except Exception as e:
-            api_logger.warning(
-                f"Failed to generate image description: {e}",
-                extra={"event_type": "image_description_error", "error": str(e)}
-            )
-            continue
-    
-    if descriptions:
-        header = "[User attached images - descriptions for context]"
-        footer = "[End of image descriptions]"
-        return f"{header}\n" + "\n".join(descriptions) + f"\n{footer}\n\n"
-    return ""
+# _resolve_media_attachments and _generate_image_descriptions
+# are now imported from core.media_attachments
 
 # Dashboard helpers extracted to core.dashboard_helpers
+
 
 # API Routes
 

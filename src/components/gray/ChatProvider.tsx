@@ -1618,25 +1618,16 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       return baseSession;
     },
     [
-      appendMessage,
       persistSessions,
-      updateMessage,
-      updateMessageThrottled,
-      updateSession,
-      resolveChatUser,
-      workspaceContextValue,
       queueConversationTitleSync,
-      applyAutoTitle,
       schedulePendingSeedCleanup,
-      personalizedSystemPrompt,
-      markAutoStreamTriggered,
-      shouldAttachWorkspaceContextForSession,
-      webSearchEnabled,
-      ensureGeneralSession
+      setSessions,
+      ensureGeneralSession,
     ]
   );
 
-  const startQuestionnaire = useCallback((_mode: "quick" | "deep") => {
+  const startQuestionnaire = useCallback((mode: "quick" | "deep") => {
+    void mode;
     // Premade questionnaire messaging has been retired; keep state reset.
     setQuestionnaireSession(null);
   }, []);
@@ -1716,7 +1707,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
         setQuestionnaireSession(nextSession);
       }
     },
-    [appendMessage, ensureGeneralSession, updateSession]
+    [appendMessage, ensureGeneralSession, updateSession, updateUser]
   );
 
   const sendGeneralMessage = useCallback(
@@ -1754,7 +1745,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       markAutoStreamTriggered(generalSession.id, tempUserMessageId);
 
       // 1) Optimistically append user message immediately with the temp ID
-      const userMessage = appendMessage(
+      appendMessage(
         generalSession.id,
         "user",
         trimmed,
@@ -1878,9 +1869,8 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
                   ? delta
                   : accumulated + delta;
                 const extraction = extractGrayRemindersFromText(accumulated);
-                const content = extraction.cleanText;
                 if (assistantMessageId) {
-                  const updates: Partial<ChatMessage> = { content: accumulated };
+                  const updates: Partial<ChatMessage> = { content: extraction.cleanText };
                   // Persist reasoning duration on first token update
                   if (!didReceiveToken && reasoningStartTimeRef.current) {
                     const elapsed = (Date.now() - reasoningStartTimeRef.current) / 1000;
@@ -1889,7 +1879,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
                     updates.reasoningSeconds = elapsed;
                     didReceiveToken = true;
                   }
-                  updateMessage(generalSession.id, assistantMessageId, updates);
+                  updateMessageThrottled(generalSession.id, assistantMessageId, updates);
                 }
                 continue;
               }
@@ -2030,10 +2020,10 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       appendMessage,
       ensureGeneralSession,
       updateMessage,
+      updateMessageThrottled,
       updateSession,
       resolveChatUser,
       workspaceContextValue,
-      personalizedSystemPrompt,
       applyAutoTitle,
       clearAttachments,
       mapPayload, // Replaced buildAutoMapPayload
@@ -2044,11 +2034,12 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       remindersEnabled, // Added
       markHasSeenGeneralChat,
       refreshUser,
+      markAutoStreamTriggered,
       modelTier,
+      selectedModelId,
       defaultSystemPrompt,
       questionnaireSession,
       handleQuestionnaireResponse,
-      endSearchTracking,
     ]
   );
 
@@ -2114,7 +2105,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
 
       return normalized;
     },
-    [persistSessions]
+    [persistSessions, setSessions]
   );
 
   const generalSessionId = useMemo(() => {
@@ -2548,7 +2539,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
         persistedReminderKeysRef.current.add(reminderKey);
         apiService
           .createReminder(user.id, payload)
-          .then((created) => {
+          .then(() => {
             // Dispatch custom event so useWorkspaceData can refresh reminder list
             if (typeof window !== "undefined") {
               window.dispatchEvent(new CustomEvent(WORKSPACE_REFRESH_EVENT));
