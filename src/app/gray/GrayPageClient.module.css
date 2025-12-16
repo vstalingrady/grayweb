@@ -660,24 +660,24 @@
     linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(0, 0, 0, 0.55));
 }
 
-/* Pioneer plan variant - gold tinted */
+/* Pioneer plan variant - matching /pricing page theme */
 .profileMenuUpgradeCard[data-variant="pioneer"] {
-  border-color: rgba(255, 200, 100, 0.25);
-  background: linear-gradient(165deg, rgba(200, 150, 50, 0.15) 0%, rgba(20, 15, 10, 0.95) 100%);
+  border-color: rgba(226, 229, 238, 0.25);
+  background: linear-gradient(158deg, rgba(226, 229, 238, 0.15) 0%, rgba(26, 26, 36, 0.95) 100%);
 }
 
 .profileMenuUpgradeCard[data-variant="pioneer"]::before {
   background:
-    radial-gradient(140% 100% at 50% 0%, rgba(255, 200, 100, 0.18), transparent 55%),
-    linear-gradient(180deg, rgba(160, 120, 40, 0.08), rgba(0, 0, 0, 0.55));
+    radial-gradient(140% 100% at 50% 0%, rgba(226, 229, 238, 0.18), transparent 55%),
+    linear-gradient(180deg, rgba(200, 205, 215, 0.08), rgba(0, 0, 0, 0.55));
 }
 
 .profileMenuUpgradeCard[data-variant="pioneer"] .profileMenuUpgradeTitle {
-  color: rgba(255, 210, 130, 0.95);
+  color: rgba(255, 255, 255, 0.95);
 }
 
 .profileMenuUpgradeCard[data-variant="pioneer"] .profileMenuUpgradeSubtext {
-  color: rgba(255, 210, 130, 0.7);
+  color: rgba(220, 225, 235, 0.7);
 }
 
 .profileMenuIcon {
