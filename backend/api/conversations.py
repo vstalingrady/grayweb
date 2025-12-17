@@ -142,8 +142,10 @@ async def create_conversation_message(
         try:
             from chat_cache import invalidate_conversation_cache as invalidate_cache
             await invalidate_cache(conversation_id)
-        except Exception:
-            pass  # Best effort cache invalidation
+        except ImportError:
+            pass  # Cache module not available
+        except Exception as e:
+            api_logger.debug(f"Cache invalidation failed for {conversation_id}: {e}")
         
         return {"status": "success"}
     except Exception as e:
@@ -190,7 +192,7 @@ async def get_conversation(
         
         # Try Redis cache first
         try:
-            from chat_cache import get_cached_messages, cache_messages
+            from chat_cache import get_cached_messages
             cached = await get_cached_messages(conversation_id)
             if cached is not None:
                 return cached
@@ -203,11 +205,12 @@ async def get_conversation(
         # Cache the result
         try:
             from chat_cache import cache_messages
-            if history and isinstance(history, (list, dict)):
-                messages = history.get("messages", history) if isinstance(history, dict) else history
-                await cache_messages(conversation_id, messages if isinstance(messages, list) else [])
-        except Exception:
-            pass  # Best effort caching
+            if isinstance(history, list):
+                await cache_messages(conversation_id, history)
+        except ImportError:
+            pass  # Cache module not available
+        except Exception as e:
+            api_logger.debug(f"Cache write failed for {conversation_id}: {e}")
         
         return history
     except Exception as e:

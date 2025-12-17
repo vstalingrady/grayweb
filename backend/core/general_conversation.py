@@ -71,74 +71,10 @@ def _datetime_to_ms(dt) -> int:
     return datetime_to_ms(dt)
 
 
-# User data cache
-_USER_DATA_CACHE: Dict[int, int] = {}
-
-
-async def ensure_user_data_record(user_identifier: int) -> Optional[int]:
-    """Return the user_data.id for the provided identifier, creating it if needed."""
-    if user_identifier is None:
-        return None
-
-    database, _, user_data = _get_database()
-    utcnow = _get_utcnow()
-    logger = _get_logger()
-
-    cached = _USER_DATA_CACHE.get(user_identifier)
-    if cached is not None:
-        # Ensure the cached record still exists (e.g., after DB resets)
-        existing_cached = await database.fetch_one(user_data.select().where(user_data.c.id == cached))
-        if existing_cached:
-            return cached
-        _USER_DATA_CACHE.pop(user_identifier, None)
-
-    try:
-        # Try to fetch existing record
-        query = user_data.select().where(user_data.c.user_identifier == user_identifier)
-        row = await database.fetch_one(query)
-        
-        if row:
-            user_data_id = row["id"]
-            _USER_DATA_CACHE[user_identifier] = user_data_id
-            return user_data_id
-            
-        # Create new record
-        insert_query = user_data.insert().values(
-            user_identifier=user_identifier,
-            created_at=utcnow(),
-            updated_at=utcnow()
-        )
-        user_data_id = await database.execute(insert_query)
-        
-        if user_data_id:
-            _USER_DATA_CACHE[user_identifier] = user_data_id
-            return user_data_id
-            
-    except Exception as error:
-        # Race condition: another request might have created the record between our check and insert.
-        import asyncio
-
-        for delay_seconds in (0.0, 0.01, 0.02, 0.05):
-            if delay_seconds:
-                await asyncio.sleep(delay_seconds)
-            try:
-                row = await database.fetch_one(
-                    user_data.select().where(user_data.c.user_identifier == user_identifier)
-                )
-            except Exception:
-                row = None
-            if row:
-                user_data_id = row["id"]
-                _USER_DATA_CACHE[user_identifier] = user_data_id
-                return user_data_id
-            
-        logger.error(
-            f"Error ensuring user data record: {error}",
-            extra={"event_type": "user_data_ensure_failed"},
-        )
-        return None
-    
-    return None
+try:
+    from backend.core.conversation_store import ensure_user_data_record
+except ImportError:  # pragma: no cover
+    from core.conversation_store import ensure_user_data_record  # type: ignore
 
 
 async def load_general_conversation_history(user_id: int) -> List[Dict[str, Any]]:

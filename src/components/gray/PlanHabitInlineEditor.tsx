@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { ArrowRight, Bell, Calendar, ChevronDown, ChevronLeft, ChevronRight, Clock, Plus, X } from "lucide-react";
+import { ArrowRight, Calendar, ChevronDown, ChevronLeft, ChevronRight, Plus, X } from "lucide-react";
 import calendarStyles from "@/components/calendar/GrayDashboardCalendar.module.css";
 import { MiniMonth } from "@/components/calendar/MiniMonth";
 import { useUser } from "@/contexts/UserContext";
@@ -26,8 +26,13 @@ import {
   startOfMonth,
   toDateTimeLocalString,
 } from "./planHabitInlineEditor/dateUtils";
-
-type ReminderPreset = "none" | "0" | "5" | "10" | "15" | "30" | "60" | "1440" | "custom";
+import { formatInlineDurationLabel } from "./planHabitInlineEditor/timeUtils";
+import {
+  deriveReminderPresetFromReminderAt,
+  parseReminderLeadMinutes,
+  type ReminderPreset,
+} from "./planHabitInlineEditor/reminderUtils";
+import { ReminderControls } from "./planHabitInlineEditor/ReminderControls";
 
 type PlanHabitInlineEditorProps = {
   type: "plan" | "habit";
@@ -63,8 +68,6 @@ export function PlanHabitInlineEditor({
   const colorPickerRef = useRef<HTMLDivElement | null>(null);
   const colorPickerTriggerRef = useRef<HTMLButtonElement | null>(null);
   const colorPickerPopoverRef = useRef<HTMLDivElement | null>(null);
-  const reminderMenuRef = useRef<HTMLDivElement | null>(null);
-  const reminderTriggerRef = useRef<HTMLButtonElement | null>(null);
 
   const [title, setTitle] = useState("");
   const [detailsValue, setDetailsValue] = useState("");
@@ -80,9 +83,6 @@ export function PlanHabitInlineEditor({
   const [reminderPreset, setReminderPreset] = useState<ReminderPreset>("none");
   const [isReminderMenuOpen, setIsReminderMenuOpen] = useState(false);
   const [customReminderMinutes, setCustomReminderMinutes] = useState<string>("");
-  const [reminderMenuPosition, setReminderMenuPosition] = useState<{ top: number; left: number; width: number } | null>(
-    null
-  );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const headerLabel = useMemo(() => t("Events"), [t]);
@@ -148,32 +148,8 @@ export function PlanHabitInlineEditor({
     setHexDraft(color);
   }, [color]);
 
-  const reminderOptions = useMemo(
-    () =>
-      [
-        { value: "none", label: t("No reminder") },
-        { value: "0", label: t("When event starts") },
-        { value: "5", label: t("5 minutes before") },
-        { value: "10", label: t("10 minutes before") },
-        { value: "15", label: t("15 minutes before") },
-        { value: "30", label: t("30 minutes before") },
-        { value: "60", label: t("1 hour before") },
-        { value: "1440", label: t("1 day before") },
-        { value: "custom", label: t("Custom...") },
-      ] satisfies ReadonlyArray<{ value: ReminderPreset; label: string }>,
-    [t]
-  );
-
-  const reminderLabel = useMemo(() => {
-    return reminderOptions.find((option) => option.value === reminderPreset)?.label ?? t("No reminder");
-  }, [reminderOptions, reminderPreset, t]);
-
   const closeColorPicker = useCallback(() => {
     setIsColorPickerOpen(false);
-  }, []);
-
-  const closeReminderMenu = useCallback(() => {
-    setIsReminderMenuOpen(false);
   }, []);
 
   const colorPickerDismissRefs = useMemo(
@@ -186,77 +162,6 @@ export function PlanHabitInlineEditor({
     ignoreRefs: colorPickerDismissRefs,
     onDismiss: closeColorPicker,
   });
-
-  const reminderMenuDismissRefs = useMemo(() => [reminderTriggerRef, reminderMenuRef], []);
-
-  const handleReminderMenuEscape = useCallback(() => {
-    closeReminderMenu();
-    reminderTriggerRef.current?.focus();
-  }, [closeReminderMenu]);
-
-  useDismissableLayer({
-    isOpen: isReminderMenuOpen,
-    ignoreRefs: reminderMenuDismissRefs,
-    onDismiss: closeReminderMenu,
-    onEscape: handleReminderMenuEscape,
-  });
-
-  useEffect(() => {
-    if (!isReminderMenuOpen) return;
-    const focusTarget = () => {
-      const optionButton = reminderMenuRef.current?.querySelector<HTMLButtonElement>(
-        `[data-reminder-option="${reminderPreset}"]`
-      );
-      optionButton?.focus();
-    };
-    const handle = requestAnimationFrame(focusTarget);
-    return () => cancelAnimationFrame(handle);
-  }, [isReminderMenuOpen, reminderPreset]);
-
-  const updateReminderMenuPosition = useCallback(() => {
-    if (!isReminderMenuOpen) return;
-    const triggerRect = reminderTriggerRef.current?.getBoundingClientRect();
-    const menuRect = reminderMenuRef.current?.getBoundingClientRect();
-    if (!triggerRect || !menuRect) return;
-
-    const viewportPadding = 12;
-    const gap = 8;
-    const maxWidth = Math.max(0, window.innerWidth - viewportPadding * 2);
-    const desiredWidth = Math.max(220, triggerRect.width);
-    const width = Math.min(desiredWidth, maxWidth);
-    const left = clamp(triggerRect.left, viewportPadding, window.innerWidth - viewportPadding - width);
-
-    const spaceBelow = window.innerHeight - triggerRect.bottom - viewportPadding;
-    const spaceAbove = triggerRect.top - viewportPadding;
-    const height = menuRect.height;
-    const shouldOpenUp = spaceBelow < height && spaceAbove > spaceBelow;
-    const top = shouldOpenUp ? Math.max(viewportPadding, triggerRect.top - gap - height) : triggerRect.bottom + gap;
-
-    setReminderMenuPosition({ top, left, width });
-  }, [isReminderMenuOpen]);
-
-  useLayoutEffect(() => {
-    if (!isReminderMenuOpen) {
-      setReminderMenuPosition(null);
-      return;
-    }
-    updateReminderMenuPosition();
-  }, [isReminderMenuOpen, updateReminderMenuPosition]);
-
-  useEffect(() => {
-    if (!isReminderMenuOpen) return;
-
-    const scheduleUpdate = () => {
-      requestAnimationFrame(updateReminderMenuPosition);
-    };
-
-    window.addEventListener("resize", scheduleUpdate);
-    window.addEventListener("scroll", scheduleUpdate, true);
-    return () => {
-      window.removeEventListener("resize", scheduleUpdate);
-      window.removeEventListener("scroll", scheduleUpdate, true);
-    };
-  }, [isReminderMenuOpen, updateReminderMenuPosition]);
 
   useLayoutEffect(() => {
     if (!isColorPickerOpen) {
@@ -305,38 +210,12 @@ export function PlanHabitInlineEditor({
       return;
     }
 
-    const reminderAt = editingItem.reminderAt;
-    if (!reminderAt) {
-      setReminderPreset("none");
-      setCustomReminderMinutes("");
-      return;
-    }
-
-    const remindAtMs = Date.parse(reminderAt);
-    if (!Number.isFinite(remindAtMs)) {
-      setReminderPreset("none");
-      setCustomReminderMinutes("");
-      return;
-    }
-
-    const deltaMinutes = Math.max(0, Math.round((eventStart.getTime() - remindAtMs) / 60000));
-    const presets: Array<Exclude<typeof reminderPreset, "custom" | "none">> = [
-      "0",
-      "5",
-      "10",
-      "15",
-      "30",
-      "60",
-      "1440",
-    ];
-    const matched = presets.find((value) => Number(value) === deltaMinutes);
-    if (matched) {
-      setReminderPreset(matched);
-      setCustomReminderMinutes("");
-    } else {
-      setReminderPreset("custom");
-      setCustomReminderMinutes(String(deltaMinutes));
-    }
+    const derived = deriveReminderPresetFromReminderAt({
+      reminderAt: editingItem.reminderAt,
+      eventStart,
+    });
+    setReminderPreset(derived.preset);
+    setCustomReminderMinutes(derived.customMinutes);
   }, [eventStart, habitToEdit, planToEdit]);
 
   useEffect(() => {
@@ -378,20 +257,7 @@ export function PlanHabitInlineEditor({
       const trimmed = title.trim();
       const details = detailsValue.trim();
       const descriptionValue = details.length > 0 ? details : null;
-      const resolveReminderLeadMinutes = (): number | null => {
-        if (reminderPreset === "none") {
-          return null;
-        }
-        if (reminderPreset === "custom") {
-          const parsed = Number.parseInt(customReminderMinutes.trim(), 10);
-          if (!Number.isFinite(parsed) || parsed < 0) {
-            return null;
-          }
-          return parsed;
-        }
-        return Number.parseInt(reminderPreset, 10);
-      };
-      const reminderLeadMinutes = resolveReminderLeadMinutes();
+      const reminderLeadMinutes = parseReminderLeadMinutes(reminderPreset, customReminderMinutes);
       const reminderAtIso =
         reminderLeadMinutes === null
           ? null
@@ -586,31 +452,8 @@ export function PlanHabitInlineEditor({
               />
             </div>
 	            <span className={calendarStyles.composerDuration}>
-	              {(() => {
-	                const start = new Date(`2000-01-01T${startTime}`);
-	                const end = new Date(`2000-01-01T${endTime}`);
-	                let diff = end.getTime() - start.getTime();
-	                if (!Number.isFinite(diff)) {
-	                  return "";
-	                }
-	                if (diff < 0) {
-	                  diff += 24 * 60 * 60 * 1000;
-	                }
-	                const totalMinutes = Math.floor(diff / 60000);
-	                if (!Number.isFinite(totalMinutes) || totalMinutes <= 0) {
-	                  return "";
-	                }
-	                const hours = Math.floor(totalMinutes / 60);
-	                const minutes = totalMinutes % 60;
-	                if (hours <= 0) {
-	                  return `${totalMinutes}m`;
-	                }
-	                if (minutes === 0) {
-	                  return `${hours}h`;
-	                }
-	                return `${hours}h ${minutes}m`;
-	              })()}
-		            </span>
+	              {formatInlineDurationLabel(startTime, endTime)}
+	            </span>
 		          </div>
           <div className={calendarStyles.composerTimeMetaRow}>
             <div className={calendarStyles.composerDateRow}>
@@ -646,135 +489,16 @@ export function PlanHabitInlineEditor({
               </button>
             </div>
 
-            <div className={calendarStyles.composerInlineSelect}>
-              <button
-                type="button"
-                ref={reminderTriggerRef}
-                className={`${calendarStyles.composerDateTrigger} ${calendarStyles.composerInlineSelectTrigger}`}
-                onClick={() => {
-                  setIsDatePickerOpen(false);
-                  setIsReminderMenuOpen((previous) => !previous);
-                }}
-                aria-haspopup="listbox"
-                aria-expanded={isReminderMenuOpen ? "true" : "false"}
-                aria-label={t("Notification")}
-                disabled={isSubmitting}
-                onKeyDown={(event) => {
-                  if (event.key === "ArrowDown" || event.key === "Enter" || event.key === " ") {
-                    event.preventDefault();
-                    setIsReminderMenuOpen(true);
-                  }
-                }}
-              >
-                <Bell
-                  size={14}
-                  aria-hidden="true"
-                  className={calendarStyles.composerInlineControlIcon}
-                />
-                <span className={calendarStyles.composerInlineControlLabel}>{reminderLabel}</span>
-                <ChevronDown
-                  size={14}
-                  aria-hidden="true"
-                  className={calendarStyles.composerInlineControlChevron}
-                />
-              </button>
-              {isReminderMenuOpen ? (
-                <div
-                  ref={reminderMenuRef}
-                  className={calendarStyles.composerInlineSelectPopover}
-                  style={
-                    reminderMenuPosition
-                      ? {
-                        top: reminderMenuPosition.top,
-                        left: reminderMenuPosition.left,
-                        width: reminderMenuPosition.width,
-                      }
-                      : undefined
-                  }
-                  role="listbox"
-                  aria-label={t("Notification")}
-                  tabIndex={-1}
-                  onKeyDown={(event) => {
-                    const optionButtons = Array.from(
-                      reminderMenuRef.current?.querySelectorAll<HTMLButtonElement>(
-                        "button[data-reminder-option]"
-                      ) ?? []
-                    );
-                    if (optionButtons.length === 0) return;
-                    const activeIndex = optionButtons.findIndex((button) => button === document.activeElement);
-                    const selectedIndex = Math.max(
-                      0,
-                      reminderOptions.findIndex((option) => option.value === reminderPreset)
-                    );
-                    const currentIndex = activeIndex >= 0 ? activeIndex : selectedIndex;
-
-                    if (event.key === "Escape") {
-                      event.preventDefault();
-                      setIsReminderMenuOpen(false);
-                      reminderTriggerRef.current?.focus();
-                      return;
-                    }
-                    if (event.key === "ArrowDown") {
-                      event.preventDefault();
-                      optionButtons[(currentIndex + 1) % optionButtons.length]?.focus();
-                      return;
-                    }
-                    if (event.key === "ArrowUp") {
-                      event.preventDefault();
-                      optionButtons[(currentIndex - 1 + optionButtons.length) % optionButtons.length]?.focus();
-                      return;
-                    }
-                    if (event.key === "Home") {
-                      event.preventDefault();
-                      optionButtons[0]?.focus();
-                      return;
-                    }
-                    if (event.key === "End") {
-                      event.preventDefault();
-                      optionButtons[optionButtons.length - 1]?.focus();
-                    }
-                  }}
-                >
-                  {reminderOptions.map((option) => (
-                    <button
-                      key={option.value}
-                      type="button"
-                      role="option"
-                      aria-selected={option.value === reminderPreset}
-                      data-reminder-option={option.value}
-                      className={calendarStyles.composerInlineSelectOption}
-                      onClick={() => {
-                        setReminderPreset(option.value);
-                        setIsReminderMenuOpen(false);
-                        reminderTriggerRef.current?.focus();
-                      }}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-
-            {reminderPreset === "custom" ? (
-              <div className={calendarStyles.composerInlineNumber}>
-                <Clock size={14} aria-hidden="true" className={calendarStyles.composerInlineControlIcon} />
-                <input
-                  type="number"
-                  min={0}
-                  step={1}
-                  value={customReminderMinutes}
-                  onChange={(event) => setCustomReminderMinutes(event.target.value)}
-                  placeholder="30"
-                  aria-label={t("Minutes before")}
-                  className={calendarStyles.composerInlineNumberInput}
-                  disabled={isSubmitting}
-                />
-                <span className={calendarStyles.composerInlineNumberSuffix} aria-hidden="true">
-                  min
-                </span>
-              </div>
-            ) : null}
+            <ReminderControls
+              reminderPreset={reminderPreset}
+              setReminderPreset={setReminderPreset}
+              customReminderMinutes={customReminderMinutes}
+              setCustomReminderMinutes={setCustomReminderMinutes}
+              isSubmitting={isSubmitting}
+              isOpen={isReminderMenuOpen}
+              setIsOpen={setIsReminderMenuOpen}
+              onBeforeToggle={() => setIsDatePickerOpen(false)}
+            />
           </div>
         </div>
         <hr className={calendarStyles.composerSectionDivider} />

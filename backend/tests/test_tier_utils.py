@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from backend.model_access import coerce_model_for_tier
-from backend.tier_utils import normalize_plan_tier
+from backend.tier_utils import bootstrap_plan_tier, normalize_plan_tier
 
 
 def test_normalize_plan_tier_handles_standard_tiers() -> None:
@@ -23,3 +23,14 @@ def test_coerce_model_for_tier_treats_pro_as_voyager() -> None:
     assert effective_model == "anthropic/claude-sonnet-4.5"
     assert coerced is False
 
+
+def test_bootstrap_plan_tier_defaults_to_scout(monkeypatch) -> None:
+    monkeypatch.delenv("BOOTSTRAP_PIONEER_EMAILS", raising=False)
+    assert bootstrap_plan_tier("someone@example.com") == "scout"
+    assert bootstrap_plan_tier(None) == "scout"
+
+
+def test_bootstrap_plan_tier_respects_env_list(monkeypatch) -> None:
+    monkeypatch.setenv("BOOTSTRAP_PIONEER_EMAILS", "owner@example.com; other@example.com")
+    assert bootstrap_plan_tier("OWNER@example.com") == "pioneer"
+    assert bootstrap_plan_tier("random@example.com") == "scout"

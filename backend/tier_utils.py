@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import logging
+import os
+import re
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -66,3 +68,32 @@ def normalize_plan_tier(
     
     return normalized
 
+
+_BOOTSTRAP_PIONEER_EMAILS_ENV = "BOOTSTRAP_PIONEER_EMAILS"
+
+
+def bootstrap_plan_tier(email: Optional[str], *, default: str = "scout") -> str:
+    """
+    Return the initial plan tier to assign to a newly provisioned user.
+
+    This avoids hardcoding special-case emails in multiple places. To grant a
+    specific user pioneer automatically, set `BOOTSTRAP_PIONEER_EMAILS` to a
+    comma/space/semicolon separated list of emails.
+    """
+    normalized_default = normalize_plan_tier(default)
+    normalized_email = (email or "").strip().lower()
+    if not normalized_email:
+        return normalized_default
+
+    raw = os.getenv(_BOOTSTRAP_PIONEER_EMAILS_ENV, "")
+    if not raw.strip():
+        return normalized_default
+
+    candidates = {
+        entry.strip().lower()
+        for entry in re.split(r"[,\s;]+", raw)
+        if entry.strip()
+    }
+    if normalized_email in candidates:
+        return "pioneer"
+    return normalized_default

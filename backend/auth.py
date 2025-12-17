@@ -14,6 +14,11 @@ except Exception:  # pragma: no cover
 import time
 
 try:
+    from backend.tier_utils import bootstrap_plan_tier
+except Exception:  # pragma: no cover
+    from tier_utils import bootstrap_plan_tier  # type: ignore
+
+try:
     import jwt  # type: ignore
     from jwt import InvalidTokenError  # type: ignore
 except Exception:  # pragma: no cover - optional dependency
@@ -123,8 +128,8 @@ async def invalidate_user_cache_redis(auth_user_id: str):
             await _redis_client.connect()
         await _redis_client.delete_session(f"user:{auth_user_id}")
         logger.debug(f"[REDIS] Invalidated cache for user {auth_user_id}")
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"[REDIS] Cache invalidation failed for {auth_user_id}: {e}")
 
 
 def _decode_token_without_signature(token: str) -> Optional[Dict[str, Any]]:
@@ -141,7 +146,8 @@ def _decode_token_without_signature(token: str) -> Optional[Dict[str, Any]]:
         )
     except InvalidTokenError:
         return None
-    except Exception:
+    except Exception as e:
+        logger.debug(f"JWT decode failed unexpectedly: {e}")
         return None
 
 # Minimal initials helper to avoid circular import
@@ -347,8 +353,8 @@ async def verify_supabase_token(token: str) -> Dict[str, Any]:
                     return payload
             except InvalidTokenError as e:
                 logger.warning(f"Legacy JWT verification failed: {e}")
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Legacy JWT verification error: {e}")
         else:
             logger.debug("Skipping legacy JWT verification: SUPABASE_JWT_SECRET not configured")
 
@@ -502,10 +508,7 @@ async def get_current_user(
         try:
             now = utcnow()
             
-            # Enforce plan tier logic
-            assigned_plan_tier = "scout"
-            if email and email.lower().strip() == "vstalingrady@gmail.com":
-                assigned_plan_tier = "pioneer"
+            assigned_plan_tier = bootstrap_plan_tier(email)
                 
             insert_values = {
                 "email": email or f"missing-email-{auth_user_id}@example.com",

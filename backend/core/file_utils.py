@@ -352,7 +352,12 @@ async def persist_upload_file(
         except Exception:
             pass
 
-    scan_file_for_malware(storage_path)
+    if CLAMAV_SCAN_ENABLED and CLAMAV_SCAN_BINARY:
+        import asyncio
+
+        await asyncio.to_thread(scan_file_for_malware, storage_path)
+    else:
+        scan_file_for_malware(storage_path)
 
     return storage_path, resolved_mime, bytes_written, sanitized_name, storage_name
 

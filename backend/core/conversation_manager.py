@@ -78,12 +78,15 @@ def _is_valid_uuid(value):
 def _get_conversation_store_helpers():
     """Get conversation store helpers."""
     try:
+        from backend.core.chat_history import load_thread_history
+    except ImportError:  # pragma: no cover
+        from core.chat_history import load_thread_history  # type: ignore
+    try:
         from backend.core.conversation_store import (
             CONVERSATION_OWNER_CACHE,
             GENERAL_CONVERSATION_PREFIX,
             _handle_conversation_store_error,
             _general_conversation_user_id,
-            load_thread_history,
             append_to_conversation_cache,
         )
     except ImportError:
@@ -92,7 +95,6 @@ def _get_conversation_store_helpers():
             GENERAL_CONVERSATION_PREFIX,
             _handle_conversation_store_error,
             _general_conversation_user_id,
-            load_thread_history,
             append_to_conversation_cache,
         )
     return {

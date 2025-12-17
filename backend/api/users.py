@@ -41,6 +41,10 @@ from backend.auth import (
 from backend.time_utils import utcnow
 from backend.usage_tracker import UsageTracker
 from backend.logging_config import create_logger
+try:
+    from backend.tier_utils import bootstrap_plan_tier
+except ImportError:  # pragma: no cover
+    from tier_utils import bootstrap_plan_tier  # type: ignore
 
 try:
     from backend.core.rate_limit import limiter
@@ -102,11 +106,8 @@ async def create_user(
     initials = generate_initials(user.full_name)
     now = utcnow()
     
-    # Enforce plan tier logic: default to "scout", hardcode "pioneer" for specific user.
-    # We ignore the incoming user.plan_tier to prevent clients from setting it.
-    assigned_plan_tier = "scout"
-    if user.email.lower().strip() == "vstalingrady@gmail.com":
-        assigned_plan_tier = "pioneer"
+    # Ignore any incoming `user.plan_tier`; clients should not be able to self-assign tiers.
+    assigned_plan_tier = bootstrap_plan_tier(user.email)
 
     query = users.insert().values(
         email=user.email.lower(),

@@ -9,6 +9,7 @@ from typing import Optional
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.date import DateTrigger
+from apscheduler.jobstores.base import JobLookupError
 
 import databases
 
@@ -70,14 +71,15 @@ class ReminderSchedulerManager:
             if str(job.id).startswith("reminder:"):
                 try:
                     self.scheduler.remove_job(job.id)
-                except Exception:
-                    pass
+                except JobLookupError:
+                    pass  # Job already removed, expected
 
         for row in rows:
             try:
                 reminder_id = int(row["id"])
                 user_id = int(row["user_id"])
-            except Exception:
+            except (ValueError, KeyError, TypeError) as e:
+                logger.warning("Skipping malformed reminder row: %s", e)
                 continue
             remind_at = row.get("remind_at")
             await self.refresh_job(user_id=user_id, reminder_id=reminder_id, remind_at=remind_at)
@@ -91,8 +93,8 @@ class ReminderSchedulerManager:
         job_id = f"reminder:{user_id}:{reminder_id}"
         try:
             self.scheduler.remove_job(job_id)
-        except Exception:
-            pass
+        except JobLookupError:
+            pass  # Job doesn't exist, expected
 
         await self.engine._ensure_connection()
         if remind_at is None:
@@ -134,8 +136,8 @@ class ReminderSchedulerManager:
         job_id = f"reminder:{user_id}:{reminder_id}"
         try:
             self.scheduler.remove_job(job_id)
-        except Exception:
-            pass
+        except JobLookupError:
+            pass  # Job doesn't exist, expected
 
     async def _run_job(self, user_id: int, reminder_id: int) -> None:
         try:
