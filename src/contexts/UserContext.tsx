@@ -401,6 +401,9 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
     if (typeof userData.maps_enabled === 'boolean') {
       payload.maps_enabled = userData.maps_enabled;
     }
+    if (Object.prototype.hasOwnProperty.call(userData, 'preferred_model')) {
+      payload.preferred_model = userData.preferred_model ?? null;
+    }
     if (Object.prototype.hasOwnProperty.call(userData, 'visible_model_ids')) {
       payload.visible_model_ids = userData.visible_model_ids ?? null;
     }

@@ -59,6 +59,7 @@ async def stream_openrouter_response(
     - "reminders": Reminder/plan/habit cards
     - "usage": Usage statistics
     - "error": Error message
+    - "onboarding_complete": Signals that complete_onboarding was executed successfully
     """
     if not openrouter_service.available:
         error_msg = "OpenRouter service is currently unavailable. Please try again later."
@@ -100,6 +101,11 @@ async def stream_openrouter_response(
         # Native tool call accumulator
         pending_tool_calls: Dict[int, Dict[str, Any]] = {}
         reasoning_started = False
+        
+        # Legacy text-based tool detection for onboarding
+        tool_buffer = ""
+        is_collecting_tool = False
+        intercepted_legacy_tool_call = False
         
         # Build system prompt with tool instructions if needed
         run_system_prompt = system_prompt
@@ -180,14 +186,61 @@ async def stream_openrouter_response(
                         reasoning_started = False
                     
                     if text:
-                        if not got_first_token:
-                            got_first_token = True
-                            ttft = (time.perf_counter() - t0_first_token) * 1000
-                            if ttft > 200:
-                                api_logger.info(f"[Timing] OpenRouter TTFT: {ttft:.0f}ms")
-                        accumulated += text
-                        yielded_any_tokens = True
-                        yield ("delta", text)
+                        # Legacy text-based tool detection for onboarding
+                        if is_onboarding_tool and not pending_tool_calls:
+                            tool_buffer += text
+                            
+                            if "```json" in tool_buffer or (tool_buffer.strip().startswith("{") and "tool" in tool_buffer):
+                                is_collecting_tool = True
+                            
+                            if is_collecting_tool:
+                                if "```" in tool_buffer.split("```json")[-1] or "}" in tool_buffer:
+                                    try:
+                                        json_match = re.search(r"```(?:javascript|json)?\s*({.*?})\s*```", tool_buffer, re.DOTALL)
+                                        if not json_match:
+                                            json_match = re.search(r"({.*\"tool\":\s*\"complete_onboarding\".*})", tool_buffer, re.DOTALL)
+                                        
+                                        if json_match:
+                                            json_str = json_match.group(1)
+                                            tool_data = json.loads(json_str)
+                                            
+                                            if tool_data.get("tool") == "complete_onboarding":
+                                                api_logger.info(f"Intercepted OpenRouter onboarding tool call (text-based) for user {user_id}")
+                                                tool_args = tool_data.get("params") or tool_data.get("arguments") or tool_data
+                                                pending_tool_calls[0] = {
+                                                    "name": "complete_onboarding",
+                                                    "arguments": [json.dumps(tool_args)],
+                                                    "id": "legacy_onboarding_call"
+                                                }
+                                                tool_buffer = ""
+                                                is_collecting_tool = False
+                                                intercepted_legacy_tool_call = True
+                                                break
+                                    except Exception as e:
+                                        api_logger.warning(f"Failed to parse intercepted tool JSON: {e}")
+                                        yield ("delta", tool_buffer)
+                                        yielded_any_tokens = True
+                                    
+                                    accumulated += tool_buffer
+                                    tool_buffer = ""
+                                    is_collecting_tool = False
+                                    continue
+                            
+                            if len(tool_buffer) > 20 and not is_collecting_tool:
+                                yield ("delta", tool_buffer)
+                                yielded_any_tokens = True
+                                accumulated += tool_buffer
+                                tool_buffer = ""
+                        else:
+                            # Normal streaming
+                            if not got_first_token:
+                                got_first_token = True
+                                ttft = (time.perf_counter() - t0_first_token) * 1000
+                                if ttft > 200:
+                                    api_logger.info(f"[Timing] OpenRouter TTFT: {ttft:.0f}ms")
+                            accumulated += text
+                            yielded_any_tokens = True
+                            yield ("delta", text)
             
             elif isinstance(chunk, str):
                 if not got_first_token:
@@ -198,6 +251,10 @@ async def stream_openrouter_response(
                 accumulated += chunk
                 yielded_any_tokens = True
                 yield ("delta", chunk)
+        
+        # Check for break due to legacy tool call interception
+        if intercepted_legacy_tool_call:
+            api_logger.info(f"Breaking stream loop for legacy tool call on turn {turn}")
         
         # Close reasoning tags if still open
         if reasoning_started:
@@ -235,6 +292,11 @@ async def stream_openrouter_response(
                         "gray.reminder", "gray.plan", "gray.habit"
                     }:
                         yield ("reminders", [tool_result])
+                    
+                    # Signal onboarding completion if complete_onboarding succeeded
+                    if tool_name == "complete_onboarding" and isinstance(tool_result, dict):
+                        if tool_result.get("status") == "success":
+                            yield ("onboarding_complete", tool_result)
                     
                     # Add to history for multi-turn
                     current_history.append({"role": "assistant", "text": accumulated})

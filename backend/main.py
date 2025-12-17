@@ -826,6 +826,7 @@ try:
         has_onboarding_tool as _has_onboarding_tool_hybrid,
     )
     from backend.core.stream_handlers.gemini_stream import stream_gemini_response
+    from backend.core.stream_handlers.openrouter import stream_openrouter_response
     from backend.core.stream_handlers.context import (
         build_intent_window_text,
         consolidate_gemini_tools,
@@ -839,6 +840,7 @@ except ImportError:
         has_onboarding_tool as _has_onboarding_tool_hybrid,
     )
     from core.stream_handlers.gemini_stream import stream_gemini_response  # type: ignore
+    from core.stream_handlers.openrouter import stream_openrouter_response  # type: ignore
     from core.stream_handlers.context import (  # type: ignore
         build_intent_window_text,
         consolidate_gemini_tools,
@@ -1916,342 +1918,33 @@ CRITICAL: When the user asks to create/update a plan or habit, you MUST call the
                     # This ensures OpenRouter generates conversation, not tool calls
                     tool_list = []
                 
-                # Multi-turn loop for tool handling (standard OpenRouter flow when not using hybrid)
-                current_history = list(conversation_history) if conversation_history else []
-                max_tool_turns = 5 if not use_hybrid_tools else 1  # Only 1 turn when hybrid handled tools
-                yielded_any_tokens = False
-                total_accumulated = ""
-                current_message = message
-                
-                for turn in range(max_tool_turns + 1):
-                    accumulated = ""
-                    t0_first_token = time.perf_counter()
-                    got_first_token = False
-                    onboarding_completed_this_turn = False
-                    
-                    # Buffer for detecting JSON tool calls (legacy text fallback for onboarding)
-                    tool_buffer = ""
-                    is_collecting_tool = False
-                    intercepted_legacy_tool_call = False
-                    
-                    # Native tool call accumulator: index -> {name, arguments_parts, id}
-                    pending_tool_calls = {}
-                    # Track if we've started streaming reasoning content (to wrap in <thinking> tags once)
-                    reasoning_started = False
-                    # DEBUG: Log what we're sending to OpenRouter
-                    has_plugins = search_enabled
-                    num_tools = len(tool_list) if tool_list else 0
-                    tool_names = []
-                    if tool_list:
-                        for t in tool_list:
-                            if hasattr(t, 'function_declarations') and t.function_declarations:
-                                for fd in t.function_declarations:
-                                    tool_names.append(fd.name)
-                            elif hasattr(t, 'google_search'):
-                                tool_names.append('google_search')
-                            elif hasattr(t, 'google_maps'):
-                                tool_names.append('google_maps')
-                    hist_len = len(current_history) if current_history else 0
-                    api_logger.info(f"[OpenRouter Call] search_enabled={search_enabled}, tools={num_tools} ({tool_names}), history={hist_len}, model={model}, reasoning_mode={reasoning_mode}")
-
-                    run_system_prompt = effective_system_prompt
-                    if needs_structured_tools and tool_list:
-                        run_system_prompt = (run_system_prompt or "") + "\n\n" + (
-                            "TOOLS REQUIRED:\n"
-                            "- When the user asks to create/update/delete a plan, habit, or reminder, you MUST call the appropriate tool.\n"
-                            "- Do NOT claim 'reminders set', 'scheduled', or similar unless you actually invoked the tool and it succeeded.\n"
-                            "- If the user intent is ambiguous, ask a clarifying question before calling tools."
-                        )
-                    if search_enabled:
-                        # Track web search cost ($10/K = $0.01 per search)
-                        # We charge if the search capability is enabled and passed to the provider
-                        if user_id:
-                            try:
-                                tracker = UsageTracker(db)
-                                await tracker.track_cost(user_id, 0.01, "web_search")
-                            except Exception as e:
-                                api_logger.warning(f"Failed to track search cost: {e}")
-
-                        # Explicitly tell the model about the search capability so it knows to use it (via the plugin)
-                        run_system_prompt = (run_system_prompt or "") + "\n\nYou have access to Google Search. You must use it for current events, news, or factual queries where your knowledge might be outdated."
-
-                    async for chunk in OPENROUTER_SERVICE.stream(
-                        current_message,
-                        current_history,
-                        hybrid_workspace_context,  # Uses tool results context when hybrid flow is active
-                        run_system_prompt,
-                        time_context,
-                        model,
-                        include_usage=True,
-                        response_format=response_format,
-                        tools=tool_list,
-                        tool_choice="auto",
-                        plugins=[{"id": "web", "max_results": 5}] if search_enabled else None,
-                        reasoning_mode=reasoning_mode,
-                        attachments=media_attachments,
-                        history_token_budget=history_token_budget,
-                        provider_routing=provider_routing,
-                    ):
-                        if isinstance(chunk, dict):
-                            # Handle usage statistics
-                            if "usage" in chunk:
-                                yield ("usage", chunk["usage"])
-                                continue
-                                
-                            # Handle native streaming tool calls
-                            if "tool_calls" in chunk:
-                                for tc in chunk["tool_calls"]:
-                                    idx = tc.get("index", 0)
-                                    if idx not in pending_tool_calls:
-                                        pending_tool_calls[idx] = {"name": "", "arguments": [], "id": ""}
-                                    
-                                    if tc.get("id"):
-                                        pending_tool_calls[idx]["id"] = tc["id"]
-                                    
-                                    func = tc.get("function", {})
-                                    if func.get("name"):
-                                        pending_tool_calls[idx]["name"] = func["name"]
-                                    if func.get("arguments"):
-                                        pending_tool_calls[idx]["arguments"].append(func["arguments"])
-                            
-                            # Handle reasoning chunks - stream as opening tag once, then content
-                            if chunk.get("type") == "reasoning":
-                                r_text = chunk.get("content", "")
-                                if not reasoning_started:
-                                    # First reasoning chunk - emit opening tag
-                                    yield ("delta", "<thinking>")
-                                    accumulated += "<thinking>"
-                                    reasoning_started = True
-                                # Stream the raw thinking content
-                                accumulated += r_text
-                                yield ("delta", r_text)
-                                if not got_first_token:
-                                    got_first_token = True
-                                    first_token_ms = (time.perf_counter() - t0_first_token) * 1000
-                                    api_logger.info(f"[Timing] First token: {first_token_ms:.0f}ms")
-                                yielded_any_tokens = True
-                            continue
-                            
-                        # Legacy text-based tool call detection for onboarding
-                        if is_onboarding_tool and not pending_tool_calls:
-                            tool_buffer += chunk
-                            
-                            if "```json" in tool_buffer or (tool_buffer.strip().startswith("{") and "tool" in tool_buffer):
-                                is_collecting_tool = True
-                            
-                            if is_collecting_tool:
-                                if "```" in tool_buffer.split("```json")[-1] or "}" in tool_buffer:
-                                    try:
-                                        json_match = re.search(r"```(?:javascript|json)?\s*({.*?})\s*```", tool_buffer, re.DOTALL)
-                                        if not json_match:
-                                            json_match = re.search(r"({.*\"tool\":\s*\"complete_onboarding\".*})", tool_buffer, re.DOTALL)
-                                        
-                                        if json_match:
-                                            json_str = json_match.group(1)
-                                            tool_data = json.loads(json_str)
-
-                                            if tool_data.get("tool") == "complete_onboarding":
-                                                api_logger.info(f"Intercepted OpenRouter onboarding tool call (text-based) for user {user_id}")
-                                                tool_args = tool_data.get("params") or tool_data.get("arguments") or tool_data
-                                                pending_tool_calls[0] = {
-                                                    "name": "complete_onboarding",
-                                                    "arguments_parts": [json.dumps(tool_args)],
-                                                    "id": "legacy_onboarding_call"
-                                                }
-                                                tool_buffer = ""
-                                                is_collecting_tool = False
-                                                intercepted_legacy_tool_call = True
-                                                break
-                                    except Exception as e:
-                                        api_logger.warning(f"Failed to parse intercepted tool JSON: {e}")
-                                        yield ("delta", tool_buffer)
-                                        yielded_any_tokens = True
-
-                                    accumulated += tool_buffer
-                                    tool_buffer = ""
-                                    is_collecting_tool = False
-                                    continue
-
-                            if len(tool_buffer) > 20 and not is_collecting_tool:
-                                yield ("delta", tool_buffer)
-                                yielded_any_tokens = True
-                                accumulated += tool_buffer
-                                tool_buffer = ""
-                        else:
-                            # Normal streaming - close thinking tag if we were in reasoning mode
-                            if reasoning_started:
-                                yield ("delta", "</thinking>\n")
-                                accumulated += "</thinking>\n"
-                                reasoning_started = False  # Reset for potential future reasoning
-                            accumulated += chunk
-                            if chunk:
-                                yield ("delta", chunk)
-                                if not got_first_token:
-                                    got_first_token = True
-                                    first_token_ms = (time.perf_counter() - t0_first_token) * 1000
-                                    api_logger.info(f"[Timing] First token: {first_token_ms:.0f}ms")
-                                yielded_any_tokens = True
-                    
-                    if intercepted_legacy_tool_call:
-                        # Stop streaming the provider response early; we'll execute the tool and
-                        # then do a follow-up model call (same as native tool_calls flow).
-                        api_logger.info(f"Breaking stream loop for legacy tool call on turn {turn}")
-                        pass
-                    
-                    # Flush remaining buffer
-                    if tool_buffer:
-                        yield ("delta", tool_buffer)
-                        yielded_any_tokens = True
-                        accumulated += tool_buffer
-                    
-                    # Close thinking tag if stream ended while still in reasoning mode
-                    if reasoning_started:
-                        yield ("delta", "</thinking>\n")
-                        accumulated += "</thinking>\n"
-                        reasoning_started = False
-                                
-                    # Process any accumulated native tool calls
-                    if pending_tool_calls:
-                        tool_handlers = _get_tool_handlers(user_timezone)
-                        
-                        tool_results = []
-                        for idx, call in pending_tool_calls.items():
-                            tool_name = call.get("name")
-                            handler = tool_handlers.get(tool_name)
-                            
-                            if not handler:
-                                api_logger.warning(f"Unknown tool call from OpenRouter: {tool_name}")
-                                tool_results.append({"tool": tool_name, "error": f"Unknown tool: {tool_name}", "call_id": call.get("id", "")})
-                                continue
-                            
-                            api_logger.info(f"Executing OpenRouter tool call: {tool_name}")
-                            try:
-                                args_str = "".join(call["arguments"])
-                                args = json.loads(args_str) if args_str.strip() else {}
-                                tool_result = await handler(user_id, args, db)
-                                tool_results.append({"tool": tool_name, "result": tool_result, "call_id": call.get("id", "")})
-                                if tool_name == "complete_onboarding" and isinstance(tool_result, dict):
-                                    onboarding_completed_this_turn = tool_result.get("status") == "success"
-                                
-                                # Yield reminder/plan/habit cards to frontend
-                                if isinstance(tool_result, dict) and tool_result.get("type") in {"gray.reminder", "gray.plan", "gray.habit"}:
-                                    yield ("reminders", [tool_result])
-                                    yielded_any_tokens = True
-                                    
-                            except Exception as e:
-                                api_logger.error(f"Failed to execute OpenRouter tool call {tool_name}: {e}", exc_info=True)
-                                tool_results.append({"tool": tool_name, "error": str(e), "call_id": call.get("id", "")})
-                        
-                        # Skip follow-up call for read-only list tools (optimization)
-                        # These just return data - no need for LLM to summarize
-                        read_only_tools = {"list_calendar_events", "list_plans", "list_habits", "list_reminders", "fetch_proactivity_summary"}
-                        all_read_only = all(tr.get("tool") in read_only_tools for tr in tool_results)
-                        
-                        if all_read_only:
-                            # Just finish - the tool results were already yielded as cards/data
-                            api_logger.info("Skipping follow-up call for read-only tools")
-                            total_accumulated += accumulated
-                            # If we have any text, yield it; otherwise yield a default acknowledgment
-                            if accumulated.strip():
-                                yield ("delta", accumulated)
-                                yielded_any_tokens = True
-                            elif not total_accumulated.strip():
-                                # No text at all - give a minimal response so frontend doesn't show error
-                                total_accumulated = "Here's what I found."
-                                yield ("delta", total_accumulated)
-                                yielded_any_tokens = True
-                            break  # Exit loop, go to final response
-                        
-                        # Update history with tool call and results for next turn
-                        current_history.append({
-                            "role": "model",
-                            "text": accumulated or "",
-                            "tool_calls": [
-                                {
-                                    "id": call.get("id", f"call_{idx}"),
-                                    "type": "function",
-                                    "function": {
-                                        "name": call.get("name"),
-                                        "arguments": "".join(call.get("arguments", []))
-                                    }
-                                }
-                                for idx, call in pending_tool_calls.items()
-                            ]
-                        })
-                        
-                        for tr in tool_results:
-                            result_content = json.dumps(tr.get("result", tr.get("error", {})))
-                            current_history.append({
-                                "role": "tool",
-                                "name": tr.get("tool"),
-                                "tool_call_id": tr.get("call_id", ""),
-                                "content": result_content
-                            })
-
-                        if onboarding_completed_this_turn:
-                            try:
-                                updated_user = await db.fetch_one(users.select().where(users.c.id == user_id))
-                            except Exception:
-                                updated_user = None
-
-                            nickname = _row_get(updated_user, "personalization_nickname") if updated_user else None
-                            occupation = _row_get(updated_user, "personalization_occupation") if updated_user else None
-                            about = _row_get(updated_user, "personalization_about") if updated_user else None
-
-                            profile_lines: List[str] = []
-                            if nickname:
-                                profile_lines.append(f"Preferred name: {nickname}")
-                            if occupation:
-                                profile_lines.append(f"Occupation/focus: {occupation}")
-                            if about:
-                                profile_lines.append(f"About: {about}")
-
-                            profile_block = ""
-                            if profile_lines:
-                                profile_block = "User profile:\n- " + "\n- ".join(profile_lines)
-
-                            effective_system_prompt = "\n\n".join(
-                                p
-                                for p in [
-                                    DEFAULT_SYSTEM_PROMPT,
-                                    profile_block,
-                                    "Onboarding is complete. Continue naturally and respond to the user's last message.",
-                                ]
-                                if p
-                            )
-
-                            # Prevent re-triggering onboarding inside the same request.
-                            is_onboarding_tool = False
-                            tool_list = [
-                                t
-                                for t in tool_list
-                                if not (
-                                    getattr(t, "function_declarations", None)
-                                    and any(fd.name == "complete_onboarding" for fd in t.function_declarations)
-                                )
-                            ]
-                        
-                        total_accumulated += accumulated
-                        current_message = ""  # Empty message, rely on history
-                        continue  # Loop back for model's response after tool execution
-                    
-                    # No tool calls - we're done with this turn
-                    total_accumulated += accumulated
-                    break
-                
-                # Final response
-                if response_format:
-                    text, structured_reminders = _materialize_structured_reminders(total_accumulated)
-                    yield ("final", {
-                        "text": text,
-                        "grounding_metadata": None,
-                        "reminders": structured_reminders if structured_reminders else None
-                    })
-                else:
-                    if yielded_any_tokens and not total_accumulated.strip():
-                        total_accumulated = "Done."
-                        yield ("delta", total_accumulated)
-                    yield ("final", {"text": total_accumulated, "grounding_metadata": None})
+                # Use extracted stream_openrouter_response function for all OpenRouter streaming
+                async for event_type, data in stream_openrouter_response(
+                    openrouter_service=OPENROUTER_SERVICE,
+                    message=message,
+                    conversation_history=conversation_history,
+                    workspace_context=hybrid_workspace_context,
+                    system_prompt=effective_system_prompt,
+                    time_context=time_context,
+                    model=model,
+                    tool_list=tool_list,
+                    search_enabled=search_enabled,
+                    reasoning_mode=reasoning_mode,
+                    media_attachments=media_attachments,
+                    history_token_budget=history_token_budget,
+                    user_id=user_id,
+                    needs_structured_tools=needs_structured_tools,
+                    is_onboarding_tool=is_onboarding_tool,
+                    response_format=response_format,
+                    provider_routing=provider_routing,
+                    execute_function_call_fn=_execute_function_call,
+                    db=db,
+                    user_timezone=user_timezone,
+                    hybrid_tool_results=hybrid_tool_results if use_hybrid_tools else None,
+                    hybrid_tool_cards=None,  # Already emitted above
+                    usage_tracker_cls=UsageTracker,
+                ):
+                    yield (event_type, data)
                 return
                 
             except Exception as openrouter_error:
