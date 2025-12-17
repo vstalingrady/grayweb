@@ -59,8 +59,6 @@ import {
   isTitleDerivedFromMessage,
 } from "./chat/utils";
 import { extractGrayRemindersFromText, buildReminderConfirmationText, buildReminderKey, coerceReminderPayload } from "./chat/reminderUtils";
-import { ALL_PIONEER_MODEL_IDS, PIONEER_ONLY_MODEL_IDS } from "./modelCatalog";
-import { normalizePlanTier } from "./utils/helperFunctions";
 import {
   GENERAL_CHAT_SESSION_ID,
   SHARED_CHAT_PLACEHOLDER_TITLE,
@@ -73,6 +71,10 @@ import {
 import { WORKSPACE_REFRESH_EVENT } from "./hooks/useWorkspaceData";
 import { buildReminderPingMessage, sendReminderNotification } from "./chat/provider/reminderNotifications";
 import { useDefaultSystemPrompt } from "./chat/provider/useDefaultSystemPrompt";
+import { useAutoStreamState } from "./chat/provider/useAutoStreamState";
+import { useMapsSettings } from "./chat/provider/useMapsSettings";
+import { useModelPreferences } from "./chat/provider/useModelPreferences";
+import { useRemindersEnabled } from "./chat/provider/useRemindersEnabled";
 import {
   GENERAL_SESSION_TITLE,
   createEmptyGeneralSession,
@@ -85,8 +87,6 @@ import {
 
 const WORKSPACE_CONTEXT_COOLDOWN_MS = 600000; // 10 minutes
 const CONVERSATION_MEMORY_STORAGE_PREFIX = "gray_conversation_memory";
-const VISIBLE_MODEL_IDS_STORAGE_PREFIX = "gray_visible_model_ids";
-const REMINDERS_ENABLED_STORAGE_PREFIX = "gray_reminders_enabled";
 
 declare global {
   interface Window {
@@ -216,131 +216,25 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
   }, []);
   const [isAttachmentUploading, setIsAttachmentUploading] = useState(false);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
-  const [mapsEnabled, setMapsEnabled] = useState(false);
-
-  useEffect(() => {
-    if (user) {
-      setMapsEnabled(Boolean(user.maps_enabled));
-    }
-  }, [user]);
-
-  const [mapsWidgetEnabled, setMapsWidgetEnabled] = useState(false);
-  const [mapsLatitude, setMapsLatitude] = useState("");
-  const [mapsLongitude, setMapsLongitude] = useState("");
-
-  const mapPayload = useMemo(() => {
-    const normalizedLatitude = mapsLatitude.trim();
-    const normalizedLongitude = mapsLongitude.trim();
-    const parsedLatitude = normalizedLatitude ? Number(normalizedLatitude) : undefined;
-    const parsedLongitude = normalizedLongitude ? Number(normalizedLongitude) : undefined;
-    const payload: {
-      maps_enabled: boolean;
-      maps_widget: boolean;
-      maps_latitude?: number;
-      maps_longitude?: number;
-    } = {
-      maps_enabled: mapsEnabled,
-      maps_widget: mapsWidgetEnabled,
-    };
-    if (normalizedLatitude && !Number.isNaN(parsedLatitude ?? NaN)) {
-      payload.maps_latitude = parsedLatitude;
-    }
-    if (normalizedLongitude && !Number.isNaN(parsedLongitude ?? NaN)) {
-      payload.maps_longitude = parsedLongitude;
-    }
-    return payload;
-  }, [mapsEnabled, mapsLatitude, mapsLongitude, mapsWidgetEnabled]);
-
-  const hasLocationCoordinates = Boolean(
-    mapPayload.maps_latitude != null && mapPayload.maps_longitude != null
-  );
-
-  const getGeolocation = useCallback((): Promise<{ latitude: number; longitude: number } | null> => {
-    return new Promise((resolve) => {
-      if (typeof window === "undefined" || !window.navigator?.geolocation) {
-        resolve(null);
-        return;
-      }
-      window.navigator.geolocation.getCurrentPosition(
-        (position) => {
-          resolve({
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude,
-          });
-        },
-        () => resolve(null)
-      );
-    });
-  }, []);
-
-  // Helper to manually request location (e.g. from the Tools menu)
-  const requestLocationCoordinates = useCallback(async () => {
-    const coords = await getGeolocation();
-    if (coords) {
-      setMapsLatitude(coords.latitude.toString());
-      setMapsLongitude(coords.longitude.toString());
-      setMapsWidgetEnabled(true);
-      return true;
-    }
-    return false;
-  }, [getGeolocation]);
-
-  const toggleMapsEnabled = useCallback(async () => {
-    const nextState = !mapsEnabled;
-    setMapsEnabled(nextState);
-
-    // If enabling, also try to get coordinates if not already present
-    if (nextState && !hasLocationCoordinates) {
-      await requestLocationCoordinates();
-    }
-  }, [hasLocationCoordinates, mapsEnabled, requestLocationCoordinates]);
+  const {
+    mapsEnabled,
+    mapsWidgetEnabled,
+    mapsLatitude,
+    mapsLongitude,
+    setMapsEnabled,
+    setMapsWidgetEnabled,
+    setMapsLatitude,
+    setMapsLongitude,
+    mapPayload,
+    toggleMapsEnabled,
+  } = useMapsSettings(user);
 
   const toggleWebSearchEnabled = useCallback(() => {
     setWebSearchEnabled((prev) => !prev);
   }, []);
-
-  const remindersEnabledStorageKey = useMemo(
-    () => `${REMINDERS_ENABLED_STORAGE_PREFIX}:${user?.id ?? "anon"}`,
-    [user?.id]
+  const { remindersEnabled, toggleRemindersEnabled } = useRemindersEnabled(
+    user?.id
   );
-  const [remindersEnabled, setRemindersEnabled] = useState(true);
-
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-    try {
-      const stored = window.localStorage.getItem(remindersEnabledStorageKey);
-      if (stored === null) {
-        setRemindersEnabled(true);
-        return;
-      }
-      setRemindersEnabled(stored !== "0");
-    } catch {
-      setRemindersEnabled(true);
-    }
-  }, [remindersEnabledStorageKey]);
-
-  const setRemindersEnabledPersisted = useCallback(
-    (updater: boolean | ((prev: boolean) => boolean)) => {
-      setRemindersEnabled((prev) => {
-        const nextValue = typeof updater === "function" ? updater(prev) : updater;
-        if (typeof window !== "undefined") {
-          try {
-            window.localStorage.setItem(remindersEnabledStorageKey, nextValue ? "1" : "0");
-          } catch {
-            // Best-effort persistence.
-          }
-        }
-        return nextValue;
-      });
-    },
-    [remindersEnabledStorageKey]
-  );
-
-  const toggleRemindersEnabled = useCallback(() => {
-    setRemindersEnabledPersisted((prev) => !prev);
-  }, [setRemindersEnabledPersisted]);
 
   const [autoWebSearchEnabled, setAutoWebSearchEnabledState] = useState(false);
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
@@ -348,179 +242,22 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
   const [modelTier, setModelTier] = useState<"lite" | "pro" | "pioneer">("lite");
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
   const [visibleModelIds, setVisibleModelIds] = useState<string[] | null>(null);
-  const visibleModelIdsHydratedRef = useRef(false);
-  const lastPersistedVisibleModelIdsRef = useRef<string | null>(null);
   // Track profile hash to only send full profile when it changes
   const lastSentProfileHashRef = useRef<string>("");
   // Track when reasoning mode starts to calculate reasoning duration
   const reasoningStartTimeRef = useRef<number | null>(null);
-
-  const normalizeVisibleModelIds = useCallback((value: unknown): string[] | null => {
-    if (value === null || value === undefined) {
-      return null;
-    }
-    if (!Array.isArray(value)) {
-      return null;
-    }
-    const allowed = new Set(ALL_PIONEER_MODEL_IDS);
-    const sanitized = value
-      .filter((candidate): candidate is string => typeof candidate === "string" && allowed.has(candidate))
-      .filter((candidate, index, self) => self.indexOf(candidate) === index);
-    return sanitized.length === 0
-      ? []
-      : sanitized.length === ALL_PIONEER_MODEL_IDS.length
-        ? null
-        : sanitized;
-  }, []);
-
-  const areVisibleModelIdsEqual = useCallback((left: string[] | null, right: string[] | null): boolean => {
-    if (left === null && right === null) {
-      return true;
-    }
-    if (left === null || right === null) {
-      return false;
-    }
-    if (left.length !== right.length) {
-      return false;
-    }
-    for (let index = 0; index < left.length; index += 1) {
-      if (left[index] !== right[index]) {
-        return false;
-      }
-    }
-    return true;
-  }, []);
-
-  // Restore model selection from local storage
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const storedTier = localStorage.getItem("gray_model_tier");
-      if (storedTier && ["lite", "pioneer"].includes(storedTier)) {
-        setModelTier(storedTier as "lite" | "pioneer");
-      } else if (storedTier === "pro") {
-        // Migration: "Pro" is removed, force to "Lite"
-        setModelTier("lite");
-        localStorage.setItem("gray_model_tier", "lite");
-      }
-      const storedModelId = localStorage.getItem("gray_selected_model_id");
-      if (storedModelId) {
-        setSelectedModelId(storedModelId);
-      }
-    }
-  }, []);
-
-  // Enforce plan-tier model access on the client to avoid stale localStorage
-  // keeping a user on a higher-tier model after downgrade.
-  useEffect(() => {
-    const normalizedTier = normalizePlanTier(user);
-
-    if (normalizedTier === "scout") {
-      if (modelTier !== "lite") {
-        setModelTier("lite");
-      }
-      if (selectedModelId) {
-        setSelectedModelId(null);
-      }
-      if (reasoningMode) {
-        setReasoningMode(false);
-      }
-      return;
-    }
-
-    if (normalizedTier === "voyager") {
-      if (selectedModelId && PIONEER_ONLY_MODEL_IDS.includes(selectedModelId)) {
-        setSelectedModelId(null);
-        setModelTier("lite");
-      }
-    }
-  }, [modelTier, reasoningMode, selectedModelId, user]);
-
-  // Restore visible models per user (or anon)
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-    if (user && "visible_model_ids" in user) {
-      setVisibleModelIds(normalizeVisibleModelIds((user as { visible_model_ids?: unknown }).visible_model_ids));
-      visibleModelIdsHydratedRef.current = true;
-      return;
-    }
-    const key = `${VISIBLE_MODEL_IDS_STORAGE_PREFIX}:${user?.id ?? "anon"}`;
-    const raw = window.localStorage.getItem(key);
-    if (!raw) {
-      setVisibleModelIds(null);
-      visibleModelIdsHydratedRef.current = true;
-      return;
-    }
-    try {
-      const parsed = JSON.parse(raw);
-      setVisibleModelIds(normalizeVisibleModelIds(parsed));
-      visibleModelIdsHydratedRef.current = true;
-    } catch {
-      setVisibleModelIds(null);
-      visibleModelIdsHydratedRef.current = true;
-    }
-  }, [normalizeVisibleModelIds, user]);
-
-  // Persist visible models preference
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-    const key = `${VISIBLE_MODEL_IDS_STORAGE_PREFIX}:${user?.id ?? "anon"}`;
-    if (visibleModelIds === null) {
-      window.localStorage.removeItem(key);
-      return;
-    }
-    window.localStorage.setItem(key, JSON.stringify(visibleModelIds));
-  }, [user?.id, visibleModelIds]);
-
-  // Persist visible models preference to the backend (so it survives browser resets / multi-device).
-  useEffect(() => {
-    if (!user || typeof updateUser !== "function") {
-      lastPersistedVisibleModelIdsRef.current = null;
-      return;
-    }
-    if (!("visible_model_ids" in user)) {
-      return;
-    }
-    if (!visibleModelIdsHydratedRef.current) {
-      return;
-    }
-
-    const normalizedFromUser = normalizeVisibleModelIds((user as { visible_model_ids?: unknown }).visible_model_ids);
-    if (areVisibleModelIdsEqual(normalizedFromUser, visibleModelIds)) {
-      return;
-    }
-
-    const serialized =
-      visibleModelIds === null ? "all" : JSON.stringify(visibleModelIds);
-    if (lastPersistedVisibleModelIdsRef.current === serialized) {
-      return;
-    }
-    lastPersistedVisibleModelIdsRef.current = serialized;
-
-    void updateUser({ visible_model_ids: visibleModelIds }).catch((error) => {
-      console.error("Failed to persist visible models preference:", error);
-    });
-  }, [areVisibleModelIdsEqual, normalizeVisibleModelIds, updateUser, user, visibleModelIds]);
-
-  // Persist model selection changes
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      localStorage.setItem("gray_model_tier", modelTier);
-    }
-  }, [modelTier]);
-
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      if (selectedModelId) {
-        localStorage.setItem("gray_selected_model_id", selectedModelId);
-      } else {
-        localStorage.removeItem("gray_selected_model_id");
-      }
-    }
-  }, [selectedModelId]);
+  useModelPreferences({
+    user,
+    updateUser,
+    modelTier,
+    setModelTier,
+    selectedModelId,
+    setSelectedModelId,
+    reasoningMode,
+    setReasoningMode,
+    visibleModelIds,
+    setVisibleModelIds,
+  });
 
   const [questionnaireSession, setQuestionnaireSession] = useState<QuestionnaireSession | null>(null);
 
@@ -570,35 +307,10 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
     [workspaceContextValue]
   );
 
-  const autoStreamTriggeredRef = useRef<Set<string>>(new Set());
   const pendingHistorySyncRef = useRef<Set<string>>(new Set());
   const reminderDeliveryCacheRef = useRef<Set<number>>(new Set());
-  const markAutoStreamTriggered = useCallback((sessionId: string, messageId?: string | null) => {
-    if (!sessionId || !messageId) {
-      return;
-    }
-    autoStreamTriggeredRef.current.add(`${sessionId}:${messageId}`);
-  }, []);
-  const hasAutoStreamTriggered = useCallback((sessionId: string, messageId?: string | null) => {
-    if (!sessionId || !messageId) {
-      return false;
-    }
-    return autoStreamTriggeredRef.current.has(`${sessionId}:${messageId}`);
-  }, []);
-  const resetAutoStreamState = useCallback((sessionId?: string | null) => {
-    if (!sessionId) {
-      autoStreamTriggeredRef.current.clear();
-      return;
-    }
-    const prefix = `${sessionId}:`;
-    const keysToDelete: string[] = [];
-    autoStreamTriggeredRef.current.forEach((value) => {
-      if (value.startsWith(prefix)) {
-        keysToDelete.push(value);
-      }
-    });
-    keysToDelete.forEach((key) => autoStreamTriggeredRef.current.delete(key));
-  }, []);
+  const { markAutoStreamTriggered, hasAutoStreamTriggered, resetAutoStreamState } =
+    useAutoStreamState();
   const scheduleHistorySync = useCallback(
     (conversationId: string, payload: ConversationHistoryEntryPayload[]) => {
       void (async () => {
