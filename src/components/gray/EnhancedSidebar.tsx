@@ -7,20 +7,19 @@ import {
   Settings as SettingsIcon,
   LifeBuoy,
   LogOut,
-  MoreHorizontal,
-  Pencil,
   Pin,
-  Trash2,
 } from "lucide-react";
-import { createPortal } from "react-dom";
 import Skeleton from "react-loading-skeleton";
 import { SiDiscord } from "react-icons/si";
 import { useUser } from "@/contexts/UserContext";
 import { useI18n } from "@/contexts/I18nContext";
 import styles from "@/app/gray/GrayPageClient.module.css";
 import railNavStyles from "./sidebar/RailNav.module.css";
-import { type SidebarHistorySection, type SidebarNavItem, type SidebarNavKey, type SidebarHistoryEntry } from "./types";
+import { type SidebarHistorySection, type SidebarNavItem, type SidebarNavKey } from "./types";
 import { StarfieldCanvas } from "./StarfieldCanvas";
+import { HistoryItemMenu } from "./enhancedSidebar/HistoryItemMenu";
+import { SidebarHistorySkeleton } from "./enhancedSidebar/SidebarHistorySkeleton";
+import { useDismissableLayer } from "./hooks/useDismissableLayer";
 
 type GrayEnhancedSidebarProps = {
   isExpanded: boolean;
@@ -50,160 +49,6 @@ type GrayEnhancedSidebarProps = {
 
 const normalizeNavLabel = (item: SidebarNavItem): string => {
   return item.label;
-};
-
-const SidebarHistorySkeleton = () => (
-  <div
-    className="gray-history-skeleton"
-    style={{
-      padding: "6px 16px",
-      display: "flex",
-      flexDirection: "column",
-      gap: 10,
-    }}
-    aria-label="Loading"
-  >
-    <Skeleton
-      height={14}
-      width="78%"
-      baseColor="rgba(255, 255, 255, 0.08)"
-      highlightColor="rgba(255, 255, 255, 0.18)"
-      borderRadius={6}
-      duration={1.2}
-      enableAnimation
-    />
-    <Skeleton
-      height={14}
-      width="64%"
-      baseColor="rgba(255, 255, 255, 0.08)"
-      highlightColor="rgba(255, 255, 255, 0.18)"
-      borderRadius={6}
-      duration={1.2}
-      enableAnimation
-    />
-    <Skeleton
-      height={14}
-      width="70%"
-      baseColor="rgba(255, 255, 255, 0.08)"
-      highlightColor="rgba(255, 255, 255, 0.18)"
-      borderRadius={6}
-      duration={1.2}
-      enableAnimation
-    />
-    <Skeleton
-      height={14}
-      width="52%"
-      baseColor="rgba(255, 255, 255, 0.08)"
-      highlightColor="rgba(255, 255, 255, 0.18)"
-      borderRadius={6}
-      duration={1.2}
-      enableAnimation
-    />
-    <Skeleton
-      height={14}
-      width="68%"
-      baseColor="rgba(255, 255, 255, 0.08)"
-      highlightColor="rgba(255, 255, 255, 0.18)"
-      borderRadius={6}
-      duration={1.2}
-      enableAnimation
-    />
-  </div>
-);
-
-const HistoryItemMenu = ({
-  entry,
-  onRename,
-  onDelete,
-  onPin,
-}: {
-  entry: SidebarHistoryEntry;
-  onRename?: (id: string) => void;
-  onDelete?: (id: string) => void;
-  onPin?: (id: string, pinned: boolean) => void;
-}) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const [coords, setCoords] = useState({ top: 0, left: 0 });
-
-  useEffect(() => {
-    if (!isOpen) return;
-    const close = () => setIsOpen(false);
-    window.addEventListener("click", close);
-    window.addEventListener("scroll", close, { capture: true });
-    return () => {
-      window.removeEventListener("click", close);
-      window.removeEventListener("scroll", close, { capture: true });
-    };
-  }, [isOpen]);
-
-  const toggle = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!triggerRef.current) return;
-    const rect = triggerRef.current.getBoundingClientRect();
-    // Position menu: to the right of the button, or slightly below.
-    setCoords({ top: rect.bottom + 2, left: rect.right - 150 });
-    setIsOpen(!isOpen);
-  };
-
-  return (
-    <>
-      <div
-        className={styles.sidebarHistoryActions}
-        style={{ opacity: isOpen ? 1 : undefined }}
-      >
-        <button ref={triggerRef} onClick={toggle} className={styles.sidebarActionButton}>
-          <MoreHorizontal size={14} />
-        </button>
-      </div>
-      {isOpen &&
-        createPortal(
-          <div
-            className={styles.sidebarMenuPopover}
-            style={{ top: coords.top, left: coords.left }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {onRename && (
-              <button
-                onClick={() => {
-                  onRename(entry.id);
-                  setIsOpen(false);
-                }}
-                className={styles.sidebarMenuItem}
-              >
-                <Pencil size={13} /> Rename
-              </button>
-            )}
-            {onPin && (
-              <button
-                onClick={() => {
-                  onPin(entry.id, !entry.isPinned);
-                  setIsOpen(false);
-                }}
-                className={styles.sidebarMenuItem}
-              >
-                <Pin size={13} fill={entry.isPinned ? "currentColor" : "none"} />{" "}
-                {entry.isPinned ? "Unpin" : "Pin"}
-              </button>
-            )}
-            <div style={{ height: 1, background: "rgba(255,255,255,0.08)", margin: "2px 0" }} />
-            {onDelete && (
-              <button
-                onClick={() => {
-                  onDelete(entry.id);
-                  setIsOpen(false);
-                }}
-                className={`${styles.sidebarMenuItem} ${styles.delete}`}
-              >
-                <Trash2 size={13} /> Delete
-              </button>
-            )}
-          </div>,
-          document.body
-        )}
-    </>
-  );
 };
 
 function GrayEnhancedSidebarComponent(props: GrayEnhancedSidebarProps) {
@@ -251,6 +96,18 @@ function GrayEnhancedSidebarComponent(props: GrayEnhancedSidebarProps) {
     setResolvedAvatarUrl(sidebarAvatarUrl);
   }, [sidebarAvatarUrl]);
 
+  const closeProfileMenu = useCallback(() => {
+    setIsProfileMenuOpen(false);
+  }, []);
+
+  const profileMenuDismissRefs = useMemo(() => [profileMenuRef, profileControlsRef], []);
+
+  useDismissableLayer({
+    isOpen: isProfileMenuOpen,
+    ignoreRefs: profileMenuDismissRefs,
+    onDismiss: closeProfileMenu,
+  });
+
   const handleAvatarError = useCallback(() => {
     if (!resolvedAvatarUrl) {
       return;
@@ -259,34 +116,6 @@ function GrayEnhancedSidebarComponent(props: GrayEnhancedSidebarProps) {
     // inline avatar (initials / icon) instead of a placeholder image.
     setResolvedAvatarUrl(null);
   }, [resolvedAvatarUrl]);
-
-  useEffect(() => {
-    if (!isProfileMenuOpen) {
-      return;
-    }
-    const handlePointerDown = (event: MouseEvent) => {
-      const target = event.target as Node;
-      if (
-        profileMenuRef.current &&
-        !profileMenuRef.current.contains(target) &&
-        profileControlsRef.current &&
-        !profileControlsRef.current.contains(target)
-      ) {
-        setIsProfileMenuOpen(false);
-      }
-    };
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setIsProfileMenuOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handlePointerDown);
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.removeEventListener("mousedown", handlePointerDown);
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [isProfileMenuOpen]);
 
   const handleProfileClick = useCallback(() => {
     setIsProfileMenuOpen((previous) => !previous);

@@ -138,3 +138,20 @@ export const getProactivityTimes = (item: ProactivityItem | null | undefined) =>
     }
     return [];
 };
+
+export const buildCustomProactivityItem = (times: string[]): ProactivityItem => {
+    const sortedTimes = dedupeTimes(times);
+    const resolvedTimes = sortedTimes.length > 0 ? sortedTimes : [...DEFAULT_CUSTOM_SETTINGS.times];
+    const firstTime = resolvedTimes[0] ?? DEFAULT_PROACTIVITY_TIME;
+    const formattedTimes = resolvedTimes.map((time) => formatCustomTimeLabel(time)).join(", ");
+    const descriptionParts = [`${resolvedTimes.length} touchpoints`, formattedTimes];
+
+    return {
+        id: CUSTOM_PROACTIVITY_ID,
+        label: "Custom plan",
+        description: descriptionParts.join(" • "),
+        cadence: "Custom",
+        time: firstTime,
+        times: resolvedTimes,
+    };
+};

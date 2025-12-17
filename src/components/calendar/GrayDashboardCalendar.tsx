@@ -14,6 +14,7 @@ import {
 
 import styles from "./GrayDashboardCalendar.module.css";
 import { CalendarSidebar } from "./CalendarSidebar";
+import { GrayDashboardCalendarHeader } from "./GrayDashboardCalendarHeader";
 import {
   EventComposer,
   EventComposerPayload,
@@ -835,102 +836,26 @@ export function GrayDashboardCalendar({
     });
   };
 
-  const dashboardToggle = shouldShowDashboardToggle ? (
-    <div className={styles.calendarSurfaceHeadingGroup}>
-      <div className={styles.calendarSurfaceTabs}>
-        <button
-          type="button"
-          className={styles.calendarSurfaceTab}
-          data-active={dashboardTab === "pulse"}
-          aria-pressed={dashboardTab === "pulse"}
-          onClick={() => onSelectDashboardTab?.("pulse")}
-        >
-          {t("Pulse")}
-        </button>
-        <button
-          type="button"
-          className={styles.calendarSurfaceTab}
-          data-active={dashboardTab === "calendar"}
-          aria-pressed={dashboardTab === "calendar"}
-          onClick={() => onSelectDashboardTab?.("calendar")}
-        >
-          {t("Calendar")}
-        </button>
-      </div>
-    </div>
-  ) : null;
-
   const headerNode = renderHeader
     ? renderHeader(headerProps)
     : shouldRenderHeader
       ? (
-        <header className={styles.calendarSurfaceHeader}>
-          <div className={styles.calendarSurfaceHeaderLeft}>
-            {dashboardToggle}
-            {showSurfaceHeading && (
-              <>
-                {showSurfaceLabel && (
-                  <span className={styles.calendarSurfaceLabel}>{t("Calendar")}</span>
-                )}
-                <div className={styles.calendarSurfaceTitleRow}>
-                  {showNavigationControls && (
-                    <div className={styles.calendarSurfaceNavArrows}>
-                      <button
-                        type="button"
-                        aria-label={t("Previous month")}
-                        onClick={() => handleMainMonthNavigate(-1)}
-                      >
-                        ‹
-                      </button>
-                      <button
-                        type="button"
-                        aria-label={t("Next month")}
-                        onClick={() => handleMainMonthNavigate(1)}
-                      >
-                        ›
-                      </button>
-                    </div>
-                  )}
-                </div>
-                {showHeaderDates && (
-                  <p className={styles.calendarSurfaceRange}>{rangeLabel}</p>
-                )}
-              </>
-            )}
-          </div>
-          {hasHeaderRight && (
-            <div className={styles.calendarSurfaceHeaderRight}>
-              <div className={styles.calendarSurfaceNav}>
-                {showNavigationControls && (
-                  <>
-                    <div className={styles.calendarSurfaceNavArrows} style={{ display: 'none' }}>
-                      {/* Hidden here, moved to left */}
-                    </div>
-                  </>
-                )}
-                {showTodayControl && (
-                  <button
-                    type="button"
-                    className={styles.calendarSurfaceButton}
-                    onClick={handleGoToday}
-                  >
-                    {t("Today")}
-                  </button>
-                )}
-                {showViewSelect && (
-                  <select
-                    className={styles.calendarViewSelect}
-                    value={viewMode}
-                    onChange={handleViewModeChange}
-                  >
-                    <option value="week">{t("Week")}</option>
-                    <option value="day">{t("Day")}</option>
-                  </select>
-                )}
-              </div>
-            </div>
-          )}
-        </header>
+        <GrayDashboardCalendarHeader
+          dashboardTab={dashboardTab}
+          onSelectDashboardTab={onSelectDashboardTab}
+          showSurfaceLabel={showSurfaceLabel}
+          showSurfaceHeading={showSurfaceHeading}
+          showHeaderDates={showHeaderDates}
+          showNavigationControls={showNavigationControls}
+          showTodayControl={showTodayControl}
+          showViewSelect={showViewSelect}
+          hasHeaderRight={hasHeaderRight}
+          rangeLabel={rangeLabel}
+          viewMode={viewMode}
+          onMainMonthNavigate={handleMainMonthNavigate}
+          onGoToday={handleGoToday}
+          onViewModeChange={handleViewModeChange}
+        />
       )
       : null;
 

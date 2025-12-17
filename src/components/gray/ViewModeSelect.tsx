@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import styles from "@/components/calendar/GrayDashboardCalendar.module.css";
+import { useDismissableLayer } from "./hooks/useDismissableLayer";
 
 export type ViewModeOption = {
   value: "week" | "day";
@@ -27,6 +28,14 @@ export function ViewModeSelect({ value, options, onChange }: ViewModeSelectProps
     setIsOpen(false);
   }, []);
 
+  const dismissRefs = useMemo(() => [wrapperRef], []);
+
+  useDismissableLayer({
+    isOpen,
+    ignoreRefs: dismissRefs,
+    onDismiss: closeMenu,
+  });
+
   const handleToggle = useCallback(() => {
     setIsOpen((prev) => !prev);
   }, []);
@@ -38,34 +47,6 @@ export function ViewModeSelect({ value, options, onChange }: ViewModeSelectProps
     },
     [closeMenu, onChange]
   );
-
-  useEffect(() => {
-    if (!isOpen) {
-      return;
-    }
-
-    const handleClickOutside = (event: MouseEvent | TouchEvent) => {
-      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
-        closeMenu();
-      }
-    };
-
-    const handleKeydown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        closeMenu();
-      }
-    };
-
-    document.addEventListener("mousedown", handleClickOutside);
-    document.addEventListener("touchstart", handleClickOutside);
-    document.addEventListener("keydown", handleKeydown);
-
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-      document.removeEventListener("touchstart", handleClickOutside);
-      document.removeEventListener("keydown", handleKeydown);
-    };
-  }, [closeMenu, isOpen]);
 
   return (
     <div className={styles.calendarViewToggle} ref={wrapperRef}>

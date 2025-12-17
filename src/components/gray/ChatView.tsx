@@ -305,8 +305,17 @@ export function GrayChatView({
 
     // Only ever auto-respond to genuine user messages, never to assistant output.
     const hasPendingAutoStream = sessionPendingAutoStream;
-    const lastUserMessage = [...messages].reverse().find((message) => message.role === "user") ?? null;
-    const lastAssistantMessage = [...messages].reverse().find((message) => message.role === "assistant") ?? null;
+    let lastUserMessage = null as (typeof messages)[number] | null;
+    let lastAssistantMessage = null as (typeof messages)[number] | null;
+    for (let index = messages.length - 1; index >= 0 && (!lastUserMessage || !lastAssistantMessage); index -= 1) {
+      const message = messages[index];
+      if (!lastUserMessage && message.role === "user") {
+        lastUserMessage = message;
+      }
+      if (!lastAssistantMessage && message.role === "assistant") {
+        lastAssistantMessage = message;
+      }
+    }
 
     // Some flows (e.g., createThreadSession) seed an empty assistant message before
     // the actual stream starts. If navigation interrupts that stream we end up with
@@ -339,20 +348,17 @@ export function GrayChatView({
     }
 
     // Mark that we've handled this specific user message so we don't re-trigger.
-    // Mark that we've handled this specific user message so we don't re-trigger.
     markAutoStreamTriggered(sessionAutoStreamId, safeLastUserMessage.id);
 
     // Set isResponding: true immediately to prevent spinner disappearing during race condition
     // between clearing pendingAutoStream and streamAssistantReply setting isResponding.
     updateSession(sessionAutoStreamId, { pendingAutoStream: false, isResponding: true });
 
-    const placeholderAssistantId = !assistantHasContent && lastAssistantMessage ? lastAssistantMessage.id : null;
-
     void streamAssistantReply(
       sessionAutoStreamId,
-      lastUserMessage.content,
+      safeLastUserMessage.content,
       sessionConversationId ?? null,
-      placeholderAssistantId
+      null
     );
   }, [
     hasAutoStreamTriggered,

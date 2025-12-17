@@ -18,7 +18,7 @@ export const useDismissableLayer = ({
       return;
     }
 
-    const handlePointerDown = (event: globalThis.MouseEvent) => {
+    const handlePointerDown = (event: Event) => {
       const target = event.target as Node | null;
       if (!target) {
         return;
@@ -46,12 +46,13 @@ export const useDismissableLayer = ({
     };
 
     document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("touchstart", handlePointerDown);
     document.addEventListener("keydown", handleKeyDown);
 
     return () => {
       document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("touchstart", handlePointerDown);
       document.removeEventListener("keydown", handleKeyDown);
     };
   }, [ignoreRefs, isOpen, onDismiss, onEscape]);
 };
-

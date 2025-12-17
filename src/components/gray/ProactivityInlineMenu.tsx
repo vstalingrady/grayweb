@@ -14,6 +14,7 @@ import {
   DEFAULT_CUSTOM_SETTINGS,
   DEFAULT_PROACTIVITY_TIME,
   PROACTIVITY_PRESETS,
+  buildCustomProactivityItem,
   dedupeTimes,
   findNextCustomTime,
   formatCustomTimeLabel,
@@ -196,19 +197,7 @@ export function ProactivityInlineMenu({
 
   const applyCustomProactivity = useCallback(
     (nextTimes: string[]) => {
-      const sortedTimes = dedupeTimes(nextTimes);
-      const firstTime = sortedTimes[0] ?? DEFAULT_PROACTIVITY_TIME;
-      const formattedTimes = sortedTimes.map((time) => formatCustomTimeLabel(time)).join(", ");
-      const descriptionParts = [`${sortedTimes.length} touchpoints`, formattedTimes];
-
-      onSelectProactivity({
-        id: CUSTOM_PROACTIVITY_ID,
-        label: "Custom plan",
-        description: descriptionParts.join(" • "),
-        cadence: "Custom",
-        time: firstTime,
-        times: sortedTimes,
-      });
+      onSelectProactivity(buildCustomProactivityItem(nextTimes));
     },
     [onSelectProactivity]
   );

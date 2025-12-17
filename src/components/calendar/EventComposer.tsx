@@ -13,44 +13,39 @@ import type { MouseEvent } from "react";
 import type { CSSProperties } from "react";
 
 import styles from "./GrayDashboardCalendar.module.css";
+import { EventComposerColorPicker } from "./EventComposerColorPicker";
+import { EventComposerDatePicker } from "./EventComposerDatePicker";
 import {
   CalendarEntryType,
   CalendarEvent,
   CalendarInfo,
-  CalendarEventDisplayHint,
 } from "./types";
-import { ArrowRight, Calendar, ChevronDown, ChevronLeft, ChevronRight, Plus, X } from "lucide-react";
+import { ArrowRight, ChevronDown, X } from "lucide-react";
 import { useI18n } from "@/contexts/I18nContext";
-import { MiniMonth } from "./MiniMonth";
 import {
   DEFAULT_COLORS,
-  EARTHY_PALETTE,
-  NEUTRAL_PALETTE,
-  PASTEL_PALETTE,
-  QUICK_COLOR_SWATCHES,
   clamp,
   combineDateWithTime,
+  formatDurationLabel,
   formatTimeInput,
-  hexToRgb,
   isPointerEventInside,
   normalizeHex,
-  rgbToHex,
   startOfDay,
   startOfMonth,
 } from "./eventComposerUtils";
 
-export type EventComposerPayload = {
-  id?: string;
-  title: string;
-  start: Date;
-  end: Date;
-  color: string;
-  entryType: CalendarEntryType;
-  calendarId: string;
-  description?: string;
-  displayHint?: CalendarEventDisplayHint;
-  reminderMinutesBefore?: number | null;
-};
+import type { ComposerState, EventComposerPayload } from "./eventComposerState";
+import {
+  DEFAULT_EVENT_DURATION_MINUTES,
+  DEFAULT_STATE,
+  ENTRY_TYPE_LABELS,
+  VISIBLE_ENTRY_TYPES,
+  composerReducer,
+  resolveStateFromEvent,
+} from "./eventComposerState";
+
+export type { ComposerState, EventComposerPayload };
+export { DEFAULT_EVENT_DURATION_MINUTES };
 
 type AnchorRect = {
   top: number;
@@ -71,68 +66,6 @@ type EventComposerProps = {
   anchorRect?: AnchorRect | null;
   onStateChange?: (state: ComposerState) => void;
 };
-
-export type ComposerState = {
-  title: string;
-  startTime: string;
-  endTime: string;
-  color: string;
-  entryType: CalendarEntryType;
-  calendarId: string;
-  details: string;
-  reminderMinutesBefore: number | null;
-};
-
-type ComposerAction =
-  | { type: "reset"; payload: ComposerState }
-  | { type: "update"; payload: Partial<ComposerState> };
-
-const DEFAULT_STATE: ComposerState = {
-  title: "",
-  startTime: "09:00",
-  endTime: "10:00",
-  color: DEFAULT_COLORS.event,
-  entryType: "event",
-  calendarId: "default",
-  details: "",
-  reminderMinutesBefore: null,
-};
-
-export const DEFAULT_EVENT_DURATION_MINUTES = 60;
-
-const VISIBLE_ENTRY_TYPES: CalendarEntryType[] = ["plan", "habit", "event"];
-const ENTRY_TYPE_LABELS: Record<CalendarEntryType, string> = {
-  event: "Event",
-  task: "Task",
-  plan: "Plans",
-  habit: "Habits",
-};
-
-const composerReducer = (state: ComposerState, action: ComposerAction): ComposerState => {
-  switch (action.type) {
-    case "reset":
-      return action.payload;
-    case "update":
-      return { ...state, ...action.payload };
-    default:
-      return state;
-  }
-};
-
-const resolveStateFromEvent = (
-  event: CalendarEvent,
-  fallbackCalendarId: string
-): ComposerState => ({
-  title: event.title,
-  startTime: formatTimeInput(event.start),
-  endTime: formatTimeInput(event.end),
-  color: event.color,
-  entryType: event.entryType,
-  calendarId: event.calendarId ?? fallbackCalendarId,
-  details: event.description ?? "",
-  reminderMinutesBefore:
-    typeof event.reminderMinutesBefore === "number" ? event.reminderMinutesBefore : null,
-});
 
 export function EventComposer({
   isOpen,
@@ -181,6 +114,11 @@ export function EventComposer({
     if (!isOpen) {
       return;
     }
+
+    const initialDateSource = activeEvent?.start ?? initialRange?.start ?? referenceDate;
+    const normalizedInitialDate = startOfDay(initialDateSource);
+    setSelectedDate(normalizedInitialDate);
+    setMonthDate(startOfMonth(normalizedInitialDate));
 
     if (activeEvent) {
       dispatch({ type: "reset", payload: resolveStateFromEvent(activeEvent, calendarFallbackId) });
@@ -547,7 +485,6 @@ export function EventComposer({
     return () => window.removeEventListener("resize", updatePosition);
   }, [isDatePickerOpen, monthDate]);
 
-  const rgb = hexToRgb(state.color) ?? { red: 0, green: 0, blue: 0 };
   const colorPopoverStyle = useMemo<CSSProperties | undefined>(() => {
     if (!colorPickerPosition) return undefined;
     return { top: `${colorPickerPosition.top}px`, left: `${colorPickerPosition.left}px` };
@@ -569,10 +506,6 @@ export function EventComposer({
 
   const handleUpdateColorWithoutClosing = (colorValue: string) => {
     dispatch({ type: "update", payload: { color: colorValue } });
-  };
-
-  const handlePickCustomColor = () => {
-    setIsColorPickerOpen((previous) => !previous);
   };
 
   const handleHexCommit = () => {
@@ -693,24 +626,9 @@ export function EventComposer({
                       required
                     />
                   </div>
-	                  <span className={styles.composerDuration}>
-	                    {(() => {
-	                      const start = new Date(`2000-01-01T${state.startTime}`);
-	                      const end = new Date(`2000-01-01T${state.endTime}`);
-	                      let diff = end.getTime() - start.getTime();
-	                      if (diff < 0) diff += 24 * 60 * 60 * 1000;
-	                      const mins = Math.floor(diff / 60000);
-	                      const h = Math.floor(mins / 60);
-	                      const m = mins % 60;
-	                      if (h <= 0) {
-	                        return `${mins}m`;
-	                      }
-	                      if (m === 0) {
-	                        return `${h}h`;
-	                      }
-	                      return `${h}h ${m}m`;
-	                    })()}
-	                  </span>
+		                  <span className={styles.composerDuration}>
+		                    {formatDurationLabel(state.startTime, state.endTime)}
+		                  </span>
                 </div>
                 {showReminderControl ? (
                   <div className={styles.composerField}>
@@ -737,111 +655,25 @@ export function EventComposer({
                       <option value="60">{t("1 hour before")}</option>
                     </select>
                   </div>
-                ) : null}
-                <div className={styles.composerDateRow}>
-                  <button
-                    type="button"
-                    className={styles.composerDateTrigger}
-                    onClick={() => {
-                      setMonthDate(startOfMonth(selectedDate));
-                      setIsDatePickerOpen((previous) => !previous);
-                    }}
-                    aria-expanded={isDatePickerOpen ? "true" : "false"}
-                    aria-label={t("Choose date")}
-                    ref={datePickerTriggerRef}
-                  >
-                    <Calendar
-                      size={14}
-                      aria-hidden="true"
-                      className={styles.composerInlineControlIcon}
-                    />
-                    <span className={styles.composerInlineControlLabel}>
-                      {selectedDate.toLocaleDateString(undefined, {
-                        weekday: "short",
-                        month: "short",
-                        day: "numeric",
-                      })}
-                    </span>
-                    <ChevronDown
-                      size={14}
-                      aria-hidden="true"
-                      className={styles.composerInlineControlChevron}
-                    />
-                  </button>
-                </div>
-              </div>
-            </>
-          ) : null}
-
-          {isDatePickerOpen ? (
-            <div
-              ref={datePickerPopoverRef}
-              className={styles.composerDatePopover}
-              style={datePopoverStyle}
-              role="dialog"
-              aria-label={t("Date picker")}
-            >
-              <div className={styles.composerDatePopoverHeader}>
-                <span className={styles.composerDatePopoverMonthLabel}>
-                  {monthDate.toLocaleDateString(undefined, { month: "long", year: "numeric" })}
-                </span>
-                <span className={styles.composerDatePopoverControls}>
-                  <button
-                    type="button"
-                    className={styles.composerDatePopoverNavButton}
-                    aria-label={t("Previous")}
-                    title={t("Go to previous month")}
-                    onClick={() =>
-                      setMonthDate((previous) => {
-                        const next = startOfMonth(previous);
-                        next.setMonth(previous.getMonth() - 1);
-                        return next;
-                      })
-                    }
-                  >
-                    <ChevronLeft size={14} />
-                  </button>
-                  <button
-                    type="button"
-                    className={styles.composerDatePopoverNavButton}
-                    aria-label={t("Next")}
-                    title={t("Go to next month")}
-                    onClick={() =>
-                      setMonthDate((previous) => {
-                        const next = startOfMonth(previous);
-                        next.setMonth(previous.getMonth() + 1);
-                        return next;
-                      })
-                    }
-                  >
-                    <ChevronRight size={14} />
-                  </button>
-                </span>
-              </div>
-
-              <div className={styles.composerMiniCalendarCompact}>
-                <MiniMonth
-                  referenceDate={monthDate}
+	                ) : null}
+                <EventComposerDatePicker
                   selectedDate={selectedDate}
-                  onSelectDate={(nextDate) => {
-                    const normalized = startOfDay(nextDate);
-                    setSelectedDate(normalized);
-                    if (
-                      normalized.getMonth() !== monthDate.getMonth() ||
-                      normalized.getFullYear() !== monthDate.getFullYear()
-                    ) {
-                      setMonthDate(startOfMonth(normalized));
-                    }
-                    setIsDatePickerOpen(false);
-                  }}
+                  monthDate={monthDate}
+                  setSelectedDate={setSelectedDate}
+                  setMonthDate={setMonthDate}
+                  isDatePickerOpen={isDatePickerOpen}
+                  setIsDatePickerOpen={setIsDatePickerOpen}
+                  datePickerTriggerRef={datePickerTriggerRef}
+                  datePickerPopoverRef={datePickerPopoverRef}
+                  datePopoverStyle={datePopoverStyle}
                 />
-              </div>
-            </div>
-          ) : null}
+	              </div>
+	            </>
+	          ) : null}
 
-          <label className={styles.composerField}>
-            <textarea
-              value={state.details}
+	          <label className={styles.composerField}>
+	            <textarea
+	              value={state.details}
               onChange={(event) =>
                 dispatch({ type: "update", payload: { details: event.target.value } })
               }
@@ -854,158 +686,20 @@ export function EventComposer({
           <div className={styles.composerField}>
             <span>{t("Color")}</span>
             <div className={styles.composerColorRow}>
-              <div className={styles.composerColors} ref={colorPickerRef}>
-                <div className={styles.composerQuickSwatches}>
-                  {QUICK_COLOR_SWATCHES.map((swatch) => (
-                    <button
-                      key={swatch}
-                      type="button"
-                      className={styles.composerColorDot}
-                      style={{ backgroundColor: swatch }}
-                      data-active={state.color === swatch ? "true" : "false"}
-                      onClick={() => handleSelectColor(swatch)}
-                      aria-label={t("Select {color} color", { color: swatch })}
-                    />
-                  ))}
-                </div>
-                <button
-                  type="button"
-                  className={styles.composerColorDot}
-                  data-active={
-                    QUICK_COLOR_SWATCHES.includes(state.color as (typeof QUICK_COLOR_SWATCHES)[number])
-                      ? "false"
-                      : "true"
-                  }
-                  onClick={handlePickCustomColor}
-                  aria-label={t("Pick custom color")}
-                  aria-expanded={isColorPickerOpen ? "true" : "false"}
-                  ref={colorPickerTriggerRef}
-                >
-                  <Plus size={18} strokeWidth={1.75} aria-hidden="true" />
-                </button>
-
-                {isColorPickerOpen ? (
-                  <div
-                    ref={colorPickerPopoverRef}
-                    className={styles.composerColorPopover}
-                    style={colorPopoverStyle}
-                    role="dialog"
-                    aria-label={t("Color picker")}
-                  >
-                    <div className={styles.composerColorPopoverHeader}>
-                      <div
-                        className={styles.composerColorPreview}
-                        style={{ backgroundColor: state.color }}
-                        aria-hidden="true"
-                      />
-                      <label className={styles.composerColorHexLabel}>
-                        <span>HEX</span>
-                        <input
-                          value={hexDraft}
-                          onChange={(event) => setHexDraft(event.target.value)}
-                          onBlur={handleHexCommit}
-                          onKeyDown={(event) => {
-                            if (event.key === "Enter") {
-                              event.preventDefault();
-                              handleHexCommit();
-                            }
-                          }}
-                          inputMode="text"
-                          autoComplete="off"
-                          spellCheck={false}
-                        />
-                      </label>
-                    </div>
-
-                    <div className={styles.composerColorSliders} aria-label={t("RGB sliders")}>
-                      <label>
-                        <span>R</span>
-                        <input
-                          type="range"
-                          min={0}
-                          max={255}
-                          value={rgb.red}
-                          onChange={(event) => handleUpdateColorWithoutClosing(rgbToHex(Number(event.target.value), rgb.green, rgb.blue))}
-                        />
-                        <output>{rgb.red}</output>
-                      </label>
-                      <label>
-                        <span>G</span>
-                        <input
-                          type="range"
-                          min={0}
-                          max={255}
-                          value={rgb.green}
-                          onChange={(event) => handleUpdateColorWithoutClosing(rgbToHex(rgb.red, Number(event.target.value), rgb.blue))}
-                        />
-                        <output>{rgb.green}</output>
-                      </label>
-                      <label>
-                        <span>B</span>
-                        <input
-                          type="range"
-                          min={0}
-                          max={255}
-                          value={rgb.blue}
-                          onChange={(event) => handleUpdateColorWithoutClosing(rgbToHex(rgb.red, rgb.green, Number(event.target.value)))}
-                        />
-                        <output>{rgb.blue}</output>
-                      </label>
-                    </div>
-
-                    <div className={styles.composerColorPaletteSection}>
-                      <h3>Earthy</h3>
-                      <div className={styles.composerColorPaletteGrid}>
-                        {EARTHY_PALETTE.map((swatch) => (
-                          <button
-                            key={`earthy-${swatch}`}
-                            type="button"
-                            className={styles.composerColorSwatch}
-                            style={{ backgroundColor: swatch }}
-                            data-active={state.color === swatch ? "true" : "false"}
-                            onClick={() => handleSelectColor(swatch)}
-                            aria-label={t("Select {color} color", { color: swatch })}
-                          />
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className={styles.composerColorPaletteSection}>
-                      <h3>Pastel</h3>
-                      <div className={styles.composerColorPaletteGrid}>
-                        {PASTEL_PALETTE.map((swatch) => (
-                          <button
-                            key={`pastel-${swatch}`}
-                            type="button"
-                            className={styles.composerColorSwatch}
-                            style={{ backgroundColor: swatch }}
-                            data-active={state.color === swatch ? "true" : "false"}
-                            onClick={() => handleSelectColor(swatch)}
-                            aria-label={t("Select {color} color", { color: swatch })}
-                          />
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className={styles.composerColorPaletteSection}>
-                      <h3>Neutrals</h3>
-                      <div className={styles.composerColorPaletteGrid}>
-                        {NEUTRAL_PALETTE.map((swatch) => (
-                          <button
-                            key={`neutral-${swatch}`}
-                            type="button"
-                            className={styles.composerColorSwatch}
-                            style={{ backgroundColor: swatch }}
-                            data-active={state.color === swatch ? "true" : "false"}
-                            onClick={() => handleSelectColor(swatch)}
-                            aria-label={t("Select {color} color", { color: swatch })}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                ) : null}
-              </div>
+              <EventComposerColorPicker
+                color={state.color}
+                isColorPickerOpen={isColorPickerOpen}
+                setIsColorPickerOpen={setIsColorPickerOpen}
+                hexDraft={hexDraft}
+                setHexDraft={setHexDraft}
+                colorPopoverStyle={colorPopoverStyle}
+                colorPickerRef={colorPickerRef}
+                colorPickerTriggerRef={colorPickerTriggerRef}
+                colorPickerPopoverRef={colorPickerPopoverRef}
+                onSelectColor={handleSelectColor}
+                onUpdateColorWithoutClosing={handleUpdateColorWithoutClosing}
+                onHexCommit={handleHexCommit}
+              />
 
               <div className={styles.composerFooter}>
                 {activeEvent && onDelete ? (

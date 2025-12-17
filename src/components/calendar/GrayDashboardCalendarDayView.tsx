@@ -1,6 +1,6 @@
 "use client";
 
-import type { CSSProperties, HTMLAttributes, MouseEvent } from "react";
+import type { CSSProperties, HTMLAttributes, MouseEvent, MutableRefObject } from "react";
 
 import styles from "./GrayDashboardCalendar.module.css";
 import { EventCard } from "./EventCard";
@@ -26,7 +26,7 @@ type DayViewProps = {
   dayLayouts: PositionedEvent[];
   activeDrafts: Record<string, EventDraft> | null;
   selectedEventIds: Set<string>;
-  dayColumnRef: React.MutableRefObject<HTMLDivElement | null>;
+  dayColumnRef: MutableRefObject<HTMLDivElement | null>;
   onNavigateRange: (direction: number) => void;
   onGoToday: () => void;
   onUpdateViewMode: (mode: CalendarViewMode) => void;
@@ -185,4 +185,3 @@ export function GrayDashboardCalendarDayView({
     </div>
   );
 }
-

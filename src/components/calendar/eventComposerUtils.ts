@@ -131,6 +131,37 @@ export const combineDateWithTime = (date: Date, timeValue: string) => {
   return result;
 };
 
+const parseTimeToMinutes = (timeValue: string) => {
+  const [hoursRaw, minutesRaw] = timeValue.split(":");
+  const hours = Number.parseInt(hoursRaw ?? "", 10);
+  const minutes = Number.parseInt(minutesRaw ?? "", 10);
+
+  const safeHours = Number.isFinite(hours) ? hours : 0;
+  const safeMinutes = Number.isFinite(minutes) ? minutes : 0;
+  return safeHours * 60 + safeMinutes;
+};
+
+export const formatDurationLabel = (startTime: string, endTime: string) => {
+  const startMinutes = parseTimeToMinutes(startTime);
+  const endMinutes = parseTimeToMinutes(endTime);
+
+  let diffMinutes = endMinutes - startMinutes;
+  if (diffMinutes < 0) {
+    diffMinutes += 24 * 60;
+  }
+
+  const hours = Math.floor(diffMinutes / 60);
+  const minutes = diffMinutes % 60;
+
+  if (hours <= 0) {
+    return `${diffMinutes}m`;
+  }
+  if (minutes === 0) {
+    return `${hours}h`;
+  }
+  return `${hours}h ${minutes}m`;
+};
+
 export const isPointerEventInside = (event: globalThis.PointerEvent, element: HTMLElement | null) => {
   if (!element) return false;
   const target = event.target as Node | null;

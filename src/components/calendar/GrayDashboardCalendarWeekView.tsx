@@ -1,6 +1,6 @@
 "use client";
 
-import type { CSSProperties, HTMLAttributes, MouseEvent } from "react";
+import type { CSSProperties, HTMLAttributes, MouseEvent, MutableRefObject } from "react";
 
 import styles from "./GrayDashboardCalendar.module.css";
 import { EventCard } from "./EventCard";
@@ -28,8 +28,8 @@ type WeekViewProps = {
   weekLayouts: PositionedEvent[][];
   activeDrafts: Record<string, EventDraft> | null;
   selectedEventIds: Set<string>;
-  weekScrollRef: React.MutableRefObject<HTMLDivElement | null>;
-  weekColumnsRef: React.MutableRefObject<HTMLDivElement | null>;
+  weekScrollRef: MutableRefObject<HTMLDivElement | null>;
+  weekColumnsRef: MutableRefObject<HTMLDivElement | null>;
   onNavigateRange: (direction: number) => void;
   onGoToday: () => void;
   onUpdateViewMode: (mode: CalendarViewMode) => void;
@@ -231,4 +231,3 @@ export function GrayDashboardCalendarWeekView({
     </div>
   );
 }
-

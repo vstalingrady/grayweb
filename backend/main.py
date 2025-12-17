@@ -1,3 +1,11 @@
+# Ensure parent directory is on path so `backend.` imports work consistently
+import sys
+from pathlib import Path
+_backend_dir = Path(__file__).parent
+_parent_dir = _backend_dir.parent
+if str(_parent_dir) not in sys.path:
+    sys.path.insert(0, str(_parent_dir))
+
 import logging
 import asyncio
 from fastapi import FastAPI, HTTPException, Depends, status, Query, Response, Request, BackgroundTasks
@@ -850,6 +858,26 @@ except ImportError:
         determine_provider_and_model,
     )
 
+# AI Response context helpers (extracted shared logic)
+try:
+    from backend.core.ai_response_context import (
+        load_context_cache as _load_context_cache_helper,
+        build_workspace_context as _build_workspace_context,
+        prepare_tool_list as _prepare_tool_list,
+        build_effective_system_prompt as _build_effective_system_prompt,
+        resolve_media_with_timing as _resolve_media_with_timing,
+        REMINDERS_DISABLED_NOTE,
+    )
+except ImportError:
+    from core.ai_response_context import (  # type: ignore
+        load_context_cache as _load_context_cache_helper,
+        build_workspace_context as _build_workspace_context,
+        prepare_tool_list as _prepare_tool_list,
+        build_effective_system_prompt as _build_effective_system_prompt,
+        resolve_media_with_timing as _resolve_media_with_timing,
+        REMINDERS_DISABLED_NOTE,
+    )
+
 SUPABASE_POOLER_HOST = os.getenv("SUPABASE_POOLER_HOST", "aws-1-ap-south-1.pooler.supabase.com")
 SUPABASE_POOLER_PORT = int(os.getenv("SUPABASE_POOLER_PORT", "6543"))
 
@@ -1050,19 +1078,7 @@ _ensure_sqlite_columns("transactions", [
     ("paddle_transaction_id", "TEXT", None),
 ])
 
-# database and metadata imported from backend.database
-
-# GROK_DEFAULT_MODEL depends on OPENROUTER_SERVICE instance
-GROK_DEFAULT_MODEL = OPENROUTER_SERVICE.lite_model if OPENROUTER_SERVICE else "x-ai/grok-4.1-fast"
-
-DEFAULT_DEV_ORIGIN_PORTS = (3000, 5173)
-
-# Message detection keywords and functions are imported from core.message_detection
-REMINDER_KEYWORDS = _REMINDER_KEYWORDS
-TOOL_TRIGGER_KEYWORDS = _TOOL_TRIGGER_KEYWORDS
-
-# CORS, AI, and serialization utilities are imported from:
-# - core.cors_utils, core.ai_utils, core.serializers
+# Constants and utilities imported from core modules (cors_utils, message_detection, ai_utils, serializers)
 
 ALLOWED_ORIGIN_REGEX = _local_network_origin_regex()
 
@@ -1073,11 +1089,6 @@ if IS_PRODUCTION and not ALLOWED_ORIGINS and not ALLOWED_ORIGIN_REGEX:
         "CORS misconfigured for production: no allowed origins found; set SITE_URL/NEXT_PUBLIC_SITE_URL or CORS_ALLOW_ORIGINS."
     )
     raise RuntimeError("CORS configuration missing in production")
-
-
-# Database tables are now imported from backend.database
-# (chat_sessions, plans, habits, google_calendar_states)
-
 
 # Supabase setup (Auth only - conversation store is now strictly local SQLite/Postgres)
 SUPABASE_URL, SUPABASE_KEY, SUPABASE_KEY_SOURCE = resolve_supabase_credentials()
@@ -1092,8 +1103,6 @@ if SUPABASE_URL and SUPABASE_KEY and SUPABASE_URL != "your_supabase_url_here":
 
 # Note: Conversation store is now strictly local (SQLite/Postgres).
 # We no longer configure the conversation store with Supabase clients for data.
-
-_USER_DATA_CACHE: Dict[int, int] = {}
 
 async def _require_conversation_owner(conversation_id: str, current_user: Dict[str, Any]) -> None:
     """Ensure the authenticated user owns the conversation being accessed."""
@@ -1133,19 +1142,14 @@ async def _require_conversation_owner(conversation_id: str, current_user: Dict[s
                         )
                     return
         except Exception:
-            # If local lookup fails, fall through to Supabase check / lenient path.
+            # If local lookup fails, fall through to lenient path.
             pass
     else:
         # Non-UUID IDs are treated as local-only; require the current user context.
         require_same_user(current_user["id"], current_user)
         return
 
-    # Fallback: check Supabase ownership only if the conversation store is enabled.
-    if not _conversation_store_available():
-        return
-        
-    # NOTE: Functionality to check Supabase for ownership has been removed as we are strictly local-only now.
-    return
+    # NOTE: Supabase ownership check removed - now strictly local-only.
 
 # Reminder enrichment helpers (extracted to core/reminder_enrichment.py)
 try:
