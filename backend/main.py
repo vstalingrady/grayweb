@@ -5203,6 +5203,8 @@ async def chat_stream(
 
 # Conversation endpoints are now in backend/api/conversations.py
 
+# User endpoints are now in backend/api/users.py
+
 # Plans and Habits routes are now in backend/api/plans.py
 
 # Dashboard routes are now in backend/api/dashboard.py
@@ -5212,7 +5214,4 @@ async def chat_stream(
 # Proactivity routes are now in backend/api/proactivity.py
 
 # Calendar event routes are now in backend/api/calendars.py
-
-# (old conversation endpoints removed - see comments above)
-
 
