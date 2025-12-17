@@ -48,6 +48,8 @@ async def stream_openrouter_response(
     # Hybrid flow data
     hybrid_tool_results: Optional[List[Dict[str, Any]]] = None,
     hybrid_tool_cards: Optional[List[Dict[str, Any]]] = None,
+    # Usage tracking
+    usage_tracker_cls=None,
 ) -> AsyncGenerator[Tuple[str, Any], None]:
     """Stream response from OpenRouter with multi-turn tool handling.
     
@@ -110,6 +112,14 @@ async def stream_openrouter_response(
             )
         
         if search_enabled:
+            # Track web search cost ($10/K = $0.01 per search)
+            if usage_tracker_cls and user_id and db:
+                try:
+                    tracker = usage_tracker_cls(db)
+                    await tracker.track_cost(user_id, 0.01, "web_search")
+                except Exception as e:
+                    api_logger.warning(f"Failed to track search cost: {e}")
+            
             run_system_prompt = (run_system_prompt or "") + "\n\nYou have access to Google Search. You must use it for current events, news, or factual queries where your knowledge might be outdated."
         
         # Stream from OpenRouter

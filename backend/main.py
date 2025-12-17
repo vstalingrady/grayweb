@@ -828,6 +828,7 @@ try:
         has_onboarding_tool as _has_onboarding_tool_hybrid,
     )
     from backend.core.stream_handlers.gemini_stream import stream_gemini_response
+    from backend.core.stream_handlers.openrouter import stream_openrouter_response
     from backend.core.stream_handlers.context import (
         build_intent_window_text,
         consolidate_gemini_tools,
@@ -842,6 +843,7 @@ except ImportError:
         has_onboarding_tool as _has_onboarding_tool_hybrid,
     )
     from core.stream_handlers.gemini_stream import stream_gemini_response  # type: ignore
+    from core.stream_handlers.openrouter import stream_openrouter_response  # type: ignore
     from core.stream_handlers.context import (  # type: ignore
         build_intent_window_text,
         consolidate_gemini_tools,
