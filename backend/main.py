@@ -904,7 +904,6 @@ try:
         get_search_tool,
         get_url_context_tool,
         get_default_chat_tools,
-        PROMPTS_DIR,
         GLOBAL_SYSTEM_PROMPTS_PATH,
     )
 except ImportError:
@@ -916,7 +915,6 @@ except ImportError:
         get_search_tool,
         get_url_context_tool,
         get_default_chat_tools,
-        PROMPTS_DIR,
         GLOBAL_SYSTEM_PROMPTS_PATH,
     )
 
@@ -926,8 +924,6 @@ def tier_conversation_token_limit(plan_tier: Optional[str]) -> int:
 
 GEMINI_SERVICE = GeminiService()
 OPENROUTER_SERVICE = OpenRouterService()
-# GROQ_SERVICE removed - using OpenRouter for all models
-# VALIDATE_GEMINI_ON_STARTUP imported from core.ai_config
 
 AI_MESSAGE_GENERATOR = AIMessageGenerator()
 
@@ -940,8 +936,6 @@ SEARCH_TOOL = get_search_tool()
 URL_CONTEXT_TOOL = get_url_context_tool()
 DEFAULT_CHAT_TOOLS = get_default_chat_tools()
 
-# PROMPTS_DIR, GLOBAL_SYSTEM_PROMPTS_PATH, ONBOARDING_PROMPT_PATH imported from core.ai_config
-
 # Run all SQLite migrations using consolidated function from core/migrations.py
 try:
     from backend.core.migrations import run_startup_migrations as _run_startup_migrations
@@ -949,8 +943,6 @@ except ImportError:
     from core.migrations import run_startup_migrations as _run_startup_migrations  # type: ignore
 
 _run_startup_migrations()
-
-# Constants and utilities imported from core modules (cors_utils, message_detection, ai_utils, serializers)
 
 ALLOWED_ORIGIN_REGEX = _local_network_origin_regex()
 
