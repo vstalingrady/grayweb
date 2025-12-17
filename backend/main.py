@@ -1649,69 +1649,24 @@ async def stream_ai_response(
 
     explicit_model = (model or "").strip()
     normalized_model = explicit_model.lower()
-    explicit_model_is_tier_alias = normalized_model in {"lite", "gray-lite", "pro", "gray-pro"}
-    explicit_model_provided = bool(explicit_model) and not explicit_model_is_tier_alias
-    provider: Optional[str] = None
-
-    # Respect explicit tier aliases first
-    if normalized_model in {"lite", "gray-lite", "pro", "gray-pro"}:
-        # Lite tier routing: use OpenRouter with Grok 4.1 Fast
-        # We now route "Pro" requests here too, effectively removing the Pro tier logic.
-        if OPENROUTER_SERVICE and OPENROUTER_SERVICE.available:
-            provider = "openrouter"
-            model = OPENROUTER_LITE_MODEL  # x-ai/grok-4.1-fast - always set for tier alias
-        else:
-            provider = "gemini"
-            model = GEMINI_LIGHT_MODEL
-    elif normalized_model == "pioneer":
-        # Pioneer tier is a direct OpenRouter passthrough - model ID should be already set
-        # If only "pioneer" was passed without a specific model, default to a premium model
-        if OPENROUTER_SERVICE and OPENROUTER_SERVICE.available:
-            provider = "openrouter"
-            # Keep the model as-is if it contains a slash (specific model ID), otherwise use default
-            if "/" not in explicit_model:
-                model = "anthropic/claude-sonnet-4.5"  # Default pioneer model
-        else:
-            provider = "gemini"
-            model = GEMINI_LIGHT_MODEL # Fallback now uses Lite instead of Pro
-    elif normalized_model.startswith("models/") or normalized_model.startswith("gemini"):
-        provider = "gemini"
-    elif normalized_model.startswith("openrouter") or "/" in normalized_model:
-        # Any model with a slash (like x-ai/grok-4.1-fast) routes through OpenRouter
-        provider = "openrouter"
+    explicit_model_provided = bool(explicit_model) and normalized_model not in {"lite", "gray-lite", "pro", "gray-pro"}
 
     # Check for onboarding tools so we can route through a provider that supports
     # real function calling (Gemini) instead of relying on brittle JSON parsing.
     is_onboarding_tool = _has_onboarding_tool_hybrid(tools)
 
-    # Route based on chosen provider. If tool calls are present, OpenRouter should handle them.
-    # The previous logic forcing Gemini for tools is being removed as OpenRouter
-    # now supports a standardized tool calling interface.
-    if needs_structured_tools or is_onboarding_tool:
-        # Ensure tools are passed to OpenRouter if it's the selected provider
-        if provider == "openrouter":
-            pass # OpenRouter will handle tools directly
-        elif provider == "gemini":
-            # Provider is already Gemini from tier alias selection (pro/lite)
-            # Keep the model that was set by the tier alias - don't override it
-            pass
-        else:
-            # No provider set yet, fallback to Gemini with appropriate model
-            provider = "gemini"
-            # Only use REMINDER_MODEL if user didn't explicitly select a tier
-            if not explicit_model_is_tier_alias:
-                model = REMINDER_MODEL if needs_structured_tools else GEMINI_SERVICE.default_model
-    elif provider:
-        # provider was decided above based on explicit model hints
-        pass
-    else:
-        # Default to Gemini for fastest streaming
-        provider = "gemini"
-
-    # --- Google Maps Grounding Integration ---
-    # If maps enabled, force Gemini provider (OpenRouter doesn't support Maps)
+    # Use extracted function for provider/model determination
+    provider, model, explicit_model_is_tier_alias = determine_provider_and_model(
+        model=model,
+        openrouter_available=bool(OPENROUTER_SERVICE and OPENROUTER_SERVICE.available),
+        gemini_default_model=GEMINI_SERVICE.default_model if GEMINI_SERVICE else GEMINI_DEFAULT_MODEL,
+        needs_structured_tools=needs_structured_tools,
+        is_onboarding_tool=is_onboarding_tool,
+        maps_enabled=maps_enabled,
+    )
+    
+    # Add maps tool if enabled
     if maps_enabled:
-        provider = "gemini"
         tools = add_maps_tool_if_needed(tools, maps_enabled)
 
 
@@ -2059,61 +2014,18 @@ async def generate_ai_response(
 
     explicit_model = (model or "").strip()
     normalized_model = explicit_model.lower()
-    explicit_model_is_tier_alias = normalized_model in {"lite", "gray-lite", "pro", "gray-pro"}
-    explicit_model_provided = bool(explicit_model) and not explicit_model_is_tier_alias
+    explicit_model_provided = bool(explicit_model) and normalized_model not in {"lite", "gray-lite", "pro", "gray-pro"}
 
-    # Determine initial provider preference based on AI_PROVIDER environment variable
-    initial_provider = AI_PROVIDER.lower()
-    provider: Optional[str] = None
-
-    if needs_structured_tools or tools:
-        # For plan / habit / reminder flows, force Gemini tool support so we
-        # actually persist changes instead of hallucinating side effects.
-        provider = "gemini"
-        if not model:
-            model = REMINDER_MODEL
-    if provider is None and normalized_model in {"lite", "gray-lite"}:
-        # Lite tier routing: use OpenRouter with Grok 4.1 Fast
-        if OPENROUTER_SERVICE and OPENROUTER_SERVICE.available:
-            provider = "openrouter"
-            model = OPENROUTER_LITE_MODEL  # x-ai/grok-4.1-fast - always set for tier alias
-        else:
-            provider = "gemini"
-            model = GEMINI_LIGHT_MODEL
-    elif normalized_model.startswith("openrouter") or "/" in normalized_model:
-        # Any model with a slash (like x-ai/grok-4.1-fast) routes through OpenRouter
-        if OPENROUTER_SERVICE and OPENROUTER_SERVICE.available:
-            provider = "openrouter"
-        else:
-            provider = "gemini"
-            if not model:
-                model = GEMINI_LIGHT_MODEL
-    elif normalized_model in {"pro", "gray-pro"}:
-        # Pro tier routes to Gemini with pro model
-        provider = "gemini"
-        model = GEMINI_PRO_MODEL  # Always set the actual model path for tier alias
-    elif normalized_model == "pioneer":
-        # Pioneer tier is a direct OpenRouter passthrough
-        if OPENROUTER_SERVICE and OPENROUTER_SERVICE.available:
-            provider = "openrouter"
-            # Keep the model as-is if it contains a slash (specific model ID), otherwise use default
-            if "/" not in explicit_model:
-                model = "anthropic/claude-sonnet-4.5"  # Default pioneer model
-        else:
-            provider = "gemini"
-            model = GEMINI_PRO_MODEL
-    elif normalized_model.startswith("models/") or normalized_model.startswith("gemini") or initial_provider == "gemini":
-        # Explicitly requested Gemini model or default AI_PROVIDER is Gemini
-        provider = "gemini"
-        if not model:
-            model = GEMINI_DEFAULT_MODEL
-    else:
-        # Fallback to initial_provider if no other specific routing applies
-        provider = initial_provider
-
-    # Final check: if no provider was definitively set, default to Gemini
-    if not provider:
-        provider = "gemini"
+    # Use extracted function for provider/model determination
+    # Note: is_onboarding_tool is False for non-streaming (no onboarding in non-streaming)
+    provider, model, explicit_model_is_tier_alias = determine_provider_and_model(
+        model=model,
+        openrouter_available=bool(OPENROUTER_SERVICE and OPENROUTER_SERVICE.available),
+        gemini_default_model=GEMINI_SERVICE.default_model if GEMINI_SERVICE else GEMINI_DEFAULT_MODEL,
+        needs_structured_tools=needs_structured_tools or bool(tools),
+        is_onboarding_tool=False,
+        maps_enabled=maps_enabled,
+    )
 
     cached_contents = None
     cache_text_block: Optional[str] = None

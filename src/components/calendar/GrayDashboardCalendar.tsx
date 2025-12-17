@@ -14,17 +14,17 @@ import {
 
 import styles from "./GrayDashboardCalendar.module.css";
 import { CalendarSidebar } from "./CalendarSidebar";
-import { EventCard } from "./EventCard";
 import {
   EventComposer,
   EventComposerPayload,
   ComposerState,
 } from "./EventComposer";
+import { GrayDashboardCalendarDayView } from "./GrayDashboardCalendarDayView";
+import { GrayDashboardCalendarWeekView } from "./GrayDashboardCalendarWeekView";
 import { layoutDayEvents } from "./layoutDayEvents";
 import { useEventDrag } from "./useEventDrag";
 import { useEventResize } from "./useEventResize";
 import { ensureDateZone, isSameDay, startOfDay, startOfWeek } from "./dateUtils";
-import { HOURS, HOURS_LABEL } from "./timeGrid";
 import {
   CalendarEvent,
   CalendarInfo,
@@ -34,7 +34,6 @@ import {
 import { createSeedCalendars, createSeedEvents } from "./calendarSeed";
 import { formatDateLabel } from "./timeUtils";
 import type { DashboardHeaderProps } from "@/components/gray/DashboardHeader";
-import { ViewModeSelect } from "@/components/gray/ViewModeSelect";
 import { useI18n } from "@/contexts/I18nContext";
 
 const DEFAULT_HOUR_HEIGHT = 64;
