@@ -18,9 +18,9 @@ type UseChatViewScrollOptions = {
 };
 
 type UseChatViewScrollResult = {
-  chatViewportRef: RefObject<HTMLDivElement>;
-  scrollAnchorRef: RefObject<HTMLDivElement>;
-  composerDockRef: RefObject<HTMLDivElement>;
+  chatViewportRef: RefObject<HTMLDivElement | null>;
+  scrollAnchorRef: RefObject<HTMLDivElement | null>;
+  composerDockRef: RefObject<HTMLDivElement | null>;
   chatViewStyle: CSSProperties | undefined;
   handleScroll: () => void;
 };

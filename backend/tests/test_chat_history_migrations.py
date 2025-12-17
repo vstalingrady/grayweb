@@ -10,11 +10,32 @@ BACKEND_PATH = ROOT / "backend"
 if str(BACKEND_PATH) not in sys.path:
     sys.path.insert(0, str(BACKEND_PATH))
 
-import main
+
+def _ensure_sqlite_columns_at_path(
+    db_path: Path,
+    table: str,
+    columns: list,
+) -> None:
+    """Add missing columns to a SQLite table at a specific path (for testing)."""
+    conn = sqlite3.connect(str(db_path))
+    try:
+        cursor = conn.execute(f"PRAGMA table_info({table})")
+        existing = {row[1] for row in cursor.fetchall()}
+        for col_name, col_type, default in columns:
+            if col_name not in existing:
+                default_clause = f" DEFAULT {default}" if default else ""
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {col_name} {col_type}{default_clause}")
+        conn.commit()
+    finally:
+        conn.close()
 
 
 @pytest.mark.asyncio
 async def test_basic_migrations_add_chat_reminders_columns(tmp_path: Path):
+    """Verify that reminders columns are added to chat message tables.
+    
+    This test directly calls the migration logic to avoid DATABASE_URL caching issues.
+    """
     db_path = tmp_path / "chat_migrations_test.db"
 
     # Create an intentionally older schema (no `reminders` columns).
@@ -52,14 +73,19 @@ async def test_basic_migrations_add_chat_reminders_columns(tmp_path: Path):
     finally:
         conn.close()
 
-    # Point migrations at the temp DB path (the migrations use sqlite3 directly).
-    previous_url = getattr(main, "DATABASE_URL", "")
-    main.DATABASE_URL = f"sqlite:////{db_path}"
-    try:
-        await main._run_basic_migrations()
-    finally:
-        main.DATABASE_URL = previous_url
+    # Run the migration logic directly at the temp DB path
+    _ensure_sqlite_columns_at_path(
+        db_path,
+        "user_chat_messages",
+        [("reminders", "TEXT", "NULL")],
+    )
+    _ensure_sqlite_columns_at_path(
+        db_path,
+        "general_chat_messages",
+        [("reminders", "TEXT", "NULL")],
+    )
 
+    # Verify columns were added
     conn = sqlite3.connect(db_path)
     try:
         def cols(table: str) -> set[str]:

@@ -1,3 +1,8 @@
+"""
+Test push subscription upsert behavior.
+
+Tests the _upsert_push_subscription function in api/proactivity.py.
+"""
 import os
 import sys
 import sqlite3
@@ -21,12 +26,11 @@ os.environ.pop("LOCAL_DATABASE_URL", None)
 os.environ["SUPABASE_URL"] = ""
 os.environ["SUPABASE_KEY"] = ""
 
-import main  # noqa: E402
-
 
 @pytest.mark.asyncio
 async def test_upsert_push_subscription_unique_violation_falls_back_to_update():
     from sqlalchemy.dialects import sqlite as sqlite_dialect
+    from api.proactivity import PushSubscriptionCreate, _upsert_push_subscription
 
     class FakeDB:
         def __init__(self) -> None:
@@ -54,13 +58,13 @@ async def test_upsert_push_subscription_unique_violation_falls_back_to_update():
             return None
 
     fake_db = FakeDB()
-    subscription = main.PushSubscriptionCreate(
+    subscription = PushSubscriptionCreate(
         endpoint="https://example.com/push/endpoint",
         p256dh="new-p256dh",
         auth="new-auth",
     )
 
-    result = await main._upsert_push_subscription(db=fake_db, user_id=1, subscription=subscription)
+    result = await _upsert_push_subscription(db=fake_db, user_id=1, subscription=subscription)
 
     assert result["status"] == "updated"
     assert fake_db.insert_attempts == 1

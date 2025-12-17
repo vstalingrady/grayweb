@@ -16,10 +16,10 @@ import styles from "@/app/gray/GrayPageClient.module.css";
 import type { ContextUsageSummary } from "@/components/gray/types";
 import { useI18n } from "@/contexts/I18nContext";
 import { useUser } from "@/contexts/UserContext";
-import { apiService, type ConversationUsage } from "@/lib/api";
 import AttachmentTray from "./AttachmentTray";
 import { GrayChatComposer } from "./ChatComposer";
 import { useChatStore } from "./ChatProvider";
+import { useHasHydrated } from "./hooks/useHasHydrated";
 import { GENERAL_CHAT_SESSION_ID } from "./chat/constants";
 import {
   buildAssistantReply,
@@ -28,9 +28,10 @@ import {
 } from "./chat/utils";
 import { ChatMessagesList } from "./chat/view/ChatMessagesList";
 import { MobileWelcomeScreen } from "./chat/view/MobileWelcomeScreen";
-import { estimateTokenCount, formatDurationLabel } from "./chat/view/formatting";
+import { useChatMessageActions } from "./chat/view/useChatMessageActions";
 import { MarkdownCodeBlock } from "./chat/view/markdown/MarkdownCodeBlock";
 import { hasCodeBlockDescendant } from "./chat/view/markdown/utils";
+import { useChatConversationUsage } from "./chat/view/useChatConversationUsage";
 import { useChatViewScroll } from "./chat/view/useChatViewScroll";
 import { useStreamAssistantReply } from "./chat/view/useStreamAssistantReply";
 
@@ -93,13 +94,9 @@ export function GrayChatView({
 
   const { user, waitForUser } = useUser();
   const [draft, setDraft] = useState("");
-  const [hasHydrated, setHasHydrated] = useState(false);
+  const hasHydrated = useHasHydrated();
   const replyTimeout = useRef<number | null>(null);
-  const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
-  const copyResetTimeoutRef = useRef<number | null>(null);
-  const [regeneratingMessageId, setRegeneratingMessageId] = useState<string | null>(null);
   const [activeStreamingMessageId, setActiveStreamingMessageId] = useState<string | null>(null);
-  const [conversationUsage, setConversationUsage] = useState<ConversationUsage | null>(null);
   const isSubmittingRef = useRef(false);
   const streamAbortControllerRef = useRef<AbortController | null>(null);
   // Track the most recent conversation ID synchronously to avoid React state update delays
@@ -186,11 +183,6 @@ export function GrayChatView({
   });
 
   useEffect(() => {
-    setHasHydrated(true);
-  }, []);
-
-  useEffect(() => {
-    setActiveStreamingMessageId(null);
     // Reset submit state to prevent blocking after navigation
     isSubmittingRef.current = false;
   }, [session?.id]);
@@ -202,36 +194,14 @@ export function GrayChatView({
     }
   }, [activeStreamingMessageId, session?.id, session?.isResponding]);
 
-  useEffect(() => {
-    if (!activeConversationId) {
-      setConversationUsage(null);
-      return;
-    }
-
-    let cancelled = false;
-    setConversationUsage((previous) =>
-      previous && previous.conversationId === activeConversationId ? previous : null
-    );
-    const loadUsage = async () => {
-      try {
-        const usage = await apiService.getConversationUsage(activeConversationId);
-        if (!cancelled) {
-          setConversationUsage(usage);
-        }
-      } catch (error) {
-        if (!cancelled) {
-          console.info("Conversation usage unavailable:", error);
-          setConversationUsage(null);
-        }
-      }
-    };
-
-    void loadUsage();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [activeConversationId]);
+  const { setConversationUsage } = useChatConversationUsage({
+    activeConversationId,
+    sessionConversationId,
+    sessionExists,
+    messages,
+    workspaceContext,
+    onContextUsageChange,
+  });
   useEffect(
     () => () => {
       if (replyTimeout.current !== null) {
@@ -248,15 +218,6 @@ export function GrayChatView({
       replyTimeout.current = null;
     }
   }, [session?.id]);
-
-  useEffect(() => {
-    return () => {
-      if (copyResetTimeoutRef.current !== null) {
-        window.clearTimeout(copyResetTimeoutRef.current);
-        copyResetTimeoutRef.current = null;
-      }
-    };
-  }, []);
 
   const streamAssistantReply = useStreamAssistantReply({
     session,
@@ -282,6 +243,28 @@ export function GrayChatView({
     setReasoningSeconds,
     streamAbortControllerRef,
     streamedConversationIdRef,
+  });
+
+  const {
+    copiedMessageId,
+    regeneratingMessageId,
+    getResponseDurationLabel,
+    handleCopyMessage,
+    handleDeleteMessage,
+    handleEditMessage,
+    handleRetryUserMessage,
+    handleRegenerate,
+    handleCycleAssistantVariant,
+  } = useChatMessageActions({
+    session,
+    messages,
+    activeStreamingMessageId,
+    setActiveStreamingMessageId,
+    updateMessage,
+    deleteMessage,
+    updateSession,
+    markAutoStreamTriggered,
+    streamAssistantReply,
   });
 
   useEffect(() => {
@@ -486,272 +469,6 @@ export function GrayChatView({
     isSubmittingRef.current = false;
   };
 
-  const getResponseDurationLabel = useCallback(
-    (messageIndex: number) => {
-      const message = messages[messageIndex];
-      if (!message || message.role !== "assistant") {
-        return null;
-      }
-      for (let index = messageIndex - 1; index >= 0; index -= 1) {
-        const candidate = messages[index];
-        if (candidate.role === "assistant") {
-          continue;
-        }
-        if (candidate.role === "user") {
-          const diffMs = Math.max(0, message.createdAt - candidate.createdAt);
-          if (!Number.isFinite(diffMs)) {
-            return null;
-          }
-          return formatDurationLabel(diffMs);
-        }
-      }
-      return null;
-    },
-    [messages]
-  );
-
-  const handleCopyMessage = useCallback(async (messageId: string, text: string) => {
-    const trimmed = text.trim();
-    if (!trimmed) {
-      return;
-    }
-    if (typeof navigator === "undefined" || !navigator.clipboard?.writeText) {
-      console.warn("Clipboard API is not available in this environment.");
-      return;
-    }
-    try {
-      await navigator.clipboard.writeText(trimmed);
-      setCopiedMessageId(messageId);
-      if (copyResetTimeoutRef.current !== null) {
-        window.clearTimeout(copyResetTimeoutRef.current);
-      }
-      copyResetTimeoutRef.current = window.setTimeout(() => {
-        setCopiedMessageId(null);
-        copyResetTimeoutRef.current = null;
-      }, 2000);
-    } catch (error) {
-      console.error("Failed to copy response:", error);
-    }
-  }, []);
-
-  const handleDeleteMessage = useCallback(
-    (messageId: string) => {
-      if (!session) {
-        return;
-      }
-      const targetIndex = messages.findIndex((message) => message.id === messageId);
-      const targetMessage = targetIndex >= 0 ? messages[targetIndex] : null;
-      if (activeStreamingMessageId === messageId) {
-        setActiveStreamingMessageId(null);
-      }
-      if (copiedMessageId === messageId) {
-        setCopiedMessageId(null);
-      }
-      deleteMessage(session.id, messageId);
-      if (!targetMessage) {
-        return;
-      }
-      if (targetMessage.role === "assistant") {
-        const precedingUser = [...messages]
-          .slice(0, targetIndex)
-          .reverse()
-          .find((message) => message.role === "user");
-        if (precedingUser) {
-          markAutoStreamTriggered(session.id, precedingUser.id);
-        }
-        updateSession(session.id, { pendingAutoStream: false, isResponding: false });
-        return;
-      }
-      if (targetMessage.role === "user") {
-        markAutoStreamTriggered(session.id, targetMessage.id);
-        updateSession(session.id, { pendingAutoStream: false, isResponding: false });
-        return;
-      }
-    },
-    [
-      activeStreamingMessageId,
-      copiedMessageId,
-      deleteMessage,
-      markAutoStreamTriggered,
-      messages,
-      session,
-      updateSession,
-    ]
-  );
-
-  const handleEditMessage = useCallback(
-    (messageId: string, newContent: string) => {
-      if (!session) {
-        return;
-      }
-      updateMessage(session.id, messageId, { content: newContent });
-    },
-    [session, updateMessage]
-  );
-
-  const handleRetryUserMessage = useCallback(
-    (messageId: string) => {
-      if (!session) {
-        return;
-      }
-      const messageIndex = messages.findIndex((message) => message.id === messageId);
-      if (messageIndex === -1) {
-        return;
-      }
-      const target = messages[messageIndex];
-      if (target.role !== "user") {
-        return;
-      }
-      const content = target.content ?? "";
-      if (!content.trim()) {
-        return;
-      }
-
-      // If there is an assistant response immediately following this message,
-      // regenerate it. Otherwise, generate a new response.
-      const nextMessage = messages[messageIndex + 1];
-      const existingAssistantId = nextMessage?.role === "assistant" ? nextMessage.id : undefined;
-
-      void streamAssistantReply(session.id, content, session.conversationId ?? null, existingAssistantId);
-    },
-    [messages, session, streamAssistantReply]
-  );
-
-  const handleRegenerate = useCallback(
-    (messageId: string) => {
-      if (!session) {
-        return;
-      }
-
-      // Prevent regeneration while already streaming a response
-      if (session.isResponding || activeStreamingMessageId) {
-        return;
-      }
-
-      const assistantIndex = messages.findIndex((message) => message.id === messageId);
-      if (assistantIndex === -1) {
-        return;
-      }
-
-      const assistantMessage = messages[assistantIndex];
-      if (assistantMessage.role !== "assistant") {
-        return;
-      }
-
-      // Allow regenerating any assistant message, not just the latest
-      let userIndex = assistantIndex - 1;
-      while (userIndex >= 0 && messages[userIndex].role !== "user") {
-        userIndex -= 1;
-      }
-      if (userIndex < 0) {
-        console.warn("Unable to locate the originating user message for regeneration.");
-        return;
-      }
-
-      const userMessage = messages[userIndex];
-
-      setRegeneratingMessageId(assistantMessage.id);
-      void (async () => {
-        try {
-          await streamAssistantReply(session.id, userMessage.content, session.conversationId ?? null, assistantMessage.id);
-        } finally {
-          setRegeneratingMessageId(null);
-        }
-      })();
-    },
-    [activeStreamingMessageId, messages, session, streamAssistantReply]
-  );
-
-  const handleCycleAssistantVariant = useCallback(
-    (messageId: string, direction: "prev" | "next") => {
-      if (!session) {
-        return;
-      }
-      const target = session.messages.find((message) => message.id === messageId && message.role === "assistant");
-      if (!target || !Array.isArray(target.variants) || target.variants.length <= 1) {
-        return;
-      }
-      const total = target.variants.length;
-      const currentIndex =
-        typeof target.activeVariantIndex === "number" && target.activeVariantIndex >= 0
-          ? target.activeVariantIndex
-          : total - 1;
-      const delta = direction === "prev" ? -1 : 1;
-      let nextIndex = currentIndex + delta;
-      if (nextIndex < 0) {
-        nextIndex = total - 1;
-      } else if (nextIndex >= total) {
-        nextIndex = 0;
-      }
-      const nextContent = target.variants[nextIndex] ?? target.content;
-      updateMessage(session.id, messageId, {
-        content: nextContent,
-        activeVariantIndex: nextIndex,
-      });
-    },
-    [session, updateMessage]
-  );
-
-  // Respect the backend as the single source of truth for context limits.
-  // If limit > 0, use it. If limit is 0/undefined, treat as "unlimited" and let
-  // downstream consumers decide how to present that (e.g. "Unlimited context").
-  const contextLimit = typeof conversationUsage?.limit === "number" && conversationUsage.limit > 0 ? conversationUsage.limit : 0;
-  const fallbackConversationTokens = useMemo(() => {
-    if (!session) {
-      return 0;
-    }
-    return session.messages.reduce((total, message) => {
-      const contentTokens = estimateTokenCount(message.content);
-      return total + contentTokens;
-    }, 0);
-  }, [session]);
-
-  const conversationContextStats = useMemo(() => {
-    const limit = contextLimit;
-
-    // Count messages participating in the current session context.
-    // Always use the actual session message count as the source of truth
-    const messageCount = session?.messages.length ?? 0;
-
-    // Prefer backend-accurate token usage ONLY if it is fresh (message counts match).
-    // Otherwise, use our local estimate so the user sees immediate feedback while typing/streaming.
-    const backendMessageCount = conversationUsage?.messageCount ?? -1;
-    const isBackendFresh = backendMessageCount === messageCount;
-
-    const conversationTokens =
-      isBackendFresh && typeof conversationUsage?.conversationTokens === "number" && conversationUsage.conversationTokens >= 0
-        ? conversationUsage.conversationTokens
-        : fallbackConversationTokens;
-
-    // Workspace context: include the FULL workspace summary so the user sees its impact.
-    const workspaceTokens = estimateTokenCount(workspaceContext);
-
-    // If we have authoritative backend usage, use that as the total (it likely includes system prompt + context).
-    // Otherwise, sum our estimates.
-    const totalTokens =
-      typeof conversationUsage?.conversationTokens === "number" && conversationUsage.conversationTokens >= 0
-        ? conversationUsage.conversationTokens
-        : conversationTokens + workspaceTokens;
-    const percentUsed = limit > 0 ? Math.max(0, Math.min(100, (totalTokens / limit) * 100)) : 0;
-    const tokensRemaining = limit > 0 ? Math.max(0, limit - totalTokens) : 0;
-
-    return {
-      provider: conversationUsage?.provider ?? "local",
-      modelName: conversationUsage?.modelName ?? null,
-      modelLabel: conversationUsage?.modelLabel ?? null,
-      limit,
-      modelLimit: conversationUsage?.modelLimit ?? null,
-      messageCount,
-      conversationTokens,
-      workspaceTokens,
-      totalTokens,
-      percentUsed,
-      tokensRemaining,
-      contextWarning: conversationUsage?.contextWarning ?? null,
-      suggestedModels: conversationUsage?.suggestedModels ?? null,
-    };
-  }, [contextLimit, conversationUsage, fallbackConversationTokens, session?.messages.length, workspaceContext]);
-
   const markdownComponents = useMemo<Components>(
     () => ({
       code: MarkdownCodeBlock,
@@ -784,59 +501,6 @@ export function GrayChatView({
     }),
     []
   );
-
-  const lastUsageSummaryRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (!onContextUsageChange) {
-      return;
-    }
-    if (!sessionExists) {
-      if (lastUsageSummaryRef.current !== null) {
-        lastUsageSummaryRef.current = null;
-        onContextUsageChange(null);
-      }
-      return;
-    }
-    const summary: ContextUsageSummary = {
-      conversationId: sessionConversationId,
-      messageCount: conversationContextStats.messageCount,
-      conversationTokens: conversationContextStats.conversationTokens,
-      workspaceTokens: conversationContextStats.workspaceTokens,
-      totalTokens: conversationContextStats.totalTokens,
-      tokensRemaining: conversationContextStats.tokensRemaining,
-      limit: conversationContextStats.limit,
-      modelLimit: conversationContextStats.modelLimit,
-      provider: conversationContextStats.provider,
-      modelName: conversationContextStats.modelName,
-      modelLabel: conversationContextStats.modelLabel,
-    };
-    const serialized = JSON.stringify(summary);
-    if (serialized === lastUsageSummaryRef.current) {
-      return;
-    }
-    lastUsageSummaryRef.current = serialized;
-    onContextUsageChange(summary);
-    return () => {
-      if (lastUsageSummaryRef.current === serialized) {
-        lastUsageSummaryRef.current = null;
-        onContextUsageChange(null);
-      }
-    };
-  }, [
-    conversationContextStats.conversationTokens,
-    conversationContextStats.limit,
-    conversationContextStats.messageCount,
-    conversationContextStats.modelLabel,
-    conversationContextStats.modelLimit,
-    conversationContextStats.modelName,
-    conversationContextStats.provider,
-    conversationContextStats.totalTokens,
-    conversationContextStats.tokensRemaining,
-    conversationContextStats.workspaceTokens,
-    onContextUsageChange,
-    sessionConversationId,
-    sessionExists,
-  ]);
 
   if (!hasHydrated) {
     return (

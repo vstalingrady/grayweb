@@ -826,13 +826,11 @@ try:
         has_onboarding_tool as _has_onboarding_tool_hybrid,
     )
     from backend.core.stream_handlers.gemini_stream import stream_gemini_response
-    from backend.core.stream_handlers.openrouter import stream_openrouter_response
     from backend.core.stream_handlers.context import (
         build_intent_window_text,
         consolidate_gemini_tools,
         add_url_context_tool_if_needed,
         add_maps_tool_if_needed,
-        determine_provider_and_model as _determine_provider_and_model,
     )
 except ImportError:
     from core.stream_handlers.hybrid import (  # type: ignore
@@ -841,13 +839,11 @@ except ImportError:
         has_onboarding_tool as _has_onboarding_tool_hybrid,
     )
     from core.stream_handlers.gemini_stream import stream_gemini_response  # type: ignore
-    from core.stream_handlers.openrouter import stream_openrouter_response  # type: ignore
     from core.stream_handlers.context import (  # type: ignore
         build_intent_window_text,
         consolidate_gemini_tools,
         add_url_context_tool_if_needed,
         add_maps_tool_if_needed,
-        determine_provider_and_model as _determine_provider_and_model,
     )
 
 SUPABASE_POOLER_HOST = os.getenv("SUPABASE_POOLER_HOST", "aws-1-ap-south-1.pooler.supabase.com")
@@ -3461,18 +3457,3 @@ async def chat_stream(
 
         clear_request_context()
         return StreamingResponse(error_stream(), status_code=500, media_type="text/event-stream")
-
-# Conversation endpoints are now in backend/api/conversations.py
-
-# User endpoints are now in backend/api/users.py
-
-# Plans and Habits routes are now in backend/api/plans.py
-
-# Dashboard routes are now in backend/api/dashboard.py
-
-# Payment routes are now in backend/api/payments.py
-
-# Proactivity routes are now in backend/api/proactivity.py
-
-# Calendar event routes are now in backend/api/calendars.py
-
