@@ -77,12 +77,6 @@ SUSPICIOUS_PATTERNS = (b"<script", b"javascript:", b"onerror=", b"<?php", b"#!/"
 # Optional base URL for serving uploaded media (e.g., CDN or site URL)
 STORAGE_BASE_URL = os.getenv("STORAGE_BASE_URL") or None
 
-# Legacy ClamAV names kept for backwards-compatible imports (e.g., `backend/main.py`).
-# Virus scanning is no longer supported by this backend.
-CLAMAV_SCAN_ENABLED = False
-CLAMAV_SCAN_BINARY = None
-CLAMAV_SCAN_TIMEOUT = 0
-
 
 # -----------------------------------------------------------------------------
 # Utility functions
@@ -139,11 +133,6 @@ def reject_if_suspicious(chunk: bytes) -> None:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="File contains suspicious or executable content.",
             )
-
-
-def scan_file_for_malware(storage_path: Path) -> None:
-    """Legacy no-op: ClamAV scanning was removed from the backend."""
-    return
 
 
 def ensure_storage_path(storage_name: str) -> Path:
@@ -289,17 +278,4 @@ async def persist_upload_file(
         except Exception:
             pass
 
-    scan_file_for_malware(storage_path)
-
     return storage_path, resolved_mime, bytes_written, sanitized_name, storage_name
-
-
-# Backwards compatibility aliases (with underscore prefix for internal use)
-_sanitize_filename = sanitize_filename
-_normalize_mime = normalize_mime
-_sniff_mime_type = sniff_mime_type
-_reject_if_suspicious = reject_if_suspicious
-_scan_file_for_malware = scan_file_for_malware
-_ensure_storage_path = ensure_storage_path
-_resolve_storage_path_from_record = resolve_storage_path_from_record
-_persist_upload_file = persist_upload_file

@@ -35,9 +35,16 @@ _USER_CACHE_TTL = 10.0  # 10 seconds
 
 # Redis cache (L2 - longer TTL, shared across processes)
 try:
-    from redis_client import get_redis_client
+    from backend.redis_client import get_redis_client
+except ImportError:  # pragma: no cover
+    try:
+        from redis_client import get_redis_client  # type: ignore
+    except ImportError:  # pragma: no cover
+        get_redis_client = None  # type: ignore[assignment]
+
+if callable(get_redis_client):
     _redis_client = get_redis_client()
-except ImportError:
+else:
     _redis_client = None
 
 # Optional, explicitly gated insecure fallback for local development.

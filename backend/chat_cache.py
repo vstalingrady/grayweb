@@ -12,11 +12,17 @@ from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
-# Try to import Redis client
 try:
-    from redis_client import get_redis_client
+    from backend.redis_client import get_redis_client
+except ImportError:  # pragma: no cover
+    try:
+        from redis_client import get_redis_client  # type: ignore
+    except ImportError:  # pragma: no cover
+        get_redis_client = None  # type: ignore[assignment]
+
+if callable(get_redis_client):
     _redis = get_redis_client()
-except ImportError:
+else:
     _redis = None
 
 

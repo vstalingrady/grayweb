@@ -51,6 +51,11 @@ try:
 except ImportError:
     from core.rate_limit import limiter  # type: ignore
 
+try:
+    from backend.core.text_utils import generate_initials
+except ImportError:  # pragma: no cover
+    from core.text_utils import generate_initials  # type: ignore
+
 router = APIRouter(tags=["users"])
 
 api_logger = create_logger("backend.api.users")
@@ -59,7 +64,6 @@ api_logger = create_logger("backend.api.users")
 def _get_user_helpers():
     """Lazy import user helpers to avoid circular imports."""
     from backend.main import (
-        generate_initials,
         _serialize_user_row,
         _row_get,
         supabase,
@@ -70,7 +74,6 @@ def _get_user_helpers():
     )
     from backend.core.conversation_store import delete_supabase_user_records
     return (
-        generate_initials,
         _serialize_user_row,
         _row_get,
         supabase,
@@ -92,7 +95,6 @@ async def create_user(
 ):
     """Create a new user account."""
     (
-        generate_initials,
         _serialize_user_row,
         _row_get,
         supabase,
@@ -140,7 +142,6 @@ async def get_user_by_email(
 ):
     """Get a user by their email address."""
     (
-        generate_initials,
         _serialize_user_row,
         _row_get,
         supabase,
@@ -173,7 +174,6 @@ async def get_user(
 ):
     """Get a user by ID."""
     (
-        generate_initials,
         _serialize_user_row,
         _row_get,
         supabase,
@@ -214,7 +214,6 @@ async def update_user(
 ):
     """Update a user's profile information."""
     (
-        generate_initials,
         _serialize_user_row,
         _row_get,
         supabase,
@@ -415,7 +414,6 @@ async def delete_user_account(
 ):
     """Delete a user account and all associated data."""
     (
-        generate_initials,
         _serialize_user_row,
         _row_get,
         supabase,

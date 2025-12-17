@@ -2303,131 +2303,35 @@ async def chat_stream(
         user_about = _row_get(user_record, "personalization_about")
         user_plan_tier = _row_get(user_record, "plan_tier")
 
-        def _has_personalization(value: Optional[str]) -> bool:
-            if value is None:
-                return False
-            return bool(str(value).strip())
-
-        needs_personalization = bool(
-            user_record
-            and (
-                not _has_personalization(user_nickname)
-                or not _has_personalization(user_occupation)
-                or not _has_personalization(user_about)
-            )
+        # Use the extracted chat context helper for onboarding and system prompt resolution
+        chat_context = _prepare_chat_context(
+            user_record=user_record,
+            user_has_seen_general=user_has_seen_general,
+            user_nickname=user_nickname,
+            user_occupation=user_occupation,
+            user_about=user_about,
+            message=effective_message,
+            client_system_prompt=chat_request.system_prompt,
+            prompt_locale=prompt_locale,
         )
-
-        # Enforce onboarding for brand-new users; allow regular tools once they've completed it.
-        force_onboarding_mode = bool(user_record and not user_has_seen_general)
-
-        # Handle Onboarding Logic
-        # Determine which system prompt to use.
-        # Treat the user as \"in onboarding\" while any explicit personalization
-        # field (nickname, occupation, or about) is missing.
-        is_onboarding = bool(needs_personalization)
-
-        onboarding_system_prompt = load_prompt_from_json(
-            GLOBAL_SYSTEM_PROMPTS_PATH,
-            "onboarding",
-            locale=prompt_locale,
-        )
-        default_system_prompt = load_prompt_from_json(
-            GLOBAL_SYSTEM_PROMPTS_PATH,
-            "chat",
-            locale=prompt_locale,
-        )
-
-        if is_onboarding:
-            # Ignore client-provided prompts during onboarding so the AI
-            # reliably completes the profile setup flow (name, occupation, blurb, etc.)
-            # before switching to the regular chat persona.
-            effective_system_prompt = onboarding_system_prompt
-        elif chat_request.system_prompt:
-            # IMPORTANT: Always include the base expansive Gray persona.
-            # The client may send personalization (user profile, nickname, custom instructions)
-            # but the core "be thoughtful, detailed, engaging" persona should always be present.
-            # Check if the client prompt already contains the base (to avoid duplication).
-            client_prompt = chat_request.system_prompt.strip()
-            # DEFAULT_SYSTEM_PROMPT now starts with "You are Gray", so we check for that signature.
-            base_signatures = ("You are Gray", "Anda adalah Gray")
-            if any(signature in client_prompt for signature in base_signatures):
-                # Client already sent the full prompt, use as-is
-                effective_system_prompt = client_prompt
-            else:
-                # Client sent personalization only; prepend the base persona
-                effective_system_prompt = f"{default_system_prompt}\n\n{client_prompt}"
-        else:
-            effective_system_prompt = default_system_prompt
-
-        # Replace {{date}} placeholder if present.
-        if effective_system_prompt and "{{date}}" in effective_system_prompt:
-            effective_system_prompt = effective_system_prompt.replace(
-                "{{date}}",
-                datetime.now().strftime("%Y-%m-%d"),
-            )
-
-        effective_model = chat_request.model
-        tool_list: Optional[List[Dict[str, Any]]] = None
-
-        # While the user is in onboarding, always expose the dedicated
-        # onboarding tools (e.g., `complete_onboarding`) so the model can
-        # actually persist profile data once it has all required fields.
-        if is_onboarding:
-            tool_list = list(ONBOARDING_TOOLS) + list(PLAN_TOOLS)
-
-        raw_message = (effective_message or "").strip()
-        wants_onboarding = (
-            "ready to start" in raw_message.lower()
-            or "start onboarding" in raw_message.lower()
-        )
-
-        # If force_onboarding_mode is active, or if explicitly requested and needed, enforce onboarding settings.
-        if force_onboarding_mode or (user_record and wants_onboarding and needs_personalization):
-            # Always use onboarding prompt and tools in onboarding mode.
-            effective_system_prompt = onboarding_system_prompt
-            tool_list = list(ONBOARDING_TOOLS) + list(PLAN_TOOLS)
-
-            # If this is the very first interaction (triggered by frontend with empty message usually)
-            if not effective_message or not effective_message.strip():
-                effective_message = ""
-
+        
+        effective_system_prompt = chat_context.effective_system_prompt
+        effective_message = chat_context.effective_message
+        tool_list = chat_context.tool_list
+        is_onboarding = chat_context.is_onboarding
+        force_onboarding_mode = chat_context.force_onboarding_mode
+        
+        if force_onboarding_mode:
             api_logger.info(
                 f"User {chat_request.user_id} is in onboarding flow (forced: {force_onboarding_mode})",
                 extra={
                     "event_type": "onboarding_flow",
-                    "requested": wants_onboarding,
-                    "needs_personalization": needs_personalization,
+                    "is_onboarding": is_onboarding,
                     "force_onboarding_mode": force_onboarding_mode,
                 },
             )
 
-        # The forced onboarding branch can overwrite the system prompt after we already
-        # performed template substitution, so run {{date}} substitution again.
-        if effective_system_prompt and "{{date}}" in effective_system_prompt:
-            effective_system_prompt = effective_system_prompt.replace(
-                "{{date}}",
-                datetime.now().strftime("%Y-%m-%d"),
-            )
-
-        # During onboarding, inject any already-saved profile fields into the system prompt
-        # so onboarding continues seamlessly across separate chat threads.
-        if is_onboarding or force_onboarding_mode:
-            known_lines: List[str] = []
-            if _has_personalization(user_nickname):
-                known_lines.append(f"- preferred name: {str(user_nickname).strip()}")
-            if _has_personalization(user_occupation):
-                known_lines.append(f"- occupation/focus: {str(user_occupation).strip()}")
-            if _has_personalization(user_about):
-                known_lines.append(f"- about blurb: {str(user_about).strip()}")
-            if known_lines:
-                effective_system_prompt = "\n\n".join(
-                    [
-                        (effective_system_prompt or "").strip(),
-                        "Already saved (persisted across chats):",
-                        "\n".join(known_lines),
-                        "Do NOT ask again for any field listed above. If the user provides any new or corrected onboarding details, call `complete_onboarding` immediately (it can be called multiple times).",
-                    ]
-                ).strip()
+        effective_model = chat_request.model
 
         # Infer timezone from time_context if not explicitly provided
         if not chat_request.timezone and chat_request.time_context:

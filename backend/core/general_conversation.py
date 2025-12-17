@@ -255,7 +255,10 @@ async def replace_general_conversation_history(user_id: int, history: List[Dict[
 
     # Invalidate Redis cache for General conversation
     try:
-        from chat_cache import invalidate_conversation_cache
+        from backend.chat_cache import invalidate_conversation_cache
+    except ImportError:  # pragma: no cover
+        from chat_cache import invalidate_conversation_cache  # type: ignore
+    try:
         import asyncio
         general_conv_id = f"general:{user_id}"
         asyncio.create_task(invalidate_conversation_cache(general_conv_id))

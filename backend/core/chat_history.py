@@ -213,7 +213,10 @@ async def overwrite_thread_history(
 
     # 3. Invalidate Redis cache so deleted messages don't reappear
     try:
-        from chat_cache import invalidate_conversation_cache
+        from backend.chat_cache import invalidate_conversation_cache
+    except ImportError:  # pragma: no cover
+        from chat_cache import invalidate_conversation_cache  # type: ignore
+    try:
         import asyncio
         asyncio.create_task(invalidate_conversation_cache(conversation_id))
     except ImportError:

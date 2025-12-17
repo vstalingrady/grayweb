@@ -25,6 +25,10 @@ try:
 except ImportError:
     from tier_utils import normalize_plan_tier  # type: ignore
 
+try:
+    from backend.chat_cache import cache_messages, get_cached_messages, invalidate_conversation_cache
+except ImportError:  # pragma: no cover
+    from chat_cache import cache_messages, get_cached_messages, invalidate_conversation_cache  # type: ignore
 
 router = APIRouter(tags=["conversations"])
 
@@ -140,10 +144,7 @@ async def create_conversation_message(
         
         # Invalidate cache since conversation changed
         try:
-            from chat_cache import invalidate_conversation_cache as invalidate_cache
-            await invalidate_cache(conversation_id)
-        except ImportError:
-            pass  # Cache module not available
+            await invalidate_conversation_cache(conversation_id)
         except Exception as e:
             api_logger.debug(f"Cache invalidation failed for {conversation_id}: {e}")
         
@@ -191,24 +192,17 @@ async def get_conversation(
         await _require_conversation_owner(conversation_id, current_user)
         
         # Try Redis cache first
-        try:
-            from chat_cache import get_cached_messages
-            cached = await get_cached_messages(conversation_id)
-            if cached is not None:
-                return cached
-        except ImportError:
-            pass  # Cache module not available
+        cached = await get_cached_messages(conversation_id)
+        if cached is not None:
+            return cached
         
         # Fetch from database
         history = await _load_conversation_history(conversation_id, current_user["id"])
         
         # Cache the result
         try:
-            from chat_cache import cache_messages
             if isinstance(history, list):
                 await cache_messages(conversation_id, history)
-        except ImportError:
-            pass  # Cache module not available
         except Exception as e:
             api_logger.debug(f"Cache write failed for {conversation_id}: {e}")
         
