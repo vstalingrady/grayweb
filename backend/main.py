@@ -4,11 +4,11 @@ import sqlite3
 from dateutil import parser as date_parser
 from fastapi import FastAPI, HTTPException, Depends, status, File, Form, Query, UploadFile, Response, Request, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.security import HTTPBearer
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, field_validator
-from typing import Optional, List, Dict, Any, AsyncGenerator, Tuple, Union, Iterable, Set, Mapping
+from typing import Optional, List, Dict, Any, AsyncGenerator, Tuple, Union
 import databases
 import sqlalchemy
 from datetime import datetime, timezone, date, timedelta
