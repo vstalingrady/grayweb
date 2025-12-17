@@ -853,6 +853,7 @@ try:
         has_onboarding_tool as _has_onboarding_tool_hybrid,
     )
     from backend.core.stream_handlers.openrouter import stream_openrouter_response
+    from backend.core.stream_handlers.gemini_stream import stream_gemini_response
     from backend.core.stream_handlers.context import (
         build_intent_window_text,
         determine_provider_and_model as _determine_provider_and_model,
@@ -869,6 +870,7 @@ except ImportError:
         has_onboarding_tool as _has_onboarding_tool_hybrid,
     )
     from core.stream_handlers.openrouter import stream_openrouter_response  # type: ignore
+    from core.stream_handlers.gemini_stream import stream_gemini_response  # type: ignore
     from core.stream_handlers.context import (  # type: ignore
         build_intent_window_text,
         determine_provider_and_model as _determine_provider_and_model,
@@ -878,8 +880,6 @@ except ImportError:
         add_url_context_tool_if_needed,
         add_maps_tool_if_needed,
     )
-
-
 
 
 SUPABASE_POOLER_HOST = os.getenv("SUPABASE_POOLER_HOST", "aws-1-ap-south-1.pooler.supabase.com")
@@ -904,9 +904,6 @@ file_logger = create_logger("backend.files")
 logging.getLogger("uvicorn.access").disabled = True
 
 app_logger.info(f"Backend starting (env={os.getenv('ENVIRONMENT', 'development')}, provider={os.getenv('AI_PROVIDER', 'openrouter')})")
-
-
-# _float_env, _int_env are now imported from core.env_helpers
 
 
 # load_prompt_from_file, load_prompt_from_json, _normalize_prompt_locale, _prompt_locale_from_request
@@ -998,10 +995,6 @@ DEFAULT_CHAT_TOOLS = get_default_chat_tools()
 
 # PROMPTS_DIR, GLOBAL_SYSTEM_PROMPTS_PATH, ONBOARDING_PROMPT_PATH imported from core.ai_config
 
-
-
-# SQLite helper functions (_ensure_sqlite_columns, _ensure_sqlite_table, _ensure_sqlite_index,
-# _drop_sqlite_table, _rebuild_sqlite_table_without_columns) are now imported from core.sqlite_helpers
 
 
 # Run all SQLite migrations using the unified helpers
@@ -1290,17 +1283,6 @@ async def _require_conversation_owner(conversation_id: str, current_user: Dict[s
     return
 
 
-# General conversation functions (_load_general_conversation_history,
-# _insert_general_conversation_message, _replace_general_conversation_history,
-# _ensure_user_data_record) are now imported from core.general_conversation
-
-# Utility functions imported from core modules
-
-# _should_enable_reminder_tools_semantic removed - semantic classification disabled for performance
-
-# _ensure_datetime_value is now imported from core.env_helpers
-
-
 async def _maybe_enrich_actions_with_reminder_time(
     actions: List[Dict[str, Any]],
     message: str,
@@ -1532,9 +1514,6 @@ async def _create_reminders_from_actions(
             )
 
     return results
-
-
-# _is_valid_uuid is now imported from core.env_helpers
 
 
 
@@ -2098,51 +2077,7 @@ async def _execute_function_call(
 
 # _has_onboarding_tool wrapper removed - use _has_onboarding_tool_hybrid directly
 
-
-# _fetch_url_context_with_gemini - wrapper to hybrid module version
-async def _fetch_url_context_with_gemini(
-    message: str,
-    urls: List[str],
-    workspace_context: Optional[str] = None,
-    time_context: Optional[str] = None,
-) -> Tuple[str, Optional[Dict[str, Any]]]:
-    """Fetch URL content using Gemini with URL Context tool."""
-    return await _fetch_url_context_with_gemini_hybrid(
-        GEMINI_SERVICE, message, urls, workspace_context, time_context
-    )
-
-# _execute_tools_with_gemini_flash - wrapper to hybrid module version
-async def _execute_tools_with_gemini_flash(
-    message: str,
-    conversation_history: Optional[List[Dict[str, Any]]],
-    tool_list: List[types.Tool],
-    system_prompt: Optional[str],
-    time_context: Optional[str],
-    workspace_context: Optional[str],
-    user_id: int,
-    db: databases.Database,
-    user_timezone: Optional[str] = None,
-    history_token_budget: Optional[int] = None,
-) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], bool]:
-    """Execute tools using Gemini Flash for speed, return results for hybrid flow."""
-    return await _execute_tools_with_gemini_flash_hybrid(
-        GEMINI_SERVICE,
-        _execute_function_call,
-        message,
-        conversation_history,
-        tool_list,
-        system_prompt,
-        time_context,
-        workspace_context,
-        user_id,
-        db,
-        user_timezone,
-        history_token_budget,
-    )
-
-
 # _format_tool_results_for_context is now imported from core.function_call_helpers
-
 
 # _resolve_media_attachments and _generate_image_descriptions
 # are now imported from core.media_attachments
@@ -2451,11 +2386,8 @@ async def stream_ai_response(
                         f"[URL Context] Detected {len(message_urls)} URLs, fetching with Gemini",
                         extra={"event_type": "url_context_hybrid_start", "url_count": len(message_urls)}
                     )
-                    url_content, url_metadata = await _fetch_url_context_with_gemini(
-                        message,
-                        message_urls,
-                        workspace_with_cache,
-                        time_context,
+                    url_content, url_metadata = await _fetch_url_context_with_gemini_hybrid(
+                        GEMINI_SERVICE, message, message_urls, workspace_with_cache, time_context
                     )
                     if url_content:
                         # Inject URL content as context for OpenRouter
@@ -2499,7 +2431,9 @@ CRITICAL: When the user asks to create/update a plan or habit, you MUST call the
                     hybrid_system_prompt = (effective_system_prompt or "") + "\n\n" + tool_instruction
                     
                     # Execute tools with Gemini Flash
-                    hybrid_tool_results, hybrid_tool_cards, onboarding_done = await _execute_tools_with_gemini_flash(
+                    hybrid_tool_results, hybrid_tool_cards, onboarding_done = await _execute_tools_with_gemini_flash_hybrid(
+                        GEMINI_SERVICE,
+                        _execute_function_call,
                         message,
                         conversation_history,
                         tool_list,
@@ -2509,7 +2443,7 @@ CRITICAL: When the user asks to create/update a plan or habit, you MUST call the
                         user_id,
                         db,
                         user_timezone,
-                        history_token_budget=history_token_budget,
+                        history_token_budget,
                     )
                     
                     # Emit tool cards (reminders, plans, habits) to frontend
@@ -2898,262 +2832,31 @@ CRITICAL: When the user asks to create/update a plan or habit, you MUST call the
 
     
     grounding_metadata: Optional[Dict[str, Any]] = None
-    # Only invoke Gemini when it is the selected provider (or when a previous
-    # provider explicitly fell back by setting provider='gemini').
+    # Only invoke Gemini when it is the selected provider
     if provider == "gemini" and GEMINI_SERVICE.available:
-        try:
-            # Initialize loop variables
-            current_history = list(conversation_history) if conversation_history else []
-            intermediate_history: List[types.Content] = []
-            
-            # We'll allow up to 5 turns of tool use to prevent infinite loops
-            max_tool_turns = 5
-            
-            previous_turns_text = ""
-            for turn in range(max_tool_turns + 1):
-                accumulated = ""
-                final_usage = None
-                tool_calls_in_this_turn: List[types.FunctionCall] = []
-                
-                # Prepare extra contents for this turn
-                # This includes the initial cached context (if any) plus any intermediate turns from tool usage
-                current_extra_contents = []
-                if cached_contents:
-                    current_extra_contents.extend(cached_contents)
-                if intermediate_history:
-                    current_extra_contents.extend(intermediate_history)
-
-                # Stream response from Gemini
-                text_buffer = ""
-                is_buffering_text = False
-                async for chunk in GEMINI_SERVICE.stream(
-                    message if turn == 0 else "", # Only send message on first turn, subsequent turns use history
-                    current_history,
-                    workspace_with_cache,
-                    effective_system_prompt,
-                    time_context,
-                    model,
-                    attachments=media_attachments if turn == 0 else None, # Attachments only on first turn
-                    extra_contents=current_extra_contents,
-                    tools=tool_list,
-                    tool_config=effective_tool_config,
-                    reasoning_mode=reasoning_mode,
-                    history_token_budget=history_token_budget,
-                ):
-                    if chunk.usage_metadata:
-                        final_usage = chunk.usage_metadata
-
-                    candidate = chunk.candidates[0] if chunk.candidates else None
-                    parts = getattr(candidate, "content", None)
-                    parts_list = getattr(parts, "parts", None) if parts else None
-
-                    if candidate:
-                        payload = _candidate_grounding_payload(candidate)
-                        if payload:
-                            grounding_metadata = payload
-                        
-                        # Extract thinking content for Gemini 3 models (always think via include_thoughts) or when reasoning_mode is enabled
-                        is_gemini_3_model = model and "gemini-3" in model.lower()
-                        if reasoning_mode or is_gemini_3_model:
-                            thought_content = _candidate_thought(candidate)
-                            if thought_content and not accumulated.startswith("<thinking>"):
-                                # Stream thinking content wrapped in <thinking> tags on first occurrence
-                                thinking_wrapper = f"<thinking>{thought_content}</thinking>\n"
-                                accumulated = thinking_wrapper + accumulated
-                                yield ("delta", thinking_wrapper)
-                    
-                    suppress_text = False
-                    if parts_list:
-                        suppress_text = any(getattr(part, "function_call", None) for part in parts_list)
-
-                    if not suppress_text and candidate:
-                        text_fragment = _candidate_text(candidate)
-                        
-                        # --- Buffering Logic for Text Tool Call Interception ---
-                        if "```" in text_fragment or is_buffering_text:
-                            is_buffering_text = True
-                            text_buffer += text_fragment
-                            
-                            # Check for end of code block (>= 2 sets of triple backticks)
-                            if text_buffer.count("```") >= 2:
-                                # Process possible tool call
-                                try:
-                                    # Look for JSON block: ```... { ... } ...```
-                                    match = re.search(r"```(?:javascript|json)?\s*(\{[\s\S]*?\})\s*```", text_buffer, re.IGNORECASE)
-                                    if not match:
-                                        # Fallback: Try to find a JSON object that looks like a tool call even if the regex didn't match perfectly
-                                        # or if it's just a raw JSON block inside the backticks
-                                        match = re.search(r"```\s*(\{[\s\S]*?\})\s*```", text_buffer, re.IGNORECASE)
-                                    
-                                    if match:
-                                        json_str = match.group(1)
-                                        tool_data = json.loads(json_str)
-                                        
-                                        if isinstance(tool_data, dict) and tool_data.get("tool") in REMINDER_FUNCTION_NAMES:
-                                            tool_name = tool_data.get("tool")
-                                            tool_params = tool_data.get("params") or {}
-                                            
-                                            api_logger.info(f"Intercepted and suppressed text tool call in Gemini stream: {tool_name}")
-                                            
-                                            gemini_fc = types.FunctionCall(name=tool_name, args=tool_params)
-                                            tool_result = await _execute_function_call(gemini_fc, user_id, db, user_timezone=user_timezone)
-                                            
-                                            if isinstance(tool_result, dict) and tool_result.get("type") in {"gray.reminder", "gray.plan", "gray.habit"}:
-                                                yield ("reminders", [tool_result])
-                                            
-                                            # Remove the code block from buffer
-                                            start, end = match.span()
-                                            pre_text = text_buffer[:start]
-                                            post_text = text_buffer[end:]
-                                            
-                                            if pre_text:
-                                                accumulated += pre_text
-                                                yield ("delta", pre_text)
-                                            
-                                            # Reset buffer to post_text and continue buffering if it has ```
-                                            text_buffer = post_text
-                                            is_buffering_text = "```" in text_buffer
-                                            
-                                            # If we are no longer buffering, flush
-                                            if not is_buffering_text and text_buffer:
-                                                accumulated += text_buffer
-                                                yield ("delta", text_buffer)
-                                                text_buffer = ""
-                                            
-                                            continue # Skip yielding text_fragment directly
-                                except Exception:
-                                    pass # Parse failed, treating as normal text
-                                
-                                # If we reached here, it wasn't a suppressed tool call. Flush buffer if it's getting too big or we are done buffering.
-                                # Actually, if we have 2 backticks and didn't match, we should probably flush up to the second backtick?
-                                # For simplicity, if we have >= 2 backticks and didn't match, we flush everything.
-                                if text_buffer.count("```") >= 2:
-                                    accumulated += text_buffer
-                                    yield ("delta", text_buffer)
-                                    text_buffer = ""
-                                    is_buffering_text = False
-                            
-                            # Safety valve: if buffer gets too big without closing
-                            elif len(text_buffer) > 2000:
-                                accumulated += text_buffer
-                                yield ("delta", text_buffer)
-                                text_buffer = ""
-                                is_buffering_text = False
-                            
-                            continue # Continue loop, don't yield text_fragment directly
-                        
-                        # Normal text content (no code block involved)
-                        accumulated += text_fragment
-                        if text_fragment:
-                            yield ("delta", text_fragment)
-                    
-                    # Collect function calls
-                    if parts_list:
-                        for part in parts_list:
-                            if getattr(part, "function_call", None):
-                                tool_calls_in_this_turn.append(part.function_call)
-                
-                # End of stream for this turn.
-                if text_buffer:
-                    accumulated += text_buffer
-                    yield ("delta", text_buffer)
-                
-                # If no tool calls, we are done.
-                if not tool_calls_in_this_turn:
-                    if final_usage and user_id is not None and db is not None:
-                        tracker = UsageTracker(db)
-                        await tracker.track_usage(
-                            user_id,
-                            final_usage.prompt_token_count or 0,
-                            final_usage.candidates_token_count or 0,
-                            model=model
-                        )
-
-                    # Clean up structured reminders from text if needed
-                    final_reminders = None
-                    if response_format:
-                        accumulated, final_reminders = _materialize_structured_reminders(accumulated)
-
-                    final_payload = {
-                        "text": previous_turns_text + (accumulated or ""), 
-                        "grounding_metadata": grounding_metadata,
-                        "reminders": final_reminders
-                    }
-                    yield ("final", final_payload)
-                    return
-
-                # Handle tool calls
-                # Construct the model's message with function calls
-                model_parts = []
-                if accumulated:
-                    model_parts.append(types.Part.from_text(text=accumulated))
-                    
-                # Accumulate text for next turns
-                # If we are using structured output, we should probably strip the JSON before accumulating
-                # But typically tools and structured output don't mix in the same turn for Gemini unless we force it.
-                # Just in case, if response_format is set, clean it.
-                if response_format:
-                    text, _ = _materialize_structured_reminders(accumulated)
-                    previous_turns_text += text
-                else:
-                    previous_turns_text += accumulated
-
-                # Enforce single execution per mutating tool per turn to avoid double inserts (e.g., reminders)
-                SINGLE_CALL_PER_TURN = {
-                    "create_reminder",
-                    "update_reminder",
-                    "delete_reminder",
-                    "delete_latest_reminder",
-                    "create_plan",
-                    "update_plan",
-                    "delete_plan",
-                    "create_habit",
-                    "update_habit",
-                    "delete_habit",
-                }
-                deduped_tool_calls: List[types.FunctionCall] = []
-                seen_tool_names: Set[str] = set()
-                for fc in tool_calls_in_this_turn:
-                    if fc.name in SINGLE_CALL_PER_TURN:
-                        if fc.name in seen_tool_names:
-                            api_logger.info(f"Skipping extra {fc.name} call in turn", extra={"user_id": user_id})
-                            continue
-                        seen_tool_names.add(fc.name)
-                    deduped_tool_calls.append(fc)
-
-                for fc in deduped_tool_calls:
-                    model_parts.append(types.Part.from_function_call(name=fc.name, args=fc.args or {}))
-                
-                # Add the model's turn (text + tool calls) to intermediate history
-                intermediate_history.append(types.Content(role="model", parts=model_parts))
-                
-                # Execute tools and add results
-                for fc in deduped_tool_calls:
-                    tool_result = {} # Initialize for each tool call
-                    try:
-                        tool_result = await _execute_function_call(fc, user_id, db, user_timezone=user_timezone)
-                        
-                        # Emit structured payloads (like reminders) directly to the client
-                        # so the frontend can render them immediately.
-                        if isinstance(tool_result, dict) and tool_result.get("type") in {"gray.reminder", "gray.plan", "gray.habit"}:
-                            api_logger.info(f"Yielding reminders event for {tool_result.get('type')}")
-                            yield ("reminders", [tool_result])
-                            
-                    except Exception as e:
-                        tool_result = {"error": str(e)}
-                        api_logger.error(f"Tool execution failed for {fc.name}: {e}", exc_info=True)
-                        
-                    finally:
-                        # Append the tool's execution and its result to history
-                        intermediate_history.extend(_build_function_call_contents(fc, tool_result))
-                        # Yield a blank delta to ensure frontend gets a chance to process the card_event before more text.
-                        yield ("delta", "")
-                
-                # Loop continues to next turn, where intermediate_history will be included in extra_contents
-                
-        except Exception as gemini_error:  # pragma: no cover - best effort logging
-            print(f"[Gemini] Streaming failed: {gemini_error}")
-            raise
+        async for event_type, data in stream_gemini_response(
+            gemini_service=GEMINI_SERVICE,
+            message=message,
+            conversation_history=conversation_history,
+            workspace_context=workspace_with_cache,
+            system_prompt=effective_system_prompt,
+            time_context=time_context,
+            model=model,
+            tool_list=tool_list,
+            tool_config=effective_tool_config,
+            reasoning_mode=reasoning_mode,
+            media_attachments=media_attachments,
+            cached_contents=cached_contents,
+            history_token_budget=history_token_budget,
+            user_id=user_id,
+            response_format=response_format,
+            execute_function_call_fn=_execute_function_call,
+            db=db,
+            user_timezone=user_timezone,
+            usage_tracker_cls=UsageTracker,
+        ):
+            yield (event_type, data)
+        return
 
     raise RuntimeError("AI service unavailable")
 

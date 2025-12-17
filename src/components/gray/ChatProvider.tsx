@@ -11,19 +11,15 @@ import {
   type ReactNode,
   type SetStateAction,
 } from "react";
-import { usePathname } from "next/navigation";
 import { useUser } from "@/contexts/UserContext";
 import { useI18n } from "@/contexts/I18nContext";
 import {
   apiService,
-  type ConversationSummary,
   type GroundingMetadata,
   type MediaUpload,
 } from "@/lib/api";
 import { buildLocalTimeContextWithOverrides } from "@/lib/timeContext";
-import { type QuestionnaireSession } from "@/lib/questionnaire";
 
-import { compressImage } from "@/lib/imageCompression";
 import {
   ChatRole,
   ChatMessage,
@@ -36,7 +32,6 @@ import {
 } from "./chat/types";
 import {
   buildGeneralConversationId,
-  isGeneralConversationId,
   buildPersonalizedSystemPrompt,
   computeProfileHash,
   buildAssistantReply,
@@ -52,31 +47,31 @@ import {
   parseGrayTitleMarkers,
   coerceConversationIdForRequest,
   buildConversationHistoryPayload,
-  toTimestamp,
   isTitleDerivedFromMessage,
 } from "./chat/utils";
 import { extractGrayRemindersFromText, buildReminderConfirmationText, coerceReminderPayload } from "./chat/reminderUtils";
 import {
   GENERAL_CHAT_SESSION_ID,
-  SHARED_CHAT_PLACEHOLDER_TITLE,
   SELF_CONTEXT_PATTERNS,
   DUPLICATE_THREAD_WINDOW_MS,
-  REMOTE_SESSION_MERGE_WINDOW_MS,
 } from "./chat/constants";
 import { useDefaultSystemPrompt } from "./chat/provider/useDefaultSystemPrompt";
 import { useAutoStreamState } from "./chat/provider/useAutoStreamState";
+import { useAttachments } from "./chat/provider/useAttachments";
+import { useConversationSync } from "./chat/provider/useConversationSync";
+import { useConversationHistory } from "./chat/provider/useConversationHistory";
 import { useMapsSettings } from "./chat/provider/useMapsSettings";
 import { useModelPreferences } from "./chat/provider/useModelPreferences";
 import { usePersistAiCreatedReminders } from "./chat/provider/usePersistAiCreatedReminders";
+import { useQuestionnaire } from "./chat/provider/useQuestionnaire";
+import { useRemoteConversations } from "./chat/provider/useRemoteConversations";
 import { useReminderPolling } from "./chat/provider/useReminderPolling";
 import { useRemindersEnabled } from "./chat/provider/useRemindersEnabled";
+import { useSessionStorage } from "./chat/provider/useSessionStorage";
 import {
   GENERAL_SESSION_TITLE,
   createEmptyGeneralSession,
-  dedupeSessionsByConversation,
-  loadStoredSessions,
   makeMessage,
-  mapApiMessagesToChatMessages,
   normalizeSessionsList,
 } from "./chat/provider/sessionStore";
 
@@ -108,7 +103,6 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
   const { locale } = useI18n();
   const defaultSystemPrompt = useDefaultSystemPrompt(locale);
   const onboardingSeenRef = useRef(false);
-  const hasLoadedFromStorageRef = useRef(false);
 
   // Sync selected model from user profile on load
   useEffect(() => {
@@ -181,8 +175,12 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
   }, [generalConversationId]);
 
   const sessions = sessionsState;
-  const [remoteConversationsLoaded, setRemoteConversationsLoaded] = useState(false);
-  const pendingTitleSyncRef = useRef<Map<string, string>>(new Map());
+  const {
+    pendingHistorySyncRef,
+    pendingTitleSyncRef,
+    queueConversationTitleSync,
+    enqueueHistorySync,
+  } = useConversationSync({ sessions, sessionsRef, userId: user?.id });
   const pendingThreadSeedsRef = useRef<Map<string, { sessionId: string; createdAt: number }>>(
     new Map()
   );
@@ -190,27 +188,6 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
     workspaceContext ?? null
   );
   const workspaceContextUsageRef = useRef<Map<string, number>>(new Map());
-  const [selectedAttachments, setSelectedAttachments] = useState<MediaUpload[]>([]);
-  const attachmentsRef = useRef<MediaUpload[]>(selectedAttachments);
-  useEffect(() => {
-    attachmentsRef.current = selectedAttachments;
-  }, [selectedAttachments]);
-  useEffect(() => {
-    return () => {
-      attachmentsRef.current.forEach((attachment) => {
-        if (attachment?.previewUrl) {
-          URL.revokeObjectURL(attachment.previewUrl);
-        }
-      });
-    };
-  }, []);
-  const releaseAttachmentPreview = useCallback((attachment: MediaUpload) => {
-    if (attachment?.previewUrl) {
-      URL.revokeObjectURL(attachment.previewUrl);
-    }
-  }, []);
-  const [isAttachmentUploading, setIsAttachmentUploading] = useState(false);
-  const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const {
     mapsEnabled,
     mapsWidgetEnabled,
@@ -302,44 +279,8 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
     [workspaceContextValue]
   );
 
-  const pendingHistorySyncRef = useRef<Set<string>>(new Set());
   const { markAutoStreamTriggered, hasAutoStreamTriggered, resetAutoStreamState } =
     useAutoStreamState();
-  const scheduleHistorySync = useCallback(
-    (conversationId: string, payload: ConversationHistoryEntryPayload[]) => {
-      void (async () => {
-        try {
-          await apiService.overwriteConversationHistory(conversationId, payload);
-        } catch (error) {
-          console.warn("Failed to sync conversation history after deletion:", error);
-        }
-      })();
-    },
-    []
-  );
-  const historySyncTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
-  const enqueueHistorySync = useCallback(
-    (conversationId: string, payload: ConversationHistoryEntryPayload[]) => {
-      const existing = historySyncTimersRef.current.get(conversationId);
-      if (existing) {
-        clearTimeout(existing);
-      }
-      const timer = setTimeout(() => {
-        historySyncTimersRef.current.delete(conversationId);
-        scheduleHistorySync(conversationId, payload);
-      }, 250);
-      historySyncTimersRef.current.set(conversationId, timer);
-    },
-    [scheduleHistorySync]
-  );
-
-  useEffect(() => {
-    const timers = historySyncTimersRef.current;
-    return () => {
-      timers.forEach((timer) => clearTimeout(timer));
-      timers.clear();
-    };
-  }, []);
 
   // DISABLED: This sync effect was causing data loss by overwriting backend
   // history with stale/incomplete local state on page reload. The backend
@@ -357,6 +298,16 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
     }
     return waitForUser();
   }, [user, waitForUser]);
+
+  const {
+    selectedAttachments,
+    attachmentsRef,
+    isAttachmentUploading,
+    attachmentError,
+    uploadAttachments,
+    removeAttachment,
+    clearAttachments,
+  } = useAttachments({ resolveChatUser });
 
   const schedulePendingSeedCleanup = useCallback((seed: string, sessionId: string) => {
     if (!seed) {
@@ -377,240 +328,25 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
     }, DUPLICATE_THREAD_WINDOW_MS);
   }, []);
 
-  const uploadAttachments = useCallback(
-    async (files: FileList | File[]) => {
-      const selectedFiles = Array.from(files ?? []);
-      if (selectedFiles.length === 0) {
-        return;
-      }
-
-      setAttachmentError(null);
-      setIsAttachmentUploading(true);
-
-      try {
-        const resolvedUser = await resolveChatUser();
-        if (!resolvedUser) {
-          throw new Error("Unable to upload without an authenticated user.");
-        }
-        const uploads: MediaUpload[] = [];
-        for (const file of selectedFiles) {
-          if (!file) {
-            continue;
-          }
-          // Compress image before uploading
-          const processedFile = await compressImage(file);
-          const upload = await apiService.uploadMediaFile(processedFile);
-          const previewUrl = file.type?.toLowerCase().startsWith("image/")
-            ? URL.createObjectURL(file)
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            : (upload as any)?.publicUrl || (upload as any)?.url || null;
-          uploads.push({ ...upload, previewUrl });
-        }
-        if (uploads.length > 0) {
-          setSelectedAttachments((prev) => [...prev, ...uploads]);
-        }
-      } catch (error) {
-        console.error("Failed to upload attachments:", error);
-        if (error instanceof Error) {
-          setAttachmentError(error.message);
-        } else {
-          setAttachmentError("Failed to upload attachment.");
-        }
-      } finally {
-        setIsAttachmentUploading(false);
-      }
-    },
-    [resolveChatUser]
-  );
-
-  const removeAttachment = useCallback(
-    (id: number) => {
-      setSelectedAttachments((prev) => {
-        const next: MediaUpload[] = [];
-        prev.forEach((attachment) => {
-          if (attachment.id === id) {
-            releaseAttachmentPreview(attachment);
-            return;
-          }
-          next.push(attachment);
-        });
-        return next;
-      });
-    },
-    [releaseAttachmentPreview]
-  );
-
-  const clearAttachments = useCallback(() => {
-    setSelectedAttachments((prev) => {
-      prev.forEach(releaseAttachmentPreview);
-      return [];
-    });
-  }, [releaseAttachmentPreview]);
-
   useEffect(() => {
     if (workspaceContext !== undefined) {
       setWorkspaceContextValue(workspaceContext ?? null);
     }
   }, [workspaceContext]);
 
-  // Hydrate from local storage on mount
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-    // Only load if we haven't already (though this component should only mount once per app life ideally)
-    if (hasLoadedFromStorageRef.current) {
-      return;
-    }
+  const { persistSessions } = useSessionStorage({
+    sessions,
+    userId: user?.id,
+    userEmail: user?.email,
+    generalConversationId,
+    setSessions,
+  });
 
-    const { sessions: loadedSessions } = loadStoredSessions(
-      buildSessionStorageKeyCandidates(user?.id, user?.email)
-    );
-
-    if (loadedSessions.length > 0) {
-      setSessions((prev) => {
-        // Merge loaded sessions with any that might have been initialized (e.g. general)
-        // For simplicity, just use loaded ones but ensure General exists if needed.
-        const merged = dedupeSessionsByConversation([...prev, ...loadedSessions]);
-        const ordered = normalizeSessionsList(merged);
-        return ordered;
-      });
-    }
-    hasLoadedFromStorageRef.current = true;
-  }, [setSessions, user?.email, user?.id]);
-
-  const persistSessions = useCallback((_next: ChatSession[]) => {
-    if (typeof window === "undefined") {
-      return;
-    }
-    const keys = buildSessionStorageKeyCandidates(user?.id, user?.email);
-    const key = keys[0]; // Use the most specific key (ID + Email, or ID)
-    if (!key) {
-      return;
-    }
-
-    try {
-      const serializable = _next.map((session) => ({
-        ...session,
-        messages: session.messages.map((message) => {
-          if (!message.attachments?.length) {
-            return message;
-          }
-          return {
-            ...message,
-            attachments: message.attachments.map((attachment) => {
-              // Strip blob URLs (previewUrl) before saving so we don't load expired ones later
-              // eslint-disable-next-line @typescript-eslint/no-unused-vars
-              const { previewUrl, ...rest } = attachment;
-              return rest;
-            }),
-          };
-        }),
-      }));
-      window.localStorage.setItem(key, JSON.stringify(serializable));
-    } catch (error) {
-      console.warn("Failed to persist sessions to localStorage:", error);
-    }
-  }, [user?.id, user?.email]);
-
-  useEffect(() => {
-    setSessions((prev) => {
-      let changed = false;
-      const next = prev.map((session) => {
-        if (session.scope !== "general") {
-          return session;
-        }
-        const nextConversationId = generalConversationId ?? undefined;
-        if (session.conversationId === nextConversationId) {
-          return session;
-        }
-        changed = true;
-        return { ...session, conversationId: nextConversationId };
-      });
-      if (!changed) {
-        return prev;
-      }
-      const ordered = normalizeSessionsList(next);
-      persistSessions(ordered);
-      return ordered;
-    });
-  }, [generalConversationId, persistSessions, setSessions]);
-
-  useEffect(() => {
-    if (!pendingHistorySyncRef.current.size) {
-      return;
-    }
-    const pending = Array.from(pendingHistorySyncRef.current);
-    pending.forEach((sessionId) => {
-      const session = sessionsRef.current.find((candidate) => candidate.id === sessionId);
-      if (!session) {
-        pendingHistorySyncRef.current.delete(sessionId);
-        return;
-      }
-      const normalizedConversationId = normalizeConversationIdValue(session.conversationId ?? undefined);
-      if (!normalizedConversationId) {
-        return;
-      }
-      pendingHistorySyncRef.current.delete(sessionId);
-      const payload = buildConversationHistoryPayload(session.messages);
-      scheduleHistorySync(normalizedConversationId, payload);
-    });
-  }, [sessions, scheduleHistorySync]);
-
-  const syncConversationTitle = useCallback(
-    async (sessionId: string, conversationId: string, title: string) => {
-      const trimmed = title.trim();
-      const normalizedConversationId = normalizeConversationIdValue(conversationId);
-      if (!trimmed || !normalizedConversationId) {
-        return;
-      }
-      if (!user?.id) {
-        // Wait until we know the numeric user so the backend can create or update the row.
-        return;
-      }
-      try {
-        await apiService.updateConversation(normalizedConversationId, {
-          title: trimmed,
-          user_id: user.id,
-        });
-        pendingTitleSyncRef.current.delete(sessionId);
-      } catch (error) {
-        pendingTitleSyncRef.current.delete(sessionId);
-        console.warn(
-          "Skipping remote conversation title update (falling back to local title only):",
-          error
-        );
-      }
-    },
-    [user?.id]
-  );
-
-  const queueConversationTitleSync = useCallback(
-    (sessionId: string, title: string) => {
-      const trimmed = title.trim();
-      if (!trimmed) {
-        pendingTitleSyncRef.current.delete(sessionId);
-        return;
-      }
-      pendingTitleSyncRef.current.set(sessionId, trimmed);
-      const session = sessionsRef.current.find((candidate) => candidate.id === sessionId);
-      const normalizedConversationId = normalizeConversationIdValue(session?.conversationId);
-      if (normalizedConversationId) {
-        void syncConversationTitle(sessionId, normalizedConversationId, trimmed);
-      }
-    },
-    [syncConversationTitle]
-  );
-
-  useEffect(() => {
-    pendingTitleSyncRef.current.forEach((title, sessionId) => {
-      const session = sessionsRef.current.find((candidate) => candidate.id === sessionId);
-      const normalizedConversationId = normalizeConversationIdValue(session?.conversationId);
-      if (normalizedConversationId) {
-        void syncConversationTitle(sessionId, normalizedConversationId, title);
-      }
-    });
-  }, [sessions, syncConversationTitle]);
+  const { remoteConversationsLoaded } = useRemoteConversations({
+    userId: user?.id,
+    setSessions,
+    persistSessions,
+  });
 
   const updateSession = useCallback(
     (sessionId: string, partial: Partial<ChatSession>) => {
@@ -814,7 +550,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
         enqueueHistorySync(conversationIdForSync, historyPayload);
       }
     },
-    [enqueueHistorySync, persistSessions, setSessions]
+    [enqueueHistorySync, persistSessions, pendingHistorySyncRef, setSessions]
   );
 
   const renameSession = useCallback(
@@ -998,7 +734,6 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
     resetAutoStreamState();
     pendingTitleSyncRef.current = new Map();
     pendingThreadSeedsRef.current = new Map();
-    setRemoteConversationsLoaded(false);
 
     setSessions(() => {
       const emptyGeneral = createEmptyGeneralSession(undefined, generalConversationIdRef.current);
@@ -1006,7 +741,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       persistSessions(ordered);
       return ordered;
     });
-  }, [persistSessions, resetAutoStreamState, setSessions, user?.email, user?.id]);
+  }, [persistSessions, pendingTitleSyncRef, resetAutoStreamState, setSessions, user?.email, user?.id]);
 
   const ensureGeneralSession = useCallback((): ChatSession => {
     const existing = sessionsRef.current.find((session) => session.scope === "general");
@@ -1021,224 +756,6 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
     });
     return created;
   }, [persistSessions, setSessions]);
-
-  const mergeRemoteConversations = useCallback(
-    (conversations: ConversationSummary[]) => {
-      if (!Array.isArray(conversations) || conversations.length === 0) {
-        return;
-      }
-
-      const shouldAdoptRemoteTitle = (currentTitle: string | null | undefined, remoteTitle: string) => {
-        if (!remoteTitle || !remoteTitle.trim()) {
-          return false;
-        }
-        const normalizedRemote = remoteTitle.trim();
-        const normalizedCurrent = (currentTitle ?? "").trim();
-        if (!normalizedCurrent) {
-          return true;
-        }
-        if (normalizedCurrent.toLowerCase() === normalizedRemote.toLowerCase()) {
-          return false;
-        }
-        if (normalizedCurrent.toLowerCase() === SHARED_CHAT_PLACEHOLDER_TITLE.toLowerCase()) {
-          return true;
-        }
-        return isGenericTitle(normalizedCurrent);
-      };
-      setSessions((prev) => {
-        let changed = false;
-        const next = [...prev];
-        const indexById = new Map(next.map((session, index) => [session.id, index]));
-        const indexByConversationId = new Map(
-          next
-            .map((session, index) => [normalizeConversationIdValue(session.conversationId), index] as const)
-            .filter(([conversationId]) => typeof conversationId === "string")
-        );
-
-        const findExistingIndex = (conversationId: string): number | undefined => {
-          if (indexById.has(conversationId)) {
-            return indexById.get(conversationId);
-          }
-          if (indexByConversationId.has(conversationId)) {
-            return indexByConversationId.get(conversationId);
-          }
-          return undefined;
-        };
-
-        const findPendingSessionMatch = (targetTimestamp: number): number | undefined => {
-          let bestIndex: number | undefined;
-          let smallestDiff = REMOTE_SESSION_MERGE_WINDOW_MS + 1;
-          next.forEach((session, index) => {
-            if (session.scope !== "thread" || session.conversationId) {
-              return;
-            }
-            if (!session.messages.length) {
-              return;
-            }
-            const first = session.messages[0];
-            if (!first || first.role !== "user" || !first.content.trim()) {
-              return;
-            }
-            const diff = Math.abs(session.createdAt - targetTimestamp);
-            if (diff > REMOTE_SESSION_MERGE_WINDOW_MS || diff >= smallestDiff) {
-              return;
-            }
-            smallestDiff = diff;
-            bestIndex = index;
-          });
-          return bestIndex;
-        };
-
-        conversations.forEach((record) => {
-          const conversationId = normalizeConversationIdValue(record.id);
-          if (!conversationId) {
-            return;
-          }
-          // Skip general conversations - they should not appear as separate threads in the sidebar
-          if (isGeneralConversationId(conversationId)) {
-            return;
-          }
-          const normalizedTitle =
-            record.title?.trim() && record.title.trim().length > 0 ? record.title.trim() : "New Chat";
-          const createdAt = toTimestamp(record.created_at);
-          const updatedAt = toTimestamp(record.updated_at ?? record.created_at);
-          const existingIndex = findExistingIndex(conversationId);
-
-          if (typeof existingIndex === "number") {
-            const current = next[existingIndex];
-            const adoptRemoteTitle = shouldAdoptRemoteTitle(current.title, normalizedTitle);
-            const merged: ChatSession = {
-              ...current,
-              createdAt: Math.min(current.createdAt, createdAt),
-              updatedAt: Math.max(current.updatedAt, updatedAt),
-              conversationId,
-              ...(adoptRemoteTitle
-                ? {
-                  title: normalizedTitle,
-                  titleMode: isGenericTitle(normalizedTitle) ? "auto" : "manual",
-                }
-                : {}),
-            };
-            if (
-              merged.title !== current.title ||
-              merged.updatedAt !== current.updatedAt ||
-              merged.conversationId !== current.conversationId ||
-              merged.createdAt !== current.createdAt
-            ) {
-              next[existingIndex] = merged;
-              changed = true;
-            }
-            return;
-          }
-
-          const pendingIndex = findPendingSessionMatch(createdAt);
-          if (typeof pendingIndex === "number") {
-            const pending = next[pendingIndex];
-            const adoptRemoteTitle = shouldAdoptRemoteTitle(pending.title, normalizedTitle);
-            const merged: ChatSession = {
-              ...pending,
-              createdAt: Math.min(pending.createdAt, createdAt),
-              updatedAt: Math.max(pending.updatedAt, updatedAt),
-              conversationId,
-              pendingAutoStream: false,
-              ...(adoptRemoteTitle
-                ? {
-                  title: normalizedTitle,
-                  titleMode: isGenericTitle(normalizedTitle) ? "auto" : "manual",
-                }
-                : {}),
-            };
-            next[pendingIndex] = merged;
-            indexByConversationId.set(conversationId, pendingIndex);
-            changed = true;
-            return;
-          }
-
-          const newSession: ChatSession = {
-            id: conversationId,
-            title: normalizedTitle,
-            titleMode: isGenericTitle(normalizedTitle) ? "auto" : "manual",
-            createdAt,
-            updatedAt,
-            messages: [],
-            isResponding: false,
-            scope: "thread",
-            conversationId,
-            pendingAutoStream: false,
-          };
-          next.push(newSession);
-          indexById.set(conversationId, next.length - 1);
-          indexByConversationId.set(conversationId, next.length - 1);
-          changed = true;
-        });
-
-        if (!changed) {
-          return prev;
-        }
-
-        const deduped: ChatSession[] = [];
-        const seenConversationIds = new Map<string, number>();
-
-        next.forEach((session) => {
-          const conversationId = normalizeConversationIdValue(session.conversationId);
-          if (!conversationId) {
-            deduped.push(session);
-            return;
-          }
-          const existingIndex = seenConversationIds.get(conversationId);
-          if (typeof existingIndex === "number") {
-            const existing = deduped[existingIndex];
-            const currentScore = session.messages.length;
-            const existingScore = existing.messages.length;
-            const shouldReplace =
-              currentScore > existingScore ||
-              (currentScore === existingScore && session.updatedAt > existing.updatedAt);
-            if (shouldReplace) {
-              deduped[existingIndex] = session;
-            }
-            changed = true;
-            return;
-          }
-          seenConversationIds.set(conversationId, deduped.length);
-          deduped.push(session);
-        });
-
-        const ordered = normalizeSessionsList(deduped);
-        persistSessions(ordered);
-        return ordered;
-      });
-    },
-    [persistSessions, setSessions]
-  );
-
-  useEffect(() => {
-    setRemoteConversationsLoaded(false);
-    if (!user?.id) {
-      setRemoteConversationsLoaded(true);
-      return;
-    }
-    let cancelled = false;
-    const loadRemoteConversations = async () => {
-      try {
-        const records = await apiService.listUserConversations(user.id, 200);
-        if (cancelled || !records) {
-          return;
-        }
-        mergeRemoteConversations(records);
-      } catch (error) {
-        console.error("Failed to load remote conversations:", error);
-      } finally {
-        if (!cancelled) {
-          setRemoteConversationsLoaded(true);
-        }
-      }
-    };
-    void loadRemoteConversations();
-    return () => {
-      cancelled = true;
-      setRemoteConversationsLoaded(false);
-    };
-  }, [user?.id, mergeRemoteConversations]);
 
   // Ref to break forward reference to sendGeneralMessage (defined later)
   // This avoids a Temporal Dead Zone error in the bundled output.
@@ -1724,6 +1241,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
     },
     [
       appendMessage,
+      attachmentsRef,
       ensureGeneralSession,
       updateMessage,
       updateMessageThrottled,

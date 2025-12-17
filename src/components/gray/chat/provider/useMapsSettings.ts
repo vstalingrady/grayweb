@@ -1,7 +1,5 @@
-/* eslint-disable react-hooks/set-state-in-effect */
 import {
   useCallback,
-  useEffect,
   useMemo,
   useState,
   type Dispatch,
@@ -30,13 +28,39 @@ type UseMapsSettingsResult = {
 };
 
 export const useMapsSettings = (user: User | null): UseMapsSettingsResult => {
-  const [mapsEnabled, setMapsEnabled] = useState(false);
+  const userScopeKey = useMemo(() => String(user?.id ?? "anon"), [user?.id]);
+  const [mapsEnabledOverride, setMapsEnabledOverride] = useState<{
+    userScopeKey: string;
+    value: boolean | null;
+  }>({ userScopeKey, value: null });
 
-  useEffect(() => {
-    if (user) {
-      setMapsEnabled(Boolean(user.maps_enabled));
+  const mapsEnabled = useMemo(() => {
+    if (
+      mapsEnabledOverride.userScopeKey === userScopeKey &&
+      mapsEnabledOverride.value !== null
+    ) {
+      return mapsEnabledOverride.value;
     }
-  }, [user]);
+    return Boolean(user?.maps_enabled);
+  }, [mapsEnabledOverride, user?.maps_enabled, userScopeKey]);
+
+  const setMapsEnabled: Dispatch<SetStateAction<boolean>> = useCallback(
+    (updater) => {
+      setMapsEnabledOverride((prev) => {
+        const isSameScope = prev.userScopeKey === userScopeKey;
+        const baseValue =
+          isSameScope && prev.value !== null
+            ? prev.value
+            : Boolean(user?.maps_enabled);
+        const nextValue =
+          typeof updater === "function"
+            ? (updater as (value: boolean) => boolean)(baseValue)
+            : updater;
+        return { userScopeKey, value: nextValue };
+      });
+    },
+    [user?.maps_enabled, userScopeKey]
+  );
 
   const [mapsWidgetEnabled, setMapsWidgetEnabled] = useState(false);
   const [mapsLatitude, setMapsLatitude] = useState("");
@@ -104,7 +128,7 @@ export const useMapsSettings = (user: User | null): UseMapsSettingsResult => {
     if (nextState && !hasLocationCoordinates) {
       await requestLocationCoordinates();
     }
-  }, [hasLocationCoordinates, mapsEnabled, requestLocationCoordinates]);
+  }, [hasLocationCoordinates, mapsEnabled, requestLocationCoordinates, setMapsEnabled]);
 
   return {
     mapsEnabled,
