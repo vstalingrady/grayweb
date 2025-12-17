@@ -856,9 +856,6 @@ try:
     from backend.core.stream_handlers.gemini_stream import stream_gemini_response
     from backend.core.stream_handlers.context import (
         build_intent_window_text,
-        determine_provider_and_model as _determine_provider_and_model,
-        build_workspace_with_cache,
-        build_effective_system_prompt,
         consolidate_gemini_tools,
         add_url_context_tool_if_needed,
         add_maps_tool_if_needed,
@@ -873,9 +870,6 @@ except ImportError:
     from core.stream_handlers.gemini_stream import stream_gemini_response  # type: ignore
     from core.stream_handlers.context import (  # type: ignore
         build_intent_window_text,
-        determine_provider_and_model as _determine_provider_and_model,
-        build_workspace_with_cache,
-        build_effective_system_prompt,
         consolidate_gemini_tools,
         add_url_context_tool_if_needed,
         add_maps_tool_if_needed,

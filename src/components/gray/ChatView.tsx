@@ -25,14 +25,12 @@ import { GrayChatComposer } from "./ChatComposer";
 import { useChatStore } from "./ChatProvider";
 import { GENERAL_CHAT_SESSION_ID } from "./chat/constants";
 import {
-  buildReminderConfirmationText,
-  coerceReminderPayload,
   extractGrayRemindersFromText,
+  resolveAssistantReminders,
 } from "./chat/reminderUtils";
 import {
   type ChatMessage as ChatSessionMessage,
   type ChatRole,
-  type GrayReminderCreatedPayload,
 } from "./chat/types";
 import {
   buildAssistantReply,
@@ -676,26 +674,9 @@ export function GrayChatView({
             }
             const metadata = event.groundingMetadata ?? undefined;
             const baseVariants = previousVariants.length > 0 ? previousVariants : [];
-            // Process reminders: prefer structured SSE payloads, fallback to text extraction.
-            let finalReminders: GrayReminderCreatedPayload[] | undefined;
-            if (capturedReminders.length > 0) {
-              finalReminders = capturedReminders
-                .map((candidate) => coerceReminderPayload(candidate))
-                .filter((r): r is GrayReminderCreatedPayload => Boolean(r));
-            } else {
-              const extracted = extractGrayRemindersFromText(normalizedResponse);
-              if (extracted.reminders.length > 0) {
-                finalReminders = extracted.reminders;
-              }
-            }
-
-            let finalContent = normalizedResponse;
-            if (finalReminders && finalReminders.length > 0 && !finalContent.trim()) {
-              const confirmation = buildReminderConfirmationText(finalReminders);
-              if (confirmation) {
-                finalContent = confirmation;
-              }
-            }
+            const reminderResult = resolveAssistantReminders(normalizedResponse, capturedReminders);
+            const finalContent = reminderResult.content;
+            const finalReminders = reminderResult.reminders;
 
             const nextVariants = finalContent ? [...baseVariants, finalContent] : baseVariants;
             const nextActiveIndex = nextVariants.length > 0 ? nextVariants.length - 1 : undefined;

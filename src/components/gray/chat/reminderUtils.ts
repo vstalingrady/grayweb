@@ -310,6 +310,34 @@ export const buildReminderConfirmationText = (reminders: GrayReminderCreatedPayl
     return `Got it — ${clause}${clarifier}${extra}`.trim();
 };
 
+export const resolveAssistantReminders = (
+    content: string,
+    capturedReminders: unknown[]
+): { content: string; reminders?: GrayReminderCreatedPayload[] } => {
+    let reminders: GrayReminderCreatedPayload[] | undefined;
+
+    if (capturedReminders.length > 0) {
+        reminders = capturedReminders
+            .map((candidate) => coerceReminderPayload(candidate))
+            .filter((reminder): reminder is GrayReminderCreatedPayload => Boolean(reminder));
+    } else {
+        const extracted = extractGrayRemindersFromText(content);
+        if (extracted.reminders.length > 0) {
+            reminders = extracted.reminders;
+        }
+    }
+
+    let updatedContent = content;
+    if (reminders && reminders.length > 0 && !updatedContent.trim()) {
+        const confirmation = buildReminderConfirmationText(reminders);
+        if (confirmation) {
+            updatedContent = confirmation;
+        }
+    }
+
+    return { content: updatedContent, reminders };
+};
+
 const stripReminderPreamble = (segment: string): string => {
     if (!segment) {
         return segment;

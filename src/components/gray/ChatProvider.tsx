@@ -20,7 +20,6 @@ import {
   ChatMessage,
   ChatSession,
   ChatContextValue,
-  GrayReminderCreatedPayload,
 } from "./chat/types";
 import {
   buildGeneralConversationId,
@@ -34,7 +33,7 @@ import {
   shouldRequestAutoTitleForSession,
   coerceConversationIdForRequest,
 } from "./chat/utils";
-import { extractGrayRemindersFromText, buildReminderConfirmationText, coerceReminderPayload } from "./chat/reminderUtils";
+import { extractGrayRemindersFromText, resolveAssistantReminders } from "./chat/reminderUtils";
 import {
   GENERAL_CHAT_SESSION_ID,
   SELF_CONTEXT_PATTERNS,
@@ -617,34 +616,12 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
                 const metadata = event.groundingMetadata ?? undefined;
                 const timingUpdate = event.timing ? { backendTimings: event.timing } : undefined;
 
-                // Process reminders: prefer SSE-sent reminders, fallback to text extraction
-                let finalReminders: GrayReminderCreatedPayload[] | undefined;
-                if (capturedReminders.length > 0) {
-                  // Use structured reminders sent via SSE; coerce legacy shapes too.
-                  finalReminders = capturedReminders
-                    .map((r) => coerceReminderPayload(r))
-                    .filter((r): r is GrayReminderCreatedPayload => Boolean(r));
-                } else {
-                  // Fallback: extract reminders from text (backward compatibility)
-                  const extracted = extractGrayRemindersFromText(content);
-                  if (extracted.reminders.length > 0) {
-                    finalReminders = extracted.reminders;
-                  }
-                }
-
-                // If we have reminders but no text, generate a friendly confirmation message
-                let finalContent = content;
-                if (finalReminders && finalReminders.length > 0 && !content.trim()) {
-                  const confirmationText = buildReminderConfirmationText(finalReminders);
-                  if (confirmationText) {
-                    finalContent = confirmationText;
-                  }
-                }
+                const reminderResult = resolveAssistantReminders(content, capturedReminders);
 
                 const finalMessageUpdates: Partial<ChatMessage> = {
-                  content: finalContent,
+                  content: reminderResult.content,
                   groundingMetadata: metadata,
-                  reminders: finalReminders,
+                  reminders: reminderResult.reminders,
                   ...(timingUpdate ?? {}),
                 };
 
