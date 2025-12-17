@@ -51,10 +51,15 @@ try:
 except ImportError:
     from core.rate_limit import limiter  # type: ignore
 
-try:
-    from backend.core.text_utils import generate_initials
-except ImportError:  # pragma: no cover
-    from core.text_utils import generate_initials  # type: ignore
+
+def generate_initials(full_name: str) -> str:
+    """Generate initials from full name."""
+    parts = full_name.strip().split()
+    if len(parts) >= 2:
+        return (parts[0][0] + parts[-1][0]).upper()
+    elif len(parts) == 1:
+        return parts[0][:2].upper()
+    return "U"
 
 router = APIRouter(tags=["users"])
 
