@@ -813,7 +813,24 @@ try:
 except ImportError:
     from core.proactivity_helpers import fetch_proactivity_summary as _fetch_proactivity_summary  # type: ignore
 
+# Chat starter helpers (extracted from main.py)
+try:
+    from backend.core.chat_starter_helpers import (
+        sse_event as _sse_event,
+        starter_profile_context as _starter_profile_context,
+        starter_fallback_message as _starter_fallback_message,
+        build_starter_prompt as _build_starter_prompt,
+    )
+except ImportError:
+    from core.chat_starter_helpers import (  # type: ignore
+        sse_event as _sse_event,
+        starter_profile_context as _starter_profile_context,
+        starter_fallback_message as _starter_fallback_message,
+        build_starter_prompt as _build_starter_prompt,
+    )
+
 load_dotenv(ROOT_DIR / ".env")
+
 
 
 
@@ -4218,45 +4235,8 @@ async def generate_ai_response(
     raise HTTPException(status_code=503, detail="AI service unavailable")
 
 
-
-def _sse_event(event: str, payload: Dict[str, Any]) -> str:
-    """Serialize an SSE event."""
-    return f"event: {event}\ndata: {json.dumps(payload)}\n\n"
-
-
-def _starter_profile_context(payload: ChatStarterRequest) -> str:
-    lines: List[str] = []
-    if payload.nickname and payload.nickname.strip():
-        lines.append(f"Preferred name: {payload.nickname.strip()}")
-    elif payload.name and payload.name.strip():
-        lines.append(f"Name: {payload.name.strip()}")
-    if payload.occupation and payload.occupation.strip():
-        lines.append(f"Occupation: {payload.occupation.strip()}")
-    if payload.about and payload.about.strip():
-        lines.append(f"About: {payload.about.strip()}")
-    if payload.custom_instructions and payload.custom_instructions.strip():
-        lines.append(f"Tone guidance: {payload.custom_instructions.strip()}")
-    return "\n".join(lines)
-
-
-def _starter_fallback_message(payload: ChatStarterRequest) -> str:
-    preferred = (payload.nickname or payload.name or "there").strip() or "there"
-    return (
-        f"Hey {preferred}. I'm Gray. What's the main thing you're trying to move forward right now?"
-    )
-
-
-def _build_starter_prompt(payload: ChatStarterRequest, profile_context: str, prompt_locale: str) -> str:
-    base_prompt = load_prompt_from_json(
-        GLOBAL_SYSTEM_PROMPTS_PATH,
-        "starter",
-        "You are Gray. Write a warm, engaging greeting to start the conversation.",
-        locale=prompt_locale,
-    )
-    prompt_parts = [base_prompt]
-    if profile_context:
-        prompt_parts.append(f"Profile hints:\n{profile_context}")
-    return "\n\n".join(part for part in prompt_parts if part.strip())
+# _sse_event, _starter_profile_context, _starter_fallback_message, _build_starter_prompt
+# are now imported from core.chat_starter_helpers
 
 
 async def generate_chat_starter(
