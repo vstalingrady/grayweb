@@ -23,7 +23,6 @@ import {
   type HabitUpdates,
   type ProactivityItem,
   type SidebarNavKey,
-  type SidebarHistorySection,
   type SidebarHistoryEntry,
   type ContextUsageSummary,
 } from "@/components/gray/types";
@@ -39,12 +38,8 @@ import { EventComposerPayload } from "@/components/calendar/EventComposer";
 import { useI18n } from "@/contexts/I18nContext";
 import { useNotificationPreferences } from "@/contexts/NotificationPreferencesContext";
 import {
-  type ChatSession,
-} from "@/components/gray/chat/types";
-import {
   normalizeConversationIdValue,
 } from "@/components/gray/chat/utils";
-import { DEFAULT_HISTORY_SECTIONS } from "@/components/gray/historySeed";
 import { useProactivityNotifications } from "@/components/gray/ProactivityNotificationProvider";
 
 // New Imports for Refactoring
@@ -53,18 +48,16 @@ import { useProactivity } from "@/components/gray/hooks/useProactivity";
 import { usePulse } from "@/components/gray/hooks/usePulse";
 import { toDateKey, normalizeProactivityTimes, primaryProactivityTime, normalizeProactivityChannels } from "./utils";
 import { UsageLimitBanner } from "@/components/gray/UsageLimitBanner";
+import { buildHistorySections } from "./buildHistorySections";
 // Type-only import
 import { GrayChatComposer } from "@/components/gray/ChatComposer";
 import {
   buildGeneralChatSession,
   derivePlanTierLabel,
-  getSessionSeedFingerprint,
-  getReadableSessionTitle,
   deriveInitials,
   greetingForDate,
   type PlanCarrierUser,
 } from "@/components/gray/utils/helperFunctions";
-import { HISTORY_DUPLICATE_WINDOW_MS } from "@/components/gray/utils/constants";
 import { SIDEBAR_ITEMS, SIDEBAR_RAIL_ITEMS, NAVIGATION_ROUTES } from "@/components/gray/utils/sidebarConfig";
 import {
   isAnonLimitReached,
@@ -350,24 +343,44 @@ function GrayPageClientInner({
     setIsMounted(true);
   }, []);
 
-  useEffect(() => {
-    if (supportsInlineChat) {
-      return;
-    }
-    const chatId = activeChatId ?? null;
-    if (!chatId) {
-      return;
-    }
-    try {
-      const lastDeletedId = sessionStorage.getItem(lastDeletedChatIdStorageKey);
-      if (lastDeletedId && lastDeletedId === chatId) {
-        sessionStorage.removeItem(lastDeletedChatIdStorageKey);
-        router.replace("/");
-      }
-    } catch {
-      // Ignore storage errors (e.g. disabled cookies).
-    }
-  }, [activeChatId, lastDeletedChatIdStorageKey, router, supportsInlineChat]);
+	  useEffect(() => {
+	    if (supportsInlineChat) {
+	      return;
+	    }
+	    const chatId = activeChatId ?? null;
+	    if (!chatId) {
+	      return;
+	    }
+	    try {
+	      const lastDeletedRaw = sessionStorage.getItem(lastDeletedChatIdStorageKey);
+	      if (!lastDeletedRaw) {
+	        return;
+	      }
+	      const parsedIds: Array<string | null> = [];
+	      try {
+	        const parsed = JSON.parse(lastDeletedRaw) as unknown;
+	        if (typeof parsed === "string") {
+	          parsedIds.push(parsed);
+	        } else if (parsed && typeof parsed === "object") {
+	          const sessionId = (parsed as { sessionId?: unknown }).sessionId;
+	          const conversationId = (parsed as { conversationId?: unknown }).conversationId;
+	          parsedIds.push(
+	            typeof sessionId === "string" ? sessionId : null,
+	            typeof conversationId === "string" ? conversationId : null
+	          );
+	        }
+	      } catch {
+	        parsedIds.push(lastDeletedRaw);
+	      }
+
+	      if (parsedIds.some((candidate) => candidate === chatId)) {
+	        sessionStorage.removeItem(lastDeletedChatIdStorageKey);
+	        router.replace("/");
+	      }
+	    } catch {
+	      // Ignore storage errors (e.g. disabled cookies).
+	    }
+	  }, [activeChatId, lastDeletedChatIdStorageKey, router, supportsInlineChat]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -810,242 +823,17 @@ function GrayPageClientInner({
     return SIDEBAR_ITEMS;
   }, [isScout]);
 
-  const filteredRailItems = useMemo(() => {
-    if (isScout) {
-      return SIDEBAR_RAIL_ITEMS.filter((item) => item.id !== "calendar");
-    }
-    return SIDEBAR_RAIL_ITEMS;
-  }, [isScout]);
-  const historySections = useMemo<SidebarHistorySection[]>(() => {
-    // Only show conversations that are bound to a *normalized*
-    // conversationId so we don't duplicate entries with both
-    // the raw user prompt and the refined AI title or temporary
-    // local-only thread shells.
-    const threadSessions = sessions.filter((session) => {
-      if (session.scope !== "thread") {
-        return false;
-      }
-      const normalizedConversationId = normalizeConversationIdValue(session.conversationId);
-      return typeof normalizedConversationId === "string" && normalizedConversationId.length > 0;
-    });
-    const dedupeMap = new Map<string, ChatSession>();
-
-    const registerSession = (key: string, session: ChatSession) => {
-      const existing = dedupeMap.get(key);
-      if (!existing || session.updatedAt > existing.updatedAt) {
-        dedupeMap.set(key, session);
-      }
-    };
-
-    threadSessions.forEach((session) => {
-      const normalizedConversationId = session.conversationId?.trim() ?? "";
-      const fingerprint = getSessionSeedFingerprint(session);
-      const baseKey =
-        normalizedConversationId.length > 0
-          ? normalizedConversationId
-          : fingerprint
-            ? `seed:${fingerprint}`
-            : session.id;
-      const existing = dedupeMap.get(baseKey);
-      if (!existing) {
-        registerSession(baseKey, session);
-        return;
-      }
-      const isConversationMatch = normalizedConversationId.length > 0;
-      const isBurstDuplicate =
-        !isConversationMatch &&
-        Math.abs(session.updatedAt - existing.updatedAt) <= HISTORY_DUPLICATE_WINDOW_MS;
-      if (isConversationMatch || isBurstDuplicate) {
-        registerSession(baseKey, session);
-        return;
-      }
-      registerSession(`${baseKey}:${session.id}`, session);
-    });
-
-    const dedupedThreadSessions = Array.from(dedupeMap.values());
-    if (!dedupedThreadSessions.length) {
-      return DEFAULT_HISTORY_SECTIONS.map((section) => ({
-        ...section,
-        entries: section.entries.map((entry) => ({ ...entry })),
-      }));
-    }
-
-    // Prevent "ghost" duplicate entries: if a placeholder session is still marked
-    // as title-generating but we already have another session with the same seed
-    // prompt within a short window, hide the placeholder so the sidebar doesn't
-    // show an extra skeleton row.
-    const sessionsBySeed = new Map<string, ChatSession[]>();
-    dedupedThreadSessions.forEach((session) => {
-      const fingerprint = getSessionSeedFingerprint(session);
-      if (!fingerprint) {
-        return;
-      }
-      const bucket = sessionsBySeed.get(fingerprint) ?? [];
-      bucket.push(session);
-      sessionsBySeed.set(fingerprint, bucket);
-    });
-
-    const isPlaceholderTitle = (session: ChatSession): boolean => {
-      const normalized = (session.title ?? "").trim().toLowerCase();
-      return (
-        !normalized ||
-        normalized === "new chat" ||
-        normalized === "new conversation" ||
-        normalized === "new thread" ||
-        normalized === "new session"
-      );
-    };
-
-    const prunedThreadSessions = dedupedThreadSessions.filter((session) => {
-      if (!session.isGeneratingTitle) {
-        return true;
-      }
-      if (!isPlaceholderTitle(session)) {
-        return true;
-      }
-      const fingerprint = getSessionSeedFingerprint(session);
-      if (!fingerprint) {
-        return true;
-      }
-      const candidates = sessionsBySeed.get(fingerprint) ?? [];
-      const hasBetterMatch = candidates.some(
-        (candidate) =>
-          candidate !== session &&
-          !candidate.isGeneratingTitle &&
-          Math.abs(candidate.updatedAt - session.updatedAt) <= HISTORY_DUPLICATE_WINDOW_MS
-      );
-      return !hasBetterMatch;
-    });
-
-    const pinnedSessions: ChatSession[] = [];
-    const unpinnedSessions: ChatSession[] = [];
-
-    prunedThreadSessions.forEach((session) => {
-      // Check for pinned in metadata
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const isPinned = !!(session.metadata as any)?.is_pinned;
-      if (isPinned) {
-        pinnedSessions.push(session);
-      } else {
-        unpinnedSessions.push(session);
-      }
-    });
-
-    const currentYear = new Date().getFullYear();
-    const groups = new Map<
-      string,
-      {
-        id: string;
-        label: string;
-        entries: SidebarHistorySection["entries"];
-        sortKey: number;
-      }
-    >();
-
-    // 1. Pinned Group
-    if (pinnedSessions.length > 0) {
-      // Sort pinned by most recently updated
-      pinnedSessions.sort((a, b) => b.updatedAt - a.updatedAt);
-      const pinnedEntries = pinnedSessions.map((session) => ({
-        id: session.id,
-        title: getReadableSessionTitle(session),
-        href: `/c/${session.conversationId || session.id}`,
-        createdAt: session.updatedAt,
-        isGeneratingTitle: session.isGeneratingTitle,
-        isPinned: true,
-      }));
-      groups.set("pinned", {
-        id: "pinned",
-        label: "Pinned",
-        entries: pinnedEntries,
-        sortKey: 9999, // Ensure it stays on top
-      });
-    }
-
-    // 2. Regular Groups
-    unpinnedSessions.forEach((session) => {
-      const date = new Date(session.updatedAt);
-      const now = new Date();
-      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      const yesterday = new Date(today);
-      yesterday.setDate(yesterday.getDate() - 1);
-      const oneWeekAgo = new Date(today);
-      oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-
-      let groupId: string;
-      let label: string;
-      let sortKey: number;
-
-      if (date >= today) {
-        groupId = "recent";
-        label = "Recent";
-        sortKey = Number.MAX_SAFE_INTEGER;
-      } else if (date >= yesterday) {
-        groupId = "yesterday";
-        label = "Yesterday";
-        sortKey = Number.MAX_SAFE_INTEGER - 1;
-      } else if (date >= oneWeekAgo) {
-        groupId = "this-week";
-        label = "This Week";
-        sortKey = Number.MAX_SAFE_INTEGER - 2;
-      } else {
-        groupId = `${date.getFullYear()}-${date.getMonth()}`;
-        label =
-          date.getFullYear() === currentYear
-            ? date.toLocaleDateString([], { month: "long" })
-            : date.toLocaleDateString([], { month: "long", year: "numeric" });
-        sortKey = new Date(date.getFullYear(), date.getMonth(), 1).getTime();
-      }
-
-      const href =
-        session.scope === "general" || session.id === GENERAL_CHAT_SESSION_ID
-          ? "/g"
-          : `/c/${session.id}`;
-
-      if (!groups.has(groupId)) {
-        groups.set(groupId, {
-          id: groupId,
-          label,
-          entries: [],
-          sortKey,
-        });
-      }
-
-      groups.get(groupId)?.entries.push({
-        id: session.id,
-        title: getReadableSessionTitle(session),
-        href,
-        createdAt: session.updatedAt,
-        isGeneratingTitle: session.isGeneratingTitle,
-      });
-    });
-
-    return Array.from(groups.values())
-      .sort((a, b) => b.sortKey - a.sortKey)
-      .map((group) => {
-        const sorted = group.entries.sort((a, b) => b.createdAt - a.createdAt);
-        const seen = new Set<string>();
-        const deduped: typeof sorted = [];
-        sorted.forEach((entry) => {
-          const day = new Date(entry.createdAt).toDateString();
-          const key = `${entry.title.toLowerCase()}::${day}`;
-          if (seen.has(key)) {
-            return;
-          }
-          seen.add(key);
-          deduped.push(entry);
-        });
-        return {
-          id: group.id,
-          label: group.label,
-          entries: deduped,
-        };
-      });
-  }, [sessions]);
-  const isDashboardView = viewMode === "dashboard";
-  const isChatView = viewMode === "chat";
-  const isPulseRoute =
-    pathname === "/pulse" || pathname.startsWith("/cal") || pathname.startsWith("/gray/dashboard");
+	  const filteredRailItems = useMemo(() => {
+	    if (isScout) {
+	      return SIDEBAR_RAIL_ITEMS.filter((item) => item.id !== "calendar");
+	    }
+	    return SIDEBAR_RAIL_ITEMS;
+	  }, [isScout]);
+	  const historySections = useMemo(() => buildHistorySections(sessions), [sessions]);
+	  const isDashboardView = viewMode === "dashboard";
+	  const isChatView = viewMode === "chat";
+	  const isPulseRoute =
+	    pathname === "/pulse" || pathname.startsWith("/cal") || pathname.startsWith("/gray/dashboard");
 
   const handleNavigate = (navId: SidebarNavKey) => {
     if (navId === "search") {
@@ -2200,12 +1988,12 @@ function GrayPageClientInner({
     );
     const urlId = currentSession?.conversationId ?? currentChatId;
 
-    const pathname = window.location.pathname;
-    const targetPath = `/c/${urlId}`;
-    if (pathname !== targetPath) {
-      router.replace(targetPath);
-    }
-  }, [currentChatId, generalSessionId, manualViewMode, router, sessions, supportsInlineChat]);
+	    const pathname = window.location.pathname;
+	    const targetPath = `/c/${urlId}`;
+	    if (pathname !== targetPath) {
+	      window.history.replaceState(null, "", targetPath);
+	    }
+	  }, [currentChatId, generalSessionId, manualViewMode, sessions, supportsInlineChat]);
 
   const handleOpenHistoryEntry = (entry: SidebarHistoryEntry) => {
     if (!entry.href || entry.href === "#") {
@@ -2242,25 +2030,61 @@ function GrayPageClientInner({
     renameSession(id, nextTitle);
   }, [sessions, renameSession]);
 
-  const handleDeleteHistoryEntry = useCallback((id: string) => {
-    const confirmed = window.confirm("Delete this conversation? This cannot be undone.");
-    if (!confirmed) {
-      return;
-    }
-    try {
-      sessionStorage.setItem(lastDeletedChatIdStorageKey, id);
-    } catch {
-      // Ignore
-    }
-    deleteSession(id);
-    if (activeChatId === id) {
-      if (generalSessionId) {
-        router.push("/" + generalSessionId);
-      } else {
-        router.push("/");
-      }
-    }
-  }, [deleteSession, activeChatId, generalSessionId, router, lastDeletedChatIdStorageKey]);
+	  const handleDeleteHistoryEntry = useCallback(
+	    (id: string) => {
+	      const confirmed = window.confirm("Delete this conversation? This cannot be undone.");
+	      if (!confirmed) {
+	        return;
+	      }
+
+	      const targetSession = sessions.find((session) => session.id === id) ?? null;
+	      const normalizedConversationId =
+	        normalizeConversationIdValue(targetSession?.conversationId) ?? null;
+
+	      try {
+	        sessionStorage.setItem(
+	          lastDeletedChatIdStorageKey,
+	          JSON.stringify({ sessionId: id, conversationId: normalizedConversationId })
+	        );
+	      } catch {
+	        // Ignore
+	      }
+
+	      deleteSession(id);
+
+	      const matchesActiveRoute =
+	        activeChatId === id ||
+	        (normalizedConversationId !== null && activeChatId === normalizedConversationId);
+	      const matchesCurrentChat =
+	        currentChatId === id ||
+	        (normalizedConversationId !== null && currentChatId === normalizedConversationId);
+
+	      if (matchesCurrentChat) {
+	        setCurrentChatId(generalSessionId);
+	      }
+
+	      if (!matchesActiveRoute && !matchesCurrentChat) {
+	        return;
+	      }
+
+	      if (supportsInlineChat) {
+	        setManualViewMode(null);
+	        return;
+	      }
+
+	      router.replace("/");
+	    },
+	    [
+	      activeChatId,
+	      currentChatId,
+	      deleteSession,
+	      generalSessionId,
+	      lastDeletedChatIdStorageKey,
+	      router,
+	      sessions,
+	      supportsInlineChat,
+	    ]
+	  );
 
   const handleRenameHistoryOverlayEntry = useCallback(
     (entry: SidebarHistoryEntry) => handleRenameHistoryEntry(entry.id),
@@ -2402,9 +2226,9 @@ function GrayPageClientInner({
           >
 
 
-            <GrayEnhancedSidebar
-              activeNav={activeNav ?? "general"}
-              isExpanded={sidebarExpandedForLayout}
+	            <GrayEnhancedSidebar
+	              activeNav={activeNav ?? "general"}
+	              isExpanded={sidebarExpandedForLayout}
               onToggle={() => {
                 if (isCalendarPage) {
                   setIsCalendarSidebarExpanded((previous) => !previous);
@@ -2431,14 +2255,14 @@ function GrayPageClientInner({
               viewerAvatarUrl={viewerAvatarUrl}
               viewerAvatarColor={viewerAvatarColor}
               viewerPlanLabel={viewerPlanLabel}
-              navItems={filteredSidebarItems}
-              railItems={filteredRailItems}
-              historySections={historySections}
-              onNavigate={handleMobileNavigate}
-              activeChatId={activeChatId ?? generalSessionId}
-              onOpenSettings={handleOpenSettings}
-              onOpenHelp={handleOpenHelp}
-              onUpgradePlan={handleUpgradePlan}
+	              navItems={filteredSidebarItems}
+	              railItems={filteredRailItems}
+	              historySections={historySections}
+	              onNavigate={handleMobileNavigate}
+	              activeChatId={currentChatId ?? activeChatId ?? generalSessionId}
+	              onOpenSettings={handleOpenSettings}
+	              onOpenHelp={handleOpenHelp}
+	              onUpgradePlan={handleUpgradePlan}
               onLogOut={handleLogOut}
               onRenameHistoryEntry={handleRenameHistoryEntry}
               onDeleteHistoryEntry={handleDeleteHistoryEntry}
