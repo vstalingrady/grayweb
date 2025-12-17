@@ -146,10 +146,9 @@ export function StarfieldCanvas({
       const centerY = state.height + 20; // Slightly below the canvas
 
       for (const star of stars) {
-        // if (!reducedMotion) {
-        // Update angle for orbital motion
-        star.angle += star.angularSpeed * dtSeconds;
-        // }
+        if (orbitMode && !reducedMotion) {
+          star.angle += star.angularSpeed * dtSeconds;
+        }
 
         // Calculate position based on orbit
         const x = centerX + Math.cos(star.angle) * star.orbitRadius;

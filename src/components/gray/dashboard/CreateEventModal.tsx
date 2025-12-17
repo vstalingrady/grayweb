@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect } from "react";
 import { X, ChevronDown, Calendar, CheckSquare, Bell, Clock } from "lucide-react";
 import styles from "./styles.module.css";
 import { apiService } from "@/lib/api";

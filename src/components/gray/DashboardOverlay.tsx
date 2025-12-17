@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { X } from "lucide-react";
+import { useEffect } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import styles from "./DashboardOverlay.module.css";
 import { GrayDashboardView } from "./DashboardView";

@@ -1,4 +1,4 @@
-import type { ChatMessage, GrayReminderCreatedPayload, ChatSession, ConversationHistoryEntryPayload } from "./types";
+import type { ChatMessage, ChatSession, ConversationHistoryEntryPayload } from "./types";
 import type { User, Reminder } from "@/lib/api";
 import {
     GREETING_PATTERN,
@@ -8,15 +8,13 @@ import {
     MAP_TRIGGER_PHRASE,
     LOW_SIGNAL_TITLE_WORDS,
     GENERAL_SESSION_TITLE,
-    REMINDER_PRE_BLOCK_REGEX,
-    REMINDER_CODE_BLOCK_REGEX,
     GRAY_TITLE_HTML_CAPTURE_REGEX,
     GRAY_TITLE_HTML_STRIP_REGEX,
     GRAY_TITLE_LEGACY_CAPTURE_REGEX,
     GRAY_TITLE_LEGACY_STRIP_REGEX,
     GENERAL_CONVERSATION_PREFIX,
 } from "./constants";
-import { formatReminderDateLabel, formatReminderSlotLabel } from "../reminderTimeUtils";
+import { formatReminderDateLabel } from "../reminderTimeUtils";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 

@@ -16,7 +16,6 @@ import {
   isProductionHost,
   isGrayWorkspaceHost,
   normalizeWorkspaceRedirect,
-  resolveDefaultWorkspacePath,
   resolveWorkspaceHost,
   resolveWorkspaceOrigin,
 } from "@/lib/grayRouting";

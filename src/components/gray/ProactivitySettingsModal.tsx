@@ -11,7 +11,6 @@ import {
     DEFAULT_CUSTOM_SETTINGS,
     DEFAULT_PROACTIVITY_TIME,
     PROACTIVITY_PRESETS,
-    type ProactivityPreset,
     type CustomSettingsState,
     dedupeTimes,
     findNextCustomTime,

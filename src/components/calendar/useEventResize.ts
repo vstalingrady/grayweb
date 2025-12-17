@@ -3,9 +3,6 @@ import { MutableRefObject, useCallback, useRef, useState } from "react";
 
 import { CalendarEvent, EventDraft } from "./types";
 
-const minutesBetween = (anchor: Date, value: Date) =>
-    (value.getTime() - anchor.getTime()) / 60000;
-
 const addMinutes = (anchor: Date, minutes: number) =>
     new Date(anchor.getTime() + minutes * 60000);
 

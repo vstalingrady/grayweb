@@ -232,7 +232,7 @@ export function AddPlanHabitModal({
 
         } else {
 
-          const result = await apiService.createPlan(user.id, {
+          await apiService.createPlan(user.id, {
 
             label: trimmed,
 
@@ -245,8 +245,6 @@ export function AddPlanHabitModal({
             description: descriptionValue,
 
           });
-
-          // console.log('[AddPlanHabitModal] Plan created successfully', result);
 
         }
 
@@ -286,7 +284,7 @@ export function AddPlanHabitModal({
 
           // console.log('[AddPlanHabitModal] Creating new habit');
 
-          const result = await apiService.createHabit(user.id, {
+          await apiService.createHabit(user.id, {
 
             label: trimmed,
 
@@ -295,8 +293,6 @@ export function AddPlanHabitModal({
             description: details.length > 0 ? details : null,
 
           });
-
-          // console.log('[AddPlanHabitModal] Habit created successfully', result);
 
         }
 

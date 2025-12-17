@@ -104,7 +104,7 @@ export function ProactivityNotificationProvider({ children }: ProactivityNotific
         // console.log("[Proactivity] SSE Connected");
       };
 
-      eventSource.addEventListener("ping", (event) => {
+      eventSource.addEventListener("ping", () => {
         // Keep-alive, ignore
       });
 

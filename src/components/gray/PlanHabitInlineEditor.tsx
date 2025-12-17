@@ -137,19 +137,6 @@ const combineDateWithTime = (date: Date, timeValue: string) => {
   return result;
 };
 
-const toDateTimeLocalValue = (value: string | null | undefined): string => {
-  if (!value) {
-    return "";
-  }
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return "";
-  }
-  const offset = parsed.getTimezoneOffset();
-  const normalized = new Date(parsed.getTime() - offset * 60000);
-  return normalized.toISOString().slice(0, 16);
-};
-
 const toDateTimeLocalString = (value: Date): string => {
   const offset = value.getTimezoneOffset();
   const normalized = new Date(value.getTime() - offset * 60000);

@@ -106,7 +106,6 @@ type GrayDashboardCalendarProps = {
   onCalendarsChange?: (calendars: CalendarInfo[]) => void;
   hourHeight?: number;
   maxHeight?: number | string;
-  showSelectedDateLabel?: boolean;
   showSurfaceLabel?: boolean;
   showSurfaceHeading?: boolean;
   showHeaderControls?: boolean;
@@ -139,7 +138,6 @@ export function GrayDashboardCalendar({
   onCalendarsChange,
   hourHeight: hourHeightProp,
   maxHeight,
-  showSelectedDateLabel = true,
   showSurfaceLabel = true,
   showSurfaceHeading = true,
   showHeaderControls = true,
@@ -266,13 +264,12 @@ export function GrayDashboardCalendar({
     activeDraft: blockResizeDraft,
   } = resizeControls;
 
-  // We only support resizing single blocks for now, simpler
-  const dayResizeDrafts = blockResizeDraft ? { [blockResizeDraft.id]: blockResizeDraft } : null;
-  const dayDrafts = useMemo(() => {
-    // Resize takes precedence if active
-    if (dayResizeDrafts) return dayResizeDrafts;
+  const dayDrafts = useMemo<Record<string, EventDraft> | null>(() => {
+    if (blockResizeDraft) {
+      return { [blockResizeDraft.id]: blockResizeDraft };
+    }
     return dayDragDrafts;
-  }, [dayDragDrafts, dayResizeDrafts]);
+  }, [blockResizeDraft, dayDragDrafts]);
 
   // Week view drag with horizontal support
   const weekDragControls = useEventDrag({
@@ -716,26 +713,6 @@ export function GrayDashboardCalendar({
       height: eventHeightPx,
     };
     openComposerAt(start, anchorRect);
-  };
-
-  // Helper to override event position if dragged
-  const getEventOverride = (event: PositionedEvent, dayStart: Date) => {
-    const draft = activeDrafts?.[event.id];
-    if (!draft) return event;
-
-    const startMinutes = (draft.start.getTime() - dayStart.getTime()) / 60000;
-    const endMinutes = (draft.end.getTime() - dayStart.getTime()) / 60000;
-    const durationMinutes = Math.max(endMinutes - startMinutes, 5);
-
-    const minuteHeight = hourHeight / 60;
-    const top = Math.max(startMinutes * minuteHeight, 0);
-    const height = Math.max(durationMinutes * minuteHeight, shortEventMinimumHeight);
-
-    return {
-      ...event,
-      top,
-      height,
-    };
   };
 
   const handleDeleteEvent = (event: PositionedEvent) => {

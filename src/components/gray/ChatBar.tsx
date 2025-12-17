@@ -22,11 +22,7 @@ export type GrayChatBarProps = {
   isSubmitDisabled?: boolean;
   isSubmitting?: boolean;
   onAddAttachment?: () => void;
-  isReasoningEnabled?: boolean;
-  onToggleReasoning?: () => void;
-  isReasoningLocked?: boolean;
   isSearchEnabled?: boolean;
-  onToggleSearch?: () => void;
   modelSelector?: React.ReactNode;
   onPasteFiles?: (files: File[]) => void;
   attachmentTray?: React.ReactNode;
@@ -40,11 +36,7 @@ export function GrayChatBar({
   isSubmitDisabled,
   isSubmitting = false,
   onAddAttachment,
-  isReasoningEnabled = false,
-  onToggleReasoning,
-  isReasoningLocked = false,
   isSearchEnabled = false,
-  onToggleSearch,
   modelSelector,
   onPasteFiles,
   attachmentTray,

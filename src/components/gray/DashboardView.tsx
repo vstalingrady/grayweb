@@ -482,7 +482,6 @@ export function GrayDashboardView({
       currentDate={currentDate}
       showSidebar={true}
       showHeaderDates={true}
-      showSelectedDateLabel={false}
       showCalendarList={!isScout}
       calendars={calendars}
       events={mergedEvents}

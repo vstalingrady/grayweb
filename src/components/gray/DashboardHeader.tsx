@@ -1,4 +1,3 @@
-import styles from "@/app/gray/GrayPageClient.module.css";
 import calendarStyles from "@/components/calendar/GrayDashboardCalendar.module.css";
 import { ViewModeSelect } from "./ViewModeSelect";
 import { useI18n } from "@/contexts/I18nContext";
@@ -153,7 +152,15 @@ export function DashboardHeader({
         )}
       </div>
       <div className={calendarStyles.calendarSurfaceHeaderRight}>
-        {null}
+        {showUpgradeButton && onUpgradeClick ? (
+          <button
+            type="button"
+            className={calendarStyles.calendarSurfaceButton}
+            onClick={onUpgradeClick}
+          >
+            {t("Upgrade")}
+          </button>
+        ) : null}
         {shouldRenderControls && (
           <div className={calendarStyles.calendarSurfaceNav}>
             {showMonthNavigation && (

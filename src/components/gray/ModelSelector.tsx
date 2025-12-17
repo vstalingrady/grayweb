@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useCallback, useMemo, useState, useRef, useEffect } from "react";
-import { Zap, Sparkles, Lock, ChevronUp, Rocket, Grid, ChevronRight, Check, Brain, Settings, ArrowRight, Box, Calendar } from "lucide-react";
+import { Zap, Lock, ChevronUp, Grid, ChevronRight, Check, Brain, Settings, Box, Calendar } from "lucide-react";
 import Image from "next/image";
 import { useChatStore } from "@/components/gray/ChatProvider";
 import { useUser } from "@/contexts/UserContext";
@@ -150,8 +150,6 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, [isOpen]);
-
-  const nextTier = currentLevel === 0 ? "voyager" : currentLevel === 1 ? "pioneer" : null;
 
   return (
     <div className={styles.container} ref={containerRef}>

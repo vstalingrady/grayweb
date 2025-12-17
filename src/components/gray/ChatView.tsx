@@ -846,14 +846,22 @@ export function GrayChatView({
       }
     },
     [
+      autoWebSearchEnabled,
       appendMessage,
+      applyAutoTitle,
+      buildAttachmentPayloads,
+      clearAttachments,
+      mapPayload,
+      modelTier,
+      reasoningMode,
       resolveChatUser,
+      selectedModelId,
+      session,
       updateMessage,
       updateSession,
+      webSearchEnabled,
       workspaceContext,
       personalizedSystemPrompt,
-      applyAutoTitle,
-      session,
     ]
   );
 
@@ -902,12 +910,6 @@ export function GrayChatView({
     // the actual stream starts. If navigation interrupts that stream we end up with
     // a blank assistant entry, so treat it as "awaiting" unless it has real content.
     const assistantHasContent = Boolean(lastAssistantMessage?.content?.trim());
-
-    const isAwaitingAssistant =
-      Boolean(lastUserMessage) &&
-      (!lastAssistantMessage ||
-        lastAssistantMessage.createdAt < (lastUserMessage?.createdAt ?? 0) ||
-        !assistantHasContent);
 
     // If we have an assistant message that is just empty/loading, do not trigger a new one.
     // This prevents double-triggering while the first one is being created or streamed.
@@ -1379,11 +1381,18 @@ export function GrayChatView({
         }
         return <p {...rest}>{children}</p>;
       },
-      table: ({ children, node: _node, ...rest }: React.TableHTMLAttributes<HTMLTableElement> & { node?: Element }) => (
-        <div className={styles.chatTableWrapper}>
-          <table {...rest}>{children}</table>
-        </div>
-      ),
+      table: ({
+        children,
+        node,
+        ...rest
+      }: React.TableHTMLAttributes<HTMLTableElement> & { node?: Element }) => {
+        void node;
+        return (
+          <div className={styles.chatTableWrapper}>
+            <table {...rest}>{children}</table>
+          </div>
+        );
+      },
     }),
     []
   );
@@ -1430,6 +1439,7 @@ export function GrayChatView({
     conversationContextStats.limit,
     conversationContextStats.messageCount,
     conversationContextStats.modelLabel,
+    conversationContextStats.modelLimit,
     conversationContextStats.modelName,
     conversationContextStats.provider,
     conversationContextStats.totalTokens,

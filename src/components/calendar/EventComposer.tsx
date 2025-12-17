@@ -430,7 +430,7 @@ export function EventComposer({
   );
   const currentEnd = useMemo(() => {
     return combineDateWithTime(selectedDate, state.endTime);
-  }, [currentStart, selectedDate, state.endTime]);
+  }, [selectedDate, state.endTime]);
 
   const closeWithOptionalAutoCreate = useCallback(
     (options?: { allowAutoCreate?: boolean }) => {

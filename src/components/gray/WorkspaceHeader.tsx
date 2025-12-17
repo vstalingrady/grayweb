@@ -37,7 +37,21 @@ function GrayWorkspaceHeader({
       {children ? <div className={styles.headerLeft}>{children}</div> : null}
       {!hideDesktopMeta ? (
         <div className={`${styles.headerRight} hidden md:flex`}>
-          {null}
+          <button
+            type="button"
+            className={styles.planBadge}
+            onClick={handlePlanBadgeClick}
+            data-state={!isUpgradeVisible ? "active" : undefined}
+            disabled={!isUpgradeVisible || !onUpgradeClick}
+            aria-label={
+              isUpgradeVisible
+                ? t("Upgrade plan from {plan}", { plan: normalizedPlanLabel })
+                : t("Current plan: {plan}", { plan: normalizedPlanLabel })
+            }
+          >
+            <span className={styles.planBadgeLabel}>{normalizedPlanLabel}</span>
+            {isUpgradeVisible ? <span className={styles.planBadgeHint}>{t("Upgrade")}</span> : null}
+          </button>
         </div>
       ) : null}
     </header>
