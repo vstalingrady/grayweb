@@ -18,7 +18,7 @@ export default function PerformanceChart() {
 
   // Initialize data
   useEffect(() => {
-    const initialData = [];
+    const initialData: number[] = [];
     let value = 100;
     let velocity = 0.1;
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { LoaderCircle } from "lucide-react";
 import { useUser } from "@/contexts/UserContext";
@@ -15,22 +15,20 @@ export default function DeleteAccountPage() {
   const searchParams = useSearchParams();
   const { user, loading, deleteUserAccount } = useUser();
   const hasHydrated = useHasHydrated();
+  const verifiedParam = searchParams?.get("verified") === "true";
   const [status, setStatus] = useState<"idle" | "deleting" | "error" | "success">("idle");
   const [error, setError] = useState<string | null>(null);
   const [confirmationEmail, setConfirmationEmail] = useState("");
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const verifiedOnceRef = useRef(false);
-  const suppressVerificationRef = useRef(false);
-  const verifiedParam = searchParams?.get("verified") === "true";
-  const isIdentityVerified = !suppressVerificationRef.current && (isAuthenticated || verifiedParam || verifiedOnceRef.current);
+  const [verifiedOnce, setVerifiedOnce] = useState(() => verifiedParam);
+  const [suppressVerification, setSuppressVerification] = useState(false);
+  const isIdentityVerified =
+    !suppressVerification && (isAuthenticated || verifiedParam || verifiedOnce);
 
   useEffect(() => {
     if (!verifiedParam) {
       return;
     }
-
-    verifiedOnceRef.current = true;
-    suppressVerificationRef.current = false;
 
     if (typeof window === "undefined") {
       return;
@@ -136,8 +134,8 @@ export default function DeleteAccountPage() {
   }, [deleteUserAccount, status, user, confirmationEmail, t]);
 
   const handleCancel = () => {
-    verifiedOnceRef.current = false;
-    suppressVerificationRef.current = true;
+    setVerifiedOnce(false);
+    setSuppressVerification(true);
     setIsAuthenticated(false);
   };
 
@@ -219,7 +217,8 @@ export default function DeleteAccountPage() {
           subtitleText={t("Please log in again to confirm your identity.")}
           redirectTo="/delete-account?verified=true"
           onSuccess={() => {
-            suppressVerificationRef.current = false;
+            setVerifiedOnce(true);
+            setSuppressVerification(false);
             setIsAuthenticated(true);
           }}
         />

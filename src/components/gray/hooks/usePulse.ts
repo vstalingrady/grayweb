@@ -1,5 +1,4 @@
-/* eslint-disable react-hooks/set-state-in-effect */
-import { useState, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { apiService, type DashboardPulse } from "@/lib/api";
 import { type PulseEntry, type PlanItem, type HabitItem, type ProactivityItem } from "@/components/gray/types";
 import { toDateKey } from "@/app/gray/utils"; // We'll need to extract utils too
@@ -175,18 +174,17 @@ export function usePulse(
   currentPlans: PlanItem[],
   currentHabits: HabitItem[],
   proactivity: ProactivityItem | null,
-  onNotification?: (title: string, body: string) => void
+  _onNotification?: (title: string, body: string) => void
 ) {
-  const [pulseEntries, setPulseEntries] = useState<PulseEntry[]>([]);
-  const [activePulseId, setActivePulseId] = useState<string | null>(null);
+  const [pulseState, setPulseState] = useState<{
+    userId: number | null;
+    entries: PulseEntry[];
+    activePulseId: string | null;
+  }>(() => ({ userId: null, entries: [], activePulseId: null }));
 
   // Fetch initial pulse data
   useEffect(() => {
-    if (!userId) {
-      setPulseEntries([]);
-      setActivePulseId(null);
-      return;
-    }
+    if (!userId) return;
 
     let cancelled = false;
 
@@ -197,12 +195,13 @@ export function usePulse(
           return;
         }
         const mapped = pulses.map((pulse) => mapDashboardPulseToEntry(pulse));
-        setPulseEntries(mapped);
-        setActivePulseId((previous) => {
-          if (previous && mapped.some((entry) => entry.id === previous)) {
-            return previous;
-          }
-          return mapped[0]?.id ?? null;
+        setPulseState((previous) => {
+          const previousActivePulseId = previous.userId === userId ? previous.activePulseId : null;
+          const nextActivePulseId =
+            previousActivePulseId && mapped.some((entry) => entry.id === previousActivePulseId)
+              ? previousActivePulseId
+              : mapped[0]?.id ?? null;
+          return { userId, entries: mapped, activePulseId: nextActivePulseId };
         });
       } catch (error) {
         console.error("Failed to load dashboard pulses:", error);
@@ -215,13 +214,9 @@ export function usePulse(
     };
   }, [userId]);
 
-  // Sync current state to today's pulse
-  useEffect(() => {
-    if (!userId) return;
-
-    const snapshotBase = createPulseSnapshot(todayAnchor, currentPlans, currentHabits, proactivity);
-
-    setPulseEntries((previous) => {
+  const mergeTodaySnapshot = useCallback(
+    (previous: PulseEntry[]): PulseEntry[] => {
+      const snapshotBase = createPulseSnapshot(todayAnchor, currentPlans, currentHabits, proactivity);
       const existingIndex = previous.findIndex((entry) => entry.dateKey === snapshotBase.dateKey);
       const stableId = existingIndex >= 0 ? previous[existingIndex].id : snapshotBase.id;
 
@@ -272,23 +267,72 @@ export function usePulse(
       }
 
       return [snapshot, ...previous].slice(0, MAX_PULSE_HISTORY);
-    });
+    },
+    [currentHabits, currentPlans, proactivity, todayAnchor]
+  );
 
-  }, [userId, currentPlans, currentHabits, proactivity, todayAnchor, onNotification]);
-
-  // Ensure active pulse selection
-  useEffect(() => {
-    if (!pulseEntries.length) {
-      if (activePulseId !== null) {
-        setActivePulseId(null);
-      }
-      return;
+  const pulseEntries = useMemo(() => {
+    if (!userId || pulseState.userId !== userId) {
+      return [];
     }
+    return mergeTodaySnapshot(pulseState.entries);
+  }, [mergeTodaySnapshot, pulseState.entries, pulseState.userId, userId]);
 
-    if (!activePulseId || !pulseEntries.some((entry) => entry.id === activePulseId)) {
-      setActivePulseId(pulseEntries[0].id);
+  const setPulseEntries = useCallback(
+    (next: PulseEntry[] | ((previous: PulseEntry[]) => PulseEntry[])) => {
+      setPulseState((previous) => {
+        if (!userId) {
+          return previous;
+        }
+
+        const baseEntries = previous.userId === userId ? previous.entries : [];
+        const mergedPrevious = mergeTodaySnapshot(baseEntries);
+        const resolvedNext = typeof next === "function" ? next(mergedPrevious) : next;
+
+        return {
+          userId,
+          entries: resolvedNext,
+          activePulseId: previous.userId === userId ? previous.activePulseId : null,
+        };
+      });
+    },
+    [mergeTodaySnapshot, userId]
+  );
+
+  const activePulseId = useMemo(() => {
+    if (!pulseEntries.length || !userId || pulseState.userId !== userId) {
+      return null;
     }
-  }, [pulseEntries, activePulseId]);
+    const candidate = pulseState.activePulseId;
+    if (candidate && pulseEntries.some((entry) => entry.id === candidate)) {
+      return candidate;
+    }
+    return pulseEntries[0]?.id ?? null;
+  }, [pulseEntries, pulseState.activePulseId, pulseState.userId, userId]);
+
+  const setActivePulseId = useCallback(
+    (next: string | null | ((previous: string | null) => string | null)) => {
+      setPulseState((previous) => {
+        if (!userId) {
+          return previous;
+        }
+
+        const previousActivePulseId = previous.userId === userId ? previous.activePulseId : null;
+        const resolvedNext = typeof next === "function" ? next(previousActivePulseId) : next;
+
+        if (resolvedNext === previousActivePulseId && previous.userId === userId) {
+          return previous;
+        }
+
+        return {
+          userId,
+          entries: previous.userId === userId ? previous.entries : [],
+          activePulseId: resolvedNext,
+        };
+      });
+    },
+    [userId]
+  );
 
   const activePulse = useMemo(() => {
     if (!pulseEntries.length) return null;

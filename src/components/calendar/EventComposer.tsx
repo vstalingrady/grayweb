@@ -1,4 +1,3 @@
-/* eslint-disable react-hooks/set-state-in-effect */
 import {
   FormEvent,
   useCallback,
@@ -117,8 +116,11 @@ export function EventComposer({
 
     const initialDateSource = activeEvent?.start ?? initialRange?.start ?? referenceDate;
     const normalizedInitialDate = startOfDay(initialDateSource);
-    setSelectedDate(normalizedInitialDate);
-    setMonthDate(startOfMonth(normalizedInitialDate));
+    const syncDates = () => {
+      setSelectedDate(normalizedInitialDate);
+      setMonthDate(startOfMonth(normalizedInitialDate));
+    };
+    syncDates();
 
     if (activeEvent) {
       dispatch({ type: "reset", payload: resolveStateFromEvent(activeEvent, calendarFallbackId) });
@@ -157,14 +159,9 @@ export function EventComposer({
     if (typeof window === "undefined") {
       return;
     }
-    if (!isOpen || !anchorRect) {
-      setAnchoredPosition(null);
-      setAnchorSide(null);
-      return;
-    }
 
     const updatePosition = () => {
-      if (!anchorRect) {
+      if (!isOpen || !anchorRect) {
         setAnchoredPosition(null);
         setAnchorSide(null);
         return;
@@ -197,6 +194,9 @@ export function EventComposer({
     };
 
     updatePosition();
+    if (!isOpen || !anchorRect) {
+      return;
+    }
     window.addEventListener("resize", updatePosition);
     return () => window.removeEventListener("resize", updatePosition);
   }, [anchorRect, isOpen, state.entryType, state.startTime, state.endTime, state.details, state.title]);
@@ -205,9 +205,12 @@ export function EventComposer({
   const showReminderControl = state.entryType === "event";
 
   useEffect(() => {
-    if (isHabit) {
-      setIsDatePickerOpen(false);
-    }
+    const closeDatePickerIfHabit = () => {
+      if (isHabit) {
+        setIsDatePickerOpen(false);
+      }
+    };
+    closeDatePickerIfHabit();
   }, [isHabit]);
 
   const handleSelectEntryType = (nextType: CalendarEntryType) => {
@@ -349,14 +352,18 @@ export function EventComposer({
   }, [activeEventId, closeWithOptionalAutoCreate, handleDelete, isOpen]);
 
   useEffect(() => {
-    if (!isOpen) {
-      setIsColorPickerOpen(false);
-      setIsDatePickerOpen(false);
-    }
+    const closePickers = () => {
+      if (!isOpen) {
+        setIsColorPickerOpen(false);
+        setIsDatePickerOpen(false);
+      }
+    };
+    closePickers();
   }, [isOpen]);
 
   useEffect(() => {
-    setHexDraft(state.color);
+    const syncHexDraft = () => setHexDraft(state.color);
+    syncHexDraft();
   }, [state.color]);
 
   useEffect(() => {
@@ -403,54 +410,58 @@ export function EventComposer({
   }, [isColorPickerOpen]);
 
   useLayoutEffect(() => {
-    if (!isColorPickerOpen) {
-      setColorPickerPosition(null);
-      return;
-    }
+    const updatePosition = () => {
+      if (!isColorPickerOpen) {
+        setColorPickerPosition(null);
+        return;
+      }
 
-    const triggerRect = colorPickerTriggerRef.current?.getBoundingClientRect();
-    if (!triggerRect) return;
+      const triggerRect = colorPickerTriggerRef.current?.getBoundingClientRect();
+      if (!triggerRect) return;
 
-    const popoverRect = colorPickerPopoverRef.current?.getBoundingClientRect();
-    const popoverWidth = popoverRect?.width ?? 360;
-    const popoverHeight = popoverRect?.height ?? 420;
+      const popoverRect = colorPickerPopoverRef.current?.getBoundingClientRect();
+      const popoverWidth = popoverRect?.width ?? 360;
+      const popoverHeight = popoverRect?.height ?? 420;
 
-    const viewportPadding = 12;
-    const gap = 12;
+      const viewportPadding = 12;
+      const gap = 12;
 
-    const spaceRight = window.innerWidth - triggerRect.right - gap;
-    const spaceLeft = triggerRect.left - gap;
+      const spaceRight = window.innerWidth - triggerRect.right - gap;
+      const spaceLeft = triggerRect.left - gap;
 
-    let left = triggerRect.right + gap;
-    if (spaceRight < popoverWidth && spaceLeft >= popoverWidth) {
-      left = triggerRect.left - gap - popoverWidth;
-    } else if (spaceRight < popoverWidth) {
-      left = clamp(
-        triggerRect.left - popoverWidth / 2,
+      let left = triggerRect.right + gap;
+      if (spaceRight < popoverWidth && spaceLeft >= popoverWidth) {
+        left = triggerRect.left - gap - popoverWidth;
+      } else if (spaceRight < popoverWidth) {
+        left = clamp(
+          triggerRect.left - popoverWidth / 2,
+          viewportPadding,
+          window.innerWidth - viewportPadding - popoverWidth
+        );
+      }
+
+      const top = clamp(
+        triggerRect.top,
         viewportPadding,
-        window.innerWidth - viewportPadding - popoverWidth
+        window.innerHeight - viewportPadding - popoverHeight
       );
-    }
 
-    const top = clamp(
-      triggerRect.top,
-      viewportPadding,
-      window.innerHeight - viewportPadding - popoverHeight
-    );
+      setColorPickerPosition({ top, left });
+    };
 
-    setColorPickerPosition({ top, left });
+    updatePosition();
   }, [isColorPickerOpen]);
 
   useLayoutEffect(() => {
-    if (!isDatePickerOpen) {
-      setDatePickerPosition(null);
-      return;
-    }
-
     const viewportPadding = 12;
     const gap = 10;
 
     const updatePosition = () => {
+      if (!isDatePickerOpen) {
+        setDatePickerPosition(null);
+        return;
+      }
+
       const triggerRect = datePickerTriggerRef.current?.getBoundingClientRect();
       if (!triggerRect) return;
 
@@ -481,6 +492,9 @@ export function EventComposer({
     };
 
     updatePosition();
+    if (!isDatePickerOpen) {
+      return;
+    }
     window.addEventListener("resize", updatePosition);
     return () => window.removeEventListener("resize", updatePosition);
   }, [isDatePickerOpen, monthDate]);

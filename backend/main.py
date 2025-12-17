@@ -898,44 +898,26 @@ app_logger.info(f"Backend starting (env={os.getenv('ENVIRONMENT', 'development')
 try:
     from backend.core.ai_config import (
         AI_PROVIDER,
-        REMINDER_MODEL,
         GEMINI_DEFAULT_MODEL,
-        GEMINI_PRO_MODEL,
         VALIDATE_GEMINI_ON_STARTUP,
-        TIER_CONVERSATION_TOKEN_LIMITS,
         tier_conversation_token_limit as _tier_conversation_token_limit_base,
-        REMINDER_FUNCTION_NAMES,
         get_search_tool,
         get_url_context_tool,
         get_default_chat_tools,
         PROMPTS_DIR,
         GLOBAL_SYSTEM_PROMPTS_PATH,
-        ONBOARDING_PROMPT_PATH,
-        STREAMING_TOKEN_DELAY,
-        MAX_DASHBOARD_PULSE_HISTORY,
-        DEFAULT_DASHBOARD_PROACTIVITY,
-        DEFAULT_WORKSPACE_BACKGROUNDS,
     )
 except ImportError:
     from core.ai_config import (  # type: ignore
         AI_PROVIDER,
-        REMINDER_MODEL,
         GEMINI_DEFAULT_MODEL,
-        GEMINI_PRO_MODEL,
         VALIDATE_GEMINI_ON_STARTUP,
-        TIER_CONVERSATION_TOKEN_LIMITS,
         tier_conversation_token_limit as _tier_conversation_token_limit_base,
-        REMINDER_FUNCTION_NAMES,
         get_search_tool,
         get_url_context_tool,
         get_default_chat_tools,
         PROMPTS_DIR,
         GLOBAL_SYSTEM_PROMPTS_PATH,
-        ONBOARDING_PROMPT_PATH,
-        STREAMING_TOKEN_DELAY,
-        MAX_DASHBOARD_PULSE_HISTORY,
-        DEFAULT_DASHBOARD_PROACTIVITY,
-        DEFAULT_WORKSPACE_BACKGROUNDS,
     )
 
 # tier_conversation_token_limit wrapper that uses normalize_plan_tier
