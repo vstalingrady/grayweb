@@ -460,26 +460,6 @@ export type ChatStreamUsageEvent = {
 
 export type ChatStreamEvent = ChatStreamTokenEvent | ChatStreamEndEvent | ChatStreamErrorEvent | ChatStreamRemindersEvent | ChatStreamUsageEvent;
 
-type StreamPayload = {
-  delta?: string;
-  token?: string;
-  text?: string;
-  conversation_id?: string;
-  conversationId?: string;
-  response?: string;
-  title?: string | null;
-  grounding_metadata?: GroundingMetadata | null;
-  groundingMetadata?: GroundingMetadata | null;
-  message?: string;
-  error?: string;
-  timing?: {
-    total_ms?: number;
-    first_token_ms?: number;
-    totalMs?: number;
-    firstTokenMs?: number;
-  };
-};
-
 export interface GoogleAuthResponse {
   authorization_url: string;
   state?: string;

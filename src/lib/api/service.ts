@@ -955,26 +955,48 @@ class ApiService {
     const decoder = new TextDecoder();
     let buffer = '';
 
-    type StreamPayload = unknown;
+    const newlineRegex = /\r?\n/;
+    const eventPrefix = 'event:';
+    const dataPrefix = 'data:';
+    const eventPrefixLength = eventPrefix.length;
+    const dataPrefixLength = dataPrefix.length;
+
+    type StreamPayload = Record<string, unknown> & {
+      delta?: string;
+      token?: string;
+      text?: string;
+      conversation_id?: string;
+      conversationId?: string;
+      response?: string;
+      title?: string | null;
+      grounding_metadata?: unknown;
+      groundingMetadata?: unknown;
+      message?: string;
+      error?: string;
+      reminders?: unknown[];
+      usage?: unknown;
+      timing?: {
+        total_ms?: number;
+        first_token_ms?: number;
+        totalMs?: number;
+        firstTokenMs?: number;
+      };
+    };
 
     /* eslint-disable @typescript-eslint/no-explicit-any */
     const parseSseEvent = (chunk: string): ChatStreamEvent | null => {
-      // Pre-compile regex for better performance
-      const newlineRegex = /\r?\n/;
       const lines = chunk.split(newlineRegex);
       let eventType = 'message';
       const dataLines: string[] = [];
-      const dataPrefixLength = 'data:'.length;
-      const eventPrefixLength = 'event:'.length;
 
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
         if (!line || line[0] === ':') {
           continue;
         }
-        if (line.startsWith('event:')) {
+        if (line.startsWith(eventPrefix)) {
           eventType = line.slice(eventPrefixLength).trim() || eventType;
-        } else if (line.startsWith('data:')) {
+        } else if (line.startsWith(dataPrefix)) {
           // Preserve the entire payload after the first "data:" prefix.
           let value = line.slice(dataPrefixLength);
           if (value.startsWith(' ')) {
