@@ -1811,6 +1811,14 @@ except ImportError:
 
 app.include_router(uploads_router)
 
+# Context Cache routes
+try:
+    from backend.api.context_cache import router as context_cache_router
+except ImportError:
+    from api.context_cache import router as context_cache_router  # type: ignore
+
+app.include_router(context_cache_router)
+
 # Initialize audit logger with database
 
 try:
@@ -3985,55 +3993,12 @@ async def create_chat_title(
     return ChatTitleResponse(title=_fallback_title_from_message(payload.message))
 
 
-@app.post("/context-cache", response_model=ContextCache)
-@limiter.limit("60/minute")
-async def create_context_cache(
-    request: Request,
-    payload: ContextCacheBase,
-    user_id: int = Query(..., description="ID of the user creating the context cache"),
-    db: databases.Database = Depends(get_database),
-    current_user: Dict[str, Any] = Depends(get_current_user),
-) -> ContextCache:
-    require_same_user(user_id, current_user)
-    now = utcnow()
-    query = context_cache.insert().values(
-        user_id=user_id,
-        conversation_id=payload.conversation_id,
-        label=payload.label,
-        content=payload.content,
-        created_at=now,
-    )
-    cache_id = await db.execute(query)
-    return ContextCache(
-        id=cache_id,
-        user_id=user_id,
-        conversation_id=payload.conversation_id,
-        label=payload.label,
-        content=payload.content,
-        created_at=now,
-    )
-
-
-@app.get("/context-cache/{cache_id}", response_model=ContextCache)
-@limiter.limit("120/minute")
-async def get_context_cache(
-    request: Request,
-    cache_id: int,
-    db: databases.Database = Depends(get_database),
-    current_user: Dict[str, Any] = Depends(get_current_user),
-):
-    record = await db.fetch_one(
-        context_cache.select().where(context_cache.c.id == cache_id)
-    )
-    payload = _serialize_context_cache(record)
-    if not payload:
-        raise HTTPException(status_code=404, detail="Context cache not found.")
-    require_same_user(payload["user_id"], current_user)
-    return ContextCache(**payload)
+# Context cache endpoints are now in backend/api/context_cache.py
 
 # Upload endpoints are now in backend/api/uploads.py
 
 async def chat_endpoint(
+
     request: Request,
     chat_request: ChatRequest,
     background_tasks: BackgroundTasks,
