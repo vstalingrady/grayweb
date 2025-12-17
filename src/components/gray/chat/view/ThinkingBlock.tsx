@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Brain, ChevronDown } from "lucide-react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import rehypeKatex from "rehype-katex";
-import styles from "@/app/gray/GrayPageClient.module.css";
+import styles from "@/components/gray/chat/ChatStyles.module.css";
 import { useI18n } from "@/contexts/I18nContext";
 import { MARKDOWN_PLUGINS } from "./markdown/plugins";
 

@@ -17,37 +17,30 @@ import { CalendarSidebar } from "./CalendarSidebar";
 import { GrayDashboardCalendarHeader } from "./GrayDashboardCalendarHeader";
 import {
   EventComposer,
-  EventComposerPayload,
-  ComposerState,
+  type EventComposerPayload,
 } from "./EventComposer";
 import { GrayDashboardCalendarDayView } from "./GrayDashboardCalendarDayView";
 import { GrayDashboardCalendarWeekView } from "./GrayDashboardCalendarWeekView";
-import { layoutDayEvents } from "./layoutDayEvents";
-import { useEventDrag } from "./useEventDrag";
-import { useEventResize } from "./useEventResize";
-import { ensureDateZone, isSameDay, startOfDay, startOfWeek } from "./dateUtils";
+import { useCalendarComposer } from "./useCalendarComposer";
+import { useControlledCalendarData } from "./useControlledCalendarData";
+import { useDashboardCalendarDateState } from "./useDashboardCalendarDateState";
+import { useDashboardCalendarDragResize } from "./useDashboardCalendarDragResize";
+import { useCalendarLayouts } from "./useCalendarLayouts";
+import { useCalendarNowIndicators } from "./useCalendarNowIndicators";
+import { startOfWeek } from "./dateUtils";
 import {
   CalendarEvent,
   CalendarInfo,
-  EventDraft,
   PositionedEvent,
 } from "./types";
-import { createSeedCalendars, createSeedEvents } from "./calendarSeed";
 import { formatDateLabel } from "./timeUtils";
 import type { DashboardHeaderProps } from "@/components/gray/DashboardHeader";
 import { useI18n } from "@/contexts/I18nContext";
+import type { CalendarViewMode, ComposerAnchorRect } from "./dashboardCalendarTypes";
 
 const DEFAULT_HOUR_HEIGHT = 64;
 const SNAP_MINUTES = 15;
 const TIMELINE_WIDTH = 56;
-
-type CalendarViewMode = "week" | "day";
-type ComposerAnchorRect = {
-  top: number;
-  left: number;
-  width: number;
-  height: number;
-};
 
 const formatWeekRange = (reference: Date) => {
   const start = startOfWeek(reference);
@@ -131,161 +124,82 @@ export function GrayDashboardCalendar({
   const { t } = useI18n();
   const hourHeight = hourHeightProp ?? DEFAULT_HOUR_HEIGHT;
   const [viewMode, setViewMode] = useState<CalendarViewMode>(viewModeLocked ?? "week");
-  const initial = initialDate ? new Date(initialDate) : new Date();
 
-  const [internalSelectedDate, setInternalSelectedDate] = useState(() => controlledSelectedDate ?? initial);
-  const selectedDate = controlledSelectedDate ?? internalSelectedDate;
-
-  const [monthDate, setMonthDate] = useState(() => selectedDate);
-  const [calendarsState, setCalendarsState] = useState<CalendarInfo[]>(createSeedCalendars);
-  const [eventsState, setEventsState] = useState<CalendarEvent[]>(createSeedEvents);
-  const [composerOpen, setComposerOpen] = useState(false);
-  const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
+  const {
+    selectedDate,
+    monthDate,
+    handleDaySelect,
+    handleMonthNavigate,
+    handleNavigateRange,
+    handleGoToday,
+    handleMainMonthNavigate,
+  } = useDashboardCalendarDateState({
+    initialDate,
+    selectedDate: controlledSelectedDate,
+    onSelectedDateChange,
+    viewMode,
+  });
 
   // Multi-select state
   const [selectedEventIds, setSelectedEventIds] = useState<Set<string>>(new Set());
 
 
-  const [nowReference, setNowReference] = useState<Date | null>(() => currentDate ?? null);
-  const [composerRange, setComposerRange] = useState<{ start: Date; end: Date } | null>(null);
-  const [composerAnchorRect, setComposerAnchorRect] = useState<ComposerAnchorRect | null>(null);
-
-
-  const dayColumnRef = useRef<HTMLDivElement | null>(null);
-  const weekScrollRef = useRef<HTMLDivElement | null>(null);
-  const weekColumnsRef = useRef<HTMLDivElement | null>(null);
   const hasInitialDayScrollRef = useRef(false);
   const hasInitialWeekScrollRef = useRef(false);
 
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
 
-  useEffect(() => {
-    if (controlledSelectedDate) {
-      setMonthDate(controlledSelectedDate);
-    }
-  }, [controlledSelectedDate]);
-
-  const calendars = externalCalendars ?? calendarsState;
-  const events = externalEvents ?? eventsState;
-
-  const updateCalendars = (updater: (previous: CalendarInfo[]) => CalendarInfo[]) => {
-    if (externalCalendars && onCalendarsChange) {
-      onCalendarsChange(updater(externalCalendars));
-      return;
-    }
-    setCalendarsState((previous) => {
-      const next = updater(previous);
-      onCalendarsChange?.(next);
-      return next;
-    });
-  };
-
-  const updateEvents = (updater: (previous: CalendarEvent[]) => CalendarEvent[]) => {
-    if (externalEvents && onEventsChange) {
-      onEventsChange(updater(externalEvents));
-      return;
-    }
-    setEventsState((previous) => {
-      const next = updater(previous);
-      onEventsChange?.(next);
-      return next;
-    });
-  };
-
-  const handleCommitDrag = (drafts: Record<string, EventDraft>) => {
-    updateEvents((previous) =>
-      previous.map((event) => {
-        const draft = drafts[event.id];
-        if (draft) {
-          return {
-            ...event,
-            start: ensureDateZone(draft.start),
-            end: ensureDateZone(draft.end),
-          };
-        }
-        return event;
-      })
-    );
-  };
-
-  const dragControls = useEventDrag({
-    containerRef: dayColumnRef,
-    hourHeight,
-    snapMinutes: SNAP_MINUTES,
-    selectedEventIds,
-    allEvents: events,
-    onCommit: handleCommitDrag,
+  const { calendars, events, updateCalendars, updateEvents } = useControlledCalendarData({
+    calendars: externalCalendars,
+    events: externalEvents,
+    onCalendarsChange,
+    onEventsChange,
   });
-  const {
-    getDraggableProps,
-    suppressClickRef: daySuppressClickRef,
-    activeDrafts: dayDragDrafts,
-  } = dragControls;
 
-  const resizeControls = useEventResize({
-    containerRef: dayColumnRef,
-    hourHeight,
-    snapMinutes: SNAP_MINUTES,
-    onCommit: handleCommitDrag,
-  });
+  const clearSelection = useCallback(() => {
+    setSelectedEventIds(new Set());
+  }, []);
+
   const {
+    composerOpen,
+    editingEvent,
+    composerRange,
+    composerAnchorRect,
+    composerPreviewEvent,
+    setComposerDraft,
+    openComposerAt,
+    editEvent,
+    closeComposer,
+    handleComposerSubmit,
+    handleComposerDelete,
+  } = useCalendarComposer({
+    events,
+    updateEvents,
+    onEventDelete,
+    onCreatePlan,
+    onCreateHabit,
+    onClearSelection: clearSelection,
+  });
+
+  const {
+    dayColumnRef,
+    weekScrollRef,
+    weekColumnsRef,
+    daySuppressClickRef,
+    weekSuppressClickRef,
+    getDayDraggableProps,
+    getWeekDraggableProps,
     getResizeProps,
-    activeDraft: blockResizeDraft,
-  } = resizeControls;
-
-  const dayDrafts = useMemo<Record<string, EventDraft> | null>(() => {
-    if (blockResizeDraft) {
-      return { [blockResizeDraft.id]: blockResizeDraft };
-    }
-    return dayDragDrafts;
-  }, [blockResizeDraft, dayDragDrafts]);
-
-  // Week view drag with horizontal support
-  const weekDragControls = useEventDrag({
-    containerRef: weekScrollRef,
+    activeDrafts,
+  } = useDashboardCalendarDragResize({
     hourHeight,
     snapMinutes: SNAP_MINUTES,
     selectedEventIds,
-    allEvents: events,
-    onCommit: handleCommitDrag,
-    horizontal: {
-      columnCount: 7,
-      getColumnIndex: (pointerEvent: PointerEvent) => {
-        const weekColumnsEl = weekColumnsRef.current;
-        if (!weekColumnsEl) return 0;
-
-        const rect = weekColumnsEl.getBoundingClientRect();
-        const columnWidth = rect.width / 7;
-        const relativeX = pointerEvent.clientX - rect.left;
-        return Math.max(0, Math.min(6, Math.floor(relativeX / columnWidth)));
-      },
-    },
+    events,
+    updateEvents,
   });
-  const {
-    getDraggableProps: getWeekDraggableProps,
-    suppressClickRef: weekSuppressClickRef,
-    activeDrafts: weekDrafts,
-  } = weekDragControls;
 
-  const activeDrafts = dayDrafts || weekDrafts;
-
-  const dayAnchor = useMemo(() => startOfDay(selectedDate), [selectedDate]);
   const weekAnchor = useMemo(() => startOfWeek(selectedDate), [selectedDate]);
-
-  const calendarMap = useMemo(() => new Map(calendars.map((calendar) => [calendar.id, calendar])), [calendars]);
-
-  const shortEventMinimumHeight = useMemo(
-    () => Math.max(Math.round(hourHeight / 4), 12),
-    [hourHeight]
-  );
-
-  const visibleEvents = useMemo(
-    () => events.filter((event) => {
-      // For regular events, check if their calendar is visible
-      return calendarMap.get(event.calendarId)?.isVisible !== false;
-    }),
-    [calendarMap, events]
-  );
 
   const weekDays = useMemo(
     () =>
@@ -304,106 +218,22 @@ export function GrayDashboardCalendar({
     return zone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
   }, []);
 
-  const [composerDraft, setComposerDraft] = useState<ComposerState | null>(null);
+  const { nowReference, dayIndicatorOffset, weekNowIndicator } = useCalendarNowIndicators({
+    currentDate,
+    selectedDate,
+    weekDays,
+    hourHeight,
+  });
 
-  const composerPreviewEvent = useMemo<CalendarEvent | null>(() => {
-    if (!composerOpen || !composerRange) {
-      return null;
-    }
-    const draftTitle = composerDraft?.title?.trim();
-    return {
-      id: "composer-preview",
-      title: draftTitle ? draftTitle : "",
-      start: composerRange.start,
-      end: composerRange.end,
-      color: composerDraft?.color || "#3D6F73",
-      entryType: composerDraft?.entryType || "event",
-      calendarId: "preview",
-      isAllDay: false,
-    };
-  }, [composerOpen, composerRange, composerDraft]);
-
-  const dayEvents = useMemo(() => {
-    const filtered = visibleEvents.filter((event) => isSameDay(event.start, selectedDate));
-    let result = filtered;
-
-    if (activeDrafts) {
-      result = result.map((event) => {
-        const draft = activeDrafts[event.id];
-        if (draft) {
-          return {
-            ...event,
-            start: ensureDateZone(draft.start),
-            end: ensureDateZone(draft.end),
-          };
-        }
-        return event;
-      });
-    }
-
-    if (composerPreviewEvent && isSameDay(composerPreviewEvent.start, selectedDate)) {
-      result = [...result, composerPreviewEvent];
-    }
-
-    return result;
-  }, [activeDrafts, selectedDate, visibleEvents, composerPreviewEvent]);
-
-  const dayLayouts = useMemo<PositionedEvent[]>(
-    () =>
-      layoutDayEvents(dayEvents, {
-        hourHeight,
-        minimumHeight: shortEventMinimumHeight,
-        dayStart: dayAnchor,
-      }),
-    [dayAnchor, dayEvents, hourHeight, shortEventMinimumHeight]
-  );
-
-  const weekLayouts = useMemo(() => {
-    return weekDays.map((day) => {
-      const dayEventsForWeek = visibleEvents.filter((event) => isSameDay(event.start, day));
-      const mappedEvents = activeDrafts
-        ? dayEventsForWeek.map((event) => {
-          const draft = activeDrafts[event.id];
-          if (draft) {
-            return {
-              ...event,
-              start: ensureDateZone(draft.start),
-              end: ensureDateZone(draft.end),
-            };
-          }
-          return event;
-        })
-        : dayEventsForWeek;
-
-      const eventsWithPreview = mappedEvents.filter((event) => isSameDay(event.start, day));
-
-      // Also add any active drafts if they belong to this day but weren't originally
-      if (activeDrafts) {
-        Object.values(activeDrafts).forEach((draft) => {
-          if (isSameDay(draft.start, day) && !dayEventsForWeek.some((e) => e.id === draft.id)) {
-            const originalEvent = visibleEvents.find((e) => e.id === draft.id);
-            if (originalEvent) {
-              eventsWithPreview.push({
-                ...originalEvent,
-                start: ensureDateZone(draft.start),
-                end: ensureDateZone(draft.end),
-              });
-            }
-          }
-        });
-      }
-
-      if (composerPreviewEvent && isSameDay(composerPreviewEvent.start, day)) {
-        eventsWithPreview.push(composerPreviewEvent);
-      }
-
-      return layoutDayEvents(eventsWithPreview, {
-        hourHeight,
-        minimumHeight: shortEventMinimumHeight,
-        dayStart: startOfDay(day),
-      });
-    });
-  }, [hourHeight, shortEventMinimumHeight, visibleEvents, weekDays, activeDrafts, composerPreviewEvent]);
+  const { dayLayouts, weekLayouts } = useCalendarLayouts({
+    calendars,
+    events,
+    selectedDate,
+    weekDays,
+    hourHeight,
+    activeDrafts,
+    composerPreviewEvent,
+  });
 
   const updateViewMode = useCallback(
     (nextMode: CalendarViewMode) => {
@@ -421,51 +251,6 @@ export function GrayDashboardCalendar({
 
   const rangeNavigationLabel = viewMode === "week" ? t("Week") : t("Day");
   const shouldShowDashboardToggle = typeof onSelectDashboardTab === "function";
-
-  useEffect(() => {
-    if (currentDate) {
-      setNowReference(currentDate);
-    } else {
-      const syncNow = () => setNowReference(new Date());
-      syncNow();
-      const interval = window.setInterval(syncNow, 60000);
-      return () => window.clearInterval(interval);
-    }
-  }, [currentDate]);
-
-  const getNowOffset = useCallback(
-    (reference: Date) => {
-      const minutes = reference.getHours() * 60 + reference.getMinutes() + reference.getSeconds() / 60;
-      const offset = (minutes / 60) * hourHeight;
-      const maxOffset = hourHeight * 24;
-      return Math.min(Math.max(offset, 0), maxOffset);
-    },
-    [hourHeight]
-  );
-
-  const showDayNowIndicator = useMemo(
-    () => (nowReference ? isSameDay(nowReference, selectedDate) : false),
-    [nowReference, selectedDate]
-  );
-
-  const dayIndicatorOffset = useMemo(
-    () => (showDayNowIndicator && nowReference ? getNowOffset(nowReference) : null),
-    [showDayNowIndicator, nowReference, getNowOffset]
-  );
-
-  const weekNowIndicator = useMemo(() => {
-    if (!nowReference) {
-      return null;
-    }
-    const dayIndex = weekDays.findIndex((day) => isSameDay(day, nowReference));
-    if (dayIndex === -1) {
-      return null;
-    }
-    return {
-      offset: getNowOffset(nowReference),
-      dayIndex,
-    };
-  }, [getNowOffset, nowReference, weekDays]);
 
 
 
@@ -499,7 +284,7 @@ export function GrayDashboardCalendar({
     const target = Math.max(earliestTop - hourHeight, 0);
     container.scrollTo({ top: target });
     hasInitialDayScrollRef.current = true;
-  }, [dayIndicatorOffset, dayLayouts, hourHeight, viewMode]);
+  }, [dayColumnRef, dayIndicatorOffset, dayLayouts, hourHeight, viewMode]);
 
   useEffect(() => {
     // Only auto-scroll once on initial mount, never interfere with user scrolling
@@ -513,7 +298,7 @@ export function GrayDashboardCalendar({
     const target = Math.max(weekNowIndicator.offset - hourHeight, 0);
     container.scrollTo({ top: target });
     hasInitialWeekScrollRef.current = true;
-  }, [hourHeight, viewMode, weekNowIndicator]);
+  }, [hourHeight, viewMode, weekNowIndicator, weekScrollRef]);
 
 
 
@@ -526,23 +311,6 @@ export function GrayDashboardCalendar({
       )
     );
   };
-
-  const openComposerAt = useCallback(
-    (startDate: Date, anchorRect?: ComposerAnchorRect | null) => {
-      // startDate is already snapped from handleColumnClick, just copy it
-      const alignedStart = new Date(startDate);
-      // Ensure seconds/ms are cleared (they should be, but be defensive)
-      alignedStart.setSeconds(0, 0);
-      const alignedEnd = new Date(alignedStart.getTime() + 30 * 60000);
-      setComposerRange({ start: alignedStart, end: alignedEnd });
-      setEditingEvent(null);
-      setComposerAnchorRect(anchorRect ?? null);
-      setComposerOpen(true);
-      // Clear selection when opening composer
-      setSelectedEventIds(new Set());
-    },
-    []
-  );
 
   const isGoogleCalendarEvent = (event: CalendarEvent) =>
     typeof event.calendarId === "string" && event.calendarId.startsWith("google:");
@@ -571,79 +339,8 @@ export function GrayDashboardCalendar({
       if (isGoogleCalendarEvent(event)) {
         return;
       }
-      handleEditEvent(event, anchorRect);
+      editEvent(event, anchorRect);
     }
-  };
-
-  const handleEditEvent = (event: CalendarEvent, anchorRect?: DOMRect | DOMRectReadOnly | null) => {
-    setEditingEvent(event);
-    setComposerOpen(true);
-    setComposerRange(null);
-    if (anchorRect) {
-      setComposerAnchorRect({
-        top: anchorRect.top,
-        left: anchorRect.left,
-        width: anchorRect.width,
-        height: anchorRect.height,
-      });
-    } else {
-      setComposerAnchorRect(null);
-    }
-  };
-
-  const handleComposerSubmit = ({ id, ...payload }: EventComposerPayload) => {
-    if (payload.entryType === "plan" && onCreatePlan) {
-      onCreatePlan({ id, ...payload });
-      setComposerOpen(false);
-      setEditingEvent(null);
-      setComposerRange(null);
-      setComposerAnchorRect(null);
-      return;
-    }
-
-    if (payload.entryType === "habit" && onCreateHabit) {
-      onCreateHabit({ id, ...payload });
-      setComposerOpen(false);
-      setEditingEvent(null);
-      setComposerRange(null);
-      setComposerAnchorRect(null);
-      return;
-    }
-
-    updateEvents((previous) => {
-      if (id) {
-        return previous.map((event) =>
-          event.id === id
-            ? {
-              ...event,
-              ...payload,
-            }
-            : event
-        );
-      }
-
-      const newEvent: CalendarEvent = {
-        id: `evt-${Date.now()}`,
-        ...payload,
-      };
-      return [...previous, newEvent];
-    });
-    setComposerOpen(false);
-    setEditingEvent(null);
-    setComposerRange(null);
-    setComposerAnchorRect(null);
-  };
-
-  const handleComposerDelete = (eventId: string) => {
-    const eventToDelete = events.find((event) => event.id === eventId);
-    if (eventToDelete && onEventDelete) {
-      onEventDelete(eventToDelete);
-    }
-    updateEvents((previous) => previous.filter((event) => event.id !== eventId));
-    setComposerOpen(false);
-    setEditingEvent(null);
-    setComposerRange(null);
-    setComposerAnchorRect(null);
   };
 
   const handleColumnClick = (event: MouseEvent<HTMLDivElement>, day: Date) => {
@@ -660,7 +357,7 @@ export function GrayDashboardCalendar({
     }
 
     // Clear selection on background click
-    setSelectedEventIds(new Set());
+    clearSelection();
 
     const bounds = target.getBoundingClientRect();
     const offsetY = event.clientY - bounds.top;
@@ -690,47 +387,6 @@ export function GrayDashboardCalendar({
       onEventDelete(calendarEvent);
     }
     updateEvents((previous) => previous.filter((e) => e.id !== event.id));
-  };
-
-  const updateSelectedDate = useCallback(
-    (compute: (previous: Date) => Date) => {
-      const computeNext = (prev: Date) => {
-        const next = compute(prev);
-        setMonthDate(next);
-        return next;
-      };
-
-      if (onSelectedDateChange) {
-        // If controlled, compute the next date based on current prop (or internal if falling back)
-        // and notify parent. Parent is responsible for updating prop.
-        const next = computeNext(selectedDate);
-        onSelectedDateChange(next);
-      } else {
-        setInternalSelectedDate((previous) => computeNext(previous));
-      }
-    },
-    [onSelectedDateChange, selectedDate]
-  );
-
-  const handleDaySelect = (nextDate: Date) => {
-    updateSelectedDate(() => nextDate);
-  };
-
-  const handleMonthNavigate = (offset: number) => {
-    setMonthDate((previous) => {
-      const next = new Date(previous);
-      next.setMonth(previous.getMonth() + offset);
-      return next;
-    });
-  };
-
-  const handleNavigateRange = (direction: number) => {
-    updateSelectedDate((previous) => {
-      const next = new Date(previous);
-      const delta = direction * (viewMode === "week" ? 7 : 1);
-      next.setDate(previous.getDate() + delta);
-      return next;
-    });
   };
 
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -763,10 +419,6 @@ export function GrayDashboardCalendar({
     }
 
     touchStartRef.current = null;
-  };
-
-  const handleGoToday = () => {
-    updateSelectedDate(() => startOfDay(new Date()));
   };
 
   const calendarStyle: CSSProperties & { [key: string]: string | number | undefined } = {
@@ -826,14 +478,6 @@ export function GrayDashboardCalendar({
       { value: "day", label: t("Day") },
     ],
     rangeNavigationLabel,
-  };
-
-  const handleMainMonthNavigate = (offset: number) => {
-    updateSelectedDate((previous) => {
-      const next = new Date(previous);
-      next.setMonth(previous.getMonth() + offset);
-      return next;
-    });
   };
 
   const headerNode = renderHeader
@@ -944,7 +588,7 @@ export function GrayDashboardCalendar({
               handleEventClick(event, anchorRect, mouseEvent)
             }
             isGoogleCalendarEvent={isGoogleCalendarEvent}
-            getDayDraggableProps={getDraggableProps}
+            getDayDraggableProps={getDayDraggableProps}
             getResizeProps={getResizeProps}
             onDeleteEvent={handleDeleteEvent}
           />
@@ -962,10 +606,7 @@ export function GrayDashboardCalendar({
       calendars={calendars}
       anchorRect={composerAnchorRect}
       onRequestClose={() => {
-        setComposerOpen(false);
-        setEditingEvent(null);
-        setComposerRange(null);
-        setComposerAnchorRect(null);
+        closeComposer();
       }}
       onSubmit={handleComposerSubmit}
       onDelete={handleComposerDelete}

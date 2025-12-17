@@ -5,8 +5,6 @@ Extracted from main.py to reduce its size and improve modularity.
 """
 import os
 import re
-import shutil
-import subprocess
 from pathlib import Path
 from typing import Dict, Optional, Set, Tuple
 from uuid import uuid4
@@ -20,20 +18,6 @@ except ImportError:
     from logging_config import create_logger
 
 file_logger = create_logger("backend.files")
-
-
-# -----------------------------------------------------------------------------
-# Environment helpers
-# -----------------------------------------------------------------------------
-
-def _int_env(var_name: str, default: int) -> int:
-    try:
-        value = os.getenv(var_name)
-        if value is None or value.strip() == "":
-            return default
-        return int(value)
-    except (TypeError, ValueError):
-        return default
 
 
 # -----------------------------------------------------------------------------
@@ -93,14 +77,11 @@ SUSPICIOUS_PATTERNS = (b"<script", b"javascript:", b"onerror=", b"<?php", b"#!/"
 # Optional base URL for serving uploaded media (e.g., CDN or site URL)
 STORAGE_BASE_URL = os.getenv("STORAGE_BASE_URL") or None
 
-# ClamAV configuration
-CLAMAV_SCAN_ENABLED = os.getenv("ENABLE_CLAMAV_SCAN", "false").strip().lower() in {"1", "true", "yes", "on"}
-CLAMAV_SCAN_BINARY = (
-    os.getenv("CLAMAV_SCAN_BINARY")
-    or shutil.which("clamdscan")
-    or shutil.which("clamscan")
-)
-CLAMAV_SCAN_TIMEOUT = _int_env("CLAMAV_SCAN_TIMEOUT_SECONDS", 30)
+# Legacy ClamAV names kept for backwards-compatible imports (e.g., `backend/main.py`).
+# Virus scanning is no longer supported by this backend.
+CLAMAV_SCAN_ENABLED = False
+CLAMAV_SCAN_BINARY = None
+CLAMAV_SCAN_TIMEOUT = 0
 
 
 # -----------------------------------------------------------------------------
@@ -161,52 +142,8 @@ def reject_if_suspicious(chunk: bytes) -> None:
 
 
 def scan_file_for_malware(storage_path: Path) -> None:
-    """Scan a file with ClamAV if enabled."""
-    if not CLAMAV_SCAN_ENABLED or not CLAMAV_SCAN_BINARY:
-        return
-
-    try:
-        result = subprocess.run(
-            [CLAMAV_SCAN_BINARY, "--no-summary", str(storage_path)],
-            capture_output=True,
-            text=True,
-            timeout=CLAMAV_SCAN_TIMEOUT,
-            check=False,
-        )
-    except FileNotFoundError:
-        return
-    except subprocess.TimeoutExpired:
-        storage_path.unlink(missing_ok=True)
-        raise HTTPException(
-            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
-            detail="Antivirus scan timed out.",
-        )
-
-    if result.returncode == 0:
-        return
-
-    storage_path.unlink(missing_ok=True)
-
-    if result.returncode == 1:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Upload failed antivirus scan.",
-        )
-
-    file_logger.warning(
-        "Antivirus scan failed",
-        extra={
-            "event_type": "upload_scan_error",
-            "path": str(storage_path),
-            "stdout": result.stdout,
-            "stderr": result.stderr,
-            "returncode": result.returncode,
-        },
-    )
-    raise HTTPException(
-        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        detail="Failed to scan file for malware.",
-    )
+    """Legacy no-op: ClamAV scanning was removed from the backend."""
+    return
 
 
 def ensure_storage_path(storage_name: str) -> Path:
@@ -352,12 +289,7 @@ async def persist_upload_file(
         except Exception:
             pass
 
-    if CLAMAV_SCAN_ENABLED and CLAMAV_SCAN_BINARY:
-        import asyncio
-
-        await asyncio.to_thread(scan_file_for_malware, storage_path)
-    else:
-        scan_file_for_malware(storage_path)
+    scan_file_for_malware(storage_path)
 
     return storage_path, resolved_mime, bytes_written, sanitized_name, storage_name
 

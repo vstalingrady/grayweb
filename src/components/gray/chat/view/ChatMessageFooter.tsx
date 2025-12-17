@@ -10,7 +10,7 @@ import {
   SignalHigh,
   Trash2,
 } from "lucide-react";
-import styles from "@/app/gray/GrayPageClient.module.css";
+import styles from "@/components/gray/chat/ChatStyles.module.css";
 import type { ChatMessage as ChatSessionMessage } from "../types";
 
 export type ChatMessageFooterProps = {

@@ -12,7 +12,7 @@ import {
   type ReactNode,
 } from "react";
 import type { Components } from "react-markdown";
-import styles from "@/app/gray/GrayPageClient.module.css";
+import styles from "@/components/gray/chat/ChatStyles.module.css";
 import type { ContextUsageSummary } from "@/components/gray/types";
 import { useI18n } from "@/contexts/I18nContext";
 import { useUser } from "@/contexts/UserContext";

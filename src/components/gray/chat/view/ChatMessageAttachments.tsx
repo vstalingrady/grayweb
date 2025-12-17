@@ -1,6 +1,6 @@
 "use client";
 
-import styles from "@/app/gray/GrayPageClient.module.css";
+import styles from "@/components/gray/chat/ChatStyles.module.css";
 import type { MediaUpload } from "@/lib/api";
 
 export type ChatMessageAttachmentsProps = {

@@ -3,7 +3,7 @@ import type { ChangeEvent } from "react";
 import styles from "./GrayDashboardCalendar.module.css";
 import { useI18n } from "@/contexts/I18nContext";
 
-type CalendarViewMode = "week" | "day";
+import type { CalendarViewMode } from "./dashboardCalendarTypes";
 
 type GrayDashboardCalendarHeaderProps = {
   dashboardTab: "pulse" | "calendar";
@@ -126,4 +126,3 @@ export function GrayDashboardCalendarHeader({
     </header>
   );
 }
-

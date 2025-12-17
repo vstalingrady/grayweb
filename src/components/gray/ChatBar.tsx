@@ -1,6 +1,7 @@
 "use client";
 
-import styles from "@/app/gray/GrayPageClient.module.css";
+import styles from "@/components/gray/chat/ChatStyles.module.css";
+import pageStyles from "@/app/gray/GrayPageClient.module.css";
 import Image from "next/image";
 import { Paperclip, ArrowUpRight } from "lucide-react";
 import {
@@ -191,7 +192,7 @@ export function GrayChatBar({
               aria-hidden="true"
               width={18}
               height={18}
-              className={`${styles.chatSearchSpinner} ${styles.uiIconImage}`}
+              className={`${styles.chatSearchSpinner} ${pageStyles.uiIconImage}`}
             />
           ) : null}
           <div className={styles.chatModelSelectorDirect}>
@@ -235,7 +236,7 @@ export function GrayChatBar({
               aria-hidden="true"
               width={18}
               height={18}
-              className={`${styles.chatSearchSpinner} ${styles.uiIconImage}`}
+              className={`${styles.chatSearchSpinner} ${pageStyles.uiIconImage}`}
             />
           ) : null}
           <div className={styles.chatModelSelectorDirect}>

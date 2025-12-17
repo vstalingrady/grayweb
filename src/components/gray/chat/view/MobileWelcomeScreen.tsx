@@ -2,7 +2,8 @@
 
 import { memo, useMemo } from "react";
 import Image from "next/image";
-import styles from "@/app/gray/GrayPageClient.module.css";
+import styles from "@/components/gray/chat/ChatStyles.module.css";
+import pageStyles from "@/app/gray/GrayPageClient.module.css";
 import { useI18n } from "@/contexts/I18nContext";
 
 // Greeting messages for mobile welcome screen - time-based and fun options
@@ -86,7 +87,7 @@ export const MobileWelcomeScreen = memo(() => {
             alt=""
             width={40}
             height={40}
-            className={styles.uiIconImage}
+            className={pageStyles.uiIconImage}
           />
         </div>
         <p className={styles.mobileWelcomeGreeting}>{greeting}</p>

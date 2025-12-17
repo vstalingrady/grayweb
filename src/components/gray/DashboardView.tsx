@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import styles from "@/app/gray/GrayPageClient.module.css";
+import chatStyles from "@/components/gray/chat/ChatStyles.module.css";
 import { GrayDashboardCalendar } from "@/components/calendar/GrayDashboardCalendar";
 import type { CalendarEvent, CalendarInfo } from "@/components/calendar/types";
 import { EventComposerPayload } from "@/components/calendar/EventComposer";
@@ -578,7 +579,7 @@ export function GrayDashboardView({
           )}
         </div>
         {isChatBarVisible ? (
-          <div className={styles.chatComposerDock} ref={chatDockRef}>
+          <div className={chatStyles.chatComposerDock} ref={chatDockRef}>
             {chatBar}
           </div>
         ) : null}

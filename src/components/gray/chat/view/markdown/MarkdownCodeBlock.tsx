@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { CheckCircle2, Copy } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import rehypeKatex from "rehype-katex";
-import styles from "@/app/gray/GrayPageClient.module.css";
+import styles from "@/components/gray/chat/ChatStyles.module.css";
 import { useI18n } from "@/contexts/I18nContext";
 import { MARKDOWN_PLUGINS } from "./plugins";
 import { normalizeAssistantMath } from "./mathNormalization";
@@ -169,4 +169,3 @@ export const MarkdownCodeBlock: CodeComponent = ({ inline, className, children, 
     </div>
   );
 };
-

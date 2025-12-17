@@ -3,7 +3,7 @@
 import { memo, useCallback, useRef, useState, type RefObject } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import rehypeKatex from "rehype-katex";
-import styles from "@/app/gray/GrayPageClient.module.css";
+import styles from "@/components/gray/chat/ChatStyles.module.css";
 import { useI18n } from "@/contexts/I18nContext";
 import { REMINDER_CODE_BLOCK_REGEX } from "../constants";
 import { stripGrayTitleMarkers } from "../utils";

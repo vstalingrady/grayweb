@@ -1,7 +1,7 @@
 "use client";
 
 import type { MutableRefObject } from "react";
-import styles from "@/app/gray/GrayPageClient.module.css";
+import styles from "@/components/gray/chat/ChatStyles.module.css";
 
 export type ChatMessageEditorProps = {
   defaultValue: string;
@@ -42,4 +42,3 @@ export function ChatMessageEditor({ defaultValue, textareaRef, onCancel, onSave 
     </div>
   );
 }
-

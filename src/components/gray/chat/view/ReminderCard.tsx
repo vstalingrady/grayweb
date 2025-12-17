@@ -1,7 +1,7 @@
 "use client";
 
 import { CalendarClock } from "lucide-react";
-import styles from "@/app/gray/GrayPageClient.module.css";
+import styles from "@/components/gray/chat/ChatStyles.module.css";
 import { useI18n } from "@/contexts/I18nContext";
 import { formatReminderDisplayLabels } from "../../reminderTimeUtils";
 import type { GrayReminderCreatedPayload, GrayReminderEntityType } from "../types";
@@ -82,4 +82,3 @@ export const ReminderCard = ({ reminder }: { reminder: GrayReminderCreatedPayloa
     </article>
   );
 };
-

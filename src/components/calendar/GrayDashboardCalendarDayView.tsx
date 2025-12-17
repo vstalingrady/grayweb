@@ -10,7 +10,7 @@ import { isSameDay } from "./dateUtils";
 import { ViewModeSelect } from "@/components/gray/ViewModeSelect";
 import { useI18n } from "@/contexts/I18nContext";
 
-type CalendarViewMode = "week" | "day";
+import type { CalendarViewMode } from "./dashboardCalendarTypes";
 
 type DragProps = Pick<HTMLAttributes<HTMLElement>, "onPointerDown">;
 

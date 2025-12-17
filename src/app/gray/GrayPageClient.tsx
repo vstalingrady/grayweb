@@ -13,6 +13,7 @@ import { formatDisplayName } from "@/lib/names";
 import { clearAuthCookies } from "@/lib/auth/cookies";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import styles from "./GrayPageClient.module.css";
+import chatStyles from "@/components/gray/chat/ChatStyles.module.css";
 import {
   type ProactivityItem,
   type SidebarNavKey,
@@ -725,9 +726,9 @@ function GrayPageClientInner({
         >
           {/* Welcome overlay for the main "/" (threads) surface */}
           {pathname === "/" && activeNav === "threads" ? (
-            <div className={styles.mobileWelcomeScreen} aria-hidden="true">
-                <div className={styles.mobileWelcomeContent}>
-                  <div className={styles.mobileWelcomeLogo}>
+            <div className={chatStyles.mobileWelcomeScreen} aria-hidden="true">
+                <div className={chatStyles.mobileWelcomeContent}>
+                  <div className={chatStyles.mobileWelcomeLogo}>
                   <Image
                     src="/grayaiwhitenotspinning.svg"
                     alt=""
@@ -736,7 +737,7 @@ function GrayPageClientInner({
                     className={styles.uiIconImage}
                   />
                   </div>
-                  <p className={styles.mobileWelcomeGreeting}>Ready when you are.</p>
+                  <p className={chatStyles.mobileWelcomeGreeting}>Ready when you are.</p>
                 </div>
             </div>
           ) : null}
@@ -1505,14 +1506,14 @@ function GrayPageClientInner({
 
               {isDashboardView ? renderPrimaryView() : renderMainSurface()}
               {isMounted && viewMode === "general" ? (
-                <div className={styles.chatComposerDock} data-surface="threads">
-                  <div className={styles.chatAttachmentTopTray}>{generalAttachmentTray}</div>
+                <div className={chatStyles.chatComposerDock} data-surface="threads">
+                  <div className={chatStyles.chatAttachmentTopTray}>{generalAttachmentTray}</div>
                   <input
                     ref={attachmentInputRef}
                     type="file"
                     multiple
                     accept="image/*,.pdf"
-                    className={styles.chatAttachmentInput}
+                    className={chatStyles.chatAttachmentInput}
                     onChange={handleAttachmentInputChange}
                   />
                   {isUsageLimitReached && usageStatus && (

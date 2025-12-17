@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import styles from "@/app/gray/GrayPageClient.module.css";
+import styles from "@/components/gray/chat/ChatStyles.module.css";
 import { useI18n } from "@/contexts/I18nContext";
 
 export const GrayStreamingSpinner = ({
@@ -24,4 +24,3 @@ export const GrayStreamingSpinner = ({
     </div>
   );
 };
-
