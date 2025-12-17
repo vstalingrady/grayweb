@@ -8,6 +8,7 @@ def _make_request():
 
 def test_delete_conversation_uuid_does_not_require_global_tables(monkeypatch):
     import backend.main as main
+    from backend.api import conversations as conv_module
     from backend.core.rate_limit import limiter
 
     # Disable rate limiter to bypass starlette.requests.Request type check
@@ -25,7 +26,7 @@ def test_delete_conversation_uuid_does_not_require_global_tables(monkeypatch):
             return None
 
     monkeypatch.setattr(main, "_require_conversation_owner", stub_require_owner)
-    monkeypatch.setattr(main, "_invalidate_conversation_cache", lambda _conversation_id: None)
+    monkeypatch.setattr(main, "invalidate_conversation_cache", lambda _conversation_id: None)
     monkeypatch.setattr(main, "database", StubDb())
     monkeypatch.setattr(main, "supabase", None)
     monkeypatch.setattr(main, "_conversation_store_available", lambda: False)

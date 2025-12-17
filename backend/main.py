@@ -852,13 +852,14 @@ try:
         execute_tools_with_gemini_flash as _execute_tools_with_gemini_flash_hybrid,
         has_onboarding_tool as _has_onboarding_tool_hybrid,
     )
+    from backend.core.stream_handlers.openrouter import stream_openrouter_response
 except ImportError:
     from core.stream_handlers.hybrid import (  # type: ignore
         fetch_url_context_with_gemini as _fetch_url_context_with_gemini_hybrid,
         execute_tools_with_gemini_flash as _execute_tools_with_gemini_flash_hybrid,
         has_onboarding_tool as _has_onboarding_tool_hybrid,
     )
-
+    from core.stream_handlers.openrouter import stream_openrouter_response  # type: ignore
 
 
 
@@ -893,34 +894,74 @@ app_logger.info(f"Backend starting (env={os.getenv('ENVIRONMENT', 'development')
 # load_prompt_from_file, load_prompt_from_json, _normalize_prompt_locale, _prompt_locale_from_request
 # are now imported from core.prompt_utils
 
-AI_PROVIDER = (os.getenv("AI_PROVIDER") or "openrouter").strip().lower()
-# Default lite tier provider - using OpenRouter for all models
-LITE_TIER_PROVIDER = (os.getenv("LITE_TIER_PROVIDER") or "openrouter").strip().lower()
+# AI Configuration imports (centralized in core.ai_config)
+try:
+    from backend.core.ai_config import (
+        AI_PROVIDER,
+        LITE_TIER_PROVIDER,
+        REMINDER_MODEL,
+        GROK_TOOL_MODEL,
+        OPENROUTER_LITE_MODEL,
+        GEMINI_DEFAULT_MODEL,
+        GEMINI_LIGHT_MODEL,
+        GEMINI_PRO_MODEL,
+        VALIDATE_GEMINI_ON_STARTUP,
+        TIER_CONVERSATION_TOKEN_LIMITS,
+        tier_conversation_token_limit as _tier_conversation_token_limit_base,
+        REMINDER_FUNCTION_NAMES,
+        REMINDER_RESPONSE_FORMAT,
+        get_search_tool,
+        get_url_context_tool,
+        get_default_chat_tools,
+        PROMPTS_DIR,
+        GLOBAL_SYSTEM_PROMPTS_PATH,
+        ONBOARDING_PROMPT_PATH,
+        STREAMING_TOKEN_DELAY,
+        MAX_DASHBOARD_PULSE_HISTORY,
+        DEFAULT_DASHBOARD_PROACTIVITY,
+        DEFAULT_WORKSPACE_BACKGROUNDS,
+        SINGLE_CALL_PER_TURN_TOOLS,
+    )
+except ImportError:
+    from core.ai_config import (  # type: ignore
+        AI_PROVIDER,
+        LITE_TIER_PROVIDER,
+        REMINDER_MODEL,
+        GROK_TOOL_MODEL,
+        OPENROUTER_LITE_MODEL,
+        GEMINI_DEFAULT_MODEL,
+        GEMINI_LIGHT_MODEL,
+        GEMINI_PRO_MODEL,
+        VALIDATE_GEMINI_ON_STARTUP,
+        TIER_CONVERSATION_TOKEN_LIMITS,
+        tier_conversation_token_limit as _tier_conversation_token_limit_base,
+        REMINDER_FUNCTION_NAMES,
+        REMINDER_RESPONSE_FORMAT,
+        get_search_tool,
+        get_url_context_tool,
+        get_default_chat_tools,
+        PROMPTS_DIR,
+        GLOBAL_SYSTEM_PROMPTS_PATH,
+        ONBOARDING_PROMPT_PATH,
+        STREAMING_TOKEN_DELAY,
+        MAX_DASHBOARD_PULSE_HISTORY,
+        DEFAULT_DASHBOARD_PROACTIVITY,
+        DEFAULT_WORKSPACE_BACKGROUNDS,
+        SINGLE_CALL_PER_TURN_TOOLS,
+    )
 
 
-# Conversation memory/context limits (tokens) by plan tier.
-# "64,000 token memory" refers to tokens of conversation history included as context.
-TIER_CONVERSATION_TOKEN_LIMITS: Dict[str, int] = {
-    "scout": 65_536,
-    "voyager": 2_000_000,
-    "pioneer": 2_000_000,
-}
 
 
+# tier_conversation_token_limit wrapper that uses normalize_plan_tier
 def tier_conversation_token_limit(plan_tier: Optional[str]) -> int:
-    normalized = normalize_plan_tier(plan_tier)
-    return TIER_CONVERSATION_TOKEN_LIMITS.get(normalized, TIER_CONVERSATION_TOKEN_LIMITS["scout"])
+    return _tier_conversation_token_limit_base(plan_tier, normalize_fn=normalize_plan_tier)
 
 
 GEMINI_SERVICE = GeminiService()
 OPENROUTER_SERVICE = OpenRouterService()
 # GROQ_SERVICE removed - using OpenRouter for all models
-VALIDATE_GEMINI_ON_STARTUP = os.getenv("VALIDATE_GEMINI_ON_STARTUP", "true").strip().lower() not in {
-    "0",
-    "false",
-    "no",
-    "off",
-}
+# VALIDATE_GEMINI_ON_STARTUP imported from core.ai_config
 
 AI_MESSAGE_GENERATOR = AIMessageGenerator()
 
@@ -932,25 +973,12 @@ MEDIA_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 # _scan_file_for_malware, _ensure_storage_path, _resolve_storage_path_from_record, _persist_upload_file)
 # are now imported from core.file_utils
 
+# Tool definitions - use lazy getters from ai_config
+SEARCH_TOOL = get_search_tool()
+URL_CONTEXT_TOOL = get_url_context_tool()
+DEFAULT_CHAT_TOOLS = get_default_chat_tools()
 
-SEARCH_TOOL = types.Tool(
-    google_search=types.GoogleSearch(),
-)
-
-# URL Context Tool - allows AI to fetch and analyze content from URLs
-URL_CONTEXT_TOOL = types.Tool(
-    url_context=types.UrlContext(),
-)
-
-
-# PLAN_TOOLS not included by default - added conditionally based on message intent
-# CALENDAR_TOOLS removed from default - tool definitions add ~2s latency to OpenRouter
-# This prevents the LLM from calling get_workspace_state on simple casual messages
-DEFAULT_CHAT_TOOLS = [SEARCH_TOOL]
-
-PROMPTS_DIR = ROOT_DIR / "backend" / "prompts"
-GLOBAL_SYSTEM_PROMPTS_PATH = ROOT_DIR / "public" / "system-prompts.json"
-ONBOARDING_PROMPT_PATH = PROMPTS_DIR / "onboarding.txt"
+# PROMPTS_DIR, GLOBAL_SYSTEM_PROMPTS_PATH, ONBOARDING_PROMPT_PATH imported from core.ai_config
 
 
 
@@ -1060,70 +1088,15 @@ _ensure_sqlite_columns("transactions", [
 
 # database and metadata imported from backend.database
 
+# STREAMING_TOKEN_DELAY, REMINDER_RESPONSE_FORMAT, REMINDER_MODEL, GROK_TOOL_MODEL,
+# OPENROUTER_LITE_MODEL, GEMINI_DEFAULT_MODEL, GEMINI_LIGHT_MODEL, GEMINI_PRO_MODEL,
+# REMINDER_FUNCTION_NAMES, MAX_DASHBOARD_PULSE_HISTORY, DEFAULT_DASHBOARD_PROACTIVITY
+# are now imported from core.ai_config
 
-STREAMING_TOKEN_DELAY = max(0.0, _float_env("GRAY_STREAMING_TOKEN_DELAY_SECONDS", 0.0))
+# GROK_DEFAULT_MODEL depends on OPENROUTER_SERVICE instance
+GROK_DEFAULT_MODEL = OPENROUTER_SERVICE.lite_model if OPENROUTER_SERVICE else "x-ai/grok-4.1-fast"
 
 DEFAULT_DEV_ORIGIN_PORTS = (3000, 5173)
-
-REMINDER_RESPONSE_FORMAT = {
-    "type": "json_schema",
-    "json_schema": {
-        "name": "gray_reminder_payload",
-        "strict": True,
-        "schema": {
-            "type": "object",
-            "properties": {
-                "message": {"type": "string", "description": "User-facing reply text."},
-                "reminders": {
-                    "type": "array",
-                    "description": "List of reminder payloads to render and execute.",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "type": {"type": "string", "enum": ["gray.reminder"]},
-                            "source": {"type": "string", "enum": ["native/backend"]},
-                            "status": {"type": "string", "enum": ["created", "updated", "completed", "deleted"]},
-                            "entity": {"type": "string", "enum": ["plan", "habit", "reminder"]},
-                            "data": {
-                                "type": "object",
-                                "additionalProperties": True,
-                            },
-                        },
-                        "required": ["type", "source", "status", "entity", "data"],
-                        "additionalProperties": False,
-                    },
-                },
-            },
-            "required": ["message", "reminders"],
-            "additionalProperties": False,
-        },
-    },
-}
-
-REMINDER_MODEL = os.getenv("REMINDER_MODEL", "models/gemini-flash-lite-latest")
-GROK_TOOL_MODEL = os.getenv("GROK_TOOL_MODEL", "x-ai/grok-4.1-fast")
-GROK_DEFAULT_MODEL = os.getenv("GROK_DEFAULT_MODEL", OPENROUTER_SERVICE.lite_model if OPENROUTER_SERVICE else "x-ai/grok-4.1-fast")
-# GROQ_LITE_MODEL removed - using OpenRouter for lite tier
-# Hardcoded to x-ai/grok-4.1-fast - don't use env var for now
-OPENROUTER_LITE_MODEL = os.getenv("OPENROUTER_LITE_MODEL", "x-ai/grok-4.1-fast")
-GEMINI_DEFAULT_MODEL = os.getenv("GEMINI_DEFAULT_MODEL", "models/gemini-flash-lite-latest")
-GEMINI_LIGHT_MODEL = os.getenv("GEMINI_LIGHT_MODEL", "models/gemini-flash-lite-latest")
-GEMINI_PRO_MODEL = os.getenv("GEMINI_PRO_MODEL", "models/gemini-3-pro-preview")
-REMINDER_FUNCTION_NAMES = (
-    "create_plan",
-    "update_plan",
-    "delete_plan",
-    "create_habit",
-    "update_habit",
-    "delete_habit",
-    "create_reminder",
-    "add_reminder",
-    "update_reminder",
-    "delete_reminder",
-    "delete_latest_reminder",
-    "list_reminders",
-    "complete_onboarding",
-)
 
 # Message detection keywords and functions are imported from core.message_detection
 REMINDER_KEYWORDS = _REMINDER_KEYWORDS
@@ -1144,14 +1117,6 @@ if IS_PRODUCTION and not ALLOWED_ORIGINS and not ALLOWED_ORIGIN_REGEX:
     raise RuntimeError("CORS configuration missing in production")
 
 
-MAX_DASHBOARD_PULSE_HISTORY = 30
-DEFAULT_DASHBOARD_PROACTIVITY = {
-    "id": "proactivity-default",
-    "label": "Check-ins",
-    "description": "Daily sync nudges for squad channels.",
-    "cadence": "Daily",
-    "time": "09:00 AM",
-}
 
 # Database tables
 # users table imported from backend.database
@@ -1211,14 +1176,10 @@ habits = sqlalchemy.Table(
 
 
 
-
 # Context caching for long context reuse
-
-
-DEFAULT_WORKSPACE_BACKGROUNDS: List[Dict[str, Any]] = []
+# DEFAULT_WORKSPACE_BACKGROUNDS imported from core.ai_config
 
 # Proactive notifications
-
 
 
 
@@ -2117,10 +2078,7 @@ async def _execute_function_call(
     return await handler(user_id, args, db)
 
 
-# _has_onboarding_tool - use the extracted version from hybrid module
-def _has_onboarding_tool(tools: Optional[List[types.Tool]]) -> bool:
-    """Check if the tools list contains the complete_onboarding function."""
-    return _has_onboarding_tool_hybrid(tools)
+# _has_onboarding_tool wrapper removed - use _has_onboarding_tool_hybrid directly
 
 
 # _fetch_url_context_with_gemini - wrapper to hybrid module version
@@ -2225,13 +2183,7 @@ async def get_admin_metrics(
 # AI Chat helper functions (get_or_create_conversation, save_conversation_message
 # are now imported from core.conversation_manager)
 
-async def generate_chat_title_suggestion(message: str) -> Optional[str]:
-
-    """Generate a concise chat title locally."""
-    trimmed = (message or "").strip()
-    if not trimmed:
-        return None
-    return _fallback_title_from_message(trimmed)
+# generate_chat_title_suggestion removed - use _fallback_title_from_message directly
 
 
 # _update_conversation_title wrapper removed - use update_conversation_title directly
@@ -2329,7 +2281,7 @@ async def stream_ai_response(
 
     # Check for onboarding tools so we can route through a provider that supports
     # real function calling (Gemini) instead of relying on brittle JSON parsing.
-    is_onboarding_tool = _has_onboarding_tool(tools)
+    is_onboarding_tool = _has_onboarding_tool_hybrid(tools)
 
     # Route based on chosen provider. If tool calls are present, OpenRouter should handle them.
     # The previous logic forcing Gemini for tools is being removed as OpenRouter
@@ -3438,7 +3390,7 @@ async def generate_ai_response(
     tool_list = [*base_tools, *maps_tools]
     # Add PLAN_TOOLS and CALENDAR_TOOLS only when message intent suggests scheduling operations
     # BUT skip for onboarding flow - it only needs complete_onboarding tool, extra tools add latency
-    is_onboarding_tool = _has_onboarding_tool(tools)
+    is_onboarding_tool = _has_onboarding_tool_hybrid(tools)
 
     if needs_structured_tools and not is_onboarding_tool:
         tool_list = [*tool_list, *PLAN_TOOLS, *CALENDAR_TOOLS]
@@ -3707,7 +3659,8 @@ async def create_chat_title(
     _ = current_user  # Auth enforced via dependency
     suggestion: Optional[str] = None
     try:
-        suggestion = await generate_chat_title_suggestion(payload.message)
+        trimmed = (payload.message or "").strip()
+        suggestion = _fallback_title_from_message(trimmed) if trimmed else None
     except Exception as error:  # pragma: no cover - best effort logging
         print(f"Title generation error: {error}")
     if suggestion:

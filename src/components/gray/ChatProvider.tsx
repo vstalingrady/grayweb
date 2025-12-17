@@ -16,12 +16,9 @@ import { useUser } from "@/contexts/UserContext";
 import { useI18n } from "@/contexts/I18nContext";
 import {
   apiService,
-  isApiNetworkError,
   type ConversationSummary,
   type GroundingMetadata,
   type MediaUpload,
-  type Reminder,
-  type ReminderCreatePayload,
 } from "@/lib/api";
 import { buildLocalTimeContextWithOverrides } from "@/lib/timeContext";
 import { type QuestionnaireSession } from "@/lib/questionnaire";
@@ -58,22 +55,20 @@ import {
   toTimestamp,
   isTitleDerivedFromMessage,
 } from "./chat/utils";
-import { extractGrayRemindersFromText, buildReminderConfirmationText, buildReminderKey, coerceReminderPayload } from "./chat/reminderUtils";
+import { extractGrayRemindersFromText, buildReminderConfirmationText, coerceReminderPayload } from "./chat/reminderUtils";
 import {
   GENERAL_CHAT_SESSION_ID,
   SHARED_CHAT_PLACEHOLDER_TITLE,
   SELF_CONTEXT_PATTERNS,
   DUPLICATE_THREAD_WINDOW_MS,
   REMOTE_SESSION_MERGE_WINDOW_MS,
-  REMINDER_POLL_MIN_INTERVAL,
-  REMINDER_POLL_SHORT_INTERVAL,
 } from "./chat/constants";
-import { WORKSPACE_REFRESH_EVENT } from "./hooks/useWorkspaceData";
-import { buildReminderPingMessage, sendReminderNotification } from "./chat/provider/reminderNotifications";
 import { useDefaultSystemPrompt } from "./chat/provider/useDefaultSystemPrompt";
 import { useAutoStreamState } from "./chat/provider/useAutoStreamState";
 import { useMapsSettings } from "./chat/provider/useMapsSettings";
 import { useModelPreferences } from "./chat/provider/useModelPreferences";
+import { usePersistAiCreatedReminders } from "./chat/provider/usePersistAiCreatedReminders";
+import { useReminderPolling } from "./chat/provider/useReminderPolling";
 import { useRemindersEnabled } from "./chat/provider/useRemindersEnabled";
 import {
   GENERAL_SESSION_TITLE,
@@ -308,7 +303,6 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
   );
 
   const pendingHistorySyncRef = useRef<Set<string>>(new Set());
-  const reminderDeliveryCacheRef = useRef<Set<number>>(new Set());
   const { markAutoStreamTriggered, hasAutoStreamTriggered, resetAutoStreamState } =
     useAutoStreamState();
   const scheduleHistorySync = useCallback(
@@ -1955,105 +1949,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
     };
   }, [pathname, persistSessions, setSessions, user?.id]);
 
-  useEffect(() => {
-    if (!user?.id || !generalSessionId) {
-      reminderDeliveryCacheRef.current.clear();
-      return;
-    }
-
-    let cancelled = false;
-    let timeoutId: ReturnType<typeof setTimeout> | null = null;
-
-    const computeNextReminderPollDelay = (candidates: Reminder[]): number => {
-      if (!candidates.length) {
-        return REMINDER_POLL_MIN_INTERVAL;
-      }
-      const now = Date.now();
-      const delays = candidates
-        .map((reminder) => {
-          const remindAt = new Date(reminder.remind_at).getTime();
-          if (!Number.isFinite(remindAt)) {
-            return null;
-          }
-          return remindAt - now;
-        })
-        .filter((candidate): candidate is number => candidate !== null);
-      if (!delays.length) {
-        return REMINDER_POLL_MIN_INTERVAL;
-      }
-      const soonest = Math.min(...delays);
-      if (soonest <= 0) {
-        return REMINDER_POLL_SHORT_INTERVAL;
-      }
-      return Math.min(soonest, REMINDER_POLL_MIN_INTERVAL);
-    };
-
-    const pollDueReminders = async () => {
-      if (cancelled || !user?.id || !generalSessionId) {
-        return;
-      }
-      let fetchedReminders: Reminder[] = [];
-      try {
-        const reminders = await apiService.getUserReminders(user.id, { status: "pending", limit: 50 });
-        fetchedReminders = reminders;
-        const now = Date.now();
-        for (const reminder of reminders) {
-          if (!reminder.id) {
-            continue;
-          }
-          const remindAt = new Date(reminder.remind_at).getTime();
-          if (!Number.isFinite(remindAt) || remindAt > now) {
-            continue;
-          }
-          if (reminderDeliveryCacheRef.current.has(reminder.id)) {
-            continue;
-          }
-          reminderDeliveryCacheRef.current.add(reminder.id);
-
-          // Client-side stale check: If > 15 mins late, mark delivered but don't nag.
-          // This protects against backend returning old pending items.
-          const isStale = (now - remindAt) > (15 * 60 * 1000);
-
-          if (!isStale) {
-            appendMessage(generalSessionId, "assistant", buildReminderPingMessage(reminder));
-            sendReminderNotification(reminder);
-          }
-
-          try {
-            await apiService.updateReminder(user.id, reminder.id, { status: "delivered" });
-          } catch (updateError) {
-            console.error("Failed to update reminder status:", updateError);
-          }
-        }
-      } catch (error) {
-        // Soft-handle network/unavailable backend errors to avoid noisy logs
-        const isNetworkish =
-          isApiNetworkError(error) ||
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (error instanceof Error && "status" in error && typeof (error as any).status === "number" && (error as any).status >= 500);
-        if (isNetworkish) {
-          if (process.env.NODE_ENV !== "production") {
-            console.debug("Skipping reminder poll; backend unavailable.", error);
-          }
-        } else {
-          console.error("Failed to poll reminders:", error);
-        }
-      } finally {
-        if (!cancelled) {
-          const nextDelay = computeNextReminderPollDelay(fetchedReminders);
-          timeoutId = setTimeout(pollDueReminders, nextDelay);
-        }
-      }
-    };
-
-    pollDueReminders();
-    return () => {
-      cancelled = true;
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-      }
-    };
-  }, [appendMessage, generalSessionId, user?.id]);
+  useReminderPolling({ userId: user?.id, generalSessionId, appendMessage });
 
   const value = useMemo(
     () => ({
@@ -2183,88 +2079,7 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
     persistSessions(sessions);
   }, [persistSessions, sessions]);
 
-  // Persist AI-created reminders to Supabase
-  const persistedReminderKeysRef = useRef<Set<string>>(new Set());
-  useEffect(() => {
-    if (!user?.id) {
-      return;
-    }
-
-    const allMessages = sessions.flatMap((session) => session.messages);
-    const messagesWithReminders = allMessages.filter(
-      (message) => message.role === "assistant" && message.reminders && message.reminders.length > 0
-    );
-
-    for (const message of messagesWithReminders) {
-      if (!message.reminders) continue;
-
-      for (const reminder of message.reminders) {
-        const reminderKey = buildReminderKey(reminder);
-
-        // Skip if already persisted
-        if (persistedReminderKeysRef.current.has(reminderKey)) {
-          continue;
-        }
-
-        // Reminders created via backend tool calls are already persisted server-side.
-        if (String(reminder.source || "").toLowerCase() === "native/backend") {
-          persistedReminderKeysRef.current.add(reminderKey);
-          if (typeof window !== "undefined") {
-            window.dispatchEvent(new CustomEvent(WORKSPACE_REFRESH_EVENT));
-          }
-          continue;
-        }
-
-        // Extract reminder data
-        const data = reminder.data;
-        const reminderRecord = (data.reminder as Record<string, unknown> | null) ?? null;
-        const remindAtIso =
-          (reminderRecord && typeof reminderRecord.remind_at === "string" && reminderRecord.remind_at) ||
-          (typeof data.time_iso === "string" ? data.time_iso : null);
-
-        if (!remindAtIso) {
-          console.warn("Skipping reminder without valid remind_at time:", reminder);
-          continue;
-        }
-
-        // Check for color in metadata
-        let color: string | undefined = undefined;
-        if (reminderRecord && typeof reminderRecord["metadata"] === "object" && reminderRecord["metadata"]) {
-          const metadata = reminderRecord["metadata"] as Record<string, unknown>;
-          if (typeof metadata["color"] === "string" && metadata["color"]) {
-            color = metadata["color"];
-          }
-        }
-
-        const payload: ReminderCreatePayload = {
-          label: data.label || "Reminder",
-          remind_at: remindAtIso,
-          description: data.summary ?? reminder.data.raw?.description as string | undefined ?? null,
-          entity_type: reminder.entity,
-          delivery_mode: reminder.delivery_mode ?? reminder.entity,
-          summary: data.summary ?? null,
-          metadata: reminderRecord?.metadata as Record<string, unknown> | undefined ?? null,
-          color,
-        };
-
-        // Persist to Supabase
-        persistedReminderKeysRef.current.add(reminderKey);
-        apiService
-          .createReminder(user.id, payload)
-          .then(() => {
-            // Dispatch custom event so useWorkspaceData can refresh reminder list
-            if (typeof window !== "undefined") {
-              window.dispatchEvent(new CustomEvent(WORKSPACE_REFRESH_EVENT));
-            }
-          })
-          .catch((error) => {
-            console.error("Failed to persist AI-created reminder:", error);
-            // Remove from persisted set so it can be retried
-            persistedReminderKeysRef.current.delete(reminderKey);
-          });
-      }
-    }
-  }, [sessions, user?.id]);
+  usePersistAiCreatedReminders({ sessions, userId: user?.id });
 
   return (
     <ChatContext.Provider value={value}>
