@@ -294,7 +294,7 @@ async def create_reminder_tool(user_id: int, args: Dict[str, Any], db: databases
     
     try:
         global reminder_scheduler
-        if reminder_scheduler is not None:
+        if reminder_scheduler:
             await reminder_scheduler.refresh_job(user_id=user_id, reminder_id=int(created_id), remind_at=remind_at_dt)
     except Exception as exc:
         api_logger.warning("Failed to schedule reminder job", extra={"user_id": user_id, "reminder_id": created_id, "error": str(exc)})
@@ -326,7 +326,7 @@ async def update_reminder_tool(user_id: int, args: Dict[str, Any], db: databases
     
     try:
         global reminder_scheduler
-        if reminder_scheduler is not None:
+        if reminder_scheduler:
             status = (dict(updated).get("status") or "").strip().lower()
             if status != "pending":
                 await reminder_scheduler.cancel_job(user_id=user_id, reminder_id=int(reminder_id))
@@ -348,7 +348,7 @@ async def delete_reminder_tool(user_id: int, args: Dict[str, Any], db: databases
 
     try:
         global reminder_scheduler
-        if reminder_scheduler is not None:
+        if reminder_scheduler:
             await reminder_scheduler.cancel_job(user_id=user_id, reminder_id=int(reminder_id))
     except Exception:
         pass
@@ -398,7 +398,7 @@ async def delete_latest_reminder_tool(user_id: int, args: Dict[str, Any], db: da
         rid, rlabel, rtime = record["id"], record.get("label"), record.get("remind_at")
         try:
             global reminder_scheduler
-            if reminder_scheduler is not None:
+            if reminder_scheduler:
                 await reminder_scheduler.cancel_job(user_id=user_id, reminder_id=int(rid))
         except Exception:
             pass
