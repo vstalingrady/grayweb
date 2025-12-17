@@ -848,15 +848,15 @@ except ImportError:
 # Hybrid stream handlers (extracted from main.py)
 try:
     from backend.core.stream_handlers.hybrid import (
-        fetch_url_context_with_gemini as _fetch_url_context_with_gemini_new,
-        execute_tools_with_gemini_flash as _execute_tools_with_gemini_flash_new,
-        has_onboarding_tool as _has_onboarding_tool_new,
+        fetch_url_context_with_gemini as _fetch_url_context_with_gemini_hybrid,
+        execute_tools_with_gemini_flash as _execute_tools_with_gemini_flash_hybrid,
+        has_onboarding_tool as _has_onboarding_tool_hybrid,
     )
 except ImportError:
     from core.stream_handlers.hybrid import (  # type: ignore
-        fetch_url_context_with_gemini as _fetch_url_context_with_gemini_new,
-        execute_tools_with_gemini_flash as _execute_tools_with_gemini_flash_new,
-        has_onboarding_tool as _has_onboarding_tool_new,
+        fetch_url_context_with_gemini as _fetch_url_context_with_gemini_hybrid,
+        execute_tools_with_gemini_flash as _execute_tools_with_gemini_flash_hybrid,
+        has_onboarding_tool as _has_onboarding_tool_hybrid,
     )
 
 
@@ -2117,119 +2117,25 @@ async def _execute_function_call(
     return await handler(user_id, args, db)
 
 
+# _has_onboarding_tool - use the extracted version from hybrid module
 def _has_onboarding_tool(tools: Optional[List[types.Tool]]) -> bool:
     """Check if the tools list contains the complete_onboarding function."""
-    if not tools:
-        return False
-    for t in tools:
-        if t.function_declarations:
-            for fd in t.function_declarations:
-                if fd.name == "complete_onboarding":
-                    return True
-    return False
+    return _has_onboarding_tool_hybrid(tools)
 
 
-
+# _fetch_url_context_with_gemini - wrapper to hybrid module version
 async def _fetch_url_context_with_gemini(
     message: str,
     urls: List[str],
     workspace_context: Optional[str] = None,
     time_context: Optional[str] = None,
 ) -> Tuple[str, Optional[Dict[str, Any]]]:
-    """Fetch URL content using Gemini with URL Context tool.
-    
-    This is used for the hybrid architecture: Gemini fetches URL content,
-    which is then passed to any model (OpenRouter, Gemini Pro, etc.) as context.
-    
-    Args:
-        message: The user's original message
-        urls: List of URLs extracted from the message
-        workspace_context: Optional workspace context
-        time_context: Optional time context
-        
-    Returns:
-        Tuple of (url_content_summary, url_context_metadata)
-    """
-    if not GEMINI_SERVICE or not GEMINI_SERVICE.available:
-        return "", None
-    
-    if not urls:
-        return "", None
-    
-    # Build a prompt that asks Gemini to fetch and summarize the URL content
-    url_list = "\n".join(f"- {url}" for url in urls)
-    system_prompt = (
-        "You have access to the URL Context tool which can fetch content from URLs. "
-        "Fetch the content from the provided URLs and provide a comprehensive summary "
-        "of the relevant information. Include key facts, data, and context that would "
-        "help answer the user's question."
+    """Fetch URL content using Gemini with URL Context tool."""
+    return await _fetch_url_context_with_gemini_hybrid(
+        GEMINI_SERVICE, message, urls, workspace_context, time_context
     )
-    
-    context_prompt = f"The user is asking about content from these URLs:\n{url_list}\n\nUser message: {message}"
-    
-    try:
-        api_logger.info(
-            f"[URL Context] Fetching content from {len(urls)} URLs",
-            extra={"event_type": "url_context_fetch_start", "url_count": len(urls)}
-        )
-        
-        response = await GEMINI_SERVICE.generate(
-            context_prompt,
-            conversation_history=None,
-            workspace_context=workspace_context,
-            system_prompt=system_prompt,
-            time_context=time_context,
-            model=URL_CONTEXT_MODEL,
-            attachments=None,
-            extra_contents=None,
-            response_schema=None,
-            response_mime_type=None,
-            tools=[URL_CONTEXT_TOOL],
-            tool_config=None,
-            reasoning_mode=False,
-        )
-        
-        if not response.candidates:
-            api_logger.warning(
-                "[URL Context] No candidates in response",
-                extra={"event_type": "url_context_no_candidates"}
-            )
-            return "", None
-        
-        candidate = response.candidates[0]
-        url_content = _candidate_text(candidate)
-        
-        # Extract URL context metadata if available
-        url_metadata: Optional[Dict[str, Any]] = None
-        if hasattr(candidate, 'url_context_metadata') and candidate.url_context_metadata:
-            url_metadata = {
-                "url_metadata": [
-                    {
-                        "retrieved_url": m.retrieved_url,
-                        "url_retrieval_status": str(m.url_retrieval_status) if m.url_retrieval_status else None
-                    }
-                    for m in (candidate.url_context_metadata.url_metadata or [])
-                ]
-            }
-        
-        api_logger.info(
-            f"[URL Context] Successfully fetched content ({len(url_content)} chars)",
-            extra={
-                "event_type": "url_context_fetch_success",
-                "content_len": len(url_content),
-                "url_count": len(urls)
-            }
-        )
-        
-        return url_content.strip(), url_metadata
-        
-    except Exception as error:
-        api_logger.warning(
-            f"[URL Context] Failed to fetch URL content: {error}",
-            extra={"event_type": "url_context_fetch_error", "error": str(error)},
-        )
-        return "", None
 
+# _execute_tools_with_gemini_flash - wrapper to hybrid module version
 async def _execute_tools_with_gemini_flash(
     message: str,
     conversation_history: Optional[List[Dict[str, Any]]],
@@ -2242,116 +2148,25 @@ async def _execute_tools_with_gemini_flash(
     user_timezone: Optional[str] = None,
     history_token_budget: Optional[int] = None,
 ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], bool]:
-    """Execute tools using Gemini Flash for speed, return results for hybrid flow.
-    
-    This is used when OpenRouter is the response model but we want fast tool execution.
-    Gemini Flash handles the tool calling, then results are passed to OpenRouter for
-    the final personality-rich response.
-    
-    Returns:
-        tool_results: List of {tool_name, result, args} for each executed tool
-        tool_cards: List of reminder/plan/habit cards to emit to frontend
-        onboarding_completed: True if complete_onboarding was called
-    """
-    if not GEMINI_SERVICE.available:
-        return [], [], False
-    
-    GEMINI_FLASH_MODEL = "models/gemini-2.0-flash"
-    tool_results: List[Dict[str, Any]] = []
-    tool_cards: List[Dict[str, Any]] = []
-    onboarding_completed = False
-    
-    try:
-        # Initial generation with tools
-        response = await GEMINI_SERVICE.generate(
-            message,
-            conversation_history,
-            workspace_context,
-            system_prompt,
-            time_context,
-            GEMINI_FLASH_MODEL,
-            tools=tool_list,
-            history_token_budget=history_token_budget,
-        )
-        
-        # Loop to handle tool execution (max 3 iterations)
-        extra_contents: Optional[List[types.Content]] = None
-        for attempt in range(3):
-            function_call = _extract_function_call(response)
-            if not function_call:
-                break
-            
-            tool_name = function_call.name
-            tool_args = function_call.args or {}
-            
-            api_logger.info(
-                f"[Hybrid] Gemini Flash executing tool: {tool_name}",
-                extra={"user_id": user_id, "tool": tool_name}
-            )
-            
-            try:
-                tool_result = await _execute_function_call(
-                    function_call, user_id, db, user_timezone=user_timezone
-                )
-                tool_results.append({
-                    "tool_name": tool_name,
-                    "args": dict(tool_args),
-                    "result": tool_result,
-                })
-                
-                # Collect reminder/plan/habit cards for frontend
-                if isinstance(tool_result, dict) and tool_result.get("type") in {
-                    "gray.reminder", "gray.plan", "gray.habit"
-                }:
-                    tool_cards.append(tool_result)
-                
-                # Check if onboarding was completed (partial saves should not disable onboarding)
-                if tool_name == "complete_onboarding" and isinstance(tool_result, dict):
-                    onboarding_completed = onboarding_completed or tool_result.get("status") == "success"
-                
-                # Build contents for next iteration
-                tool_contents = _build_function_call_contents(function_call, tool_result)
-                if extra_contents:
-                    extra_contents.extend(tool_contents)
-                else:
-                    extra_contents = tool_contents
-                
-                # Generate again to see if more tools are needed
-                response = await GEMINI_SERVICE.generate(
-                    message,
-                    conversation_history,
-                    workspace_context,
-                    system_prompt,
-                    time_context,
-                    GEMINI_FLASH_MODEL,
-                    extra_contents=extra_contents,
-                    tools=tool_list,
-                    history_token_budget=history_token_budget,
-                )
-                
-            except Exception as tool_error:
-                api_logger.error(
-                    f"[Hybrid] Tool execution failed: {tool_name}: {tool_error}",
-                    exc_info=True
-                )
-                tool_results.append({
-                    "tool_name": tool_name,
-                    "args": dict(tool_args),
-                    "error": str(tool_error),
-                })
-                break
-    
-    except Exception as gemini_error:
-        api_logger.error(
-            f"[Hybrid] Gemini Flash tool execution failed: {gemini_error}",
-            exc_info=True,
-            extra={"user_id": user_id}
-        )
-    
-    return tool_results, tool_cards, onboarding_completed
+    """Execute tools using Gemini Flash for speed, return results for hybrid flow."""
+    return await _execute_tools_with_gemini_flash_hybrid(
+        GEMINI_SERVICE,
+        _execute_function_call,
+        message,
+        conversation_history,
+        tool_list,
+        system_prompt,
+        time_context,
+        workspace_context,
+        user_id,
+        db,
+        user_timezone,
+        history_token_budget,
+    )
 
 
 # _format_tool_results_for_context is now imported from core.function_call_helpers
+
 
 # _resolve_media_attachments and _generate_image_descriptions
 # are now imported from core.media_attachments
