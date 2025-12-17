@@ -972,9 +972,12 @@ async def _require_conversation_owner(conversation_id: str, current_user: Dict[s
                             detail="You can only access your own conversations",
                         )
                     return
-        except Exception:
-            # If local lookup fails, fall through to lenient path.
-            pass
+        except Exception as e:
+            # Log database lookup failures - don't silently fail security checks
+            api_logger.warning(
+                f"Conversation ownership check failed for {conversation_id}: {e}",
+                extra={"conversation_id": conversation_id, "user_id": current_user.get("id"), "error": str(e)}
+            )
     else:
         # Non-UUID IDs are treated as local-only; require the current user context.
         require_same_user(current_user["id"], current_user)
@@ -2264,8 +2267,8 @@ async def chat_endpoint(
                             "text": "[I understand and will remember this context while responding in this thread.]"
                         }
                         conversation_history = [general_context_marker] + recent_general + [general_context_end] + conversation_history
-            except Exception:
-                pass  # Non-critical: continue without General context
+            except Exception as e:
+                api_logger.debug(f"Could not load general context: {e}", extra={"user_id": chat_request.user_id})
 
         # Save user message to local conversation store (after capturing prior history),
         # but avoid writing an identical message twice in a row (e.g., when a fallback
