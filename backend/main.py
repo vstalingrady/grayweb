@@ -2392,10 +2392,8 @@ ONBOARDING_SYSTEM_PROMPT = load_prompt_from_json(
     "You are Gray.",
 )
 
-DEFAULT_SYSTEM_PROMPT_PATH = GLOBAL_SYSTEM_PROMPTS_PATH
-
 DEFAULT_SYSTEM_PROMPT = load_prompt_from_json(
-    DEFAULT_SYSTEM_PROMPT_PATH,
+    GLOBAL_SYSTEM_PROMPTS_PATH,
     "chat",
     "You are Gray.",
 )
