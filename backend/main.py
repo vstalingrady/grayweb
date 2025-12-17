@@ -4031,20 +4031,17 @@ async def get_context_cache(
     require_same_user(payload["user_id"], current_user)
     return ContextCache(**payload)
 
-
-@app.post("/api/uploads", response_model=MediaUpload)
-@limiter.limit("5/minute")
-async def upload_media(
-    request: Request,
-    background_tasks: BackgroundTasks,
-    file: UploadFile = File(...),
-    current_user: Dict[str, Any] = Depends(get_current_user),
-    db: databases.Database = Depends(get_database),
-):
-
 # Upload endpoints are now in backend/api/uploads.py
 
+async def chat_endpoint(
+    request: Request,
+    chat_request: ChatRequest,
+    background_tasks: BackgroundTasks,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db: databases.Database = Depends(get_database)
+):
     """Send a message to AI and get a response"""
+
     # Force the request user to the authenticated user to avoid mismatches from stale client state.
     # We overwrite it instead of raising 403 to be more potentially resilient to frontend glitches,
     # as long as the action is performed as the authenticated user.
