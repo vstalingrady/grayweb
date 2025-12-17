@@ -2,13 +2,11 @@
 
 import {
   useCallback,
-  useEffect,
   useMemo,
   useRef,
   useState,
   type ChangeEvent,
   type CSSProperties,
-  type MouseEvent,
   type ReactNode,
 } from "react";
 
@@ -25,18 +23,20 @@ import { useCalendarComposer } from "./useCalendarComposer";
 import { useControlledCalendarData } from "./useControlledCalendarData";
 import { useDashboardCalendarDateState } from "./useDashboardCalendarDateState";
 import { useDashboardCalendarDragResize } from "./useDashboardCalendarDragResize";
+import { useDashboardCalendarInitialScroll } from "./useDashboardCalendarInitialScroll";
+import { useDashboardCalendarInteractions } from "./useDashboardCalendarInteractions";
+import { useDashboardCalendarSelection } from "./useDashboardCalendarSelection";
 import { useCalendarLayouts } from "./useCalendarLayouts";
 import { useCalendarNowIndicators } from "./useCalendarNowIndicators";
 import { startOfWeek } from "./dateUtils";
 import {
   CalendarEvent,
   CalendarInfo,
-  PositionedEvent,
 } from "./types";
 import { formatDateLabel } from "./timeUtils";
 import type { DashboardHeaderProps } from "@/components/gray/DashboardHeader";
 import { useI18n } from "@/contexts/I18nContext";
-import type { CalendarViewMode, ComposerAnchorRect } from "./dashboardCalendarTypes";
+import type { CalendarViewMode } from "./dashboardCalendarTypes";
 
 const DEFAULT_HOUR_HEIGHT = 64;
 const SNAP_MINUTES = 15;
@@ -140,12 +140,8 @@ export function GrayDashboardCalendar({
     viewMode,
   });
 
-  // Multi-select state
-  const [selectedEventIds, setSelectedEventIds] = useState<Set<string>>(new Set());
-
-
-  const hasInitialDayScrollRef = useRef(false);
-  const hasInitialWeekScrollRef = useRef(false);
+  const { selectedEventIds, clearSelection, toggleSelection, selectSingle } =
+    useDashboardCalendarSelection();
 
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
 
@@ -155,10 +151,6 @@ export function GrayDashboardCalendar({
     onCalendarsChange,
     onEventsChange,
   });
-
-  const clearSelection = useCallback(() => {
-    setSelectedEventIds(new Set());
-  }, []);
 
   const {
     composerOpen,
@@ -235,6 +227,16 @@ export function GrayDashboardCalendar({
     composerPreviewEvent,
   });
 
+  useDashboardCalendarInitialScroll({
+    viewMode,
+    dayColumnRef,
+    weekScrollRef,
+    dayIndicatorOffset,
+    weekNowIndicator,
+    dayLayouts,
+    hourHeight,
+  });
+
   const updateViewMode = useCallback(
     (nextMode: CalendarViewMode) => {
       if (viewModeLocked) {
@@ -252,56 +254,6 @@ export function GrayDashboardCalendar({
   const rangeNavigationLabel = viewMode === "week" ? t("Week") : t("Day");
   const shouldShowDashboardToggle = typeof onSelectDashboardTab === "function";
 
-
-
-  useEffect(() => {
-    // Only auto-scroll once on initial mount, never interfere with user scrolling
-    if (hasInitialDayScrollRef.current || viewMode !== "day") {
-      return;
-    }
-    const container = dayColumnRef.current;
-    if (!container) {
-      return;
-    }
-
-    // Scroll to current time indicator if available
-    if (dayIndicatorOffset !== null) {
-      const target = Math.max(dayIndicatorOffset - hourHeight, 0);
-      container.scrollTo({ top: target });
-      hasInitialDayScrollRef.current = true;
-      return;
-    }
-
-    // Otherwise scroll to first event or top
-    if (!dayLayouts.length) {
-      return;
-    }
-
-    const earliestTop = dayLayouts.reduce(
-      (min, event) => Math.min(min, event.top),
-      Number.POSITIVE_INFINITY
-    );
-    const target = Math.max(earliestTop - hourHeight, 0);
-    container.scrollTo({ top: target });
-    hasInitialDayScrollRef.current = true;
-  }, [dayColumnRef, dayIndicatorOffset, dayLayouts, hourHeight, viewMode]);
-
-  useEffect(() => {
-    // Only auto-scroll once on initial mount, never interfere with user scrolling
-    if (hasInitialWeekScrollRef.current || viewMode !== "week") {
-      return;
-    }
-    const container = weekScrollRef.current;
-    if (!container || !weekNowIndicator) {
-      return;
-    }
-    const target = Math.max(weekNowIndicator.offset - hourHeight, 0);
-    container.scrollTo({ top: target });
-    hasInitialWeekScrollRef.current = true;
-  }, [hourHeight, viewMode, weekNowIndicator, weekScrollRef]);
-
-
-
   const handleToggleCalendar = (calendarId: string) => {
     updateCalendars((previous) =>
       previous.map((calendar) =>
@@ -312,82 +264,22 @@ export function GrayDashboardCalendar({
     );
   };
 
-  const isGoogleCalendarEvent = (event: CalendarEvent) =>
-    typeof event.calendarId === "string" && event.calendarId.startsWith("google:");
-
-  const handleEventClick = (
-    event: CalendarEvent,
-    anchorRect?: DOMRect | DOMRectReadOnly | null,
-    mouseEvent?: MouseEvent
-  ) => {
-    if (daySuppressClickRef.current || weekSuppressClickRef.current) return;
-
-    if (mouseEvent?.ctrlKey || mouseEvent?.metaKey) {
-      // Toggle selection
-      setSelectedEventIds((prev) => {
-        const next = new Set(prev);
-        if (next.has(event.id)) {
-          next.delete(event.id);
-        } else {
-          next.add(event.id);
-        }
-        return next;
-      });
-    } else {
-      // Single select and edit
-      setSelectedEventIds(new Set([event.id]));
-      if (isGoogleCalendarEvent(event)) {
-        return;
-      }
-      editEvent(event, anchorRect);
-    }
-  };
-
-  const handleColumnClick = (event: MouseEvent<HTMLDivElement>, day: Date) => {
-    if (daySuppressClickRef.current || weekSuppressClickRef.current) {
-      return;
-    }
-    const target = event.currentTarget;
-    if (event.target instanceof HTMLElement) {
-      // Ignore clicks that originate from an existing event card so we don't
-      // create a new draft on top of the one being edited.
-      if (event.target.closest(`.${styles.eventCard}`)) {
-        return;
-      }
-    }
-
-    // Clear selection on background click
-    clearSelection();
-
-    const bounds = target.getBoundingClientRect();
-    const offsetY = event.clientY - bounds.top;
-    const totalMinutes = Math.max(0, Math.min(24 * 60 - 1, Math.round((offsetY / hourHeight) * 60 / SNAP_MINUTES) * SNAP_MINUTES));
-    const hours = Math.floor(totalMinutes / 60);
-    const minutes = totalMinutes % 60;
-    const start = new Date(day);
-    start.setHours(hours, minutes, 0, 0);
-
-    const startMinutes = hours * 60 + minutes;
-    const startOffsetPx = (startMinutes / 60) * hourHeight;
-    const defaultDurationMinutes = 60; // Default event length
-    const eventHeightPx = (defaultDurationMinutes / 60) * hourHeight;
-
-    const anchorRect: ComposerAnchorRect = {
-      left: bounds.left,
-      width: bounds.width,
-      top: bounds.top + startOffsetPx,
-      height: eventHeightPx,
-    };
-    openComposerAt(start, anchorRect);
-  };
-
-  const handleDeleteEvent = (event: PositionedEvent) => {
-    const calendarEvent = events.find((e) => e.id === event.id);
-    if (calendarEvent && onEventDelete) {
-      onEventDelete(calendarEvent);
-    }
-    updateEvents((previous) => previous.filter((e) => e.id !== event.id));
-  };
+  const { isGoogleCalendarEvent, handleEventClick, handleColumnClick, handleDeleteEvent } =
+    useDashboardCalendarInteractions({
+      hourHeight,
+      snapMinutes: SNAP_MINUTES,
+      eventCardClassName: styles.eventCard,
+      daySuppressClickRef,
+      weekSuppressClickRef,
+      events,
+      updateEvents,
+      onEventDelete,
+      clearSelection,
+      toggleSelection,
+      selectSingle,
+      editEvent,
+      openComposerAt,
+    });
 
   const handleTouchStart = (e: React.TouchEvent) => {
     touchStartRef.current = {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, type MouseEvent } from "react";
+import { useCallback, type MouseEvent, type MutableRefObject } from "react";
 
 import type { ComposerAnchorRect } from "./dashboardCalendarTypes";
 import type { CalendarEvent, PositionedEvent } from "./types";
@@ -9,8 +9,8 @@ type UseDashboardCalendarInteractionsOptions = {
   hourHeight: number;
   snapMinutes: number;
   eventCardClassName: string;
-  daySuppressClickRef: React.MutableRefObject<boolean>;
-  weekSuppressClickRef: React.MutableRefObject<boolean>;
+  daySuppressClickRef: MutableRefObject<boolean>;
+  weekSuppressClickRef: MutableRefObject<boolean>;
   events: CalendarEvent[];
   updateEvents: (updater: (previous: CalendarEvent[]) => CalendarEvent[]) => void;
   onEventDelete?: (event: CalendarEvent) => void;
@@ -140,4 +140,3 @@ export const useDashboardCalendarInteractions = ({
     handleDeleteEvent,
   };
 };
-

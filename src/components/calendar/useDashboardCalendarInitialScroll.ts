@@ -1,14 +1,14 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type MutableRefObject } from "react";
 
 import type { CalendarViewMode, WeekNowIndicator } from "./dashboardCalendarTypes";
 import type { PositionedEvent } from "./types";
 
 type UseDashboardCalendarInitialScrollOptions = {
   viewMode: CalendarViewMode;
-  dayColumnRef: React.MutableRefObject<HTMLDivElement | null>;
-  weekScrollRef: React.MutableRefObject<HTMLDivElement | null>;
+  dayColumnRef: MutableRefObject<HTMLDivElement | null>;
+  weekScrollRef: MutableRefObject<HTMLDivElement | null>;
   dayIndicatorOffset: number | null;
   weekNowIndicator: WeekNowIndicator | null;
   dayLayouts: PositionedEvent[];
@@ -73,4 +73,3 @@ export const useDashboardCalendarInitialScroll = ({
     hasInitialWeekScrollRef.current = true;
   }, [hourHeight, viewMode, weekNowIndicator, weekScrollRef]);
 };
-

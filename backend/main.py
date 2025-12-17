@@ -2192,15 +2192,9 @@ async def chat_endpoint(
     """Send a message to AI and get a response"""
 
     # Force the request user to the authenticated user to avoid mismatches from stale client state.
-    # We overwrite it instead of raising 403 to be more potentially resilient to frontend glitches,
-    # as long as the action is performed as the authenticated user.
-    chat_request.user_id = current_user["id"]
-    
-    # Use authenticated ID for consistency
     authenticated_user_id = current_user["id"]
     chat_request.user_id = authenticated_user_id
     prompt_locale = _prompt_locale_from_request(request)
-    start_time = utcnow()
 
     # Set request context for logging
     correlation_id = str(uuid4())
@@ -2220,22 +2214,9 @@ async def chat_endpoint(
 
     try:
         # Generate a title for the chat session (only if requested)
-        # We use a fast local fallback initially to avoid blocking the response.
-        # The AI-generated title will be updated in the background if requested.
         session_title = _fallback_title_from_message(chat_request.message)
 
-        # Create chat session
-        now = utcnow()
-        chat_session_query = chat_sessions.insert().values(
-            user_id=chat_request.user_id,
-            title=session_title,
-            scope="thread",
-            created_at=now,
-            updated_at=now
-        )
-        session_id = await db.execute(chat_session_query)
-
-        # Determine conversation_id, only using Supabase when provided ID is valid or unspecified
+        # Determine conversation_id
         requested_conversation_id = chat_request.conversation_id
         valid_requested_conversation_id = _is_valid_uuid(requested_conversation_id)
         if requested_conversation_id and not valid_requested_conversation_id:

@@ -1,6 +1,6 @@
 "use client";
 
-import styles from "@/components/gray/chat/ChatStyles.module.css";
+import styles from "./ChatMessageGroundingPanel.module.css";
 import type { GroundingMetadata } from "@/lib/api";
 import { buildGroundingSourceCards, buildGroundingSourceFaviconUrl, buildGroundingSourceInitials } from "./groundingSources";
 import { getSanitizedSearchEntryHtml } from "./searchEntrySanitizer";

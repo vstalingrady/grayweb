@@ -4,7 +4,8 @@ import { useMemo, useState } from "react";
 import { CheckCircle2, Copy } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import rehypeKatex from "rehype-katex";
-import styles from "@/components/gray/chat/ChatStyles.module.css";
+import chatStyles from "@/components/gray/chat/ChatStyles.module.css";
+import styles from "./MarkdownCodeBlock.module.css";
 import { useI18n } from "@/contexts/I18nContext";
 import { MARKDOWN_PLUGINS } from "./plugins";
 import { normalizeAssistantMath } from "./mathNormalization";
@@ -49,7 +50,7 @@ export const MarkdownCodeBlock: CodeComponent = ({ inline, className, children, 
     // Render LaTeX math blocks as regular markdown so remark-math / rehype-katex
     // can display them instead of treating them as plain code.
     return (
-      <div className={styles.chatMarkdown}>
+      <div className={chatStyles.chatMarkdown}>
         <ReactMarkdown remarkPlugins={MARKDOWN_PLUGINS} rehypePlugins={[[rehypeKatex, { strict: false }]]}>
           {normalizedMath}
         </ReactMarkdown>

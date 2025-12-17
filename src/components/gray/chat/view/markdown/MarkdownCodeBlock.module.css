@@ -1,0 +1,203 @@
+.chatPlainCodeFallback {
+  margin: 0;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  white-space: pre-wrap;
+}
+
+.codeBlock {
+  width: 100%;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(5, 5, 5, 0.94);
+  margin: clamp(8px, 1.6vh, 14px) 0;
+  overflow: hidden;
+  font-family: var(--font-mono, "IBM Plex Mono", SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace);
+}
+
+.codeHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-size: 0.58rem;
+  color: rgba(255, 255, 255, 0.68);
+  background: rgba(4, 4, 4, 0.96);
+}
+
+.codeLanguage {
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.62rem;
+}
+
+.codeCopyButton {
+  border: none;
+  background: transparent;
+  width: 28px;
+  height: 28px;
+  color: rgba(255, 255, 255, 0.65);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+.codeCopyButton[data-copied="true"] {
+  color: #a6ffd4;
+}
+
+.codeCopyButton:hover {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.codeSurface {
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: rgba(8, 8, 8, 0.65);
+  align-items: flex-start;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+.codeSurfaceCompact {
+  padding: 6px 12px;
+  background: rgba(8, 8, 8, 0.4);
+  align-items: flex-start;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+.codeSurfaceMini {
+  padding: 0;
+  background: transparent;
+  align-items: flex-start;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+.codeBlockCompact {
+  border-radius: 12px;
+  margin: clamp(6px, 1vh, 10px) 0;
+  background: rgba(5, 5, 5, 0.96);
+}
+
+.codeBlockCompact .codeSurface {
+  padding: 6px 10px;
+}
+
+.codeBlockCompact .codeLine {
+  padding: 0;
+  font-size: 0.86rem;
+}
+
+.codeBlockCompact .codeLineNumber {
+  display: none;
+}
+
+.codeHeaderCompact {
+  padding: 6px 12px;
+  font-size: 0.5rem;
+  letter-spacing: 0.14em;
+}
+
+.inlineCodeToken {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  margin: 0 2px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  font-family: var(--font-mono, "IBM Plex Mono", SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace);
+  font-size: 0.92em;
+  line-height: 1.35;
+  white-space: nowrap;
+}
+
+.codeLine {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 0;
+  font-size: 0.92rem;
+  line-height: 1.6;
+  width: fit-content;
+  min-width: 100%;
+}
+
+.codeLineCompact {
+  padding: 0;
+  gap: 10px;
+  font-size: 0.88rem;
+}
+
+.codeLineMini {
+  padding: 0;
+  gap: 6px;
+  font-size: 0.78rem;
+}
+
+.codeLineNumber {
+  width: 32px;
+  text-align: right;
+  opacity: 0.35;
+  user-select: none;
+  font-size: 0.82rem;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.codeLineContent {
+  flex: 0 0 auto;
+  white-space: pre;
+  font-family: inherit;
+  font-size: 0.82rem;
+}
+
+.codeLineContentMini {
+  font-size: 0.74rem;
+}
+
+.codeToken {
+  white-space: pre;
+}
+
+.codeTokenPlain {
+  color: rgba(235, 235, 235, 0.92);
+}
+
+.codeTokenKeyword {
+  color: #8fc9ff;
+}
+
+.codeTokenString {
+  color: #ffd580;
+}
+
+.codeTokenComment {
+  color: rgba(183, 195, 221, 0.65);
+  font-style: italic;
+}
+
+.codeTokenNumber {
+  color: #f6a5ff;
+}
+
+.codeTokenBuiltin {
+  color: #8fe5aa;
+}
+
+.codeTokenLiteral {
+  color: #ffb29b;
+}
+

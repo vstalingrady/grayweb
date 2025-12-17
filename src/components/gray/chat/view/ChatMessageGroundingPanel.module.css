@@ -1,0 +1,188 @@
+.chatGroundingPanel {
+  margin-top: 0.5rem;
+  padding: 0.45rem 0.6rem;
+  border-radius: 0.6rem;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.chatGroundingSourceDeck {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-bottom: 0.4rem;
+}
+
+.chatGroundingSearchEntryDeck {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  margin-bottom: 0.6rem;
+}
+
+.chatGroundingSourceDeckHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.chatGroundingSourceDeckHeader > span:first-child {
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.chatGroundingSourceDeckBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  text-transform: uppercase;
+  font-size: 0.65rem;
+  letter-spacing: 0.08em;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.chatGroundingSourceCards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 0.5rem;
+}
+
+.chatGroundingSourceCard {
+  padding: 0.5rem 0.6rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.02);
+  text-decoration: none;
+  color: inherit;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  transition: border 0.2s ease, background 0.2s ease;
+  min-width: 0;
+}
+
+.chatGroundingSourceCard:hover {
+  border-color: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.chatGroundingSourceCard[data-clickable="false"] {
+  cursor: default;
+}
+
+.chatGroundingSourceCardAvatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 0.4rem;
+  background: rgba(255, 255, 255, 0.06);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.65rem;
+  font-weight: 600;
+  flex-shrink: 0;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.chatGroundingSourceCardContent {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+  flex: 1;
+}
+
+.chatGroundingSourceCardTitle {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.9);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chatGroundingSourceCardSite {
+  font-size: 0.68rem;
+  color: rgba(255, 255, 255, 0.5);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chatGroundingSearchEntry {
+  margin-top: 0.4rem;
+  border-radius: 0.65rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.015);
+  padding: 0.75rem;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 0.9rem;
+}
+
+.chatGroundingSearchEntry :global(a) {
+  color: rgba(135, 178, 255, 0.95);
+  text-decoration: none;
+}
+
+.chatGroundingSearchEntry :global(a:hover) {
+  text-decoration: underline;
+}
+
+.chatGroundingQueries {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-bottom: 0.6rem;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.chatGroundingQueryChip {
+  padding: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+  border: none;
+  background: transparent;
+  border-radius: 0;
+}
+
+.chatGroundingSources {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.chatGroundingSource {
+  font-size: 0.75rem;
+}
+
+.chatGroundingLink {
+  color: rgba(255, 255, 255, 0.8);
+  text-decoration: underline;
+}
+
+.chatGroundingPlain {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.chatGroundingWidget {
+  margin-top: 0.4rem;
+  font-size: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.chatGroundingWidget code {
+  font-family: "IBM Plex Mono", menlo, monospace;
+  font-size: 0.7rem;
+  padding: 0.2rem 0.35rem;
+  border-radius: 0.35rem;
+  background: rgba(255, 255, 255, 0.05);
+}
+
