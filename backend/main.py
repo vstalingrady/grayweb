@@ -2887,26 +2887,14 @@ CRITICAL: When the user asks to create/update a plan or habit, you MUST call the
 
 
     # URL Context: Add URL context tool when URLs are detected in the message
-    # This allows Gemini to fetch and analyze content from URLs
     message_urls = _extract_urls_from_message(message)
     if provider == "gemini" and message_urls:
-        api_logger.info(
-            f"[URL Context] Adding URL context tool for {len(message_urls)} URLs",
-            extra={"event_type": "url_context_gemini_tool_add", "url_count": len(message_urls)}
-        )
-        if tool_list is None:
-            tool_list = []
-        # Check if URL context tool is already in the list
-        has_url_context = any(
-            hasattr(t, 'url_context') and t.url_context is not None 
-            for t in tool_list
-        )
-        if not has_url_context:
-            tool_list.append(URL_CONTEXT_TOOL)
+        tool_list = add_url_context_tool_if_needed(tool_list or [], message_urls, URL_CONTEXT_TOOL)
 
     # Gemini-specific tool list adjustment (consolidating)
     if provider == "gemini" and tool_list:
         tool_list = consolidate_gemini_tools(tool_list)
+
 
     
     grounding_metadata: Optional[Dict[str, Any]] = None
@@ -3221,14 +3209,8 @@ async def generate_ai_response(
     if not (message or "").strip() and not conversation_history and not (attachments or []):
         message = "Let's get started."
 
-    # Determine whether this turn is part of a reminder/plan/habit flow using
-    # both the current message and a short window of recent history.
-    intent_window_text = (message or "") or ""
-    if conversation_history:
-        for entry in conversation_history[-4:]:
-            text = entry.get("text") or ""
-            if text:
-                intent_window_text += f"\n{text}"
+    # Determine whether this turn is part of a reminder/plan/habit flow.
+    intent_window_text = build_intent_window_text(message, conversation_history)
 
     request_structured_reminders = _should_request_structured_reminders(intent_window_text)
     needs_structured_tools = request_structured_reminders or _needs_structured_tools(intent_window_text)
