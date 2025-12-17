@@ -1,56 +1,45 @@
-/* eslint-disable react-hooks/set-state-in-effect */
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { LoaderCircle } from "lucide-react";
 import { useUser } from "@/contexts/UserContext";
 import styles from "./page.module.css";
 import LoginForm from "@/components/LoginForm";
 import { useI18n } from "@/contexts/I18nContext";
+import { useHasHydrated } from "@/components/gray/hooks/useHasHydrated";
 
 export default function DeleteAccountPage() {
   const { t } = useI18n();
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, loading, deleteUserAccount } = useUser();
+  const hasHydrated = useHasHydrated();
   const [status, setStatus] = useState<"idle" | "deleting" | "error" | "success">("idle");
   const [error, setError] = useState<string | null>(null);
   const [confirmationEmail, setConfirmationEmail] = useState("");
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const verifiedOnceRef = useRef(false);
+  const suppressVerificationRef = useRef(false);
+  const verifiedParam = searchParams?.get("verified") === "true";
+  const isIdentityVerified = !suppressVerificationRef.current && (isAuthenticated || verifiedParam || verifiedOnceRef.current);
 
-  // Handle locking the target user for deletion
   useEffect(() => {
-    if (loading || !user) return;
-
-    // If we are starting the flow (not verified yet), lock the target email
-    const isVerified = searchParams?.get("verified") === "true";
-    const storedTarget = window.sessionStorage.getItem("delete_account_target");
-
-    if (!isVerified) {
-      // If we are just arriving effectively as a fresh start for this flow, overwrite
-      // We only do this if we are not already in a weird state? 
-      // Actually, if I just land here, I am deleting MY account.
-      if (storedTarget !== user.email) {
-        window.sessionStorage.setItem("delete_account_target", user.email);
-      }
-    } else {
-      // We are verified (came back from auth)
-      // Check if we have a stored target
-      if (storedTarget && storedTarget !== user.email) {
-        setError(
-          t(
-            "Account mismatch. You started deletion for {target} but logged in as {current}. Please log in as the correct user.",
-            { target: storedTarget, current: user.email }
-          )
-        );
-        setStatus("error");
-        // We do NOT set isAuthenticated(false) here, because we want renderBody to show the error message.
-        // The handleDelete function will enforce the safety check.
-      }
+    if (!verifiedParam) {
+      return;
     }
-  }, [loading, user, searchParams, t]);
 
+    verifiedOnceRef.current = true;
+    suppressVerificationRef.current = false;
+
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const newUrl = new URL(window.location.href);
+    newUrl.searchParams.delete("verified");
+    window.history.replaceState({}, "", newUrl.toString());
+  }, [verifiedParam]);
 
   useEffect(() => {
     if (status === "deleting" || status === "success") {
@@ -62,18 +51,45 @@ export default function DeleteAccountPage() {
     }
   }, [loading, router, user, status]);
 
-  // Check if we are returning from an OAuth flow that was initiated for verification
   useEffect(() => {
-    const verifiedParam = searchParams?.get("verified");
-    if (verifiedParam === "true") {
-      setIsAuthenticated(true);
-
-      // Clean up URL
-      const newUrl = new URL(window.location.href);
-      newUrl.searchParams.delete("verified");
-      window.history.replaceState({}, "", newUrl.toString());
+    if (loading || !user) {
+      return;
     }
-  }, [searchParams]);
+
+    if (isIdentityVerified) {
+      return;
+    }
+
+    try {
+      const storedTarget = window.sessionStorage.getItem("delete_account_target");
+      if (storedTarget !== user.email) {
+        window.sessionStorage.setItem("delete_account_target", user.email);
+      }
+    } catch {
+      // sessionStorage may be unavailable
+    }
+  }, [isIdentityVerified, loading, user]);
+
+  const storedTarget = (() => {
+    if (!hasHydrated) {
+      return null;
+    }
+    try {
+      return window.sessionStorage.getItem("delete_account_target");
+    } catch {
+      return null;
+    }
+  })();
+  const mismatchError =
+    isIdentityVerified && user && storedTarget && storedTarget !== user.email
+      ? t(
+        "Account mismatch. You started deletion for {target} but logged in as {current}. Please log in as the correct user.",
+        { target: storedTarget, current: user.email }
+      )
+      : null;
+
+  const displayError = mismatchError ?? error;
+  const displayStatus = mismatchError ? "error" : status;
 
   const handleDelete = useCallback(async () => {
     if (!user || status === "deleting") {
@@ -81,7 +97,13 @@ export default function DeleteAccountPage() {
     }
 
     // Safety check: Ensure the current user matches the stored target
-    const storedTarget = window.sessionStorage.getItem("delete_account_target");
+    const storedTarget = (() => {
+      try {
+        return window.sessionStorage.getItem("delete_account_target");
+      } catch {
+        return null;
+      }
+    })();
     if (storedTarget && storedTarget !== user.email) {
       setError(
         t(
@@ -113,36 +135,19 @@ export default function DeleteAccountPage() {
     }
   }, [deleteUserAccount, status, user, confirmationEmail, t]);
 
-  const renderBody = () => {
-    if (loading || !user) {
-      return (
-        <div className={styles["delete-account__card"]}>
-          <LoaderCircle className={styles["delete-account__spinner"]} size={20} />
-          <p>{t("Verifying your session...")}</p>
-        </div>
-      );
-    }
+  const handleCancel = () => {
+    verifiedOnceRef.current = false;
+    suppressVerificationRef.current = true;
+    setIsAuthenticated(false);
+  };
 
-    if (!isAuthenticated) {
-      return (
-        <div style={{ width: "100%", height: "100%" }}>
-          <LoginForm
-            initialMode="signin"
-            headerText={t("Delete Account")}
-            subtitleText={t("Please log in again to confirm your identity.")}
-            redirectTo="/delete-account?verified=true"
-            onSuccess={() => setIsAuthenticated(true)}
-          />
-        </div>
-      );
-    }
-
+  const renderVerifiedBody = (currentUser: NonNullable<typeof user>) => {
     const description =
-      status === "deleting"
+      displayStatus === "deleting"
         ? t("Deleting your workspace data...")
         : t("Identity verified. This action cannot be undone.");
 
-    const isMatch = confirmationEmail === user.email;
+    const isMatch = confirmationEmail === currentUser.email;
 
     return (
       <div className={styles["delete-account__card"]}>
@@ -150,42 +155,42 @@ export default function DeleteAccountPage() {
         <p className={styles["delete-account__description"]}>
           {description}{" "}
           {t("To permanently delete your account, type your email")}{" "}
-          <strong>{user.email}</strong>{" "}
+          <strong>{currentUser.email}</strong>{" "}
           {t("below.")}
         </p>
 
         <input
           type="email"
           className={styles["delete-account__input"]}
-          placeholder={user.email}
+          placeholder={currentUser.email}
           value={confirmationEmail}
           onChange={(e) => {
             setConfirmationEmail(e.target.value);
             if (error) setError(null);
           }}
-          disabled={status === "deleting"}
+          disabled={displayStatus === "deleting"}
         />
 
-        {error ? <p className={styles["delete-account__error"]}>{error}</p> : null}
+        {displayError ? <p className={styles["delete-account__error"]}>{displayError}</p> : null}
 
         <div className={styles["delete-account__actions"]}>
           <button
             type="button"
             className={styles["delete-account__cancel"]}
-            onClick={() => setIsAuthenticated(false)}
-            disabled={status === "deleting"}
+            onClick={handleCancel}
+            disabled={displayStatus === "deleting"}
           >
             {t("Cancel")}
           </button>
           <button
             type="button"
             className={styles["delete-account__button"]}
-            disabled={status === "deleting" || !isMatch}
+            disabled={displayStatus === "deleting" || !isMatch || Boolean(mismatchError)}
             onClick={handleDelete}
           >
-            {status === "deleting"
+            {displayStatus === "deleting"
               ? t("Deleting...")
-              : status === "error"
+              : displayStatus === "error"
                 ? t("Retry delete")
                 : t("Delete account")}
           </button>
@@ -194,20 +199,33 @@ export default function DeleteAccountPage() {
     );
   };
 
-  return (
-    <main className={styles["delete-account"]}>
-      {isAuthenticated ? renderBody() : (
-        // When not authenticated, LoginForm handles its own layout, so we render it directly
-        // However, LoginForm's layout is full screen fixed. 
-        // We can wrap it or just let it take over since this page is a full screen flow.
+  if (loading || !user) {
+    return (
+      <main className={styles["delete-account"]}>
+        <div className={styles["delete-account__card"]}>
+          <LoaderCircle className={styles["delete-account__spinner"]} size={20} />
+          <p>{t("Verifying your session...")}</p>
+        </div>
+      </main>
+    );
+  }
+
+  if (!isIdentityVerified) {
+    return (
+      <main className={styles["delete-account"]}>
         <LoginForm
           initialMode="signin"
           headerText={t("Delete Account")}
           subtitleText={t("Please log in again to confirm your identity.")}
           redirectTo="/delete-account?verified=true"
-          onSuccess={() => setIsAuthenticated(true)}
+          onSuccess={() => {
+            suppressVerificationRef.current = false;
+            setIsAuthenticated(true);
+          }}
         />
-      )}
-    </main>
-  );
+      </main>
+    );
+  }
+
+  return <main className={styles["delete-account"]}>{renderVerifiedBody(user)}</main>;
 }

@@ -1,9 +1,8 @@
-/* eslint-disable react-hooks/set-state-in-effect */
-
 import { useCallback, useEffect, useState, type ChangeEvent } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDown, Plus, Pencil, X } from "lucide-react";
 import styles from "@/app/gray/GrayPageClient.module.css";
+import { useHasHydrated } from "@/components/gray/hooks/useHasHydrated";
 import { useI18n } from "@/contexts/I18nContext";
 import { type ProactivityItem } from "./types";
 import {
@@ -32,6 +31,18 @@ export type ProactivitySettingsModalProps = {
 
 export function ProactivitySettingsModal({
     isOpen,
+    ...props
+}: ProactivitySettingsModalProps) {
+    const hasHydrated = useHasHydrated();
+
+    if (!hasHydrated || !isOpen || typeof document === "undefined") {
+        return null;
+    }
+
+    return createPortal(<ProactivitySettingsModalContent {...props} isOpen={isOpen} />, document.body);
+}
+
+function ProactivitySettingsModalContent({
     onClose,
     activeProactivity,
     activeProactivityTimes,
@@ -61,31 +72,7 @@ export function ProactivitySettingsModal({
     const customTimes = customSettings.times;
     const isCustomPresetSelected = selectedPresetId === CUSTOM_PROACTIVITY_ID;
 
-    // Effect to sync state when opening modal
     useEffect(() => {
-        if (!isOpen) return;
-
-        setCustomSettings({
-            times: activeProactivityTimes.length > 0 ? activeProactivityTimes : [...DEFAULT_CUSTOM_SETTINGS.times],
-        });
-
-        if (activeProactivityId === CUSTOM_PROACTIVITY_ID) {
-            setSelectedPresetId(CUSTOM_PROACTIVITY_ID);
-        } else if (activeProactivityId && PROACTIVITY_PRESETS.some((preset) => preset.id === activeProactivityId)) {
-            setSelectedPresetId(activeProactivityId);
-        } else {
-            setSelectedPresetId("");
-        }
-    }, [isOpen, activeProactivityId, activeProactivityTimes]);
-
-    // Effect to handle escape key and reset edit state
-    useEffect(() => {
-        if (!isOpen) {
-            setEditingCustomTimeIndex(null);
-            setEditingCustomTimeDraft("");
-            return;
-        }
-
         const handleKeyDown = (event: KeyboardEvent) => {
             if (event.key === "Escape") {
                 event.preventDefault();
@@ -94,7 +81,7 @@ export function ProactivitySettingsModal({
         };
         window.addEventListener("keydown", handleKeyDown);
         return () => window.removeEventListener("keydown", handleKeyDown);
-    }, [isOpen, onClose]);
+    }, [onClose]);
 
     const applyCustomProactivity = useCallback(
         (nextTimes: string[]) => {
@@ -353,10 +340,5 @@ export function ProactivitySettingsModal({
         </div>
     );
 
-    const [isMounted, setIsMounted] = useState(false);
-    useEffect(() => setIsMounted(true), []);
-
-    if (!isMounted || !isOpen || typeof document === "undefined") return null;
-
-    return createPortal(content, document.body);
+    return content;
 }

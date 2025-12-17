@@ -40,8 +40,10 @@ export default function PerformanceChart() {
       value += velocity;
       initialData.push(value);
     }
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- Initialize after mount to avoid hydration mismatches.
-    setData(initialData);
+    const rafId = requestAnimationFrame(() => {
+      setData(initialData);
+    });
+    return () => cancelAnimationFrame(rafId);
   }, []);
 
   const updateData = useCallback(() => {

@@ -4,8 +4,6 @@ import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-// Icons used directly in this component's JSX
-import { Menu, Zap, MessageCircle } from "lucide-react";
 import { useUser } from "@/contexts/UserContext";
 import {
   apiService,
@@ -67,6 +65,7 @@ import {
 } from "@/lib/anonymousSession";
 import { SignUpPromptModal } from "@/components/gray/SignUpPromptModal";
 import { PLAN_EVENT_ID_PREFIX } from "@/components/gray/planCalendarUtils";
+import { GrayMobileHeader } from "./components/GrayMobileHeader";
 
 // Lazy load all heavy components for better code splitting
 const GrayEnhancedSidebar = dynamic(
@@ -427,6 +426,27 @@ function GrayPageClientInner({
   }, [isSidebarExpanded, isMobileViewport, sidebarPreferenceKey]);
 
   const isCalendarPage = pathname === "/pulse" || pathname.startsWith("/cal");
+  const toggleSidebarExpandedForLayout = useCallback(() => {
+    if (isCalendarPage) {
+      setIsCalendarSidebarExpanded((previous) => !previous);
+      return;
+    }
+    setIsSidebarExpanded((previous) => !previous);
+  }, [isCalendarPage]);
+  const expandSidebarForLayout = useCallback(() => {
+    if (isCalendarPage) {
+      setIsCalendarSidebarExpanded(true);
+      return;
+    }
+    setIsSidebarExpanded(true);
+  }, [isCalendarPage]);
+  const collapseSidebarForLayout = useCallback(() => {
+    if (isCalendarPage) {
+      setIsCalendarSidebarExpanded(false);
+      return;
+    }
+    setIsSidebarExpanded(false);
+  }, [isCalendarPage]);
 
   useEffect(() => {
     if (isCalendarPage) {
@@ -547,6 +567,28 @@ function GrayPageClientInner({
       ? "chat"
       : manualViewMode ?? (activeNav === "history" ? "history" : baseViewMode);
 
+  const handleMobileHeaderSelectChat = useCallback(() => {
+    setManualViewMode(null);
+    if (pathname !== "/") {
+      router.push("/");
+    }
+    if (isMobileViewport) {
+      setIsSidebarExpanded(false);
+      setIsCalendarSidebarExpanded(false);
+    }
+  }, [isMobileViewport, pathname, router]);
+
+  const handleMobileHeaderSelectPulse = useCallback(() => {
+    setManualViewMode(null);
+    if (pathname !== "/pulse") {
+      router.push("/pulse");
+    }
+    if (isMobileViewport) {
+      setIsSidebarExpanded(false);
+      setIsCalendarSidebarExpanded(false);
+    }
+  }, [isMobileViewport, pathname, router]);
+
   const shouldHideDesktopWorkspaceChrome =
     !isMobileViewport &&
     (viewMode === "chat" ||
@@ -632,7 +674,7 @@ function GrayPageClientInner({
   const handleMobileNavigate = (nav: SidebarNavKey) => {
     handleNavigate(nav);
     if (isMobileViewport) {
-      setIsSidebarExpanded(false);
+      collapseSidebarForLayout();
     }
   };
 

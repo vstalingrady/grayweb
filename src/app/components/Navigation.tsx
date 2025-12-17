@@ -1,9 +1,10 @@
-/* eslint-disable react-hooks/set-state-in-effect */
 "use client";
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useDismissableLayer } from "@/components/gray/hooks/useDismissableLayer";
+import { useHasHydrated } from "@/components/gray/hooks/useHasHydrated";
 import { resolveTryGrayUrl } from "@/lib/grayCta";
 import { useI18n } from "@/contexts/I18nContext";
 
@@ -12,63 +13,35 @@ const Navigation = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const drawerId = "mobile-navigation";
   const [menuOpen, setMenuOpen] = useState(false);
-  const [tryGrayUrl, setTryGrayUrl] = useState(() => resolveTryGrayUrl());
+  const hasHydrated = useHasHydrated();
+  const tryGrayUrl = useMemo(() => {
+    if (!hasHydrated) {
+      return resolveTryGrayUrl();
+    }
+    return resolveTryGrayUrl(window.location.hostname);
+  }, [hasHydrated]);
   const grayHref = "/";
+  const closeMenu = useCallback(() => setMenuOpen(false), []);
 
   const navLinks = [
     { href: grayHref, label: "GRAY" },
     { href: "/#research", label: "RESEARCH" },
   ] as const;
 
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-    setTryGrayUrl(resolveTryGrayUrl(window.location.hostname));
-  }, []);
+  useDismissableLayer({
+    isOpen: menuOpen,
+    ignoreRefs: [containerRef],
+    onDismiss: closeMenu,
+  });
 
   useEffect(() => {
-    if (!menuOpen) {
-      return undefined;
-    }
-
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setMenuOpen(false);
-      }
-    };
-
-    window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [menuOpen]);
-
-  useEffect(() => {
-    if (!menuOpen) {
-      return undefined;
-    }
-
-    const closeOnClickAway = (event: MouseEvent) => {
-      if (!containerRef.current) {
-        return;
-      }
-
-      if (!containerRef.current.contains(event.target as Node)) {
-        setMenuOpen(false);
-      }
-    };
-
-    document.addEventListener("mousedown", closeOnClickAway);
-    return () => document.removeEventListener("mousedown", closeOnClickAway);
-  }, [menuOpen]);
-
-  useEffect(() => {
-    const handleResize = () => setMenuOpen(false);
+    const handleResize = () => closeMenu();
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
-  }, []);
+  }, [closeMenu]);
 
   const toggleMenu = () => setMenuOpen((open) => !open);
-  const handleNavClick = () => setMenuOpen(false);
+  const handleNavClick = closeMenu;
 
   return (
     <div className="nav-shell" ref={containerRef}>

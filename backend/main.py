@@ -49,8 +49,6 @@ try:
     from backend.core import conversation_store
     from backend.core.conversation_store import (
         configure_conversation_store,
-        get_or_create_conversation,
-        save_conversation_message,
         get_cached_user,
         cache_conversation_history,
         append_to_conversation_cache,
@@ -66,8 +64,6 @@ except Exception:  # When running with backend/ on sys.path directly (tests)
     from core import conversation_store  # type: ignore
     from core.conversation_store import (  # type: ignore
         configure_conversation_store,
-        get_or_create_conversation,
-        save_conversation_message,
         get_cached_user,
         cache_conversation_history,
         append_to_conversation_cache,
@@ -878,9 +874,6 @@ except ImportError:
         REMINDERS_DISABLED_NOTE,
     )
 
-SUPABASE_POOLER_HOST = os.getenv("SUPABASE_POOLER_HOST", "aws-1-ap-south-1.pooler.supabase.com")
-SUPABASE_POOLER_PORT = int(os.getenv("SUPABASE_POOLER_PORT", "6543"))
-
 # Initialize enhanced logging system
 app_logger = setup_logging(
     log_level=get_log_level(),
@@ -905,10 +898,7 @@ app_logger.info(f"Backend starting (env={os.getenv('ENVIRONMENT', 'development')
 try:
     from backend.core.ai_config import (
         AI_PROVIDER,
-        LITE_TIER_PROVIDER,
         REMINDER_MODEL,
-        GROK_TOOL_MODEL,
-        OPENROUTER_LITE_MODEL,
         GEMINI_DEFAULT_MODEL,
         GEMINI_LIGHT_MODEL,
         GEMINI_PRO_MODEL,
@@ -932,10 +922,7 @@ try:
 except ImportError:
     from core.ai_config import (  # type: ignore
         AI_PROVIDER,
-        LITE_TIER_PROVIDER,
         REMINDER_MODEL,
-        GROK_TOOL_MODEL,
-        OPENROUTER_LITE_MODEL,
         GEMINI_DEFAULT_MODEL,
         GEMINI_LIGHT_MODEL,
         GEMINI_PRO_MODEL,

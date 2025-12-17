@@ -1,13 +1,12 @@
 "use client";
 
-/* eslint-disable react-hooks/set-state-in-effect */
-
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDown, Plus, Pencil, X } from "lucide-react";
 import calendarStyles from "@/components/calendar/GrayDashboardCalendar.module.css";
 import styles from "@/app/gray/GrayPageClient.module.css";
 import { useI18n } from "@/contexts/I18nContext";
+import { useDismissableLayer } from "@/components/gray/hooks/useDismissableLayer";
 import { type ProactivityItem } from "./types";
 import {
   CUSTOM_PROACTIVITY_ID,
@@ -42,15 +41,38 @@ export function ProactivityInlineMenu({
   onSelectProactivity,
   onRemoveProactivity,
 }: ProactivityInlineMenuProps) {
+  if (!isOpen || typeof document === "undefined") {
+    return null;
+  }
+
+  return createPortal(
+    <ProactivityInlineMenuContent
+      isOpen={isOpen}
+      onClose={onClose}
+      anchorRef={anchorRef}
+      activeProactivity={activeProactivity}
+      activeProactivityTimes={activeProactivityTimes}
+      onSelectProactivity={onSelectProactivity}
+      onRemoveProactivity={onRemoveProactivity}
+    />,
+    document.body
+  );
+}
+
+function ProactivityInlineMenuContent({
+  isOpen,
+  onClose,
+  anchorRef,
+  activeProactivity,
+  activeProactivityTimes,
+  onSelectProactivity,
+  onRemoveProactivity,
+}: ProactivityInlineMenuProps) {
   const { t } = useI18n();
   const panelRef = useRef<HTMLDivElement | null>(null);
   const presetTriggerRef = useRef<HTMLButtonElement | null>(null);
   const presetMenuRef = useRef<HTMLDivElement | null>(null);
-  const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
   const [isPresetMenuOpen, setIsPresetMenuOpen] = useState(false);
-  const [presetMenuPosition, setPresetMenuPosition] = useState<{ top: number; left: number; width: number } | null>(
-    null
-  );
 
   const activeProactivityId = activeProactivity?.id ?? "";
   const initialPresetId = useMemo(() => {
@@ -66,8 +88,8 @@ export function ProactivityInlineMenu({
     return "";
   }, [activeProactivity, activeProactivityId]);
 
-  const [selectedPresetId, setSelectedPresetId] = useState<string>(initialPresetId);
-  const [customTimes, setCustomTimes] = useState<string[]>(
+  const [selectedPresetId, setSelectedPresetId] = useState<string>(() => initialPresetId);
+  const [customTimes, setCustomTimes] = useState<string[]>(() =>
     activeProactivityTimes.length > 0 ? activeProactivityTimes : [...DEFAULT_CUSTOM_SETTINGS.times]
   );
   const [editingCustomTimeIndex, setEditingCustomTimeIndex] = useState<number | null>(null);
@@ -75,23 +97,7 @@ export function ProactivityInlineMenu({
 
   const isCustomPresetSelected = selectedPresetId === CUSTOM_PROACTIVITY_ID;
 
-  useEffect(() => {
-    if (!isOpen) {
-      setEditingCustomTimeIndex(null);
-      setEditingCustomTimeDraft("");
-      setIsPresetMenuOpen(false);
-      setPresetMenuPosition(null);
-      return;
-    }
-    setSelectedPresetId(initialPresetId);
-    setCustomTimes(activeProactivityTimes.length > 0 ? activeProactivityTimes : [...DEFAULT_CUSTOM_SETTINGS.times]);
-  }, [activeProactivityTimes, initialPresetId, isOpen]);
-
   useLayoutEffect(() => {
-    if (!isOpen) {
-      setPosition(null);
-      return;
-    }
     const anchorEl = anchorRef.current;
     const panelEl = panelRef.current;
     if (!anchorEl || !panelEl) {
@@ -116,7 +122,8 @@ export function ProactivityInlineMenu({
         window.innerWidth - viewportPadding - panelRect.width
       );
 
-      setPosition({ top, left });
+      panelEl.style.top = `${Math.round(top)}px`;
+      panelEl.style.left = `${Math.round(left)}px`;
     };
 
     update();
@@ -126,11 +133,10 @@ export function ProactivityInlineMenu({
       window.removeEventListener("resize", update);
       window.removeEventListener("scroll", update, true);
     };
-  }, [anchorRef, isOpen, selectedPresetId, customTimes.length]);
+  }, [anchorRef, selectedPresetId, customTimes.length, isPresetMenuOpen]);
 
   useLayoutEffect(() => {
-    if (!isOpen || !isPresetMenuOpen) {
-      setPresetMenuPosition(null);
+    if (!isPresetMenuOpen) {
       return;
     }
 
@@ -142,9 +148,13 @@ export function ProactivityInlineMenu({
 
     const update = () => {
       const triggerRect = triggerEl.getBoundingClientRect();
-      const menuRect = menuEl.getBoundingClientRect();
       const viewportPadding = 12;
       const gap = 8;
+
+      const width = Math.round(triggerRect.width);
+      menuEl.style.width = `${width}px`;
+
+      const menuRect = menuEl.getBoundingClientRect();
 
       const preferredTop = triggerRect.bottom + gap;
       const canPlaceBelow = preferredTop + menuRect.height <= window.innerHeight - viewportPadding;
@@ -152,10 +162,10 @@ export function ProactivityInlineMenu({
         ? preferredTop
         : clamp(triggerRect.top - gap - menuRect.height, viewportPadding, window.innerHeight - viewportPadding - menuRect.height);
 
-      const width = Math.round(triggerRect.width);
       const left = clamp(triggerRect.left, viewportPadding, window.innerWidth - viewportPadding - width);
 
-      setPresetMenuPosition({ top: Math.round(top), left: Math.round(left), width });
+      menuEl.style.top = `${Math.round(top)}px`;
+      menuEl.style.left = `${Math.round(left)}px`;
     };
 
     update();
@@ -165,35 +175,13 @@ export function ProactivityInlineMenu({
       window.removeEventListener("resize", update);
       window.removeEventListener("scroll", update, true);
     };
-  }, [isOpen, isPresetMenuOpen]);
+  }, [isPresetMenuOpen, selectedPresetId]);
 
-  useEffect(() => {
-    if (!isOpen) {
-      return;
-    }
-
-    const handlePointerDown = (event: MouseEvent) => {
-      const target = event.target as Node | null;
-      if (!target) return;
-      if (anchorRef.current?.contains(target)) return;
-      if (panelRef.current?.contains(target)) return;
-      onClose();
-    };
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        onClose();
-      }
-    };
-
-    document.addEventListener("mousedown", handlePointerDown);
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.removeEventListener("mousedown", handlePointerDown);
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [anchorRef, isOpen, onClose]);
+  useDismissableLayer({
+    isOpen,
+    ignoreRefs: [anchorRef, panelRef],
+    onDismiss: onClose,
+  });
 
   const applyCustomProactivity = useCallback(
     (nextTimes: string[]) => {
@@ -302,19 +290,11 @@ export function ProactivityInlineMenu({
     [applyCustomProactivity, customTimes]
   );
 
-  if (!isOpen || typeof document === "undefined") {
-    return null;
-  }
-
   const panel = (
     <div
       ref={panelRef}
       className={calendarStyles.composerColorPopover}
-      style={
-        position
-          ? { top: `${position.top}px`, left: `${position.left}px`, width: "min(420px, 92vw)" }
-          : { width: "min(420px, 92vw)" }
-      }
+      style={{ width: "min(420px, 92vw)" }}
       role="dialog"
       aria-label={t("Proactivity")}
     >
@@ -353,11 +333,6 @@ export function ProactivityInlineMenu({
           <div
             ref={presetMenuRef}
             className={calendarStyles.composerInlineSelectPopover}
-            style={
-              presetMenuPosition
-                ? { top: presetMenuPosition.top, left: presetMenuPosition.left, width: presetMenuPosition.width }
-                : undefined
-            }
             role="listbox"
             aria-label={t("Preset cadence")}
             tabIndex={-1}
@@ -493,5 +468,5 @@ export function ProactivityInlineMenu({
     </div>
   );
 
-  return createPortal(panel, document.body);
+  return panel;
 }
