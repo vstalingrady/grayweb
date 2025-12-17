@@ -1,7 +1,4 @@
 import logging
-import math
-import socket
-import ipaddress
 import asyncio
 import sqlite3
 from dateutil import parser as date_parser
@@ -31,7 +28,6 @@ import re
 import time
 import hmac
 import hashlib
-import shutil
 import subprocess
 from dotenv import load_dotenv
 from supabase import Client

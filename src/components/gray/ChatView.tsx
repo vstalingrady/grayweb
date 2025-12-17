@@ -19,15 +19,11 @@ import type { ContextUsageSummary } from "@/components/gray/types";
 import { useI18n } from "@/contexts/I18nContext";
 import { useUser } from "@/contexts/UserContext";
 import { apiService, type ConversationUsage, type GroundingMetadata } from "@/lib/api";
-import { buildLocalTimeContextWithOverrides } from "@/lib/timeContext";
 import AttachmentTray from "./AttachmentTray";
 import { GrayChatComposer } from "./ChatComposer";
 import { useChatStore } from "./ChatProvider";
 import { GENERAL_CHAT_SESSION_ID } from "./chat/constants";
-import {
-  extractGrayRemindersFromText,
-  resolveAssistantReminders,
-} from "./chat/reminderUtils";
+import { extractGrayRemindersFromText } from "./chat/reminderUtils";
 import {
   type ChatMessage as ChatSessionMessage,
   type ChatRole,
@@ -47,6 +43,7 @@ import { MobileWelcomeScreen } from "./chat/view/MobileWelcomeScreen";
 import { estimateTokenCount, formatDurationLabel } from "./chat/view/formatting";
 import { MarkdownCodeBlock } from "./chat/view/markdown/MarkdownCodeBlock";
 import { hasCodeBlockDescendant } from "./chat/view/markdown/utils";
+import { useStreamAssistantReply } from "./chat/view/useStreamAssistantReply";
 
 type GrayChatViewProps = {
   sessionId: string | null;
