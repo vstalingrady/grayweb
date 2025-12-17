@@ -2238,19 +2238,9 @@ async def stream_ai_response(
     history_token_budget = tier_conversation_token_limit(plan_tier)
 
     # Determine whether this turn is part of a reminder/plan/habit flow.
-    # Look at the current message plus a short window of recent history so
-    # follow-ups like "12 pm" after "set a reminder" still route through tools.
-    intent_window_text = (message or "") or ""
-    if conversation_history:
-        try:
-            # Only look at the last few turns to avoid over-triggering.
-            for entry in conversation_history[-4:]:
-                text = entry.get("text") or ""
-                if text:
-                    intent_window_text += f"\n{text}"
-        except Exception:
-            # If history normalization fails, fall back to current message only.
-            pass
+    # Uses the current message plus a short window of recent history.
+    intent_window_text = build_intent_window_text(message, conversation_history)
+
 
     request_structured_reminders = _should_request_structured_reminders(intent_window_text)
     needs_structured_tools = reminders_enabled or request_structured_reminders or _needs_structured_tools(intent_window_text)
@@ -2327,42 +2317,16 @@ async def stream_ai_response(
 
 
     # --- Google Maps Grounding Integration ---
-    # If the user has enabled maps (or we detected intent), we MUST use Gemini
-    # because OpenRouter does not support Google Maps Grounding.
+    # If maps enabled, force Gemini provider (OpenRouter doesn't support Maps)
     if maps_enabled:
         provider = "gemini"
-        
-        # Ensure the Google Maps tool is in the tools list
-        if tools is None:
-            tools = []
-        
-        # Check if Google Maps is already in tools to avoid duplication
-        has_maps_tool = False
-        for t in tools:
-            if hasattr(t, "google_maps") and t.google_maps:
-                has_maps_tool = True
-                break
-        
-        if not has_maps_tool:
-            tools.append(types.Tool(google_maps=types.GoogleMaps()))
-
-        # Configure retrieval with user location for "near me" queries
-        if maps_latitude is not None and maps_longitude is not None:
-             # Create retrieval config with user location
-             # For now, we will rely on the semantic understanding of the location passed in the tool (if any)
-             # or implicitly by the model knowing the user's location from the conversation context if we injected it.
-             # However, the instruction was to follow the specific dictionary structure.
-             # Since we are using the official Google GenAI SDK types, we should try to reuse them if possible.
-             # But the SDK wrapper in `backend/main.py` (GeminiService) ultimately calls `genai.GenerativeModel`.
-             
-             # We will leave tool_config as None and rely on the Tool injection unless we are sure about the exact dict structure
-             # that avoids the syntax error. The previous error was caused by unmatched braces in a comment block that wasn't commented.
-             pass
+        tools = add_maps_tool_if_needed(tools, maps_enabled)
 
     prefers_gemini = (
         AI_PROVIDER == "gemini"
         or _prefers_gemini_model(normalized_model)
     )
+
 
     # Check usage limits (now that we know the effective model)
     if user_id is not None and db is not None:
@@ -2942,25 +2906,7 @@ CRITICAL: When the user asks to create/update a plan or habit, you MUST call the
 
     # Gemini-specific tool list adjustment (consolidating)
     if provider == "gemini" and tool_list:
-        all_declarations = []
-        search_instance = None
-        url_context_instance = None
-        
-        for t in tool_list:
-            if t.function_declarations:
-                all_declarations.extend(t.function_declarations)
-            if t.google_search:
-                search_instance = t.google_search
-            if hasattr(t, 'url_context') and t.url_context is not None:
-                url_context_instance = t.url_context
-        
-        # Rebuild a single tool if we have any components
-        if all_declarations or search_instance or url_context_instance:
-            tool_list = [types.Tool(
-                function_declarations=all_declarations if all_declarations else None,
-                google_search=search_instance,
-                url_context=url_context_instance
-            )]
+        tool_list = consolidate_gemini_tools(tool_list)
 
     
     grounding_metadata: Optional[Dict[str, Any]] = None
@@ -3494,21 +3440,7 @@ async def generate_ai_response(
 
     # Gemini-specific tool list adjustment (consolidating)
     if provider == "gemini" and tool_list:
-        all_declarations = []
-        search_instance = None
-        
-        for t in tool_list:
-            if t.function_declarations:
-                all_declarations.extend(t.function_declarations)
-            if t.google_search:
-                search_instance = t.google_search
-        
-        # Rebuild a single tool if we have any components
-        if all_declarations or search_instance:
-            tool_list = [types.Tool(
-                function_declarations=all_declarations if all_declarations else None,
-                google_search=search_instance
-            )]
+        tool_list = consolidate_gemini_tools(tool_list)
 
     
     grounding_metadata: Optional[Dict[str, Any]] = None
