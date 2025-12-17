@@ -457,6 +457,34 @@ habits = sqlalchemy.Table(
     sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
 )
 
+# Chat session tables (consolidated from main.py)
+chat_sessions = sqlalchemy.Table(
+    "chat_sessions",
+    metadata,
+    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
+    sqlalchemy.Column("user_id", sqlalchemy.ForeignKey("users.id")),
+    sqlalchemy.Column("title", sqlalchemy.String),
+    sqlalchemy.Column("scope", sqlalchemy.String, default="thread"),
+    sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
+    sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
+    extend_existing=True,
+)
+
+# Google Calendar OAuth state storage (consolidated from main.py)
+google_calendar_states = sqlalchemy.Table(
+    "google_calendar_states",
+    metadata,
+    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
+    sqlalchemy.Column("state_token", sqlalchemy.String, unique=True, nullable=False),
+    sqlalchemy.Column("user_id", sqlalchemy.ForeignKey("users.id")),
+    sqlalchemy.Column("nonce", sqlalchemy.String, nullable=False),
+    sqlalchemy.Column("redirect_uri", sqlalchemy.String, nullable=False),
+    sqlalchemy.Column("expires_at", sqlalchemy.DateTime, nullable=True),
+    sqlalchemy.Column("consumed_at", sqlalchemy.DateTime, nullable=True),
+    sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
+    extend_existing=True,
+)
+
 
 # Database dependency for FastAPI routes
 async def get_database():
@@ -465,4 +493,5 @@ async def get_database():
     Connection is managed globally by startup/shutdown events.
     """
     yield database
+
 

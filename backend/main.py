@@ -316,14 +316,6 @@ try:
         create_calendar_event as _create_calendar_event,
         update_calendar_event as _update_calendar_event,
         delete_calendar_event as _delete_calendar_event,
-        list_plans_tool as _list_plans_tool,
-        list_habits_tool as _list_habits_tool,
-        list_reminders_tool as _list_reminders_tool,
-        get_workspace_state_tool as _get_workspace_state_tool,
-        create_reminder_tool as _create_reminder_tool,
-        update_reminder_tool as _update_reminder_tool,
-        delete_reminder_tool as _delete_reminder_tool,
-        delete_latest_reminder_tool as _delete_latest_reminder_tool,
         build_maps_tool_and_config as _build_maps_tool_and_config,
     )
 except ImportError:
@@ -338,14 +330,6 @@ except ImportError:
         create_calendar_event as _create_calendar_event,
         update_calendar_event as _update_calendar_event,
         delete_calendar_event as _delete_calendar_event,
-        list_plans_tool as _list_plans_tool,
-        list_habits_tool as _list_habits_tool,
-        list_reminders_tool as _list_reminders_tool,
-        get_workspace_state_tool as _get_workspace_state_tool,
-        create_reminder_tool as _create_reminder_tool,
-        update_reminder_tool as _update_reminder_tool,
-        delete_reminder_tool as _delete_reminder_tool,
-        delete_latest_reminder_tool as _delete_latest_reminder_tool,
         build_maps_tool_and_config as _build_maps_tool_and_config,
     )
 
@@ -601,6 +585,8 @@ try:
         reminders,
         plans,
         habits,
+        chat_sessions,
+        google_calendar_states,
     )
 except ImportError:
     from database import (
@@ -626,6 +612,8 @@ except ImportError:
         reminders,
         plans,
         habits,
+        chat_sessions,
+        google_calendar_states,
     )
 
 try:
@@ -1084,70 +1072,10 @@ if IS_PRODUCTION and not ALLOWED_ORIGINS and not ALLOWED_ORIGIN_REGEX:
     )
     raise RuntimeError("CORS configuration missing in production")
 
-# Database tables
-# users table imported from backend.database
 
-chat_sessions = sqlalchemy.Table(
-    "chat_sessions",
-    metadata,
-    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
-    sqlalchemy.Column("user_id", sqlalchemy.ForeignKey("users.id")),
-    sqlalchemy.Column("title", sqlalchemy.String),
-    sqlalchemy.Column("scope", sqlalchemy.String, default="thread"),
-    sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
-    sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
-    extend_existing=True,
-)
+# Database tables are now imported from backend.database
+# (chat_sessions, plans, habits, google_calendar_states)
 
-plans = sqlalchemy.Table(
-    "plans",
-    metadata,
-    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
-    sqlalchemy.Column("user_id", sqlalchemy.ForeignKey("users.id")),
-    sqlalchemy.Column("label", sqlalchemy.String),
-    sqlalchemy.Column("completed", sqlalchemy.Boolean, default=False),
-    sqlalchemy.Column("deadline", sqlalchemy.String, nullable=True),
-    sqlalchemy.Column("schedule_slot", sqlalchemy.String, nullable=True),
-    sqlalchemy.Column("description", sqlalchemy.String, nullable=True),
-    sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
-    sqlalchemy.Column("color", sqlalchemy.String, nullable=True),
-    sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
-    extend_existing=True,
-)
-
-habits = sqlalchemy.Table(
-    "habits",
-    metadata,
-    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
-    sqlalchemy.Column("user_id", sqlalchemy.ForeignKey("users.id")),
-    sqlalchemy.Column("label", sqlalchemy.String),
-    sqlalchemy.Column("previous_label", sqlalchemy.String),
-    sqlalchemy.Column("description", sqlalchemy.String, nullable=True),
-    sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
-    sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
-    extend_existing=True,
-)
-
-# Proactivity tracking
-
-# Context caching for long context reuse
-# DEFAULT_WORKSPACE_BACKGROUNDS imported from core.ai_config
-
-# Proactive notifications
-
-google_calendar_states = sqlalchemy.Table(
-    "google_calendar_states",
-    metadata,
-    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
-    sqlalchemy.Column("state_token", sqlalchemy.String, unique=True, nullable=False),
-    sqlalchemy.Column("user_id", sqlalchemy.ForeignKey("users.id")),
-    sqlalchemy.Column("nonce", sqlalchemy.String, nullable=False),
-    sqlalchemy.Column("redirect_uri", sqlalchemy.String, nullable=False),
-    sqlalchemy.Column("expires_at", sqlalchemy.DateTime, nullable=True),
-    sqlalchemy.Column("consumed_at", sqlalchemy.DateTime, nullable=True),
-    sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
-    extend_existing=True,
-)
 
 # Supabase setup (Auth only - conversation store is now strictly local SQLite/Postgres)
 SUPABASE_URL, SUPABASE_KEY, SUPABASE_KEY_SOURCE = resolve_supabase_credentials()
@@ -1217,236 +1145,27 @@ async def _require_conversation_owner(conversation_id: str, current_user: Dict[s
     # NOTE: Functionality to check Supabase for ownership has been removed as we are strictly local-only now.
     return
 
-async def _maybe_enrich_actions_with_reminder_time(
-    actions: List[Dict[str, Any]],
-    message: str,
-    time_context: str,
-) -> None:
-    """
-    Best-effort enrichment for reminder actions when the model only provides
-    relative timing (e.g. "in 30 minutes").
-
-    Mutates the ``actions`` list in-place, setting ``time_iso`` and ``description``
-    when they are missing.
-    """
-    # Derive a "now" anchor from the provided time_context, falling back to UTC now.
-    base_time: datetime
-    match = re.search(r"ISO timestamp:\s*([0-9T:\.\-:+Z]+)", time_context or "")
-    if match:
-        base_time = _ensure_datetime_value(match.group(1)) or utcnow()
-    else:
-        base_time = utcnow()
-
-    normalized_message = (message or "").lower()
-    relative_match = re.search(
-        r"\bin\s+(\d+)\s*(minute|minutes|min|mins|hour|hours|hr|hrs)\b",
-        normalized_message,
+# Reminder enrichment helpers (extracted to core/reminder_enrichment.py)
+try:
+    from backend.core.reminder_enrichment import (
+        maybe_enrich_actions_with_reminder_time as _maybe_enrich_actions_with_reminder_time,
+        create_reminders_from_actions as _create_reminders_from_actions_base,
     )
-
-    delta: Optional[timedelta] = None
-    if relative_match:
-        amount = int(relative_match.group(1))
-        unit = relative_match.group(2)
-        if unit.startswith("hour") or unit.startswith("hr"):
-            delta = timedelta(hours=amount)
-        else:
-            delta = timedelta(minutes=amount)
-
-    if not delta:
-        # If we cannot confidently parse a relative offset, leave actions unchanged.
-        return
-
-    target_time = base_time + delta
-    iso_value = target_time.replace(tzinfo=timezone.utc).isoformat()
-
-    for action in actions:
-        # Only fill in missing times; do not overwrite explicit model outputs.
-        if not action.get("time_iso"):
-            action["time_iso"] = iso_value
-        if not action.get("description"):
-            action["description"] = message.strip() or action.get("label") or "Reminder"
+except ImportError:
+    from core.reminder_enrichment import (  # type: ignore
+        maybe_enrich_actions_with_reminder_time as _maybe_enrich_actions_with_reminder_time,
+        create_reminders_from_actions as _create_reminders_from_actions_base,
+    )
 
 async def _create_reminders_from_actions(
     db: databases.Database,
     user_id: int,
     actions: List[Dict[str, Any]],
 ) -> List[Dict[str, Any]]:
-    """
-    Persist reminder-style actions into the local database.
-
-    For each action:
-      - Create a plan row (if one does not already exist).
-      - Create a corresponding reminder row, or reschedule the latest one
-        that matches the same label/entity for this user.
-
-    Returns a list of operation payloads shaped as:
-      { "operation": "created" | "rescheduled", "reminder": { ...row... } }
-    """
+    """Wrapper that passes the global reminder_scheduler."""
     global reminder_scheduler
-    results: List[Dict[str, Any]] = []
-    now = utcnow()
+    return await _create_reminders_from_actions_base(db, user_id, actions, reminder_scheduler)
 
-    for action in actions:
-        label = (action.get("label") or "Reminder").strip()
-        entity = (action.get("entity") or "plan").strip().lower()
-        time_iso = action.get("time_iso")
-        remind_at = _ensure_datetime_value(time_iso)
-        if remind_at is None:
-            # If no time is available, skip this action rather than creating a broken reminder.
-            continue
-
-        description = action.get("description")
-        schedule_slot = action.get("schedule_slot")
-
-        # Find the most recent existing reminder for this user/label/entity.
-        existing_reminder = await db.fetch_one(
-            reminders.select()
-            .where(
-                (reminders.c.user_id == user_id)
-                & (reminders.c.label == label)
-                & (reminders.c.entity_type == entity)
-            )
-            .order_by(reminders.c.created_at.desc(), reminders.c.id.desc())
-        )
-
-        if existing_reminder:
-            # `databases` returns a Record, which supports dict-style access but
-            # not `.get()`. Normalize once for safe optional lookups.
-            existing_record = dict(existing_reminder)
-            reminder_id = existing_record["id"]
-            plan_id = existing_record.get("entity_id")
-
-            # Ensure there is an associated plan row so the dashboard can reflect the reminder.
-            if plan_id is None:
-                plan_id = await db.execute(
-                    plans.insert().values(
-                        user_id=user_id,
-                        label=label,
-                        completed=False,
-                        deadline=time_iso,
-                        schedule_slot=schedule_slot,
-                        description=description,
-                        created_at=now,
-                        updated_at=now,
-                    )
-                )
-
-            # Reschedule existing reminder and update its linkage to the plan.
-            await db.execute(
-                reminders.update()
-                .where(
-                    (reminders.c.id == reminder_id)
-                    & (reminders.c.user_id == user_id)
-                )
-                .values(
-                    remind_at=remind_at,
-                    description=description,
-                    entity_type=entity,
-                    entity_id=plan_id,
-                    updated_at=now,
-                )
-            )
-
-            # Keep the plan's deadline aligned with the new reminder time.
-            await db.execute(
-                plans.update()
-                .where(
-                    (plans.c.id == plan_id)
-                    & (plans.c.user_id == user_id)
-                )
-                .values(
-                    deadline=time_iso,
-                    updated_at=now,
-                )
-            )
-
-            row = await db.fetch_one(
-                reminders.select().where(reminders.c.id == reminder_id)
-            )
-            try:
-                if reminder_scheduler is not None:
-                    await reminder_scheduler.refresh_job(
-                        user_id=user_id,
-                        reminder_id=int(reminder_id),
-                        remind_at=remind_at,
-                    )
-            except Exception as exc:  # pragma: no cover
-                api_logger.warning(
-                    "Failed to reschedule reminder job",
-                    extra={
-                        "event_type": "reminder_schedule_failed",
-                        "user_id": user_id,
-                        "reminder_id": reminder_id,
-                        "error": str(exc),
-                    },
-                )
-            results.append(
-                {
-                    "operation": "rescheduled",
-                    "reminder": _serialize_reminder_row(row) if row is not None else None,
-                }
-            )
-        else:
-            # Create a new plan row for this reminder.
-            plan_id = await db.execute(
-                plans.insert().values(
-                    user_id=user_id,
-                    label=label,
-                    completed=False,
-                    deadline=time_iso,
-                    schedule_slot=schedule_slot,
-                    description=description,
-                    created_at=now,
-                    updated_at=now,
-                )
-            )
-
-            # Create the corresponding reminder row.
-            reminder_id = await db.execute(
-                reminders.insert().values(
-                    user_id=user_id,
-                    entity_type=entity,
-                    entity_id=plan_id,
-                    delivery_mode="plan",
-                    label=label,
-                    description=description,
-                    summary=description,
-                    remind_at=remind_at,
-                    status="pending",
-                    metadata=None,
-                    created_at=now,
-                    updated_at=now,
-                    delivered_at=None,
-                )
-            )
-            row = await db.fetch_one(
-                reminders.select().where(reminders.c.id == reminder_id)
-            )
-            try:
-                if reminder_scheduler is not None:
-                    await reminder_scheduler.refresh_job(
-                        user_id=user_id,
-                        reminder_id=int(reminder_id),
-                        remind_at=remind_at,
-                    )
-            except Exception as exc:  # pragma: no cover
-                api_logger.warning(
-                    "Failed to schedule reminder job",
-                    extra={
-                        "event_type": "reminder_schedule_failed",
-                        "user_id": user_id,
-                        "reminder_id": reminder_id,
-                        "error": str(exc),
-                    },
-                )
-            results.append(
-                {
-                    "operation": "created",
-                    "reminder": _serialize_reminder_row(row) if row is not None else None,
-                }
-            )
-
-    return results
 
 # FastAPI app
 @asynccontextmanager
@@ -1462,37 +1181,12 @@ async def lifespan(app: FastAPI):
     finally:
         await _disconnect_database()
 
-async def _ensure_paddle_columns():
-    """Ensure Paddle columns exist in SQLite."""
-    try:
-        # Check users table
-        api_logger.info("Checking for Paddle columns...")
-        query = "PRAGMA table_info(users)"
-        columns = await database.fetch_all(query)
-        col_names = [col["name"] for col in columns]
+# Migration functions (extracted to core/migrations.py)
+try:
+    from backend.core.migrations import ensure_paddle_columns as _ensure_paddle_columns
+except ImportError:
+    from core.migrations import ensure_paddle_columns as _ensure_paddle_columns  # type: ignore
 
-        if "paddle_customer_id" not in col_names:
-            api_logger.info("Adding paddle_customer_id to users")
-            await database.execute("ALTER TABLE users ADD COLUMN paddle_customer_id TEXT")
-            await database.execute("CREATE INDEX ix_users_paddle_customer_id ON users (paddle_customer_id)")
-        
-        if "paddle_subscription_id" not in col_names:
-            api_logger.info("Adding paddle_subscription_id to users")
-            await database.execute("ALTER TABLE users ADD COLUMN paddle_subscription_id TEXT")
-            await database.execute("CREATE INDEX ix_users_paddle_subscription_id ON users (paddle_subscription_id)")
-
-        # Check transactions table
-        query = "PRAGMA table_info(transactions)"
-        columns = await database.fetch_all(query)
-        col_names = [col["name"] for col in columns]
-        
-        if "paddle_transaction_id" not in col_names:
-            api_logger.info("Adding paddle_transaction_id to transactions")
-            await database.execute("ALTER TABLE transactions ADD COLUMN paddle_transaction_id TEXT")
-            await database.execute("CREATE UNIQUE INDEX ix_transactions_paddle_transaction_id ON transactions (paddle_transaction_id)")
-
-    except Exception as e:
-        api_logger.error(f"Failed to ensure Paddle columns: {e}")
 
 app = FastAPI(title="User Profile API with AI Chat", version="1.0.0", lifespan=lifespan)
 
@@ -1502,48 +1196,13 @@ if MEDIA_UPLOAD_DIR.exists():
     app.mount("/uploads", StaticFiles(directory=MEDIA_UPLOAD_DIR), name="uploads")
 app.include_router(paddle_router)
 
-# Security Headers Middleware
-@app.middleware("http")
-async def add_security_headers(request: Request, call_next):
-    response = await call_next(request)
-    
-    # Strict-Transport-Security (HSTS) - Force HTTPS for 1 year
-    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-    
-    # X-Frame-Options - Prevent clickjacking
-    response.headers["X-Frame-Options"] = "DENY"
-    
-    # X-Content-Type-Options - Prevent MIME sniffing
-    response.headers["X-Content-Type-Options"] = "nosniff"
-    
-    # X-XSS-Protection - Enable browser XSS filter
-    response.headers["X-XSS-Protection"] = "1; mode=block"
-    
-    # Referrer-Policy - Control referrer information
-    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-    
-    # Permissions-Policy - Restrict browser features
-    response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
-    
-    # Content-Security-Policy (CSP) - Prevent XSS and injection attacks
-    # Note: This is a restrictive policy. Adjust based on your frontend needs.
-    csp_directives = [
-        "default-src 'self'",
-        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://apis.google.com https://accounts.google.com",
-        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-        "font-src 'self' https://fonts.gstatic.com",
-        "img-src 'self' data: https: blob:",
-        "connect-src 'self' https://apis.google.com https://accounts.google.com",
-        "frame-src 'self' https://accounts.google.com",
-        "object-src 'none'",
-        "base-uri 'self'",
-        "form-action 'self'",
-        "frame-ancestors 'none'",
-        "upgrade-insecure-requests"
-    ]
-    response.headers["Content-Security-Policy"] = "; ".join(csp_directives)
-    
-    return response
+# Security Headers Middleware (extracted to core/security_middleware.py)
+try:
+    from backend.core.security_middleware import add_security_headers
+except ImportError:
+    from core.security_middleware import add_security_headers  # type: ignore
+app.middleware("http")(add_security_headers)
+
 
 # Rate limiting
 app.state.limiter = limiter
@@ -1708,93 +1367,11 @@ async def _connect_database():
         db_logger.error(f"Database connection failed: {e}", exc_info=True)
         raise
 
-async def _run_basic_migrations():
-    """Ensure critical SQLite columns exist."""
-    _drop_sqlite_table("user_streaks")
-    _rebuild_sqlite_table_without_columns("habits", {"streak_label", "streak_id"})
-    _ensure_sqlite_index("habits", "ix_habits_user_id", "user_id")
+try:
+    from backend.core.migrations import run_basic_migrations as _run_basic_migrations
+except ImportError:
+    from core.migrations import run_basic_migrations as _run_basic_migrations  # type: ignore
 
-    _ensure_sqlite_columns(
-        "users",
-        [
-            ("visible_model_ids", "TEXT", "NULL"),
-            ("personalization_location", "TEXT", "NULL"),
-            ("personalization_time_zone", "TEXT", "NULL"),
-            ("personalization_system_prompt_override", "TEXT", "NULL"),
-            ("theme_mode", "TEXT", "NULL"),
-            ("ui_locale", "TEXT", "NULL"),
-            ("preferred_response_language", "TEXT", "NULL"),
-            ("notification_preferences", "TEXT", "NULL"),
-            ("conversation_memory_enabled", "BOOLEAN", "1"),
-            ("auto_web_search_enabled", "BOOLEAN", "0"),
-        ],
-    )
-    if DATABASE_URL.startswith("postgres"):
-        try:
-            await database.execute(
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS visible_model_ids JSONB"
-            )
-            await database.execute(
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS personalization_location TEXT"
-            )
-            await database.execute(
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS personalization_time_zone TEXT"
-            )
-            await database.execute(
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS personalization_system_prompt_override TEXT"
-            )
-            await database.execute(
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS theme_mode TEXT"
-            )
-            await database.execute(
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS ui_locale TEXT"
-            )
-            await database.execute(
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS preferred_response_language TEXT"
-            )
-            await database.execute(
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS notification_preferences JSONB"
-            )
-            await database.execute(
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS conversation_memory_enabled BOOLEAN DEFAULT TRUE"
-            )
-            await database.execute(
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS auto_web_search_enabled BOOLEAN DEFAULT FALSE"
-            )
-        except Exception as exc:  # pragma: no cover - best effort migration
-            app_logger.warning(
-                "Postgres migration failed",
-                extra={"event_type": "postgres_migration_error", "table": "users", "error": str(exc)},
-            )
-    _ensure_sqlite_columns(
-        "user_chat_messages",
-        [
-            # Older local DBs did not include reminders; missing columns break SELECT *.
-            ("reminders", "TEXT", "NULL"),
-        ],
-    )
-    _ensure_sqlite_columns(
-        "general_chat_messages",
-        [
-            # Older local DBs did not include reminders; missing columns break SELECT *.
-            ("reminders", "TEXT", "NULL"),
-        ],
-    )
-    _ensure_sqlite_columns(
-        "reminders",
-        [
-            ("label", "TEXT", "''"),
-            ("remind_at", "TIMESTAMP", "CURRENT_TIMESTAMP"),
-            ("status", "TEXT", "'pending'"),
-            ("description", "TEXT", "NULL"),
-            ("summary", "TEXT", "NULL"),
-            ("entity_type", "TEXT", "NULL"),
-            ("entity_id", "INTEGER", "NULL"),
-            ("delivery_mode", "TEXT", "NULL"),
-            ("metadata", "TEXT", "NULL"),
-            ("delivered_at", "TIMESTAMP", "NULL"),
-        ]
-    )
 
 async def _disconnect_database():
     """Disconnect from the database on shutdown."""

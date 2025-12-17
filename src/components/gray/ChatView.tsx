@@ -18,21 +18,15 @@ import styles from "@/app/gray/GrayPageClient.module.css";
 import type { ContextUsageSummary } from "@/components/gray/types";
 import { useI18n } from "@/contexts/I18nContext";
 import { useUser } from "@/contexts/UserContext";
-import { apiService, type ConversationUsage, type GroundingMetadata } from "@/lib/api";
+import { apiService, type ConversationUsage } from "@/lib/api";
 import AttachmentTray from "./AttachmentTray";
 import { GrayChatComposer } from "./ChatComposer";
 import { useChatStore } from "./ChatProvider";
 import { GENERAL_CHAT_SESSION_ID } from "./chat/constants";
-import { extractGrayRemindersFromText } from "./chat/reminderUtils";
-import {
-  type ChatMessage as ChatSessionMessage,
-  type ChatRole,
-} from "./chat/types";
 import {
   buildAssistantReply,
   buildGeneralConversationId,
   normalizeConversationIdValue,
-  stripGrayTitleMarkers,
 } from "./chat/utils";
 import { ChatMessagesList } from "./chat/view/ChatMessagesList";
 import { MobileWelcomeScreen } from "./chat/view/MobileWelcomeScreen";
@@ -92,10 +86,11 @@ export function GrayChatView({
 
   // Load messages if they are missing (e.g. for historical threads)
   useEffect(() => {
-    if (sessionId && session?.conversationId && session.messages.length === 0) {
-      void loadConversationMessages(sessionId);
+    if (!session?.conversationId || session.messages.length > 0) {
+      return;
     }
-  }, [sessionId, session?.conversationId, session?.messages.length, loadConversationMessages]);
+    void loadConversationMessages(session.id);
+  }, [loadConversationMessages, session?.conversationId, session?.id, session?.messages.length]);
 
   const { user, waitForUser } = useUser();
   const [draft, setDraft] = useState("");
@@ -104,12 +99,10 @@ export function GrayChatView({
   const scrollAnchorRef = useRef<HTMLDivElement | null>(null);
   // Track if the user is currently at the bottom of the chat to implement "sticky scrolling"
   const isAtBottomRef = useRef(true);
-  const isLoadingHistoryRef = useRef<string | null>(null);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const copyResetTimeoutRef = useRef<number | null>(null);
   const [regeneratingMessageId, setRegeneratingMessageId] = useState<string | null>(null);
   const [activeStreamingMessageId, setActiveStreamingMessageId] = useState<string | null>(null);
-  const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [conversationUsage, setConversationUsage] = useState<ConversationUsage | null>(null);
   const isSubmittingRef = useRef(false);
   const streamAbortControllerRef = useRef<AbortController | null>(null);
@@ -147,7 +140,6 @@ export function GrayChatView({
     },
     [uploadAttachments]
   );
-  const activeSessionId = session?.id ?? null;
   const activeConversationId =
     session?.conversationId && session.conversationId !== GENERAL_CHAT_SESSION_ID
       ? session.conversationId
@@ -279,12 +271,6 @@ export function GrayChatView({
   }, [activeStreamingMessageId, session?.id, session?.isResponding]);
 
   useEffect(() => {
-    if (isHistoryLoading) {
-      setActiveStreamingMessageId(null);
-    }
-  }, [isHistoryLoading]);
-
-  useEffect(() => {
     if (!activeConversationId) {
       setConversationUsage(null);
       return;
@@ -339,121 +325,6 @@ export function GrayChatView({
       }
     };
   }, []);
-
-  useEffect(() => {
-    if (!activeSessionId || !activeConversationId) {
-      setIsHistoryLoading(false);
-      isLoadingHistoryRef.current = null;
-      return;
-    }
-
-    if (isLoadingHistoryRef.current === `${activeSessionId}:${activeConversationId}`) {
-      return;
-    }
-
-    // Skip loading if we already have messages AND they include assistant messages
-    // (user messages will appear before backend sends the response)
-    const hasAssistantMessages = session?.messages?.some((msg) => msg.role === "assistant");
-    const isGeneralConversation =
-      typeof activeConversationId === "string" && activeConversationId.startsWith("general:");
-    if (hasAssistantMessages && !isGeneralConversation) {
-      return;
-    }
-
-    let cancelled = false;
-    setIsHistoryLoading(true);
-    isLoadingHistoryRef.current = `${activeSessionId}:${activeConversationId}`;
-
-    (async () => {
-      try {
-        const history = await apiService.getConversation(activeConversationId);
-        if (cancelled) {
-          return;
-        }
-
-        if (!Array.isArray(history) || history.length === 0) {
-          updateSession(activeSessionId, {
-            conversationId: activeConversationId ?? undefined,
-            messages: [],
-            updatedAt: Date.now(),
-            isResponding: false,
-          });
-          return;
-        }
-
-        // Deduplicate consecutive identical backend messages so that if the same
-        // user entry is stored twice, it only renders once in the UI.
-        const dedupedHistory = history.filter((message, index, arr) => {
-          if (index === 0) {
-            return true;
-          }
-          const prev = arr[index - 1];
-          // Check for exact duplicate content/role
-          if (prev.role === message.role && (prev.text ?? "") === (message.text ?? "")) {
-            return false;
-          }
-          return true;
-        });
-
-        const mappedHistory: ChatSessionMessage[] = dedupedHistory.map((message, index) => {
-          const role: ChatRole = message.role === "model" ? "assistant" : "user";
-          const rawText = message.text ?? "";
-          const normalizedText = role === "assistant" ? stripGrayTitleMarkers(rawText) : rawText;
-          const reminderExtraction =
-            role === "assistant"
-              ? extractGrayRemindersFromText(normalizedText)
-              : { cleanText: normalizedText, reminders: [] };
-          const normalizedMetadata =
-            (message as { grounding_metadata?: GroundingMetadata | null }).grounding_metadata ??
-            (message as { groundingMetadata?: GroundingMetadata | null }).groundingMetadata ??
-            null;
-          // Use the message's timestamp from the API if available, otherwise fall back to now
-          const apiTimestamp = (message as { timestamp?: number }).timestamp;
-          const createdAt =
-            typeof apiTimestamp === "number" && Number.isFinite(apiTimestamp) && apiTimestamp > 0
-              ? apiTimestamp
-              : Date.now();
-          return {
-            id:
-              typeof crypto !== "undefined" && "randomUUID" in crypto
-                ? crypto.randomUUID()
-                : `${activeConversationId}-${index}-${Date.now()}`,
-            role,
-            content: reminderExtraction.cleanText,
-            createdAt,
-            reminders:
-              role === "assistant" && reminderExtraction.reminders.length
-                ? reminderExtraction.reminders
-                : undefined,
-            groundingMetadata: normalizedMetadata ?? undefined,
-          };
-        });
-
-        updateSession(activeSessionId, {
-          conversationId: activeConversationId ?? undefined,
-          messages: mappedHistory,
-          updatedAt: Date.now(),
-          isResponding: false,
-        });
-      } catch (error) {
-        console.error("Failed to load conversation history:", error);
-        updateSession(activeSessionId, {
-          conversationId: activeConversationId ?? undefined,
-          messages: session?.messages ?? [],
-          updatedAt: Date.now(),
-          isResponding: false,
-        });
-      } finally {
-        if (!cancelled) {
-          setIsHistoryLoading(false);
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [activeConversationId, activeSessionId, session, updateSession]);
 
   const streamAssistantReply = useStreamAssistantReply({
     session,

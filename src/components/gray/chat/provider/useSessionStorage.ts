@@ -77,7 +77,6 @@ export const useSessionStorage = ({
               ...message,
               attachments: message.attachments.map((attachment) => {
                 // Strip blob URLs (previewUrl) before saving so we don't load expired ones later
-                // eslint-disable-next-line @typescript-eslint/no-unused-vars
                 const { previewUrl, ...rest } = attachment;
                 return rest;
               }),
@@ -124,4 +123,3 @@ export const useSessionStorage = ({
 
   return { persistSessions };
 };
-

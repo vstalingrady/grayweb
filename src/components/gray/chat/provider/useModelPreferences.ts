@@ -12,8 +12,8 @@ type UseModelPreferencesOptions = {
   updateUser: (userData: UserUpdate) => Promise<void>;
   modelTier: ModelTier;
   setModelTier: Dispatch<SetStateAction<ModelTier>>;
-  selectedModelId: string | null;
-  setSelectedModelId: Dispatch<SetStateAction<string | null>>;
+  selectedModelId: string | null | undefined;
+  setSelectedModelId: Dispatch<SetStateAction<string | null | undefined>>;
   reasoningMode: boolean;
   setReasoningMode: Dispatch<SetStateAction<boolean>>;
   visibleModelIds: string[] | null;
@@ -205,4 +205,3 @@ export const useModelPreferences = ({
     }
   }, [selectedModelId]);
 };
-

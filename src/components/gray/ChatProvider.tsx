@@ -14,26 +14,16 @@ import {
 import { useUser } from "@/contexts/UserContext";
 import { useI18n } from "@/contexts/I18nContext";
 import { apiService } from "@/lib/api";
-import { buildLocalTimeContextWithOverrides } from "@/lib/timeContext";
 
 import {
-  ChatMessage,
   ChatSession,
   ChatContextValue,
 } from "./chat/types";
 import {
   buildGeneralConversationId,
   buildPersonalizedSystemPrompt,
-  computeProfileHash,
-  buildAssistantReply,
-  buildAssistantErrorReply,
-  normalizeAssistantContent,
   shouldIncludeWorkspaceContext,
-  resolveClientTimezone,
-  shouldRequestAutoTitleForSession,
-  coerceConversationIdForRequest,
 } from "./chat/utils";
-import { extractGrayRemindersFromText, resolveAssistantReminders } from "./chat/reminderUtils";
 import {
   GENERAL_CHAT_SESSION_ID,
   SELF_CONTEXT_PATTERNS,
@@ -52,6 +42,7 @@ import { useReminderPolling } from "./chat/provider/useReminderPolling";
 import { useRemindersEnabled } from "./chat/provider/useRemindersEnabled";
 import { useSessionActions } from "./chat/provider/useSessionActions";
 import { useSessionStorage } from "./chat/provider/useSessionStorage";
+import { useSendGeneralMessage } from "./chat/provider/useSendGeneralMessage";
 import {
   createEmptyGeneralSession,
   makeMessage,
@@ -59,20 +50,6 @@ import {
 } from "./chat/provider/sessionStore";
 
 const WORKSPACE_CONTEXT_COOLDOWN_MS = 600000; // 10 minutes
-const CONVERSATION_MEMORY_STORAGE_PREFIX = "gray_conversation_memory";
-
-declare global {
-  interface Window {
-    endSearchTracking?: () => void;
-  }
-}
-
-const endSearchTracking = () => {
-  if (typeof window === "undefined") {
-    return;
-  }
-  window.endSearchTracking?.();
-};
 
 const ChatContext = createContext<ChatContextValue | null>(null);
 
@@ -86,17 +63,25 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
   const { locale } = useI18n();
   const defaultSystemPrompt = useDefaultSystemPrompt(locale);
   const onboardingSeenRef = useRef(false);
+  const [autoWebSearchEnabledOverride, setAutoWebSearchEnabledOverride] = useState<boolean | undefined>(undefined);
+  const [webSearchEnabled, setWebSearchEnabled] = useState(false);
+  const [reasoningMode, setReasoningMode] = useState(false);
+  const [modelTier, setModelTier] = useState<"lite" | "pro" | "pioneer">("lite");
+  const [selectedModelIdOverride, setSelectedModelIdOverride] = useState<string | null | undefined>(undefined);
+  const [visibleModelIds, setVisibleModelIds] = useState<string[] | null>(null);
 
-  // Sync selected model from user profile on load
-  useEffect(() => {
-    if (user?.preferred_model) {
-      setSelectedModelId(user.preferred_model);
-    }
-  }, [user]);
+  const autoWebSearchEnabled =
+    autoWebSearchEnabledOverride === undefined
+      ? typeof user?.auto_web_search_enabled === "boolean"
+        ? user.auto_web_search_enabled
+        : false
+      : autoWebSearchEnabledOverride;
+  const selectedModelId =
+    selectedModelIdOverride === undefined ? user?.preferred_model ?? null : selectedModelIdOverride;
 
   const handleSetSelectedModelId = useCallback(
     (id: string | null) => {
-      setSelectedModelId(id);
+      setSelectedModelIdOverride(id);
       if (user && id) {
         // Persist preference to backend
         void apiService.updateUser(user.id, { preferred_model: id }).catch((err) => {
@@ -164,9 +149,9 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
     queueConversationTitleSync,
     enqueueHistorySync,
   } = useConversationSync({ sessions, sessionsRef, userId: user?.id });
-  const [workspaceContextValue, setWorkspaceContextValue] = useState<string | null>(
-    workspaceContext ?? null
-  );
+  const [workspaceContextState, setWorkspaceContextState] = useState<string | null>(workspaceContext ?? null);
+  const workspaceContextValue =
+    workspaceContext !== undefined ? workspaceContext ?? null : workspaceContextState;
   const workspaceContextUsageRef = useRef<Map<string, number>>(new Map());
   const {
     mapsEnabled,
@@ -188,45 +173,33 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
     user?.id
   );
 
-  const [autoWebSearchEnabled, setAutoWebSearchEnabledState] = useState(false);
-  const [webSearchEnabled, setWebSearchEnabled] = useState(false);
-  const [reasoningMode, setReasoningMode] = useState(false);
-  const [modelTier, setModelTier] = useState<"lite" | "pro" | "pioneer">("lite");
-  const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
-  const [visibleModelIds, setVisibleModelIds] = useState<string[] | null>(null);
   // Track profile hash to only send full profile when it changes
-  const lastSentProfileHashRef = useRef<string>("");
-  // Track when reasoning mode starts to calculate reasoning duration
-  const reasoningStartTimeRef = useRef<number | null>(null);
   useModelPreferences({
     user,
     updateUser,
     modelTier,
     setModelTier,
     selectedModelId,
-    setSelectedModelId,
+    setSelectedModelId: setSelectedModelIdOverride,
     reasoningMode,
     setReasoningMode,
     visibleModelIds,
     setVisibleModelIds,
   });
 
-  // Persist automatic web search preference per user (falls back to session memory for anon users).
-  useEffect(() => {
-    if (typeof user?.auto_web_search_enabled === "boolean") {
-      setAutoWebSearchEnabledState(user.auto_web_search_enabled);
-    }
-  }, [user?.auto_web_search_enabled]);
-
   const setAutoWebSearchEnabled = useCallback(
     (value: boolean) => {
-      setAutoWebSearchEnabledState(value);
+      setAutoWebSearchEnabledOverride(value);
       if (!user) {
         return;
       }
-      void updateUser({ auto_web_search_enabled: value }).catch((error) => {
-        console.error("Failed to persist automatic web search preference:", error);
-      });
+      void updateUser({ auto_web_search_enabled: value })
+        .then(() => {
+          setAutoWebSearchEnabledOverride(undefined);
+        })
+        .catch((error) => {
+          console.error("Failed to persist automatic web search preference:", error);
+        });
     },
     [updateUser, user]
   );
@@ -285,12 +258,6 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
     removeAttachment,
     clearAttachments,
   } = useAttachments({ resolveChatUser });
-
-  useEffect(() => {
-    if (workspaceContext !== undefined) {
-      setWorkspaceContextValue(workspaceContext ?? null);
-    }
-  }, [workspaceContext]);
 
   const { persistSessions } = useSessionStorage({
     sessions,
@@ -426,316 +393,40 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
       updateUser,
     });
 
+  const { sendGeneralMessage: sendGeneralMessageStream } = useSendGeneralMessage({
+    ensureGeneralSession,
+    appendMessage,
+    updateMessage,
+    updateMessageThrottled,
+    updateSession,
+    clearAttachments,
+    attachmentsRef,
+    resolveChatUser,
+    workspaceContext: workspaceContextValue,
+    shouldAttachWorkspaceContextForSession,
+    autoWebSearchEnabled,
+    webSearchEnabled,
+    mapPayload,
+    remindersEnabled,
+    reasoningMode,
+    modelTier,
+    selectedModelId,
+    defaultSystemPrompt,
+    markHasSeenGeneralChat,
+    refreshUser,
+    markAutoStreamTriggered,
+    generalConversationIdRef,
+  });
+
   const sendGeneralMessage = useCallback(
     async (content: string): Promise<string> => {
-      // Check if questionnaire is active
       if (questionnaireSession) {
         await handleQuestionnaireResponse(content, questionnaireSession);
         return ensureGeneralSession().id;
       }
-
-
-      const trimmed = content.trim();
-      const generalSession = ensureGeneralSession();
-
-      if (!trimmed) {
-        return generalSession.id;
-      }
-      const isGeneralScope = generalSession.scope === "general";
-      const resolvedGeneralConversationId =
-        coerceConversationIdForRequest(generalSession.conversationId) ??
-        coerceConversationIdForRequest(generalConversationIdRef.current);
-      let requestConversationId = resolvedGeneralConversationId;
-
-      const attachmentPayloads = attachmentsRef.current.map((attachment) => ({
-        id: attachment.id,
-      }));
-
-      // Create a temp message ID to prevent duplicate auto-streaming
-      const tempUserMessageId = typeof crypto !== "undefined" && "randomUUID" in crypto
-        ? crypto.randomUUID()
-        : Math.random().toString(36).slice(2);
-
-      // Mark this message as already triggered for auto-streaming BEFORE appending
-      // This prevents the auto-stream effect from racing with our own streaming
-      markAutoStreamTriggered(generalSession.id, tempUserMessageId);
-
-      // 1) Optimistically append user message immediately with the temp ID
-      appendMessage(
-        generalSession.id,
-        "user",
-        trimmed,
-        tempUserMessageId,
-        undefined,
-        attachmentsRef.current.length > 0 ? [...attachmentsRef.current] : undefined
-      );
-      clearAttachments();
-      // 2) Immediately insert an empty assistant message so UI shows instant response start.
-      let assistantMessageId: string | null = null;
-      const initialAssistant = appendMessage(generalSession.id, "assistant", "");
-      assistantMessageId = (initialAssistant as ChatMessage | null)?.id ?? null;
-
-      updateSession(generalSession.id, {
-        isResponding: true,
-        updatedAt: Date.now(),
-      });
-
-      // 3) Wait for the authenticated user so the first streamed reply connects properly.
-      const resolvedUser = await resolveChatUser();
-      if (resolvedUser && !requestConversationId) {
-        requestConversationId = buildGeneralConversationId(resolvedUser.id);
-      }
-
-      if (!resolvedUser) {
-        const fallback = buildAssistantReply(trimmed);
-        if (assistantMessageId) {
-          updateMessage(generalSession.id, assistantMessageId, { content: fallback });
-        } else {
-          appendMessage(generalSession.id, "assistant", fallback);
-        }
-        updateSession(generalSession.id, { isResponding: false, pendingAutoStream: false });
-        return generalSession.id;
-      }
-
-      let streamedConversationId: string | null = requestConversationId ?? null;
-
-      const includeWorkspaceContext = shouldAttachWorkspaceContextForSession(
-        generalSession.id,
-        trimmed
-      );
-      const contextPayload = includeWorkspaceContext ? workspaceContextValue ?? undefined : undefined;
-      const shouldUseWebSearch = autoWebSearchEnabled || webSearchEnabled;
-
-      const streamGeneralResponse = () => {
-        (async () => {
-          let accumulated = "";
-          let capturedReminders: unknown[] = [];
-          let didReceiveToken = false;
-          const streamingUserId = resolvedUser.id;
-          try {
-            const effectiveTimeZone =
-              resolvedUser.personalization_time_zone?.trim() || resolveClientTimezone();
-            const timeContext = buildLocalTimeContextWithOverrides(undefined, {
-              timeZone: effectiveTimeZone,
-            });
-            // const autoMapPayload = buildAutoMapPayload(trimmed); // Removed
-
-            // Only include full profile when it changes or on first message
-            const currentProfileHash = computeProfileHash(resolvedUser);
-            const isFirstMessage = generalSession.messages.length <= 1;
-            const profileChanged = currentProfileHash !== lastSentProfileHashRef.current;
-            const shouldIncludeFullProfile = isFirstMessage || profileChanged;
-
-            const systemPromptForRequest = buildPersonalizedSystemPrompt(
-              resolvedUser,
-              defaultSystemPrompt,
-              shouldIncludeFullProfile
-            );
-
-            // Update the ref so subsequent messages know the profile was sent
-            if (shouldIncludeFullProfile) {
-              lastSentProfileHashRef.current = currentProfileHash;
-            }
-
-            // Start tracking reasoning time if reasoning mode is enabled
-            if (reasoningMode) {
-              reasoningStartTimeRef.current = Date.now();
-            }
-
-            const shouldGenerateTitle = shouldRequestAutoTitleForSession(generalSession);
-            if (shouldGenerateTitle) {
-              updateSession(generalSession.id, { isGeneratingTitle: true });
-            }
-
-            const conversationMemoryEnabled = (() => {
-              if (typeof resolvedUser.conversation_memory_enabled === "boolean") {
-                return resolvedUser.conversation_memory_enabled;
-              }
-              if (typeof window === "undefined") {
-                return true;
-              }
-              const storageKey = `${CONVERSATION_MEMORY_STORAGE_PREFIX}:${streamingUserId ?? "anon"}`;
-              try {
-                return window.localStorage.getItem(storageKey) !== "0";
-              } catch {
-                return true;
-              }
-            })();
-
-            for await (const event of apiService.sendMessageStream({
-              message: trimmed,
-              system_prompt: systemPromptForRequest,
-              user_id: streamingUserId,
-              context: contextPayload,
-              conversation_id: requestConversationId ?? undefined,
-              time_context: timeContext,
-              timezone: effectiveTimeZone,
-              conversation_memory_enabled: conversationMemoryEnabled,
-              attachments: attachmentPayloads,
-              should_generate_title: shouldGenerateTitle,
-              web_search_enabled: shouldUseWebSearch,
-              ...mapPayload,
-              reasoning_mode: reasoningMode,
-              reminders_enabled: remindersEnabled,
-              model: selectedModelId ?? modelTier,
-            })) {
-              if (event.type === "token") {
-                const delta = event.delta;
-                accumulated = accumulated && delta.startsWith(accumulated)
-                  ? delta
-                  : accumulated + delta;
-                const extraction = extractGrayRemindersFromText(accumulated);
-                if (assistantMessageId) {
-                  const updates: Partial<ChatMessage> = { content: extraction.cleanText };
-                  // Persist reasoning duration on first token update
-                  if (!didReceiveToken && reasoningStartTimeRef.current) {
-                    const elapsed = (Date.now() - reasoningStartTimeRef.current) / 1000;
-                    // setReasoningSeconds(elapsed); // This line is likely for a local state, not directly in message update
-                    reasoningStartTimeRef.current = null; // Clear it after first token
-                    updates.reasoningSeconds = elapsed;
-                    didReceiveToken = true;
-                  }
-                  updateMessageThrottled(generalSession.id, assistantMessageId, updates);
-                }
-                continue;
-              }
-
-              if (event.type === "reminders") {
-                // Capture structured reminders sent via SSE
-                if (Array.isArray(event.reminders) && event.reminders.length > 0) {
-                  capturedReminders = event.reminders;
-                }
-                continue;
-              }
-
-              if (event.type === "end") {
-                streamedConversationId =
-                  coerceConversationIdForRequest(event.conversationId) ?? streamedConversationId;
-                const finalResponse = normalizeAssistantContent(event.response ?? accumulated, trimmed);
-                const content = finalResponse;
-                const metadata = event.groundingMetadata ?? undefined;
-                const timingUpdate = event.timing ? { backendTimings: event.timing } : undefined;
-
-                const reminderResult = resolveAssistantReminders(content, capturedReminders);
-
-                const finalMessageUpdates: Partial<ChatMessage> = {
-                  content: reminderResult.content,
-                  groundingMetadata: metadata,
-                  reminders: reminderResult.reminders,
-                  ...(timingUpdate ?? {}),
-                };
-
-                // If reasoningSeconds was not set on first token (e.g., very fast response), set it now
-                if (!didReceiveToken && reasoningStartTimeRef.current) {
-                  const elapsed = (Date.now() - reasoningStartTimeRef.current) / 1000;
-                  finalMessageUpdates.reasoningSeconds = elapsed;
-                }
-
-                if (assistantMessageId) {
-                  updateMessage(generalSession.id, assistantMessageId, finalMessageUpdates);
-                } else {
-                  const assistantMessage = appendMessage(
-                    generalSession.id,
-                    "assistant",
-                    content,
-                    undefined,
-                    metadata
-                  );
-                  assistantMessageId = (assistantMessage as ChatMessage | null)?.id ?? null;
-                  if (assistantMessageId && timingUpdate) {
-                    updateMessage(generalSession.id, assistantMessageId, timingUpdate);
-                  }
-                }
-
-                updateSession(generalSession.id, {
-                  conversationId: streamedConversationId ?? resolvedGeneralConversationId ?? undefined,
-                  isResponding: false,
-                  pendingAutoStream: false,
-                  isGeneratingTitle: false,
-                });
-                void markHasSeenGeneralChat();
-                clearAttachments();
-                if (!isGeneralScope && event.title) {
-                  applyAutoTitle(generalSession.id, event.title);
-                }
-                return generalSession.id;
-              }
-
-              if (event.type === "error") {
-                throw new Error(event.message);
-              }
-            }
-
-            const finalFallback = normalizeAssistantContent(accumulated, trimmed);
-            if (assistantMessageId) {
-              updateMessage(generalSession.id, assistantMessageId, { content: finalFallback });
-            } else {
-              const assistantMessage = appendMessage(generalSession.id, "assistant", finalFallback);
-              assistantMessageId = (assistantMessage as ChatMessage | null)?.id ?? null;
-            }
-            updateSession(generalSession.id, {
-              conversationId: streamedConversationId ?? resolvedGeneralConversationId ?? undefined,
-              isResponding: false,
-              pendingAutoStream: false,
-              isGeneratingTitle: false,
-            });
-          } catch (error) {
-            console.error("Failed to send general message:", error);
-            const fallback = buildAssistantErrorReply(error);
-            if (assistantMessageId) {
-              updateMessage(generalSession.id, assistantMessageId, { content: fallback });
-            } else {
-              appendMessage(generalSession.id, "assistant", fallback);
-            }
-            updateSession(generalSession.id, {
-              conversationId: streamedConversationId ?? resolvedGeneralConversationId ?? undefined,
-              isResponding: false,
-              pendingAutoStream: false,
-              isGeneratingTitle: false,
-            });
-            clearAttachments();
-          } finally {
-            endSearchTracking();
-            void markHasSeenGeneralChat();
-            // Keep the local user profile in sync with any onboarding/profile tools
-            // that may have run during this message (e.g., complete_onboarding).
-            void refreshUser();
-            // Safety net: ensure isResponding is always reset
-            updateSession(generalSession.id, { isResponding: false, pendingAutoStream: false });
-          }
-          clearAttachments();
-        })();
-      };
-
-      streamGeneralResponse();
-      return generalSession.id;
+      return sendGeneralMessageStream(content);
     },
-    [
-      appendMessage,
-      attachmentsRef,
-      ensureGeneralSession,
-      updateMessage,
-      updateMessageThrottled,
-      updateSession,
-      resolveChatUser,
-      workspaceContextValue,
-      applyAutoTitle,
-      clearAttachments,
-      mapPayload, // Replaced buildAutoMapPayload
-      shouldAttachWorkspaceContextForSession,
-      autoWebSearchEnabled,
-      webSearchEnabled,
-      reasoningMode, // Added
-      remindersEnabled, // Added
-      markHasSeenGeneralChat,
-      refreshUser,
-      markAutoStreamTriggered,
-      modelTier,
-      selectedModelId,
-      defaultSystemPrompt,
-      questionnaireSession,
-      handleQuestionnaireResponse,
-    ]
+    [ensureGeneralSession, handleQuestionnaireResponse, questionnaireSession, sendGeneralMessageStream]
   );
 
   // Keep the ref in sync with the actual sendGeneralMessage function
@@ -757,126 +448,65 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
 
   useReminderPolling({ userId: user?.id, generalSessionId, appendMessage });
 
-  const value = useMemo(
-    () => ({
-      sessions,
-      createThreadSession,
-      sendGeneralMessage,
-      appendMessage,
-      updateMessage,
-      deleteMessage,
-      updateSession,
-      renameSession,
-      pinSession,
-      applyAutoTitle,
-      deleteSession,
-      clearAllConversations,
-      getSession,
-      ensureSession,
-      generalSessionId,
-      workspaceContext: workspaceContextValue,
-      setWorkspaceContext: setWorkspaceContextValue,
-      hasAutoStreamTriggered,
-      markAutoStreamTriggered,
-      resetAutoStreamState,
-      markHasSeenGeneralChat,
-      personalizedSystemPrompt,
-      attachments: selectedAttachments,
-      isAttachmentUploading,
-      attachmentError,
-      uploadAttachments,
-      removeAttachment,
-      clearAttachments,
-      mapsEnabled,
-      mapsWidgetEnabled,
-      mapsLatitude,
-      mapsLongitude,
-      setMapsEnabled,
-      setMapsWidgetEnabled,
-      setMapsLatitude,
-      setMapsLongitude,
-      toggleMapsEnabled,
-      toggleWebSearchEnabled,
-      remindersEnabled,
-      toggleRemindersEnabled,
-      mapPayload,
-      // Web Search
-      autoWebSearchEnabled,
-      setAutoWebSearchEnabled,
-      webSearchEnabled,
-      loadConversationMessages,
-      reasoningMode,
-      setReasoningMode,
-      modelTier,
-      setModelTier,
-      selectedModelId,
-      setSelectedModelId: handleSetSelectedModelId,
-      visibleModelIds,
-      setVisibleModelIds,
-      questionnaireSession,
-      startQuestionnaire,
-      cancelQuestionnaire,
-      remoteConversationsLoaded,
-    }),
-    [
-      appendMessage,
-      createThreadSession,
-      clearAllConversations,
-      deleteSession,
-      generalSessionId,
-      getSession,
-      deleteMessage,
-      sendGeneralMessage,
-      updateMessage,
-      renameSession,
-      applyAutoTitle,
-      ensureSession,
-      sessions,
-      updateSession,
-      workspaceContextValue,
-      hasAutoStreamTriggered,
-      markAutoStreamTriggered,
-      resetAutoStreamState,
-      markHasSeenGeneralChat,
-      personalizedSystemPrompt,
-      selectedAttachments,
-      isAttachmentUploading,
-      attachmentError,
-      uploadAttachments,
-      removeAttachment,
-      clearAttachments,
-      mapsEnabled,
-      mapsWidgetEnabled,
-      mapsLatitude,
-      mapsLongitude,
-      setMapsEnabled,
-      setMapsWidgetEnabled,
-      setMapsLatitude,
-      setMapsLongitude,
-      toggleMapsEnabled,
-      toggleWebSearchEnabled,
-      remindersEnabled,
-      toggleRemindersEnabled,
-      mapPayload,
-      autoWebSearchEnabled,
-      setAutoWebSearchEnabled,
-      webSearchEnabled,
-      loadConversationMessages,
-      reasoningMode,
-      setReasoningMode,
-      modelTier,
-      setModelTier,
-      selectedModelId,
-      handleSetSelectedModelId,
-      visibleModelIds,
-      setVisibleModelIds,
-      questionnaireSession,
-      startQuestionnaire,
-      cancelQuestionnaire,
-      remoteConversationsLoaded,
-      pinSession,
-    ]
-  );
+  const value: ChatContextValue = {
+    sessions,
+    createThreadSession,
+    sendGeneralMessage,
+    appendMessage,
+    updateMessage,
+    deleteMessage,
+    updateSession,
+    renameSession,
+    pinSession,
+    applyAutoTitle,
+    deleteSession,
+    clearAllConversations,
+    getSession,
+    ensureSession,
+    generalSessionId,
+    workspaceContext: workspaceContextValue,
+    setWorkspaceContext: setWorkspaceContextState,
+    hasAutoStreamTriggered,
+    markAutoStreamTriggered,
+    resetAutoStreamState,
+    markHasSeenGeneralChat,
+    personalizedSystemPrompt,
+    attachments: selectedAttachments,
+    isAttachmentUploading,
+    attachmentError,
+    uploadAttachments,
+    removeAttachment,
+    clearAttachments,
+    mapsEnabled,
+    mapsWidgetEnabled,
+    mapsLatitude,
+    mapsLongitude,
+    setMapsEnabled,
+    setMapsWidgetEnabled,
+    setMapsLatitude,
+    setMapsLongitude,
+    toggleMapsEnabled,
+    toggleWebSearchEnabled,
+    remindersEnabled,
+    toggleRemindersEnabled,
+    mapPayload,
+    autoWebSearchEnabled,
+    setAutoWebSearchEnabled,
+    webSearchEnabled,
+    loadConversationMessages,
+    reasoningMode,
+    setReasoningMode,
+    modelTier,
+    setModelTier,
+    selectedModelId,
+    setSelectedModelId: handleSetSelectedModelId,
+    visibleModelIds,
+    setVisibleModelIds,
+    questionnaireSession,
+    startQuestionnaire,
+    cancelQuestionnaire,
+    remoteConversationsLoaded,
+  };
 
   usePersistAiCreatedReminders({ sessions, userId: user?.id });
 

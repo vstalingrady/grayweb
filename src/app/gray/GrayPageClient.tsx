@@ -66,6 +66,7 @@ import {
   ANON_MESSAGE_LIMIT_VALUE,
 } from "@/lib/anonymousSession";
 import { SignUpPromptModal } from "@/components/gray/SignUpPromptModal";
+import { PLAN_EVENT_ID_PREFIX } from "@/components/gray/planCalendarUtils";
 
 // Lazy load all heavy components for better code splitting
 const GrayEnhancedSidebar = dynamic(
@@ -187,8 +188,6 @@ function GrayPageClientInner({
     setProactivity,
     persistProactivitySettings
   } = useProactivity(userId, resolvedTimezone);
-
-  void pathname;
 
   const {
     sessions,
@@ -337,50 +336,48 @@ function GrayPageClientInner({
 
   const [isMounted, setIsMounted] = useState(false);
   const wasMobileViewportRef = useRef(isMobileViewport);
-
-
   useEffect(() => {
     setIsMounted(true);
   }, []);
 
-	  useEffect(() => {
-	    if (supportsInlineChat) {
-	      return;
-	    }
-	    const chatId = activeChatId ?? null;
-	    if (!chatId) {
-	      return;
-	    }
-	    try {
-	      const lastDeletedRaw = sessionStorage.getItem(lastDeletedChatIdStorageKey);
-	      if (!lastDeletedRaw) {
-	        return;
-	      }
-	      const parsedIds: Array<string | null> = [];
-	      try {
-	        const parsed = JSON.parse(lastDeletedRaw) as unknown;
-	        if (typeof parsed === "string") {
-	          parsedIds.push(parsed);
-	        } else if (parsed && typeof parsed === "object") {
-	          const sessionId = (parsed as { sessionId?: unknown }).sessionId;
-	          const conversationId = (parsed as { conversationId?: unknown }).conversationId;
-	          parsedIds.push(
-	            typeof sessionId === "string" ? sessionId : null,
-	            typeof conversationId === "string" ? conversationId : null
-	          );
-	        }
-	      } catch {
-	        parsedIds.push(lastDeletedRaw);
-	      }
+  useEffect(() => {
+    if (supportsInlineChat) {
+      return;
+    }
+    const chatId = activeChatId ?? null;
+    if (!chatId) {
+      return;
+    }
+    try {
+      const lastDeletedRaw = sessionStorage.getItem(lastDeletedChatIdStorageKey);
+      if (!lastDeletedRaw) {
+        return;
+      }
+      const parsedIds: Array<string | null> = [];
+      try {
+        const parsed = JSON.parse(lastDeletedRaw) as unknown;
+        if (typeof parsed === "string") {
+          parsedIds.push(parsed);
+        } else if (parsed && typeof parsed === "object") {
+          const sessionId = (parsed as { sessionId?: unknown }).sessionId;
+          const conversationId = (parsed as { conversationId?: unknown }).conversationId;
+          parsedIds.push(
+            typeof sessionId === "string" ? sessionId : null,
+            typeof conversationId === "string" ? conversationId : null
+          );
+        }
+      } catch {
+        parsedIds.push(lastDeletedRaw);
+      }
 
-	      if (parsedIds.some((candidate) => candidate === chatId)) {
-	        sessionStorage.removeItem(lastDeletedChatIdStorageKey);
-	        router.replace("/");
-	      }
-	    } catch {
-	      // Ignore storage errors (e.g. disabled cookies).
-	    }
-	  }, [activeChatId, lastDeletedChatIdStorageKey, router, supportsInlineChat]);
+      if (parsedIds.some((candidate) => candidate === chatId)) {
+        sessionStorage.removeItem(lastDeletedChatIdStorageKey);
+        router.replace("/");
+      }
+    } catch {
+      // Ignore storage errors (e.g. disabled cookies).
+    }
+  }, [activeChatId, lastDeletedChatIdStorageKey, router, supportsInlineChat]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -513,8 +510,7 @@ function GrayPageClientInner({
   // only, so we no longer read from or write to localStorage here.
 
   const handleTestProactivity = useCallback(
-    async (proactivityId: string) => {
-      void proactivityId;
+    async (_proactivityId: string) => {
       if (!userId) {
         return;
       }
@@ -537,12 +533,7 @@ function GrayPageClientInner({
 
   // Determine if upgrade button should be shown based on route
   // Show on / (dashboard) route only
-  const shouldShowUpgradeButton = useMemo(() => {
-    if (!pathname) return false;
-    // Show on / route (dashboard view)
-    if (pathname === "/") return true;
-    return false;
-  }, [pathname]);
+  const shouldShowUpgradeButton = pathname === "/";
 
   const [manualViewMode, setManualViewMode] = useState<ViewMode | null>(() => {
     if (supportsInlineChat && (activeChatId ?? null)) {
@@ -551,18 +542,17 @@ function GrayPageClientInner({
     return activeNav === "history" && baseViewMode !== "chat" ? "history" : null;
   });
 
-  const effectiveManualViewMode = manualViewMode;
-
   const viewMode: ViewMode =
     baseViewMode === "chat"
       ? "chat"
-      : effectiveManualViewMode ?? (activeNav === "history" ? "history" : baseViewMode);
+      : manualViewMode ?? (activeNav === "history" ? "history" : baseViewMode);
 
-  const shouldHideDesktopWorkspaceChrome = !isMobileViewport
-    && (viewMode === "chat"
-      || (pathname?.startsWith("/c/") ?? false)
-      || pathname === "/g"
-      || (pathname?.startsWith("/g/") ?? false));
+  const shouldHideDesktopWorkspaceChrome =
+    !isMobileViewport &&
+    (viewMode === "chat" ||
+      (pathname?.startsWith("/c/") ?? false) ||
+      pathname === "/g" ||
+      (pathname?.startsWith("/g/") ?? false));
   const renderPrimaryView = () => {
     if (isDashboardView) {
       return (
@@ -629,14 +619,14 @@ function GrayPageClientInner({
           onToggleHabit={toggleHabit}
           onSavePlan={savePlan}
           onDeletePlan={deletePlan}
-          onDeleteHabit={deleteHabit}
-          onRefreshData={refreshPlansAndHabits}
-          showGreeting={false}
-          hidePlans={effectiveIsMobileViewport}
-        />
-      </div>
-    );
-  };
+	          onDeleteHabit={deleteHabit}
+	          onRefreshData={refreshPlansAndHabits}
+	          showGreeting={false}
+	          hidePlans={isMobileViewport}
+	        />
+	      </div>
+	    );
+	  };
 
   // Close mobile sidebar on navigation
   const handleMobileNavigate = (nav: SidebarNavKey) => {
@@ -823,61 +813,42 @@ function GrayPageClientInner({
     return SIDEBAR_ITEMS;
   }, [isScout]);
 
-	  const filteredRailItems = useMemo(() => {
-	    if (isScout) {
-	      return SIDEBAR_RAIL_ITEMS.filter((item) => item.id !== "calendar");
-	    }
-	    return SIDEBAR_RAIL_ITEMS;
-	  }, [isScout]);
-	  const historySections = useMemo(() => buildHistorySections(sessions), [sessions]);
-	  const isDashboardView = viewMode === "dashboard";
-	  const isChatView = viewMode === "chat";
-	  const isPulseRoute =
-	    pathname === "/pulse" || pathname.startsWith("/cal") || pathname.startsWith("/gray/dashboard");
-
-  const handleNavigate = (navId: SidebarNavKey) => {
-    if (navId === "search") {
-      return;
+  const filteredRailItems = useMemo(() => {
+    if (isScout) {
+      return SIDEBAR_RAIL_ITEMS.filter((item) => item.id !== "calendar");
     }
+    return SIDEBAR_RAIL_ITEMS;
+  }, [isScout]);
 
-    if (navId === "history") {
-      setIsHistoryOverlayOpen(true);
-      return;
-    }
+  const historySections = useMemo(() => buildHistorySections(sessions), [sessions]);
+  const isDashboardView = viewMode === "dashboard";
+  const isChatView = viewMode === "chat";
+  const isPulseRoute =
+    pathname === "/pulse" || pathname.startsWith("/cal") || pathname.startsWith("/gray/dashboard");
 
-    if (navId === "dashboard") {
-      setManualViewMode(null);
-      router.push("/");
-      return;
-    }
-
-    if (navId === "calendar") {
-      setManualViewMode(null);
-      const target = NAVIGATION_ROUTES[navId];
-      if (target) {
-        router.push(target);
+  const handleNavigate = useCallback(
+    (navId: SidebarNavKey) => {
+      switch (navId) {
+        case "search":
+          return;
+        case "history":
+          setIsHistoryOverlayOpen(true);
+          return;
+        case "dashboard":
+          setManualViewMode(null);
+          router.push("/");
+          return;
+        default: {
+          setManualViewMode(null);
+          const target = NAVIGATION_ROUTES[navId];
+          if (target) {
+            router.push(target);
+          }
+        }
       }
-      return;
-    }
-
-    if (navId === "general") {
-      setManualViewMode(null);
-      const target = NAVIGATION_ROUTES[navId];
-      if (target) {
-        router.push(target);
-      }
-      return;
-    }
-
-    if (navId === "threads") {
-      setManualViewMode(null);
-      const target = NAVIGATION_ROUTES[navId];
-      if (target) {
-        router.push(target);
-      }
-      return;
-    }
-  };
+    },
+    [router]
+  );
 
   useEffect(() => {
     const start = Date.now();
@@ -1017,8 +988,6 @@ function GrayPageClientInner({
     }
 
     const directSession = sessions.find((session) => session.id === activeChatId);
-    // console.log('[GrayPageClient] Looking for session:', activeChatId, 'found:', directSession?.id, 'messages:', directSession?.messages?.length);
-    // console.log('[GrayPageClient] All sessions:', sessions.map(s => ({ id: s.id, msgCount: s.messages?.length })));
 
     // Already selected the right session and it exists.
     if (currentChatId === activeChatId && directSession) {
@@ -1027,7 +996,6 @@ function GrayPageClientInner({
 
     // 1) Exact local session id match (/c/{session.id}).
     if (directSession) {
-      // console.log('[GrayPageClient] Found direct session, setting as current');
       if (currentChatId !== directSession.id) {
         setCurrentChatId(directSession.id);
       }
@@ -1334,11 +1302,11 @@ function GrayPageClientInner({
 
     apiService
       .deleteHabit(user.id, habitId)
-      .catch((error) => {
+      .catch((error: unknown) => {
         console.error("Failed to delete habit:", error);
+        const message = error instanceof Error ? error.message : String(error);
         // If habit is already deleted on backend, keep it removed from UI
-        if (error.message.includes("Habit not found")) {
-          console.log("Habit was already deleted on backend, keeping UI updated");
+        if (message.includes("Habit not found")) {
           return;
         }
         // For other errors, restore the habit in UI
@@ -1458,13 +1426,10 @@ function GrayPageClientInner({
     // Intentionally suppress desktop notifications for calendar visibility/label tweaks.
   };
 
-  const handleEventsChange = async (allEvents: CalendarEvent[]) => {
-    // Define prefix locally to match planCalendarUtils
-    const PLAN_EVENT_ID_PREFIX = "plan-event-";
-
-    // 1. Separate events by type
-    const planEvents = allEvents.filter((e) => e.id.startsWith(PLAN_EVENT_ID_PREFIX));
-    const standardEvents = allEvents.filter((e) => !e.id.startsWith(PLAN_EVENT_ID_PREFIX));
+	  const handleEventsChange = async (allEvents: CalendarEvent[]) => {
+	    // 1. Separate events by type
+	    const planEvents = allEvents.filter((e) => e.id.startsWith(PLAN_EVENT_ID_PREFIX));
+	    const standardEvents = allEvents.filter((e) => !e.id.startsWith(PLAN_EVENT_ID_PREFIX));
 
     // 2. Handle Plans (Update schedule + deadline day when moved between days)
     // We compare against current `plans` state to see if schedule or day changed.
@@ -1519,15 +1484,19 @@ function GrayPageClientInner({
       });
     });
 
-    // 3. Capture previousEvents BEFORE any state changes for accurate comparison
-    const previousEvents = calendarEvents;
-
-    // 4. Update Calendar State (Standard + Plans)
-    // We need to preserve plan events in the calendar state to prevent them from disappearing
-    // when events are clicked or moved. Plan data lives in `plans` state, but the calendar
-    // events derived from plans need to remain in calendarEvents for rendering.
-    const nextStateEvents = [...standardEvents, ...planEvents];
-    setCalendarEvents(nextStateEvents);
+	    // 3. Capture previous events BEFORE any state changes for accurate comparison
+	    const previousEvents = calendarEvents;
+	    const previousStandardEvents = previousEvents.filter(
+	      (event) => !event.id.startsWith(PLAN_EVENT_ID_PREFIX)
+	    );
+	    const nextStandardEvents = standardEvents;
+	
+	    // 4. Update Calendar State (Standard + Plans)
+	    // We need to preserve plan events in the calendar state to prevent them from disappearing
+	    // when events are clicked or moved. Plan data lives in `plans` state, but the calendar
+	    // events derived from plans need to remain in calendarEvents for rendering.
+	    const nextStateEvents = [...nextStandardEvents, ...planEvents];
+	    setCalendarEvents(nextStateEvents);
 
     if (!user) {
       return;
@@ -1558,57 +1527,92 @@ function GrayPageClientInner({
         return;
       }
       console.error(`Failed to ${action}:`, error);
-    };
-
-    // Find deleted events (in previous but not in next)
-    // Only consider standard events for deletion detection against previous state
-    const deletedEventIds = previousEvents
-      .filter(prev => !nextStateEvents.find(next => next.id === prev.id))
-      .map(event => event.id);
-
-    // Find new events (in next but not in previous)
-    const newEvents = nextStateEvents.filter(
-      next => !previousEvents.find(prev => prev.id === next.id)
-    );
-
-    // Find updated events (in both, but with different data)
-    const updatedEvents = nextStateEvents.filter(next => {
-      const prev = previousEvents.find(p => p.id === next.id);
-      if (!prev) return false;
-      return (
-        prev.title !== next.title ||
-        prev.start.getTime() !== next.start.getTime() ||
-        prev.end.getTime() !== next.end.getTime() ||
-        prev.description !== next.description ||
-        prev.calendarId !== next.calendarId ||
-        prev.color !== next.color ||
-        prev.reminderMinutesBefore !== next.reminderMinutesBefore
-      );
-    });
+	    };
+	
+	    // Find deleted events (in previous but not in next)
+	    const deletedEventIds = previousStandardEvents
+	      .filter(
+	        (previousEvent) => !nextStandardEvents.some((nextEvent) => nextEvent.id === previousEvent.id)
+	      )
+	      .map((event) => event.id);
+	
+	    // Find new events (in next but not in previous)
+	    const newEvents = nextStandardEvents.filter(
+	      (nextEvent) => !previousStandardEvents.some((previousEvent) => previousEvent.id === nextEvent.id)
+	    );
+	
+	    // Find updated events (in both, but with different data)
+	    const updatedEvents = nextStandardEvents.filter((nextEvent) => {
+	      const previousEvent = previousStandardEvents.find((event) => event.id === nextEvent.id);
+	      if (!previousEvent) {
+	        return false;
+	      }
+	      return (
+	        previousEvent.title !== nextEvent.title ||
+	        previousEvent.start.getTime() !== nextEvent.start.getTime() ||
+	        previousEvent.end.getTime() !== nextEvent.end.getTime() ||
+	        previousEvent.description !== nextEvent.description ||
+	        previousEvent.calendarId !== nextEvent.calendarId ||
+	        previousEvent.color !== nextEvent.color ||
+	        previousEvent.reminderMinutesBefore !== nextEvent.reminderMinutesBefore
+	      );
+	    });
 
     // Delete removed events
     for (const eventId of deletedEventIds) {
       const numericId = Number(eventId);
-      if (!Number.isNaN(numericId)) {
-        // Real event - delete from backend
-        try {
-          await apiService.deleteCalendarEvent(user.id, numericId);
-        } catch (error) {
-          logCalendarSyncError("delete calendar event", error);
-          revertDelete(eventId);
-          return;
-        }
-      } else if (eventId.startsWith('evt-')) {
-        // Temporary event - just remove from local state
-        console.log("Removing temporary event:", eventId);
+      if (Number.isNaN(numericId)) {
+        continue;
+      }
+
+      try {
+        await apiService.deleteCalendarEvent(user.id, numericId);
+      } catch (error) {
+        logCalendarSyncError("delete calendar event", error);
+        revertDelete(eventId);
+        return;
       }
     }
 
     // Create new events
-    console.log("[CALENDAR] Creating new events:", newEvents.map(e => ({ id: e.id, title: e.title, calendarId: e.calendarId, entryType: e.entryType })));
     for (const event of newEvents) {
       const numericCalendarId = event.calendarId ? Number(event.calendarId) : null;
-      if (!Number.isNaN(numericCalendarId) || event.calendarId === "default") {
+      if (Number.isNaN(numericCalendarId) && event.calendarId !== "default") {
+        continue;
+      }
+
+      try {
+        const createdEvent = await apiService.createCalendarEvent(user.id, {
+          calendar_id: event.calendarId === "default" ? null : numericCalendarId,
+          title: event.title,
+          description: event.description,
+          start_time: event.start.toISOString(),
+          end_time: event.end.toISOString(),
+          color: event.color,
+          reminder_minutes_before: event.reminderMinutesBefore ?? null,
+        });
+        // Update the local state with the real ID from the backend
+        setCalendarEvents((previous) =>
+          previous.map((existing) =>
+            existing.id === event.id ? { ...existing, id: createdEvent.id.toString() } : existing
+          )
+        );
+      } catch (error) {
+        logCalendarSyncError("create calendar event", error);
+        revertCreate(event.id);
+        return;
+      }
+    }
+
+    // Update existing events
+    for (const event of updatedEvents) {
+      // Handle temporary events (evt-*) that were created locally but not yet persisted
+      if (event.id.startsWith("evt-")) {
+        const numericCalendarId = event.calendarId ? Number(event.calendarId) : null;
+        if (Number.isNaN(numericCalendarId) && event.calendarId !== "default") {
+          continue;
+        }
+
         try {
           const createdEvent = await apiService.createCalendarEvent(user.id, {
             calendar_id: event.calendarId === "default" ? null : numericCalendarId,
@@ -1619,74 +1623,45 @@ function GrayPageClientInner({
             color: event.color,
             reminder_minutes_before: event.reminderMinutesBefore ?? null,
           });
-          // Update the local state with the real ID from the backend
-          setCalendarEvents(prev => prev.map(e => e.id === event.id ? {
-            ...e,
-            id: createdEvent.id.toString()
-          } : e));
+          setCalendarEvents((previous) =>
+            previous.map((existing) =>
+              existing.id === event.id ? { ...existing, id: createdEvent.id.toString() } : existing
+            )
+          );
         } catch (error) {
-          logCalendarSyncError("create calendar event", error);
-          revertCreate(event.id);
-          return;
+          logCalendarSyncError("create calendar event from temporary", error);
         }
-      }
-    }
 
-    // Update existing events
-    console.log("[CALENDAR] Updating events:", updatedEvents.map(e => ({ id: e.id, title: e.title })));
-    for (const event of updatedEvents) {
-      // Handle temporary events (evt-*) that were created locally but not yet persisted
-      if (event.id.startsWith('evt-')) {
-        // Treat as a new event that needs to be created
-        const numericCalendarId = event.calendarId ? Number(event.calendarId) : null;
-        if (!Number.isNaN(numericCalendarId) || event.calendarId === "default") {
-          try {
-            const createdEvent = await apiService.createCalendarEvent(user.id, {
-              calendar_id: event.calendarId === "default" ? null : numericCalendarId,
-              title: event.title,
-              description: event.description,
-              start_time: event.start.toISOString(),
-              end_time: event.end.toISOString(),
-              color: event.color,
-              reminder_minutes_before: event.reminderMinutesBefore ?? null,
-            });
-            // Update local state with the real ID
-            setCalendarEvents(prev => prev.map(e => e.id === event.id ? {
-              ...e,
-              id: createdEvent.id.toString()
-            } : e));
-          } catch (error) {
-            logCalendarSyncError("create calendar event from temporary", error);
-            // Keep the temporary event in local state even if creation fails
-            continue;
-          }
-        }
         continue;
       }
 
       const numericEventId = Number(event.id);
       const numericCalendarId = event.calendarId ? Number(event.calendarId) : null;
-      if (!Number.isNaN(numericEventId) && (!Number.isNaN(numericCalendarId) || event.calendarId === "default")) {
-        try {
-          await apiService.updateCalendarEvent(user.id, numericEventId, {
-            calendar_id: event.calendarId === "default" ? null : numericCalendarId,
-            title: event.title,
-            description: event.description,
-            start_time: event.start.toISOString(),
-            end_time: event.end.toISOString(),
-            color: event.color,
-            reminder_minutes_before: event.reminderMinutesBefore ?? null,
-          });
-        } catch (error) {
-          // If event doesn't exist in database (404), skip the API call and keep optimistic update
-          if (error instanceof Error && error.message.includes("Not Found")) {
-            console.log(`Event ${event.id} not found in database, keeping as client-side only`);
-            continue;
-          }
-          logCalendarSyncError("update calendar event", error);
-          revertUpdate(event.id);
-          return;
+      if (
+        Number.isNaN(numericEventId) ||
+        (Number.isNaN(numericCalendarId) && event.calendarId !== "default")
+      ) {
+        continue;
+      }
+
+      try {
+        await apiService.updateCalendarEvent(user.id, numericEventId, {
+          calendar_id: event.calendarId === "default" ? null : numericCalendarId,
+          title: event.title,
+          description: event.description,
+          start_time: event.start.toISOString(),
+          end_time: event.end.toISOString(),
+          color: event.color,
+          reminder_minutes_before: event.reminderMinutesBefore ?? null,
+        });
+      } catch (error) {
+        // If event doesn't exist in database (404), skip the API call and keep optimistic update
+        if (error instanceof Error && error.message.includes("Not Found")) {
+          continue;
         }
+        logCalendarSyncError("update calendar event", error);
+        revertUpdate(event.id);
+        return;
       }
     }
 
@@ -2121,29 +2096,25 @@ function GrayPageClientInner({
 
   const generalAttachmentsActive =
     viewMode === "general" && (attachments.length > 0 || isAttachmentUploading);
-  const generalAttachmentsFlag = generalAttachmentsActive;
-	  const generalAttachmentTray = viewMode === "general"
-	    ? (
-	      <AttachmentTray
-	        attachments={attachments}
-	        isUploading={isAttachmentUploading}
-	        error={attachmentError}
-	        onRemoveAttachment={removeAttachment}
-	      />
-	    )
-	    : null;
-  const effectiveIsMobileViewport = isMobileViewport;
-  const effectiveIsSidebarExpanded = isSidebarExpanded;
-  const sidebarExpandedForLayout = isCalendarPage ? isCalendarSidebarExpanded : effectiveIsSidebarExpanded;
+  const generalAttachmentTray =
+    viewMode === "general" ? (
+      <AttachmentTray
+        attachments={attachments}
+        isUploading={isAttachmentUploading}
+        error={attachmentError}
+        onRemoveAttachment={removeAttachment}
+      />
+    ) : null;
+  const sidebarExpandedForLayout = isCalendarPage ? isCalendarSidebarExpanded : isSidebarExpanded;
 
   return (
     <>
       <div
         className={styles.page}
         data-dashboard-tab={dashboardTabAttr}
-        data-mobile-sidebar={effectiveIsMobileViewport ? "true" : "false"}
+        data-mobile-sidebar={isMobileViewport ? "true" : "false"}
         data-sidebar-expanded={sidebarExpandedForLayout ? "true" : "false"}
-        {...(isMounted && { "data-general-attachments": generalAttachmentsFlag ? "true" : "false" })}
+        {...(isMounted && { "data-general-attachments": generalAttachmentsActive ? "true" : "false" })}
       >
         {/* Mobile Header - only rendered after hydration to avoid SSR/CSR mismatch */}
         {isMounted && (
@@ -2221,7 +2192,7 @@ function GrayPageClientInner({
           <div
             className={styles.layout}
             data-view={viewMode}
-            data-mobile-sidebar={effectiveIsMobileViewport ? "true" : "false"}
+            data-mobile-sidebar={isMobileViewport ? "true" : "false"}
             {...(isMounted && { "data-sidebar-expanded": sidebarExpandedForLayout ? "true" : "false" })}
           >
 
@@ -2277,16 +2248,16 @@ function GrayPageClientInner({
               data-view={viewMode}
               data-dashboard-tab={dashboardTabAttr}
               data-compact={isCompactLayout ? "true" : "false"}
-              {...(isMounted && { "data-general-attachments": generalAttachmentsFlag ? "true" : "false" })}
+              {...(isMounted && { "data-general-attachments": generalAttachmentsActive ? "true" : "false" })}
               data-dashboard-free="true"
             >
               {/* Mobile Sidebar Overlay */}
               {isMounted && (
                 <div
                   className={styles.overlay}
-                  data-visible={effectiveIsMobileViewport && sidebarExpandedForLayout ? "true" : "false"}
+                  data-visible={isMobileViewport && sidebarExpandedForLayout ? "true" : "false"}
                   onClick={() => {
-                    if (effectiveIsMobileViewport) {
+                    if (isMobileViewport) {
                       if (isCalendarPage) {
                         setIsCalendarSidebarExpanded(false);
                         return;
@@ -2359,23 +2330,19 @@ function GrayPageClientInner({
             messageLimit={ANON_MESSAGE_LIMIT_VALUE}
           />
         )}
-
-
-	        <HistoryOverlay
-	          isOpen={isHistoryOverlayOpen}
-	          onClose={() => setIsHistoryOverlayOpen(false)}
-	          sections={historySections}
-	          onOpenEntry={handleOpenHistoryEntry}
-	          onOpenEntryExternal={handleOpenHistoryEntryExternal}
-	          onRenameEntry={handleRenameHistoryOverlayEntry}
-	          onDeleteEntry={handleDeleteHistoryOverlayEntry}
-	          onCreateNewChat={() => {
-	            getOrCreateGeneralSessionId();
-	            handleNavigate("general");
-	            setManualViewMode(null);
-	            router.push("/");
-	          }}
-	        />
+        <HistoryOverlay
+          isOpen={isHistoryOverlayOpen}
+          onClose={() => setIsHistoryOverlayOpen(false)}
+          sections={historySections}
+          onOpenEntry={handleOpenHistoryEntry}
+          onOpenEntryExternal={handleOpenHistoryEntryExternal}
+          onRenameEntry={handleRenameHistoryOverlayEntry}
+          onDeleteEntry={handleDeleteHistoryOverlayEntry}
+          onCreateNewChat={() => {
+            getOrCreateGeneralSessionId();
+            handleNavigate("threads");
+          }}
+        />
       </div>
     </>
   );
