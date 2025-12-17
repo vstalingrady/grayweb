@@ -1388,13 +1388,6 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
     ]
   );
 
-  useEffect(() => {
-    if (!hasLoadedFromStorageRef.current) {
-      return;
-    }
-    persistSessions(sessions);
-  }, [persistSessions, sessions]);
-
   usePersistAiCreatedReminders({ sessions, userId: user?.id });
 
   return (

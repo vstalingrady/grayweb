@@ -3183,9 +3183,6 @@ async def generate_ai_response(
     raise HTTPException(status_code=503, detail="AI service unavailable")
 
 
-# _sse_event, _starter_profile_context, _starter_fallback_message, _build_starter_prompt
-# are now imported from core.chat_starter_helpers
-
 
 async def generate_chat_starter(
     request: Request,
@@ -3498,15 +3495,6 @@ DEFAULT_SYSTEM_PROMPT = load_prompt_from_json(
     "chat",
     "You are Gray.",
 )
-
-# Cache classes (AsyncTTLCache, TTLCache) and instances (USER_CACHE, CONVERSATION_OWNER_CACHE,
-# CONVERSATION_HISTORY_CACHE) are now imported from core.cache
-
-# _get_cached_user removed - use get_cached_user from core.conversation_store directly
-
-
-# _cache_conversation_history, _append_to_conversation_cache, _invalidate_conversation_cache
-# are now imported directly from core.conversation_store - removed duplicate implementations
 
 
 @app.post("/api/chat/stream")
