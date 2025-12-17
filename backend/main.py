@@ -283,7 +283,6 @@ except ImportError:
 # AI utilities (extracted from main.py)
 try:
     from backend.core.ai_utils import (
-        prefers_gemini_model as _prefers_gemini_model,
         candidate_text as _candidate_text,
         candidate_thought as _candidate_thought,
         candidate_grounding_payload as _candidate_grounding_payload,
@@ -294,7 +293,6 @@ try:
     )
 except ImportError:
     from core.ai_utils import (  # type: ignore
-        prefers_gemini_model as _prefers_gemini_model,
         candidate_text as _candidate_text,
         candidate_thought as _candidate_thought,
         candidate_grounding_payload as _candidate_grounding_payload,

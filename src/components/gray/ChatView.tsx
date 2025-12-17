@@ -386,37 +386,6 @@ export function GrayChatView({
     user,
   ]);
 
-  // Adjust scroll when composer height changes to prevent it from covering messages
-  useLayoutEffect(() => {
-    const composer = composerDockRef.current;
-    const viewport = chatViewportRef.current;
-    if (!composer || !viewport) {
-      return;
-    }
-
-    let lastHeight = composer.offsetHeight;
-
-    const observer = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        const newHeight = entry.borderBoxSize?.[0]?.blockSize ?? entry.target.getBoundingClientRect().height;
-        const diff = newHeight - lastHeight;
-
-        // If getting taller
-        if (diff > 0) {
-          // Check if we are near bottom (within 50px)
-          const isNearBottom = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight <= 50;
-          if (isNearBottom) {
-            viewport.scrollTop += diff;
-          }
-        }
-        lastHeight = newHeight;
-      }
-    });
-
-    observer.observe(composer);
-    return () => observer.disconnect();
-  }, []);
-
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const nextPrompt = draft.trim();

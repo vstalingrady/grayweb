@@ -1,4 +1,13 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type RefObject,
+} from "react";
 import type { ChatMessage } from "../types";
 
 type UseChatViewScrollOptions = {
@@ -9,9 +18,9 @@ type UseChatViewScrollOptions = {
 };
 
 type UseChatViewScrollResult = {
-  chatViewportRef: React.RefObject<HTMLDivElement>;
-  scrollAnchorRef: React.RefObject<HTMLDivElement>;
-  composerDockRef: React.RefObject<HTMLDivElement>;
+  chatViewportRef: RefObject<HTMLDivElement>;
+  scrollAnchorRef: RefObject<HTMLDivElement>;
+  composerDockRef: RefObject<HTMLDivElement>;
   chatViewStyle: CSSProperties | undefined;
   handleScroll: () => void;
 };
@@ -22,9 +31,9 @@ export const useChatViewScroll = ({
   messages,
   activeStreamingMessageId,
 }: UseChatViewScrollOptions): UseChatViewScrollResult => {
-  const chatViewportRef = useRef<HTMLDivElement | null>(null);
-  const scrollAnchorRef = useRef<HTMLDivElement | null>(null);
-  const composerDockRef = useRef<HTMLDivElement | null>(null);
+  const chatViewportRef = useRef<HTMLDivElement>(null);
+  const scrollAnchorRef = useRef<HTMLDivElement>(null);
+  const composerDockRef = useRef<HTMLDivElement>(null);
   const isAtBottomRef = useRef(true);
   const [composerHeight, setComposerHeight] = useState(0);
 
@@ -108,4 +117,3 @@ export const useChatViewScroll = ({
     handleScroll,
   };
 };
-
