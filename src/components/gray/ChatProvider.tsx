@@ -231,8 +231,6 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
     setVisibleModelIds,
   });
 
-  const [questionnaireSession, setQuestionnaireSession] = useState<QuestionnaireSession | null>(null);
-
   // Persist automatic web search preference per user (falls back to session memory for anon users).
   useEffect(() => {
     if (typeof user?.auto_web_search_enabled === "boolean") {
@@ -291,7 +289,6 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
   // Original purpose: Sync local edits (including deletions) to backend.
   // Problem: Local state could be stale/incomplete, overwriting valid backend data.
   // Fix: Only sync on explicit user actions (delete, edit), not on session changes.
-  const syncedHistoryRef = useRef<Set<string>>(new Set());
   const resolveChatUser = useCallback(async () => {
     if (user) {
       return user;
@@ -849,89 +846,13 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
     ]
   );
 
-  const startQuestionnaire = useCallback((mode: "quick" | "deep") => {
-    void mode;
-    // Premade questionnaire messaging has been retired; keep state reset.
-    setQuestionnaireSession(null);
-  }, []);
-
-  const cancelQuestionnaire = useCallback(() => {
-    setQuestionnaireSession(null);
-  }, []);
-
-  const handleQuestionnaireResponse = useCallback(
-    async (content: string, session: QuestionnaireSession) => {
-      const generalSession = ensureGeneralSession();
-      const trimmed = content.trim();
-
-      // 1. Append user message
-      appendMessage(generalSession.id, "user", trimmed);
-      updateSession(generalSession.id, { isResponding: true });
-
-      // 2. Process response
-      // For now, we just move to the next question in the quick list
-      // In a real implementation, we would use the Python logic (evaluateSmartGoal, etc.)
-      // and potentially call the LLM for "deep" mode.
-
-      const nextSession = { ...session };
-      let responseText = "";
-
-      if (session.phase === "foundation") {
-        const currentQ = session.quickQuestions[session.step];
-        if (currentQ) {
-          nextSession.foundationAnswers[currentQ.key] = trimmed;
-          nextSession.step += 1;
-        }
-
-        const nextQ = session.quickQuestions[nextSession.step];
-        if (nextQ) {
-          responseText = nextQ.prompt;
-          if (nextQ.clarification) {
-            responseText += `\n\n_${nextQ.clarification}_`;
-          }
-        } else {
-          // End of foundation
-          nextSession.phase = "personalized"; // or 'complete'
-          responseText = "Thanks! I've got the basics. I've updated your profile with this information.";
-
-          // Synthesize and save profile
-          const answers = nextSession.foundationAnswers;
-          const aboutParts: string[] = [];
-          if (answers.goals) aboutParts.push(`Goals: ${answers.goals}`);
-          if (answers.wins) aboutParts.push(`Wins: ${answers.wins}`);
-          if (answers.obstacles) aboutParts.push(`Obstacles: ${answers.obstacles}`);
-
-          const updatePayload = {
-            personalization_nickname: answers.name || null,
-            personalization_occupation: answers.focus || null,
-            personalization_about: aboutParts.length > 0 ? aboutParts.join('\n\n') : null,
-            // NOTE: Do NOT save custom_instructions from onboarding - this should only be set
-            // manually by the user in Settings. The AI should not auto-generate response guidelines.
-            has_seen_general_chat: true, // Mark as seen so we don't trigger again
-          };
-
-          // Fire and forget update, or await if we want to be sure
-          void updateUser(updatePayload).catch(err => console.error("Failed to save questionnaire profile:", err));
-
-          setQuestionnaireSession(null); // End it for now
-        }
-      }
-
-      if (responseText) {
-        setTimeout(() => {
-          appendMessage(generalSession.id, "assistant", responseText);
-          updateSession(generalSession.id, { isResponding: false });
-        }, 500);
-      } else {
-        updateSession(generalSession.id, { isResponding: false });
-      }
-
-      if (nextSession.phase !== "personalized") { // If not finished
-        setQuestionnaireSession(nextSession);
-      }
-    },
-    [appendMessage, ensureGeneralSession, updateSession, updateUser]
-  );
+  const { questionnaireSession, startQuestionnaire, cancelQuestionnaire, handleQuestionnaireResponse } =
+    useQuestionnaire({
+      ensureGeneralSession,
+      appendMessage,
+      updateSession,
+      updateUser,
+    });
 
   const sendGeneralMessage = useCallback(
     async (content: string): Promise<string> => {
@@ -1337,135 +1258,12 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
     return general?.id ?? null;
   }, [sessions]);
 
-  const generalHistoryHydratedRef = useRef(false);
-  const pathname = usePathname();
-
-  const loadConversationMessages = useCallback(
-    async (sessionId: string) => {
-      const session = sessionsRef.current.find((s) => s.id === sessionId);
-      if (!session || !session.conversationId) {
-        return;
-      }
-      if (session.messages.length > 0) {
-        return;
-      }
-
-      try {
-        const history = await apiService.getConversation(session.conversationId);
-        if (!Array.isArray(history) || history.length === 0) {
-          return;
-        }
-
-        const now = Date.now();
-        const mapped = mapApiMessagesToChatMessages(history, session.conversationId, now);
-
-        if (!mapped.length) {
-          return;
-        }
-
-        setSessions((prev) => {
-          const index = prev.findIndex((s) => s.id === sessionId);
-          if (index === -1) {
-            return prev;
-          }
-          const current = prev[index];
-          // Double check to avoid race conditions
-          if (current.messages && current.messages.length > 0) {
-            return prev;
-          }
-          const updated: ChatSession = {
-            ...current,
-            messages: mapped,
-            // We don't update updatedAt here to avoid jumping it to the top of the list
-            isResponding: false,
-          };
-          const next = [...prev];
-          next[index] = updated;
-          const ordered = normalizeSessionsList(next);
-          persistSessions(ordered);
-          return ordered;
-        });
-      } catch (error) {
-        console.error("Failed to load conversation messages:", error);
-      }
-    },
-    [persistSessions, setSessions]
-  );
-
-  // Hydrate the General workspace (`/g`) from Supabase-backed history so that
-  // existing `general_chat_messages` rows render as the canonical General chat.
-  useEffect(() => {
-    const general = sessionsRef.current.find((session) => session.scope === "general");
-    const generalHasMessages = Boolean(general?.messages && general.messages.length > 0);
-
-    // Reset hydration flag if we're on /g but the session has no messages
-    // This handles page refreshes where the session state is lost
-    if (pathname === "/g" && !generalHasMessages) {
-      generalHistoryHydratedRef.current = false;
-    }
-
-    if (!general || !user?.id || pathname !== "/g" || generalHistoryHydratedRef.current || generalHasMessages) {
-      return;
-    }
-
-    let cancelled = false;
-
-    const hydrateGeneralHistory = async () => {
-      const generalConversationId = buildGeneralConversationId(user.id);
-      if (!generalConversationId) {
-        return;
-      }
-      try {
-        const history = await apiService.getConversation(generalConversationId);
-        if (cancelled || !Array.isArray(history) || history.length === 0) {
-          return;
-        }
-
-        const now = Date.now();
-        const mapped = mapApiMessagesToChatMessages(history, generalConversationId, now);
-
-        if (!mapped.length) {
-          return;
-        }
-
-        // Mark as synced immediately to prevent the sync effect from pushing
-        // this authoritative history back to the server, which can cause
-        // message duplication if the backend's replace logic is non-atomic.
-        syncedHistoryRef.current.add(generalConversationId);
-
-        setSessions((prev) => {
-          const index = prev.findIndex((session) => session.scope === "general");
-          if (index === -1) {
-            return prev;
-          }
-          const current = prev[index];
-          if (current.messages && current.messages.length > 0) {
-            return prev;
-          }
-          const updated: ChatSession = {
-            ...current,
-            conversationId: generalConversationId,
-            messages: mapped,
-            updatedAt: now,
-            isResponding: false,
-          };
-          const next = [...prev];
-          next[index] = updated;
-          const ordered = normalizeSessionsList(next);
-          persistSessions(ordered);
-          return ordered;
-        });
-        generalHistoryHydratedRef.current = true;
-      } catch (error) {
-        console.error("Failed to load general conversation history:", error);
-      }
-    };
-
-    void hydrateGeneralHistory();
-    return () => {
-      cancelled = true;
-    };
-  }, [pathname, persistSessions, setSessions, user?.id]);
+  const { loadConversationMessages } = useConversationHistory({
+    sessionsRef,
+    setSessions,
+    persistSessions,
+    userId: user?.id,
+  });
 
   useReminderPolling({ userId: user?.id, generalSessionId, appendMessage });
 

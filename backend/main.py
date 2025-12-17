@@ -906,9 +906,6 @@ logging.getLogger("uvicorn.access").disabled = True
 app_logger.info(f"Backend starting (env={os.getenv('ENVIRONMENT', 'development')}, provider={os.getenv('AI_PROVIDER', 'openrouter')})")
 
 
-# load_prompt_from_file, load_prompt_from_json, _normalize_prompt_locale, _prompt_locale_from_request
-# are now imported from core.prompt_utils
-
 # AI Configuration imports (centralized in core.ai_config)
 try:
     from backend.core.ai_config import (
@@ -984,9 +981,6 @@ AI_MESSAGE_GENERATOR = AIMessageGenerator()
 # are imported from core.file_utils. Ensure upload directory exists:
 MEDIA_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
-# File utility functions (_sanitize_filename, _normalize_mime, _sniff_mime_type, _reject_if_suspicious,
-# _scan_file_for_malware, _ensure_storage_path, _resolve_storage_path_from_record, _persist_upload_file)
-# are now imported from core.file_utils
 
 # Tool definitions - use lazy getters from ai_config
 SEARCH_TOOL = get_search_tool()
@@ -1099,10 +1093,6 @@ _ensure_sqlite_columns("transactions", [
 
 # database and metadata imported from backend.database
 
-# STREAMING_TOKEN_DELAY, REMINDER_RESPONSE_FORMAT, REMINDER_MODEL, GROK_TOOL_MODEL,
-# OPENROUTER_LITE_MODEL, GEMINI_DEFAULT_MODEL, GEMINI_LIGHT_MODEL, GEMINI_PRO_MODEL,
-# REMINDER_FUNCTION_NAMES, MAX_DASHBOARD_PULSE_HISTORY, DEFAULT_DASHBOARD_PROACTIVITY
-# are now imported from core.ai_config
 
 # GROK_DEFAULT_MODEL depends on OPENROUTER_SERVICE instance
 GROK_DEFAULT_MODEL = OPENROUTER_SERVICE.lite_model if OPENROUTER_SERVICE else "x-ai/grok-4.1-fast"
@@ -1224,10 +1214,6 @@ if SUPABASE_URL and SUPABASE_KEY and SUPABASE_URL != "your_supabase_url_here":
 
 
 _USER_DATA_CACHE: Dict[int, int] = {}
-
-
-# _conversation_store_available, _handle_conversation_store_error, _general_conversation_user_id
-# are now imported directly from core.conversation_store
 
 
 async def _require_conversation_owner(conversation_id: str, current_user: Dict[str, Any]) -> None:
@@ -2015,19 +2001,6 @@ async def get_database():
     """
     yield database
 
-# dev_analytics_summary endpoint is now in backend/api/analytics.py
-
-
-# Helper functions - many utilities have been extracted to core modules:
-# - core.env_helpers: _timestamp_ms_to_datetime, _datetime_to_ms, _is_valid_uuid
-# - core.tool_handlers: _build_maps_tool_and_config, calendar event handlers
-# - core.cache: _load_context_cache, _context_cache_contents
-# - core.title_generator: _generate_chat_title_inline
-# - core.conversation_manager: _load_conversation_history, get_or_create_conversation
-# - core.proactivity_helpers: _fetch_proactivity_summary
-# - core.onboarding_handler: _complete_onboarding
-# - core.ai_utils: _merge_extra_contents
-# - core.chat_history: normalize_conversation_history
 
 
 def _get_tool_handlers(user_timezone: Optional[str] = None) -> Dict[str, Any]:
@@ -2073,16 +2046,6 @@ async def _execute_function_call(
 
     args = function_call.args or {}
     return await handler(user_id, args, db)
-
-
-# _has_onboarding_tool wrapper removed - use _has_onboarding_tool_hybrid directly
-
-# _format_tool_results_for_context is now imported from core.function_call_helpers
-
-# _resolve_media_attachments and _generate_image_descriptions
-# are now imported from core.media_attachments
-
-# Dashboard helpers extracted to core.dashboard_helpers
 
 
 # API Routes
@@ -2132,16 +2095,6 @@ async def get_admin_metrics(
             "onboarding_speed": "Verify signup finishes in under 60 seconds.",
         },
     }
-
-# AI Chat helper functions (get_or_create_conversation, save_conversation_message
-# are now imported from core.conversation_manager)
-
-# generate_chat_title_suggestion removed - use _fallback_title_from_message directly
-
-
-# _update_conversation_title wrapper removed - use update_conversation_title directly
-
-
 async def stream_ai_response(
     message: str,
     conversation_history: Optional[List[Dict[str, Any]]] = None,
