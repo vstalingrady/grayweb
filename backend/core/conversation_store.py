@@ -1,14 +1,12 @@
+from __future__ import annotations
+
 import logging
-import time
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 try:
-    from backend.time_utils import utcnow, utcnow_aware
+    from backend.time_utils import utcnow
 except Exception:  # pragma: no cover
-    from time_utils import utcnow, utcnow_aware  # type: ignore
-
-from fastapi import HTTPException, status
+    from time_utils import utcnow  # type: ignore
 
 try:  # Prefer package-relative imports when running as a package
     from backend.database import (
@@ -27,15 +25,20 @@ except Exception:  # pragma: no cover - fallback for direct backend/ execution
         user_data,
     )
 
+try:
+    from backend.core.cache import (
+        CONVERSATION_HISTORY_CACHE,
+        CONVERSATION_OWNER_CACHE,
+        USER_CACHE,
+    )
+except Exception:  # pragma: no cover - fallback when running with backend/ on sys.path
+    from core.cache import (  # type: ignore
+        CONVERSATION_HISTORY_CACHE,
+        CONVERSATION_OWNER_CACHE,
+        USER_CACHE,
+    )
 
 logger = logging.getLogger("backend.conversation_store")
-
-
-supabase = None
-supabase_admin = None
-SUPABASE_KEY_SOURCE: Optional[str] = None
-SUPABASE_CONVERSATIONS_ENABLED: bool = False
-
 
 def configure_conversation_store(
     *,
@@ -52,7 +55,6 @@ def configure_conversation_store(
 
 GENERAL_CONVERSATION_PREFIX = "general:"
 _USER_DATA_CACHE: Dict[int, int] = {}
-_SUPABASE_USER_DATA_CACHE: Dict[int, int] = {}
 
 
 def _conversation_store_available() -> bool:
@@ -61,37 +63,7 @@ def _conversation_store_available() -> bool:
     return False
 
 
-def _disable_conversation_store(reason: str) -> None:
-    global SUPABASE_CONVERSATIONS_ENABLED
-    if SUPABASE_CONVERSATIONS_ENABLED:
-        SUPABASE_CONVERSATIONS_ENABLED = False
-        logger.warning("Conversation storage disabled: %s", reason)
-
-
 def _handle_conversation_store_error(context: str, error: Exception) -> None:
-    code = getattr(error, "code", None)
-    message = getattr(error, "message", None)
-    if isinstance(error, dict):
-        code = error.get("code")
-        message = error.get("message")
-    details = message or str(error)
-    logger.warning("%s: %s", context, details)
-    normalized = (details or "").lower()
-    if code == "PGRST205" or "could not find the table" in normalized:
-        _disable_conversation_store(
-            "Supabase user chat tables missing; suppressing further requests."
-        )
-    elif (
-        "permission denied" in normalized
-        or "insufficient privilege" in normalized
-        or "not authorized" in normalized
-    ):
-        _disable_conversation_store(
-            "Supabase conversation access denied; suppressing further requests."
-        )
-
-
-def _handle_supabase_table_error(context: str, error: Exception) -> None:
     details = getattr(error, "message", None) or str(error)
     logger.warning("%s: %s", context, details)
 
@@ -107,67 +79,6 @@ def _general_conversation_user_id(conversation_id: Optional[str]) -> Optional[in
         return int(conversation_id.split(":", 1)[1])
     except (ValueError, IndexError):
         return None
-
-
-class AsyncTTLCache:
-    def __init__(self, ttl_seconds: int = 300):
-        self.ttl_seconds = ttl_seconds
-        self.cache: Dict[str, Tuple[Any, float]] = {}
-
-    async def get(self, key: str, fetch_func):
-        now = time.time()
-        if key in self.cache:
-            value, timestamp = self.cache[key]
-            if now - timestamp < self.ttl_seconds:
-                return value
-
-        value = await fetch_func()
-        self.cache[key] = (value, now)
-        return value
-
-    def clear(self) -> None:
-        self.cache = {}
-
-    def invalidate(self, key: str) -> None:
-        if key in self.cache:
-            del self.cache[key]
-
-
-class TTLCache:
-    def __init__(self, ttl_seconds: int = 600, max_size: int = 256):
-        self.ttl_seconds = ttl_seconds
-        self.max_size = max_size
-        self.cache: Dict[str, Tuple[Any, float]] = {}
-
-    def get(self, key: str) -> Any:
-        now = time.time()
-        entry = self.cache.get(key)
-        if not entry:
-            return None
-        value, ts = entry
-        if now - ts > self.ttl_seconds:
-            self.cache.pop(key, None)
-            return None
-        return value
-
-    def set(self, key: str, value: Any) -> None:
-        if len(self.cache) >= self.max_size:
-            # Evict the oldest entry to keep memory bounded
-            oldest = min(self.cache.items(), key=lambda item: item[1][1])[0]
-            self.cache.pop(oldest, None)
-        self.cache[key] = (value, time.time())
-
-    def invalidate(self, key: str) -> None:
-        self.cache.pop(key, None)
-
-    def clear(self) -> None:
-        self.cache.clear()
-
-
-USER_CACHE = AsyncTTLCache(ttl_seconds=300)
-CONVERSATION_OWNER_CACHE = TTLCache(ttl_seconds=900, max_size=512)
-CONVERSATION_HISTORY_CACHE = TTLCache(ttl_seconds=900, max_size=256)
-
 
 async def get_cached_user(user_id: int):
     async def fetch():
@@ -286,170 +197,6 @@ async def ensure_user_data_record(user_identifier: int) -> Optional[int]:
         return None
 
     return None
-
-
-# Removed _resolve_supabase_user_data_id, require_supabase_user_data_id, and ensure_supabase_thread_exists.
-
-
-async def get_or_create_conversation(
-    conversation_id: Optional[str],
-    user_id: int,
-    *,
-    title: Optional[str] = None,
-) -> str:
-    """Get existing conversation or create a new one in Supabase-backed storage."""
-    from uuid import UUID, uuid4
-
-    valid_id: Optional[str] = None
-    if conversation_id:
-        if str(conversation_id).startswith("general:"):
-             valid_id = str(conversation_id)
-        else:
-            try:
-                UUID(str(conversation_id))
-                valid_id = str(conversation_id)
-            except Exception:
-                valid_id = None
-
-    if valid_id:
-        cached_owner = CONVERSATION_OWNER_CACHE.get(valid_id)
-        if cached_owner == user_id:
-            return valid_id
-        try:
-            query = user_chat_threads.select().where(
-                (user_chat_threads.c.id == valid_id)
-                & (user_chat_threads.c.user_identifier == user_id)
-            )
-            row = await database.fetch_one(query)
-            if row:
-                CONVERSATION_OWNER_CACHE.set(valid_id, user_id)
-                return valid_id
-        except Exception as error:
-            _handle_conversation_store_error("Error checking conversation", error)
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Conversation storage is not available.",
-            )
-
-    try:
-        user_data_id = await ensure_user_data_record(user_id)
-        if user_data_id is None:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="User metadata storage is not available.",
-            )
-
-        new_id = valid_id if valid_id else str(uuid4())
-        now = utcnow()
-        insert_query = user_chat_threads.insert().values(
-            id=new_id,
-            title=title or "New Conversation",
-            user_identifier=user_id,
-            user_data_id=user_data_id,
-            context_snapshot=[],
-            metadata={},
-            created_at=now,
-            updated_at=now,
-            last_message_at=now,
-        )
-        await database.execute(insert_query)
-        CONVERSATION_OWNER_CACHE.set(new_id, user_id)
-        return new_id
-    except Exception as error:
-        _handle_conversation_store_error("Error creating conversation", error)
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Conversation storage is not available.",
-        )
-
-
-async def save_conversation_message(
-    conversation_id: str,
-    message: Dict[str, Any],
-    *,
-    user_id: Optional[int] = None,
-) -> None:
-    """Persist a single message for a conversation."""
-    # Normalize the payload we write to storage so that rows are tidy and
-    # consistent.
-    raw_role = message.get("role")
-    if not raw_role:
-        return
-    role = "model" if raw_role == "assistant" else raw_role
-    if role not in {"user", "model"}:
-        return
-    text = message.get("text") or ""
-    grounding_metadata = message.get("grounding_metadata") or message.get(
-        "groundingMetadata"
-    )
-
-    general_user_id = _general_conversation_user_id(conversation_id)
-    if general_user_id is not None:
-        # General conversation messages are handled elsewhere (in main) and
-        # should not be written into user_chat_messages.
-        return
-
-    try:
-        import json
-        reminders_data = message.get("reminders")
-        insert_query = user_chat_messages.insert().values(
-            thread_id=conversation_id,
-            role=role,
-            text=text,
-            grounding_metadata=grounding_metadata,
-            attachments=message.get("attachments"),
-            reminders=json.dumps(reminders_data) if reminders_data else None,
-            created_at=utcnow(),
-        )
-        try:
-             await database.execute(insert_query)
-        except Exception:
-             # Retry without reminders for older DB schemas
-             if reminders_data:
-                 query_without_reminders = user_chat_messages.insert().values(
-                     thread_id=conversation_id,
-                     role=role,
-                     text=text,
-                     grounding_metadata=grounding_metadata,
-                     attachments=message.get("attachments"),
-                     reminders=None,
-                     created_at=utcnow(),
-                 )
-                 await database.execute(query_without_reminders)
-             else:
-                 raise
-
-        update_query = (
-            user_chat_threads.update()
-            .where(user_chat_threads.c.id == conversation_id)
-            .values(
-                last_message_at=utcnow(),
-                updated_at=utcnow(),
-            )
-        )
-        await database.execute(update_query)
-
-        # Calculate timestamp for the cache (in milliseconds since epoch)
-        now_aware = utcnow_aware()
-        timestamp_ms = int(now_aware.timestamp() * 1000)
-
-        append_to_conversation_cache(
-            conversation_id,
-            user_id,
-            {
-                "role": role,
-                "text": text,
-                "grounding_metadata": grounding_metadata,
-                "attachments": message.get("attachments"),
-                "reminders": reminders_data,
-                "timestamp": timestamp_ms,
-            },
-        )
-    except Exception as error:  # pragma: no cover - defensive logging
-        _handle_conversation_store_error("Error saving message", error)
-        logger.error(
-            "Failed to save message to thread %s: %s", conversation_id, error
-        )
 
 
 def delete_supabase_user_records(user_id: int) -> None:
