@@ -23,6 +23,8 @@ import {
 import { layoutDayEvents } from "./layoutDayEvents";
 import { useEventDrag } from "./useEventDrag";
 import { useEventResize } from "./useEventResize";
+import { ensureDateZone, isSameDay, startOfDay, startOfWeek } from "./dateUtils";
+import { HOURS, HOURS_LABEL } from "./timeGrid";
 import {
   CalendarEvent,
   CalendarInfo,
@@ -30,11 +32,11 @@ import {
   PositionedEvent,
 } from "./types";
 import { createSeedCalendars, createSeedEvents } from "./calendarSeed";
+import { formatDateLabel } from "./timeUtils";
 import type { DashboardHeaderProps } from "@/components/gray/DashboardHeader";
 import { ViewModeSelect } from "@/components/gray/ViewModeSelect";
 import { useI18n } from "@/contexts/I18nContext";
 
-const HOURS = Array.from({ length: 24 }, (_, index) => index);
 const DEFAULT_HOUR_HEIGHT = 64;
 const SNAP_MINUTES = 15;
 const TIMELINE_WIDTH = 56;
@@ -46,23 +48,6 @@ type ComposerAnchorRect = {
   width: number;
   height: number;
 };
-
-const startOfDay = (value: Date) => {
-  const result = new Date(value);
-  result.setHours(0, 0, 0, 0);
-  return result;
-};
-
-const startOfWeek = (value: Date) => {
-  const result = startOfDay(value);
-  result.setDate(result.getDate() - result.getDay());
-  return result;
-};
-
-const isSameDay = (a: Date, b: Date) =>
-  a.getFullYear() === b.getFullYear() &&
-  a.getMonth() === b.getMonth() &&
-  a.getDate() === b.getDate();
 
 const formatWeekRange = (reference: Date) => {
   const start = startOfWeek(reference);
@@ -79,22 +64,6 @@ const formatWeekRange = (reference: Date) => {
   const year = end.getFullYear();
   return `${startLabel} — ${endLabel}, ${year}`;
 };
-
-const formatDayLabel = (value: Date) =>
-  value.toLocaleDateString(undefined, {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-  });
-
-const HOURS_LABEL = HOURS.map((hour) => {
-  if (hour === 0) return "12 AM";
-  if (hour < 12) return `${hour} AM`;
-  if (hour === 12) return "12 PM";
-  return `${hour - 12} PM`;
-});
-
-const ensureDateZone = (value: Date) => new Date(value.getTime());
 
 type GrayDashboardCalendarProps = {
   initialDate?: Date;
@@ -723,304 +692,6 @@ export function GrayDashboardCalendar({
     updateEvents((previous) => previous.filter((e) => e.id !== event.id));
   };
 
-  const calendarGridStyle = useMemo(
-    () => ({ "--calendar-grid-columns": viewMode === "week" ? "7" : "1" }) as CSSProperties,
-    [viewMode]
-  );
-
-  const renderWeekView = () => (
-    <div className={styles.calendarGrid} style={calendarGridStyle}>
-      <div className={styles.calendarBody}>
-        <div className={styles.calendarBodyScroll} ref={weekScrollRef}>
-          <div className={styles.stickyHeaderGroup}>
-            <div className={styles.calendarMonthRow}>
-              <div className={styles.calendarMonthTitleGroup}>
-                <div className={styles.calendarSurfaceNavArrows}>
-                  <button
-                    type="button"
-                    aria-label={t("Previous {range}", { range: rangeNavigationLabel })}
-                    onClick={() => handleNavigateRange(-1)}
-                  >
-                    ‹
-                  </button>
-                  <button
-                    type="button"
-                    aria-label={t("Next {range}", { range: rangeNavigationLabel })}
-                    onClick={() => handleNavigateRange(1)}
-                  >
-                    ›
-                  </button>
-                </div>
-                {showTodayControl && (
-                  <button
-                    type="button"
-                    className={styles.calendarSurfaceButton}
-                    onClick={handleGoToday}
-                    style={{ height: 32, padding: "0 12px", fontSize: "0.55rem" }}
-                  >
-                    {t("Today")}
-                  </button>
-                )}
-                {showViewSelect && (
-                  <div style={{ transform: "scale(0.9)", transformOrigin: "left center" }}>
-                    <ViewModeSelect
-                      value={viewMode}
-                      options={[
-                        { value: "week", label: t("Week") },
-                        { value: "day", label: t("Day") },
-                      ]}
-                      onChange={(mode) => updateViewMode(mode)}
-                    />
-                  </div>
-                )}
-              </div>
-            </div>
-            {showHeaderDates && (
-              <div className={styles.calendarHeaderRow}>
-                <div className={styles.calendarHeaderPlaceholder}>
-                  <span className={styles.calendarTimezoneLabel}>{timeZoneLabel}</span>
-                </div>
-                {weekDays.map((day) => {
-                  const isSelectedDay = isSameDay(day, selectedDate);
-                  const isToday = nowReference ? isSameDay(day, nowReference) : false;
-                  return (
-                    <div
-                      key={day.toISOString()}
-                      className={styles.calendarHeaderCell}
-                      data-selected={isSelectedDay ? "true" : "false"}
-                      data-today={isToday ? "true" : "false"}
-                    >
-                      <span>{day.toLocaleDateString(undefined, { weekday: "short" })}</span>
-                      <strong>{day.getDate()}</strong>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-            <div className={styles.calendarAllDayRow}>
-              <div className={styles.calendarAllDayLabel}>
-                <span>{t("All day")}</span>
-              </div>
-              {weekDays.map((day) => (
-                <div key={day.toISOString()} className={styles.calendarAllDayCell}>
-                  {/* All-day events will go here later */}
-                </div>
-              ))}
-            </div>
-          </div>
-          <div className={styles.calendarTimesColumn}>
-            {HOURS_LABEL.map((label, hour) => (
-              <span key={label} data-hour={hour}>
-                {label}
-              </span>
-            ))}
-            {weekNowIndicator && (
-              <>
-                <div
-                  className={styles.calendarTimelineNowLine}
-                  style={{ top: `${weekNowIndicator.offset}px` }}
-                  aria-hidden="true"
-                />
-                <div
-                  className={styles.calendarTimelineNowMarker}
-                  style={{ top: `${weekNowIndicator.offset}px` }}
-                  aria-hidden="true"
-                />
-              </>
-            )}
-          </div>
-          <div className={styles.calendarWeekColumns} ref={weekColumnsRef}>
-            {weekDays.map((day, columnIndex) => {
-              const isToday = nowReference ? isSameDay(day, nowReference) : false;
-              const columnNowIndicatorOffset =
-                weekNowIndicator?.dayIndex === columnIndex ? weekNowIndicator.offset : null;
-
-              const eventsToRender = weekLayouts[columnIndex] || [];
-
-              return (
-                <div
-                  key={day.toISOString()}
-                  className={styles.calendarWeekColumn}
-                  data-today={isToday ? "true" : "false"}
-                  data-selected={isSameDay(day, selectedDate) ? "true" : "false"}
-                >
-                  <div
-                    className={styles.calendarColumnScroller}
-                    onClick={(event) => handleColumnClick(event, day)}
-                  >
-                    <div className={styles.calendarHourGrid} aria-hidden="true">
-                      {HOURS.map((hour) => (
-                        <div key={hour} className={styles.calendarHourRow} />
-                      ))}
-                    </div>
-                    {columnNowIndicatorOffset !== null && (
-                      <>
-                        <div
-                          className={styles.nowIndicator}
-                          style={{ top: `${columnNowIndicatorOffset}px` }}
-                          aria-hidden="true"
-                        />
-                      </>
-                    )}
-
-                    {eventsToRender.map((event) => (
-                        <EventCard
-                          key={event.id}
-                          event={event}
-                          onClick={(_e, anchorRect, mouseEvent) => handleEventClick(event, anchorRect, mouseEvent)}
-                          draggableProps={
-                            isGoogleCalendarEvent(event)
-                              ? undefined
-                              : viewMode === "week"
-                                ? getWeekDraggableProps(event)
-                                : undefined
-                          }
-                          resizeProps={isGoogleCalendarEvent(event) ? undefined : getResizeProps}
-                          isDragging={!!activeDrafts?.[event.id]}
-                          isSelected={selectedEventIds.has(event.id)}
-                          onDelete={handleDeleteEvent}
-                        />
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
-  const renderDayView = () => (
-    <div className={styles.calendarGrid} style={calendarGridStyle}>
-      <div className={styles.calendarBody}>
-        <div className={styles.calendarMonthRow}>
-          <div className={styles.calendarMonthTitleGroup}>
-            <div className={styles.calendarSurfaceNavArrows}>
-              <button
-                type="button"
-                aria-label={t("Previous {range}", { range: rangeNavigationLabel })}
-                onClick={() => handleNavigateRange(-1)}
-              >
-                ‹
-              </button>
-              <button
-                type="button"
-                aria-label={t("Next {range}", { range: rangeNavigationLabel })}
-                onClick={() => handleNavigateRange(1)}
-              >
-                ›
-              </button>
-            </div>
-            {showTodayControl && (
-              <button
-                type="button"
-                className={styles.calendarSurfaceButton}
-                onClick={handleGoToday}
-                style={{ height: 32, padding: "0 12px", fontSize: "0.55rem" }}
-              >
-                {t("Today")}
-              </button>
-            )}
-            {showViewSelect && (
-              <div style={{ transform: "scale(0.9)", transformOrigin: "left center" }}>
-                <ViewModeSelect
-                  value={viewMode}
-                  options={[
-                    { value: "week", label: t("Week") },
-                    { value: "day", label: t("Day") },
-                  ]}
-                  onChange={(mode) => updateViewMode(mode)}
-                />
-              </div>
-            )}
-          </div>
-        </div>
-        {showHeaderDates && (
-          <div className={styles.calendarHeaderRow}>
-            <div className={styles.calendarHeaderPlaceholder}>
-              <span className={styles.calendarTimezoneLabel}>+ {timeZoneLabel}</span>
-            </div>
-            <div
-              className={styles.calendarHeaderCell}
-              data-selected="true"
-              data-today={(nowReference ? isSameDay(selectedDate, nowReference) : false) ? "true" : "false"}
-            >
-              <span>{selectedDate.toLocaleDateString(undefined, { weekday: "short" })}</span>
-              <strong>{selectedDate.getDate()}</strong>
-            </div>
-          </div>
-        )}
-        <div
-          className={styles.calendarBodyScroll}
-          ref={dayColumnRef}
-        >
-          <div className={styles.calendarTimesColumn}>
-            {HOURS_LABEL.map((label, hour) => (
-              <span key={label} data-hour={hour}>
-                {label}
-              </span>
-            ))}
-            {dayIndicatorOffset !== null && (
-              <>
-                <div
-                  className={styles.calendarTimelineNowLine}
-                  style={{ top: `${dayIndicatorOffset}px` }}
-                  aria-hidden="true"
-                />
-              </>
-            )}
-          </div>
-          <div
-            className={styles.calendarDayColumn}
-            data-selected="true"
-            data-today={(nowReference ? isSameDay(selectedDate, nowReference) : false) ? "true" : "false"}
-          >
-            <div
-              className={styles.calendarColumnScroller}
-              onClick={(event) => handleColumnClick(event, selectedDate)}
-            >
-              <div className={styles.calendarHourGrid} aria-hidden="true">
-                {HOURS.map((hour) => (
-                  <div key={hour} className={styles.calendarHourRow} />
-                ))}
-              </div>
-              {dayIndicatorOffset !== null && (
-                <>
-                  <div
-                    className={styles.nowIndicator}
-                    style={{ top: `${dayIndicatorOffset}px` }}
-                    aria-hidden="true"
-                  />
-                </>
-              )}
-
-              {/* Events */}
-              {dayLayouts.map((event) => (
-                <EventCard
-                  key={event.id}
-                  event={event}
-                  onClick={(_e, anchorRect, mouseEvent) => handleEventClick(event, anchorRect, mouseEvent)}
-                  draggableProps={
-                    isGoogleCalendarEvent(event)
-                      ? undefined
-                      : viewMode === "day"
-                        ? getDraggableProps(event)
-                        : undefined
-                  }
-                  resizeProps={isGoogleCalendarEvent(event) ? undefined : getResizeProps}
-                  isDragging={!!activeDrafts?.[event.id]}
-                  isSelected={selectedEventIds.has(event.id)}
-                  onDelete={handleDeleteEvent}
-                />
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
   const updateSelectedDate = useCallback(
     (compute: (previous: Date) => Date) => {
       const computeNext = (prev: Date) => {
@@ -1116,7 +787,7 @@ export function GrayDashboardCalendar({
   });
 
   const rangeLabel =
-    viewMode === "week" ? formatWeekRange(selectedDate) : formatDayLabel(selectedDate);
+    viewMode === "week" ? formatWeekRange(selectedDate) : formatDateLabel(selectedDate);
 
   const calendarSurfaceClassName = [
     styles.dashboardCalendar,
@@ -1283,15 +954,15 @@ export function GrayDashboardCalendar({
             monthDate={monthDate}
             selectedDate={selectedDate}
             onSelectDate={handleDaySelect}
-	            onNavigate={handleMonthNavigate}
-	            calendars={calendars}
-	            onToggleCalendar={handleToggleCalendar}
-	            showHeader={true}
-	            className={styles.calendarSidebarIntegrated}
-	            showMonthNavigation={true}
-	            showCalendarList={showCalendarList}
-	            onIntegrationAction={onIntegrationAction}
-	          />
+            onNavigate={handleMonthNavigate}
+            calendars={calendars}
+            onToggleCalendar={handleToggleCalendar}
+            showHeader
+            className={styles.calendarSidebarIntegrated}
+            showMonthNavigation
+            showCalendarList={showCalendarList}
+            onIntegrationAction={onIntegrationAction}
+          />
         </div>
       )}
       <div
@@ -1299,7 +970,61 @@ export function GrayDashboardCalendar({
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
       >
-        {viewMode === "week" ? renderWeekView() : renderDayView()}
+        {viewMode === "week" ? (
+          <GrayDashboardCalendarWeekView
+            weekDays={weekDays}
+            selectedDate={selectedDate}
+            nowReference={nowReference}
+            timeZoneLabel={timeZoneLabel}
+            rangeNavigationLabel={rangeNavigationLabel}
+            showTodayControl={showTodayControl}
+            showViewSelect={showViewSelect}
+            showHeaderDates={showHeaderDates}
+            weekNowIndicator={weekNowIndicator}
+            weekLayouts={weekLayouts}
+            activeDrafts={activeDrafts}
+            selectedEventIds={selectedEventIds}
+            weekScrollRef={weekScrollRef}
+            weekColumnsRef={weekColumnsRef}
+            onNavigateRange={handleNavigateRange}
+            onGoToday={handleGoToday}
+            onUpdateViewMode={updateViewMode}
+            onColumnClick={handleColumnClick}
+            onEventClick={(event, anchorRect, mouseEvent) =>
+              handleEventClick(event, anchorRect, mouseEvent)
+            }
+            isGoogleCalendarEvent={isGoogleCalendarEvent}
+            getWeekDraggableProps={getWeekDraggableProps}
+            getResizeProps={getResizeProps}
+            onDeleteEvent={handleDeleteEvent}
+          />
+        ) : (
+          <GrayDashboardCalendarDayView
+            selectedDate={selectedDate}
+            nowReference={nowReference}
+            timeZoneLabel={timeZoneLabel}
+            rangeNavigationLabel={rangeNavigationLabel}
+            showTodayControl={showTodayControl}
+            showViewSelect={showViewSelect}
+            showHeaderDates={showHeaderDates}
+            dayIndicatorOffset={dayIndicatorOffset}
+            dayLayouts={dayLayouts}
+            activeDrafts={activeDrafts}
+            selectedEventIds={selectedEventIds}
+            dayColumnRef={dayColumnRef}
+            onNavigateRange={handleNavigateRange}
+            onGoToday={handleGoToday}
+            onUpdateViewMode={updateViewMode}
+            onColumnClick={handleColumnClick}
+            onEventClick={(event, anchorRect, mouseEvent) =>
+              handleEventClick(event, anchorRect, mouseEvent)
+            }
+            isGoogleCalendarEvent={isGoogleCalendarEvent}
+            getDayDraggableProps={getDraggableProps}
+            getResizeProps={getResizeProps}
+            onDeleteEvent={handleDeleteEvent}
+          />
+        )}
       </div>
     </div>
   );

@@ -832,6 +832,7 @@ try:
         consolidate_gemini_tools,
         add_url_context_tool_if_needed,
         add_maps_tool_if_needed,
+        determine_provider_and_model,
     )
 except ImportError:
     from core.stream_handlers.hybrid import (  # type: ignore
@@ -846,6 +847,7 @@ except ImportError:
         consolidate_gemini_tools,
         add_url_context_tool_if_needed,
         add_maps_tool_if_needed,
+        determine_provider_and_model,
     )
 
 SUPABASE_POOLER_HOST = os.getenv("SUPABASE_POOLER_HOST", "aws-1-ap-south-1.pooler.supabase.com")

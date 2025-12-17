@@ -3,6 +3,7 @@ import {
   LayoutOptions,
   PositionedEvent,
 } from "./types";
+import { startOfDay } from "./dateUtils";
 
 const MINUTES_IN_DAY = 24 * 60;
 
@@ -11,12 +12,6 @@ const minutesBetween = (start: Date, end: Date) =>
 
 const clampMinutes = (value: number) =>
   Math.max(0, Math.min(MINUTES_IN_DAY, value));
-
-const startOfDay = (value: Date) => {
-  const result = new Date(value);
-  result.setHours(0, 0, 0, 0);
-  return result;
-};
 
 type EventLayoutMeta = {
   column: number;

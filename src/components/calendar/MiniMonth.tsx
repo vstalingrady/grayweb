@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 
 import styles from "./GrayDashboardCalendar.module.css";
+import { isSameDay, startOfMonth } from "./dateUtils";
 import { useI18n } from "@/contexts/I18nContext";
 
 type MiniMonthProps = {
@@ -11,24 +12,12 @@ type MiniMonthProps = {
 
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-const startOfMonth = (value: Date) => {
-  const result = new Date(value);
-  result.setDate(1);
-  result.setHours(0, 0, 0, 0);
-  return result;
-};
-
 const startOfGrid = (value: Date) => {
   const result = startOfMonth(value);
   const weekday = result.getDay();
   result.setDate(result.getDate() - weekday);
   return result;
 };
-
-const isSameDay = (a: Date, b: Date) =>
-  a.getFullYear() === b.getFullYear() &&
-  a.getMonth() === b.getMonth() &&
-  a.getDate() === b.getDate();
 
 export function MiniMonth({ referenceDate, selectedDate, onSelectDate }: MiniMonthProps) {
   const { t } = useI18n();

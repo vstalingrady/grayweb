@@ -1,4 +1,5 @@
 import { CalendarEntryType } from "./types";
+export { startOfDay, startOfMonth } from "./dateUtils";
 
 export const QUICK_COLOR_SWATCHES = [
   "#2F6B4F",
@@ -127,18 +128,6 @@ export const combineDateWithTime = (date: Date, timeValue: string) => {
   const [hours, minutes] = timeValue.split(":").map((value) => Number.parseInt(value, 10));
   const result = new Date(date);
   result.setHours(Number.isFinite(hours) ? hours : 0, Number.isFinite(minutes) ? minutes : 0, 0, 0);
-  return result;
-};
-
-export const startOfDay = (value: Date) => {
-  const result = new Date(value);
-  result.setHours(0, 0, 0, 0);
-  return result;
-};
-
-export const startOfMonth = (value: Date) => {
-  const result = startOfDay(value);
-  result.setDate(1);
   return result;
 };
 

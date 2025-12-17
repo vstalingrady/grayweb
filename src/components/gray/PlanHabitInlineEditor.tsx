@@ -8,6 +8,7 @@ import { useUser } from "@/contexts/UserContext";
 import { useI18n } from "@/contexts/I18nContext";
 import { apiService } from "@/lib/api";
 import type { HabitItem, HabitUpdates, PlanItem, PlanUpdates } from "./types";
+import { useDismissableLayer } from "./hooks/useDismissableLayer";
 import {
   EARTHY_PALETTE,
   NEUTRAL_PALETTE,
@@ -167,56 +168,38 @@ export function PlanHabitInlineEditor({
     return reminderOptions.find((option) => option.value === reminderPreset)?.label ?? t("No reminder");
   }, [reminderOptions, reminderPreset, t]);
 
-  useEffect(() => {
-    if (!isColorPickerOpen) return;
+  const closeColorPicker = useCallback(() => {
+    setIsColorPickerOpen(false);
+  }, []);
 
-    const handlePointerDown = (event: globalThis.MouseEvent) => {
-      const target = event.target as Node | null;
-      if (!target) return;
-      if (colorPickerTriggerRef.current?.contains(target)) return;
-      if (colorPickerPopoverRef.current?.contains(target)) return;
-      if (colorPickerRef.current?.contains(target)) return;
-      setIsColorPickerOpen(false);
-    };
+  const closeReminderMenu = useCallback(() => {
+    setIsReminderMenuOpen(false);
+  }, []);
 
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setIsColorPickerOpen(false);
-    };
+  const colorPickerDismissRefs = useMemo(
+    () => [colorPickerTriggerRef, colorPickerPopoverRef, colorPickerRef],
+    []
+  );
 
-    document.addEventListener("mousedown", handlePointerDown);
-    document.addEventListener("keydown", handleKeyDown);
+  useDismissableLayer({
+    isOpen: isColorPickerOpen,
+    ignoreRefs: colorPickerDismissRefs,
+    onDismiss: closeColorPicker,
+  });
 
-    return () => {
-      document.removeEventListener("mousedown", handlePointerDown);
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [isColorPickerOpen]);
+  const reminderMenuDismissRefs = useMemo(() => [reminderTriggerRef, reminderMenuRef], []);
 
-  useEffect(() => {
-    if (!isReminderMenuOpen) return;
+  const handleReminderMenuEscape = useCallback(() => {
+    closeReminderMenu();
+    reminderTriggerRef.current?.focus();
+  }, [closeReminderMenu]);
 
-    const handlePointerDown = (event: globalThis.MouseEvent) => {
-      const target = event.target as Node | null;
-      if (!target) return;
-      if (reminderTriggerRef.current?.contains(target)) return;
-      if (reminderMenuRef.current?.contains(target)) return;
-      setIsReminderMenuOpen(false);
-    };
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      setIsReminderMenuOpen(false);
-      reminderTriggerRef.current?.focus();
-    };
-
-    document.addEventListener("mousedown", handlePointerDown);
-    document.addEventListener("keydown", handleKeyDown);
-
-    return () => {
-      document.removeEventListener("mousedown", handlePointerDown);
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [isReminderMenuOpen]);
+  useDismissableLayer({
+    isOpen: isReminderMenuOpen,
+    ignoreRefs: reminderMenuDismissRefs,
+    onDismiss: closeReminderMenu,
+    onEscape: handleReminderMenuEscape,
+  });
 
   useEffect(() => {
     if (!isReminderMenuOpen) return;
