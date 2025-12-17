@@ -12,42 +12,42 @@ def _make_request(*, client_host: str | None, host_header: str | None = None, fo
 
 
 def test_is_localhost_request_accepts_loopback_client():
-    from backend.main import _is_localhost_request
+    from backend.api.analytics import _is_localhost_request
 
     req = _make_request(client_host="127.0.0.1", host_header="example.com")
     assert _is_localhost_request(req) is True
 
 
 def test_is_localhost_request_rejects_localhost_host_header_spoofing():
-    from backend.main import _is_localhost_request
+    from backend.api.analytics import _is_localhost_request
 
     req = _make_request(client_host="10.0.0.5", host_header="localhost:3000")
     assert _is_localhost_request(req) is False
 
 
 def test_is_localhost_request_rejects_wildcard_host_header_spoofing():
-    from backend.main import _is_localhost_request
+    from backend.api.analytics import _is_localhost_request
 
     req = _make_request(client_host="10.0.0.5", host_header="0.0.0.0:3000")
     assert _is_localhost_request(req) is False
 
 
 def test_is_localhost_request_rejects_subdomain_localhost_spoofing():
-    from backend.main import _is_localhost_request
+    from backend.api.analytics import _is_localhost_request
 
     req = _make_request(client_host="10.0.0.5", host_header="gray.localhost:3000")
     assert _is_localhost_request(req) is False
 
 
 def test_is_localhost_request_rejects_remote_host():
-    from backend.main import _is_localhost_request
+    from backend.api.analytics import _is_localhost_request
 
     req = _make_request(client_host="10.0.0.5", host_header="gray.alignment.id")
     assert _is_localhost_request(req) is False
 
 
 def test_is_localhost_request_rejects_private_client_with_service_host():
-    from backend.main import _is_localhost_request
+    from backend.api.analytics import _is_localhost_request
 
     req = _make_request(client_host="172.18.0.10", host_header="backend:8000")
     assert _is_localhost_request(req) is False
@@ -57,7 +57,7 @@ def test_dev_analytics_prod_token_gate():
     import os
     import asyncio
 
-    from backend.main import dev_analytics_summary
+    from backend.api.analytics import dev_analytics_summary
 
     async def run():
         req = _make_request(client_host="10.0.0.5", host_header="gray.alignment.id")
