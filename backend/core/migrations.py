@@ -13,14 +13,18 @@ try:
     from backend.core.sqlite_helpers import (
         ensure_sqlite_columns as _ensure_sqlite_columns,
         ensure_sqlite_index as _ensure_sqlite_index,
+        ensure_sqlite_unique_index as _ensure_sqlite_unique_index,
         drop_sqlite_table as _drop_sqlite_table,
+        rename_sqlite_column_if_needed as _rename_sqlite_column_if_needed,
         rebuild_sqlite_table_without_columns as _rebuild_sqlite_table_without_columns,
     )
 except ImportError:
     from core.sqlite_helpers import (  # type: ignore
         ensure_sqlite_columns as _ensure_sqlite_columns,
         ensure_sqlite_index as _ensure_sqlite_index,
+        ensure_sqlite_unique_index as _ensure_sqlite_unique_index,
         drop_sqlite_table as _drop_sqlite_table,
+        rename_sqlite_column_if_needed as _rename_sqlite_column_if_needed,
         rebuild_sqlite_table_without_columns as _rebuild_sqlite_table_without_columns,
     )
 
@@ -88,7 +92,11 @@ def run_startup_migrations():
     """
     # Ensure user columns
     _ensure_sqlite_columns("users", _USER_COLUMNS, backfill_nulls=_USER_BACKFILL_NULLS)
-    
+
+    # Some legacy DBs were created with a bad column name ("VARCHAR") for plan/habit descriptions.
+    _rename_sqlite_column_if_needed("plans", "VARCHAR", "description")
+    _rename_sqlite_column_if_needed("habits", "VARCHAR", "description")
+
     # User data columns
     _ensure_sqlite_columns("user_data", [
         ("profile", "JSON", None),
@@ -144,7 +152,14 @@ def run_startup_migrations():
     # Indexes
     _ensure_sqlite_index("archived_chat_messages", "ix_archived_chat_messages_user_id", "user_id")
     _ensure_sqlite_index("user_chat_messages", "ix_user_chat_messages_thread_id", "thread_id")
-    
+    _ensure_sqlite_index("transactions", "ix_transactions_user_id", "user_id")
+    _ensure_sqlite_index("user_chat_threads", "ix_user_chat_threads_user_identifier_last_message_at", "user_identifier, last_message_at")
+    _ensure_sqlite_index("general_chat_messages", "ix_general_chat_messages_user_id_created_at", "user_id, created_at")
+    _ensure_sqlite_index("media_uploads", "ix_media_uploads_user_id_created_at", "user_id, created_at")
+    _ensure_sqlite_index("reminders", "ix_reminders_user_status_remind_at", "user_id, status, remind_at")
+    _ensure_sqlite_unique_index("dashboard_pulses", "uq_dashboard_pulses_user_date", "user_id, date_key")
+    _ensure_sqlite_unique_index("proactivity_settings", "uq_proactivity_settings_user_id", "user_id")
+
     # Transaction columns
     _ensure_sqlite_columns("transactions", [
         ("billing_cycle", "VARCHAR", None),
@@ -152,6 +167,34 @@ def run_startup_migrations():
         ("subscription_ends_at", "DATETIME", None),
         ("paddle_transaction_id", "TEXT", None),
     ])
+
+    _ensure_sqlite_columns(
+        "plans",
+        [
+            ("deadline", "TEXT", None),
+            ("schedule_slot", "TEXT", None),
+            ("description", "TEXT", None),
+            ("color", "TEXT", None),
+        ],
+    )
+    _ensure_sqlite_columns("habits", [("description", "TEXT", None)])
+    _ensure_sqlite_columns("chat_sessions", [("scope", "TEXT", "'thread'")])
+    _ensure_sqlite_columns(
+        "user_chat_threads",
+        [
+            ("summary", "TEXT", None),
+            ("context_snapshot", "JSON", None),
+            ("metadata", "JSON", None),
+            ("last_message_at", "DATETIME", "CURRENT_TIMESTAMP"),
+        ],
+    )
+    _ensure_sqlite_columns(
+        "calendar_events",
+        [
+            ("color", "TEXT", None),
+            ("reminder_minutes_before", "INTEGER", None),
+        ],
+    )
 
 
 async def run_basic_migrations():
@@ -175,43 +218,6 @@ async def run_basic_migrations():
             ("auto_web_search_enabled", "BOOLEAN", "0"),
         ],
     )
-    if DATABASE_URL.startswith("postgres"):
-        try:
-            await database.execute(
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS visible_model_ids JSONB"
-            )
-            await database.execute(
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS personalization_location TEXT"
-            )
-            await database.execute(
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS personalization_time_zone TEXT"
-            )
-            await database.execute(
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS personalization_system_prompt_override TEXT"
-            )
-            await database.execute(
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS theme_mode TEXT"
-            )
-            await database.execute(
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS ui_locale TEXT"
-            )
-            await database.execute(
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS preferred_response_language TEXT"
-            )
-            await database.execute(
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS notification_preferences JSONB"
-            )
-            await database.execute(
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS conversation_memory_enabled BOOLEAN DEFAULT TRUE"
-            )
-            await database.execute(
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS auto_web_search_enabled BOOLEAN DEFAULT FALSE"
-            )
-        except Exception as exc:  # pragma: no cover - best effort migration
-            app_logger.warning(
-                "Postgres migration failed",
-                extra={"event_type": "postgres_migration_error", "table": "users", "error": str(exc)},
-            )
     _ensure_sqlite_columns(
         "user_chat_messages",
         [

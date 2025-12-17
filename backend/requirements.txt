@@ -14,11 +14,9 @@ google-auth-oauthlib
 google-auth-httplib2
 google-auth
 google-genai
-psycopg2-binary
 tiktoken
 anthropic
 pywebpush
-asyncpg
 midtransclient
 slowapi
 python-dateutil

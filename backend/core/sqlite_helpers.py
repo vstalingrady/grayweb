@@ -49,6 +49,12 @@ def ensure_sqlite_columns(
     try:
         conn = sqlite3.connect(db_path)
         try:
+            cursor = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+                (table,),
+            )
+            if cursor.fetchone() is None:
+                return
             cursor = conn.execute(f"PRAGMA table_info({table})")
             existing = {row[1] for row in cursor.fetchall()}
             added = False
@@ -118,6 +124,117 @@ def ensure_sqlite_index(table: str, index_name: str, column: str) -> None:
     except sqlite3.Error as exc:
         app_logger.error(
             "SQLite index creation failed",
+            extra={"event_type": "sqlite_migration_error", "table": table, "error": str(exc)},
+        )
+
+
+def rename_sqlite_column_if_needed(table: str, old_name: str, new_name: str) -> None:
+    """Rename a SQLite column when upgrading from a bad schema (best effort)."""
+    db_path = _get_db_path()
+    if not db_path:
+        return
+
+    def quote(ident: str) -> str:
+        return '"' + ident.replace('"', '""') + '"'
+
+    try:
+        conn = sqlite3.connect(db_path)
+        try:
+            cursor = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+                (table,),
+            )
+            if cursor.fetchone() is None:
+                return
+
+            cursor = conn.execute(f"PRAGMA table_info({quote(table)})")
+            existing = {row[1] for row in cursor.fetchall()}
+            if old_name not in existing or new_name in existing:
+                return
+
+            conn.execute(
+                f"ALTER TABLE {quote(table)} RENAME COLUMN {quote(old_name)} TO {quote(new_name)}"
+            )
+            conn.commit()
+            app_logger.info(
+                "Renamed SQLite column %s.%s -> %s",
+                table,
+                old_name,
+                new_name,
+                extra={"event_type": "sqlite_column_rename", "table": table},
+            )
+        finally:
+            conn.close()
+    except sqlite3.Error as exc:
+        app_logger.error(
+            "SQLite column rename failed",
+            extra={"event_type": "sqlite_migration_error", "table": table, "error": str(exc)},
+        )
+
+
+def ensure_sqlite_unique_index(table: str, index_name: str, columns: str) -> None:
+    """Create a UNIQUE index if it doesn't exist and the table has no duplicates."""
+    db_path = _get_db_path()
+    if not db_path:
+        return
+
+    def quote(ident: str) -> str:
+        return '"' + ident.replace('"', '""') + '"'
+
+    normalized_columns = [c.strip() for c in columns.split(",") if c.strip()]
+    if not normalized_columns:
+        return
+
+    try:
+        conn = sqlite3.connect(db_path)
+        try:
+            cursor = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+                (table,),
+            )
+            if cursor.fetchone() is None:
+                return
+
+            cursor = conn.execute(f"PRAGMA index_list({quote(table)})")
+            for row in cursor.fetchall():
+                existing_name = row[1]
+                is_unique = bool(row[2])
+                if not is_unique:
+                    continue
+                info_rows = conn.execute(f"PRAGMA index_info({quote(existing_name)})").fetchall()
+                existing_cols = [r[2] for r in sorted(info_rows, key=lambda v: v[0])]
+                if existing_cols == normalized_columns:
+                    return
+
+            placeholder_cols = ", ".join(quote(col) for col in normalized_columns)
+            duplicates_query = (
+                f"SELECT 1 FROM {quote(table)} GROUP BY {placeholder_cols} HAVING COUNT(*) > 1 LIMIT 1"
+            )
+            if conn.execute(duplicates_query).fetchone() is not None:
+                app_logger.warning(
+                    "Skipping UNIQUE index %s on %s because duplicates exist",
+                    index_name,
+                    table,
+                    extra={"event_type": "sqlite_unique_index_skipped", "table": table},
+                )
+                return
+
+            conn.execute(
+                f"CREATE UNIQUE INDEX {quote(index_name)} ON {quote(table)} ({placeholder_cols})"
+            )
+            conn.commit()
+            app_logger.info(
+                "Created UNIQUE index %s on %s (%s)",
+                index_name,
+                table,
+                ", ".join(normalized_columns),
+                extra={"event_type": "sqlite_index_created", "table": table},
+            )
+        finally:
+            conn.close()
+    except sqlite3.Error as exc:
+        app_logger.error(
+            "SQLite unique index creation failed",
             extra={"event_type": "sqlite_migration_error", "table": table, "error": str(exc)},
         )
 
@@ -215,5 +332,7 @@ def rebuild_sqlite_table_without_columns(table: str, columns_to_drop: set) -> No
 _ensure_sqlite_columns = ensure_sqlite_columns
 _ensure_sqlite_table = ensure_sqlite_table
 _ensure_sqlite_index = ensure_sqlite_index
+_rename_sqlite_column_if_needed = rename_sqlite_column_if_needed
+_ensure_sqlite_unique_index = ensure_sqlite_unique_index
 _drop_sqlite_table = drop_sqlite_table
 _rebuild_sqlite_table_without_columns = rebuild_sqlite_table_without_columns

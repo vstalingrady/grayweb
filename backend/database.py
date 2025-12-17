@@ -8,6 +8,7 @@ import sqlalchemy
 from pathlib import Path
 from dotenv import load_dotenv
 from datetime import datetime
+import logging
 
 # Use centralized environment detection
 try:
@@ -60,26 +61,37 @@ def _select_database_url() -> str:
     else:
          default_fallback = f"sqlite:///{sqlite_path}" if sqlite_path else f"sqlite:///{ROOT_DIR}/backend/users.db"
 
-    chosen: str
+    candidates: list[str] = []
     if db_mode == "remote":
-        chosen = primary_url or local_url or default_fallback
+        candidates = [primary_url, local_url, default_fallback]
     elif db_mode == "local":
-        chosen = local_url or primary_url or default_fallback
+        candidates = [local_url, primary_url, default_fallback]
     else:
-        chosen = primary_url or local_url or default_fallback
+        candidates = [primary_url, local_url, default_fallback]
 
-    return _normalize_sqlite_url(chosen)
+    for candidate in candidates:
+        if not candidate:
+            continue
+        value = candidate.strip()
+        if not value:
+            continue
+        if value.startswith("sqlite"):
+            return _normalize_sqlite_url(value)
+
+    logger = logging.getLogger("backend.database")
+    logger.error(
+        "No SQLite database URL configured; refusing to use non-SQLite DATABASE_URL.",
+        extra={"event_type": "database_url_invalid", "db_mode": db_mode},
+    )
+    raise RuntimeError(
+        "SQLite is the only supported database. Set LOCAL_DATABASE_URL or SQLITE_DB_PATH "
+        "(and remove DATABASE_URL if it points to Postgres)."
+    )
 
 
 DATABASE_URL = _select_database_url()
 
-# Create database instance
-# Create database instance
-db_args = {}
-if DATABASE_URL.startswith("postgresql"):
-    db_args["statement_cache_size"] = 0
-
-database = databases.Database(DATABASE_URL, **db_args)
+database = databases.Database(DATABASE_URL)
 metadata = sqlalchemy.MetaData()
 
 _PYTEST_TICKER_TASKS: "weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Task]" = weakref.WeakKeyDictionary()
@@ -493,5 +505,4 @@ async def get_database():
     Connection is managed globally by startup/shutdown events.
     """
     yield database
-
 
