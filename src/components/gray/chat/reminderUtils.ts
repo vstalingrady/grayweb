@@ -11,8 +11,6 @@ import {
     REMINDER_CODE_BLOCK_REGEX,
 } from "./constants";
 import { formatReminderDateLabel, formatReminderSlotLabel } from "../reminderTimeUtils";
-
-/* eslint-disable @typescript-eslint/no-explicit-any */
 export type ReminderConfig = {
     start: number;
     end: number;
@@ -528,37 +526,4 @@ export const extractGrayRemindersFromText = (
     cleanText = cleanText.trim();
 
     return { cleanText, reminders };
-};
-
-export const sendReminderNotification = (reminder: any, REMINDER_NOTIFICATION_ICON: string) => {
-    if (
-        typeof window === "undefined" ||
-        typeof Notification === "undefined" ||
-        (typeof window !== "undefined" && !window.isSecureContext)
-    ) {
-        return;
-    }
-    if (!reminder.id) {
-        return;
-    }
-    if (Notification.permission !== "granted") {
-        return;
-    }
-    try {
-        const notification = new Notification(`Reminder: ${reminder.label || "Reminder"}`, {
-            body: reminder.summary || reminder.description || "Tap to view details.",
-            icon: REMINDER_NOTIFICATION_ICON,
-            badge: REMINDER_NOTIFICATION_ICON,
-            tag: `gray-reminder-${reminder.id}`,
-            requireInteraction: true,
-        } as any);
-        notification.addEventListener("click", () => {
-            if (typeof window !== "undefined" && window.focus) {
-                window.focus();
-            }
-            notification.close();
-        });
-    } catch (error) {
-        console.error("Failed to show reminder notification:", error);
-    }
 };

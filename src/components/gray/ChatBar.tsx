@@ -1,6 +1,6 @@
 "use client";
 
-import styles from "@/components/gray/chat/ChatStyles.module.css";
+import styles from "@/components/gray/chat/ChatComposerStyles.module.css";
 import pageStyles from "@/app/gray/GrayPageClient.module.css";
 import Image from "next/image";
 import { Paperclip, ArrowUpRight } from "lucide-react";

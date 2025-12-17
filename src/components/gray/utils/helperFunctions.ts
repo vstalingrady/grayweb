@@ -173,8 +173,7 @@ export const derivePlanTierLabel = (candidate?: PlanCarrierUser | null): string 
     if (normalized === "scout") {
         return "Scout";
     }
-    const premiumTokens = new Set(["depth", "pro", "premium", "operator", "admin"]);
-    if (premiumTokens.has(normalized)) {
+    if (PREMIUM_PLAN_TIER_TOKENS.has(normalized)) {
         return "Depth";
     }
     return "Pioneer";

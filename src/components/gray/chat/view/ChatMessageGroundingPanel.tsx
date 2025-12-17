@@ -5,6 +5,22 @@ import type { GroundingMetadata } from "@/lib/api";
 import { buildGroundingSourceCards, buildGroundingSourceFaviconUrl, buildGroundingSourceInitials } from "./groundingSources";
 import { getSanitizedSearchEntryHtml } from "./searchEntrySanitizer";
 
+const getRenderedSearchEntry = (candidate: unknown): string | null => {
+  if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
+    return null;
+  }
+  const record = candidate as Record<string, unknown>;
+  const snake = record["rendered_content"];
+  if (typeof snake === "string") {
+    return snake;
+  }
+  const camel = record["renderedContent"];
+  if (typeof camel === "string") {
+    return camel;
+  }
+  return null;
+};
+
 export type ChatMessageGroundingPanelProps = {
   metadata: GroundingMetadata;
   messageId: string;
@@ -24,14 +40,7 @@ export function ChatMessageGroundingPanel({
     metadata?.search_entry_point ??
     (metadata as { searchEntryPoint?: { rendered_content?: string; renderedContent?: string } })?.searchEntryPoint ??
     null;
-  const renderedSearchEntry =
-    typeof searchEntryPoint?.rendered_content === "string"
-      ? searchEntryPoint?.rendered_content
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      : typeof (searchEntryPoint as any)?.renderedContent === "string"
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ? (searchEntryPoint as any).renderedContent
-        : null;
+  const renderedSearchEntry = getRenderedSearchEntry(searchEntryPoint);
   const sanitizedSearchEntryHtml = renderedSearchEntry ? getSanitizedSearchEntryHtml(renderedSearchEntry) : null;
 
   const chunks =

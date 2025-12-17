@@ -13,6 +13,7 @@ import {
 } from "react";
 import type { Components } from "react-markdown";
 import styles from "@/components/gray/chat/ChatStyles.module.css";
+import composerStyles from "@/components/gray/chat/ChatComposerStyles.module.css";
 import type { ContextUsageSummary } from "@/components/gray/types";
 import { useI18n } from "@/contexts/I18nContext";
 import { useUser } from "@/contexts/UserContext";
@@ -555,8 +556,8 @@ export function GrayChatView({
             {introContent}
             <div ref={scrollAnchorRef} aria-hidden="true" />
           </div>
-        ) : (
-          <ChatMessagesList
+      ) : (
+        <ChatMessagesList
             messages={messages}
             activeStreamingMessageId={activeStreamingMessageId}
             regeneratingMessageId={regeneratingMessageId}
@@ -578,13 +579,13 @@ export function GrayChatView({
           />
         )}
       </div>
-      <div className={styles.chatComposerDock} ref={composerDockRef}>
+      <div className={composerStyles.chatComposerDock} ref={composerDockRef}>
         <input
           ref={attachmentInputRef}
           type="file"
           multiple
           accept="image/*,.pdf"
-          className={styles.chatAttachmentInput}
+          className={composerStyles.chatAttachmentInput}
           onChange={handleAttachmentInputChange}
         />
         <GrayChatComposer

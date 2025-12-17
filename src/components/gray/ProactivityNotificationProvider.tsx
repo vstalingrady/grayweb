@@ -47,6 +47,19 @@ export function ProactivityNotificationProvider({ children }: ProactivityNotific
   const { notificationPreferences } = useNotificationPreferences();
   const [deliveredKeys, setDeliveredKeys] = useState<Set<string>>(new Set());
   const pushSetupRef = useRef<Promise<void> | null>(null);
+  const getAuthToken = useCallback(async (): Promise<string | null> => {
+    const { getSupabaseClient } = await import("@/lib/supabaseClient");
+    const supabase = getSupabaseClient();
+    if (!supabase) {
+      return null;
+    }
+    const { data, error } = await supabase.auth.getSession();
+    if (error) {
+      console.warn("[Proactivity] Failed to get auth session:", error);
+      return null;
+    }
+    return data.session?.access_token ?? null;
+  }, []);
 
   const handleProactivityMessage = useCallback(
     (payload: { session_id?: string; message?: string; delivery_key?: string }) => {
@@ -73,15 +86,6 @@ export function ProactivityNotificationProvider({ children }: ProactivityNotific
 
   useEffect(() => {
     if (!userId || typeof window === "undefined" || typeof EventSource === "undefined") return;
-
-    // Get authentication token
-    const getAuthToken = async (): Promise<string | null> => {
-      const supabase = (await import('@/lib/supabaseClient')).getSupabaseClient();
-      if (!supabase) return null;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data } = await (supabase.auth as any).getSession();
-      return data.session?.access_token ?? null;
-    };
 
     const setupProactivity = async () => {
       const token = await getAuthToken();
@@ -146,7 +150,7 @@ export function ProactivityNotificationProvider({ children }: ProactivityNotific
     return () => {
       cleanup.then(fn => fn?.());
     };
-  }, [userId, handleProactivityMessage]);
+  }, [getAuthToken, userId, handleProactivityMessage]);
 
   useEffect(() => {
     if (!userId || typeof window === "undefined") return;
@@ -158,11 +162,7 @@ export function ProactivityNotificationProvider({ children }: ProactivityNotific
     if (pushSetupRef.current) return;
 
     const setup = async () => {
-      const supabase = (await import("@/lib/supabaseClient")).getSupabaseClient();
-      if (!supabase) return;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data } = await (supabase.auth as any).getSession();
-      const token: string | null = data.session?.access_token ?? null;
+      const token = await getAuthToken();
       if (!token) return;
 
       const registration = await navigator.serviceWorker.register("/sw-proactivity.js");
@@ -204,7 +204,7 @@ export function ProactivityNotificationProvider({ children }: ProactivityNotific
       .finally(() => {
         pushSetupRef.current = null;
       });
-  }, [notificationPreferences.device, notificationPreferences.proactivity, userId]);
+  }, [getAuthToken, notificationPreferences.device, notificationPreferences.proactivity, userId]);
 
   return (
     <ProactivityNotificationContext.Provider value={{ deliveredKeys }}>

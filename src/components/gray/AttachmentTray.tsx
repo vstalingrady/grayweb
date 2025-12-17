@@ -1,7 +1,7 @@
 "use client";
 
 import { LoaderCircle, X } from "lucide-react";
-import styles from "@/components/gray/chat/ChatStyles.module.css";
+import styles from "@/components/gray/chat/ChatComposerStyles.module.css";
 import type { MediaUpload } from "@/lib/api";
 import { useI18n } from "@/contexts/I18nContext";
 

@@ -2,7 +2,7 @@
 
 import { type ReactNode } from "react";
 import { GrayChatBar, type GrayChatBarProps } from "./ChatBar";
-import styles from "@/components/gray/chat/ChatStyles.module.css";
+import styles from "@/components/gray/chat/ChatComposerStyles.module.css";
 import { useChatStore } from "./ChatProvider";
 import { ModelSelector } from "./ModelSelector";
 

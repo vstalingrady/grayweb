@@ -5,6 +5,8 @@ _backend_dir = Path(__file__).parent
 _parent_dir = _backend_dir.parent
 if str(_parent_dir) not in sys.path:
     sys.path.insert(0, str(_parent_dir))
+if str(_backend_dir) not in sys.path:
+    sys.path.insert(0, str(_backend_dir))
 
 import logging
 import asyncio
@@ -20,10 +22,6 @@ import sqlalchemy
 from datetime import datetime, timezone, date, timedelta
 
 # Time helpers (avoid datetime.utcnow() deprecation)
-try:
-    from backend.time_utils import utcnow, utcnow_aware
-except Exception:  # When running with backend/ on sys.path directly (tests)
-    from time_utils import utcnow, utcnow_aware  # type: ignore
 import os
 import json
 from asyncio import TimeoutError, wait_for, sleep
@@ -32,22 +30,16 @@ import re
 import time
 from dotenv import load_dotenv
 from supabase import Client
-# Support both package and module import contexts
+
 try:
-    from backend.supabase_utils import (
+    from backend.compat_imports import (
+        utcnow, utcnow_aware,
+        # Supabase utilities
         create_supabase_client,
         create_supabase_service_client,
         resolve_supabase_credentials,
-    )  # type: ignore
-except Exception:  # When running with backend/ on sys.path directly (tests)
-    from supabase_utils import (
-        create_supabase_client,
-        create_supabase_service_client,
-        resolve_supabase_credentials,
-    )  # type: ignore
-try:
-    from backend.core import conversation_store
-    from backend.core.conversation_store import (
+        # Conversation store
+        conversation_store,
         configure_conversation_store,
         get_cached_user,
         cache_conversation_history,
@@ -59,294 +51,62 @@ try:
         _conversation_store_available,
         _handle_conversation_store_error,
         _general_conversation_user_id,
-    )
-except Exception:  # When running with backend/ on sys.path directly (tests)
-    from core import conversation_store  # type: ignore
-    from core.conversation_store import (  # type: ignore
-        configure_conversation_store,
-        get_cached_user,
-        cache_conversation_history,
-        append_to_conversation_cache,
-        invalidate_conversation_cache,
-        delete_supabase_user_records,
-        CONVERSATION_OWNER_CACHE,
-        GENERAL_CONVERSATION_PREFIX,
-        _conversation_store_available,
-        _handle_conversation_store_error,
-        _general_conversation_user_id,
-    )
-try:
-    from backend.core.chat_history import (
+        # Chat history
         normalize_conversation_history,
         load_thread_history,
         overwrite_thread_history,
         normalize_conversation_title,
         apply_conversation_update,
         update_conversation_title,
-    )
-except Exception:
-    from core.chat_history import (  # type: ignore
-        normalize_conversation_history,
-        load_thread_history,
-        overwrite_thread_history,
-        normalize_conversation_title,
-        apply_conversation_update,
-        update_conversation_title,
-    )
-
-try:
-    from backend.core.file_utils import (
+        # File utilities
         MEDIA_UPLOAD_DIR,
         MEDIA_UPLOAD_ROOT,
-        UPLOAD_READ_CHUNK_SIZE,
-        MAX_MEDIA_UPLOAD_SIZE_BYTES,
-        MAX_BACKGROUND_UPLOAD_SIZE_BYTES,
-        IMAGE_MIME_TYPES,
-        DOCUMENT_MIME_TYPES,
-        CHAT_UPLOAD_MIME_TYPES,
-        BACKGROUND_UPLOAD_MIME_TYPES,
-        IMAGE_EXTENSIONS,
-        CHAT_UPLOAD_EXTENSIONS,
-        BACKGROUND_UPLOAD_EXTENSIONS,
-        MIME_EXTENSION_MAP,
-        STORAGE_BASE_URL,
-        CLAMAV_SCAN_ENABLED,
-        CLAMAV_SCAN_BINARY,
-        CLAMAV_SCAN_TIMEOUT,
         sanitize_filename as _sanitize_filename,
-        normalize_mime as _normalize_mime,
-        sniff_mime_type as _sniff_mime_type,
-        reject_if_suspicious as _reject_if_suspicious,
-        scan_file_for_malware as _scan_file_for_malware,
-        ensure_storage_path as _ensure_storage_path,
-        resolve_storage_path_from_record as _resolve_storage_path_from_record,
-        persist_upload_file as _persist_upload_file,
-    )
-except ImportError:
-    from core.file_utils import (  # type: ignore
-        MEDIA_UPLOAD_DIR,
-        MEDIA_UPLOAD_ROOT,
-        UPLOAD_READ_CHUNK_SIZE,
-        MAX_MEDIA_UPLOAD_SIZE_BYTES,
-        MAX_BACKGROUND_UPLOAD_SIZE_BYTES,
-        IMAGE_MIME_TYPES,
-        DOCUMENT_MIME_TYPES,
-        CHAT_UPLOAD_MIME_TYPES,
-        BACKGROUND_UPLOAD_MIME_TYPES,
-        IMAGE_EXTENSIONS,
-        CHAT_UPLOAD_EXTENSIONS,
-        BACKGROUND_UPLOAD_EXTENSIONS,
-        MIME_EXTENSION_MAP,
-        STORAGE_BASE_URL,
-        CLAMAV_SCAN_ENABLED,
-        CLAMAV_SCAN_BINARY,
-        CLAMAV_SCAN_TIMEOUT,
-        sanitize_filename as _sanitize_filename,
-        normalize_mime as _normalize_mime,
-        sniff_mime_type as _sniff_mime_type,
-        reject_if_suspicious as _reject_if_suspicious,
-        scan_file_for_malware as _scan_file_for_malware,
-        ensure_storage_path as _ensure_storage_path,
-        resolve_storage_path_from_record as _resolve_storage_path_from_record,
-        persist_upload_file as _persist_upload_file,
-    )
-
-try:
-    from backend.core.sqlite_helpers import (
-        ensure_sqlite_columns as _ensure_sqlite_columns,
-        ensure_sqlite_table as _ensure_sqlite_table,
-        ensure_sqlite_index as _ensure_sqlite_index,
-        drop_sqlite_table as _drop_sqlite_table,
-        rebuild_sqlite_table_without_columns as _rebuild_sqlite_table_without_columns,
-    )
-except ImportError:
-    from core.sqlite_helpers import (  # type: ignore
-        ensure_sqlite_columns as _ensure_sqlite_columns,
-        ensure_sqlite_table as _ensure_sqlite_table,
-        ensure_sqlite_index as _ensure_sqlite_index,
-        drop_sqlite_table as _drop_sqlite_table,
-        rebuild_sqlite_table_without_columns as _rebuild_sqlite_table_without_columns,
-    )
-
-try:
-    from backend.core.prompt_utils import (
+        # Prompt utilities
         load_prompt_from_file,
         load_prompt_from_json,
         normalize_prompt_locale as _normalize_prompt_locale,
         prompt_locale_from_request as _prompt_locale_from_request,
-    )
-except ImportError:
-    from core.prompt_utils import (  # type: ignore
-        load_prompt_from_file,
-        load_prompt_from_json,
-        normalize_prompt_locale as _normalize_prompt_locale,
-        prompt_locale_from_request as _prompt_locale_from_request,
-    )
-
-try:
-    from backend.core.cors_utils import (
+        # CORS utilities
         IS_PRODUCTION,
-        DEFAULT_DEV_ORIGIN_PORTS,
-        LOCAL_NETWORK_ORIGIN_PATTERN,
-        split_env_list as _split_env_list,
-        origin_variants as _origin_variants,
-        local_network_origins as _local_network_origins,
         local_network_origin_regex as _local_network_origin_regex,
         build_allowed_origins as _build_allowed_origins,
-    )
-except ImportError:
-    from core.cors_utils import (  # type: ignore
-        IS_PRODUCTION,
-        DEFAULT_DEV_ORIGIN_PORTS,
-        LOCAL_NETWORK_ORIGIN_PATTERN,
-        split_env_list as _split_env_list,
-        origin_variants as _origin_variants,
-        local_network_origins as _local_network_origins,
-        local_network_origin_regex as _local_network_origin_regex,
-        build_allowed_origins as _build_allowed_origins,
-    )
-
-try:
-    from backend.core.cache import (
+        # Cache
         TTLCache,
         AsyncTTLCache,
         USER_CACHE,
-        CONVERSATION_OWNER_CACHE,
         CONVERSATION_HISTORY_CACHE,
         load_context_cache as _load_context_cache,
         context_cache_contents as _context_cache_contents,
-    )
-except ImportError:
-    from core.cache import (  # type: ignore
-        TTLCache,
-        AsyncTTLCache,
-        USER_CACHE,
-        CONVERSATION_OWNER_CACHE,
-        CONVERSATION_HISTORY_CACHE,
-        load_context_cache as _load_context_cache,
-        context_cache_contents as _context_cache_contents,
-    )
-
-try:
-    from backend.core.message_detection import (
-        REMINDER_KEYWORDS as _REMINDER_KEYWORDS,
-        TOOL_TRIGGER_KEYWORDS as _TOOL_TRIGGER_KEYWORDS,
+        # Message detection
         needs_structured_tools as _needs_structured_tools,
         should_request_structured_reminders as _should_request_structured_reminders,
         should_use_web_search as _should_use_web_search,
-        should_enable_search as _should_enable_search,
-    )
-except ImportError:
-    from core.message_detection import (  # type: ignore
-        REMINDER_KEYWORDS as _REMINDER_KEYWORDS,
-        TOOL_TRIGGER_KEYWORDS as _TOOL_TRIGGER_KEYWORDS,
-        needs_structured_tools as _needs_structured_tools,
-        should_request_structured_reminders as _should_request_structured_reminders,
-        should_use_web_search as _should_use_web_search,
-        should_enable_search as _should_enable_search,
-    )
-
-try:
-    from backend.core.serializers import (
+        extract_urls_from_message as _extract_urls_from_message,
+        # Serializers
         row_get as _row_get,
         parse_json_field as _parse_json_field,
         serialize_reminder_row as _serialize_reminder_row,
         serialize_habit_record as _serialize_habit_record,
-        serialize_proactivity_notification as _serialize_proactivity_notification,
-        serialize_context_cache as _serialize_context_cache,
-        normalize_plan_items as _normalize_plan_items,
-        normalize_habit_items as _normalize_habit_items,
-        normalize_proactivity as _normalize_proactivity,
         datetime_to_ms as _datetime_to_ms,
-        parse_iso_timestamp as _parse_iso_timestamp,
-        DEFAULT_DASHBOARD_PROACTIVITY,
-    )
-except ImportError:
-    from core.serializers import (  # type: ignore
-        row_get as _row_get,
-        parse_json_field as _parse_json_field,
-        serialize_reminder_row as _serialize_reminder_row,
-        serialize_habit_record as _serialize_habit_record,
-        serialize_proactivity_notification as _serialize_proactivity_notification,
-        serialize_context_cache as _serialize_context_cache,
-        normalize_plan_items as _normalize_plan_items,
-        normalize_habit_items as _normalize_habit_items,
-        normalize_proactivity as _normalize_proactivity,
-        datetime_to_ms as _datetime_to_ms,
-        parse_iso_timestamp as _parse_iso_timestamp,
-        DEFAULT_DASHBOARD_PROACTIVITY,
-    )
-
-try:
-    from backend.core.ai_utils import (
+        # AI utilities
         candidate_text as _candidate_text,
         candidate_thought as _candidate_thought,
         candidate_grounding_payload as _candidate_grounding_payload,
         merge_extra_contents as _merge_extra_contents,
         materialize_structured_reminders as _materialize_structured_reminders,
-        clean_title as _clean_title,
         fallback_title_from_message as _fallback_title_from_message,
-    )
-except ImportError:
-    from core.ai_utils import (  # type: ignore
-        candidate_text as _candidate_text,
-        candidate_thought as _candidate_thought,
-        candidate_grounding_payload as _candidate_grounding_payload,
-        merge_extra_contents as _merge_extra_contents,
-        materialize_structured_reminders as _materialize_structured_reminders,
-        clean_title as _clean_title,
-        fallback_title_from_message as _fallback_title_from_message,
-    )
-
-try:
-    from backend.core.tool_handlers import (
-        set_reminder_scheduler as _set_tool_reminder_scheduler,
-        parse_iso_datetime as _parse_iso_datetime,
-        normalize_remind_at as _normalize_remind_at,
-        parse_remind_at as _parse_remind_at,
-        build_reminder_payload as _build_reminder_payload,
+        # Tool handlers
+        set_tool_reminder_scheduler as _set_tool_reminder_scheduler,
         list_calendar_events as _list_calendar_events,
         create_calendar_event as _create_calendar_event,
         update_calendar_event as _update_calendar_event,
         delete_calendar_event as _delete_calendar_event,
         build_maps_tool_and_config as _build_maps_tool_and_config,
-    )
-except ImportError:
-
-    from core.tool_handlers import (  # type: ignore
-        set_reminder_scheduler as _set_tool_reminder_scheduler,
-        parse_iso_datetime as _parse_iso_datetime,
-        normalize_remind_at as _normalize_remind_at,
-        parse_remind_at as _parse_remind_at,
-        build_reminder_payload as _build_reminder_payload,
-        list_calendar_events as _list_calendar_events,
-        create_calendar_event as _create_calendar_event,
-        update_calendar_event as _update_calendar_event,
-        delete_calendar_event as _delete_calendar_event,
-        build_maps_tool_and_config as _build_maps_tool_and_config,
-    )
-
-
-try:
-    from backend.core.entity_reminders import (
-        set_reminder_scheduler as _set_entity_reminder_scheduler,
-        get_pending_entity_reminder_map as _get_pending_entity_reminder_map,
-        delete_pending_entity_reminders as _delete_pending_entity_reminders,
-        delete_all_entity_reminders as _delete_all_entity_reminders,
-        upsert_entity_reminder as _upsert_entity_reminder,
-    )
-except ImportError:
-    from core.entity_reminders import (  # type: ignore
-        set_reminder_scheduler as _set_entity_reminder_scheduler,
-        get_pending_entity_reminder_map as _get_pending_entity_reminder_map,
-        delete_pending_entity_reminders as _delete_pending_entity_reminders,
-        delete_all_entity_reminders as _delete_all_entity_reminders,
-        upsert_entity_reminder as _upsert_entity_reminder,
-    )
-
-try:
-    from backend.core.workspace_tools import (
-        set_reminder_scheduler as _set_workspace_reminder_scheduler,
+        # Entity reminders
+        set_entity_reminder_scheduler as _set_entity_reminder_scheduler,
+        # Workspace tools
+        set_workspace_reminder_scheduler as _set_workspace_reminder_scheduler,
         list_plans_tool as _list_plans_tool,
         create_plan_tool as _create_plan_tool,
         update_plan_tool as _update_plan_tool,
@@ -363,8 +123,68 @@ try:
         get_workspace_state_tool as _get_workspace_state_tool,
     )
 except ImportError:
-    from core.workspace_tools import (  # type: ignore
-        set_reminder_scheduler as _set_workspace_reminder_scheduler,
+    from compat_imports import (  # type: ignore
+        utcnow, utcnow_aware,
+        create_supabase_client,
+        create_supabase_service_client,
+        resolve_supabase_credentials,
+        conversation_store,
+        configure_conversation_store,
+        get_cached_user,
+        cache_conversation_history,
+        append_to_conversation_cache,
+        invalidate_conversation_cache,
+        delete_supabase_user_records,
+        CONVERSATION_OWNER_CACHE,
+        GENERAL_CONVERSATION_PREFIX,
+        _conversation_store_available,
+        _handle_conversation_store_error,
+        _general_conversation_user_id,
+        normalize_conversation_history,
+        load_thread_history,
+        overwrite_thread_history,
+        normalize_conversation_title,
+        apply_conversation_update,
+        update_conversation_title,
+        MEDIA_UPLOAD_DIR,
+        MEDIA_UPLOAD_ROOT,
+        sanitize_filename as _sanitize_filename,
+        load_prompt_from_file,
+        load_prompt_from_json,
+        normalize_prompt_locale as _normalize_prompt_locale,
+        prompt_locale_from_request as _prompt_locale_from_request,
+        IS_PRODUCTION,
+        local_network_origin_regex as _local_network_origin_regex,
+        build_allowed_origins as _build_allowed_origins,
+        TTLCache,
+        AsyncTTLCache,
+        USER_CACHE,
+        CONVERSATION_HISTORY_CACHE,
+        load_context_cache as _load_context_cache,
+        context_cache_contents as _context_cache_contents,
+        needs_structured_tools as _needs_structured_tools,
+        should_request_structured_reminders as _should_request_structured_reminders,
+        should_use_web_search as _should_use_web_search,
+        extract_urls_from_message as _extract_urls_from_message,
+        row_get as _row_get,
+        parse_json_field as _parse_json_field,
+        serialize_reminder_row as _serialize_reminder_row,
+        serialize_habit_record as _serialize_habit_record,
+        datetime_to_ms as _datetime_to_ms,
+        candidate_text as _candidate_text,
+        candidate_thought as _candidate_thought,
+        candidate_grounding_payload as _candidate_grounding_payload,
+        merge_extra_contents as _merge_extra_contents,
+        materialize_structured_reminders as _materialize_structured_reminders,
+        fallback_title_from_message as _fallback_title_from_message,
+        set_tool_reminder_scheduler as _set_tool_reminder_scheduler,
+        list_calendar_events as _list_calendar_events,
+        create_calendar_event as _create_calendar_event,
+        update_calendar_event as _update_calendar_event,
+        delete_calendar_event as _delete_calendar_event,
+        build_maps_tool_and_config as _build_maps_tool_and_config,
+        set_entity_reminder_scheduler as _set_entity_reminder_scheduler,
+        set_workspace_reminder_scheduler as _set_workspace_reminder_scheduler,
         list_plans_tool as _list_plans_tool,
         create_plan_tool as _create_plan_tool,
         update_plan_tool as _update_plan_tool,
@@ -934,6 +754,18 @@ if SUPABASE_URL and SUPABASE_KEY and SUPABASE_URL != "your_supabase_url_here":
 
 # Note: Conversation store is now strictly local (SQLite/Postgres).
 # We no longer configure the conversation store with Supabase clients for data.
+
+
+# Stub functions for admin metrics (not yet implemented)
+def _count_error_entries(since: datetime) -> Dict[str, Any]:
+    """Placeholder for error counting - not yet implemented."""
+    return {"count": 0, "note": "Error counting not implemented"}
+
+
+def _collect_latency_stats(since: datetime) -> Dict[str, Any]:
+    """Placeholder for latency stats - not yet implemented."""
+    return {"note": "Latency stats not implemented"}
+
 
 async def _require_conversation_owner(conversation_id: str, current_user: Dict[str, Any]) -> None:
     """Ensure the authenticated user owns the conversation being accessed."""

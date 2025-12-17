@@ -1,0 +1,649 @@
+@media (max-width: 768px) {
+  .hideOnMobile {
+    display: none !important;
+  }
+}
+
+.chatBarLeftGroup {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  margin-right: 8px;
+}
+
+.chatBarRightGroup {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+
+.chatSearchSpinner {
+  width: 18px;
+  height: 18px;
+  animation: graySpin 1s linear infinite;
+  flex-shrink: 0;
+  opacity: 0.9;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chatSearchSpinner {
+    animation: none;
+  }
+}
+
+.chatBarRounded[data-expanded="true"] .chatBarLeftGroup,
+.chatBarRounded[data-expanded="true"] .chatBarRightGroup {
+  align-items: flex-end;
+  padding-bottom: 4px;
+}
+
+.chatModelSelectorDirect {
+  display: flex;
+  align-items: center;
+  position: relative;
+}
+
+.chatIconActive {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+}
+
+.chatActionActive {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+}
+
+.chatComposerDock {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  width: 100%;
+  padding: 0;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: transparent;
+}
+
+.chatAttachmentTopTray {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + clamp(4px, 1vh, 10px));
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  justify-content: center;
+  pointer-events: auto;
+}
+
+.chatAttachmentTopTray:empty {
+  display: none;
+  margin: 0;
+  padding: 0;
+}
+
+.chatAttachmentTopTray > * {
+  width: 100%;
+  max-width: min(var(--chat-column-max-width, 680px), 100%);
+  margin: 0 auto;
+  pointer-events: auto;
+}
+
+.chatComposerDock::before {
+  content: none;
+}
+
+.chatComposerDock .chatBarRow {
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  display: flex;
+  justify-content: center;
+  pointer-events: auto;
+}
+
+.chatComposerDock .chatBarRounded {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  border-bottom: none;
+}
+
+.chatComposerDock .generalChatBarRow {
+  /* Allow max-width to be inherited from chatBarRow */
+}
+
+[data-mobile-sidebar="true"] .chatComposerDock {
+  left: 0;
+  width: 100%;
+}
+
+.chatAttachmentInput {
+  display: none;
+}
+
+.chatBarRounded {
+  width: 100%;
+  max-width: min(var(--chat-column-max-width, 840px), 100%);
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0;
+  margin: 0 auto;
+  border-radius: 26px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgb(28, 28, 28);
+  padding: 8px;
+  position: relative;
+  z-index: 1;
+  transition: none;
+  pointer-events: auto;
+}
+
+.chatBarRounded[data-has-attachments="true"] {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+}
+
+.chatBarInputRow {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0;
+  width: 100%;
+}
+
+.chatBarInputRow .chatBarRightGroup {
+  margin-right: 0;
+}
+
+.chatBarControlsRow {
+  display: none;
+}
+
+.chatBarRounded[data-expanded="true"] {
+  align-items: flex-end;
+}
+
+.chatBarRounded[data-expanded="true"] .chatBarInputRow {
+  align-items: flex-end;
+}
+
+@media (max-width: 768px) {
+  .chatBarRounded {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    padding: 8px;
+  }
+
+  .chatBarControlsRow {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .chatBarRounded[data-expanded="true"] {
+    align-items: stretch;
+  }
+
+  .chatBarRounded[data-expanded="true"] .chatBarInputRow {
+    align-items: flex-start;
+  }
+}
+
+.chatAttachmentTrayTop {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 0 !important;
+  width: 100%;
+}
+
+.chatBarRounded:focus-within {
+  border-color: rgba(255, 255, 255, 0.15);
+  background: rgb(28, 28, 28);
+}
+
+[data-view="general"] .chatBarRounded {
+  background: rgb(28, 28, 28);
+}
+
+[data-view="general"] .chatBarRounded:focus-within {
+  background: rgb(28, 28, 28);
+}
+
+.chatBarRow {
+  position: relative;
+  width: 100%;
+  align-self: center;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0;
+  padding: 0;
+  box-sizing: border-box;
+  margin: 0;
+  pointer-events: auto;
+  z-index: 2;
+}
+
+.generalChatComposer {
+  position: relative;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  padding: 0;
+  padding-bottom: 0;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  border-top: none;
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  justify-content: center;
+  z-index: 100;
+  pointer-events: auto;
+  overflow: visible;
+}
+
+[data-compact="true"] .generalChatComposer {
+  position: relative;
+  bottom: auto;
+  left: auto;
+  right: auto;
+  padding-left: 0;
+  padding-right: 0;
+  width: min(var(--gray-general-max-width, 680px), 100%);
+  max-width: min(540px, 100%);
+  margin-top: 0;
+  pointer-events: auto;
+}
+
+.chatComposerSkirt {
+  display: none;
+  height: 0;
+  pointer-events: none;
+}
+
+@media (max-width: 768px) {
+  .chatComposerSkirt {
+    height: env(safe-area-inset-bottom, 0px);
+  }
+}
+
+[data-view="chat"] .chatBarRounded {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.generalChatComposer[data-has-attachments="true"] {
+  gap: clamp(8px, 1.5vh, 18px);
+}
+
+.generalChatComposer > * {
+  margin: 0 auto;
+  pointer-events: auto;
+}
+
+.generalChatComposer .generalChatBarRow {
+  width: 100%;
+  max-width: min(var(--chat-column-max-width, 840px), 100%);
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+.generalChatBarRow {
+  width: 100%;
+  padding-bottom: 8px;
+  margin: 0 auto;
+}
+
+.generalChatComposer .generalChatBarRow {
+  padding-bottom: 0;
+}
+
+.generalChatBarRow::before {
+  display: none;
+}
+
+.chatBarUnderline {
+  display: none !important;
+}
+
+.chatIconButton,
+.chatActionButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  border-radius: 0;
+  padding: 0;
+  color: rgba(235, 235, 235, 0.7);
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+  position: relative;
+  z-index: 2;
+}
+
+.chatIconButton {
+  background: none;
+  width: 32px;
+  height: 32px;
+  border: none;
+  padding: 0;
+  color: rgba(235, 235, 235, 0.7);
+}
+
+.chatActionButton {
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  background: #f5f5f5;
+  color: #050505;
+  line-height: 0;
+}
+
+.chatActionButton svg {
+  display: block;
+}
+
+.chatStopIcon {
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  background: currentColor;
+  display: block;
+}
+
+.chatIconButton[disabled],
+.chatActionButton[disabled] {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.chatIconButton[disabled]:hover,
+.chatActionButton[disabled]:hover {
+  color: rgba(235, 235, 235, 0.7);
+}
+
+.chatIconButton:hover {
+  background: none;
+  color: rgba(235, 235, 235, 0.7);
+}
+
+.chatActionButton:hover {
+  background: #ffffff;
+  color: #050505;
+}
+
+.chatInputWrapper {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  background: transparent;
+  min-width: 0;
+  min-height: 0;
+  position: relative;
+  gap: 0;
+  padding-left: 0;
+  text-align: left;
+}
+
+.chatAttachmentTrayInline {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  flex-shrink: 0;
+  padding: 12px 12px 4px 12px;
+  width: 100%;
+}
+
+.chatAttachmentThumb {
+  width: 80px;
+  height: 80px;
+  border-radius: 12px;
+  overflow: hidden;
+  position: relative;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.chatAttachmentThumbImage {
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+.chatAttachmentThumbImage img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.chatAttachmentThumbFile {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.08);
+  padding: 8px;
+  text-align: center;
+}
+
+.chatAttachmentThumbFile span {
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.85);
+  word-break: break-word;
+  line-height: 1.2;
+}
+
+.chatAttachmentRemoveBtn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 26px;
+  height: 26px;
+  background: rgba(0, 0, 0, 0.6);
+  border: none;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 999px;
+  z-index: 2;
+  touch-action: manipulation;
+}
+
+.chatAttachmentRemoveBtn:hover {
+  background: rgba(200, 50, 50, 0.9);
+}
+
+.chatAttachmentRemoveBtn:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.45);
+  outline-offset: 2px;
+}
+
+.chatAttachmentLoading {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.chatAttachmentSpinner {
+  opacity: 0.6;
+  animation: spin 1s linear infinite;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.chatAttachmentErrorInline {
+  font-size: 0.75rem;
+  color: #ff6b6b;
+  margin-left: 4px;
+}
+
+.chatInput {
+  flex: 1 1 auto;
+  border: none;
+  background: transparent;
+  color: rgba(245, 245, 245, 0.92);
+  font-family: var(
+    --font-sans,
+    "Plus Jakarta Sans",
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    sans-serif
+  );
+  font-size: 0.95rem;
+  padding: 2px 8px;
+  outline: none;
+  min-width: 0;
+  min-height: 24px;
+  max-height: none;
+  height: auto;
+  line-height: 1.4;
+  vertical-align: middle;
+  box-sizing: border-box;
+  width: 100%;
+  text-align: left;
+  resize: none;
+  overflow-y: hidden;
+}
+
+.chatInput::placeholder {
+  color: rgba(235, 235, 235, 0.45);
+  letter-spacing: 0.08em;
+  font-family: inherit;
+  text-align: left;
+}
+
+@media (max-width: 768px) {
+  .chatIconButton {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+
+  .chatInputWrapper {
+    width: auto !important;
+    flex: 1 1 auto !important;
+    padding-bottom: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    order: 0 !important;
+  }
+
+  .generalChatComposer {
+    padding: 0 !important;
+    padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+    width: 100% !important;
+    max-width: none !important;
+  }
+
+  .chatBarRounded {
+    gap: 8px !important;
+    padding: 10px 12px !important;
+    border-radius: 26px !important;
+    width: 98% !important;
+    max-width: none !important;
+    margin: 0 auto !important;
+    flex-wrap: nowrap !important;
+    align-items: flex-end !important;
+  }
+
+  .chatBarLeftGroup {
+    order: 0 !important;
+    margin-right: 0 !important;
+    padding-bottom: 0 !important;
+  }
+
+  .chatBarRightGroup {
+    order: 0 !important;
+    margin-left: 0 !important;
+    padding-bottom: 0 !important;
+  }
+
+  .chatInput {
+    padding-top: 2px !important;
+    padding-bottom: 2px !important;
+    padding-left: 4px !important;
+    padding-right: 4px !important;
+    font-size: 16px !important;
+    min-height: 24px;
+  }
+
+  .chatIconButton,
+  .chatActionButton {
+    width: 36px !important;
+    height: 36px !important;
+    padding: 8px !important;
+  }
+
+  .generalChatBarRow {
+    padding-bottom: 0;
+    width: 100% !important;
+    max-width: none !important;
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  .chatComposerDock .chatBarRow {
+    width: 100% !important;
+    max-width: none !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes graySpin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+

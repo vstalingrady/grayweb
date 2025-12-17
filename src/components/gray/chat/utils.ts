@@ -1,4 +1,9 @@
-import type { ChatMessage, ChatSession, ConversationHistoryEntryPayload } from "./types";
+import type {
+    ChatMessage,
+    ChatSession,
+    ConversationHistoryEntryPayload,
+    GrayReminderCreatedPayload,
+} from "./types";
 import type { User, Reminder } from "@/lib/api";
 import {
     GREETING_PATTERN,
@@ -15,6 +20,7 @@ import {
     GENERAL_CONVERSATION_PREFIX,
 } from "./constants";
 import { formatReminderDateLabel } from "../reminderTimeUtils";
+import { extractGrayRemindersFromText } from "./reminderUtils";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -97,19 +103,14 @@ export const normalizeAssistantContent = (candidate: string | null | undefined, 
     return trimmed.length > 0 ? trimmed : buildAssistantReply(prompt);
 };
 
-// Import extractGrayRemindersFromText lazily to avoid module-level circular dependency issues.
-// This function is used to normalize assistant messages and extract reminders.
 export const normalizeAssistantMessage = (
     role: string,
     content: string | null | undefined
-): { content: string; reminders: import("./types").GrayReminderCreatedPayload[] } => {
+): { content: string; reminders: GrayReminderCreatedPayload[] } => {
     // Only process assistant messages
     if (role !== "assistant" && role !== "model") {
         return { content: content ?? "", reminders: [] };
     }
-    // Import synchronously from the module since it's already bundled
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { extractGrayRemindersFromText } = require("./reminderUtils") as { extractGrayRemindersFromText: (text: string) => { cleanText: string; reminders: import("./types").GrayReminderCreatedPayload[] } };
     const result = extractGrayRemindersFromText(content ?? "");
     return { content: result.cleanText, reminders: result.reminders };
 };

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type HTMLAttributes } from "react";
 import { CheckCircle2, Copy } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import rehypeKatex from "rehype-katex";
@@ -18,26 +18,33 @@ import {
   tokenizeCode,
 } from "./codeHighlighting";
 
-// Type definition for code component
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type CodeComponent = any;
+type MarkdownCodeBlockProps = HTMLAttributes<HTMLElement> & {
+  inline?: boolean;
+  node?: unknown;
+};
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const MarkdownCodeBlock: CodeComponent = ({ inline, className, children, ...props }: any) => {
+export const MarkdownCodeBlock = ({
+  inline,
+  className,
+  children,
+  node,
+  ...props
+}: MarkdownCodeBlockProps) => {
+  void node;
   const isInline = Boolean(inline);
   const [copied, setCopied] = useState(false);
   const { t } = useI18n();
   const raw = typeof children === "string" ? children : String(children ?? "");
   const language = getLanguageId(className?.replace("language-", "") ?? undefined);
-  const { normalizedRaw, trimmedRaw, codeLines } = useMemo(() => {
-    const normalized = stripUniformIndent(raw);
+  const { trimmedRaw, codeLines } = useMemo(() => {
+    const trimmed = stripUniformIndent(raw).trim();
 
     return {
-      normalizedRaw: normalized.trim(),
-      trimmedRaw: normalized.trim(),
-      codeLines: tokenizeCode(normalized.trim(), language),
+      trimmedRaw: trimmed,
+      codeLines: tokenizeCode(trimmed, language),
     };
   }, [raw, language]);
+  const normalizedRaw = trimmedRaw;
 
   if (!isInline && !trimmedRaw) {
     return null;

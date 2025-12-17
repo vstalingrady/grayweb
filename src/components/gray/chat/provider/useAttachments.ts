@@ -68,8 +68,7 @@ export const useAttachments = ({ resolveChatUser }: UseAttachmentsOptions): UseA
           const upload = await apiService.uploadMediaFile(processedFile);
           const previewUrl = file.type?.toLowerCase().startsWith("image/")
             ? URL.createObjectURL(file)
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            : (upload as any)?.publicUrl || (upload as any)?.url || null;
+            : upload.public_url ?? undefined;
           uploads.push({ ...upload, previewUrl });
         }
         if (uploads.length > 0) {

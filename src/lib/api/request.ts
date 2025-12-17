@@ -44,15 +44,16 @@ export const apiFetch = async <T>(endpoint: string, options: RequestInit = {}): 
 
   const supabase = getSupabaseClient();
   if (supabase) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data } = await (supabase.auth as any).getSession();
-    const token = data.session?.access_token;
+    const { data, error } = await supabase.auth.getSession();
+    if (error) {
+      console.warn("[ApiService] Failed to load auth session:", error);
+    }
+    const token = data.session?.access_token ?? null;
     if (typeof token === "string" && token.length > 20 && token.split(".").length === 3) {
       headers.set("Authorization", `Bearer ${token}`);
     } else if (token) {
       console.warn("[ApiService] Invalid auth token detected. Clearing session.");
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (supabase.auth as any).signOut().catch(() => {});
+      await supabase.auth.signOut().catch(() => {});
     }
   }
 
@@ -287,4 +288,3 @@ export const apiFetch = async <T>(endpoint: string, options: RequestInit = {}): 
     throw new Error("Unexpected API error");
   }
 };
-

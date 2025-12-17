@@ -7,6 +7,38 @@ export async function* sendChatMessageStream(
   request: ChatRequest,
   options?: { signal?: AbortSignal },
 ): AsyncGenerator<ChatStreamEvent, void, unknown> {
+  type UsagePayload = Extract<ChatStreamEvent, { type: "usage" }>["usage"];
+  type GroundingMetadataPayload = Extract<ChatStreamEvent, { type: "end" }>["groundingMetadata"];
+
+  const coerceUsagePayload = (candidate: unknown): UsagePayload | null => {
+    if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
+      return null;
+    }
+    const record = candidate as Record<string, unknown>;
+    const completionTokens = record["completion_tokens"] ?? record["completionTokens"];
+    const promptTokens = record["prompt_tokens"] ?? record["promptTokens"];
+    const totalTokens = record["total_tokens"] ?? record["totalTokens"];
+    const totalCost = record["total_cost"] ?? record["totalCost"];
+
+    if (
+      typeof completionTokens !== "number" ||
+      typeof promptTokens !== "number" ||
+      typeof totalTokens !== "number"
+    ) {
+      return null;
+    }
+
+    const usage: UsagePayload = {
+      completion_tokens: completionTokens,
+      prompt_tokens: promptTokens,
+      total_tokens: totalTokens,
+    };
+    if (typeof totalCost === "number") {
+      usage.total_cost = totalCost;
+    }
+    return usage;
+  };
+
   const baseUrl = resolveApiBaseUrl();
   const endpoint = "/api/chat/stream";
   const normalizedEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
@@ -36,15 +68,16 @@ export async function* sendChatMessageStream(
 
   const supabase = getSupabaseClient();
   if (supabase) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data } = await (supabase.auth as any).getSession();
-    const token = data.session?.access_token;
+    const { data, error } = await supabase.auth.getSession();
+    if (error) {
+      console.warn("[ApiService.stream] Failed to load auth session:", error);
+    }
+    const token = data.session?.access_token ?? null;
     if (typeof token === "string" && token.length > 20 && token.split(".").length === 3) {
       headers["Authorization"] = `Bearer ${token}`;
     } else if (token) {
       console.warn("[ApiService.stream] Invalid auth token detected. Clearing session.");
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (supabase.auth as any).signOut().catch(() => {});
+      await supabase.auth.signOut().catch(() => {});
     }
   }
 
@@ -127,7 +160,6 @@ export async function* sendChatMessageStream(
     };
   };
 
-  /* eslint-disable @typescript-eslint/no-explicit-any */
   const parseSseEvent = (chunk: string): ChatStreamEvent | null => {
     const lines = chunk.split(newlineRegex);
     let eventType = "message";
@@ -162,19 +194,20 @@ export async function* sendChatMessageStream(
     }
 
     if (eventType === "token") {
-      const delta = (payload as any).delta ?? (payload as any).token ?? (payload as any).text ?? "";
+      const delta = payload.delta ?? payload.token ?? payload.text ?? "";
       return delta ? { type: "token", delta } : null;
     }
 
     if (eventType === "end") {
+      const groundingCandidate = payload.grounding_metadata ?? payload.groundingMetadata ?? null;
       return {
         type: "end",
-        conversationId: (payload as any).conversation_id ?? (payload as any).conversationId ?? null,
-        response: (payload as any).response ?? (payload as any).text ?? "",
-        title: (payload as any).title ?? null,
-        groundingMetadata: (payload as any).grounding_metadata ?? (payload as any).groundingMetadata ?? null,
+        conversationId: payload.conversation_id ?? payload.conversationId ?? null,
+        response: payload.response ?? payload.text ?? "",
+        title: payload.title ?? null,
+        groundingMetadata: groundingCandidate as GroundingMetadataPayload,
         timing: (() => {
-          const rawTiming = (payload as any).timing;
+          const rawTiming = payload.timing;
           if (!rawTiming) {
             return undefined;
           }
@@ -205,12 +238,12 @@ export async function* sendChatMessageStream(
     if (eventType === "error") {
       return {
         type: "error",
-        message: (payload as any).message ?? (payload as any).error ?? "Stream error",
+        message: payload.message ?? payload.error ?? "Stream error",
       };
     }
 
     if (eventType === "reminders") {
-      const reminders = (payload as any).reminders;
+      const reminders = payload.reminders;
       if (Array.isArray(reminders)) {
         return {
           type: "reminders",
@@ -221,20 +254,16 @@ export async function* sendChatMessageStream(
     }
 
     if (eventType === "usage") {
-      const usage = (payload as any).usage;
-      if (usage) {
-        return {
-          type: "usage",
-          usage,
-        };
-      }
-      return null;
+      const usage = coerceUsagePayload(payload.usage);
+      return usage ? { type: "usage", usage } : null;
     }
 
-    const fallbackDelta = (payload as any).delta ?? (payload as any).token ?? (payload as any).text;
-    return fallbackDelta ? { type: "token", delta: fallbackDelta } : null;
+    const fallbackDelta = payload.delta ?? payload.token ?? payload.text;
+    if (typeof fallbackDelta !== "string" || !fallbackDelta) {
+      return null;
+    }
+    return { type: "token", delta: fallbackDelta };
   };
-  /* eslint-enable @typescript-eslint/no-explicit-any */
 
   const flushBuffer = (): ChatStreamEvent[] => {
     const events: ChatStreamEvent[] = [];
@@ -294,4 +323,3 @@ export async function* sendChatMessageStream(
     }
   }
 }
-

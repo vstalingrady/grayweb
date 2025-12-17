@@ -14,6 +14,7 @@ import { clearAuthCookies } from "@/lib/auth/cookies";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import styles from "./GrayPageClient.module.css";
 import chatStyles from "@/components/gray/chat/ChatStyles.module.css";
+import composerStyles from "@/components/gray/chat/ChatComposerStyles.module.css";
 import {
   type ProactivityItem,
   type SidebarNavKey,
@@ -1506,14 +1507,14 @@ function GrayPageClientInner({
 
               {isDashboardView ? renderPrimaryView() : renderMainSurface()}
               {isMounted && viewMode === "general" ? (
-                <div className={chatStyles.chatComposerDock} data-surface="threads">
-                  <div className={chatStyles.chatAttachmentTopTray}>{generalAttachmentTray}</div>
+                <div className={composerStyles.chatComposerDock} data-surface="threads">
+                  <div className={composerStyles.chatAttachmentTopTray}>{generalAttachmentTray}</div>
                   <input
                     ref={attachmentInputRef}
                     type="file"
                     multiple
                     accept="image/*,.pdf"
-                    className={chatStyles.chatAttachmentInput}
+                    className={composerStyles.chatAttachmentInput}
                     onChange={handleAttachmentInputChange}
                   />
                   {isUsageLimitReached && usageStatus && (
