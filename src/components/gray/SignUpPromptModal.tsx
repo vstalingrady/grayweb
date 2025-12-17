@@ -3,7 +3,7 @@
 import { useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { X } from "lucide-react";
-import styles from "@/app/gray/GrayPageClient.module.css";
+import styles from "./SignUpPromptModal.module.css";
 import { useI18n } from "@/contexts/I18nContext";
 
 type SignUpPromptModalProps = {

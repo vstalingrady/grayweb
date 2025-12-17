@@ -14,16 +14,11 @@ import { clearAuthCookies } from "@/lib/auth/cookies";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import styles from "./GrayPageClient.module.css";
 import {
-  type PlanItem,
-  type PlanUpdates,
-  type HabitItem,
-  type HabitUpdates,
   type ProactivityItem,
   type SidebarNavKey,
   type SidebarHistoryEntry,
   type ContextUsageSummary,
 } from "@/components/gray/types";
-import type { CalendarEvent, CalendarInfo } from "@/components/calendar/types";
 import {
   useChatStore,
 } from "@/components/gray/ChatProvider";
@@ -63,10 +58,10 @@ import {
   ANON_MESSAGE_LIMIT_VALUE,
 } from "@/lib/anonymousSession";
 import { SignUpPromptModal } from "@/components/gray/SignUpPromptModal";
-import { PLAN_EVENT_ID_PREFIX } from "@/components/gray/planCalendarUtils";
 import { GrayMobileHeader } from "./components/GrayMobileHeader";
 import { useCalendarSyncHandlers } from "./hooks/useCalendarSyncHandlers";
 import { useGoogleCalendarIntegration } from "./hooks/useGoogleCalendarIntegration";
+import { usePlanHabitActions } from "./hooks/usePlanHabitActions";
 
 // Lazy load all heavy components for better code splitting
 const GrayEnhancedSidebar = dynamic(
@@ -294,8 +289,28 @@ function GrayPageClientInner({
     activePulse,
     isActivePulseEditable
   } = usePulse(userId, todayAnchor, nowDateKey, derivedPlans, derivedHabits, proactivity, sendDashboardNotification);
-
-  const [habitEditorTarget, setHabitEditorTarget] = useState<HabitItem | null>(null);
+  const {
+    habitEditorTarget,
+    setHabitEditorTarget,
+    togglePlan,
+    savePlan,
+    deletePlan,
+    toggleHabit,
+    handleHabitModalSubmit,
+    editHabit,
+    deleteHabit,
+  } = usePlanHabitActions({
+    userId,
+    isActivePulseEditable,
+    pulseEntries,
+    activePulse,
+    setPulseEntries,
+    plans,
+    setPlans,
+    habits,
+    setHabits,
+    sendDashboardNotification,
+  });
 
   const readSidebarExpandedPreference = useCallback(() => {
     if (typeof window === "undefined") {
@@ -1091,271 +1106,6 @@ function GrayPageClientInner({
     updateSession,
     variant,
   ]);
-
-  const togglePlan = (id: string) => {
-    if (!user) {
-      return;
-    }
-
-    if (!isActivePulseEditable && pulseEntries.length > 0) {
-      return;
-    }
-
-    const planId = Number(id);
-    if (Number.isNaN(planId)) {
-      return;
-    }
-
-    const previousPlans = plans;
-    const targetPlan = previousPlans.find((plan) => plan.id === id);
-    if (!targetPlan) {
-      return;
-    }
-
-    const nextCompleted = !targetPlan.completed;
-    const updatedPlans = previousPlans.map((plan) =>
-      plan.id === id ? { ...plan, completed: nextCompleted } : plan
-    );
-
-    setPlans(updatedPlans);
-
-    apiService
-      .updatePlan(user.id, planId, { completed: nextCompleted })
-      .catch((error) => {
-        console.error("Failed to update plan:", error);
-        setPlans(previousPlans);
-      });
-  };
-
-  const savePlan = async (planId: string, updates: PlanUpdates) => {
-    if (!user) {
-      return;
-    }
-    if (!isActivePulseEditable && pulseEntries.length > 0) {
-      return;
-    }
-
-    const numericPlanId = Number(planId);
-    if (Number.isNaN(numericPlanId)) {
-      return;
-    }
-
-    const previousPlans = plans;
-    const updatedPlans = previousPlans.map((plan) =>
-      plan.id === planId
-        ? {
-          ...plan,
-          label: updates.label,
-          deadline: updates.deadline ?? null,
-          scheduleSlot: updates.scheduleSlot ?? null,
-          details: updates.details ?? null,
-          reminderAt: "reminderAt" in updates ? (updates.reminderAt ?? null) : plan.reminderAt ?? null,
-          color: "color" in updates ? (updates.color ?? null) : plan.color ?? null,
-        }
-        : plan
-    );
-
-    setPlans(updatedPlans);
-    const targetPlan = previousPlans.find((plan) => plan.id === planId);
-    const planLabel = updates.label || targetPlan?.label || "Plan";
-    void sendDashboardNotification("Plan saved", `${planLabel} updated in today's pulse.`);
-
-    try {
-      const updatePayload: Parameters<typeof apiService.updatePlan>[2] = {
-        label: updates.label,
-        description: updates.details ?? null,
-        deadline: updates.deadline ?? null,
-        scheduleSlot: updates.scheduleSlot ?? null,
-      };
-      if ("reminderAt" in updates) {
-        updatePayload.reminderAt = updates.reminderAt ?? null;
-      }
-      if ("color" in updates) {
-        updatePayload.color = updates.color ?? null;
-      }
-      await apiService.updatePlan(user.id, numericPlanId, updatePayload);
-    } catch (error) {
-      console.error("Failed to update plan:", error);
-      setPlans(previousPlans);
-      throw error;
-    }
-  };
-
-  const deletePlan = (planToDelete: PlanItem) => {
-    if (!user) {
-      return;
-    }
-    if (!isActivePulseEditable && pulseEntries.length > 0) {
-      return;
-    }
-
-    const planId = Number(planToDelete.id);
-    if (Number.isNaN(planId)) {
-      return;
-    }
-
-    const previousPlans = plans;
-    const updatedPlans = previousPlans.filter((plan) => plan.id !== planToDelete.id);
-    setPlans(updatedPlans);
-
-    apiService
-      .deletePlan(user.id, planId)
-      .catch((error) => {
-        console.error("Failed to delete plan:", error);
-        setPlans(previousPlans);
-      });
-  };
-
-  const toggleHabit = async (id: string) => {
-    if (!user) {
-      return;
-    }
-    if (!isActivePulseEditable && pulseEntries.length > 0) {
-      return;
-    }
-    const previousHabits = habits;
-    const targetHabit = previousHabits.find((habit) => habit.id === id);
-    if (!targetHabit) {
-      return;
-    }
-
-    const updatedHabits = previousHabits.map((habit) =>
-      habit.id === id
-        ? {
-          ...habit,
-          completed: !habit.completed,
-        }
-        : habit
-    );
-
-    // 1. Update local habits state (definitions)
-    setHabits(updatedHabits);
-
-    // 2. Update Pulse Entries (Dashboard View source of truth)
-    // We must manually update this so that:
-    // a) The UI updates immediately
-    // b) The usePulse sync logic (which preserves existing pulse status) sees the new status
-    if (activePulse) {
-      const updatedPulseHabits = activePulse.habits.map((h) => {
-        if (h.id === id) {
-          const updatedH = updatedHabits.find((uh) => uh.id === id);
-          if (updatedH) {
-            return {
-              ...h,
-              completed: updatedH.completed,
-            };
-          }
-        }
-        return h;
-      });
-
-      const newActivePulse = { ...activePulse, habits: updatedPulseHabits };
-
-      setPulseEntries((prev) =>
-        prev.map((p) => (p.id === activePulse.id ? newActivePulse : p))
-      );
-
-      // 3. Persist to API
-      try {
-        await apiService.createOrUpdateDashboardPulse(user.id, {
-          date_key: newActivePulse.dateKey,
-          timestamp: newActivePulse.timestamp,
-          plans: newActivePulse.plans, // Use existing plans
-          habits: newActivePulse.habits.map((h) => ({
-            id: h.id,
-            label: h.label,
-            previous_label: h.previousLabel,
-            completed: Boolean(h.completed),
-          })),
-          proactivity: {
-            id: newActivePulse.proactivity?.id ?? "proactivity-1",
-            label: newActivePulse.proactivity?.label ?? "Check-ins",
-            description: newActivePulse.proactivity?.description ?? null,
-            cadence: newActivePulse.proactivity?.cadence ?? "Manual",
-            time: newActivePulse.proactivity?.time ?? "09:00",
-          },
-          carry_forward: false,
-        });
-      } catch (err) {
-        console.error("Failed to save habit toggle to pulse:", err);
-        // Optional: Revert state on error?
-      }
-    }
-  };
-
-  const handleHabitModalSubmit = useCallback(
-    async (habitId: string | null, updates: HabitUpdates) => {
-      if (typeof userId !== "number") {
-        throw new Error("You need to be signed in to update habits.");
-      }
-      if (!habitId) {
-        throw new Error("Missing habit id.");
-      }
-      const numericId = Number(habitId);
-      if (Number.isNaN(numericId)) {
-        throw new Error("Invalid habit id.");
-      }
-      const previousHabits = habits;
-      const updatedHabits = previousHabits.map((habit) =>
-        habit.id === habitId
-          ? { ...habit, label: updates.label, details: updates.details ?? habit.details }
-          : habit
-      );
-      setHabits(updatedHabits);
-      try {
-        await apiService.updateHabit(userId, numericId, {
-          label: updates.label,
-          description: updates.details ?? null,
-        });
-      } catch (error) {
-        console.error("Failed to update habit:", error);
-        setHabits(previousHabits);
-        throw (error instanceof Error ? error : new Error("Failed to update habit."));
-      }
-    },
-    [habits, setHabits, userId]
-  );
-
-  const editHabit = (habitToEdit: HabitItem) => {
-    if (!user) {
-      return;
-    }
-    if (!isActivePulseEditable && pulseEntries.length > 0) {
-      return;
-    }
-    setHabitEditorTarget(habitToEdit);
-  };
-
-  const deleteHabit = (habitToDelete: HabitItem) => {
-    if (!user) {
-      return;
-    }
-    if (!isActivePulseEditable && pulseEntries.length > 0) {
-      return;
-    }
-
-    const habitId = Number(habitToDelete.id);
-    if (Number.isNaN(habitId)) {
-      return;
-    }
-
-    const previousHabits = habits;
-    const updatedHabits = previousHabits.filter((habit) => habit.id !== habitToDelete.id);
-    setHabits(updatedHabits);
-
-    apiService
-      .deleteHabit(user.id, habitId)
-      .catch((error: unknown) => {
-        console.error("Failed to delete habit:", error);
-        const message = error instanceof Error ? error.message : String(error);
-        // If habit is already deleted on backend, keep it removed from UI
-        if (message.includes("Habit not found")) {
-          return;
-        }
-        // For other errors, restore the habit in UI
-        setHabits(previousHabits);
-      });
-  };
 
   const selectProactivityPreset = (next: ProactivityItem) => {
     const normalized: ProactivityItem = {

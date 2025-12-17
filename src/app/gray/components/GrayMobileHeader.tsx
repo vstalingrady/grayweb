@@ -2,7 +2,7 @@
 
 import { Menu, MessageCircle, Zap } from "lucide-react";
 
-import styles from "../GrayPageClient.module.css";
+import styles from "./GrayMobileHeader.module.css";
 
 type GrayMobileHeaderProps = {
   isSidebarExpanded: boolean;
@@ -20,7 +20,10 @@ export function GrayMobileHeader({
   onSelectPulse,
 }: GrayMobileHeaderProps) {
   return (
-    <div className={styles.mobileHeader}>
+    <div
+      className={styles.mobileHeader}
+      data-sidebar-expanded={isSidebarExpanded ? "true" : undefined}
+    >
       <div className={styles.mobileHeaderLeft}>
         {!isSidebarExpanded ? (
           <button type="button" className={styles.mobileMenuButton} onClick={onToggleSidebar}>
@@ -58,4 +61,3 @@ export function GrayMobileHeader({
     </div>
   );
 }
-

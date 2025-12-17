@@ -94,7 +94,6 @@ except Exception:
         update_conversation_title,
     )
 
-# File handling utilities (extracted from main.py)
 try:
     from backend.core.file_utils import (
         MEDIA_UPLOAD_DIR,
@@ -152,7 +151,6 @@ except ImportError:
         persist_upload_file as _persist_upload_file,
     )
 
-# SQLite migration helpers (extracted from main.py)
 try:
     from backend.core.sqlite_helpers import (
         ensure_sqlite_columns as _ensure_sqlite_columns,
@@ -170,7 +168,6 @@ except ImportError:
         rebuild_sqlite_table_without_columns as _rebuild_sqlite_table_without_columns,
     )
 
-# Prompt loading utilities (extracted from main.py)
 try:
     from backend.core.prompt_utils import (
         load_prompt_from_file,
@@ -186,7 +183,6 @@ except ImportError:
         prompt_locale_from_request as _prompt_locale_from_request,
     )
 
-# CORS utilities (extracted from main.py)
 try:
     from backend.core.cors_utils import (
         IS_PRODUCTION,
@@ -210,7 +206,6 @@ except ImportError:
         build_allowed_origins as _build_allowed_origins,
     )
 
-# Cache utilities (extracted from main.py)
 try:
     from backend.core.cache import (
         TTLCache,
@@ -232,7 +227,6 @@ except ImportError:
         context_cache_contents as _context_cache_contents,
     )
 
-# Message detection utilities (extracted from main.py)
 try:
     from backend.core.message_detection import (
         REMINDER_KEYWORDS as _REMINDER_KEYWORDS,
@@ -252,7 +246,6 @@ except ImportError:
         should_enable_search as _should_enable_search,
     )
 
-# Serialization utilities (extracted from main.py)
 try:
     from backend.core.serializers import (
         row_get as _row_get,
@@ -284,7 +277,6 @@ except ImportError:
         DEFAULT_DASHBOARD_PROACTIVITY,
     )
 
-# AI utilities (extracted from main.py)
 try:
     from backend.core.ai_utils import (
         candidate_text as _candidate_text,
@@ -306,7 +298,6 @@ except ImportError:
         fallback_title_from_message as _fallback_title_from_message,
     )
 
-# Tool handlers (extracted from main.py)
 try:
     from backend.core.tool_handlers import (
         set_reminder_scheduler as _set_tool_reminder_scheduler,
@@ -335,7 +326,6 @@ except ImportError:
         build_maps_tool_and_config as _build_maps_tool_and_config,
     )
 
-# Entity reminder operations (extracted from main.py)
 
 try:
     from backend.core.entity_reminders import (
@@ -354,7 +344,6 @@ except ImportError:
         upsert_entity_reminder as _upsert_entity_reminder,
     )
 
-# Workspace tool handlers (extracted from main.py)
 try:
     from backend.core.workspace_tools import (
         set_reminder_scheduler as _set_workspace_reminder_scheduler,
@@ -396,9 +385,6 @@ from uuid import UUID, uuid4
 from pathlib import Path
 from urllib.parse import urlparse
 
-# NODE_ENV, ENVIRONMENT, IS_PRODUCTION now imported from core.cors_utils
-
-# Enhanced logging imports
 try:
     from backend.logging_config import (
         setup_logging, create_logger, set_request_context, clear_request_context,
@@ -686,7 +672,6 @@ try:
 except ImportError:
     from env_utils import ROOT_DIR
 
-# Environment helpers (extracted from main.py)
 try:
     from backend.core.env_helpers import (
         float_env as _float_env,
@@ -708,7 +693,6 @@ except ImportError:
         ensure_datetime_value as _ensure_datetime_value,
     )
 
-# Dashboard helpers (extracted from main.py)
 try:
     from backend.core.dashboard_helpers import (
         serialize_dashboard_pulse_record as _serialize_dashboard_pulse_record,
@@ -722,13 +706,11 @@ except ImportError:
         coerce_activity_day as _coerce_activity_day,
     )
 
-# Log utilities (extracted from main.py)
 try:
     from backend.core.log_utils import payload_log_summary as _payload_log_summary
 except ImportError:
     from core.log_utils import payload_log_summary as _payload_log_summary  # type: ignore
 
-# General conversation handlers (extracted from main.py)
 try:
     from backend.core.general_conversation import (
         load_general_conversation_history as _load_general_conversation_history,
@@ -746,19 +728,16 @@ except ImportError:
         ensure_user_data_record as _ensure_user_data_record,
     )
 
-# Onboarding handler (extracted from main.py)
 try:
     from backend.core.onboarding_handler import complete_onboarding as _complete_onboarding
 except ImportError:
     from core.onboarding_handler import complete_onboarding as _complete_onboarding  # type: ignore
 
-# Title generator (extracted from main.py)
 try:
     from backend.core.title_generator import generate_chat_title_inline as _generate_chat_title_inline
 except ImportError:
     from core.title_generator import generate_chat_title_inline as _generate_chat_title_inline  # type: ignore
 
-# Media attachments (extracted from main.py)
 try:
     from backend.core.media_attachments import (
         resolve_media_attachments as _resolve_media_attachments,
@@ -770,7 +749,6 @@ except ImportError:
         generate_image_descriptions as _generate_image_descriptions,
     )
 
-# Conversation manager (extracted from main.py)
 try:
     from backend.core.conversation_manager import (
         load_conversation_history as _load_conversation_history,
@@ -784,13 +762,11 @@ except ImportError:
         save_conversation_message,
     )
 
-# Proactivity helpers (extracted from main.py)
 try:
     from backend.core.proactivity_helpers import fetch_proactivity_summary as _fetch_proactivity_summary
 except ImportError:
     from core.proactivity_helpers import fetch_proactivity_summary as _fetch_proactivity_summary  # type: ignore
 
-# Chat starter helpers (extracted from main.py)
 try:
     from backend.core.chat_starter_helpers import (
         sse_event as _sse_event,
@@ -808,7 +784,6 @@ except ImportError:
 
 load_dotenv(ROOT_DIR / ".env")
 
-# Function call helpers (extracted from main.py)
 try:
     from backend.core.function_call_helpers import (
         build_function_call_contents as _build_function_call_contents,
@@ -822,7 +797,6 @@ except ImportError:
         format_tool_results_for_context as _format_tool_results_for_context,
     )
 
-# Hybrid stream handlers (extracted from main.py)
 try:
     from backend.core.stream_handlers.hybrid import (
         fetch_url_context_with_gemini as _fetch_url_context_with_gemini_hybrid,
@@ -927,21 +901,16 @@ OPENROUTER_SERVICE = OpenRouterService()
 
 AI_MESSAGE_GENERATOR = AIMessageGenerator()
 
-# File upload constants (CLAMAV_*, MEDIA_UPLOAD_*, IMAGE_MIME_TYPES, etc.)
-# are imported from core.file_utils. Ensure upload directory exists:
 MEDIA_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
-# Tool definitions - use lazy getters from ai_config
 SEARCH_TOOL = get_search_tool()
 URL_CONTEXT_TOOL = get_url_context_tool()
 DEFAULT_CHAT_TOOLS = get_default_chat_tools()
 
-# Run all SQLite migrations using consolidated function from core/migrations.py
 try:
     from backend.core.migrations import run_startup_migrations as _run_startup_migrations
 except ImportError:
     from core.migrations import run_startup_migrations as _run_startup_migrations  # type: ignore
-
 _run_startup_migrations()
 
 ALLOWED_ORIGIN_REGEX = _local_network_origin_regex()
@@ -954,10 +923,8 @@ if IS_PRODUCTION and not ALLOWED_ORIGINS and not ALLOWED_ORIGIN_REGEX:
     )
     raise RuntimeError("CORS configuration missing in production")
 
-# Supabase setup (Auth only - conversation store is now strictly local SQLite/Postgres)
 SUPABASE_URL, SUPABASE_KEY, SUPABASE_KEY_SOURCE = resolve_supabase_credentials()
 
-# Initialize Supabase using unified helper (Auth only)
 supabase: Optional[Client] = None
 supabase_admin: Optional[Client] = None
 SUPABASE_ADMIN_KEY_SOURCE: Optional[str] = None
