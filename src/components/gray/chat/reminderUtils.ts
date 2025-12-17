@@ -314,6 +314,7 @@ export const resolveAssistantReminders = (
     content: string,
     capturedReminders: unknown[]
 ): { content: string; reminders?: GrayReminderCreatedPayload[] } => {
+    const extracted = extractGrayRemindersFromText(content);
     let reminders: GrayReminderCreatedPayload[] | undefined;
 
     if (capturedReminders.length > 0) {
@@ -321,13 +322,12 @@ export const resolveAssistantReminders = (
             .map((candidate) => coerceReminderPayload(candidate))
             .filter((reminder): reminder is GrayReminderCreatedPayload => Boolean(reminder));
     } else {
-        const extracted = extractGrayRemindersFromText(content);
         if (extracted.reminders.length > 0) {
             reminders = extracted.reminders;
         }
     }
 
-    let updatedContent = content;
+    let updatedContent = reminders ? extracted.cleanText : content;
     if (reminders && reminders.length > 0 && !updatedContent.trim()) {
         const confirmation = buildReminderConfirmationText(reminders);
         if (confirmation) {

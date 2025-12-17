@@ -1,0 +1,1041 @@
+/*
+ * Settings UI styles extracted from `src/app/gray/GrayPageClient.module.css`
+ * so the Settings bundle can evolve independently.
+ */
+
+/* -------------------------------------------------------------------------- */
+/*                              Full Page Settings                            */
+/* -------------------------------------------------------------------------- */
+
+.settingsOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.15s ease-out;
+  padding: 24px;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+.settingsContainer {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  height: clamp(600px, 92vh, 1200px);
+  width: clamp(900px, 95vw, 1600px);
+  background: #0a0a0a;
+  color: #f5f5f5;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow:
+    0 24px 48px rgba(0, 0, 0, 0.6),
+    0 0 0 1px rgba(255, 255, 255, 0.05);
+  overflow: hidden;
+}
+
+.settingsSidebar {
+  padding: 20px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  background: #0a0a0a;
+  height: 100%;
+  overflow-y: auto;
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.settingsSidebarBack {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #a1a1aa;
+  background: none;
+  border: none;
+  font-size: 0.8rem;
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: color 0.2s;
+  width: fit-content;
+}
+
+.settingsSidebarHeader {
+  margin-bottom: -8px;
+}
+
+.settingsSidebarBack:hover {
+  color: #fff;
+}
+
+.settingsNavGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.settingsNavLabel {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  color: #71717a;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  padding: 0 12px;
+  margin-bottom: 6px;
+}
+
+.settingsNavItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  color: #a1a1aa;
+  text-align: left;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 500;
+  transition: all 0.2s;
+  width: 100%;
+}
+
+.settingsNavItem:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: #ededed;
+}
+
+.settingsNavItem[data-active="true"] {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.settingsNavItemIcon {
+  width: 16px;
+  height: 16px;
+  opacity: 0.8;
+}
+
+.settingsSidebarFooter {
+  margin-top: auto;
+  padding: 0 12px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.settingsSidebarFooterDivider {
+  height: 1px;
+  width: 100%;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.settingsSidebarContextHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.settingsSidebarContextTitle {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: rgba(245, 245, 245, 0.9);
+}
+
+.settingsSidebarContextAction {
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(245, 245, 245, 0.85);
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+
+.settingsSidebarContextAction:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.14);
+  color: #fff;
+}
+
+.settingsSidebarContextAction:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.settingsSidebarContextMeta {
+  margin: 0;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  color: rgba(245, 245, 245, 0.65);
+}
+
+.settingsSidebarContextMeta[data-variant="muted"] {
+  color: rgba(245, 245, 245, 0.55);
+}
+
+.settingsContent {
+  padding: 48px 64px;
+  overflow-y: auto;
+  width: 100%;
+}
+
+.settingsPageHeader {
+  margin-bottom: 32px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.settingsPageTitle {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #fff;
+  margin: 0;
+}
+
+.settingsSection {
+  margin-bottom: 40px;
+}
+
+.settingsSectionTitle {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #fff;
+  margin: 0 0 16px 0;
+}
+
+.settingsFormGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+@media (max-width: 720px) {
+  .settingsFormGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.settingsFormField {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.settingsFormLabel {
+  font-size: 0.8rem;
+  color: rgba(245, 245, 245, 0.8);
+  font-weight: 500;
+}
+
+.settingsContextBar {
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.settingsContextBarFill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.55));
+}
+
+.settingsRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.settingsTierSeparator {
+  padding: 14px 0 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.settingsTierSeparatorTitle {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(245, 245, 245, 0.75);
+}
+
+.settingsTierSeparatorSubtitle {
+  font-size: 0.76rem;
+  color: rgba(245, 245, 245, 0.55);
+}
+
+.settingsRow:last-child {
+  border-bottom: none;
+}
+
+.settingsLabelGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.settingsLabel {
+  font-size: 0.85rem;
+  color: #ededed;
+}
+
+.settingsValue {
+  font-size: 0.8rem;
+  color: #a1a1aa;
+}
+
+.settingsRowLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  background: transparent;
+  padding: 6px 0;
+  cursor: pointer;
+  color: #a1a1aa;
+}
+
+.settingsRowLink:hover {
+  color: #ededed;
+}
+
+.settingsRowLink:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.28);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
+.settingsAction {
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: transparent;
+  color: #ededed;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.settingsAction:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.settingsActionDanger {
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #f87171;
+}
+
+.settingsActionDanger:hover {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.6);
+  color: #fca5a5;
+}
+
+.settingsPrimaryButton {
+  background: #ffffff;
+  color: #000;
+  border: none;
+  font-weight: 600;
+}
+
+.settingsPrimaryButton:hover {
+  background: #e5e5e5;
+  opacity: 1;
+}
+
+.userProfileCard {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 10px;
+  margin-bottom: 24px;
+}
+
+.userName {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #fff;
+}
+
+.userEmail {
+  font-family: var(--font-mono, "IBM Plex Mono", SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace);
+  letter-spacing: 0.02em;
+}
+
+.userProfileActions {
+  margin-left: auto;
+}
+
+.deleteAccountHelper {
+  font-size: 0.75rem;
+  color: #71717a;
+}
+
+.comingSoonText {
+  margin-top: 24px;
+  color: #71717a;
+  font-size: 0.85rem;
+}
+
+.avatarLarge {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: #27272a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  color: #a1a1aa;
+}
+
+.avatarLarge img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.settingsInput {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 6px 10px;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 0.85rem;
+  outline: none;
+}
+
+.settingsInput:focus {
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.settingsUpgradeCard {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 20px;
+  border-radius: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.settingsSubscriptionCard {
+  padding: 20px;
+  border-radius: 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(12, 12, 12, 0.9);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.6);
+}
+
+.settingsSubscriptionCard[data-variant="highlighted"] {
+  background-image: linear-gradient(135deg,
+      rgba(220, 220, 220, 0.08),
+      rgba(32, 32, 32, 0.92) 60%,
+      rgba(240, 240, 240, 0.15));
+  box-shadow: 0 25px 70px rgba(0, 0, 0, 0.75);
+}
+
+.settingsSubscriptionCard[data-variant="primary"] {
+  background-image: linear-gradient(158deg, rgba(226, 229, 238, 0.34) 0%, rgba(26, 26, 36, 0.96) 100%);
+  box-shadow: 0 35px 58px rgba(0, 0, 0, 0.82), 0 0 20px rgba(24, 24, 30, 0.32);
+}
+
+.settingsSubscriptionButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 0.85rem;
+  padding: 0.7rem 1.1rem;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.settingsSubscriptionButtonOutline {
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  background: rgba(20, 20, 20, 0.9);
+  color: #f9f9f9;
+  transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.settingsSubscriptionButtonOutline:hover {
+  border-color: rgba(255, 255, 255, 0.45);
+  transform: translateY(-1px);
+}
+
+.settingsSubscriptionButtonPrimary {
+  border: none;
+  color: #0a0a0a;
+  background: linear-gradient(135deg, #f8f8f8, #d2d2d2);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.35);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.settingsSubscriptionButtonPrimary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.4);
+}
+
+.settingsSubscriptionCard .settingsUpgradeText p {
+  color: rgba(245, 245, 245, 0.72);
+}
+
+.settingsUpgradeText h4 {
+  color: #ffffff;
+  margin: 0 0 4px 0;
+  font-size: 0.9rem;
+}
+
+.settingsUpgradeText p {
+  color: #a3a3a3;
+  margin: 0;
+  font-size: 0.8rem;
+}
+
+.settingsDangerCard {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(239, 68, 68, 0.18);
+  padding: 20px;
+  border-radius: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.settingsDangerCard > button {
+  margin-left: auto;
+}
+
+@media (max-width: 768px) {
+  .settingsOverlay {
+    padding: 0;
+    background: #0a0a0a;
+  }
+
+  .settingsContainer {
+    grid-template-columns: 1fr;
+    height: 100dvh;
+    width: 100%;
+    margin: 0;
+    border: none;
+    border-radius: 0;
+    max-width: none;
+  }
+
+  .settingsSidebar {
+    display: none;
+    /* Mobile logic is handled in component render paths. */
+  }
+
+  .settingsContent {
+    padding: 24px;
+  }
+}
+
+/* Toggle Switch */
+.settingsToggle {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  padding: 2px;
+}
+
+.settingsToggle[aria-checked="true"] {
+  background: #ffffff;
+  border-color: #ffffff;
+}
+
+.settingsToggleThumb {
+  display: block;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #a3a3a3;
+  transition: transform 0.2s ease, background 0.2s ease;
+  transform: translateX(0);
+}
+
+.settingsToggle[aria-checked="true"] .settingsToggleThumb {
+  background: #000;
+  transform: translateX(20px);
+}
+
+/* Settings Select/Dropdown trigger style */
+.settingsSelectButton {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #f5f5f5;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.settingsSelectButton:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.settingsSelectTrigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  width: 100%;
+  border: none;
+  border-radius: inherit;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.settingsSelectValue {
+  flex: 1;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.settingsSelectChevron {
+  opacity: 0.65;
+  transition: transform 160ms ease, opacity 160ms ease;
+}
+
+.settingsSelectChevron[data-open="true"] {
+  transform: rotate(180deg);
+  opacity: 0.85;
+}
+
+.settingsSelectMenu {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  min-width: 220px;
+  padding: 6px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(24, 24, 28, 0.95);
+  box-shadow: 0 22px 46px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(14px);
+  z-index: 200;
+}
+
+.settingsSelectOption {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(245, 245, 245, 0.86);
+  font-size: 0.85rem;
+  cursor: pointer;
+  text-align: left;
+  transition: background 140ms ease, color 140ms ease;
+}
+
+.settingsSelectOption:hover,
+.settingsSelectOption:focus-visible {
+  background: rgba(255, 255, 255, 0.07);
+  color: rgba(255, 255, 255, 0.95);
+  outline: none;
+}
+
+.settingsSelectOption[data-selected="true"] {
+  background: rgba(59, 130, 246, 0.16);
+  color: rgba(255, 255, 255, 0.96);
+}
+
+/* Helper text for settings items */
+.settingsItemDescription {
+  font-size: 0.8rem;
+  color: #a3a3a3;
+  margin-top: 4px;
+  width: 100%;
+  max-width: none;
+  line-height: 1.5;
+}
+
+/* Personalization Settings specific styles */
+.settingsTextarea {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 16px;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 0.9rem;
+  width: 100%;
+  min-height: 240px;
+  resize: vertical;
+  font-family: inherit;
+  margin-top: 8px;
+  outline: none;
+}
+
+.settingsTextarea:focus {
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.settingsButtonGroup {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.settingsSecondaryButton {
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: transparent;
+  color: #f5f5f5;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.settingsSecondaryButton:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.settingsInputLabel {
+  font-size: 0.9rem;
+  color: #f5f5f5;
+  font-weight: 500;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.watchlistIcon {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #a1a1aa;
+}
+
+.settingsItemMeta {
+  display: flex;
+  flex-direction: column;
+}
+
+.settingsItemTitle {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: #ededed;
+}
+
+.settingsItemSubtitle {
+  font-size: 0.8rem;
+  color: #a1a1aa;
+}
+
+.monoText {
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace);
+}
+
+.settingsRowFlexStart {
+  align-items: flex-start;
+}
+
+.settingsFullWidthInput {
+  margin-top: 16px;
+}
+
+.settingsFullWidthInput input {
+  width: 100%;
+}
+
+.settingsFlexRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.settingsActionChevron {
+  transform: rotate(180deg);
+  margin-left: 6px;
+}
+
+.settingsDescriptionMargin {
+  margin-bottom: 16px;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                             Mobile Settings Root                           */
+/* -------------------------------------------------------------------------- */
+
+.mobileSettingsRoot {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.mobileSettingsHeader {
+  display: grid;
+  grid-template-columns: 44px 1fr 44px;
+  align-items: center;
+  padding: 16px;
+  gap: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.mobileSettingsBack {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: none;
+  background: transparent;
+  color: rgba(245, 245, 245, 0.85);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.mobileSettingsBack:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+}
+
+.mobileSettingsTitle {
+  margin: 0;
+  text-align: center;
+  font-size: 1rem;
+  font-weight: 600;
+  color: rgba(245, 245, 245, 0.95);
+}
+
+.mobileProfileSection {
+  padding: 24px 16px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.mobileProfileAvatar {
+  position: relative;
+  width: 88px;
+  height: 88px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  color: rgba(245, 245, 245, 0.9);
+}
+
+.mobileProfileAvatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.mobileProfileEditButton {
+  position: absolute;
+  bottom: 6px;
+  right: 6px;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(10, 10, 10, 0.72);
+  color: rgba(245, 245, 245, 0.92);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.mobileProfileEditButton:hover {
+  background: rgba(10, 10, 10, 0.88);
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+.mobileProfileName {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: rgba(245, 245, 245, 0.95);
+}
+
+.mobileProfileHandle {
+  font-size: 0.85rem;
+  color: rgba(245, 245, 245, 0.6);
+}
+
+.mobileGroupLabel {
+  margin: 20px 16px 8px;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(245, 245, 245, 0.55);
+  font-weight: 700;
+}
+
+.mobileGroup {
+  margin: 0 16px 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.mobileGroupItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 14px;
+  background: transparent;
+  border: none;
+  color: rgba(245, 245, 245, 0.9);
+  text-align: left;
+}
+
+button.mobileGroupItem {
+  cursor: pointer;
+}
+
+.mobileGroupItem + .mobileGroupItem {
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.mobileGroupItemIcon {
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(245, 245, 245, 0.75);
+  flex-shrink: 0;
+}
+
+.mobileGroupItemLabel {
+  flex: 1;
+  font-size: 0.92rem;
+  font-weight: 500;
+}
+
+.mobileGroupItemValue {
+  font-size: 0.85rem;
+  color: rgba(245, 245, 245, 0.55);
+}
+
+.mobileGroupItemMono {
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace);
+  font-size: 0.82rem;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobileMonoText {
+  color: rgba(245, 245, 245, 0.65);
+}
+
+.mobileGroupItemArrow {
+  width: 16px;
+  height: 16px;
+  color: rgba(245, 245, 245, 0.45);
+  flex-shrink: 0;
+}
+
+.mobileThemeGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  width: 100%;
+}
+
+.mobileThemeOption {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 10px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(245, 245, 245, 0.85);
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.mobileThemeOption[data-active="true"] {
+  border-color: rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(245, 245, 245, 0.95);
+}
+
+.mobileThemePreview {
+  width: 44px;
+  height: 44px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
