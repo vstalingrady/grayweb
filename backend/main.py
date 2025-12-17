@@ -845,6 +845,20 @@ except ImportError:
         format_tool_results_for_context as _format_tool_results_for_context,
     )
 
+# Hybrid stream handlers (extracted from main.py)
+try:
+    from backend.core.stream_handlers.hybrid import (
+        fetch_url_context_with_gemini as _fetch_url_context_with_gemini_new,
+        execute_tools_with_gemini_flash as _execute_tools_with_gemini_flash_new,
+        has_onboarding_tool as _has_onboarding_tool_new,
+    )
+except ImportError:
+    from core.stream_handlers.hybrid import (  # type: ignore
+        fetch_url_context_with_gemini as _fetch_url_context_with_gemini_new,
+        execute_tools_with_gemini_flash as _execute_tools_with_gemini_flash_new,
+        has_onboarding_tool as _has_onboarding_tool_new,
+    )
+
 
 
 
