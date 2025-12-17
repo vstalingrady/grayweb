@@ -2159,76 +2159,15 @@ function GrayPageClientInner({
         {...(isMounted && { "data-general-attachments": generalAttachmentsActive ? "true" : "false" })}
       >
         {/* Mobile Header - only rendered after hydration to avoid SSR/CSR mismatch */}
-        {isMounted && (
-          <div className={styles.mobileHeader}>
-            <div className={styles.mobileHeaderLeft}>
-              {!sidebarExpandedForLayout ? (
-                <>
-                  <button
-                    className={styles.mobileMenuButton}
-                    onClick={() => {
-                      if (isCalendarPage) {
-                        setIsCalendarSidebarExpanded((previous) => !previous);
-                        return;
-                      }
-                      setIsSidebarExpanded(!isSidebarExpanded);
-                    }}
-                  >
-                    <Menu size={24} />
-                  </button>
-                </>
-              ) : null}
-            </div>
-
-            {/* Mobile View Toggle - Always Visible */}
-            <div className={styles.mobileHeaderToggle}>
-              <div className={styles.mobileToggle}>
-                <button
-                  type="button"
-                  className={styles.mobileToggleOption}
-                  data-active={!isPulseRoute ? "true" : "false"}
-                  onClick={() => {
-                    setManualViewMode(null);
-                    if (pathname !== "/") {
-                      router.push("/");
-                    }
-                    if (isMobileViewport) {
-                      setIsSidebarExpanded(false);
-                      setIsCalendarSidebarExpanded(false);
-                    }
-                  }}
-                >
-                  <span className={styles.mobileToggleIcon}>
-                    <MessageCircle size={16} />
-                  </span>
-                  <span>Chat</span>
-                </button>
-                <button
-                  type="button"
-                  className={styles.mobileToggleOption}
-                  data-active={isPulseRoute ? "true" : "false"}
-                  onClick={() => {
-                    setManualViewMode(null);
-                    if (pathname !== "/pulse") {
-                      router.push("/pulse");
-                    }
-                    if (isMobileViewport) {
-                      setIsSidebarExpanded(false);
-                      setIsCalendarSidebarExpanded(false);
-                    }
-                  }}
-                >
-                  <span className={styles.mobileToggleIcon}>
-                    <Zap size={16} />
-                  </span>
-                  <span>Pulse</span>
-                </button>
-              </div>
-            </div>
-
-            {null}
-          </div>
-        )}
+        {isMounted ? (
+          <GrayMobileHeader
+            isSidebarExpanded={sidebarExpandedForLayout}
+            isPulseActive={isPulseRoute}
+            onToggleSidebar={toggleSidebarExpandedForLayout}
+            onSelectChat={handleMobileHeaderSelectChat}
+            onSelectPulse={handleMobileHeaderSelectPulse}
+          />
+        ) : null}
 
         <div className={styles.shell}>
           <div
@@ -2239,43 +2178,25 @@ function GrayPageClientInner({
           >
 
 
-	            <GrayEnhancedSidebar
-	              activeNav={activeNav ?? "general"}
-	              isExpanded={sidebarExpandedForLayout}
-              onToggle={() => {
-                if (isCalendarPage) {
-                  setIsCalendarSidebarExpanded((previous) => !previous);
-                  return;
-                }
-                setIsSidebarExpanded((prev) => !prev);
-              }}
-              onExpand={() => {
-                if (isCalendarPage) {
-                  setIsCalendarSidebarExpanded(true);
-                  return;
-                }
-                setIsSidebarExpanded(true);
-              }}
-              onCollapse={() => {
-                if (isCalendarPage) {
-                  setIsCalendarSidebarExpanded(false);
-                  return;
-                }
-                setIsSidebarExpanded(false);
-              }}
+            <GrayEnhancedSidebar
+              activeNav={activeNav ?? "general"}
+              isExpanded={sidebarExpandedForLayout}
+              onToggle={toggleSidebarExpandedForLayout}
+              onExpand={expandSidebarForLayout}
+              onCollapse={collapseSidebarForLayout}
               viewerName={viewerName}
               viewerInitials={viewerInitials}
               viewerAvatarUrl={viewerAvatarUrl}
               viewerAvatarColor={viewerAvatarColor}
               viewerPlanLabel={viewerPlanLabel}
-	              navItems={filteredSidebarItems}
-	              railItems={filteredRailItems}
-	              historySections={historySections}
-	              onNavigate={handleMobileNavigate}
-	              activeChatId={currentChatId ?? activeChatId ?? generalSessionId}
-	              onOpenSettings={handleOpenSettings}
-	              onOpenHelp={handleOpenHelp}
-	              onUpgradePlan={handleUpgradePlan}
+              navItems={filteredSidebarItems}
+              railItems={filteredRailItems}
+              historySections={historySections}
+              onNavigate={handleMobileNavigate}
+              activeChatId={currentChatId ?? activeChatId ?? generalSessionId}
+              onOpenSettings={handleOpenSettings}
+              onOpenHelp={handleOpenHelp}
+              onUpgradePlan={handleUpgradePlan}
               onLogOut={handleLogOut}
               onRenameHistoryEntry={handleRenameHistoryEntry}
               onDeleteHistoryEntry={handleDeleteHistoryEntry}
@@ -2300,11 +2221,7 @@ function GrayPageClientInner({
                   data-visible={isMobileViewport && sidebarExpandedForLayout ? "true" : "false"}
                   onClick={() => {
                     if (isMobileViewport) {
-                      if (isCalendarPage) {
-                        setIsCalendarSidebarExpanded(false);
-                        return;
-                      }
-                      setIsSidebarExpanded(false);
+                      collapseSidebarForLayout();
                     }
                   }}
                   aria-hidden="true"

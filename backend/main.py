@@ -900,13 +900,11 @@ try:
         AI_PROVIDER,
         REMINDER_MODEL,
         GEMINI_DEFAULT_MODEL,
-        GEMINI_LIGHT_MODEL,
         GEMINI_PRO_MODEL,
         VALIDATE_GEMINI_ON_STARTUP,
         TIER_CONVERSATION_TOKEN_LIMITS,
         tier_conversation_token_limit as _tier_conversation_token_limit_base,
         REMINDER_FUNCTION_NAMES,
-        REMINDER_RESPONSE_FORMAT,
         get_search_tool,
         get_url_context_tool,
         get_default_chat_tools,
@@ -917,20 +915,17 @@ try:
         MAX_DASHBOARD_PULSE_HISTORY,
         DEFAULT_DASHBOARD_PROACTIVITY,
         DEFAULT_WORKSPACE_BACKGROUNDS,
-        SINGLE_CALL_PER_TURN_TOOLS,
     )
 except ImportError:
     from core.ai_config import (  # type: ignore
         AI_PROVIDER,
         REMINDER_MODEL,
         GEMINI_DEFAULT_MODEL,
-        GEMINI_LIGHT_MODEL,
         GEMINI_PRO_MODEL,
         VALIDATE_GEMINI_ON_STARTUP,
         TIER_CONVERSATION_TOKEN_LIMITS,
         tier_conversation_token_limit as _tier_conversation_token_limit_base,
         REMINDER_FUNCTION_NAMES,
-        REMINDER_RESPONSE_FORMAT,
         get_search_tool,
         get_url_context_tool,
         get_default_chat_tools,
@@ -941,7 +936,6 @@ except ImportError:
         MAX_DASHBOARD_PULSE_HISTORY,
         DEFAULT_DASHBOARD_PROACTIVITY,
         DEFAULT_WORKSPACE_BACKGROUNDS,
-        SINGLE_CALL_PER_TURN_TOOLS,
     )
 
 # tier_conversation_token_limit wrapper that uses normalize_plan_tier

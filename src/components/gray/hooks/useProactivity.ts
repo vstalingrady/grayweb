@@ -1,4 +1,3 @@
-/* eslint-disable react-hooks/set-state-in-effect */
 import { useState, useEffect, useCallback } from "react";
 import { ApiError, apiService, type ProactivitySettings } from "@/lib/api";
 import { type ProactivityItem } from "@/components/gray/types";
@@ -102,13 +101,34 @@ const areProactivityItemsEqual = (a: ProactivityItem | null, b: ProactivityItem 
 };
 
 export function useProactivity(userId: number | null, resolvedTimezone: string) {
-  const [proactivity, setProactivity] = useState<ProactivityItem | null>(null);
+  const [proactivityState, setProactivityState] = useState<{
+    userId: number | null;
+    value: ProactivityItem | null;
+  }>(() => ({ userId: null, value: null }));
+
+  const proactivity = userId && proactivityState.userId === userId ? proactivityState.value : null;
+
+  const setProactivity = useCallback(
+    (next: ProactivityItem | null | ((previous: ProactivityItem | null) => ProactivityItem | null)) => {
+      setProactivityState((previous) => {
+        if (!userId) {
+          return previous;
+        }
+        const previousValue = previous.userId === userId ? previous.value : null;
+        const resolved = typeof next === "function" ? next(previousValue) : next;
+
+        if (areProactivityItemsEqual(previousValue, resolved)) {
+          return previous.userId === userId ? previous : { userId, value: previousValue };
+        }
+
+        return { userId, value: resolved };
+      });
+    },
+    [userId]
+  );
 
   useEffect(() => {
-    if (!userId) {
-      setProactivity(null);
-      return;
-    }
+    if (!userId) return;
     let cancelled = false;
     const loadProactivitySettings = async () => {
       try {
@@ -117,15 +137,7 @@ export function useProactivity(userId: number | null, resolvedTimezone: string) 
           return;
         }
         const normalized = mapSettingsToProactivity(settings);
-        setProactivity((previous) => {
-          if (normalized === null) {
-            return previous === null ? previous : null;
-          }
-          if (areProactivityItemsEqual(previous, normalized)) {
-            return previous;
-          }
-          return normalized;
-        });
+        setProactivity(normalized);
       } catch (error) {
         if (cancelled) {
           return;
@@ -141,7 +153,7 @@ export function useProactivity(userId: number | null, resolvedTimezone: string) 
     return () => {
       cancelled = true;
     };
-  }, [userId]);
+  }, [setProactivity, userId]);
 
   const persistProactivitySettings = useCallback(async (next: ProactivityItem | null) => {
     if (!userId) {
@@ -159,19 +171,11 @@ export function useProactivity(userId: number | null, resolvedTimezone: string) 
       }
 
       const normalized = mapSettingsToProactivity(response);
-      setProactivity((previous) => {
-        if (normalized === null) {
-          return previous === null ? previous : null;
-        }
-        if (areProactivityItemsEqual(previous, normalized)) {
-          return previous;
-        }
-        return normalized;
-      });
+      setProactivity(normalized);
     } catch (error) {
       console.error("Failed to save proactivity settings:", error);
     }
-  }, [userId, resolvedTimezone]);
+  }, [setProactivity, userId, resolvedTimezone]);
 
   return {
     proactivity,
