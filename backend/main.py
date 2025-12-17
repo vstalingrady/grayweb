@@ -410,7 +410,6 @@ from uuid import UUID, uuid4
 from pathlib import Path
 from urllib.parse import urlparse
 
-
 # NODE_ENV, ENVIRONMENT, IS_PRODUCTION now imported from core.cors_utils
 
 # Enhanced logging imports
@@ -861,7 +860,6 @@ except ImportError:
         add_maps_tool_if_needed,
     )
 
-
 SUPABASE_POOLER_HOST = os.getenv("SUPABASE_POOLER_HOST", "aws-1-ap-south-1.pooler.supabase.com")
 SUPABASE_POOLER_PORT = int(os.getenv("SUPABASE_POOLER_PORT", "6543"))
 
@@ -884,7 +882,6 @@ file_logger = create_logger("backend.files")
 logging.getLogger("uvicorn.access").disabled = True
 
 app_logger.info(f"Backend starting (env={os.getenv('ENVIRONMENT', 'development')}, provider={os.getenv('AI_PROVIDER', 'openrouter')})")
-
 
 # AI Configuration imports (centralized in core.ai_config)
 try:
@@ -942,13 +939,9 @@ except ImportError:
         SINGLE_CALL_PER_TURN_TOOLS,
     )
 
-
-
-
 # tier_conversation_token_limit wrapper that uses normalize_plan_tier
 def tier_conversation_token_limit(plan_tier: Optional[str]) -> int:
     return _tier_conversation_token_limit_base(plan_tier, normalize_fn=normalize_plan_tier)
-
 
 GEMINI_SERVICE = GeminiService()
 OPENROUTER_SERVICE = OpenRouterService()
@@ -961,15 +954,12 @@ AI_MESSAGE_GENERATOR = AIMessageGenerator()
 # are imported from core.file_utils. Ensure upload directory exists:
 MEDIA_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
-
 # Tool definitions - use lazy getters from ai_config
 SEARCH_TOOL = get_search_tool()
 URL_CONTEXT_TOOL = get_url_context_tool()
 DEFAULT_CHAT_TOOLS = get_default_chat_tools()
 
 # PROMPTS_DIR, GLOBAL_SYSTEM_PROMPTS_PATH, ONBOARDING_PROMPT_PATH imported from core.ai_config
-
-
 
 # Run all SQLite migrations using the unified helpers
 _ensure_sqlite_columns("users", [
@@ -1070,9 +1060,7 @@ _ensure_sqlite_columns("transactions", [
     ("paddle_transaction_id", "TEXT", None),
 ])
 
-
 # database and metadata imported from backend.database
-
 
 # GROK_DEFAULT_MODEL depends on OPENROUTER_SERVICE instance
 GROK_DEFAULT_MODEL = OPENROUTER_SERVICE.lite_model if OPENROUTER_SERVICE else "x-ai/grok-4.1-fast"
@@ -1086,7 +1074,6 @@ TOOL_TRIGGER_KEYWORDS = _TOOL_TRIGGER_KEYWORDS
 # CORS, AI, and serialization utilities are imported from:
 # - core.cors_utils, core.ai_utils, core.serializers
 
-
 ALLOWED_ORIGIN_REGEX = _local_network_origin_regex()
 
 ALLOWED_ORIGINS = _build_allowed_origins()
@@ -1096,8 +1083,6 @@ if IS_PRODUCTION and not ALLOWED_ORIGINS and not ALLOWED_ORIGIN_REGEX:
         "CORS misconfigured for production: no allowed origins found; set SITE_URL/NEXT_PUBLIC_SITE_URL or CORS_ALLOW_ORIGINS."
     )
     raise RuntimeError("CORS configuration missing in production")
-
-
 
 # Database tables
 # users table imported from backend.database
@@ -1113,10 +1098,6 @@ chat_sessions = sqlalchemy.Table(
     sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
     extend_existing=True,
 )
-
-
-
-
 
 plans = sqlalchemy.Table(
     "plans",
@@ -1147,22 +1128,12 @@ habits = sqlalchemy.Table(
     extend_existing=True,
 )
 
-
-
-
 # Proactivity tracking
-
-
-
-
-
 
 # Context caching for long context reuse
 # DEFAULT_WORKSPACE_BACKGROUNDS imported from core.ai_config
 
 # Proactive notifications
-
-
 
 google_calendar_states = sqlalchemy.Table(
     "google_calendar_states",
@@ -1192,9 +1163,7 @@ if SUPABASE_URL and SUPABASE_KEY and SUPABASE_URL != "your_supabase_url_here":
 # Note: Conversation store is now strictly local (SQLite/Postgres).
 # We no longer configure the conversation store with Supabase clients for data.
 
-
 _USER_DATA_CACHE: Dict[int, int] = {}
-
 
 async def _require_conversation_owner(conversation_id: str, current_user: Dict[str, Any]) -> None:
     """Ensure the authenticated user owns the conversation being accessed."""
@@ -1248,7 +1217,6 @@ async def _require_conversation_owner(conversation_id: str, current_user: Dict[s
     # NOTE: Functionality to check Supabase for ownership has been removed as we are strictly local-only now.
     return
 
-
 async def _maybe_enrich_actions_with_reminder_time(
     actions: List[Dict[str, Any]],
     message: str,
@@ -1297,7 +1265,6 @@ async def _maybe_enrich_actions_with_reminder_time(
             action["time_iso"] = iso_value
         if not action.get("description"):
             action["description"] = message.strip() or action.get("label") or "Reminder"
-
 
 async def _create_reminders_from_actions(
     db: databases.Database,
@@ -1481,8 +1448,6 @@ async def _create_reminders_from_actions(
 
     return results
 
-
-
 # FastAPI app
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -1528,8 +1493,6 @@ async def _ensure_paddle_columns():
 
     except Exception as e:
         api_logger.error(f"Failed to ensure Paddle columns: {e}")
-
-
 
 app = FastAPI(title="User Profile API with AI Chat", version="1.0.0", lifespan=lifespan)
 
@@ -1604,8 +1567,6 @@ try:
         return await caching_middleware(request, call_next)
 except ImportError:
     pass  # Optional module
-
-
 
 # Mount API routers
 try:
@@ -1732,8 +1693,6 @@ except Exception:  # pragma: no cover
     except Exception:  # pragma: no cover
         ReminderSchedulerManager = None  # type: ignore
 
-
-
 async def _connect_database():
     """Connect to the database on startup."""
     try:
@@ -1748,8 +1707,6 @@ async def _connect_database():
     except Exception as e:
         db_logger.error(f"Database connection failed: {e}", exc_info=True)
         raise
-
-
 
 async def _run_basic_migrations():
     """Ensure critical SQLite columns exist."""
@@ -1839,7 +1796,6 @@ async def _run_basic_migrations():
         ]
     )
 
-
 async def _disconnect_database():
     """Disconnect from the database on shutdown."""
     try:
@@ -1913,7 +1869,6 @@ async def _initialize_proactivity_engine():
             },
         )
 
-
 async def _shutdown_proactivity_engine():
     """Stop the APScheduler + clean up."""
     global proactivity_scheduler
@@ -1930,7 +1885,6 @@ async def _shutdown_proactivity_engine():
             "event_type": "proactivity_engine_shutdown_error",
             "error": str(e)
         })
-
 
 async def _validate_gemini_api_key_on_startup():
     # Skip validation if not using Gemini or validation disabled
@@ -1968,8 +1922,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-
 # Security
 security = HTTPBearer()
 
@@ -1980,8 +1932,6 @@ async def get_database():
     Connection is managed globally by startup/shutdown events.
     """
     yield database
-
-
 
 def _get_tool_handlers(user_timezone: Optional[str] = None) -> Dict[str, Any]:
     """Return a dictionary of tool name -> handler function.
@@ -2012,7 +1962,6 @@ def _get_tool_handlers(user_timezone: Optional[str] = None) -> Dict[str, Any]:
         "get_workspace_state": lambda u, a, d: _get_workspace_state_tool(u, a, d),
     }
 
-
 async def _execute_function_call(
     function_call: types.FunctionCall,
     user_id: int,
@@ -2027,13 +1976,11 @@ async def _execute_function_call(
     args = function_call.args or {}
     return await handler(user_id, args, db)
 
-
 # API Routes
 
 @app.get("/")
 async def root():
     return {"message": "User Profile API with AI Chat"}
-
 
 @app.get("/admin/metrics")
 async def get_admin_metrics(
@@ -2109,7 +2056,6 @@ async def stream_ai_response(
     # Uses the current message plus a short window of recent history.
     intent_window_text = build_intent_window_text(message, conversation_history)
 
-
     request_structured_reminders = _should_request_structured_reminders(intent_window_text)
     needs_structured_tools = reminders_enabled or request_structured_reminders or _needs_structured_tools(intent_window_text)
 
@@ -2183,7 +2129,6 @@ async def stream_ai_response(
         # Default to Gemini for fastest streaming
         provider = "gemini"
 
-
     # --- Google Maps Grounding Integration ---
     # If maps enabled, force Gemini provider (OpenRouter doesn't support Maps)
     if maps_enabled:
@@ -2194,7 +2139,6 @@ async def stream_ai_response(
         AI_PROVIDER == "gemini"
         or _prefers_gemini_model(normalized_model)
     )
-
 
     # Check usage limits (now that we know the effective model)
     if user_id is not None and db is not None:
@@ -2752,7 +2696,6 @@ CRITICAL: When the user asks to create/update a plan or habit, you MUST call the
                 yield ("error", {"message": "AI service encountered an error. Please try again."})
                 return
 
-
     # URL Context: Add URL context tool when URLs are detected in the message
     message_urls = _extract_urls_from_message(message)
     if provider == "gemini" and message_urls:
@@ -2761,7 +2704,6 @@ CRITICAL: When the user asks to create/update a plan or habit, you MUST call the
     # Gemini-specific tool list adjustment (consolidating)
     if provider == "gemini" and tool_list:
         tool_list = consolidate_gemini_tools(tool_list)
-
 
     
     grounding_metadata: Optional[Dict[str, Any]] = None
@@ -2792,10 +2734,6 @@ CRITICAL: When the user asks to create/update a plan or habit, you MUST call the
         return
 
     raise RuntimeError("AI service unavailable")
-
-
-
-
 
 async def generate_ai_response(
     message: str,
@@ -2978,7 +2916,6 @@ async def generate_ai_response(
         tool_list = [*tool_list, *PLAN_TOOLS, *CALENDAR_TOOLS]
     effective_tool_config = maps_tool_config
 
-
     # Initialize response_format
     # If tools are available (which they are), disable legacy JSON mode to prefer tool use.
     # Exception: if we specifically want JSON mode for some reason, but for reminders/plans we now have tools.
@@ -3045,7 +2982,6 @@ async def generate_ai_response(
                     exc_info=True,
                 )
                 raise  # Propagate the error instead of falling back
-
 
     # Ensure we have an explicit tool_config when tools are present
     # Keep function calling enabled so the model can return calls we execute manually
@@ -3162,8 +3098,6 @@ async def generate_ai_response(
             raise
     raise HTTPException(status_code=503, detail="AI service unavailable")
 
-
-
 async def generate_chat_starter(
     request: Request,
     payload: ChatStarterRequest,
@@ -3213,7 +3147,6 @@ async def generate_chat_starter(
         )
         return ChatStarterResponse(message=fallback_message, used_fallback=True)
 
-
 # AI Chat endpoints
 async def create_chat_title(
     request: Request,
@@ -3231,7 +3164,6 @@ async def create_chat_title(
     if suggestion:
         return ChatTitleResponse(title=suggestion)
     return ChatTitleResponse(title=_fallback_title_from_message(payload.message))
-
 
 async def chat_endpoint(
 
@@ -3457,7 +3389,6 @@ async def chat_endpoint(
         api_logger.error(f"CHAT_ERROR_DEBUG: Chat endpoint failed: {e}", exc_info=True, extra={"user_id": chat_request.user_id})
         raise HTTPException(status_code=500, detail=f"Chat error: {str(e)}")
 
-
 ONBOARDING_SYSTEM_PROMPT = load_prompt_from_json(
     GLOBAL_SYSTEM_PROMPTS_PATH,
     "onboarding",
@@ -3471,7 +3402,6 @@ DEFAULT_SYSTEM_PROMPT = load_prompt_from_json(
     "chat",
     "You are Gray.",
 )
-
 
 async def chat_stream(
     request: Request,
@@ -3956,7 +3886,6 @@ async def chat_stream(
 
         clear_request_context()
         return StreamingResponse(error_stream(), status_code=500, media_type="text/event-stream")
-
 
 # Conversation endpoints are now in backend/api/conversations.py
 
