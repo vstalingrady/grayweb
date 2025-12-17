@@ -13,22 +13,14 @@ import {
 } from "react";
 import { useUser } from "@/contexts/UserContext";
 import { useI18n } from "@/contexts/I18nContext";
-import {
-  apiService,
-  type GroundingMetadata,
-  type MediaUpload,
-} from "@/lib/api";
+import { apiService } from "@/lib/api";
 import { buildLocalTimeContextWithOverrides } from "@/lib/timeContext";
 
 import {
-  ChatRole,
   ChatMessage,
   ChatSession,
-  ChatSessionScope,
-  ChatTitleMode,
   ChatContextValue,
   GrayReminderCreatedPayload,
-  ConversationHistoryEntryPayload,
 } from "./chat/types";
 import {
   buildGeneralConversationId,
@@ -37,23 +29,15 @@ import {
   buildAssistantReply,
   buildAssistantErrorReply,
   normalizeAssistantContent,
-  normalizeAssistantMessage,
   shouldIncludeWorkspaceContext,
   resolveClientTimezone,
-  buildSessionStorageKeyCandidates,
   shouldRequestAutoTitleForSession,
-  normalizeConversationIdValue,
-  isGenericSessionTitle as isGenericTitle,
-  parseGrayTitleMarkers,
   coerceConversationIdForRequest,
-  buildConversationHistoryPayload,
-  isTitleDerivedFromMessage,
 } from "./chat/utils";
 import { extractGrayRemindersFromText, buildReminderConfirmationText, coerceReminderPayload } from "./chat/reminderUtils";
 import {
   GENERAL_CHAT_SESSION_ID,
   SELF_CONTEXT_PATTERNS,
-  DUPLICATE_THREAD_WINDOW_MS,
 } from "./chat/constants";
 import { useDefaultSystemPrompt } from "./chat/provider/useDefaultSystemPrompt";
 import { useAutoStreamState } from "./chat/provider/useAutoStreamState";
@@ -67,9 +51,9 @@ import { useQuestionnaire } from "./chat/provider/useQuestionnaire";
 import { useRemoteConversations } from "./chat/provider/useRemoteConversations";
 import { useReminderPolling } from "./chat/provider/useReminderPolling";
 import { useRemindersEnabled } from "./chat/provider/useRemindersEnabled";
+import { useSessionActions } from "./chat/provider/useSessionActions";
 import { useSessionStorage } from "./chat/provider/useSessionStorage";
 import {
-  GENERAL_SESSION_TITLE,
   createEmptyGeneralSession,
   makeMessage,
   normalizeSessionsList,
@@ -181,9 +165,6 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
     queueConversationTitleSync,
     enqueueHistorySync,
   } = useConversationSync({ sessions, sessionsRef, userId: user?.id });
-  const pendingThreadSeedsRef = useRef<Map<string, { sessionId: string; createdAt: number }>>(
-    new Map()
-  );
   const [workspaceContextValue, setWorkspaceContextValue] = useState<string | null>(
     workspaceContext ?? null
   );
@@ -306,25 +287,6 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
     clearAttachments,
   } = useAttachments({ resolveChatUser });
 
-  const schedulePendingSeedCleanup = useCallback((seed: string, sessionId: string) => {
-    if (!seed) {
-      return;
-    }
-    const existing = pendingThreadSeedsRef.current.get(seed);
-    if (!existing || existing.sessionId !== sessionId) {
-      pendingThreadSeedsRef.current.set(seed, { sessionId, createdAt: Date.now() });
-    }
-    if (typeof window === "undefined") {
-      return;
-    }
-    window.setTimeout(() => {
-      const pending = pendingThreadSeedsRef.current.get(seed);
-      if (pending?.sessionId === sessionId) {
-        pendingThreadSeedsRef.current.delete(seed);
-      }
-    }, DUPLICATE_THREAD_WINDOW_MS);
-  }, []);
-
   useEffect(() => {
     if (workspaceContext !== undefined) {
       setWorkspaceContextValue(workspaceContext ?? null);
@@ -345,414 +307,33 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
     persistSessions,
   });
 
-  const updateSession = useCallback(
-    (sessionId: string, partial: Partial<ChatSession>) => {
-      setSessions((prev) => {
-        const next = prev.map((session) => {
-          if (session.id !== sessionId) {
-            return session;
-          }
-          const normalizedPartial: Partial<ChatSession> = { ...partial };
-          if ("conversationId" in partial) {
-            // Preserve special General conversation identifiers (`general:{userId}`)
-            // while still normalizing regular thread UUIDs.
-            normalizedPartial.conversationId =
-              coerceConversationIdForRequest(partial.conversationId) ?? undefined;
-          }
-          return { ...session, ...normalizedPartial };
-        });
-        const ordered = normalizeSessionsList(next);
-        persistSessions(ordered);
-        return ordered;
-      });
-    },
-    [persistSessions, setSessions]
-  );
-
-  const applyAutoTitle = useCallback(
-    (sessionId: string, candidate?: string | null) => {
-      const session = sessionsRef.current.find((entry) => entry.id === sessionId);
-      if (!session || session.scope === "general" || session.titleMode === "manual") {
-        return;
-      }
-      const rawTitle = (candidate ?? "").trim();
-      if (!rawTitle) {
-        return;
-      }
-      // Only replace placeholder / generic titles so we don't fight manual titles
-      // or backend-generated titles that are already set.
-      // Use isGenericTitle (same check as shouldRequestAutoTitleForSession) to allow
-      // replacing fallback titles derived from user messages.
-      if (!isGenericTitle(session.title) && !isTitleDerivedFromMessage(session.title, session.messages)) {
-        return;
-      }
-      if (session.title?.trim() === rawTitle) {
-        return;
-      }
-      updateSession(sessionId, { title: rawTitle, titleMode: "auto", isGeneratingTitle: false });
-      queueConversationTitleSync(sessionId, rawTitle);
-    },
-    [queueConversationTitleSync, updateSession]
-  );
-
-  const updateMessage = useCallback(
-    (sessionId: string, messageId: string, partial: Partial<ChatMessage>) => {
-      let assistantAutoTitle: string | null = null;
-      setSessions((prev) => {
-        let didUpdate = false;
-        const next = prev.map((session) => {
-          if (session.id !== sessionId) {
-            return session;
-          }
-          const messages = session.messages.map((message) => {
-            if (message.id !== messageId) {
-              return message;
-            }
-            didUpdate = true;
-            let nextPartial = partial;
-            if (typeof partial.content === "string" && message.role === "assistant") {
-              const parsedContent = parseGrayTitleMarkers(partial.content);
-              const normalized = normalizeAssistantMessage(message.role, parsedContent.cleanText);
-              nextPartial = {
-                ...partial,
-                content: normalized.content,
-              };
-              // Prefer explicit reminder payloads passed in the update, then any parsed from the content,
-              // then fall back to previously stored reminders to avoid losing the card mid-stream.
-              const incomingReminders =
-                Array.isArray(partial.reminders) && partial.reminders.length > 0
-                  ? partial.reminders
-                  : undefined;
-              const parsedReminders =
-                normalized.reminders && normalized.reminders.length > 0 ? normalized.reminders : undefined;
-              const existingReminders =
-                message.reminders && message.reminders.length > 0 ? message.reminders : undefined;
-              if (incomingReminders || parsedReminders || existingReminders) {
-                nextPartial.reminders = incomingReminders ?? parsedReminders ?? existingReminders;
-              }
-
-              if (parsedContent.title) {
-                assistantAutoTitle = parsedContent.title;
-              }
-            }
-            return { ...message, ...nextPartial };
-          });
-          if (!didUpdate) {
-            return session;
-          }
-          return {
-            ...session,
-            messages,
-          };
-        });
-        if (!didUpdate) {
-          return prev;
-        }
-        const ordered = normalizeSessionsList(next);
-        persistSessions(ordered);
-        return ordered;
-      });
-
-      if (assistantAutoTitle) {
-        applyAutoTitle(sessionId, assistantAutoTitle);
-      }
-    },
-    [applyAutoTitle, persistSessions, setSessions]
-  );
-
-  // Throttled version of updateMessage for streaming (ensures updates every ~30ms)
-  const pendingUpdatesRef = useRef<Map<string, Partial<ChatMessage>>>(new Map());
-  const throttledUpdateTimeoutsRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
-
-  const updateMessageThrottled = useCallback(
-    (sessionId: string, messageId: string, partial: Partial<ChatMessage>, throttleMs = 30) => {
-      const key = `${sessionId}:${messageId}`;
-      pendingUpdatesRef.current.set(key, partial);
-
-      if (throttledUpdateTimeoutsRef.current.has(key)) {
-        return;
-      }
-
-      const timeout = setTimeout(() => {
-        throttledUpdateTimeoutsRef.current.delete(key);
-        const latestPartial = pendingUpdatesRef.current.get(key);
-        if (latestPartial) {
-          updateMessage(sessionId, messageId, latestPartial);
-          pendingUpdatesRef.current.delete(key);
-        }
-      }, throttleMs);
-
-      throttledUpdateTimeoutsRef.current.set(key, timeout);
-    },
-    [updateMessage]
-  );
-
-  // Cleanup timeouts on unmount
-  useEffect(() => {
-    const timeouts = throttledUpdateTimeoutsRef.current;
-    return () => {
-      timeouts.forEach((timeout) => clearTimeout(timeout));
-      timeouts.clear();
-    };
-  }, []);
-
-  const deleteMessage = useCallback(
-    (sessionId: string, messageId: string) => {
-      let historyPayload: ConversationHistoryEntryPayload[] | null = null;
-      let conversationIdForSync: string | undefined;
-      // Prevent auto-stream from firing while we're deleting to avoid extra AI responses.
-
-      setSessions((prev) => {
-        let didUpdate = false;
-        const next = prev.map((session) => {
-          if (session.id !== sessionId) {
-            return session;
-          }
-          const filtered = session.messages.filter((message) => message.id !== messageId);
-          if (filtered.length === session.messages.length) {
-            return session;
-          }
-          didUpdate = true;
-
-          // For general sessions, try session.conversationId first, then fall back to generalConversationIdRef
-          let normalizedConversationId = coerceConversationIdForRequest(session.conversationId);
-          if (!normalizedConversationId && session.scope === "general") {
-            normalizedConversationId = coerceConversationIdForRequest(generalConversationIdRef.current);
-          }
-          const payload = buildConversationHistoryPayload(filtered);
-
-          if (normalizedConversationId) {
-            conversationIdForSync = normalizedConversationId;
-            historyPayload = payload;
-            pendingHistorySyncRef.current.delete(session.id);
-          } else if (session.scope === "thread") {
-            pendingHistorySyncRef.current.add(session.id);
-          }
-
-          return {
-            ...session,
-            messages: filtered,
-            updatedAt: Date.now(),
-          };
-        });
-        if (!didUpdate) {
-          return prev;
-        }
-        const ordered = normalizeSessionsList(next);
-        persistSessions(ordered);
-        return ordered;
-      });
-
-      if (conversationIdForSync && historyPayload) {
-        enqueueHistorySync(conversationIdForSync, historyPayload);
-      }
-    },
-    [enqueueHistorySync, persistSessions, pendingHistorySyncRef, setSessions]
-  );
-
-  const renameSession = useCallback(
-    (sessionId: string, title: string) => {
-      const trimmed = title.trim();
-      if (!trimmed) {
-        return;
-      }
-      const target = sessionsRef.current.find((session) => session.id === sessionId);
-      if (target?.scope === "general") {
-        return;
-      }
-      const normalized = trimmed.length > 100 ? trimmed.slice(0, 100).trim() : trimmed;
-      updateSession(sessionId, {
-        title: normalized,
-        titleMode: "manual",
-        updatedAt: Date.now(),
-      });
-      queueConversationTitleSync(sessionId, normalized);
-    },
-    [queueConversationTitleSync, updateSession]
-  );
-
-  const pinSession = useCallback(
-    async (sessionId: string, pinned: boolean) => {
-      const session = sessionsRef.current.find((s) => s.id === sessionId);
-      if (!session) return;
-
-      // 1. Update local state
-      const currentMeta = session.metadata || {};
-      updateSession(sessionId, {
-        metadata: { ...currentMeta, is_pinned: pinned },
-        updatedAt: Date.now(),
-      });
-
-      // 2. Persist to backend if associated with a conversation ID
-      const conversationId = normalizeConversationIdValue(session.conversationId);
-      if (conversationId) {
-        try {
-          await apiService.updateConversation(conversationId, {
-            metadata: { is_pinned: pinned },
-          });
-        } catch (err) {
-          console.error("Failed to pin session:", err);
-        }
-      }
-    },
-    [updateSession]
-  );
-
-  const appendMessage = useCallback(
-    (
-      sessionId: string,
-      role: ChatRole,
-      content: string,
-      tempId?: string,
-      metadata?: GroundingMetadata,
-      attachments?: MediaUpload[]
-    ) => {
-      let assistantAutoTitle: string | null = null;
-      let normalizedContent = content;
-      if (role === "assistant") {
-        const parsedContent = parseGrayTitleMarkers(content);
-        normalizedContent = parsedContent.cleanText;
-        assistantAutoTitle = parsedContent.title;
-      }
-
-      // Create the message immediately instead of inside setState
-      const createdMessage = makeMessage(role, normalizedContent, tempId, metadata, attachments);
-
-      setSessions((prev) => {
-        let didUpdate = false;
-
-        const next = prev.map((session) => {
-          if (session.id !== sessionId) {
-            return session;
-          }
-
-          didUpdate = true;
-
-          return {
-            ...session,
-            messages: [...session.messages, createdMessage],
-            updatedAt: createdMessage.createdAt,
-            isResponding: role === "user",
-            title: session.title,
-          };
-        });
-
-        if (didUpdate) {
-          const ordered = normalizeSessionsList(next);
-          persistSessions(ordered);
-          return ordered;
-        }
-
-        const fallbackScope = sessionId === GENERAL_CHAT_SESSION_ID ? "general" : "thread";
-        const fallbackSession: ChatSession =
-          fallbackScope === "general"
-            ? {
-              ...createEmptyGeneralSession(createdMessage.createdAt, generalConversationIdRef.current),
-              messages: [createdMessage],
-              updatedAt: createdMessage.createdAt,
-              isResponding: role === "user",
-              pendingAutoStream: false,
-            }
-            : {
-              id: sessionId,
-              title: "New Chat",
-              titleMode: "auto",
-              createdAt: createdMessage.createdAt,
-              updatedAt: createdMessage.createdAt,
-              messages: [createdMessage],
-              isResponding: role === "user",
-              scope: "thread",
-              conversationId: undefined,
-              pendingAutoStream: false,
-            };
-
-        const ordered = normalizeSessionsList([fallbackSession, ...prev]);
-        persistSessions(ordered);
-        return ordered;
-      });
-
-      if (role === "assistant" && assistantAutoTitle) {
-        applyAutoTitle(sessionId, assistantAutoTitle);
-      }
-
-      return createdMessage;
-    },
-    [applyAutoTitle, persistSessions, setSessions]
-  );
-
-  const deleteSession = useCallback(
-    (sessionId: string) => {
-      const target = sessionsRef.current.find((session) => session.id === sessionId);
-      // Skip general sessions
-      if (target?.scope === "general") {
-        return;
-      }
-
-      // For local sessions, do optimistic UI removal
-      if (target) {
-        // Clear any pending auto-stream for this session so deletion never triggers regeneration.
-        resetAutoStreamState(sessionId);
-
-        // Optimistically remove locally so it disappears from history & context immediately.
-        setSessions((prev) => {
-          const next = prev.filter((session) => session.id !== sessionId);
-          const ordered = normalizeSessionsList(next);
-          persistSessions(ordered);
-          return ordered;
-        });
-      }
-
-      // Best-effort server-side delete so the conversation is removed from backend context too.
-      // Use target.conversationId if available, otherwise fallback to sessionId for old chats.
-      const normalizedConversationId = normalizeConversationIdValue(target?.conversationId ?? sessionId);
-      if (normalizedConversationId) {
-        void (async () => {
-          try {
-            await apiService.deleteConversation(normalizedConversationId);
-          } catch (error) {
-            console.error("Failed to delete remote conversation:", error);
-          }
-        })();
-      }
-    },
-    [persistSessions, resetAutoStreamState, setSessions]
-  );
-
-  const clearAllConversations = useCallback(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const keys = buildSessionStorageKeyCandidates(user?.id, user?.email);
-        keys.forEach((key) => window.localStorage.removeItem(key));
-      } catch {
-        // ignore storage failures
-      }
-    }
-
-    resetAutoStreamState();
-    pendingTitleSyncRef.current = new Map();
-    pendingThreadSeedsRef.current = new Map();
-
-    setSessions(() => {
-      const emptyGeneral = createEmptyGeneralSession(undefined, generalConversationIdRef.current);
-      const ordered = normalizeSessionsList([emptyGeneral]);
-      persistSessions(ordered);
-      return ordered;
-    });
-  }, [persistSessions, pendingTitleSyncRef, resetAutoStreamState, setSessions, user?.email, user?.id]);
-
-  const ensureGeneralSession = useCallback((): ChatSession => {
-    const existing = sessionsRef.current.find((session) => session.scope === "general");
-    if (existing) {
-      return existing;
-    }
-    const created = createEmptyGeneralSession(undefined, generalConversationIdRef.current);
-    setSessions((prev) => {
-      const next = normalizeSessionsList([created, ...prev]);
-      persistSessions(next);
-      return next;
-    });
-    return created;
-  }, [persistSessions, setSessions]);
+  const {
+    updateSession,
+    applyAutoTitle,
+    updateMessage,
+    updateMessageThrottled,
+    deleteMessage,
+    renameSession,
+    pinSession,
+    appendMessage,
+    deleteSession,
+    clearAllConversations,
+    ensureGeneralSession,
+    getSession,
+    ensureSession,
+  } = useSessionActions({
+    sessionsRef,
+    setSessions,
+    persistSessions,
+    generalConversationIdRef,
+    pendingHistorySyncRef,
+    pendingTitleSyncRef,
+    queueConversationTitleSync,
+    enqueueHistorySync,
+    resetAutoStreamState,
+    userId: user?.id,
+    userEmail: user?.email,
+  });
 
   // Ref to break forward reference to sendGeneralMessage (defined later)
   // This avoids a Temporal Dead Zone error in the bundled output.
@@ -782,10 +363,8 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
 
       const now = Date.now();
       const trimmedInitial = (initialMessage ?? "").trim();
-      const normalizedInitial = trimmedInitial.toLowerCase();
       const shouldAutoStream = options?.autoStream !== false;
       // Duplicate detection removed to ensure fresh sessions
-
 
       const sessionId =
         typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -813,11 +392,6 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
 
       // console.log("[ChatProvider] createThreadSession: Created new session", { sessionId, willAutoStream });
 
-      if (normalizedInitial) {
-        pendingThreadSeedsRef.current.set(normalizedInitial, { sessionId, createdAt: now });
-        schedulePendingSeedCleanup(normalizedInitial, sessionId);
-      }
-
       if (trimmedInitial) {
         const userMessage = makeMessage("user", trimmedInitial);
         baseSession.messages = [userMessage];
@@ -840,7 +414,6 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
     [
       persistSessions,
       queueConversationTitleSync,
-      schedulePendingSeedCleanup,
       setSessions,
       ensureGeneralSession,
     ]
@@ -1192,66 +765,6 @@ export function ChatProvider({ children, workspaceContext }: ChatProviderProps) 
   useEffect(() => {
     sendGeneralMessageRef.current = sendGeneralMessage;
   }, [sendGeneralMessage]);
-
-  const getSession = useCallback((sessionId: string) => {
-    return sessionsRef.current.find((session) => session.id === sessionId);
-  }, []);
-
-  const ensureSession = useCallback(
-    (sessionId: string, initializer: () => ChatSession): ChatSession => {
-      const existing = sessionsRef.current.find((session) => session.id === sessionId);
-      if (existing) {
-        return existing;
-      }
-
-      const now = Date.now();
-      const raw = initializer() ?? ({} as ChatSession);
-      const normalizedScope: ChatSessionScope =
-        raw.scope === "general" ? "general" : "thread";
-      const normalized: ChatSession = {
-        id: sessionId,
-        title:
-          normalizedScope === "general"
-            ? GENERAL_SESSION_TITLE
-            : typeof raw.title === "string" && raw.title.trim().length > 0
-              ? raw.title.trim()
-              : "New Chat",
-        titleMode:
-          normalizedScope === "general"
-            ? "manual"
-            : (raw.titleMode as ChatTitleMode) === "manual"
-              ? "manual"
-              : "auto",
-        createdAt: typeof raw.createdAt === "number" ? raw.createdAt : now,
-        updatedAt: typeof raw.updatedAt === "number" ? raw.updatedAt : now,
-        messages: Array.isArray(raw.messages)
-          ? raw.messages.map((message) => ({
-            ...message,
-          }))
-          : [],
-        isResponding: Boolean(raw.isResponding),
-        scope: normalizedScope,
-        conversationId: normalizeConversationIdValue(raw.conversationId),
-        pendingAutoStream: Boolean(raw.pendingAutoStream),
-      };
-
-      setSessions((prev) => {
-        const alreadyExists = prev.some((session) => session.id === sessionId);
-        if (alreadyExists) {
-          return prev;
-        }
-        const general = prev.find((session) => session.scope === "general");
-        const others = prev.filter((session) => !(general && session.id === general.id));
-        const next = general ? [general, normalized, ...others] : [normalized, ...others];
-        const ordered = normalizeSessionsList(next);
-        persistSessions(ordered);
-        return ordered;
-      });
-
-      return normalized;
-    },
-    [persistSessions, setSessions]
-  );
 
   const generalSessionId = useMemo(() => {
     const general = sessions.find((session) => session.scope === "general");

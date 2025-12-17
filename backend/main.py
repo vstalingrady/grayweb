@@ -3497,9 +3497,6 @@ DEFAULT_SYSTEM_PROMPT = load_prompt_from_json(
 )
 
 
-@app.post("/api/chat/stream")
-# Increase the stream limit to avoid throttling active typing sessions.
-@limiter.limit("120/minute")
 async def chat_stream(
     request: Request,
     chat_request: ChatRequest,
