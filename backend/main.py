@@ -2103,8 +2103,16 @@ async def _execute_function_call(
     return await handler(user_id, args, db)
 
 
-# _build_function_call_contents and _extract_function_call
-# are now imported from core.function_call_helpers
+def _has_onboarding_tool(tools: Optional[List[types.Tool]]) -> bool:
+    """Check if the tools list contains the complete_onboarding function."""
+    if not tools:
+        return False
+    for t in tools:
+        if t.function_declarations:
+            for fd in t.function_declarations:
+                if fd.name == "complete_onboarding":
+                    return True
+    return False
 
 
 
@@ -2492,14 +2500,7 @@ async def stream_ai_response(
 
     # Check for onboarding tools so we can route through a provider that supports
     # real function calling (Gemini) instead of relying on brittle JSON parsing.
-    is_onboarding_tool = False
-    if tools:
-        for t in tools:
-            if t.function_declarations:
-                for fd in t.function_declarations:
-                    if fd.name == "complete_onboarding":
-                        is_onboarding_tool = True
-                        break
+    is_onboarding_tool = _has_onboarding_tool(tools)
 
     # Route based on chosen provider. If tool calls are present, OpenRouter should handle them.
     # The previous logic forcing Gemini for tools is being removed as OpenRouter
@@ -3621,20 +3622,12 @@ async def generate_ai_response(
     tool_list = [*base_tools, *maps_tools]
     # Add PLAN_TOOLS and CALENDAR_TOOLS only when message intent suggests scheduling operations
     # BUT skip for onboarding flow - it only needs complete_onboarding tool, extra tools add latency
-    # Check for onboarding tools so we can route through a provider that supports
-    # real function calling (Gemini) instead of relying on brittle JSON parsing.
-    is_onboarding_tool = False
-    if tools:
-        for t in tools:
-            if t.function_declarations:
-                for fd in t.function_declarations:
-                    if fd.name == "complete_onboarding":
-                        is_onboarding_tool = True
-                        break
+    is_onboarding_tool = _has_onboarding_tool(tools)
 
     if needs_structured_tools and not is_onboarding_tool:
         tool_list = [*tool_list, *PLAN_TOOLS, *CALENDAR_TOOLS]
     effective_tool_config = maps_tool_config
+
 
     # Initialize response_format
     # If tools are available (which they are), disable legacy JSON mode to prefer tool use.
