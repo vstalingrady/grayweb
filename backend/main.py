@@ -1111,25 +1111,13 @@ REMINDER_FUNCTION_NAMES = (
     "complete_onboarding",
 )
 
-# Message detection keywords and functions (REMINDER_KEYWORDS, TOOL_TRIGGER_KEYWORDS,
-# _needs_structured_tools, _should_request_structured_reminders, _should_enable_search,
-# _should_use_web_search) are now imported from core.message_detection
-
-# Use imported versions with consistent naming
+# Message detection keywords and functions are imported from core.message_detection
 REMINDER_KEYWORDS = _REMINDER_KEYWORDS
 TOOL_TRIGGER_KEYWORDS = _TOOL_TRIGGER_KEYWORDS
 
-# CORS utility functions (_split_env_list, _origin_variants, _local_network_origins,
-# _build_allowed_origins, _local_network_origin_regex) are now imported from core.cors_utils
+# CORS, AI, and serialization utilities are imported from:
+# - core.cors_utils, core.ai_utils, core.serializers
 
-# AI utility functions (_prefers_gemini_model, _materialize_structured_reminders,
-# _candidate_text, _candidate_thought, _candidate_grounding_payload, _merge_extra_contents,
-# _clean_title, _fallback_title_from_message) are now imported from core.ai_utils
-
-# Serialization functions (_row_get, _parse_json_field, _serialize_reminder_row,
-# _serialize_habit_record, _normalize_plan_items, _normalize_habit_items, 
-# _normalize_proactivity, _datetime_to_ms, _parse_iso_timestamp, _serialize_proactivity_notification,
-# _serialize_context_cache) are now imported from core.serializers
 
 ALLOWED_ORIGIN_REGEX = _local_network_origin_regex()
 
@@ -2368,36 +2356,16 @@ async def dev_analytics_summary(
         "revenue": revenue,
     }
 
-# Helper functions
-
-
-# _timestamp_ms_to_datetime, _datetime_to_ms are now imported from core.env_helpers
-
-
-# Serialization, AI utils, and web search detection functions are now imported from core modules
-
-# _gemini_web_search_summary removed (dead code - never called)
-
-# _build_maps_tool_and_config is now imported from core.tool_handlers
-
-# _load_context_cache and _context_cache_contents are now imported from core.cache
-
-
-
-
-# _generate_chat_title_inline is now imported from core.title_generator
-
-# Helper functions extracted to core modules: _merge_extra_contents (ai_utils), normalize_conversation_history (chat_history)
-
-# _load_conversation_history is now imported from core.conversation_manager
-
-# _fetch_proactivity_summary is now imported from core.proactivity_helpers
-
-
-# Calendar event handlers (_list_calendar_events, _create_calendar_event,
-# _update_calendar_event, _delete_calendar_event) are now imported from core.tool_handlers
-
-# _complete_onboarding is now imported from core.onboarding_handler
+# Helper functions - many utilities have been extracted to core modules:
+# - core.env_helpers: _timestamp_ms_to_datetime, _datetime_to_ms, _is_valid_uuid
+# - core.tool_handlers: _build_maps_tool_and_config, calendar event handlers
+# - core.cache: _load_context_cache, _context_cache_contents
+# - core.title_generator: _generate_chat_title_inline
+# - core.conversation_manager: _load_conversation_history, get_or_create_conversation
+# - core.proactivity_helpers: _fetch_proactivity_summary
+# - core.onboarding_handler: _complete_onboarding
+# - core.ai_utils: _merge_extra_contents
+# - core.chat_history: normalize_conversation_history
 
 
 async def _execute_function_call(
@@ -2717,13 +2685,11 @@ async def get_admin_metrics(
         },
     }
 
-# AI Chat helper functions
-# get_or_create_conversation and save_conversation_message are now imported from core.conversation_manager
-
-
-# _format_structured_ai_reply removed (dead code - never called)
+# AI Chat helper functions (get_or_create_conversation, save_conversation_message
+# are now imported from core.conversation_manager)
 
 async def generate_chat_title_suggestion(message: str) -> Optional[str]:
+
     """Generate a concise chat title locally."""
     trimmed = (message or "").strip()
     if not trimmed:
