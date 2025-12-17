@@ -5,12 +5,10 @@ import {
   FormEvent,
   useCallback,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
   type ChangeEvent,
-  type CSSProperties,
   type ReactNode,
 } from "react";
 import type { Components } from "react-markdown";
@@ -33,6 +31,7 @@ import { MobileWelcomeScreen } from "./chat/view/MobileWelcomeScreen";
 import { estimateTokenCount, formatDurationLabel } from "./chat/view/formatting";
 import { MarkdownCodeBlock } from "./chat/view/markdown/MarkdownCodeBlock";
 import { hasCodeBlockDescendant } from "./chat/view/markdown/utils";
+import { useChatViewScroll } from "./chat/view/useChatViewScroll";
 import { useStreamAssistantReply } from "./chat/view/useStreamAssistantReply";
 
 type GrayChatViewProps = {
@@ -96,9 +95,6 @@ export function GrayChatView({
   const [draft, setDraft] = useState("");
   const [hasHydrated, setHasHydrated] = useState(false);
   const replyTimeout = useRef<number | null>(null);
-  const scrollAnchorRef = useRef<HTMLDivElement | null>(null);
-  // Track if the user is currently at the bottom of the chat to implement "sticky scrolling"
-  const isAtBottomRef = useRef(true);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const copyResetTimeoutRef = useRef<number | null>(null);
   const [regeneratingMessageId, setRegeneratingMessageId] = useState<string | null>(null);
@@ -114,8 +110,6 @@ export function GrayChatView({
   const [thinkingStartTime, setThinkingStartTime] = useState<number | null>(null);
   const [reasoningSeconds, setReasoningSeconds] = useState<number | null>(null);
 
-  const composerDockRef = useRef<HTMLDivElement | null>(null);
-  const [composerHeight, setComposerHeight] = useState(0);
   const attachmentInputRef = useRef<HTMLInputElement | null>(null);
   const handleAttachmentInputChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
@@ -183,79 +177,17 @@ export function GrayChatView({
       onRemoveAttachment={removeAttachment}
     />
   ) : null;
+
+  const { chatViewportRef, scrollAnchorRef, composerDockRef, chatViewStyle, handleScroll } = useChatViewScroll({
+    hasHydrated,
+    sessionKey: session?.id ?? null,
+    messages,
+    activeStreamingMessageId,
+  });
+
   useEffect(() => {
     setHasHydrated(true);
   }, []);
-
-  const chatViewportRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (!hasHydrated || !session?.id || !scrollAnchorRef.current) {
-      return;
-    }
-    // Scroll to bottom on initial load (after messages are loaded)
-    scrollAnchorRef.current.scrollIntoView({ behavior: "auto" });
-  }, [hasHydrated, session?.id, messages.length]);
-
-  const streamingContentSignature = useMemo(() => {
-    if (!activeStreamingMessageId) {
-      return null;
-    }
-    const target = messages.find((message) => message.id === activeStreamingMessageId);
-    if (!target) {
-      return null;
-    }
-    const contentLength = target.content?.length ?? 0;
-    return `${activeStreamingMessageId}:${contentLength}`;
-  }, [activeStreamingMessageId, messages]);
-
-  const handleScroll = useCallback(() => {
-    const viewport = chatViewportRef.current;
-    if (!viewport) return;
-    const threshold = 300; // Same generous threshold
-    const isNearBottom =
-      viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight <= threshold;
-    isAtBottomRef.current = isNearBottom;
-  }, []);
-
-  // Force scroll to bottom unconditionally (used when user sends a message)
-  const scrollToBottom = useCallback((instant = false) => {
-    if (!scrollAnchorRef.current) return;
-    scrollAnchorRef.current.scrollIntoView({ behavior: instant ? "instant" : "smooth" });
-  }, []);
-
-  // Auto-scroll on new messages - always scroll to show the new message
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages.length, scrollToBottom]);
-
-  // Auto-scroll during active streaming if we were already at the bottom.
-  // We use the ref-based check to ensure "sticky" behavior even if a large
-  // chunk of content arrives that pushes the bottom further away than the threshold.
-  useEffect(() => {
-    if (streamingContentSignature && scrollAnchorRef.current && isAtBottomRef.current) {
-      scrollAnchorRef.current.scrollIntoView({ behavior: "instant" });
-    }
-  }, [streamingContentSignature]);
-
-  useLayoutEffect(() => {
-    const node = composerDockRef.current;
-    if (!node || typeof window === "undefined" || typeof ResizeObserver === "undefined") {
-      return;
-    }
-    const updateHeight = () => {
-      setComposerHeight(node.offsetHeight);
-    };
-    updateHeight();
-    const observer = new ResizeObserver(updateHeight);
-    observer.observe(node);
-    return () => {
-      observer.disconnect();
-    };
-  }, []);
-
-  const chatViewStyle: CSSProperties | undefined =
-    composerHeight > 0 ? ({ "--chat-composer-height": `${composerHeight}px` } as CSSProperties) : undefined;
 
   useEffect(() => {
     setActiveStreamingMessageId(null);

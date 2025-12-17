@@ -1716,10 +1716,6 @@ async def stream_ai_response(
         provider = "gemini"
         tools = add_maps_tool_if_needed(tools, maps_enabled)
 
-    prefers_gemini = (
-        AI_PROVIDER == "gemini"
-        or _prefers_gemini_model(normalized_model)
-    )
 
     # Check usage limits (now that we know the effective model)
     if user_id is not None and db is not None:
