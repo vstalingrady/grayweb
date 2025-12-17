@@ -850,13 +850,17 @@ async def lifespan(app: FastAPI):
     """Centralized startup/shutdown without deprecated on_event hooks."""
     await _connect_database()
     await _run_basic_migrations()
-    await _ensure_paddle_columns()
-    await _initialize_proactivity_engine()
-    await _validate_gemini_api_key_on_startup()
+    # Run independent checks in parallel for faster startup
+    await asyncio.gather(
+        _ensure_paddle_columns(),
+        _initialize_proactivity_engine(),
+        _validate_gemini_api_key_on_startup(),
+    )
     try:
         yield
     finally:
         await _disconnect_database()
+
 
 # Migration functions (extracted to core/migrations.py)
 try:

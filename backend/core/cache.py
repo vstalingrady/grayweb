@@ -9,10 +9,11 @@ from typing import Any, Callable, Dict, Optional, Tuple
 
 
 class AsyncTTLCache:
-    """Async-compatible TTL cache with lazy expiration."""
+    """Async-compatible TTL cache with lazy expiration and max size eviction."""
 
-    def __init__(self, ttl_seconds: int = 300):
+    def __init__(self, ttl_seconds: int = 300, max_size: int = 256):
         self.ttl_seconds = ttl_seconds
+        self.max_size = max_size
         self.cache: Dict[str, Tuple[Any, float]] = {}
 
     async def get(self, key: str, fetch_func: Callable) -> Any:
@@ -24,6 +25,10 @@ class AsyncTTLCache:
                 return value
 
         value = await fetch_func()
+        # Evict oldest entry if at max size
+        if len(self.cache) >= self.max_size:
+            oldest = min(self.cache.items(), key=lambda item: item[1][1])[0]
+            self.cache.pop(oldest, None)
         self.cache[key] = (value, now)
         return value
 
@@ -35,6 +40,7 @@ class AsyncTTLCache:
         """Remove a specific key from the cache."""
         if key in self.cache:
             del self.cache[key]
+
 
 
 class TTLCache:

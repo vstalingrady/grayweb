@@ -3,11 +3,11 @@ import logging
 import hashlib
 import midtransclient
 from datetime import datetime
-from dotenv import load_dotenv
 
 logger = logging.getLogger("backend.payment_utils")
 
-load_dotenv()
+# Environment is already loaded by database.py and main.py
+
 
 # Determine environment: "production" or "sandbox"
 # MIDTRANS_IS_PRODUCTION=true uses production keys, otherwise sandbox
