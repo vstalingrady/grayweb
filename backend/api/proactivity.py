@@ -46,12 +46,6 @@ def _get_proactivity_services():
     return proactivity_engine, proactivity_realtime_broker
 
 
-def _get_rate_limiter():
-    """Get rate limiter from main."""
-    from backend.main import limiter
-    return limiter
-
-
 def _sse_event(event: str, data: Dict[str, Any]) -> str:
     """Format SSE event."""
     return f"event: {event}\ndata: {json.dumps(data)}\n\n"

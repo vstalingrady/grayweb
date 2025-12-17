@@ -8,6 +8,7 @@ import {
   buildGeneralConversationId,
   normalizeAssistantContent,
   normalizeConversationIdValue,
+  resolveConversationMemoryEnabled,
   resolveClientTimezone,
   shouldIncludeWorkspaceContext,
   shouldRequestAutoTitleForSession,
@@ -165,6 +166,7 @@ export const useStreamAssistantReply = ({
       const timeContext = buildLocalTimeContextWithOverrides(undefined, {
         timeZone: effectiveTimeZone,
       });
+      const conversationMemoryEnabled = resolveConversationMemoryEnabled(resolvedUser);
 
       try {
         let localThinkingStartTime: number | null = null;
@@ -181,6 +183,7 @@ export const useStreamAssistantReply = ({
             context: contextPayload,
             time_context: timeContext,
             timezone: effectiveTimeZone,
+            conversation_memory_enabled: conversationMemoryEnabled,
             attachments: buildAttachmentPayloads(),
             should_generate_title: requestTitleHint,
             web_search_enabled: shouldUseWebSearch,
@@ -307,6 +310,11 @@ export const useStreamAssistantReply = ({
         clearAttachments();
         return accumulated;
       } catch (error) {
+        if (abortController.signal.aborted) {
+          updateSession(targetSessionId, { isResponding: false, pendingAutoStream: false });
+          clearAttachments();
+          return normalizeAssistantContent(accumulated, prompt);
+        }
         console.warn("Failed to stream assistant reply:", error);
         try {
           const fallbackResponse = await apiService.sendMessage({
@@ -321,6 +329,7 @@ export const useStreamAssistantReply = ({
             context: contextPayload,
             time_context: timeContext,
             timezone: effectiveTimeZone,
+            conversation_memory_enabled: conversationMemoryEnabled,
             attachments: buildAttachmentPayloads(),
             web_search_enabled: shouldUseWebSearch,
             should_generate_title: requestTitleHint,

@@ -23,6 +23,22 @@ import { formatReminderDateLabel } from "../reminderTimeUtils";
 import { extractGrayRemindersFromText } from "./reminderUtils";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const CONVERSATION_MEMORY_STORAGE_PREFIX = "gray_conversation_memory";
+
+export const resolveConversationMemoryEnabled = (user: User | null | undefined): boolean => {
+    if (typeof user?.conversation_memory_enabled === "boolean") {
+        return user.conversation_memory_enabled;
+    }
+    if (typeof window === "undefined") {
+        return true;
+    }
+    const storageKey = `${CONVERSATION_MEMORY_STORAGE_PREFIX}:${user?.id ?? "anon"}`;
+    try {
+        return window.localStorage.getItem(storageKey) !== "0";
+    } catch {
+        return true;
+    }
+};
 
 export const normalizeConversationIdValue = (value?: string | null): string | undefined => {
     if (typeof value !== "string") {

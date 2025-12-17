@@ -151,8 +151,7 @@ async def send_reminder(ctx: Dict[str, Any], user_id: int, reminder_id: int) -> 
     logger.info("Executing reminder %d for user %d", reminder_id, user_id)
     # Import here to avoid circular imports
     try:
-        from proactivity_engine import ProactivityEngine
-        engine: ProactivityEngine = ctx.get("proactivity_engine")
+        engine = ctx.get("proactivity_engine")
         if engine:
             # Dispatch reminder using existing engine
             await engine.dispatch_user_if_due(user_id, source="scheduled_reminder", force=True)
@@ -164,8 +163,7 @@ async def send_proactive_checkin(ctx: Dict[str, Any], user_id: int) -> None:
     """Execute a proactive check-in for a user."""
     logger.info("Executing proactive check-in for user %d", user_id)
     try:
-        from proactivity_engine import ProactivityEngine
-        engine: ProactivityEngine = ctx.get("proactivity_engine")
+        engine = ctx.get("proactivity_engine")
         if engine:
             await engine.dispatch_user_if_due(user_id, source="scheduled_checkin", force=True)
     except Exception as e:
@@ -178,15 +176,24 @@ async def startup(ctx: Dict[str, Any]) -> None:
     
     try:
         # Import and connect database
-        from database import database
+        try:
+            from backend.database import database
+        except ImportError:  # pragma: no cover
+            from database import database  # type: ignore
         if not database.is_connected:
             await database.connect()
             logger.info("arq worker: Database connected")
         ctx["database"] = database
         
         # Initialize proactivity engine
-        from proactivity_engine import ProactivityEngine, ProactivityRealtimeBroker
-        from ai_message_generator import AIMessageGenerator
+        try:
+            from backend.proactivity_engine import ProactivityEngine, ProactivityRealtimeBroker
+        except ImportError:  # pragma: no cover
+            from proactivity_engine import ProactivityEngine, ProactivityRealtimeBroker  # type: ignore
+        try:
+            from backend.ai_message_generator import AIMessageGenerator
+        except ImportError:  # pragma: no cover
+            from ai_message_generator import AIMessageGenerator  # type: ignore
         
         # Create realtime broker and AI generator
         broker = ProactivityRealtimeBroker()
@@ -198,9 +205,6 @@ async def startup(ctx: Dict[str, Any]) -> None:
             broker,
             ai_generator,
         )
-        if engine:
-            # Dispatch reminder using existing engine
-            pass
         ctx["proactivity_engine"] = engine
         logger.info("arq worker: ProactivityEngine initialized")
         
@@ -225,8 +229,10 @@ async def shutdown(ctx: Dict[str, Any]) -> None:
 # Cron job for periodic proactivity dispatch
 async def dispatch_all_proactivity(ctx: Dict[str, Any]) -> None:
     """Cron job to dispatch all due proactive check-ins."""
-    logger.info("Running scheduled proactivity dispatch...")
-    print(f"[arq] Running scheduled proactivity dispatch at {utcnow_aware().isoformat().replace('+00:00', 'Z')}")
+    logger.info(
+        "Running scheduled proactivity dispatch at %s",
+        utcnow_aware().isoformat().replace("+00:00", "Z"),
+    )
     try:
         engine = ctx.get("proactivity_engine")
         if engine:
@@ -234,13 +240,10 @@ async def dispatch_all_proactivity(ctx: Dict[str, Any]) -> None:
             users_evaluated = results.get("users_evaluated", 0) if results else 0
             messages_sent = results.get("messages_sent", 0) if results else 0
             logger.info("Proactivity dispatch complete: %d users evaluated, %d messages sent", users_evaluated, messages_sent)
-            print(f"[arq] Proactivity dispatch complete: {users_evaluated} users evaluated, {messages_sent} messages sent")
         else:
             logger.warning("Proactivity engine not available in arq context")
-            print("[arq] WARNING: Proactivity engine not available in arq context")
     except Exception as e:
         logger.error("Proactivity dispatch failed: %s", e, exc_info=True)
-        print(f"[arq] ERROR: Proactivity dispatch failed: {e}")
 
 
 # Worker settings for running with: arq backend.job_scheduler.WorkerSettings

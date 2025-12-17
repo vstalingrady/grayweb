@@ -64,6 +64,7 @@ import { GrayMobileHeader } from "./components/GrayMobileHeader";
 import { useCalendarSyncHandlers } from "./hooks/useCalendarSyncHandlers";
 import { useGoogleCalendarIntegration } from "./hooks/useGoogleCalendarIntegration";
 import { usePlanHabitActions } from "./hooks/usePlanHabitActions";
+import { useGrayLayoutState } from "./hooks/useGrayLayoutState";
 
 // Lazy load all heavy components for better code splitting
 const GrayEnhancedSidebar = dynamic(
@@ -208,7 +209,6 @@ function GrayPageClientInner({
   } = useChatStore();
   const supportsInlineChat = variant !== "chat";
   const [currentChatId, setCurrentChatId] = useState<string | null>(() => activeChatId ?? null);
-  const [isCompactLayout, setIsCompactLayout] = useState(false);
   const ensureSessionRef = useRef(ensureSession);
   const { deliveredKeys: deliveredProactivityKeys } = useProactivityNotifications();
   const lastDeletedChatIdStorageKey = "gray:lastDeletedChatId";
@@ -314,45 +314,22 @@ function GrayPageClientInner({
     sendDashboardNotification,
   });
 
-  const readSidebarExpandedPreference = useCallback(() => {
-    if (typeof window === "undefined") {
-      return defaultSidebarExpandedDesktop;
-    }
-    try {
-      const stored = localStorage.getItem(sidebarPreferenceKey);
-      if (stored === "true") return true;
-      if (stored === "false") return false;
-    } catch {
-      // localStorage may be unavailable
-    }
-    return defaultSidebarExpandedDesktop;
-  }, [defaultSidebarExpandedDesktop, sidebarPreferenceKey]);
-
-  const [isMobileViewport, setIsMobileViewport] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return (window.innerWidth || 0) <= 768;
+  const {
+    isCalendarPage,
+    isMobileViewport,
+    isCompactLayout,
+    sidebarExpandedForLayout,
+    toggleSidebarExpandedForLayout,
+    expandSidebarForLayout,
+    collapseSidebarForLayout,
+    collapseAllSidebars,
+  } = useGrayLayoutState({
+    pathname,
+    sidebarPreferenceKey,
+    defaultSidebarExpandedDesktop,
   });
-
-  const [isSidebarExpanded, setIsSidebarExpanded] = useState<boolean>(() => {
-    if (typeof window === "undefined") {
-      return defaultSidebarExpandedDesktop;
-    }
-    const shouldCollapseSidebar = (window.innerWidth || 0) <= 768;
-    if (shouldCollapseSidebar) return false;
-    try {
-      const stored = localStorage.getItem(sidebarPreferenceKey);
-      if (stored === "true") return true;
-      if (stored === "false") return false;
-    } catch {
-      // localStorage may be unavailable
-    }
-    return defaultSidebarExpandedDesktop;
-  });
-
-  const [isCalendarSidebarExpanded, setIsCalendarSidebarExpanded] = useState(false);
 
   const [isMounted, setIsMounted] = useState(false);
-  const wasMobileViewportRef = useRef(isMobileViewport);
   useEffect(() => {
     setIsMounted(true);
   }, []);
@@ -679,14 +656,14 @@ function GrayPageClientInner({
           onToggleHabit={toggleHabit}
           onSavePlan={savePlan}
           onDeletePlan={deletePlan}
-	          onDeleteHabit={deleteHabit}
-	          onRefreshData={refreshPlansAndHabits}
-	          showGreeting={false}
-	          hidePlans={isMobileViewport}
-	        />
-	      </div>
-	    );
-	  };
+          onDeleteHabit={deleteHabit}
+          onRefreshData={refreshPlansAndHabits}
+          showGreeting={false}
+          hidePlans={isMobileViewport}
+        />
+      </div>
+    );
+  };
 
   // Close mobile sidebar on navigation
   const handleMobileNavigate = (nav: SidebarNavKey) => {
@@ -1255,9 +1232,6 @@ function GrayPageClientInner({
     [handleChatSubmit, threadComposerControls, threadComposerDraft]
   );
 
-
-
-
   useEffect(() => {
     if (!supportsInlineChat || typeof window === "undefined") {
       return;
@@ -1279,12 +1253,12 @@ function GrayPageClientInner({
     );
     const urlId = currentSession?.conversationId ?? currentChatId;
 
-	    const pathname = window.location.pathname;
-	    const targetPath = `/c/${urlId}`;
-	    if (pathname !== targetPath) {
-	      window.history.replaceState(null, "", targetPath);
-	    }
-	  }, [currentChatId, generalSessionId, manualViewMode, sessions, supportsInlineChat]);
+    const currentPathname = window.location.pathname;
+    const targetPath = `/c/${urlId}`;
+    if (currentPathname !== targetPath) {
+      window.history.replaceState(null, "", targetPath);
+    }
+  }, [currentChatId, generalSessionId, manualViewMode, sessions, supportsInlineChat]);
 
   const handleOpenHistoryEntry = (entry: SidebarHistoryEntry) => {
     if (!entry.href || entry.href === "#") {
@@ -1321,61 +1295,61 @@ function GrayPageClientInner({
     renameSession(id, nextTitle);
   }, [sessions, renameSession]);
 
-	  const handleDeleteHistoryEntry = useCallback(
-	    (id: string) => {
-	      const confirmed = window.confirm("Delete this conversation? This cannot be undone.");
-	      if (!confirmed) {
-	        return;
-	      }
+  const handleDeleteHistoryEntry = useCallback(
+    (id: string) => {
+      const confirmed = window.confirm("Delete this conversation? This cannot be undone.");
+      if (!confirmed) {
+        return;
+      }
 
-	      const targetSession = sessions.find((session) => session.id === id) ?? null;
-	      const normalizedConversationId =
-	        normalizeConversationIdValue(targetSession?.conversationId) ?? null;
+      const targetSession = sessions.find((session) => session.id === id) ?? null;
+      const normalizedConversationId =
+        normalizeConversationIdValue(targetSession?.conversationId) ?? null;
 
-	      try {
-	        sessionStorage.setItem(
-	          lastDeletedChatIdStorageKey,
-	          JSON.stringify({ sessionId: id, conversationId: normalizedConversationId })
-	        );
-	      } catch {
-	        // Ignore
-	      }
+      try {
+        sessionStorage.setItem(
+          lastDeletedChatIdStorageKey,
+          JSON.stringify({ sessionId: id, conversationId: normalizedConversationId })
+        );
+      } catch {
+        // Ignore
+      }
 
-	      deleteSession(id);
+      deleteSession(id);
 
-	      const matchesActiveRoute =
-	        activeChatId === id ||
-	        (normalizedConversationId !== null && activeChatId === normalizedConversationId);
-	      const matchesCurrentChat =
-	        currentChatId === id ||
-	        (normalizedConversationId !== null && currentChatId === normalizedConversationId);
+      const matchesActiveRoute =
+        activeChatId === id ||
+        (normalizedConversationId !== null && activeChatId === normalizedConversationId);
+      const matchesCurrentChat =
+        currentChatId === id ||
+        (normalizedConversationId !== null && currentChatId === normalizedConversationId);
 
-	      if (matchesCurrentChat) {
-	        setCurrentChatId(generalSessionId);
-	      }
+      if (matchesCurrentChat) {
+        setCurrentChatId(generalSessionId);
+      }
 
-	      if (!matchesActiveRoute && !matchesCurrentChat) {
-	        return;
-	      }
+      if (!matchesActiveRoute && !matchesCurrentChat) {
+        return;
+      }
 
-	      if (supportsInlineChat) {
-	        setManualViewMode(null);
-	        return;
-	      }
+      if (supportsInlineChat) {
+        setManualViewMode(null);
+        return;
+      }
 
-	      router.replace("/");
-	    },
-	    [
-	      activeChatId,
-	      currentChatId,
-	      deleteSession,
-	      generalSessionId,
-	      lastDeletedChatIdStorageKey,
-	      router,
-	      sessions,
-	      supportsInlineChat,
-	    ]
-	  );
+      router.replace("/");
+    },
+    [
+      activeChatId,
+      currentChatId,
+      deleteSession,
+      generalSessionId,
+      lastDeletedChatIdStorageKey,
+      router,
+      sessions,
+      supportsInlineChat,
+    ]
+  );
 
   const handleRenameHistoryOverlayEntry = useCallback(
     (entry: SidebarHistoryEntry) => handleRenameHistoryEntry(entry.id),

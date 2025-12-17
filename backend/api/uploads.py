@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 import databases
-from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, Request, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import FileResponse
 
 try:
@@ -17,9 +17,9 @@ except ImportError:
     from auth import get_current_user  # type: ignore
 
 try:
-    from backend.database import database, media_uploads
+    from backend.database import get_database, media_uploads
 except ImportError:
-    from database import database, media_uploads  # type: ignore
+    from database import get_database, media_uploads  # type: ignore
 
 try:
     from backend.core.file_utils import (
@@ -55,25 +55,9 @@ except ImportError:
 router = APIRouter(tags=["uploads"])
 
 
-def _get_limiter():
-    """Get the limiter from main module lazily."""
-    try:
-        from backend.main import limiter
-    except ImportError:
-        from main import limiter  # type: ignore
-    return limiter
-
-
-
-async def get_database():
-    """Dependency to get the database connection."""
-    yield database
-
-
 @router.post("/api/uploads", response_model=MediaUpload)
 async def upload_media(
     request: Request,
-    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     current_user: Dict[str, Any] = Depends(get_current_user),
     db: databases.Database = Depends(get_database),

@@ -20,34 +20,22 @@ from backend.time_utils import utcnow
 router = APIRouter(tags=["payments"])
 
 
-def _get_midtrans_helpers():
-    """Lazy import Midtrans helpers."""
-    try:
-        from backend.midtrans import create_core_api_transaction, verify_notification_signature
-    except ImportError:
-        from midtrans import create_core_api_transaction, verify_notification_signature  # type: ignore
-    return create_core_api_transaction, verify_notification_signature
-
-
 def _get_logger():
     """Get app logger."""
     try:
-        from backend.main import app_logger
-    except ImportError:
+        from backend.logging_config import create_logger
+    except ImportError:  # pragma: no cover
         import logging
-        app_logger = logging.getLogger(__name__)
-    return app_logger
+        return logging.getLogger(__name__)
+    return create_logger("backend.api.payments")
 
 
 def _get_cache_helpers():
     """Get cache invalidation helpers."""
     try:
-        from backend.main import invalidate_user_cache, invalidate_user_cache_redis
-    except ImportError:
-        async def invalidate_user_cache_redis(auth_id: str) -> None:
-            pass
-        def invalidate_user_cache(auth_id: str) -> None:
-            pass
+        from backend.auth import invalidate_user_cache, invalidate_user_cache_redis
+    except ImportError:  # pragma: no cover
+        from auth import invalidate_user_cache, invalidate_user_cache_redis  # type: ignore
     return invalidate_user_cache, invalidate_user_cache_redis
 
 
@@ -58,7 +46,10 @@ async def create_payment_charge(
     user: Dict[str, Any] = Depends(get_current_user),
 ):
     """Create a transaction with Midtrans Core API."""
-    create_core_api_transaction, _ = _get_midtrans_helpers()
+    try:
+        from backend.payment_utils import create_core_api_transaction
+    except ImportError:  # pragma: no cover
+        from payment_utils import create_core_api_transaction  # type: ignore
     app_logger = _get_logger()
     
     # 1. Determine Amount & Item Details
@@ -180,7 +171,10 @@ async def create_payment_charge(
 @router.post("/payment/notification", include_in_schema=False)
 async def handle_payment_notification(notification: MidtransNotification, background_tasks: BackgroundTasks):
     """Handle Midtrans HTTP Notification (Webhook)."""
-    _, verify_notification_signature = _get_midtrans_helpers()
+    try:
+        from backend.payment_utils import verify_notification_signature
+    except ImportError:  # pragma: no cover
+        from payment_utils import verify_notification_signature  # type: ignore
     app_logger = _get_logger()
     invalidate_user_cache, invalidate_user_cache_redis = _get_cache_helpers()
     

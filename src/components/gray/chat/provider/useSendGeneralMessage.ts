@@ -10,12 +10,11 @@ import {
   coerceConversationIdForRequest,
   computeProfileHash,
   normalizeAssistantContent,
+  resolveConversationMemoryEnabled,
   resolveClientTimezone,
   shouldRequestAutoTitleForSession,
 } from "../utils";
 import { extractGrayRemindersFromText, resolveAssistantReminders } from "../reminderUtils";
-
-const CONVERSATION_MEMORY_STORAGE_PREFIX = "gray_conversation_memory";
 
 declare global {
   interface Window {
@@ -194,20 +193,7 @@ export const useSendGeneralMessage = ({
             updateSession(generalSession.id, { isGeneratingTitle: true });
           }
 
-          const conversationMemoryEnabled = (() => {
-            if (typeof resolvedUser.conversation_memory_enabled === "boolean") {
-              return resolvedUser.conversation_memory_enabled;
-            }
-            if (typeof window === "undefined") {
-              return true;
-            }
-            const storageKey = `${CONVERSATION_MEMORY_STORAGE_PREFIX}:${streamingUserId ?? "anon"}`;
-            try {
-              return window.localStorage.getItem(storageKey) !== "0";
-            } catch {
-              return true;
-            }
-          })();
+          const conversationMemoryEnabled = resolveConversationMemoryEnabled(resolvedUser);
 
           for await (const event of apiService.sendMessageStream({
             message: trimmed,

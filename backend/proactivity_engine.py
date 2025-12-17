@@ -615,6 +615,10 @@ class ProactivityEngine:
                     vapid_private_key=vapid_private,
                     vapid_claims={"sub": "mailto:admin@gray.app"},
                 )
+                logger.info(
+                    f"Web push sent successfully for user {user_id}",
+                    extra={"event_type": "web_push_success", "user_id": user_id},
+                )
             except WebPushException as exc:
                 response = getattr(exc, "response", None)
                 status_code = getattr(response, "status_code", None)
@@ -624,13 +628,25 @@ class ProactivityEngine:
                     # These mean the subscription is invalid or expired.
                     logger.warning(
                         f"Web push subscription expired/invalid for user {user_id} (status {status_code}). Removing.",
-                        extra={"response_body": response_text}
+                        extra={"event_type": "web_push_expired", "user_id": user_id, "status": status_code, "response_body": response_text}
                     )
                     try:
                         await self.db.execute(
                             f"DELETE FROM {PROACTIVITY_PUSH_TABLE} WHERE id = :id",
                             {"id": row["id"]},
                         )
+                        # Check if user has any remaining subscriptions
+                        remaining = await self.db.fetch_one(
+                            f"SELECT COUNT(*) as cnt FROM {PROACTIVITY_PUSH_TABLE} WHERE user_id = :user_id",
+                            {"user_id": user_id},
+                        )
+                        if remaining and remaining["cnt"] == 0:
+                            logger.warning(
+                                f"User {user_id} has NO remaining push subscriptions. "
+                                "Notifications will only work if app is open (SSE). "
+                                "User should re-enable notifications in settings.",
+                                extra={"event_type": "web_push_all_expired", "user_id": user_id},
+                            )
                     except Exception as delete_exc:
                         logger.error(
                             f"Failed to delete invalid push subscription for user {user_id}: {delete_exc}",

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { apiService } from "@/lib/api";
 import type { ChatMessage, ChatSession } from "../types";
+import { buildConversationHistoryPayload, normalizeConversationIdValue } from "../utils";
 import { formatDurationLabel } from "./formatting";
 
 type StreamAssistantReply = (
@@ -31,6 +33,7 @@ type UseChatMessageActionsResult = {
   handleRetryUserMessage: (messageId: string) => void;
   handleRegenerate: (messageId: string) => void;
   handleCycleAssistantVariant: (messageId: string, direction: "prev" | "next") => void;
+  requestHistorySync: () => void;
 };
 
 export const useChatMessageActions = ({
@@ -47,6 +50,8 @@ export const useChatMessageActions = ({
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const copyResetTimeoutRef = useRef<number | null>(null);
   const [regeneratingMessageId, setRegeneratingMessageId] = useState<string | null>(null);
+  const pendingHistorySyncRef = useRef(false);
+  const historySyncTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     return () => {
@@ -54,8 +59,50 @@ export const useChatMessageActions = ({
         window.clearTimeout(copyResetTimeoutRef.current);
         copyResetTimeoutRef.current = null;
       }
+      if (historySyncTimerRef.current !== null) {
+        window.clearTimeout(historySyncTimerRef.current);
+        historySyncTimerRef.current = null;
+      }
     };
   }, []);
+
+  const requestHistorySync = useCallback(() => {
+    pendingHistorySyncRef.current = true;
+  }, []);
+
+  useEffect(() => {
+    if (!pendingHistorySyncRef.current) {
+      return;
+    }
+    if (!session) {
+      return;
+    }
+    if (session.isResponding || activeStreamingMessageId) {
+      return;
+    }
+
+    const conversationId = normalizeConversationIdValue(session.conversationId);
+    if (!conversationId) {
+      return;
+    }
+
+    if (historySyncTimerRef.current !== null) {
+      window.clearTimeout(historySyncTimerRef.current);
+    }
+
+    historySyncTimerRef.current = window.setTimeout(() => {
+      historySyncTimerRef.current = null;
+      if (!pendingHistorySyncRef.current) {
+        return;
+      }
+      pendingHistorySyncRef.current = false;
+
+      const payload = buildConversationHistoryPayload(messages);
+      void apiService.overwriteConversationHistory(conversationId, payload).catch((error) => {
+        console.warn("Failed to sync conversation history:", error);
+      });
+    }, 250);
+  }, [activeStreamingMessageId, messages, session]);
 
   const getResponseDurationLabel = useCallback(
     (messageIndex: number) => {
@@ -156,8 +203,9 @@ export const useChatMessageActions = ({
         return;
       }
       updateMessage(session.id, messageId, { content: newContent });
+      requestHistorySync();
     },
-    [session, updateMessage]
+    [requestHistorySync, session, updateMessage]
   );
 
   const handleRetryUserMessage = useCallback(
@@ -181,9 +229,10 @@ export const useChatMessageActions = ({
       const nextMessage = messages[messageIndex + 1];
       const existingAssistantId = nextMessage?.role === "assistant" ? nextMessage.id : undefined;
 
+      requestHistorySync();
       void streamAssistantReply(session.id, content, session.conversationId ?? null, existingAssistantId);
     },
-    [messages, session, streamAssistantReply]
+    [messages, requestHistorySync, session, streamAssistantReply]
   );
 
   const handleRegenerate = useCallback(
@@ -223,10 +272,11 @@ export const useChatMessageActions = ({
           await streamAssistantReply(session.id, userMessage.content, session.conversationId ?? null, assistantMessage.id);
         } finally {
           setRegeneratingMessageId(null);
+          requestHistorySync();
         }
       })();
     },
-    [activeStreamingMessageId, messages, session, streamAssistantReply]
+    [activeStreamingMessageId, messages, requestHistorySync, session, streamAssistantReply]
   );
 
   const handleCycleAssistantVariant = useCallback(
@@ -255,8 +305,9 @@ export const useChatMessageActions = ({
         content: nextContent,
         activeVariantIndex: nextIndex,
       });
+      requestHistorySync();
     },
-    [messages, session, updateMessage]
+    [messages, requestHistorySync, session, updateMessage]
   );
 
   return {
@@ -269,6 +320,6 @@ export const useChatMessageActions = ({
     handleRetryUserMessage,
     handleRegenerate,
     handleCycleAssistantVariant,
+    requestHistorySync,
   };
 };
-

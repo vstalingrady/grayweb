@@ -103,6 +103,7 @@ export function GrayChatView({
   // Track the most recent conversation ID synchronously to avoid React state update delays
   // This ensures subsequent messages use the correct conversation ID even before state propagates
   const streamedConversationIdRef = useRef<string | null>(null);
+  const streamedConversationOwnerRef = useRef<string | null>(null);
   // Track when thinking content (inside <thinking> tags) actually starts
   const [isActivelyThinking, setIsActivelyThinking] = useState(false);
   const [thinkingStartTime, setThinkingStartTime] = useState<number | null>(null);
@@ -151,10 +152,17 @@ export function GrayChatView({
 
   // Sync the conversation ID ref when session changes
   useEffect(() => {
-    const sessionConvId = session?.conversationId ?? null;
-    // Only reset if we're switching to a different session or the state has a newer value
-    if (sessionConvId) {
-      streamedConversationIdRef.current = sessionConvId;
+    const nextSessionId = session?.id ?? null;
+    const nextConversationId = session?.conversationId ?? null;
+
+    if (streamedConversationOwnerRef.current !== nextSessionId) {
+      streamedConversationOwnerRef.current = nextSessionId;
+      streamedConversationIdRef.current = nextConversationId;
+      return;
+    }
+
+    if (nextConversationId) {
+      streamedConversationIdRef.current = nextConversationId;
     }
   }, [session?.id, session?.conversationId]);
 
@@ -256,6 +264,7 @@ export function GrayChatView({
     handleRetryUserMessage,
     handleRegenerate,
     handleCycleAssistantVariant,
+    requestHistorySync,
   } = useChatMessageActions({
     session,
     messages,
@@ -392,6 +401,9 @@ export function GrayChatView({
       }
       setActiveStreamingMessageId(null);
       isSubmittingRef.current = false;
+      if (session) {
+        requestHistorySync();
+      }
 
       if (!nextPrompt) {
         return;

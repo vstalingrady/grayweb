@@ -43,13 +43,13 @@ def _get_reminder_scheduler():
 
 
 def _get_api_logger():
-    """Lazy import api_logger to avoid circular imports."""
+    """Get a configured API logger."""
     try:
-        from backend.main import api_logger
-    except ImportError:
+        from backend.logging_config import create_logger
+    except ImportError:  # pragma: no cover
         import logging
-        api_logger = logging.getLogger(__name__)
-    return api_logger
+        return logging.getLogger(__name__)
+    return create_logger("backend.api.reminders")
 
 
 @router.get("/users/{user_id}/reminders", response_model=List[Dict[str, Any]])
