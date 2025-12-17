@@ -896,7 +896,7 @@ app_logger.info(f"Backend starting (env={os.getenv('ENVIRONMENT', 'development')
 AI_PROVIDER = (os.getenv("AI_PROVIDER") or "openrouter").strip().lower()
 # Default lite tier provider - using OpenRouter for all models
 LITE_TIER_PROVIDER = (os.getenv("LITE_TIER_PROVIDER") or "openrouter").strip().lower()
-OPENROUTER_FALLBACK_MODEL = os.getenv("OPENROUTER_FALLBACK_MODEL", "anthropic/claude-sonnet-4.5")
+
 
 # Conversation memory/context limits (tokens) by plan tier.
 # "64,000 token memory" refers to tokens of conversation history included as context.
@@ -2536,14 +2536,10 @@ async def stream_ai_response(
     elif provider:
         # provider was decided above based on explicit model hints
         pass
-    elif normalized_model in {"grok", "grok-lite"} or normalized_model.startswith("openrouter"):
-        if OPENROUTER_SERVICE and OPENROUTER_SERVICE.available:
-            provider = "openrouter"
-            if not model:
-                model = OPENROUTER_FALLBACK_MODEL
     else:
-        # Default to Gemini for fastest streaming rather than Grok free tier throttling.
+        # Default to Gemini for fastest streaming
         provider = "gemini"
+
 
     # --- Google Maps Grounding Integration ---
     # If the user has enabled maps (or we detected intent), we MUST use Gemini
@@ -3129,26 +3125,17 @@ CRITICAL: When the user asks to create/update a plan or habit, you MUST call the
                 
             except Exception as openrouter_error:
                 api_logger.error(
-                    f"OpenRouter streaming failed ({type(openrouter_error).__name__}: {openrouter_error}); falling back to Gemini",
+                    f"OpenRouter streaming failed: {type(openrouter_error).__name__}: {openrouter_error}",
                     extra={
-                        "event_type": "ai_provider_fallback",
+                        "event_type": "ai_provider_error",
                         "provider": provider,
                         "error": str(openrouter_error),
                     },
                     exc_info=True,
                 )
-                
-                if yielded_any_tokens:
-                    api_logger.warning(
-                        "OpenRouter failed mid-stream after yielding tokens; cannot fall back cleanly",
-                        extra={"event_type": "ai_fallback_aborted", "provider": provider},
-                    )
-                    yield ("error", {"message": "AI service encountered an error. Please try again."})
-                    return
+                yield ("error", {"message": "AI service encountered an error. Please try again."})
+                return
 
-                provider = "gemini"
-                if not model or not str(model).startswith("models/"):
-                    model = GEMINI_LIGHT_MODEL
 
     # URL Context: Add URL context tool when URLs are detected in the message
     # This allows Gemini to fetch and analyze content from URLs
@@ -3698,20 +3685,18 @@ async def generate_ai_response(
                 if not response_text:
                     raise RuntimeError("AI response was empty")
                 return response_text, grounding_metadata
-            except Exception as openrouter_error:  # pragma: no cover - best effort logging
+            except Exception as openrouter_error:
                 api_logger.error(
-                    f"OpenRouter generation failed ({type(openrouter_error).__name__}: {openrouter_error}); falling back to Gemini",
+                    f"OpenRouter generation failed: {type(openrouter_error).__name__}: {openrouter_error}",
                     extra={
-                        "event_type": "ai_provider_fallback",
+                        "event_type": "ai_provider_error",
                         "provider": provider,
                         "error": str(openrouter_error),
                     },
                     exc_info=True,
                 )
-                # Fall back to Gemini
-                provider = "gemini"
-                if not model or "/" in model:
-                    model = GEMINI_DEFAULT_MODEL
+                raise  # Propagate the error instead of falling back
+
 
     # Ensure we have an explicit tool_config when tools are present
     # Keep function calling enabled so the model can return calls we execute manually
