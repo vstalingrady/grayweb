@@ -26,7 +26,6 @@ from asyncio import TimeoutError, wait_for, sleep
 from contextlib import asynccontextmanager
 import re
 import time
-import hmac
 import hashlib
 import subprocess
 from dotenv import load_dotenv
