@@ -1,10 +1,10 @@
 import type { GroundingMetadata, MediaUpload } from "@/lib/api";
-import { GENERAL_CHAT_SESSION_ID, REMOTE_SESSION_MERGE_WINDOW_MS } from "../constants";
+import { GENERAL_CHAT_SESSION_ID, GENERAL_SESSION_TITLE, REMOTE_SESSION_MERGE_WINDOW_MS } from "../constants";
 import type { ChatMessage, ChatRole, ChatSession, GrayReminderCreatedPayload } from "../types";
 import { normalizeConversationIdValue, stripGrayTitleMarkers } from "../utils";
 import { coerceReminderPayload, extractGrayRemindersFromText } from "../reminderUtils";
 
-export const GENERAL_SESSION_TITLE = "General Chat";
+export { GENERAL_SESSION_TITLE };
 
 export function makeMessage(
   role: ChatRole,
@@ -205,4 +205,3 @@ export function mapApiMessagesToChatMessages(
     };
   });
 }
-

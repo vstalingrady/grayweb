@@ -21,16 +21,13 @@ except Exception:  # When running with backend/ on sys.path directly (tests)
     from time_utils import utcnow, utcnow_aware  # type: ignore
 import os
 import json
-import statistics
 from asyncio import TimeoutError, wait_for, sleep
 from contextlib import asynccontextmanager
 import re
 import time
 import hashlib
-import subprocess
 from dotenv import load_dotenv
 from supabase import Client
-import psycopg2
 # Support both package and module import contexts
 try:
     from backend.supabase_utils import (

@@ -161,13 +161,13 @@ export const useStreamAssistantReply = ({
       streamAbortControllerRef.current = abortController;
       const shouldUseWebSearch = autoWebSearchEnabled || webSearchEnabled;
       const shouldAttachToConversation = !isRegeneration;
+      const effectiveTimeZone = resolvedUser.personalization_time_zone?.trim() || resolveClientTimezone();
+      const timeContext = buildLocalTimeContextWithOverrides(undefined, {
+        timeZone: effectiveTimeZone,
+      });
 
       try {
         let localThinkingStartTime: number | null = null;
-        const effectiveTimeZone = resolvedUser.personalization_time_zone?.trim() || resolveClientTimezone();
-        const timeContext = buildLocalTimeContextWithOverrides(undefined, {
-          timeZone: effectiveTimeZone,
-        });
         for await (const event of apiService.sendMessageStream(
           {
             message: prompt,
@@ -319,10 +319,8 @@ export const useStreamAssistantReply = ({
             system_prompt: personalizedSystemPrompt,
             user_id: streamingUserId,
             context: contextPayload,
-            time_context: buildLocalTimeContextWithOverrides(undefined, {
-              timeZone: resolvedUser.personalization_time_zone?.trim() || resolveClientTimezone(),
-            }),
-            timezone: resolvedUser.personalization_time_zone?.trim() || resolveClientTimezone(),
+            time_context: timeContext,
+            timezone: effectiveTimeZone,
             attachments: buildAttachmentPayloads(),
             web_search_enabled: shouldUseWebSearch,
             should_generate_title: requestTitleHint,
@@ -433,4 +431,3 @@ export const useStreamAssistantReply = ({
     ]
   );
 };
-

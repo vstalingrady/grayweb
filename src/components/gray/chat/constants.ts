@@ -8,7 +8,6 @@ export const GENERAL_CONVERSATION_PREFIX = "general:";
 
 // Timing constants
 export const FALLBACK_ASSISTANT_DELAY_MS = 150;
-export const DUPLICATE_THREAD_WINDOW_MS = 15000;
 export const REMOTE_SESSION_MERGE_WINDOW_MS = 5 * 60 * 1000;
 export const REMINDER_POLL_MIN_INTERVAL = 60_000;
 export const REMINDER_POLL_SHORT_INTERVAL = 15_000;
