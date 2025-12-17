@@ -2484,19 +2484,7 @@ async def stream_ai_response(
     request_structured_reminders = _should_request_structured_reminders(intent_window_text)
     needs_structured_tools = reminders_enabled or request_structured_reminders or _needs_structured_tools(intent_window_text)
 
-    # Semantic fallback: if the simple keyword heuristics do not trigger,
-    # ask Gemini to classify whether this message is actually a reminder/plan/timer request.
-    # DISABLED for performance: This adds ~2s latency. Relying on keyword heuristics only.
-    # if not needs_structured_tools:
-    #     try:
-    #         if await _should_enable_reminder_tools_semantic(message):
-    #             needs_structured_tools = True
-    #             request_structured_reminders = True
-    #     except Exception as error:  # pragma: no cover - best effort logging
-    #         api_logger.warning(
-    #             "Semantic reminder routing failed; continuing with keyword heuristics",
-    #             extra={"event_type": "reminder_semantic_routing_error", "error": str(error)},
-    #         )
+    # Enable structured tools if keyword heuristics triggered
     if needs_structured_tools:
         request_structured_reminders = True
 
@@ -2728,22 +2716,6 @@ async def stream_ai_response(
             yield ("final", {"text": error_msg, "grounding_metadata": None})
             return
         else:
-
-            # Generate image descriptions for OpenRouter (non-vision models like DeepSeek)
-            # DISABLED: User requested direct model usage without Gemini fallback.
-            # if media_attachments:
-            #     api_logger.info(
-            #         "Generating image descriptions for OpenRouter model",
-            #         extra={"event_type": "ai_image_description_start", "provider": provider, "count": len(media_attachments)},
-            #     )
-            #     image_desc = await _generate_image_descriptions(media_attachments)
-            #     if image_desc:
-            #         message = image_desc + message
-            #         api_logger.info(
-            #             f"Added image descriptions to message for OpenRouter",
-            #             extra={"event_type": "ai_image_description_added", "count": len(media_attachments)},
-            #         )
-            
             try:
                 t0_provider = time.perf_counter()
                 
