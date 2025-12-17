@@ -3253,10 +3253,6 @@ async def create_chat_title(
     return ChatTitleResponse(title=_fallback_title_from_message(payload.message))
 
 
-# Context cache endpoints are now in backend/api/context_cache.py
-
-# Upload endpoints are now in backend/api/uploads.py
-
 async def chat_endpoint(
 
     request: Request,
