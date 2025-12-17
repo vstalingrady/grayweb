@@ -130,7 +130,7 @@ async def create_user_reminder(
     
     try:
         reminder_scheduler = _get_reminder_scheduler()
-        if reminder_scheduler is not None:
+        if reminder_scheduler:
             await reminder_scheduler.refresh_job(user_id=user_id, reminder_id=int(reminder_id), remind_at=payload.remind_at)
     except Exception as exc:
         api_logger.warning(
@@ -198,7 +198,7 @@ async def update_user_reminder(
     
     try:
         reminder_scheduler = _get_reminder_scheduler()
-        if reminder_scheduler is not None:
+        if reminder_scheduler:
             normalized_status = (update_values.get("status") or existing.get("status") or "").strip().lower()
             if normalized_status != "pending":
                 await reminder_scheduler.cancel_job(user_id=user_id, reminder_id=reminder_id)
@@ -244,7 +244,7 @@ async def delete_user_reminder(
 
     try:
         reminder_scheduler = _get_reminder_scheduler()
-        if reminder_scheduler is not None:
+        if reminder_scheduler:
             await reminder_scheduler.cancel_job(user_id=user_id, reminder_id=reminder_id)
     except Exception:
         pass

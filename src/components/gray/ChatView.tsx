@@ -25,6 +25,7 @@ import { GENERAL_CHAT_SESSION_ID } from "./chat/constants";
 import {
   buildAssistantReply,
   buildGeneralConversationId,
+  createClientUuid,
   normalizeConversationIdValue,
 } from "./chat/utils";
 import { ChatMessagesList } from "./chat/view/ChatMessagesList";
@@ -458,9 +459,7 @@ export function GrayChatView({
     // Generate a temp ID and mark it as already triggered BEFORE appending
     // This prevents the auto-stream effect from racing with our own streaming
     const tempUserMessageId =
-      typeof crypto !== "undefined" && "randomUUID" in crypto
-        ? crypto.randomUUID()
-        : Math.random().toString(36).slice(2);
+      createClientUuid();
     markAutoStreamTriggered(targetSession.id, tempUserMessageId);
 
     const userMessage = appendMessage(

@@ -8,6 +8,7 @@ import {
   buildGeneralConversationId,
   buildPersonalizedSystemPrompt,
   coerceConversationIdForRequest,
+  createClientUuid,
   computeProfileHash,
   normalizeAssistantContent,
   resolveConversationMemoryEnabled,
@@ -111,9 +112,7 @@ export const useSendGeneralMessage = ({
       }));
 
       const tempUserMessageId =
-        typeof crypto !== "undefined" && "randomUUID" in crypto
-          ? crypto.randomUUID()
-          : Math.random().toString(36).slice(2);
+        createClientUuid();
 
       markAutoStreamTriggered(generalSession.id, tempUserMessageId);
 

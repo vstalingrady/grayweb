@@ -178,9 +178,9 @@ def _derive_full_name(email: Optional[str], metadata: Dict[str, Any]) -> str:
 
 # Import Supabase client
 try:
-    from backend.supabase_utils import create_supabase_client
+    from backend.supabase_utils import create_supabase_client, resolve_supabase_credentials
 except ImportError:
-    from supabase_utils import create_supabase_client
+    from supabase_utils import create_supabase_client, resolve_supabase_credentials
 
 
 # =============================================================================
@@ -195,56 +195,48 @@ except ImportError:
 # - Supports key rotation
 # =============================================================================
 
-SUPABASE_URL = os.getenv("SUPABASE_URL") or os.getenv("NEXT_PUBLIC_SUPABASE_URL")
 SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET")  # Legacy, optional
 
-# JWKS cache (public keys from Supabase)
-_jwks_cache: Optional[Dict[str, Any]] = None
-_jwks_cache_time: float = 0
-_JWKS_CACHE_TTL = 600.0  # 10 minutes - aligns with Supabase usage
+_JWKS_CACHE_TTL_SECONDS = 600  # 10 minutes - aligns with Supabase usage
+_jwk_client: Optional[Any] = None
+_jwk_client_url: Optional[str] = None
 
 def _get_jwks_url() -> Optional[str]:
     """Get the JWKS URL for the Supabase project."""
-    if not SUPABASE_URL:
-        return None
     # https://project-id.supabase.co/auth/v1/.well-known/jwks.json
-    base = SUPABASE_URL.rstrip("/")
+    url, _, _ = resolve_supabase_credentials()
+    if not url:
+        return None
+    base = url.rstrip("/")
     return f"{base}/auth/v1/.well-known/jwks.json"
 
-def _fetch_jwks() -> Optional[Dict[str, Any]]:
-    """Fetch JWKS from Supabase (cached for 1 hour)."""
-    global _jwks_cache, _jwks_cache_time
-    
-    now = time.time()
-    if _jwks_cache and (now - _jwks_cache_time) < _JWKS_CACHE_TTL:
-        return _jwks_cache
-    
+def _get_jwk_client() -> Optional[Any]:
+    """Get a cached PyJWKClient instance for the current Supabase JWKS URL."""
+    global _jwk_client, _jwk_client_url
     jwks_url = _get_jwks_url()
     if not jwks_url:
         return None
-    
-    try:
-        import urllib.request
-        with urllib.request.urlopen(jwks_url, timeout=5) as response:
-            import json
-            _jwks_cache = json.loads(response.read().decode())
-            _jwks_cache_time = now
-            return _jwks_cache
-    except Exception as e:
-        logger.debug(f"Failed to fetch JWKS: {e}")
-        return _jwks_cache  # Return stale cache if available
+    if _jwk_client is None or _jwk_client_url != jwks_url:
+        try:
+            from jwt import PyJWKClient
+        except Exception:
+            return None
+        _jwk_client = PyJWKClient(
+            jwks_url,
+            cache_keys=True,
+            cache_jwk_set=True,
+            lifespan=_JWKS_CACHE_TTL_SECONDS,
+            timeout=5,
+        )
+        _jwk_client_url = jwks_url
+    return _jwk_client
 
 def _verify_with_jwks(token: str) -> Optional[Dict[str, Any]]:
     """Verify JWT using Supabase's public keys (JWKS)."""
     if not jwt:
         logger.debug("JWKS: jwt library not available")
         return None
-    
-    jwks = _fetch_jwks()
-    if not jwks or "keys" not in jwks or not jwks["keys"]:
-        logger.debug("JWKS: No keys available")
-        return None
-    
+
     try:
         # Optimization: If token is HS256, it's not using JWKS (which is for RS256/ES256)
         # Skip JWKS check to avoid "Unable to find signing key" warnings for legacy tokens
@@ -253,16 +245,10 @@ def _verify_with_jwks(token: str) -> Optional[Dict[str, Any]]:
             logger.debug("JWKS: Skipping verification for HS256 token")
             return None
 
-        # PyJWKClient can be used for asymmetric keys
-        from jwt import PyJWKClient
-        
-        jwks_url = _get_jwks_url()
-        if not jwks_url:
+        jwk_client = _get_jwk_client()
+        if not jwk_client:
             logger.debug("JWKS: No JWKS URL configured")
             return None
-        
-        # PyJWKClient caches keys internally
-        jwk_client = PyJWKClient(jwks_url)
         signing_key = jwk_client.get_signing_key_from_jwt(token)
         
         payload = jwt.decode(

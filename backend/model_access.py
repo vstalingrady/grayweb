@@ -20,7 +20,7 @@ VOYAGER_MODEL_IDS = {
     "anthropic/claude-haiku-4.5",
     "anthropic/claude-sonnet-4.5",
     "google/gemini-3-pro-preview",
-    "google/gemini-2.5-flash",
+    "google/gemini-3-flash-preview",
     "openai/gpt-5.2-chat",
     "deepseek/deepseek-v3.2",
     "deepseek/deepseek-v3.2-speciale",

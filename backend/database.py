@@ -221,9 +221,9 @@ user_data = sqlalchemy.Table(
     metadata,
     sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
     sqlalchemy.Column("user_identifier", sqlalchemy.Integer, unique=True, nullable=False),
-    sqlalchemy.Column("profile", sqlalchemy.JSON, default={}),
-    sqlalchemy.Column("context", sqlalchemy.JSON, default=[]),
-    sqlalchemy.Column("metadata", sqlalchemy.JSON, default={}),
+    sqlalchemy.Column("profile", sqlalchemy.JSON, default=dict),
+    sqlalchemy.Column("context", sqlalchemy.JSON, default=list),
+    sqlalchemy.Column("metadata", sqlalchemy.JSON, default=dict),
     sqlalchemy.Column("workspace_context", sqlalchemy.String, nullable=True),
     sqlalchemy.Column("long_term_memory", sqlalchemy.Text, nullable=True),
     sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
@@ -238,8 +238,8 @@ user_chat_threads = sqlalchemy.Table(
     sqlalchemy.Column("user_identifier", sqlalchemy.Integer, nullable=False),
     sqlalchemy.Column("title", sqlalchemy.String, default="New Conversation"),
     sqlalchemy.Column("summary", sqlalchemy.String, nullable=True),
-    sqlalchemy.Column("context_snapshot", sqlalchemy.JSON, default=[]),
-    sqlalchemy.Column("metadata", sqlalchemy.JSON, default={}),
+    sqlalchemy.Column("context_snapshot", sqlalchemy.JSON, default=list),
+    sqlalchemy.Column("metadata", sqlalchemy.JSON, default=dict),
     sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
     sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
     sqlalchemy.Column("last_message_at", sqlalchemy.DateTime, default=datetime.utcnow),
@@ -318,9 +318,9 @@ dashboard_pulses = sqlalchemy.Table(
     sqlalchemy.Column("user_id", sqlalchemy.Integer, nullable=False),
     sqlalchemy.Column("date_key", sqlalchemy.String, nullable=False),
     sqlalchemy.Column("timestamp", sqlalchemy.DateTime, nullable=False),
-    sqlalchemy.Column("plans", sqlalchemy.JSON, default=[]),
-    sqlalchemy.Column("habits", sqlalchemy.JSON, default=[]),
-    sqlalchemy.Column("proactivity", sqlalchemy.JSON, default={}),
+    sqlalchemy.Column("plans", sqlalchemy.JSON, default=list),
+    sqlalchemy.Column("habits", sqlalchemy.JSON, default=list),
+    sqlalchemy.Column("proactivity", sqlalchemy.JSON, default=dict),
     sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
     sqlalchemy.Column("updated_at", sqlalchemy.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow),
 )
@@ -505,4 +505,3 @@ async def get_database():
     Connection is managed globally by startup/shutdown events.
     """
     yield database
-

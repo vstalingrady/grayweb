@@ -4,81 +4,70 @@ from typing import Optional, Tuple
 from supabase import Client, create_client
 
 
-def resolve_supabase_credentials() -> Tuple[Optional[str], Optional[str], Optional[str]]:
-    """
-    Resolve Supabase URL and key from environment variables with sensible fallbacks.
+def _normalize_supabase_url(value: str) -> str:
+    trimmed = value.strip()
+    if not trimmed:
+        return ""
+    if trimmed.startswith("http://") or trimmed.startswith("https://"):
+        return trimmed.rstrip("/")
+    return f"https://{trimmed.lstrip('/').rstrip('/')}"
 
-    URL resolution order:
+
+def _resolve_supabase_url() -> Optional[str]:
+    """
+    Resolve Supabase URL from environment variables.
+
+    Priority:
     - SUPABASE_URL
-    - NEXT_PUBLIC_SUPABASE_URL (so backend automatically reuses frontend config)
-    - SUPABASE_PROJECT_URL / SUPABASE_HOST (with https:// prefix)
-    - Derive from Postgres host (e.g., <ref>.supabase.co) if present
-
-    Key resolution order:
-    - SUPABASE_KEY
-    - SUPABASE_SERVICE_ROLE_KEY
-    - SUPABASE_SERVICE_KEY
-    - SUPABASE_SECRET_KEY
-    - SUPABASE_ANON_KEY
-    - NEXT_PUBLIC_SUPABASE_ANON_KEY (read-only fallback)
-
-    Returns: (url, key, key_source_env_name)
+    - NEXT_PUBLIC_SUPABASE_URL
+    - SUPABASE_PROJECT_URL / SUPABASE_HOST
     """
-
-    def _normalize_url(value: str) -> str:
-        trimmed = value.strip()
-        if not trimmed:
-            return ""
-        if trimmed.startswith("http://") or trimmed.startswith("https://"):
-            return trimmed.rstrip("/")
-        return f"https://{trimmed.lstrip('/').rstrip('/')}"
-
-    url_candidates = [
+    url_candidates = (
         "SUPABASE_URL",
         "NEXT_PUBLIC_SUPABASE_URL",
         "SUPABASE_PROJECT_URL",
         "SUPABASE_HOST",
-    ]
+    )
 
-    url: Optional[str] = None
     for env_name in url_candidates:
-        candidate = os.getenv(env_name, "").strip()
-        if candidate and "your_supabase_url" not in candidate.lower():
-            url = _normalize_url(candidate)
-            if env_name != "SUPABASE_URL":
-                os.environ["SUPABASE_URL"] = url
-            break
+        candidate = (os.getenv(env_name) or "").strip()
+        if not candidate or "your_supabase_url" in candidate.lower():
+            continue
+        url = _normalize_supabase_url(candidate)
+        if env_name != "SUPABASE_URL":
+            os.environ["SUPABASE_URL"] = url
+        return url
+    return None
 
-    if not url:
-        # Attempt to infer from pooled Postgres host: aws-1-<region>.pooler.supabase.com
-        host = os.getenv("host") or os.getenv("PGHOST") or ""
-        if "supabase" in host:
-            parts = host.split(".")
-            if parts:
-                project_ref = parts[0]
-                url = f"https://{project_ref}.supabase.co"
-                os.environ["SUPABASE_URL"] = url
 
-    candidate_keys = [
+def _resolve_supabase_key(candidate_keys: tuple[str, ...]) -> Tuple[Optional[str], Optional[str]]:
+    for name in candidate_keys:
+        value = (os.getenv(name) or "").strip()
+        if not value or "your_supabase_key_here" in value.lower():
+            continue
+        if name != "SUPABASE_KEY":
+            os.environ["SUPABASE_KEY"] = value
+        return value, name
+    return None, None
+
+
+def resolve_supabase_credentials() -> Tuple[Optional[str], Optional[str], Optional[str]]:
+    """
+    Resolve Supabase URL and key from environment variables.
+
+    Returns: (url, key, key_source_env_name)
+    """
+    url = _resolve_supabase_url()
+
+    key_candidates = (
         "SUPABASE_KEY",
         "SUPABASE_SERVICE_ROLE_KEY",
         "SUPABASE_SERVICE_KEY",
         "SUPABASE_SECRET_KEY",
         "SUPABASE_ANON_KEY",
         "NEXT_PUBLIC_SUPABASE_ANON_KEY",
-    ]
-    key: Optional[str] = None
-    key_source: Optional[str] = None
-    for name in candidate_keys:
-        value = (os.getenv(name) or "").strip()
-        if value and "your_supabase_key_here" not in value.lower():
-            key = value
-            key_source = name
-            # Normalize into SUPABASE_KEY for consistency in the process env
-            if name != "SUPABASE_KEY":
-                os.environ["SUPABASE_KEY"] = value
-            break
-
+    )
+    key, key_source = _resolve_supabase_key(key_candidates)
     return url, key, key_source
 
 
@@ -89,48 +78,15 @@ def _resolve_supabase_service_credentials() -> Tuple[Optional[str], Optional[str
     This intentionally prefers service-role style keys even when SUPABASE_KEY
     is set to an anon key, so destructive actions don't silently fail.
     """
-    def _normalize_url(value: str) -> str:
-        trimmed = value.strip()
-        if not trimmed:
-            return ""
-        if trimmed.startswith("http://") or trimmed.startswith("https://"):
-            return trimmed.rstrip("/")
-        return f"https://{trimmed.lstrip('/').rstrip('/')}"
+    url = _resolve_supabase_url()
 
-    url_candidates = [
-        "SUPABASE_URL",
-        "NEXT_PUBLIC_SUPABASE_URL",
-        "SUPABASE_PROJECT_URL",
-        "SUPABASE_HOST",
-    ]
-
-    url: Optional[str] = None
-    for env_name in url_candidates:
-        candidate = os.getenv(env_name, "").strip()
-        if candidate and "your_supabase_url" not in candidate.lower():
-            url = _normalize_url(candidate)
-            if env_name != "SUPABASE_URL":
-                os.environ["SUPABASE_URL"] = url
-            break
-
-    service_key_candidates = [
+    service_key_candidates = (
         "SUPABASE_SERVICE_ROLE_KEY",
         "SUPABASE_SERVICE_KEY",
         "SUPABASE_SECRET_KEY",
         "SUPABASE_KEY",  # Some setups overload SUPABASE_KEY with the service role
-    ]
-
-    key: Optional[str] = None
-    key_source: Optional[str] = None
-    for name in service_key_candidates:
-        value = (os.getenv(name) or "").strip()
-        if value and "your_supabase_key_here" not in value.lower():
-            key = value
-            key_source = name
-            if name != "SUPABASE_KEY":
-                os.environ["SUPABASE_KEY"] = value
-            break
-
+    )
+    key, key_source = _resolve_supabase_key(service_key_candidates)
     return url, key, key_source
 
 

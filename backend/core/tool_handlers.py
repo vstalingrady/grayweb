@@ -657,7 +657,7 @@ async def create_reminder_tool(
     created = await db.fetch_one(reminders.select().where(reminders.c.id == created_id))
 
     try:
-        if reminder_scheduler is not None:
+        if reminder_scheduler:
             await reminder_scheduler.refresh_job(
                 user_id=user_id, reminder_id=int(created_id), remind_at=remind_at_dt
             )
@@ -712,7 +712,7 @@ async def update_reminder_tool(
         raise HTTPException(status_code=404, detail="Reminder not found")
 
     try:
-        if reminder_scheduler is not None:
+        if reminder_scheduler:
             normalized_status = (dict(updated).get("status") or "").strip().lower()
             if normalized_status != "pending":
                 await reminder_scheduler.cancel_job(user_id=user_id, reminder_id=int(reminder_id))
@@ -754,7 +754,7 @@ async def delete_reminder_tool(
         raise HTTPException(status_code=404, detail="Reminder not found")
 
     try:
-        if reminder_scheduler is not None:
+        if reminder_scheduler:
             await reminder_scheduler.cancel_job(user_id=user_id, reminder_id=int(reminder_id))
     except Exception:
         pass
@@ -819,7 +819,7 @@ async def delete_latest_reminder_tool(
         reminder_time = record.get("remind_at")
 
         try:
-            if reminder_scheduler is not None:
+            if reminder_scheduler:
                 await reminder_scheduler.cancel_job(user_id=user_id, reminder_id=int(rid))
         except Exception:
             pass

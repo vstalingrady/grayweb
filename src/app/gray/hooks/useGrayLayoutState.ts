@@ -112,7 +112,14 @@ export const useGrayLayoutState = ({
 
   useEffect(() => {
     if (isCalendarPage) {
-      setIsCalendarSidebarExpanded(false);
+      let cancelled = false;
+      Promise.resolve().then(() => {
+        if (cancelled) return;
+        setIsCalendarSidebarExpanded(false);
+      });
+      return () => {
+        cancelled = true;
+      };
     }
   }, [isCalendarPage]);
 
@@ -158,4 +165,3 @@ export const useGrayLayoutState = ({
     collapseAllSidebars,
   };
 };
-

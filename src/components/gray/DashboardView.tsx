@@ -8,7 +8,7 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
-import styles from "@/app/gray/GrayPageClient.module.css";
+import styles from "./DashboardView.module.css";
 import composerStyles from "@/components/gray/chat/ChatComposerStyles.module.css";
 import { GrayDashboardCalendar } from "@/components/calendar/GrayDashboardCalendar";
 import type { CalendarEvent, CalendarInfo } from "@/components/calendar/types";

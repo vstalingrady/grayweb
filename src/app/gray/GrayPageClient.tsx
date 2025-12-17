@@ -12,7 +12,8 @@ import { requestNotificationPermission } from "@/lib/notificationUtils";
 import { formatDisplayName } from "@/lib/names";
 import { clearAuthCookies } from "@/lib/auth/cookies";
 import { getSupabaseClient } from "@/lib/supabaseClient";
-import styles from "./GrayPageClient.module.css";
+import pageStyles from "./GrayPageLayout.module.css";
+import greetingStyles from "@/components/gray/Greeting.module.css";
 import chatStyles from "@/components/gray/chat/ChatStyles.module.css";
 import composerStyles from "@/components/gray/chat/ChatComposerStyles.module.css";
 import {
@@ -315,7 +316,6 @@ function GrayPageClientInner({
   });
 
   const {
-    isCalendarPage,
     isMobileViewport,
     isCompactLayout,
     sidebarExpandedForLayout,
@@ -372,82 +372,6 @@ function GrayPageClientInner({
       // Ignore storage errors (e.g. disabled cookies).
     }
   }, [activeChatId, lastDeletedChatIdStorageKey, router, supportsInlineChat]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    const handleResize = () => {
-      const width = window.innerWidth || 0;
-      const shouldCollapseSidebar = width <= 768;
-
-      setIsMobileViewport(shouldCollapseSidebar);
-
-      setIsSidebarExpanded((previous) => {
-        if (shouldCollapseSidebar) {
-          wasMobileViewportRef.current = true;
-          return false;
-        }
-        if (wasMobileViewportRef.current) {
-          wasMobileViewportRef.current = false;
-          return readSidebarExpandedPreference();
-        }
-        return previous;
-      });
-    };
-
-    // Initial check
-    handleResize();
-
-    window.addEventListener("resize", handleResize);
-    window.addEventListener("orientationchange", handleResize);
-    return () => {
-      window.removeEventListener("resize", handleResize);
-      window.removeEventListener("orientationchange", handleResize);
-    };
-  }, [readSidebarExpandedPreference]);
-
-  // Persist sidebar preference to localStorage when it changes (desktop only)
-  useEffect(() => {
-    if (typeof window === "undefined" || isMobileViewport) {
-      return;
-    }
-    try {
-      localStorage.setItem(sidebarPreferenceKey, isSidebarExpanded ? "true" : "false");
-    } catch {
-      // localStorage may be unavailable
-    }
-  }, [isSidebarExpanded, isMobileViewport, sidebarPreferenceKey]);
-
-  const isCalendarPage = pathname === "/pulse" || pathname.startsWith("/cal");
-  const toggleSidebarExpandedForLayout = useCallback(() => {
-    if (isCalendarPage) {
-      setIsCalendarSidebarExpanded((previous) => !previous);
-      return;
-    }
-    setIsSidebarExpanded((previous) => !previous);
-  }, [isCalendarPage]);
-  const expandSidebarForLayout = useCallback(() => {
-    if (isCalendarPage) {
-      setIsCalendarSidebarExpanded(true);
-      return;
-    }
-    setIsSidebarExpanded(true);
-  }, [isCalendarPage]);
-  const collapseSidebarForLayout = useCallback(() => {
-    if (isCalendarPage) {
-      setIsCalendarSidebarExpanded(false);
-      return;
-    }
-    setIsSidebarExpanded(false);
-  }, [isCalendarPage]);
-
-  useEffect(() => {
-    if (isCalendarPage) {
-      setIsCalendarSidebarExpanded(false);
-    }
-  }, [isCalendarPage]);
 
   const [dashboardTab, setDashboardTab] = useState<"pulse" | "calendar">(() => initialDashboardTab);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -568,10 +492,9 @@ function GrayPageClientInner({
       router.push("/");
     }
     if (isMobileViewport) {
-      setIsSidebarExpanded(false);
-      setIsCalendarSidebarExpanded(false);
+      collapseAllSidebars();
     }
-  }, [isMobileViewport, pathname, router]);
+  }, [collapseAllSidebars, isMobileViewport, pathname, router]);
 
   const handleMobileHeaderSelectPulse = useCallback(() => {
     setManualViewMode(null);
@@ -579,10 +502,9 @@ function GrayPageClientInner({
       router.push("/pulse");
     }
     if (isMobileViewport) {
-      setIsSidebarExpanded(false);
-      setIsCalendarSidebarExpanded(false);
+      collapseAllSidebars();
     }
-  }, [isMobileViewport, pathname, router]);
+  }, [collapseAllSidebars, isMobileViewport, pathname, router]);
 
   const shouldHideDesktopWorkspaceChrome =
     !isMobileViewport &&
@@ -643,7 +565,7 @@ function GrayPageClientInner({
     }
 
     return (
-      <div className={styles.generalViewSection}>
+      <div className={pageStyles.generalViewSection}>
         <GrayGeneralView
           greeting={greeting}
           currentDate={now}
@@ -677,7 +599,7 @@ function GrayPageClientInner({
     if (viewMode === "chat") {
       return (
         <div
-          className={styles.mainContent}
+          className={pageStyles.mainContent}
           data-view={viewMode}
           data-compact={isCompactLayout ? "true" : "false"}
         >
@@ -698,7 +620,7 @@ function GrayPageClientInner({
     if (viewMode === "general") {
       return (
         <div
-          className={styles.mainContent}
+          className={pageStyles.mainContent}
           data-view={viewMode}
           data-compact={isCompactLayout ? "true" : "false"}
         >
@@ -712,7 +634,7 @@ function GrayPageClientInner({
                     alt=""
                     width={40}
                     height={40}
-                    className={styles.uiIconImage}
+                    className="uiIconImage"
                   />
                   </div>
                   <p className={chatStyles.mobileWelcomeGreeting}>Ready when you are.</p>
@@ -748,29 +670,6 @@ function GrayPageClientInner({
       setManualViewMode(null);
     }
   }, [activeNav, baseViewMode, manualViewMode]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-    const evaluateViewport = () => {
-      const width = window.innerWidth || 0;
-      const height = window.innerHeight || 0;
-      const aspectRatio = height > 0 ? height / Math.max(width, 1) : 0;
-      const shouldUseCompactLayout = width <= 1024 || aspectRatio >= 1.1;
-      setIsCompactLayout((previous) =>
-        previous === shouldUseCompactLayout ? previous : shouldUseCompactLayout
-      );
-    };
-
-    evaluateViewport();
-    window.addEventListener("resize", evaluateViewport);
-    window.addEventListener("orientationchange", evaluateViewport);
-    return () => {
-      window.removeEventListener("resize", evaluateViewport);
-      window.removeEventListener("orientationchange", evaluateViewport);
-    };
-  }, []);
 
   const viewerName = useMemo(() => {
     if (userLoading) {
@@ -1375,8 +1274,8 @@ function GrayPageClientInner({
         return null;
       }
       return (
-        <div className={`${styles.greetingStack} hidden md:block`}>
-          <h1 className={styles.greeting}>{greeting}</h1>
+        <div className={`${greetingStyles.greetingStack} hidden md:block`}>
+          <h1 className={greetingStyles.greeting}>{greeting}</h1>
         </div>
       );
     },
@@ -1395,12 +1294,11 @@ function GrayPageClientInner({
         onRemoveAttachment={removeAttachment}
       />
     ) : null;
-  const sidebarExpandedForLayout = isCalendarPage ? isCalendarSidebarExpanded : isSidebarExpanded;
 
   return (
     <>
       <div
-        className={styles.page}
+        className={pageStyles.page}
         data-dashboard-tab={dashboardTabAttr}
         data-mobile-sidebar={isMobileViewport ? "true" : "false"}
         data-sidebar-expanded={sidebarExpandedForLayout ? "true" : "false"}
@@ -1417,9 +1315,9 @@ function GrayPageClientInner({
           />
         ) : null}
 
-        <div className={styles.shell}>
+        <div className={pageStyles.shell}>
           <div
-            className={styles.layout}
+            className={pageStyles.layout}
             data-view={viewMode}
             data-mobile-sidebar={isMobileViewport ? "true" : "false"}
             {...(isMounted && { "data-sidebar-expanded": sidebarExpandedForLayout ? "true" : "false" })}
@@ -1454,7 +1352,7 @@ function GrayPageClientInner({
 
             {/* Mobile Sidebar Overlay */}
             <div
-              className={styles.main}
+              className={pageStyles.main}
               data-dashboard={isDashboardView ? "true" : "false"}
               data-view={viewMode}
               data-dashboard-tab={dashboardTabAttr}
@@ -1465,7 +1363,7 @@ function GrayPageClientInner({
               {/* Mobile Sidebar Overlay */}
               {isMounted && (
                 <div
-                  className={styles.overlay}
+                  className={pageStyles.overlay}
                   data-visible={isMobileViewport && sidebarExpandedForLayout ? "true" : "false"}
                   onClick={() => {
                     if (isMobileViewport) {

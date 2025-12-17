@@ -304,15 +304,11 @@
   padding: 4px 10px;
   border-radius: 99px;
   text-decoration: none;
-  transition: transform 0.1s;
+  transition: none;
   display: inline-flex;
   align-items: center;
   gap: 6px;
   white-space: nowrap;
-}
-
-.upgradePill:hover {
-  transform: scale(1.05);
 }
 
 .upgradeBody {

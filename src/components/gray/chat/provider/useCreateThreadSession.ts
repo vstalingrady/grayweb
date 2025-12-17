@@ -1,5 +1,6 @@
 import { useCallback, type SetStateAction } from "react";
 import type { ChatSession } from "../types";
+import { createClientUuid } from "../utils";
 import { makeMessage, normalizeSessionsList } from "./sessionStore";
 
 type UseCreateThreadSessionOptions = {
@@ -24,10 +25,7 @@ export const useCreateThreadSession = ({
       const trimmedInitial = (initialMessage ?? "").trim();
       const shouldAutoStream = options?.autoStream !== false;
 
-      const sessionId =
-        typeof crypto !== "undefined" && "randomUUID" in crypto
-          ? crypto.randomUUID()
-          : Math.random().toString(36).slice(2);
+      const sessionId = createClientUuid();
       const fallbackTitle = "New Chat";
       const willAutoStream = shouldAutoStream && trimmedInitial.length > 0;
 
@@ -67,4 +65,3 @@ export const useCreateThreadSession = ({
     [persistSessions, queueConversationTitleSync, setSessions]
   );
 };
-

@@ -1067,7 +1067,7 @@ async def _disconnect_database():
 
     try:
         global reminder_scheduler
-        if reminder_scheduler is not None:
+        if reminder_scheduler:
             await reminder_scheduler.shutdown(timeout=10.0)
             app_logger.info("Reminder scheduler shut down", extra={"event_type": "reminder_scheduler_shutdown"})
     except Exception as e:  # pragma: no cover
@@ -1110,7 +1110,7 @@ async def _initialize_proactivity_engine():
         proactivity_scheduler = ProactivitySchedulerManager(proactivity_engine)
         await proactivity_scheduler.start()
 
-        if ReminderSchedulerManager is not None:
+        if ReminderSchedulerManager:
             reminder_scheduler = ReminderSchedulerManager(proactivity_engine, database)
             await reminder_scheduler.start()
     except Exception as e:

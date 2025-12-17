@@ -147,7 +147,7 @@ async def generate_chat_title_inline(
 
         # Fallback to OpenRouter if Gemini fails
         if OPENROUTER_SERVICE and OPENROUTER_SERVICE.available:
-            title_model = os.getenv("OPENROUTER_TITLE_MODEL", "google/gemini-2.5-flash-preview-09-2025")
+            title_model = os.getenv("OPENROUTER_TITLE_MODEL", "google/gemini-3-flash-preview")
             
             raw_title = await OPENROUTER_SERVICE.generate(
                 transcript,

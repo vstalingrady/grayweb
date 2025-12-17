@@ -15,9 +15,9 @@ except ImportError:
     from auth import get_current_user, require_same_user  # type: ignore
 
 try:
-    from backend.database import database, context_cache
+    from backend.database import context_cache, get_database
 except ImportError:
-    from database import database, context_cache  # type: ignore
+    from database import context_cache, get_database  # type: ignore
 
 try:
     from backend.time_utils import utcnow
@@ -35,11 +35,6 @@ except ImportError:
     from core.serializers import serialize_context_cache as _serialize_context_cache  # type: ignore
 
 router = APIRouter(tags=["context-cache"])
-
-
-async def get_database():
-    """Dependency to get the database connection."""
-    yield database
 
 
 @router.post("/context-cache", response_model=ContextCache)

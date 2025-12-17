@@ -36,10 +36,10 @@ FALLBACK_PRICING: Dict[str, Dict[str, float]] = {
     
     # Google Gemini (Gray Pro + Pioneer)
     "google/gemini-3-pro-preview": {"prompt": 2e-06, "completion": 1.2e-05, "cached": 2e-07},
-    "google/gemini-2.5-flash": {"prompt": 3e-07, "completion": 2.5e-06, "cached": 3e-08},
+    "google/gemini-3-flash-preview": {"prompt": 5e-07, "completion": 3e-06, "cached": 5e-08},
     # Direct Gemini API model names (internal use)
     "models/gemini-3-pro-preview": {"prompt": 2e-06, "completion": 1.2e-05, "cached": 2e-07},
-    "models/gemini-2.5-flash-lite": {"prompt": 1e-07, "completion": 4e-07, "cached": 1e-08},
+    "models/gemini-3-flash-lite": {"prompt": 1e-07, "completion": 4e-07, "cached": 1e-08},
     "models/gemini-flash-lite-latest": {"prompt": 1e-07, "completion": 4e-07, "cached": 1e-08},
     
     # OpenAI GPT (Pioneer)

@@ -104,7 +104,7 @@ async def delete_pending_entity_reminders(
     for row in rows:
         reminder_id = int(row["id"])
         try:
-            if reminder_scheduler is not None:
+            if reminder_scheduler:
                 await reminder_scheduler.cancel_job(user_id=user_id, reminder_id=reminder_id)
         except Exception:
             pass
@@ -138,7 +138,7 @@ async def delete_all_entity_reminders(
     for row in rows:
         reminder_id = int(row["id"])
         try:
-            if reminder_scheduler is not None:
+            if reminder_scheduler:
                 await reminder_scheduler.cancel_job(user_id=user_id, reminder_id=reminder_id)
         except Exception:
             pass
@@ -206,7 +206,7 @@ async def upsert_entity_reminder(
             .values(**base_values)
         )
         try:
-            if reminder_scheduler is not None:
+            if reminder_scheduler:
                 await reminder_scheduler.refresh_job(
                     user_id=user_id,
                     reminder_id=reminder_id,
@@ -266,7 +266,7 @@ async def upsert_entity_reminder(
     }
     reminder_id = await db.execute(reminders.insert().values(**insert_values))
     try:
-        if reminder_scheduler is not None:
+        if reminder_scheduler:
             await reminder_scheduler.refresh_job(
                 user_id=user_id,
                 reminder_id=int(reminder_id),

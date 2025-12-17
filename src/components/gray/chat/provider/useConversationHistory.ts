@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, type MutableRefObject, type SetStateAct
 import { usePathname } from "next/navigation";
 import { apiService } from "@/lib/api";
 import type { ChatSession } from "../types";
-import { buildGeneralConversationId } from "../utils";
+import { buildGeneralConversationId, normalizeConversationIdValue } from "../utils";
 import { mapApiMessagesToChatMessages, normalizeSessionsList } from "./sessionStore";
 
 type SetSessions = (updater: SetStateAction<ChatSession[]>) => void;
@@ -33,18 +33,22 @@ export const useConversationHistory = ({
       if (!session || !session.conversationId) {
         return;
       }
+      const normalizedConversationId = normalizeConversationIdValue(session.conversationId);
+      if (!normalizedConversationId) {
+        return;
+      }
       if (session.messages.length > 0) {
         return;
       }
 
       try {
-        const history = await apiService.getConversation(session.conversationId);
+        const history = await apiService.getConversation(normalizedConversationId);
         if (!Array.isArray(history) || history.length === 0) {
           return;
         }
 
         const now = Date.now();
-        const mapped = mapApiMessagesToChatMessages(history, session.conversationId, now);
+        const mapped = mapApiMessagesToChatMessages(history, normalizedConversationId, now);
 
         if (!mapped.length) {
           return;
@@ -151,4 +155,3 @@ export const useConversationHistory = ({
 
   return { loadConversationMessages };
 };
-

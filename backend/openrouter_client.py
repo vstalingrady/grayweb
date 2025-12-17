@@ -79,7 +79,7 @@ class OpenRouterService:
         "grok-2": "x-ai/grok-2-1212",
         # Google Gemini models (via OpenRouter)
         "gemini-3-pro": "google/gemini-3-pro-preview",
-        "gemini-2.5-flash": "google/gemini-2.5-flash-preview-09-2025",
+        "gemini-3-flash": "google/gemini-3-flash-preview",
         # Default fallback
         "default": "anthropic/claude-sonnet-4.5",
     }
@@ -142,7 +142,7 @@ class OpenRouterService:
         "x-ai/grok-2-1212": 131_072,
         # Google Gemini (via OpenRouter)
         "google/gemini-3-pro-preview": 1_048_576,  # 1M context
-        "google/gemini-2.5-flash-preview-09-2025": 1_048_576,  # 1M context
+        "google/gemini-3-flash-preview": 1_048_576,  # 1M context
     }
 
     @classmethod
