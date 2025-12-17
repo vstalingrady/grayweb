@@ -73,13 +73,6 @@
   flex-shrink: 0;
 }
 
-/* ... existing styles ... */
-
-.calendarSurfaceBody[data-has-sidebar="true"] {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  column-gap: clamp(20px, 3vw, 32px);
-}
-
 .calendarSidebarIntegrated {
   background: transparent;
   border: none;
@@ -115,14 +108,6 @@
   align-items: flex-start;
   gap: 12px;
   padding-left: 12px;
-}
-
-.calendarSidebarEyebrow {
-  display: block;
-  font-size: 0.6rem;
-  letter-spacing: 0.26em;
-  text-transform: uppercase;
-  color: rgba(230, 230, 230, 0.64);
 }
 
 .calendarSidebarHeader h2 {
@@ -168,23 +153,6 @@
 .calendarSidebarContent[data-visible="false"] {
   opacity: 0;
   pointer-events: none;
-}
-
-.calendarSidebarNavRow {
-  display: inline-flex;
-  gap: 8px;
-}
-
-.calendarSidebarNavRow button {
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(24, 24, 24, 0.84);
-  color: rgba(235, 235, 235, 0.7);
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  font-size: 0.58rem;
-  border-radius: 999px;
-  padding: 6px 12px;
-  cursor: pointer;
 }
 
 .miniMonth {
@@ -329,14 +297,6 @@
   color: rgba(255, 255, 255, 0.95);
 }
 
-.calendarSidebarSubhead {
-  font-size: 0.65rem;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: rgba(230, 230, 230, 0.5);
-}
-
-
 .calendarSidebarHeaderActions {
   display: inline-flex;
   align-items: center;
@@ -365,12 +325,6 @@
   color: #050505;
   font-weight: 600;
   box-shadow: 0 18px 32px rgba(0, 0, 0, 0.45);
-}
-
-.calendarSidebarCollapse {
-  background: transparent;
-  border: 1px dashed rgba(255, 255, 255, 0.2);
-  color: rgba(235, 235, 235, 0.6);
 }
 
 .calendarSidebarSwatch {
@@ -492,28 +446,6 @@
   grid-template-columns: max-content 1fr;
   column-gap: 0;
 }
-
-.calendarSidebarColumn {
-  display: flex;
-  flex-direction: column;
-  gap: clamp(18px, 3vw, 28px);
-  min-height: 0;
-  align-self: stretch;
-  /* Hide scrollbar */
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-
-.calendarSidebarColumn::-webkit-scrollbar {
-  display: none;
-}
-
-.calendarSidebarColumn>* {
-  width: 100%;
-}
-
-
-
 .calendarSidebarPanel {
   min-height: 0;
   padding-right: 0;
@@ -687,6 +619,77 @@
   border-color: rgba(255, 255, 255, 0.4);
 }
 
+.calendarViewToggle {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.calendarViewToggle .calendarViewSelect {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background-image: none;
+  padding-right: 14px;
+}
+
+.calendarViewSelectCaret {
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 6px solid rgba(245, 245, 245, 0.75);
+  flex: 0 0 auto;
+  opacity: 0.9;
+}
+
+.calendarViewMenu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  min-width: 100%;
+  padding: 6px;
+  border-radius: 12px;
+  background: rgba(20, 20, 20, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 18px 32px rgba(0, 0, 0, 0.45);
+  z-index: 30;
+}
+
+.calendarViewMenuItem {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: none;
+  background: transparent;
+  color: rgba(245, 245, 245, 0.86);
+  font: inherit;
+  font-size: 0.62rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  cursor: pointer;
+  text-align: left;
+  transition: background 140ms ease, color 140ms ease;
+}
+
+.calendarViewMenuItem:hover,
+.calendarViewMenuItem:focus-visible {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.95);
+  outline: none;
+}
+
+.calendarViewMenuItem[data-active="true"] {
+  background: rgba(245, 245, 245, 0.95);
+  color: rgba(12, 12, 12, 0.92);
+}
+
 .calendarSurfaceNav {
   display: inline-flex;
   align-items: center;
@@ -811,14 +814,6 @@
   justify-content: flex-start;
   gap: 12px;
   padding-left: 10px;
-}
-
-.calendarMonthTitle {
-  font-size: 1.15rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  color: rgba(245, 245, 245, 0.92);
-  white-space: nowrap;
 }
 
 .calendarHeaderPlaceholder {
@@ -1011,6 +1006,16 @@
   pointer-events: none;
 }
 
+.calendarTimelineNowLine {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: rgba(255, 79, 79, 0.85);
+  pointer-events: none;
+  z-index: 6;
+}
+
 .calendarTimelineNowMarker {
   display: none;
 }
@@ -1163,55 +1168,9 @@
   overflow: visible;
 }
 
-.eventCard[data-display-hint="line"] .eventCardTime,
-.eventCard[data-display-hint="line"] .eventCardTitle,
-.eventCard[data-display-hint="line"] .eventCardDetails {
+.eventCard[data-display-hint="line"] .eventCardTitle {
   display: none;
 }
-
-/* The clickable dot */
-.eventCard[data-display-hint="line"]::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: var(--event-line-color, rgba(255, 255, 255, 0.9));
-  transform: translate(-50%, -50%);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-  pointer-events: auto;
-  /* Changed from none to auto to ensure it captures drags */
-  transition: transform 0.1s ease;
-  z-index: 2;
-  /* Ensure dot is above the line */
-}
-
-/* Add a larger invisible hit target around the dot */
-.eventCard[data-display-hint="line"]::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 50%;
-  height: 12px;
-  /* Invisible vertical hit area spanning the width */
-  margin-top: -6px;
-  background: transparent;
-  pointer-events: auto;
-  z-index: 1;
-}
-
-/* The visible horizontal line - now using a child span or separate pseudo approach? 
-   Actually, let's keep ::before for the visual line if possible, but I just repurposed ::before for hit area.
-   Let's use a dedicated child element for the line in JS? No, prefer CSS only changes if possible.
-   
-   Alternative: Use ::before for the LINE (visual, pointer-events: none) and rely on ::after (dot) + container for clicks.
-   The container .eventCard has pointer-events: auto.
-   
-   If I revert the ::before change above and just keep the dot clickable:
-*/
 
 .eventCard[data-display-hint="line"]::after {
   content: "";
@@ -1219,7 +1178,6 @@
   left: 50%;
   top: 50%;
   width: 16px;
-  /* Slightly larger hit target */
   height: 16px;
   border-radius: 50%;
   background: var(--event-line-color, rgba(255, 255, 255, 0.9));
@@ -1227,6 +1185,7 @@
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
   pointer-events: auto;
   transition: transform 0.1s ease;
+  z-index: 2;
 }
 
 .eventCard[data-display-hint="line"]::before {
@@ -1241,9 +1200,8 @@
   border-radius: 999px;
   opacity: 0.8;
   pointer-events: none;
-  /* Line remains non-clickable */
+  z-index: 1;
 }
-
 
 .eventCard[data-entry-type="reminder"] {
   padding: 0;
@@ -1258,9 +1216,7 @@
   overflow: visible;
 }
 
-.eventCard[data-entry-type="reminder"] .eventCardTime,
-.eventCard[data-entry-type="reminder"] .eventCardTitle,
-.eventCard[data-entry-type="reminder"] .eventCardDetails {
+.eventCard[data-entry-type="reminder"] .eventCardTitle {
   display: none;
 }
 
@@ -1306,10 +1262,6 @@
   z-index: 4;
 }
 
-.nowIndicatorDot {
-  display: none;
-}
-
 .calendarHourGrid {
   position: absolute;
   top: 0;
@@ -1332,20 +1284,6 @@
 
 .calendarHourRow:last-child {
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-.eventCardTime {
-  font-size: 0.6rem;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: rgba(247, 247, 247, 0.78);
-  font-family: var(--font-mono,
-      "IBM Plex Mono",
-      SFMono-Regular,
-      Consolas,
-      "Liberation Mono",
-      Menlo,
-      monospace);
 }
 
 .eventCardTitle {
@@ -1391,14 +1329,6 @@
   align-items: flex-start;
   gap: 12px;
   margin-bottom: 12px;
-}
-
-.composerEyebrow {
-  margin: 0;
-  font-size: 0.66rem;
-  letter-spacing: 0.32em;
-  text-transform: uppercase;
-  color: rgba(230, 230, 230, 0.52);
 }
 
 .composerHeader h2 {
@@ -1450,13 +1380,6 @@
   gap: 8px;
 }
 
-.composerTitleLabel {
-  font-size: 0.66rem;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: rgba(220, 220, 220, 0.56);
-}
-
 .composerTitleInput {
   border-radius: 12px;
   border: none;
@@ -1494,19 +1417,6 @@
   color: rgba(220, 220, 220, 0.56);
 }
 
-.composerTypeSelectShell {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-
-.composerTypeSelect {
-  width: 100%;
-  appearance: none;
-  -webkit-appearance: none;
-  -moz-appearance: none;
-}
-
 .composerField input[type="text"],
 .composerField select,
 .composerField input[type="time"] {
@@ -1521,21 +1431,6 @@
     box-shadow 0.2s ease;
 }
 
-.composerField .composerTypeSelect {
-  padding: 10px 32px 10px 16px;
-}
-
-.composerTypeSelectShell::after {
-  content: "";
-  position: absolute;
-  right: 14px;
-  width: 8px;
-  height: 8px;
-  border-right: 1px solid rgba(235, 235, 235, 0.86);
-  border-bottom: 1px solid rgba(235, 235, 235, 0.86);
-  transform: translateY(1px) rotate(45deg);
-  pointer-events: none;
-}
 
 .composerField textarea {
   border-radius: 8px;
@@ -1895,27 +1790,6 @@
   --mini-month-weekday-letter-spacing: 0.22em;
 }
 
-.composerTaskToggle {
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  background: rgba(34, 34, 34, 0.78);
-  color: rgba(230, 230, 230, 0.8);
-  padding: 10px 14px;
-  font-size: 0.86rem;
-  text-align: left;
-  cursor: pointer;
-  transition:
-    border-color 0.2s ease,
-    background 0.2s ease,
-    color 0.2s ease;
-}
-
-.composerTaskToggle[data-active="true"] {
-  background: rgba(77, 133, 255, 0.15);
-  border-color: rgba(77, 133, 255, 0.5);
-  color: rgba(173, 197, 255, 0.95);
-}
-
 .composerColors {
   position: relative;
   display: flex;
@@ -2128,14 +2002,6 @@
   border-color: rgba(255, 255, 255, 0.65);
 }
 
-.composerHiddenColor {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  opacity: 0;
-  pointer-events: none;
-}
-
 .composerFooter {
   display: flex;
   justify-content: flex-end;
@@ -2238,65 +2104,6 @@
   }
 }
 
-.reminderHandle {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.2);
-  border: 1px solid rgba(255, 255, 255, 0.4);
-  cursor: grab;
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  opacity: 1;
-  transition: opacity 0.15s ease;
-}
-
-.eventCard:hover .reminderHandle {
-  opacity: 1;
-}
-
-.reminderHandle:hover {
-  background: rgba(255, 255, 255, 0.3);
-}
-
-.reminderHandle::after {
-  content: "";
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: currentColor;
-}
-
-.eventCardDelete {
-  position: absolute;
-  top: 2px;
-  right: 2px;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: rgba(0, 0, 0, 0.4);
-  border: none;
-  color: rgba(255, 255, 255, 0.8);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  opacity: 1;
-  transition: background 0.15s ease;
-  z-index: 11;
-  padding: 0;
-}
-
-.eventCardDelete:hover {
-  background: rgba(200, 50, 50, 0.9);
-  color: white;
-}
 
 .calendarAllDayRow {
   display: grid;
