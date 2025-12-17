@@ -1,6 +1,6 @@
 "use client";
 
-import styles from "@/app/gray/GrayPageClient.module.css";
+import styles from "../SettingsStyles.module.css";
 
 export type SettingsToggleProps = {
   checked: boolean;

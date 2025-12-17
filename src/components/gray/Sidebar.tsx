@@ -6,6 +6,7 @@ import Skeleton from "react-loading-skeleton";
 import { useUser } from "@/contexts/UserContext";
 import { useI18n } from "@/contexts/I18nContext";
 import styles from "@/app/gray/GrayPageClient.module.css";
+import railNavStyles from "./sidebar/RailNav.module.css";
 import {
   type SidebarHistorySection,
   type SidebarNavItem,
@@ -80,7 +81,7 @@ export function GraySidebar({
             priority
           />
         </button>
-        <nav aria-label={t("Sidebar quick actions")} className={styles.railNav}>
+        <nav aria-label={t("Sidebar quick actions")} className={railNavStyles.railNav}>
           <ul>
             {railItems.map((item) => (
               <li key={item.id}>

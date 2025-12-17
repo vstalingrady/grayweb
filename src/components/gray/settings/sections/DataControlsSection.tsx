@@ -2,7 +2,7 @@
 
 import type { Dispatch, SetStateAction } from "react";
 import { ChevronRight } from "lucide-react";
-import styles from "@/app/gray/GrayPageClient.module.css";
+import styles from "../SettingsStyles.module.css";
 import { apiService, type UserUpdate } from "@/lib/api";
 import { SettingsToggle } from "@/components/gray/settings/components/SettingsToggle";
 

@@ -25,7 +25,8 @@ import {
   KeyRound,
   Pencil,
 } from "lucide-react";
-import styles from "@/app/gray/GrayPageClient.module.css";
+import railNavStyles from "../sidebar/RailNav.module.css";
+import styles from "./SettingsStyles.module.css";
 import { useI18n } from "@/contexts/I18nContext";
 import { useUser } from "@/contexts/UserContext";
 import { useChatStore } from "@/components/gray/ChatProvider";
@@ -607,14 +608,14 @@ export function SettingsModal({
               <h3 className={styles.mobileProfileName}>{user?.full_name || "Gray User"}</h3>
               {user?.personalization_nickname ? (
                 <span className={styles.mobileProfileHandle}>@{user.personalization_nickname}</span>
-              ) : null}
-              <button
-                className={styles.railNav}
-                style={{ width: "auto", height: 32, padding: "0 16px", borderRadius: 16, background: "#1c1c1e", fontSize: "0.9rem", color: "#fff" }}
-                onClick={() => {
-                  setActiveSection("account");
-                  setMobileView("detail");
-                }}
+	              ) : null}
+	              <button
+	                className={railNavStyles.railNav}
+	                style={{ width: "auto", height: 32, padding: "0 16px", borderRadius: 16, background: "#1c1c1e", fontSize: "0.9rem", color: "#fff" }}
+	                onClick={() => {
+	                  setActiveSection("account");
+	                  setMobileView("detail");
+	                }}
               >
                 {t("Edit profile")}
               </button>

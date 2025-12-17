@@ -1,7 +1,7 @@
 "use client";
 
 import type { Dispatch, SetStateAction } from "react";
-import styles from "@/app/gray/GrayPageClient.module.css";
+import styles from "../SettingsStyles.module.css";
 import { API_KEY_PROVIDERS } from "@/components/gray/settings/types";
 
 type Translator = (message: string, vars?: Record<string, string | number>) => string;

@@ -1,6 +1,5 @@
 import logging
 import asyncio
-import sqlite3
 from fastapi import FastAPI, HTTPException, Depends, status, Query, Response, Request, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer

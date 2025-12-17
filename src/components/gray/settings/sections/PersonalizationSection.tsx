@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, Trash2 } from "lucide-react";
-import styles from "@/app/gray/GrayPageClient.module.css";
+import styles from "../SettingsStyles.module.css";
 import { SettingsToggle } from "@/components/gray/settings/components/SettingsToggle";
 
 type Translator = (message: string, vars?: Record<string, string | number>) => string;

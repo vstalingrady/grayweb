@@ -2,7 +2,7 @@
 
 import type { ChangeEvent, RefObject } from "react";
 import { UserCircle } from "lucide-react";
-import styles from "@/app/gray/GrayPageClient.module.css";
+import styles from "../SettingsStyles.module.css";
 import type { User } from "@/lib/api";
 
 type Translator = (message: string, vars?: Record<string, string | number>) => string;

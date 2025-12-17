@@ -2,7 +2,7 @@
 
 import type { ElementType } from "react";
 import { Moon, Sun } from "lucide-react";
-import styles from "@/app/gray/GrayPageClient.module.css";
+import styles from "../SettingsStyles.module.css";
 import type { Locale } from "@/lib/i18n";
 import type { ThemeMode } from "@/components/gray/settings/types";
 import { SettingsSelect } from "@/components/gray/settings/components/SettingsSelect";

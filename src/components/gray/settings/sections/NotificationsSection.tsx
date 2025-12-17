@@ -1,6 +1,6 @@
 "use client";
 
-import styles from "@/app/gray/GrayPageClient.module.css";
+import styles from "../SettingsStyles.module.css";
 import type { NotificationPreferences } from "@/components/gray/settings/types";
 import { SettingsToggle } from "@/components/gray/settings/components/SettingsToggle";
 

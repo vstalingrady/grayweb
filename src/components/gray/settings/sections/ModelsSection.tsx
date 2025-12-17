@@ -2,7 +2,7 @@
 
 import { Fragment } from "react";
 import { Lock } from "lucide-react";
-import styles from "@/app/gray/GrayPageClient.module.css";
+import styles from "../SettingsStyles.module.css";
 import { ALL_PIONEER_MODEL_IDS, GRAY_BRAND, PIONEER_GROUPS } from "@/components/gray/modelCatalog";
 import { SettingsLogo } from "@/components/gray/settings/components/SettingsLogo";
 import { SettingsToggle } from "@/components/gray/settings/components/SettingsToggle";

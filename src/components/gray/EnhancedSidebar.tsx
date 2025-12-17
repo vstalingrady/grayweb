@@ -18,6 +18,7 @@ import { SiDiscord } from "react-icons/si";
 import { useUser } from "@/contexts/UserContext";
 import { useI18n } from "@/contexts/I18nContext";
 import styles from "@/app/gray/GrayPageClient.module.css";
+import railNavStyles from "./sidebar/RailNav.module.css";
 import { type SidebarHistorySection, type SidebarNavItem, type SidebarNavKey, type SidebarHistoryEntry } from "./types";
 import { StarfieldCanvas } from "./StarfieldCanvas";
 
@@ -341,7 +342,7 @@ function GrayEnhancedSidebarComponent(props: GrayEnhancedSidebarProps) {
             className={`${styles.sidebarRailLogoImage} ${styles.uiIconImage}`}
           />
         </button>
-        <nav aria-label={t("Sidebar quick actions")} className={styles.railNav}>
+        <nav aria-label={t("Sidebar quick actions")} className={railNavStyles.railNav}>
           <ul>
             {railItems.map((item) => (
               <li key={item.id}>

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type ElementType } from "react";
 import { Check, ChevronDown } from "lucide-react";
-import styles from "@/app/gray/GrayPageClient.module.css";
+import styles from "../SettingsStyles.module.css";
 
 type SelectOption = { value: string; label: string };
 
