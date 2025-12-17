@@ -588,6 +588,11 @@ except ImportError:
     from core.proactivity_helpers import fetch_proactivity_summary as _fetch_proactivity_summary  # type: ignore
 
 try:
+    from backend.core.chat_context_helpers import prepare_chat_context as _prepare_chat_context
+except ImportError:
+    from core.chat_context_helpers import prepare_chat_context as _prepare_chat_context  # type: ignore
+
+try:
     from backend.core.chat_starter_helpers import (
         sse_event as _sse_event,
         starter_profile_context as _starter_profile_context,

@@ -5082,33 +5082,6 @@ h1.greeting {
   padding: 0;
 }
 
-.dashboardCalendarSurface .calendarSurfaceHeaderLeft {
-  display: flex;
-}
-
-.dashboardCalendarSurface .calendarSurfaceHeader {
-  justify-content: space-between;
-  align-items: center;
-  gap: clamp(12px, 2.2vw, 22px);
-}
-
-.dashboardCalendarSurface .calendarSurfaceHeaderRight {
-  display: inline-flex;
-  align-items: center;
-  gap: clamp(14px, 3vw, 24px);
-}
-
-.dashboardCalendarSurface .calendarSurfaceBody {
-  padding: 0;
-  padding-bottom: clamp(14px, 2vw, 22px);
-  border-top: none;
-  gap: clamp(8px, 1.4vw, 14px);
-  flex: 1;
-  min-height: 0;
-  align-items: stretch;
-  overflow: hidden;
-}
-
 .dashboardCalendarContainer[data-compact="true"] {
   padding: clamp(12px, 4vh, 18px) clamp(16px, 6vw, 24px);
   overflow: visible;
@@ -5125,10 +5098,6 @@ h1.greeting {
   padding: 0;
   box-shadow: none;
   gap: clamp(16px, 5vh, 24px);
-}
-
-.dashboardCalendarSurface[data-compact="true"] .calendarSurfaceBody {
-  padding: 0;
 }
 
 .dashboardCalendarSurface[data-compact="true"] {
@@ -5206,12 +5175,6 @@ h1.greeting {
   margin: 0;
   font-size: 0.85rem;
   color: rgba(204, 204, 204, 0.62);
-}
-
-.dashboardCalendarSurface .calendarSidebarPanel {
-  align-self: stretch;
-  height: 100%;
-  overflow: hidden;
 }
 
 .dashboardCalendarInnerSurface {
@@ -6856,12 +6819,6 @@ h1.greeting {
   }
 
   .dashboardCalendarSurface {
-    overflow: visible;
-    height: auto;
-    max-height: none;
-  }
-
-  .dashboardCalendarSurface .calendarSurfaceBody {
     overflow: visible;
     height: auto;
     max-height: none;
