@@ -2058,13 +2058,13 @@ async def get_database():
 # - core.chat_history: normalize_conversation_history
 
 
-async def _execute_function_call(
-    function_call: types.FunctionCall,
-    user_id: int,
-    db: databases.Database,
-    user_timezone: Optional[str] = None,
-) -> Dict[str, Any]:
-    handler = {
+def _get_tool_handlers(user_timezone: Optional[str] = None) -> Dict[str, Any]:
+    """Return a dictionary of tool name -> handler function.
+    
+    This is shared between _execute_function_call and stream_ai_response
+    to avoid code duplication.
+    """
+    return {
         "fetch_proactivity_summary": lambda u, a, d: _fetch_proactivity_summary(u, a.get("info_type"), d),
         "list_calendar_events": lambda u, a, d: _list_calendar_events(u, a, d),
         "create_calendar_event": lambda u, a, d: _create_calendar_event(u, a, d),
@@ -2085,7 +2085,17 @@ async def _execute_function_call(
         "delete_reminder": lambda u, a, d: _delete_reminder_tool(u, a, d),
         "delete_latest_reminder": lambda u, a, d: _delete_latest_reminder_tool(u, a, d),
         "get_workspace_state": lambda u, a, d: _get_workspace_state_tool(u, a, d),
-    }.get(function_call.name)
+    }
+
+
+async def _execute_function_call(
+    function_call: types.FunctionCall,
+    user_id: int,
+    db: databases.Database,
+    user_timezone: Optional[str] = None,
+) -> Dict[str, Any]:
+    handlers = _get_tool_handlers(user_timezone)
+    handler = handlers.get(function_call.name)
     if not handler:
         raise HTTPException(status_code=501, detail=f"Unsupported function: {function_call.name}")
 
@@ -2960,28 +2970,7 @@ CRITICAL: When the user asks to create/update a plan or habit, you MUST call the
                                 
                     # Process any accumulated native tool calls
                     if pending_tool_calls:
-                        tool_handlers = {
-                            "fetch_proactivity_summary": lambda u, a, d: _fetch_proactivity_summary(u, a.get("info_type"), d),
-                            "list_calendar_events": lambda u, a, d: _list_calendar_events(u, a, d),
-                            "create_calendar_event": lambda u, a, d: _create_calendar_event(u, a, d),
-                            "update_calendar_event": lambda u, a, d: _update_calendar_event(u, a, d),
-                            "delete_calendar_event": lambda u, a, d: _delete_calendar_event(u, a, d),
-                            "complete_onboarding": lambda u, a, d: _complete_onboarding(u, a, d, user_timezone=user_timezone),
-                            "list_plans": lambda u, a, d: _list_plans_tool(u, a, d),
-                            "create_plan": lambda u, a, d: _create_plan_tool(u, a, d),
-                            "update_plan": lambda u, a, d: _update_plan_tool(u, a, d),
-                            "delete_plan": lambda u, a, d: _delete_plan_tool(u, a, d),
-                            "list_habits": lambda u, a, d: _list_habits_tool(u, a, d),
-                            "create_habit": lambda u, a, d: _create_habit_tool(u, a, d),
-                            "update_habit": lambda u, a, d: _update_habit_tool(u, a, d),
-                            "delete_habit": lambda u, a, d: _delete_habit_tool(u, a, d),
-                            "list_reminders": lambda u, a, d: _list_reminders_tool(u, a, d),
-                            "create_reminder": lambda u, a, d: _create_reminder_tool(u, a, d),
-                            "update_reminder": lambda u, a, d: _update_reminder_tool(u, a, d),
-                            "delete_reminder": lambda u, a, d: _delete_reminder_tool(u, a, d),
-                            "delete_latest_reminder": lambda u, a, d: _delete_latest_reminder_tool(u, a, d),
-                            "get_workspace_state": lambda u, a, d: _get_workspace_state_tool(u, a, d),
-                        }
+                        tool_handlers = _get_tool_handlers(user_timezone)
                         
                         tool_results = []
                         for idx, call in pending_tool_calls.items():
