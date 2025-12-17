@@ -736,7 +736,8 @@ try:
     from backend.core.migrations import run_startup_migrations as _run_startup_migrations
 except ImportError:
     from core.migrations import run_startup_migrations as _run_startup_migrations  # type: ignore
-_run_startup_migrations()
+# Note: _run_startup_migrations is called in lifespan(), not at import time
+
 
 ALLOWED_ORIGIN_REGEX = _local_network_origin_regex()
 
@@ -848,6 +849,8 @@ async def _create_reminders_from_actions(
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Centralized startup/shutdown without deprecated on_event hooks."""
+    # Run sync migrations first (schema must exist before async operations)
+    _run_startup_migrations()
     await _connect_database()
     await _run_basic_migrations()
     # Run independent checks in parallel for faster startup
@@ -860,6 +863,7 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         await _disconnect_database()
+
 
 
 # Migration functions (extracted to core/migrations.py)
@@ -2429,7 +2433,7 @@ async def chat_stream(
             # Send an immediate keep-alive to nudge proxies to flush the stream sooner.
             yield ":streaming-start\n\n"
             try:
-                accumulated_visible = ""
+                accumulated_chunks: List[str] = []
                 final_response: Optional[str] = None
                 grounding_metadata_payload: Optional[Dict[str, Any]] = None
                 
@@ -2464,7 +2468,7 @@ async def chat_stream(
                             continue
                         if first_token_time is None:
                             first_token_time = time.perf_counter()
-                        accumulated_visible += payload
+                        accumulated_chunks.append(payload)
                         yield _sse_event("token", {"delta": payload})
                     elif kind == "tool_card":
                         yield _sse_event("tool_card", payload)
@@ -2473,14 +2477,14 @@ async def chat_stream(
                     elif kind == "final":
                         reminders_payload = None
                         if isinstance(payload, dict):
-                            final_response = payload.get("text") or accumulated_visible
+                            final_response = payload.get("text") or "".join(accumulated_chunks)
                             grounding_metadata_payload = payload.get("grounding_metadata")
                             reminders_payload = payload.get("reminders")
                         elif payload:
                             final_response = payload
 
                 if final_response is None:
-                    final_response = accumulated_visible
+                    final_response = "".join(accumulated_chunks)
                 
                 # Send reminders as a separate SSE event if they exist
                 if reminders_payload:
@@ -2565,22 +2569,26 @@ async def chat_stream(
                     timing_payload["first_token_ms"] = int(max(0.0, (first_token_time - start_time) * 1000))
                 end_payload["timing"] = timing_payload
                 yield _sse_event("end", end_payload)
+            except asyncio.CancelledError:
+                # Client disconnected - don't log as error, just re-raise
+                api_logger.debug("Stream cancelled by client disconnect", extra={"user_id": chat_request.user_id})
+                raise
             except Exception as stream_error:
                 api_logger.error(f"Stream loop error: {stream_error}", exc_info=True)
                 # Still save any accumulated response, even on error
-                if accumulated_visible:
+                if accumulated_chunks:
                     try:
                         general_user_id = _general_conversation_user_id(conversation_id)
                         if general_user_id is not None:
                             await _insert_general_conversation_message(
                                 user_id=general_user_id,
                                 role="model",
-                                text=accumulated_visible,
+                                text="".join(accumulated_chunks),
                             )
                         else:
                             await save_conversation_message(
                                 conversation_id,
-                                {"role": "model", "text": accumulated_visible},
+                                {"role": "model", "text": "".join(accumulated_chunks)},
                                 user_id=chat_request.user_id,
                             )
                     except Exception as save_error:
