@@ -1303,53 +1303,7 @@ async def _require_conversation_owner(conversation_id: str, current_user: Dict[s
 
 # Utility functions imported from core modules
 
-
-async def _should_enable_reminder_tools_semantic(message: str) -> bool:
-    """
-    Use a lightweight model to semantically classify whether a message is asking
-    for a concrete reminder / plan / habit / timer / alarm that should be stored
-    and scheduled, rather than relying only on surface keywords.
-    """
-    trimmed = (message or "").strip()
-    if not trimmed:
-        return False
-
-    system_prompt = load_prompt_from_json(
-        GLOBAL_SYSTEM_PROMPTS_PATH,
-        "intent_classification",
-        "Reply with exactly one word: REMINDERS or NONE."
-    )
-
-    text = ""
-
-    # Use OpenRouter with lite model for semantic classification
-    if OPENROUTER_SERVICE and OPENROUTER_SERVICE.available:
-        try:
-            text = await OPENROUTER_SERVICE.generate(
-                trimmed,
-                conversation_history=None,
-                workspace_context=None,
-                system_prompt=system_prompt,
-                time_context=None,
-                model=OPENROUTER_LITE_MODEL,
-                include_usage=False,
-                response_format=None,
-                tools=None,
-                tool_choice=None,
-            )
-        except Exception as error:  # pragma: no cover - best effort logging
-            api_logger.warning(
-                "Semantic reminder classifier (OpenRouter lite) failed; falling back to keyword heuristics",
-                extra={"event_type": "reminder_classifier_error", "error": str(error), "provider": "openrouter"},
-            )
-            text = ""
-
-    normalized = (text or "").strip().upper()
-    if not normalized:
-        return False
-    first_token = normalized.split()[0]
-    return first_token == "REMINDERS"
-
+# _should_enable_reminder_tools_semantic removed - semantic classification disabled for performance
 
 # _ensure_datetime_value is now imported from core.env_helpers
 
