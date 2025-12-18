@@ -74,6 +74,11 @@ export interface CalendarEvent {
   end_time: string;
   color?: string;
   reminder_minutes_before?: number | null;
+  entry_type?: string;
+  is_completed?: boolean;
+  recurrence?: string;
+  habit_id?: number;
+  reminder_at?: string;
   created_at: string;
 }
 

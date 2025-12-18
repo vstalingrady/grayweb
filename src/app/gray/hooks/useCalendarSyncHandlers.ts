@@ -1,74 +1,46 @@
 import { useCallback } from "react";
-import type { Dispatch, SetStateAction } from "react";
-
-import { workspaceService, calendarService, isApiNetworkError } from "@/lib/api";
-import type { CalendarEvent, CalendarInfo } from "@/components/calendar/types";
-import type { PlanItem, PlanUpdates } from "@/components/gray/types";
+import { calendarService, workspaceService } from "@/lib/api";
+import { type CalendarEvent, type CalendarInfo } from "@/components/calendar/types";
 import { PLAN_EVENT_ID_PREFIX } from "@/components/gray/planCalendarUtils";
+import { type PlanItem } from "@/components/gray/types";
 
-type CalendarSyncHandlersOptions = {
-  userId: number | null;
-  plans: PlanItem[];
-  setPlans: Dispatch<SetStateAction<PlanItem[]>>;
-  calendars: CalendarInfo[];
-  setCalendars: Dispatch<SetStateAction<CalendarInfo[]>>;
-  events: CalendarEvent[];
-  setEvents: Dispatch<SetStateAction<CalendarEvent[]>>;
+// Helper to determine if an error is a network error
+const isApiNetworkError = (error: unknown) => {
+  return error instanceof Error && (
+    error.message.includes("network") ||
+    error.message.includes("fetch") ||
+    error.message.includes("Failed to fetch")
+  );
 };
 
-export const useCalendarSyncHandlers = ({
-  userId,
-  plans,
-  setPlans,
-  calendars,
-  setCalendars,
-  events,
-  setEvents,
-}: CalendarSyncHandlersOptions) => {
+export const useCalendarSyncHandlers = (
+  userId: number | null,
+  plans: PlanItem[],
+  events: CalendarEvent[],
+  calendars: CalendarInfo[],
+  setEvents: React.Dispatch<React.SetStateAction<CalendarEvent[]>>,
+  setCalendars: React.Dispatch<React.SetStateAction<CalendarInfo[]>>
+) => {
   const persistPlanFromCalendarMove = useCallback(
-    async (planId: string, updates: PlanUpdates) => {
-      if (typeof userId !== "number") {
-        return;
-      }
-
-      const numericPlanId = Number(planId);
-      if (Number.isNaN(numericPlanId)) {
-        return;
-      }
-
-      const previousPlans = plans;
-      const updatedPlans = previousPlans.map((plan) =>
-        plan.id === planId
-          ? {
-            ...plan,
-            label: updates.label,
-            deadline: updates.deadline ?? null,
-            scheduleSlot: updates.scheduleSlot ?? null,
-            details: updates.details ?? null,
-          }
-          : plan
-      );
-
-      setPlans(updatedPlans);
-
+    async (planId: number, update: { label: string; deadline: string | null; scheduleSlot: string | null; description: string | null }) => {
+      if (userId === null) return;
       try {
-        await workspaceService.updatePlan(userId, numericPlanId, {
-          label: updates.label,
-          description: updates.details ?? null,
-          deadline: updates.deadline ?? null,
-          scheduleSlot: updates.scheduleSlot ?? null,
+        await workspaceService.updatePlan(userId, planId, {
+          label: update.label,
+          deadline: update.deadline,
+          scheduleSlot: update.scheduleSlot,
+          description: update.description,
         });
       } catch (error) {
-        console.error("Failed to update plan from calendar move:", error);
-        setPlans(previousPlans);
+        console.error("Failed to sync plan move:", error);
       }
     },
-    [plans, setPlans, userId]
+    [userId]
   );
 
   const handleCalendarsChange = useCallback(
-    (nextCalendars: CalendarInfo[]) => {
-      const previousCalendars = new Map(calendars.map((calendar) => [calendar.id, calendar]));
+    async (nextCalendars: CalendarInfo[]) => {
+      const previousCalendars = calendars;
       setCalendars(nextCalendars);
 
       if (typeof userId !== "number") {
@@ -76,24 +48,18 @@ export const useCalendarSyncHandlers = ({
       }
 
       nextCalendars.forEach((calendar) => {
-        const previous = previousCalendars.get(calendar.id);
-        const hasChanged =
-          !previous ||
-          previous.label !== calendar.label ||
-          previous.color !== calendar.color ||
-          previous.isVisible !== calendar.isVisible;
+        const prev = previousCalendars.find((c) => c.id === calendar.id);
+        if (!prev) return;
 
-        if (!hasChanged) {
+        if (prev.isVisible === calendar.isVisible && prev.label === calendar.label && prev.color === calendar.color) {
           return;
         }
 
-        const calendarId = Number(calendar.id);
-        if (Number.isNaN(calendarId)) {
-          return;
-        }
+        const numericId = Number(calendar.id);
+        if (Number.isNaN(numericId)) return;
 
         calendarService
-          .updateCalendar(userId, calendarId, {
+          .updateCalendar(userId, numericId, {
             label: calendar.label,
             color: calendar.color,
             is_visible: calendar.isVisible,
@@ -111,42 +77,20 @@ export const useCalendarSyncHandlers = ({
       const planEvents = allEvents.filter((event) => event.id.startsWith(PLAN_EVENT_ID_PREFIX));
       const standardEvents = allEvents.filter((event) => !event.id.startsWith(PLAN_EVENT_ID_PREFIX));
 
+      // 1. Sync Plans
       planEvents.forEach((event) => {
-        const planId = event.id.slice(PLAN_EVENT_ID_PREFIX.length);
-        const originalPlan = plans.find((plan) => plan.id === planId);
-        if (!originalPlan) {
-          return;
-        }
+        const planIdStr = event.id.slice(PLAN_EVENT_ID_PREFIX.length);
+        const planId = Number(planIdStr);
+        if (Number.isNaN(planId)) return;
 
-        const formatTime = (value: Date) =>
-          `${String(value.getHours()).padStart(2, "0")}:${String(value.getMinutes()).padStart(2, "0")}`;
-        const newScheduleSlot = `${formatTime(event.start)}-${formatTime(event.end)}`;
+        const originalPlan = plans.find((p) => p.id === String(planId));
+        if (!originalPlan) return;
 
-        const existingDeadlineIso = originalPlan.deadline ?? null;
-        let nextDeadlineIso = existingDeadlineIso;
-
-        if (existingDeadlineIso) {
-          const existingDeadline = new Date(existingDeadlineIso);
-          if (!Number.isNaN(existingDeadline.getTime())) {
-            const sameDateKey = (value: Date) =>
-              `${value.getFullYear()}-${value.getMonth()}-${value.getDate()}`;
-            const originalDateKey = sameDateKey(existingDeadline);
-            const nextDateKey = sameDateKey(event.start);
-
-            if (originalDateKey !== nextDateKey) {
-              const updatedDeadline = new Date(existingDeadline);
-              updatedDeadline.setFullYear(
-                event.start.getFullYear(),
-                event.start.getMonth(),
-                event.start.getDate()
-              );
-              nextDeadlineIso = updatedDeadline.toISOString();
-            }
-          }
-        }
+        const newScheduleSlot = event.start.toTimeString().slice(0, 5);
+        const nextDeadlineIso = event.start.toISOString().split("T")[0];
 
         const scheduleChanged = originalPlan.scheduleSlot !== newScheduleSlot;
-        const deadlineChanged = nextDeadlineIso !== existingDeadlineIso;
+        const deadlineChanged = originalPlan.deadline !== nextDeadlineIso;
 
         if (!scheduleChanged && !deadlineChanged) {
           return;
@@ -154,7 +98,7 @@ export const useCalendarSyncHandlers = ({
 
         void persistPlanFromCalendarMove(planId, {
           label: originalPlan.label,
-          details: originalPlan.details ?? null,
+          description: originalPlan.details ?? null,
           deadline: nextDeadlineIso,
           scheduleSlot: newScheduleSlot,
         });
@@ -173,6 +117,7 @@ export const useCalendarSyncHandlers = ({
         return;
       }
 
+      // Revert helpers
       const revertUpdate = (failedId: string) => {
         const original = previousEvents.find((event) => event.id === failedId);
         if (original) {
@@ -200,6 +145,7 @@ export const useCalendarSyncHandlers = ({
         console.error(`Failed to ${action}:`, error);
       };
 
+      // 2. Identify changes
       const deletedEventIds = previousStandardEvents
         .filter(
           (previousEvent) =>
@@ -214,9 +160,8 @@ export const useCalendarSyncHandlers = ({
 
       const updatedEvents = nextStandardEvents.filter((nextEvent) => {
         const previousEvent = previousStandardEvents.find((event) => event.id === nextEvent.id);
-        if (!previousEvent) {
-          return false;
-        }
+        if (!previousEvent) return false;
+
         return (
           previousEvent.title !== nextEvent.title ||
           previousEvent.start.getTime() !== nextEvent.start.getTime() ||
@@ -224,16 +169,18 @@ export const useCalendarSyncHandlers = ({
           previousEvent.description !== nextEvent.description ||
           previousEvent.calendarId !== nextEvent.calendarId ||
           previousEvent.color !== nextEvent.color ||
-          previousEvent.reminderMinutesBefore !== nextEvent.reminderMinutesBefore
+          previousEvent.reminderMinutesBefore !== nextEvent.reminderMinutesBefore ||
+          previousEvent.reminderAt !== nextEvent.reminderAt ||
+          previousEvent.entryType !== nextEvent.entryType ||
+          previousEvent.isCompleted !== nextEvent.isCompleted ||
+          previousEvent.recurrence !== nextEvent.recurrence
         );
       });
 
+      // 3. Process Deletes
       for (const eventId of deletedEventIds) {
         const numericId = Number(eventId);
-        if (Number.isNaN(numericId)) {
-          continue;
-        }
-
+        if (Number.isNaN(numericId)) continue;
         try {
           await calendarService.deleteCalendarEvent(userId, numericId);
         } catch (error) {
@@ -243,21 +190,25 @@ export const useCalendarSyncHandlers = ({
         }
       }
 
+      // 4. Process Creates
       for (const event of newEvents) {
-        const numericCalendarId = event.calendarId ? Number(event.calendarId) : null;
-        if (Number.isNaN(numericCalendarId) && event.calendarId !== "default") {
-          continue;
-        }
+        const numericCalendarId = event.calendarId ? (event.calendarId === "default" ? null : Number(event.calendarId)) : null;
+        if (numericCalendarId !== null && Number.isNaN(numericCalendarId)) continue;
 
         try {
           const createdEvent = await calendarService.createCalendarEvent(userId, {
-            calendar_id: event.calendarId === "default" ? null : numericCalendarId,
+            calendar_id: numericCalendarId,
             title: event.title,
             description: event.description,
             start_time: event.start.toISOString(),
             end_time: event.end.toISOString(),
             color: event.color,
             reminder_minutes_before: event.reminderMinutesBefore ?? null,
+            entry_type: event.entryType || "event",
+            is_completed: event.isCompleted || false,
+            recurrence: event.recurrence,
+            habit_id: event.habitId,
+            reminder_at: event.reminderAt || undefined,
           });
 
           setEvents((previous) =>
@@ -274,22 +225,52 @@ export const useCalendarSyncHandlers = ({
         }
       }
 
+      // 5. Process Updates
       for (const event of updatedEvents) {
-        if (event.id.startsWith("evt-")) {
-          const numericCalendarId = event.calendarId ? Number(event.calendarId) : null;
-          if (Number.isNaN(numericCalendarId) && event.calendarId !== "default") {
-            continue;
-          }
+        const numericId = Number(event.id);
+        if (!Number.isNaN(numericId)) {
+          const numericCalendarId = event.calendarId ? (event.calendarId === "default" ? null : Number(event.calendarId)) : null;
+          if (numericCalendarId !== null && Number.isNaN(numericCalendarId)) continue;
 
           try {
-            const createdEvent = await calendarService.createCalendarEvent(userId, {
-              calendar_id: event.calendarId === "default" ? null : numericCalendarId,
+            await calendarService.updateCalendarEvent(userId, numericId, {
+              calendar_id: numericCalendarId,
               title: event.title,
               description: event.description,
               start_time: event.start.toISOString(),
               end_time: event.end.toISOString(),
               color: event.color,
               reminder_minutes_before: event.reminderMinutesBefore ?? null,
+              entry_type: event.entryType || "event",
+              is_completed: event.isCompleted || false,
+              recurrence: event.recurrence,
+              habit_id: event.habitId,
+              reminder_at: event.reminderAt || undefined,
+            });
+          } catch (error) {
+            logCalendarSyncError("update calendar event", error);
+            revertUpdate(event.id);
+            return;
+          }
+        } else if (event.id.startsWith("evt-")) {
+          // Fallback for temporary IDs that actually represent changes
+          const numericCalendarId = event.calendarId ? (event.calendarId === "default" ? null : Number(event.calendarId)) : null;
+          if (numericCalendarId !== null && Number.isNaN(numericCalendarId)) continue;
+
+          try {
+            const createdEvent = await calendarService.createCalendarEvent(userId, {
+              calendar_id: numericCalendarId,
+              title: event.title,
+              description: event.description,
+              start_time: event.start.toISOString(),
+              end_time: event.end.toISOString(),
+              color: event.color,
+              reminder_minutes_before: event.reminderMinutesBefore ?? null,
+              entry_type: event.entryType || "event",
+              is_completed: event.isCompleted || false,
+              recurrence: event.recurrence,
+              habit_id: event.habitId,
+              reminder_at: event.reminderAt || undefined,
             });
 
             setEvents((previous) =>
@@ -300,40 +281,10 @@ export const useCalendarSyncHandlers = ({
               )
             );
           } catch (error) {
-            logCalendarSyncError("create calendar event from temporary", error);
+            logCalendarSyncError("create calendar event (temp update)", error);
+            revertCreate(event.id);
+            return;
           }
-
-          continue;
-        }
-
-        const numericEventId = Number(event.id);
-        const numericCalendarId = event.calendarId ? Number(event.calendarId) : null;
-        const shouldSkip =
-          Number.isNaN(numericEventId) ||
-          (Number.isNaN(numericCalendarId) && event.calendarId !== "default");
-
-        if (shouldSkip) {
-          continue;
-        }
-
-        try {
-          await calendarService.updateCalendarEvent(userId, numericEventId, {
-            calendar_id: event.calendarId === "default" ? null : numericCalendarId,
-            title: event.title,
-            description: event.description,
-            start_time: event.start.toISOString(),
-            end_time: event.end.toISOString(),
-            color: event.color,
-            reminder_minutes_before: event.reminderMinutesBefore ?? null,
-          });
-        } catch (error) {
-          if (error instanceof Error && error.message.includes("Not Found")) {
-            continue;
-          }
-
-          logCalendarSyncError("update calendar event", error);
-          revertUpdate(event.id);
-          return;
         }
       }
     },
@@ -342,4 +293,3 @@ export const useCalendarSyncHandlers = ({
 
   return { handleCalendarsChange, handleEventsChange };
 };
-

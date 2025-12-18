@@ -9,7 +9,7 @@ import {
 } from "@/lib/api";
 import { sanitizeEventColor, DEFAULT_EVENT_COLOR } from "@/app/gray/constants";
 import { type PlanItem, type HabitItem } from "@/components/gray/types";
-import type { CalendarEvent, CalendarInfo } from "@/components/calendar/types";
+import type { CalendarEvent, CalendarInfo, CalendarEntryType } from "@/components/calendar/types";
 
 // Custom event name for triggering workspace refresh from anywhere in the app
 export const WORKSPACE_REFRESH_EVENT = "gray:workspace-refresh";
@@ -226,7 +226,11 @@ export function useWorkspaceData(userId: number | null, variant: "general" | "da
               color: sanitizeEventColor(
                 calendarColorMap.get(associatedCalendarId) ?? fallbackEventColor
               ),
-              entryType: "event",
+              entryType: (event.entry_type || "event") as CalendarEntryType,
+              isCompleted: event.is_completed,
+              recurrence: event.recurrence,
+              habitId: event.habit_id,
+              reminderAt: event.reminder_at,
               description: event.description ?? undefined,
               reminderMinutesBefore:
                 typeof event.reminder_minutes_before === "number" ? event.reminder_minutes_before : null,

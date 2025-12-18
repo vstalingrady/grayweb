@@ -169,7 +169,8 @@ export const EventCard = memo(function EventCard({
   cardStyle["--event-card-time-color"] = timeColor;
   cardStyle["--event-card-detail-color"] = detailColor;
 
-  const taskCompleted = Boolean(taskAction?.checked);
+  const isUnifiedCompleted = Boolean(event.isCompleted);
+  const taskCompleted = taskAction ? Boolean(taskAction.checked) : isUnifiedCompleted;
   const handleTaskToggleClick = (domEvent: MouseEvent<HTMLButtonElement>) => {
     domEvent.stopPropagation();
     domEvent.preventDefault();

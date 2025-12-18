@@ -87,14 +87,25 @@ export default function LoginForm({
       return false;
     }
     const { hostname, port } = window.location;
-    const isLocal = isLocalHostname(hostname) || port === "3000";
+    const isLocal = isLocalHostname(hostname) || port === "3000" || port === "3001";
     if (isLocal) {
-      // Captcha is disabled by default on localhost to ease development,
-      // but can be force-enabled via environment variable if testing is needed
-      // or if the Supabase project requires it.
-      return process.env.NEXT_PUBLIC_ENABLE_CAPTCHA_LOCAL === "true";
+      return false;
+    }
+    if (process.env.NODE_ENV !== "production") {
+      return false;
     }
     return true;
+  }, [isMounted]);
+
+  const shouldUseDevPasswordAuth = useMemo(() => {
+    if (!isMounted) {
+      return false;
+    }
+    if (process.env.NODE_ENV === "production") {
+      return false;
+    }
+    const { hostname, port } = window.location;
+    return isLocalHostname(hostname) || port === "3000";
   }, [isMounted]);
   const turnstileSiteKey =
     shouldEnableCaptcha
@@ -374,12 +385,43 @@ export default function LoginForm({
       const isSignIn = authMode === "signin";
       if (isSignIn) {
         const authStart = performance.now();
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email: trimmedEmail,
-          password,
-          options: { captchaToken },
-        });
-        console.log(`[AUTH PERF] Sign in request took ${(performance.now() - authStart).toFixed(2)}ms`);
+        const { data, error } = shouldUseDevPasswordAuth
+          ? await (async () => {
+            const response = await fetch("/api/auth/dev/password", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ email: trimmedEmail, password, mode: "signin" }),
+            });
+
+            const payload = (await response.json().catch(() => null)) as
+              | { accessToken?: unknown; refreshToken?: unknown; detail?: unknown }
+              | null;
+
+            if (!response.ok) {
+              const detail =
+                typeof payload?.detail === "string" ? payload.detail : t("Unable to sign in.");
+              throw new Error(detail);
+            }
+
+            const accessToken = typeof payload?.accessToken === "string" ? payload.accessToken : "";
+            const refreshToken =
+              typeof payload?.refreshToken === "string" ? payload.refreshToken : "";
+
+            if (!accessToken || !refreshToken) {
+              throw new Error(t("Unable to sign in."));
+            }
+
+            return supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+          })()
+          : await supabase.auth.signInWithPassword({
+            email: trimmedEmail,
+            password,
+            options: { captchaToken },
+          });
+
+        console.log(
+          `[AUTH PERF] Sign in request took ${(performance.now() - authStart).toFixed(2)}ms`
+        );
 
         if (error) {
           throw error;
@@ -414,14 +456,42 @@ export default function LoginForm({
       }
 
       const authStart = performance.now();
-      const { data, error } = await supabase.auth.signUp({
-        email: trimmedEmail,
-        password,
-        options: {
-          emailRedirectTo: ensureAbsoluteUrl(buildCallbackDestination(redirectTo)),
-          captchaToken,
-        },
-      });
+      const { data, error } = shouldUseDevPasswordAuth
+        ? await (async () => {
+          const response = await fetch("/api/auth/dev/password", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ email: trimmedEmail, password, mode: "signup" }),
+          });
+
+          const payload = (await response.json().catch(() => null)) as
+            | { accessToken?: unknown; refreshToken?: unknown; detail?: unknown }
+            | null;
+
+          if (!response.ok) {
+            const detail =
+              typeof payload?.detail === "string" ? payload.detail : t("Unable to sign up.");
+            throw new Error(detail);
+          }
+
+          const accessToken = typeof payload?.accessToken === "string" ? payload.accessToken : "";
+          const refreshToken =
+            typeof payload?.refreshToken === "string" ? payload.refreshToken : "";
+
+          if (!accessToken || !refreshToken) {
+            throw new Error(t("Unable to sign up."));
+          }
+
+          return supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+        })()
+        : await supabase.auth.signUp({
+          email: trimmedEmail,
+          password,
+          options: {
+            emailRedirectTo: ensureAbsoluteUrl(buildCallbackDestination(redirectTo)),
+            captchaToken,
+          },
+        });
       console.log(`[AUTH PERF] Sign up request took ${(performance.now() - authStart).toFixed(2)}ms`);
 
       if (error) {

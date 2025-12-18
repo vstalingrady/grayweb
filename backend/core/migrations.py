@@ -178,6 +178,11 @@ def run_startup_migrations():
         [
             ("color", "TEXT", None),
             ("reminder_minutes_before", "INTEGER", None),
+            ("entry_type", "TEXT", "'event'"),
+            ("is_completed", "BOOLEAN", "0"),
+            ("recurrence", "TEXT", None),
+            ("habit_id", "INTEGER", None),
+            ("reminder_at", "DATETIME", None),
         ],
     )
 

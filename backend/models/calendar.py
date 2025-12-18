@@ -44,6 +44,11 @@ class CalendarEventBase(BaseModel):
     calendar_id: Optional[int] = None
     color: Optional[str] = None
     reminder_minutes_before: Optional[int] = None
+    entry_type: str = "event"
+    is_completed: bool = False
+    recurrence: Optional[str] = None
+    habit_id: Optional[int] = None
+    reminder_at: Optional[datetime] = None
 
 
 class CalendarEventCreate(CalendarEventBase):
@@ -60,6 +65,11 @@ class CalendarEventUpdate(BaseModel):
     calendar_id: Optional[int] = None
     color: Optional[str] = None
     reminder_minutes_before: Optional[int] = None
+    entry_type: Optional[str] = None
+    is_completed: Optional[bool] = None
+    recurrence: Optional[str] = None
+    habit_id: Optional[int] = None
+    reminder_at: Optional[datetime] = None
 
 
 class CalendarEvent(CalendarEventBase):

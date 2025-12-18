@@ -1,4 +1,4 @@
-export type CalendarEntryType = "event" | "task" | "plan" | "habit";
+export type CalendarEntryType = "event" | "plan" | "habit" | "reminder" | "task";
 export type CalendarEventDisplayHint = "line";
 
 export interface CalendarInfo {
@@ -15,10 +15,14 @@ export interface CalendarEvent {
   start: Date;
   end: Date;
   color: string;
-  entryType: CalendarEntryType;
   description?: string;
-  displayHint?: CalendarEventDisplayHint;
+  entryType?: "event" | "plan" | "habit" | "reminder" | "task";
+  isCompleted?: boolean;
+  recurrence?: string;
+  habitId?: number;
+  reminderAt?: string;
   reminderMinutesBefore?: number | null;
+  displayHint?: "line";
 }
 
 export interface PositionedEvent extends CalendarEvent {

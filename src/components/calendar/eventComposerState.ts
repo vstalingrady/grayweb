@@ -12,6 +12,10 @@ export type EventComposerPayload = {
   description?: string;
   displayHint?: CalendarEventDisplayHint;
   reminderMinutesBefore?: number | null;
+  isCompleted?: boolean;
+  recurrence?: string;
+  habitId?: number;
+  reminderAt?: string;
 };
 
 export type ComposerState = {
@@ -23,6 +27,10 @@ export type ComposerState = {
   calendarId: string;
   details: string;
   reminderMinutesBefore: number | null;
+  isCompleted: boolean;
+  recurrence: string | null;
+  habitId: number | null;
+  reminderAt: string | null;
 };
 
 export type ComposerAction =
@@ -38,6 +46,10 @@ export const DEFAULT_STATE: ComposerState = {
   calendarId: "default",
   details: "",
   reminderMinutesBefore: null,
+  isCompleted: false,
+  recurrence: null,
+  habitId: null,
+  reminderAt: null,
 };
 
 export const DEFAULT_EVENT_DURATION_MINUTES = 60;
@@ -49,6 +61,7 @@ export const ENTRY_TYPE_LABELS: Record<CalendarEntryType, string> = {
   task: "Task",
   plan: "Plans",
   habit: "Habits",
+  reminder: "Reminder",
 };
 
 export const composerReducer = (state: ComposerState, action: ComposerAction): ComposerState => {
@@ -70,10 +83,14 @@ export const resolveStateFromEvent = (
   startTime: formatTimeInput(event.start),
   endTime: formatTimeInput(event.end),
   color: event.color,
-  entryType: event.entryType,
+  entryType: event.entryType ?? "event",
   calendarId: event.calendarId ?? fallbackCalendarId,
   details: event.description ?? "",
   reminderMinutesBefore:
     typeof event.reminderMinutesBefore === "number" ? event.reminderMinutesBefore : null,
+  isCompleted: !!event.isCompleted,
+  recurrence: event.recurrence ?? null,
+  habitId: event.habitId ?? null,
+  reminderAt: event.reminderAt ?? null,
 });
 

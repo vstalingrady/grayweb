@@ -33,7 +33,7 @@ const parseTimeString = (value: string | null | undefined): SlotTimeParts | null
   return { hours, minutes };
 };
 
-const buildDateWithTime = (base: Date, time: SlotTimeParts | null) => {
+export const buildDateWithTime = (base: Date, time: SlotTimeParts | null) => {
   const next = new Date(base);
   if (!time) {
     return next;
@@ -60,11 +60,11 @@ export const mapPlansToCalendarEvents = (plans: PlanItem[]): CalendarEvent[] => 
   if (!plans || plans.length === 0) {
     return [];
   }
-  
+
   // Deduplicate plans by ID
   const uniquePlans = new Map<string, PlanItem>();
   plans.forEach(plan => uniquePlans.set(plan.id, plan));
-  
+
   const mapped = Array.from(uniquePlans.values())
     .filter((plan) => plan.deadline && !plan.completed)
     .map((plan) => {
@@ -81,8 +81,8 @@ export const mapPlansToCalendarEvents = (plans: PlanItem[]): CalendarEvent[] => 
         endTime && endTime.getTime() > startTime.getTime()
           ? endTime
           : new Date(
-              startTime.getTime() + (shouldDisplayAsLine ? 1 : PLAN_EVENT_DURATION_MINUTES) * 60000
-            );
+            startTime.getTime() + (shouldDisplayAsLine ? 1 : PLAN_EVENT_DURATION_MINUTES) * 60000
+          );
 
       return {
         id: `${PLAN_EVENT_ID_PREFIX}${plan.id}`,
@@ -91,7 +91,7 @@ export const mapPlansToCalendarEvents = (plans: PlanItem[]): CalendarEvent[] => 
         start: effectiveStart,
         end: effectiveEnd,
         color: PLAN_EVENT_COLOR,
-        entryType: "task" as const,
+        entryType: "plan" as const,
         description: plan.details ?? plan.scheduleSlot ?? undefined,
         displayHint: shouldDisplayAsLine ? ("line" as const) : undefined,
       };

@@ -506,6 +506,11 @@ calendar_events = sqlalchemy.Table(
     sqlalchemy.Column("end_time", sqlalchemy.DateTime, nullable=False),
     sqlalchemy.Column("color", sqlalchemy.String, nullable=True),
     sqlalchemy.Column("reminder_minutes_before", sqlalchemy.Integer, nullable=True),
+    sqlalchemy.Column("entry_type", sqlalchemy.String, default="event", index=True),
+    sqlalchemy.Column("is_completed", sqlalchemy.Boolean, default=False),
+    sqlalchemy.Column("recurrence", sqlalchemy.String, nullable=True),
+    sqlalchemy.Column("habit_id", sqlalchemy.Integer, nullable=True),
+    sqlalchemy.Column("reminder_at", sqlalchemy.DateTime, nullable=True),
     sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),
 )
 

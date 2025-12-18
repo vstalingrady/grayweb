@@ -24,6 +24,20 @@ from backend.time_utils import utcnow
 router = APIRouter(tags=["calendars"])
 
 
+def _get_reminder_helpers():
+    """Lazy import reminder helpers to avoid circular imports."""
+    from backend.core.entity_reminders import (
+        get_pending_entity_reminder_map,
+        upsert_entity_reminder,
+        delete_all_entity_reminders,
+    )
+    return (
+        get_pending_entity_reminder_map,
+        upsert_entity_reminder,
+        delete_all_entity_reminders,
+    )
+
+
 # ==================== CALENDARS ====================
 
 @router.get("/users/{user_id}/calendars", response_model=List[Calendar])
@@ -127,11 +141,27 @@ async def get_user_calendar_events(
     query = query.order_by(calendar_events.c.start_time)
     rows = await db.fetch_all(query)
     now = utcnow()
+    
+    (
+        _get_pending_entity_reminder_map,
+        _upsert_entity_reminder,
+        _delete_all_entity_reminders,
+    ) = _get_reminder_helpers()
+    
     normalized = []
+    event_ids = [int(row["id"]) for row in rows]
+    reminder_map = await _get_pending_entity_reminder_map(
+        user_id=user_id,
+        entity_type="event",
+        entity_ids=event_ids,
+        db=db,
+    )
+    
     for row in rows:
         record = dict(row)
         if record.get("created_at") is None:
             record["created_at"] = now
+        record["reminder_at"] = reminder_map.get(int(record["id"]))
         normalized.append(record)
     return normalized
 
@@ -155,11 +185,39 @@ async def create_calendar_event(
             start_time=event.start_time,
             end_time=event.end_time,
             color=event.color,
+            reminder_minutes_before=event.reminder_minutes_before,
+            entry_type=event.entry_type,
+            is_completed=event.is_completed,
+            recurrence=event.recurrence,
+            habit_id=event.habit_id,
+            reminder_at=event.reminder_at,
             created_at=now,
         )
     )
+    
+    if event.reminder_at:
+        (
+            _,
+            _upsert_entity_reminder,
+            _,
+        ) = _get_reminder_helpers()
+        await _upsert_entity_reminder(
+            user_id=user_id,
+            entity_type="event",
+            entity_id=int(event_id),
+            label=event.title,
+            description=event.description,
+            remind_at=event.reminder_at,
+            metadata=None,
+            color=event.color,
+            db=db,
+        )
+
     query = calendar_events.select().where(calendar_events.c.id == event_id)
-    return await db.fetch_one(query)
+    result = await db.fetch_one(query)
+    record = dict(result)
+    record["reminder_at"] = event.reminder_at
+    return record
 
 
 @router.patch("/users/{user_id}/calendar-events/{event_id}", response_model=CalendarEvent)
@@ -189,19 +247,52 @@ async def update_calendar_event(
     if not existing:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
 
-    if not sqlite_update_data:
+    if not sqlite_update_data and "reminder_at" not in update_data:
         return existing
 
-    await db.execute(
-        calendar_events.update()
-        .where((calendar_events.c.id == event_id) & (calendar_events.c.user_id == user_id))
-        .values(**sqlite_update_data)
-    )
+    if sqlite_update_data:
+        await db.execute(
+            calendar_events.update()
+            .where((calendar_events.c.id == event_id) & (calendar_events.c.user_id == user_id))
+            .values(**sqlite_update_data)
+        )
+    
+    (
+        _get_pending_entity_reminder_map,
+        _upsert_entity_reminder,
+        _,
+    ) = _get_reminder_helpers()
+    
+    if "reminder_at" in update_data:
+        rem_at = update_data.get("reminder_at")
+        recent = await db.fetch_one(calendar_events.select().where(calendar_events.c.id == event_id))
+        rec_dict = dict(recent)
+        await _upsert_entity_reminder(
+            user_id=user_id,
+            entity_type="event",
+            entity_id=event_id,
+            label=rec_dict.get("title", ""),
+            description=rec_dict.get("description"),
+            remind_at=rem_at,
+            metadata=None,
+            color=rec_dict.get("color"),
+            db=db,
+        )
+
     query = calendar_events.select().where(calendar_events.c.id == event_id)
     updated = await db.fetch_one(query)
     if not updated:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
-    return updated
+    
+    res_payload = dict(updated)
+    rem_map = await _get_pending_entity_reminder_map(
+        user_id=user_id,
+        entity_type="event",
+        entity_ids=[event_id],
+        db=db,
+    )
+    res_payload["reminder_at"] = rem_map.get(event_id)
+    return res_payload
 
 
 @router.delete("/users/{user_id}/calendar-events/{event_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -220,6 +311,19 @@ async def delete_calendar_event(
     )
     if not existing:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
+
+    (
+        _,
+        _,
+        _delete_all_entity_reminders,
+    ) = _get_reminder_helpers()
+    
+    await _delete_all_entity_reminders(
+        user_id=user_id,
+        entity_type="event",
+        entity_id=event_id,
+        db=db,
+    )
 
     await db.execute(
         calendar_events.delete().where(
