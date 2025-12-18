@@ -46,11 +46,14 @@ async def create_payment_charge(
     
     # 1. Determine Amount & Item Details
     is_annual = request.billing_cycle == "annual"
-    if request.plan_tier == "voyager":
-        amount = 1000  # TESTING: Original: 1777000 if is_annual else 177000
+    if request.plan_tier == "pathfinder":
+        amount = 777000 if is_annual else 77000
+        item_name = f"Gray Pathfinder Plan ({'Annual' if is_annual else 'Monthly'})"
+    elif request.plan_tier == "voyager":
+        amount = 1777000 if is_annual else 177000
         item_name = f"Gray Voyager Plan ({'Annual' if is_annual else 'Monthly'})"
     elif request.plan_tier == "pioneer":
-        amount = 1000  # TESTING: Original: 3777000 if is_annual else 377000
+        amount = 3777000 if is_annual else 377000
         item_name = f"Gray Pioneer Plan ({'Annual' if is_annual else 'Monthly'})"
     else:
         raise HTTPException(status_code=400, detail="Invalid plan tier")
