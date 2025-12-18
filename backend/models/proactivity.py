@@ -1,7 +1,7 @@
 """Proactivity and Dashboard Pydantic models."""
 
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -13,7 +13,7 @@ def utcnow_aware() -> datetime:
 
 class ProactivitySettings(BaseModel):
     """Proactivity settings model."""
-    id: Optional[str] = None
+    id: Optional[Union[str, int]] = None
     label: Optional[str] = None
     description: Optional[str] = None
     cadence: Optional[str] = None
@@ -85,14 +85,14 @@ class ProactivityNotification(BaseModel):
 
 class DashboardPulsePlanItem(BaseModel):
     """Dashboard pulse plan item."""
-    id: str
+    id: Union[str, int]
     label: str
     completed: bool = False
 
 
 class DashboardPulseHabitItem(BaseModel):
     """Dashboard pulse habit item."""
-    id: str
+    id: Union[str, int]
     label: str
     previous_label: Optional[str] = None
     completed: bool = False
@@ -100,7 +100,7 @@ class DashboardPulseHabitItem(BaseModel):
 
 class DashboardPulseProactivity(BaseModel):
     """Dashboard pulse proactivity settings."""
-    id: str
+    id: Union[str, int]
     label: str
     description: Optional[str] = None
     cadence: str
