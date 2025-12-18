@@ -65,7 +65,9 @@ async def test_verify_gumroad_license_manual_logic():
             "uses": 1,
             "purchase": {
                 "subscription_id": "sub_123",
-                "subscription_ended_at": None
+                "subscription_ended_at": None,
+                "variants": "voyager",
+                "product_name": "Voyager"
             }
         }
         
