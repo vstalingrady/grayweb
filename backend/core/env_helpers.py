@@ -125,8 +125,12 @@ def timezone_from_time_context(time_context: str) -> Tuple[Optional[str], Any]:
             # Try to load the timezone using zoneinfo
             tz = ZoneInfo(tz_label)
             return tz_label, tz
-        except Exception:
-            pass
+        except Exception as exc:
+            import logging
+            logging.getLogger("backend.env_helpers").debug(
+                "Failed to resolve timezone label from time_context",
+                extra={"event_type": "timezone_parse_failed", "timezone": tz_label, "error": str(exc)},
+            )
             
     # Fallback/default
     return None, timezone.utc
@@ -151,7 +155,7 @@ def ensure_datetime_value(value: Any) -> Optional[datetime]:
                 dt = datetime.fromisoformat(text.replace("Z", "+00:00"))
             else:
                 dt = datetime.fromisoformat(text)
-        except Exception:
+        except ValueError:
             # Best-effort fallback: drop subseconds/timezone if present.
             try:
                 dt = datetime.fromisoformat(text.split(".")[0])

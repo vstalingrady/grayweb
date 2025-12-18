@@ -385,6 +385,11 @@ async def exchange_code_for_tokens(code: str, state: str, redirect_override: Opt
             updated_at=utcnow(),
         )
     except Exception as e:
+        from backend.logging_config import create_logger
+        create_logger("backend.google_calendar").error(
+            f"Failed to exchange authorization code for user {user_id if 'user_id' in locals() else 'unknown'}: {e}",
+            exc_info=True
+        )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Failed to exchange authorization code: {str(e)}"
@@ -416,6 +421,11 @@ async def get_google_calendar_service(credentials: GoogleCalendarCredentials) ->
         service = build('calendar', 'v3', credentials=creds)
         return service
     except Exception as e:
+        from backend.logging_config import create_logger
+        create_logger("backend.google_calendar").error(
+            f"Failed to create Google Calendar service: {e}",
+            exc_info=True
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to create Google Calendar service: {str(e)}"

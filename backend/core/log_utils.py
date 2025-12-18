@@ -92,7 +92,7 @@ def iter_log_entries(path: Path) -> Iterable[Dict[str, Any]]:
                     continue
                 try:
                     parsed = json.loads(raw)
-                except Exception:
+                except json.JSONDecodeError:
                     continue
                 if isinstance(parsed, dict):
                     yield parsed

@@ -1,12 +1,13 @@
 """Background job scheduler using arq (async Redis queue).
 
 This module provides scheduled job execution for reminders and proactive messages.
-Falls back gracefully if Redis/arq is not available.
 """
 
 from __future__ import annotations
 
 import asyncio
+import importlib
+import importlib.util
 import logging
 import os
 from datetime import datetime, timedelta
@@ -16,15 +17,19 @@ from backend.time_utils import utcnow_aware
 
 logger = logging.getLogger(__name__)
 
-# Check if arq is available
-try:
-    from arq import create_pool, cron
-    from arq.connections import RedisSettings, ArqRedis
-    ARQ_AVAILABLE = True
-except ImportError:
-    ARQ_AVAILABLE = False
-    RedisSettings = None  # type: ignore
-    ArqRedis = None  # type: ignore
+_ARQ_AVAILABLE = importlib.util.find_spec("arq") is not None
+if _ARQ_AVAILABLE:
+    _arq = importlib.import_module("arq")
+    _arq_connections = importlib.import_module("arq.connections")
+    create_pool = getattr(_arq, "create_pool")
+    cron = getattr(_arq, "cron")
+    RedisSettings = getattr(_arq_connections, "RedisSettings")
+    ArqRedis = getattr(_arq_connections, "ArqRedis")
+else:
+    create_pool = None  # type: ignore[assignment]
+    cron = None  # type: ignore[assignment]
+    RedisSettings = None  # type: ignore[assignment]
+    ArqRedis = None  # type: ignore[assignment]
 
 
 class JobScheduler:
@@ -33,16 +38,18 @@ class JobScheduler:
     def __init__(self) -> None:
         self._redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
         self._pool: Optional[Any] = None
-        self._available = ARQ_AVAILABLE
 
     @property
     def available(self) -> bool:
-        return self._available and self._pool is not None
+        return _ARQ_AVAILABLE and self._pool is not None
 
     async def connect(self) -> bool:
         """Connect to Redis for job queuing."""
-        if not ARQ_AVAILABLE:
-            logger.warning("arq not available (arq package not installed)")
+        if not _ARQ_AVAILABLE or create_pool is None or RedisSettings is None:
+            logger.warning(
+                "Job scheduler requested but dependency is missing",
+                extra={"event_type": "fallback_activation", "fallback": "arq_package_missing"},
+            )
             return False
 
         try:
@@ -50,7 +57,16 @@ class JobScheduler:
             logger.info("Job scheduler connected to Redis")
             return True
         except Exception as e:
-            logger.warning("Failed to connect job scheduler: %s", e)
+            logger.warning(
+                "Failed to connect job scheduler: %s",
+                e,
+                extra={
+                    "event_type": "fallback_activation",
+                    "fallback": "arq_connect_failed",
+                    "service": "arq",
+                    "url": self._redis_url.split("@")[-1],
+                },
+            )
             self._pool = None
             return False
 
@@ -173,24 +189,15 @@ async def startup(ctx: Dict[str, Any]) -> None:
     
     try:
         # Import and connect database
-        try:
-            from backend.database import database
-        except ImportError:  # pragma: no cover
-            from database import database  # type: ignore
+        from backend.database import database
         if not database.is_connected:
             await database.connect()
             logger.info("arq worker: Database connected")
         ctx["database"] = database
         
         # Initialize proactivity engine
-        try:
-            from backend.proactivity_engine import ProactivityEngine, ProactivityRealtimeBroker
-        except ImportError:  # pragma: no cover
-            from proactivity_engine import ProactivityEngine, ProactivityRealtimeBroker  # type: ignore
-        try:
-            from backend.ai_message_generator import AIMessageGenerator
-        except ImportError:  # pragma: no cover
-            from ai_message_generator import AIMessageGenerator  # type: ignore
+        from backend.proactivity_engine import ProactivityEngine, ProactivityRealtimeBroker
+        from backend.ai_message_generator import AIMessageGenerator
         
         # Create realtime broker and AI generator
         broker = ProactivityRealtimeBroker()
@@ -244,9 +251,10 @@ async def dispatch_all_proactivity(ctx: Dict[str, Any]) -> None:
 
 
 # Worker settings for running with: arq backend.job_scheduler.WorkerSettings
-if ARQ_AVAILABLE:
+if _ARQ_AVAILABLE:
     class WorkerSettings:
         """arq worker configuration."""
+
         functions = [send_reminder, send_proactive_checkin, dispatch_all_proactivity]
         cron_jobs = [
             # Run proactivity dispatch every 5 minutes
@@ -258,3 +266,8 @@ if ARQ_AVAILABLE:
         max_jobs = 10
         job_timeout = 300  # 5 minutes max per job
         keep_result = 3600  # Keep results for 1 hour
+else:
+    class WorkerSettings:  # pragma: no cover
+        """Placeholder when arq isn't installed."""
+
+        pass

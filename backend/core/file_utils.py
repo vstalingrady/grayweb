@@ -25,7 +25,6 @@ MEDIA_UPLOAD_DIR = Path(
     os.getenv("MEDIA_UPLOAD_DIR")
     or Path(__file__).resolve().parent.parent / "media_uploads"
 )
-MEDIA_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 MEDIA_UPLOAD_ROOT = MEDIA_UPLOAD_DIR.resolve()
 if MEDIA_UPLOAD_ROOT.is_symlink():
     raise RuntimeError("MEDIA_UPLOAD_DIR must not be a symlink.")
@@ -134,6 +133,8 @@ def reject_if_suspicious(chunk: bytes) -> None:
 
 def ensure_storage_path(storage_name: str) -> Path:
     """Validate and return a safe storage path."""
+    if not MEDIA_UPLOAD_ROOT.exists():
+        MEDIA_UPLOAD_ROOT.mkdir(parents=True, exist_ok=True)
     candidate = MEDIA_UPLOAD_ROOT / storage_name
     resolved_candidate = candidate.resolve()
     if not resolved_candidate.is_relative_to(MEDIA_UPLOAD_ROOT):
@@ -272,7 +273,7 @@ async def persist_upload_file(
     finally:
         try:
             await file.close()
-        except Exception:
-            pass
+        except Exception as exc:
+            file_logger.debug(f"Failed to close file handle after upload: {exc}")
 
     return storage_path, resolved_mime, bytes_written, sanitized_name, storage_name

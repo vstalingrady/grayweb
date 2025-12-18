@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import importlib
+import importlib.util
 import json
 import os
 import logging
@@ -9,13 +11,10 @@ from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
-# Check if redis is available
-try:
-    import redis.asyncio as redis
-    REDIS_AVAILABLE = True
-except ImportError:
-    redis = None  # type: ignore
-    REDIS_AVAILABLE = False
+_REDIS_MODULE_NAME = "redis.asyncio"
+_REDIS_AVAILABLE = False
+if importlib.util.find_spec("redis") is not None:
+    _REDIS_AVAILABLE = importlib.util.find_spec(_REDIS_MODULE_NAME) is not None
 
 
 class RedisClient:
@@ -24,37 +23,50 @@ class RedisClient:
     def __init__(self, url: Optional[str] = None) -> None:
         self._url = url or os.getenv("REDIS_URL", "redis://localhost:6379/0")
         self._client: Optional[Any] = None
-        self._available = REDIS_AVAILABLE
 
     @property
     def available(self) -> bool:
-        return self._available
+        return _REDIS_AVAILABLE
+
+    def _redis(self):
+        if not _REDIS_AVAILABLE:
+            return None
+        return importlib.import_module(_REDIS_MODULE_NAME)
 
     async def connect(self) -> bool:
         """Establish connection to Redis. Returns True if successful."""
-        global _REDIS_MISSING_LOGGED
-        if not REDIS_AVAILABLE:
-            if not _REDIS_MISSING_LOGGED:
-                _REDIS_MISSING_LOGGED = True
-                logger.warning(
-                    "Redis not available (redis package not installed)",
-                    extra={"event_type": "fallback_activation", "fallback": "redis_package_missing"},
-                )
+        if not _REDIS_AVAILABLE:
+            logger.warning(
+                "Redis client requested but dependency is missing",
+                extra={"event_type": "fallback_activation", "fallback": "redis_package_missing"},
+            )
             return False
 
         try:
-            self._client = redis.from_url(self._url, decode_responses=True)
+            redis_module = self._redis()
+            if redis_module is None:
+                return False
+            self._client = redis_module.from_url(self._url, decode_responses=True)
             await self._client.ping()
             logger.info("Connected to Redis at %s", self._url.split("@")[-1])
             return True
         except Exception as e:
-            logger.warning("Failed to connect to Redis: %s", e)
+            logger.warning(
+                "Failed to connect to Redis: %s",
+                e,
+                extra={
+                    "event_type": "fallback_activation",
+                    "fallback": "redis_connect_failed",
+                    "service": "redis",
+                    "url": self._url.split("@")[-1],
+                },
+            )
             self._client = None
             return False
 
     async def ensure_connected(self) -> bool:
         """Ensure a Redis connection is available (connects lazily)."""
-        if not self._available or not REDIS_AVAILABLE:
+        if not _REDIS_AVAILABLE:
             return False
         if self._client is not None:
             return True
@@ -141,7 +153,6 @@ class RedisClient:
 
 # Singleton instance
 _redis_client: Optional[RedisClient] = None
-_REDIS_MISSING_LOGGED = False
 
 
 def get_redis_client() -> RedisClient:

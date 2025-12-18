@@ -19,7 +19,7 @@ def _timestamp_ms_to_datetime(ms: Optional[int]) -> Optional[datetime]:
         return None
     try:
         return datetime.fromtimestamp(ms / 1000.0)
-    except Exception:
+    except (OSError, OverflowError, ValueError):
         return None
 
 def serialize_dashboard_pulse_record(record: Any) -> Optional[Dict[str, Any]]:
@@ -31,7 +31,7 @@ def serialize_dashboard_pulse_record(record: Any) -> Optional[Dict[str, Any]]:
     if not isinstance(record, dict):
         try:
             record = dict(record)
-        except Exception:
+        except TypeError:
             return None
 
     def _parse_json(field_name: str) -> List[Any]:
@@ -39,7 +39,7 @@ def serialize_dashboard_pulse_record(record: Any) -> Optional[Dict[str, Any]]:
         if isinstance(val, str):
             try:
                 return json.loads(val)
-            except Exception:
+            except (json.JSONDecodeError, TypeError):
                 return []
         if isinstance(val, list):
             return val
@@ -52,7 +52,7 @@ def serialize_dashboard_pulse_record(record: Any) -> Optional[Dict[str, Any]]:
         if isinstance(val, str):
             try:
                 return json.loads(val)
-            except Exception:
+            except (json.JSONDecodeError, TypeError):
                 return {}
         if isinstance(val, dict):
             return val

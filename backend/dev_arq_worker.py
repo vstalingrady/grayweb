@@ -43,11 +43,9 @@ def _watch_filter(change: Change, path: str) -> bool:
 def main() -> int:
     arq_command = os.getenv("ARQ_COMMAND")
     if not arq_command:
-        arq_bin = Path(sys.executable).with_name("arq")
-        if arq_bin.exists():
-            arq_command = f"{arq_bin} job_scheduler.WorkerSettings"
-        else:
-            arq_command = "arq job_scheduler.WorkerSettings"
+        arq_command = f"{sys.executable} -m arq job_scheduler.WorkerSettings"
+
+    os.environ["PYTHONPATH"] = str(ROOT_DIR.parent)
 
     return run_process(
         str(ROOT_DIR),

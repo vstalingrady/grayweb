@@ -41,7 +41,7 @@ cd ..
 Create a `.env` file in the `backend/` directory:
 
 ```env
-DATABASE_URL=sqlite:///./data/users.db
+DATABASE_URL=sqlite:///../data/users.db
 GEMINI_API_KEY=your_gemini_api_key_here
 SUPABASE_URL=your_supabase_url_here
 SUPABASE_KEY=your_supabase_anon_key_here
@@ -60,9 +60,12 @@ GOOGLE_TOKEN_ENCRYPTION_KEY=your_fernet_key
 # Set this flag to false if you want to fall back to the curated localhost list.
 # CORS_ALLOW_ALL_ORIGINS=false
 # Switch providers by setting AI_PROVIDER=anthropic and providing ANTHROPIC_API_KEY
-# Optional: Discord notifications for successful payments (Midtrans + Gumroad webhooks)
-# DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
-# (or) DISCORD_PAYMENTS_WEBHOOK_URL=https://discord.com/api/webhooks/...
+# Optional: Discord webhooks (payments + operational alerts)
+# DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...  # fallback for both
+# DISCORD_PAYMENTS_WEBHOOK_URL=https://discord.com/api/webhooks/...
+# DISCORD_ALERTS_WEBHOOK_URL=https://discord.com/api/webhooks/...
+# DB_SLOW_QUERY_MS=500
+# DISCORD_ALERT_MIN_LEVEL=ERROR
 ```
 
 By default responses now stream as quickly as Gemini returns them. If you ever need to
@@ -195,8 +198,6 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key>
 
 Visit [http://localhost:8000/docs](http://localhost:8000/docs) for the automatically generated FastAPI docs once the server is running.
 
-- `GET /time` hits `SELECT NOW()` using the direct PostgreSQL connection.
-
 ## Supabase quick start
 
 - Configure your Supabase project OAuth providers for Google and Discord to match the login buttons.
@@ -204,9 +205,9 @@ Visit [http://localhost:8000/docs](http://localhost:8000/docs) for the automatic
 - The Next.js login form uses the helper in `src/lib/supabaseClient.ts` to create a browser client.
 - The FastAPI service uses Supabase for authentication only (token validation fallback + account deletion in Supabase Auth).
 
-## Production migration (Supabase → SQLite)
+## Production data
 
-If you previously stored application data in Supabase public tables, migrate it into SQLite before deploying the auth-only change and/or dropping those tables. See `docs/SUPABASE_TO_SQLITE_MIGRATION.md`.
+This repo uses SQLite for application data; keep the SQLite file/volume backed up and outside of the git repo (for this workspace layout: `../data/users.db`).
 
 ## Learn More
 

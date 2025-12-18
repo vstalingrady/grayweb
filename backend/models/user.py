@@ -3,7 +3,10 @@
 from datetime import datetime
 from typing import Any, Dict, List, Mapping, Optional
 
+import logging
 from pydantic import BaseModel, ConfigDict, EmailStr
+
+logger = logging.getLogger("backend.models.user")
 
 
 class UsageStatus(BaseModel):
@@ -109,13 +112,29 @@ def serialize_user_row(row: Mapping[str, Any]) -> Dict[str, Any]:
     if isinstance(user_dict.get("visible_model_ids"), str):
         try:
             user_dict["visible_model_ids"] = json.loads(user_dict["visible_model_ids"])
-        except Exception:
-            pass
+        except (json.JSONDecodeError, TypeError) as exc:
+            logger.warning(
+                "Failed to parse visible_model_ids JSON; leaving as-is",
+                extra={
+                    "event_type": "fallback_activation",
+                    "fallback": "user_visible_model_ids_json_invalid",
+                    "user_id": user_dict.get("id"),
+                    "error": str(exc),
+                },
+            )
 
     if isinstance(user_dict.get("notification_preferences"), str):
         try:
             user_dict["notification_preferences"] = json.loads(user_dict["notification_preferences"])
-        except Exception:
-            pass
+        except (json.JSONDecodeError, TypeError) as exc:
+            logger.warning(
+                "Failed to parse notification_preferences JSON; leaving as-is",
+                extra={
+                    "event_type": "fallback_activation",
+                    "fallback": "user_notification_preferences_json_invalid",
+                    "user_id": user_dict.get("id"),
+                    "error": str(exc),
+                },
+            )
 
     return user_dict

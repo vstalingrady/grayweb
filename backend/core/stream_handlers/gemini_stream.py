@@ -217,8 +217,9 @@ async def stream_gemini_response(
                                             text_buffer = ""
                                         
                                         continue
-                            except Exception:
-                                pass  # Parse failed, treat as normal text
+                            except (json.JSONDecodeError, TypeError, ValueError, KeyError):
+                                # Parse failed, treat as normal text
+                                pass
                             
                             # Flush buffer if 2+ backticks and no match
                             if text_buffer.count("```") >= 2:

@@ -15,6 +15,7 @@ logger = logging.getLogger("backend.gumroad_webhook")
 router = APIRouter()
 
 # Default option IDs for Gray tiered membership
+DEFAULT_PATHFINDER_OPTION_ID = ""  # Set via GUMROAD_OPTION_ID_PATHFINDER env var
 DEFAULT_VOYAGER_OPTION_ID = "lZ9QZXSGeVuLLYzGSzk7Bw=="
 DEFAULT_PIONEER_OPTION_ID = "1AKF6eGbTgVn1yq1m5YcXA=="
 
@@ -24,6 +25,11 @@ def get_gumroad_option_info() -> Dict[str, Dict[str, str]]:
     Maps option IDs to tier names. Billing cycle comes from 'recurrence' field in webhook.
     """
     mapping = {}
+    
+    # Pathfinder tier option ID
+    pathfinder_option = os.getenv("GUMROAD_OPTION_ID_PATHFINDER", DEFAULT_PATHFINDER_OPTION_ID)
+    if pathfinder_option:
+        mapping[pathfinder_option] = {"tier": "pathfinder"}
     
     # Voyager tier option ID
     voyager_option = os.getenv("GUMROAD_OPTION_ID_VOYAGER", DEFAULT_VOYAGER_OPTION_ID)
@@ -94,7 +100,9 @@ async def handle_gumroad_sale(data: Dict[str, Any], db: Any = None):
     
     # Try to identify tier from variants field or product name
     tier = None
-    if "voyager" in variants.lower() or "voyager" in product_name:
+    if "pathfinder" in variants.lower() or "pathfinder" in product_name:
+        tier = "pathfinder"
+    elif "voyager" in variants.lower() or "voyager" in product_name:
         tier = "voyager"
     elif "pioneer" in variants.lower() or "pioneer" in product_name:
         tier = "pioneer"
@@ -199,11 +207,13 @@ async def verify_gumroad_license_manual(
     variants = (purchase.get("variants") or "").lower()
     product_name = (purchase.get("product_name") or "").lower()
     
-    tier = "voyager"  # default
+    tier = "pathfinder"  # default to lowest paid tier
     if "pioneer" in variants or "pioneer" in product_name:
         tier = "pioneer"
     elif "voyager" in variants or "voyager" in product_name:
         tier = "voyager"
+    elif "pathfinder" in variants or "pathfinder" in product_name:
+        tier = "pathfinder"
     
     # Get billing cycle from recurrence
     recurrence = (purchase.get("recurrence") or "monthly").lower()

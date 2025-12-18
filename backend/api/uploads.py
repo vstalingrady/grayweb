@@ -51,7 +51,7 @@ async def upload_media(
 
     try:
         storage_path_for_db = storage_path.relative_to(MEDIA_UPLOAD_ROOT)
-    except Exception:
+    except ValueError:
         storage_path_for_db = Path(storage_name)
 
     now = utcnow()

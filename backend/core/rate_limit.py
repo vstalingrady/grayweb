@@ -1,10 +1,28 @@
 import os
+import importlib.util
+import logging
 
-try:
+logger = logging.getLogger("backend.rate_limit")
+
+_NODE_ENV = os.getenv("NODE_ENV", "").strip().lower()
+_ENVIRONMENT = os.getenv("ENVIRONMENT", "").strip().lower()
+_IS_PRODUCTION = _NODE_ENV == "production" or _ENVIRONMENT == "production"
+
+_SLOWAPI_AVAILABLE = importlib.util.find_spec("slowapi") is not None
+
+if _SLOWAPI_AVAILABLE:
     from slowapi import Limiter, _rate_limit_exceeded_handler
-    from slowapi.util import get_remote_address
     from slowapi.errors import RateLimitExceeded
-except Exception:  # Fallback when slowapi isn't installed
+    from slowapi.util import get_remote_address
+else:
+    if _IS_PRODUCTION:
+        raise RuntimeError("slowapi is required in production for rate limiting")
+
+    logger.warning(
+        "slowapi not installed; rate limiting is disabled",
+        extra={"event_type": "fallback_activation", "fallback": "slowapi_missing"},
+    )
+
     def get_remote_address(request) -> str:  # type: ignore[override]
         return "anonymous"
 

@@ -59,7 +59,7 @@ class GumroadClient:
                 return response.json()
             except Exception as e:
                 logger.error(f"Error fetching Gumroad sale {sale_id}: {str(e)}")
-                raise e
+                raise
 
     async def exchange_authorization_code(
         self, 
@@ -110,7 +110,7 @@ class GumroadClient:
                 return response.json()
             except Exception as e:
                 logger.error(f"Error fetching Gumroad user info: {str(e)}")
-                raise e
+                raise
 
     async def get_user_sales(self, user_access_token: str) -> Dict[str, Any]:
         """
@@ -127,7 +127,7 @@ class GumroadClient:
                 return response.json()
             except Exception as e:
                 logger.error(f"Error fetching Gumroad sales: {str(e)}")
-                raise e
+                raise
 
 # Singleton instance
 gumroad_client = GumroadClient()

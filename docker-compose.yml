@@ -35,7 +35,7 @@ services:
       - REDIS_URL=redis://redis:6379/0
     volumes:
       # Persist SQLite database
-      - ./data:/app/data
+      - ../data:/app/data
       # Mount media uploads
       - ./backend/media_uploads:/app/media_uploads
     depends_on:
@@ -54,7 +54,7 @@ services:
       - SQLITE_DB_PATH=/app/data/users.db
       - REDIS_URL=redis://redis:6379/0
     volumes:
-      - ./data:/app/data
+      - ../data:/app/data
     depends_on:
       - redis
       - backend

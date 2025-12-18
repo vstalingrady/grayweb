@@ -4,27 +4,34 @@ from typing import Optional, Tuple
 
 from backend.tier_utils import normalize_plan_tier
 
-TIERS = ("scout", "voyager", "pioneer")
+TIERS = ("scout", "pathfinder", "voyager", "pioneer")
 
 TIER_LEVELS = {
     "scout": 0,
-    "voyager": 1,
-    "pioneer": 2,
+    "pathfinder": 1,
+    "voyager": 2,
+    "pioneer": 3,
 }
 
 # Keep this list in sync with `src/components/gray/modelCatalog.ts`.
-VOYAGER_MODEL_IDS = {
+# Pathfinder: Budget models only (no Sonnet, Gemini Pro, GPT 5.2)
+PATHFINDER_MODEL_IDS = {
     "anthropic/claude-haiku-4.5",
-    "anthropic/claude-sonnet-4.5",
-    "google/gemini-3-pro-preview",
     "google/gemini-3-flash-preview",
-    "openai/gpt-5.2-chat",
     "deepseek/deepseek-v3.2",
     "deepseek/deepseek-v3.2-speciale",
     "x-ai/grok-4.1-fast",
     "moonshotai/kimi-k2-thinking",
 }
 
+# Voyager: All mid-tier models including Sonnet, Gemini Pro, GPT 5.2
+VOYAGER_MODEL_IDS = PATHFINDER_MODEL_IDS | {
+    "anthropic/claude-sonnet-4.5",
+    "google/gemini-3-pro-preview",
+    "openai/gpt-5.2-chat",
+}
+
+# Pioneer-only: Top-tier models
 PIONEER_ONLY_MODEL_IDS = {
     "anthropic/claude-opus-4.5",
     "openai/gpt-5.2-pro",
@@ -32,12 +39,19 @@ PIONEER_ONLY_MODEL_IDS = {
 
 PIONEER_MODEL_IDS = VOYAGER_MODEL_IDS | PIONEER_ONLY_MODEL_IDS
 
+DEFAULT_PATHFINDER_MODEL = "x-ai/grok-4.1-fast"
 DEFAULT_VOYAGER_MODEL = "anthropic/claude-sonnet-4.5"
 DEFAULT_PIONEER_MODEL = "anthropic/claude-sonnet-4.5"
 
+# Downgrade fallbacks when user requests model above their tier
 DOWNGRADE_FALLBACKS = {
+    # Pioneer → Voyager
     "anthropic/claude-opus-4.5": "anthropic/claude-sonnet-4.5",
     "openai/gpt-5.2-pro": "openai/gpt-5.2-chat",
+    # Voyager → Pathfinder
+    "anthropic/claude-sonnet-4.5": "anthropic/claude-haiku-4.5",
+    "google/gemini-3-pro-preview": "google/gemini-3-flash-preview",
+    "openai/gpt-5.2-chat": "x-ai/grok-4.1-fast",
 }
 
 
@@ -71,6 +85,16 @@ def coerce_model_for_tier(requested_model: Optional[str], plan_tier: Optional[st
     # Enforce OpenRouter allowlists for explicit model IDs.
     # The frontend sends model IDs like `anthropic/claude-sonnet-4.5`.
     if "/" in model:
+        # Pathfinder: Budget models only
+        if tier == "pathfinder":
+            if model in PATHFINDER_MODEL_IDS:
+                return model, model != model_raw
+            # Downgrade higher-tier models
+            if model in DOWNGRADE_FALLBACKS:
+                return DOWNGRADE_FALLBACKS[model], True
+            return DEFAULT_PATHFINDER_MODEL, True
+
+        # Voyager: All mid-tier models
         if tier == "voyager":
             if model in VOYAGER_MODEL_IDS:
                 return model, model != model_raw
@@ -78,10 +102,12 @@ def coerce_model_for_tier(requested_model: Optional[str], plan_tier: Optional[st
                 return DOWNGRADE_FALLBACKS.get(model, DEFAULT_VOYAGER_MODEL), True
             return DEFAULT_VOYAGER_MODEL, True
 
-        # Pioneer
+        # Pioneer: All models
         if model in PIONEER_MODEL_IDS:
             return model, model != model_raw
         return DEFAULT_PIONEER_MODEL, True
 
-    # Any other explicit model string is treated as unsupported for user selection.
+    # Any other explicit model string is treated as unsupported.
+    if tier == "pathfinder":
+        return DEFAULT_PATHFINDER_MODEL, True
     return DEFAULT_PIONEER_MODEL if tier == "pioneer" else DEFAULT_VOYAGER_MODEL, True

@@ -17,6 +17,7 @@ from backend.core.cache import (
     CONVERSATION_HISTORY_CACHE,
     CONVERSATION_OWNER_CACHE,
     USER_CACHE,
+    TTLCache,
 )
 
 logger = logging.getLogger("backend.conversation_store")
@@ -35,7 +36,7 @@ def configure_conversation_store(
 
 
 GENERAL_CONVERSATION_PREFIX = "general:"
-_USER_DATA_CACHE: Dict[int, int] = {}
+_USER_DATA_CACHE = TTLCache(ttl_seconds=3600, max_size=1024)
 
 
 def _conversation_store_available() -> bool:
@@ -126,7 +127,7 @@ async def ensure_user_data_record(user_identifier: int) -> Optional[int]:
         )
         if existing_cached:
             return cached
-        _USER_DATA_CACHE.pop(user_identifier, None)
+        _USER_DATA_CACHE.invalidate(user_identifier)
 
     try:
         # Try to fetch existing record
@@ -135,7 +136,7 @@ async def ensure_user_data_record(user_identifier: int) -> Optional[int]:
 
         if row:
             user_data_id = row["id"]
-            _USER_DATA_CACHE[user_identifier] = user_data_id
+            _USER_DATA_CACHE.set(user_identifier, user_data_id)
             return user_data_id
 
         # Create new record
@@ -147,7 +148,7 @@ async def ensure_user_data_record(user_identifier: int) -> Optional[int]:
         user_data_id = await database.execute(insert_query)
 
         if user_data_id:
-            _USER_DATA_CACHE[user_identifier] = user_data_id
+            _USER_DATA_CACHE.set(user_identifier, user_data_id)
             return user_data_id
 
     except Exception as error:  # pragma: no cover - defensive logging
@@ -167,7 +168,7 @@ async def ensure_user_data_record(user_identifier: int) -> Optional[int]:
                 row = None
             if row:
                 user_data_id = row["id"]
-                _USER_DATA_CACHE[user_identifier] = user_data_id
+                _USER_DATA_CACHE.set(user_identifier, user_data_id)
                 return user_data_id
 
         logger.error(

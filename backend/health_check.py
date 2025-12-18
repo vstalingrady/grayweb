@@ -8,6 +8,9 @@ import logging
 from typing import Dict, Any
 from fastapi import APIRouter, Response
 
+from backend.database import database
+from backend.redis_client import get_redis_client
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Health"])
@@ -16,12 +19,7 @@ router = APIRouter(tags=["Health"])
 async def check_redis() -> Dict[str, Any]:
     """Check Redis connectivity."""
     try:
-        from backend.redis_client import get_redis_client
-
         client = get_redis_client()
-        if not client.available:
-            return {"status": "unavailable", "message": "Redis not configured"}
-
         start = time.time()
         ok = await client.ping()
         latency = (time.time() - start) * 1000
@@ -29,14 +27,13 @@ async def check_redis() -> Dict[str, Any]:
             return {"status": "healthy", "latency_ms": round(latency, 2)}
         return {"status": "unhealthy", "error": "Redis ping failed"}
     except Exception as e:
+        logger.warning("Redis health check failed", extra={"error": str(e)})
         return {"status": "unhealthy", "error": str(e)}
 
 
 async def check_database() -> Dict[str, Any]:
     """Check database connectivity."""
     try:
-        from backend.database import database
-
         if not database.is_connected:
             return {"status": "disconnected"}
         
@@ -48,6 +45,7 @@ async def check_database() -> Dict[str, Any]:
             return {"status": "healthy", "latency_ms": round(latency, 2)}
         return {"status": "unhealthy", "error": "Query returned no result"}
     except Exception as e:
+        logger.warning("Database health check failed", extra={"error": str(e)})
         return {"status": "unhealthy", "error": str(e)}
 
 

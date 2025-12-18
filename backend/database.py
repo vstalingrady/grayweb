@@ -36,9 +36,12 @@ def _normalize_sqlite_url(url: str) -> str:
         path_obj = (ROOT_DIR / path_obj).resolve()
     try:
         path_obj.parent.mkdir(parents=True, exist_ok=True)
-    except Exception:
+    except OSError as exc:
         # Best-effort; directory may be managed externally.
-        pass
+        logging.getLogger("backend.database").debug(
+            "Failed to ensure SQLite parent directory exists",
+            extra={"event_type": "db_dir_create_failed", "path": str(path_obj.parent), "error": str(exc)},
+        )
     return f"sqlite:///{path_obj}"
 
 
@@ -59,11 +62,29 @@ def _select_database_url() -> str:
     # Support Docker volume mount via SQLITE_DB_PATH
     sqlite_path = os.getenv("SQLITE_DB_PATH")
     
-    # Docker uses /app/data, local uses project_root/data/users.db (gitignored)
-    if IN_DOCKER:
-         default_fallback = f"sqlite:///{sqlite_path}" if sqlite_path else "sqlite:///data/users.db"
+    def _resolve_sqlite_path(path_value: str) -> str:
+        path_obj = Path(path_value)
+        if not path_obj.is_absolute():
+            path_obj = (ROOT_DIR / path_obj).resolve()
+        try:
+            path_obj.parent.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            logging.getLogger("backend.database").debug(
+                "Failed to ensure SQLITE_DB_PATH parent directory exists",
+                extra={"event_type": "db_dir_create_failed", "path": str(path_obj.parent), "error": str(exc)},
+            )
+        return f"sqlite:///{path_obj}"
+
+    # Default DB location:
+    # - Docker: /app/data/users.db (via sqlite:///data/users.db)
+    # - Local: prefer sibling ../data/users.db when repo is checked out under .../gray/repo
+    if sqlite_path:
+        default_fallback = _resolve_sqlite_path(sqlite_path)
+    elif IN_DOCKER:
+        default_fallback = "sqlite:///data/users.db"
     else:
-         default_fallback = f"sqlite:///{sqlite_path}" if sqlite_path else f"sqlite:///{ROOT_DIR}/data/users.db"
+        sibling_data_dir = ROOT_DIR.parent / "data" if ROOT_DIR.name == "repo" else ROOT_DIR / "data"
+        default_fallback = f"sqlite:///{(sibling_data_dir / 'users.db').resolve()}"
 
     candidates: list[str] = []
     if db_mode == "remote":
@@ -105,8 +126,11 @@ try:
             "SQLite DB is located under the repo's backend/ directory; move it to data/ (gitignored) or outside the repo",
             extra={"event_type": "fallback_activation", "fallback": "db_path_inside_repo", "db_path": str(selected_path_obj)},
         )
-except Exception:
-    pass
+except Exception as exc:
+    logging.getLogger("backend.database").debug(
+        "Failed to validate SQLite DB path location",
+        extra={"event_type": "db_path_check_failed", "error": str(exc)},
+    )
 
 database = databases.Database(DATABASE_URL)
 metadata = sqlalchemy.MetaData()

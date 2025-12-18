@@ -87,8 +87,12 @@ export default function LoginForm({
       return false;
     }
     const { hostname, port } = window.location;
-    if (isLocalHostname(hostname) || port === "3000") {
-      return false;
+    const isLocal = isLocalHostname(hostname) || port === "3000";
+    if (isLocal) {
+      // Captcha is disabled by default on localhost to ease development,
+      // but can be force-enabled via environment variable if testing is needed
+      // or if the Supabase project requires it.
+      return process.env.NEXT_PUBLIC_ENABLE_CAPTCHA_LOCAL === "true";
     }
     return true;
   }, [isMounted]);

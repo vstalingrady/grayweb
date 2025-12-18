@@ -96,7 +96,7 @@ def create_core_api_transaction(
         return response
     except Exception as e:
         logger.error("Midtrans Core API Error: %s", e)
-        raise e
+        raise
 
 def verify_notification_signature(order_id: str, status_code: str, gross_amount: str, signature_key: str) -> bool:
     """

@@ -97,13 +97,12 @@ def build_intent_window_text(
     """
     intent_window = (message or "")
     if conversation_history:
-        try:
-            for entry in conversation_history[-4:]:
-                text = entry.get("text") or ""
-                if text:
-                    intent_window += f"\n{text}"
-        except Exception:
-            pass
+        for entry in conversation_history[-4:]:
+            if not isinstance(entry, dict):
+                continue
+            text = entry.get("text") or ""
+            if text:
+                intent_window += f"\n{text}"
     return intent_window
 
 

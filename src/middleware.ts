@@ -5,8 +5,15 @@ export function middleware(request: NextRequest) {
     const isPaymentSubdomain = host.startsWith("payment.");
     const { pathname, search } = request.nextUrl;
 
-    const mainSiteUrl = process.env.NEXT_PUBLIC_MAIN_SITE_URL || "https://gray.alignment.id";
-    const paymentSiteUrl = process.env.NEXT_PUBLIC_PAYMENT_SITE_URL || "https://payment.alignment.id";
+    const isLocal = host.includes("localhost") || host.includes("127.0.0.1");
+    const port = host.split(":")[1] || "";
+    const portSuffix = port ? `:${port}` : "";
+
+    const defaultMain = isLocal ? `http://localhost${portSuffix}` : "https://gray.alignment.id";
+    const defaultPayment = isLocal ? `http://payment.localhost${portSuffix}` : "https://payment.alignment.id";
+
+    const mainSiteUrl = process.env.NEXT_PUBLIC_MAIN_SITE_URL || defaultMain;
+    const paymentSiteUrl = process.env.NEXT_PUBLIC_PAYMENT_SITE_URL || defaultPayment;
 
     // 1. Redirect /payment on main domain to payment subdomain
     if (!isPaymentSubdomain && pathname.startsWith("/payment")) {

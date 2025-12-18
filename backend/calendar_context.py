@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from datetime import datetime, time, timedelta, timezone, tzinfo
 from typing import Any, Dict, Mapping, Optional, Tuple
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from backend.database import calendars, calendar_events
 
@@ -44,19 +44,21 @@ def _resolve_timezone(user_timezone: Optional[str], time_context: Optional[str])
 
     try:
         return candidate, ZoneInfo(candidate)
-    except Exception:
+    except (ZoneInfoNotFoundError, ValueError) as exc:
+        # Fallback to UTC is fine, but log why the resolution failed (e.g. invalid zone name)
+        from backend.logging_config import create_logger
+        create_logger("backend.calendar").debug(
+            "Failed to resolve timezone %s, falling back to UTC: %s", candidate, exc
+        )
         return "UTC", timezone.utc
 
 
 def _row_get(row: Any, key: str) -> Any:
-    try:
-        if isinstance(row, Mapping):
-            return row.get(key)
-    except Exception:
-        pass
+    if isinstance(row, Mapping):
+        return row.get(key)
     try:
         return row[key]
-    except Exception:
+    except (KeyError, IndexError, TypeError):
         return None
 
 
@@ -240,7 +242,11 @@ async def build_calendar_context(
         if calendar_id is not None:
             try:
                 calendar_label = calendar_labels.get(int(calendar_id))
-            except Exception:
+            except Exception as exc:
+                from backend.logging_config import create_logger
+                create_logger("backend.calendar").debug(
+                    "Failed to resolve calendar label for ID %s: %s", calendar_id, exc
+                )
                 calendar_label = None
 
         event_lines.append(

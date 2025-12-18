@@ -1,7 +1,10 @@
 import os
+import logging
 from typing import Optional, Tuple
 
 from supabase import Client, create_client
+
+logger = logging.getLogger("backend.supabase_utils")
 
 
 def _normalize_supabase_url(value: str) -> str:
@@ -97,7 +100,11 @@ def create_supabase_client() -> Optional[Client]:
         return None
     try:
         return create_client(url, key)
-    except Exception:
+    except Exception as exc:
+        logger.warning(
+            "Failed to create Supabase client",
+            extra={"event_type": "fallback_activation", "fallback": "supabase_client_create_failed", "error": str(exc)},
+        )
         return None
 
 
@@ -112,5 +119,14 @@ def create_supabase_service_client() -> Tuple[Optional[Client], Optional[str]]:
         return None, None
     try:
         return create_client(url, key), key_source
-    except Exception:
+    except Exception as exc:
+        logger.warning(
+            "Failed to create Supabase service client",
+            extra={
+                "event_type": "fallback_activation",
+                "fallback": "supabase_service_client_create_failed",
+                "key_source": key_source,
+                "error": str(exc),
+            },
+        )
         return None, key_source

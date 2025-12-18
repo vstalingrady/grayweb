@@ -721,6 +721,12 @@ class OpenRouterService:
                                     yield {"usage": data["usage"]}
                         except json.JSONDecodeError:
                             continue
+                        except asyncio.CancelledError:
+                            raise
                         except Exception as e:
+                            _logger.warning(
+                                "OpenRouter stream parse error",
+                                extra={"event_type": "fallback_activation", "fallback": "openrouter_stream_parse_error", "error": str(e)},
+                            )
                             yield {"error": {"message": str(e)}}
                             return

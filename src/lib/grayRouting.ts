@@ -232,6 +232,9 @@ export const resolveWorkspaceOrigin = (
     return null;
   }
 
+  // Extract port from currentHost if not explicitly provided
+  const resolvedPort = port || (currentHost?.includes(":") ? currentHost.split(":")[1] : undefined);
+
   // Normalize protocol to always include colon suffix
   const normalizeProtocol = (proto?: string): string => {
     if (!proto) return "http:";
@@ -243,7 +246,7 @@ export const resolveWorkspaceOrigin = (
 
   if (isLocalHostname(workspaceHost)) {
     const scheme = normalizeProtocol(protocol ?? "http");
-    const portSuffix = port ? `:${port}` : "";
+    const portSuffix = resolvedPort ? `:${resolvedPort}` : "";
     return `${scheme}//${workspaceHost}${portSuffix}`;
   }
 

@@ -24,7 +24,7 @@ const resolveSiteOrigin = (): string => {
       return origin;
     }
 
-    return `https://gray.alignment.id`;
+    return origin;
   }
 
   if (envSiteUrl) {

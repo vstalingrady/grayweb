@@ -20,6 +20,7 @@ from backend.core.rate_limit import limiter
 from backend.tier_utils import normalize_plan_tier
 
 from backend.chat_cache import cache_messages, get_cached_messages, invalidate_conversation_cache
+from backend.token_utils import estimate_tokens
 
 router = APIRouter(tags=["conversations"])
 
@@ -598,17 +599,7 @@ async def get_conversation_usage(
         
         message_count = len(history)
         
-        # Token estimation
-        try:
-            import tiktoken
-            encoding = tiktoken.get_encoding("cl100k_base")
-            total_tokens = sum(
-                len(encoding.encode(msg.get("text", "")))
-                for msg in history
-            )
-        except (ImportError, Exception):
-            total_chars = sum(len(msg.get("text", "")) for msg in history)
-            total_tokens = int(total_chars / 3.8)
+        total_tokens = sum(estimate_tokens(str(msg.get("text", ""))) for msg in history)
 
         user_tier = normalize_plan_tier(
             current_user.get("plan_tier"),

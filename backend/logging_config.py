@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 from contextvars import ContextVar
 
+from backend import discord_notifier
 from backend.security_utils import sanitize_for_logging
 from backend.time_utils import utcnow, utcnow_aware
 
@@ -260,13 +261,8 @@ def setup_logging(
     # Configure specific loggers
     _configure_specific_loggers()
 
-    # Optional Discord alerts handler (best-effort, rate-limited in notifier)
-    try:
-        from backend.discord_notifier import get_discord_alerts_webhook_url
-    except Exception:
-        get_discord_alerts_webhook_url = None  # type: ignore[assignment]
-
-    if callable(get_discord_alerts_webhook_url) and get_discord_alerts_webhook_url():
+    # Optional Discord alerts handler (rate-limited in notifier)
+    if discord_notifier.get_discord_alerts_webhook_url():
         min_level_name = (os.getenv("DISCORD_ALERT_MIN_LEVEL") or "ERROR").strip().upper()
         min_level = getattr(logging, min_level_name, logging.ERROR)
         root_logger.addHandler(DiscordAlertHandler(level=min_level))
@@ -307,10 +303,6 @@ class DiscordAlertHandler(logging.Handler):
 
     def emit(self, record: logging.LogRecord) -> None:
         if record.name.startswith("backend.discord_notifier"):
-            return
-        try:
-            from backend import discord_notifier
-        except Exception:
             return
 
         extra = _sanitize_record_extras(record)

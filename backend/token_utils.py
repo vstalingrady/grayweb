@@ -5,44 +5,33 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional
 
 import logging
 
+import tiktoken  # type: ignore
+
 logger = logging.getLogger("backend.token_utils")
-_tiktoken_missing_logged = False
 
 
 @lru_cache(maxsize=1)
 def _tiktoken_encoding():
-    global _tiktoken_missing_logged
-    try:
-        import tiktoken  # type: ignore
-
-        return tiktoken.get_encoding("cl100k_base")
-    except ImportError:
-        if not _tiktoken_missing_logged:
-            _tiktoken_missing_logged = True
-            logger.warning(
-                "tiktoken not installed; falling back to heuristic token estimation",
-                extra={"event_type": "fallback_activation", "fallback": "tiktoken_missing"},
-            )
-        return None
-    except Exception as exc:
-        logger.warning(
-            "tiktoken unavailable; falling back to heuristic token estimation",
-            extra={"event_type": "fallback_activation", "fallback": "tiktoken_error", "error": str(exc)},
-        )
-        return None
+    return tiktoken.get_encoding("cl100k_base")
 
 
 def estimate_tokens(text: str) -> int:
     if not text:
         return 0
     encoding = _tiktoken_encoding()
-    if encoding is not None:
-        try:
-            return len(encoding.encode(text))
-        except Exception:
-            pass
-    # Heuristic fallback: average English token ~= 3.8 chars (empirically closer than 4).
-    return max(1, int(len(text) / 3.8))
+    try:
+        return len(encoding.encode(text))
+    except Exception as exc:
+        logger.warning(
+            "tiktoken encode failed; falling back to heuristic token estimation",
+            extra={
+                "event_type": "fallback_activation",
+                "fallback": "tiktoken_encode_error",
+                "error": str(exc),
+            },
+        )
+        # Heuristic fallback: average English token ~= 3.8 chars (empirically closer than 4).
+        return max(1, int(len(text) / 3.8))
 
 
 def _entry_text(entry: Mapping[str, Any]) -> str:

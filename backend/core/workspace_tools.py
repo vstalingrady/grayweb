@@ -325,8 +325,11 @@ async def delete_reminder_tool(user_id: int, args: Dict[str, Any], db: databases
         global reminder_scheduler
         if reminder_scheduler:
             await reminder_scheduler.cancel_job(user_id=user_id, reminder_id=int(reminder_id))
-    except Exception:
-        pass
+    except Exception as exc:
+        api_logger.warning(
+            "Failed to cancel reminder job during deletion",
+            extra={"user_id": user_id, "reminder_id": reminder_id, "error": str(exc)}
+        )
     
     await db.execute(reminders.delete().where(reminders.c.id == reminder_id).where(reminders.c.user_id == user_id))
     return _build_reminder_payload(dict(reminder), user_id, "deleted")
@@ -375,8 +378,11 @@ async def delete_latest_reminder_tool(user_id: int, args: Dict[str, Any], db: da
             global reminder_scheduler
             if reminder_scheduler:
                 await reminder_scheduler.cancel_job(user_id=user_id, reminder_id=int(rid))
-        except Exception:
-            pass
+        except Exception as exc:
+            api_logger.warning(
+                "Failed to cancel reminder job during batch deletion",
+                extra={"user_id": user_id, "reminder_id": rid, "error": str(exc)}
+            )
         await db.execute(reminders.delete().where((reminders.c.id == rid) & (reminders.c.user_id == user_id)))
         parts = [f"Deleted reminder {rid}"]
         if rlabel:

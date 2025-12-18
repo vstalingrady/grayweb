@@ -241,8 +241,17 @@ async def delete_user_reminder(
         reminder_scheduler = _get_reminder_scheduler()
         if reminder_scheduler:
             await reminder_scheduler.cancel_job(user_id=user_id, reminder_id=reminder_id)
-    except Exception:
-        pass
+    except Exception as exc:
+        api_logger.warning(
+            "Failed to cancel reminder scheduler job during delete",
+            extra={
+                "event_type": "fallback_activation",
+                "fallback": "reminder_cancel_job_failed",
+                "user_id": user_id,
+                "reminder_id": reminder_id,
+                "error": str(exc),
+            },
+        )
 
     await db.execute(
         reminders.delete().where(

@@ -433,8 +433,8 @@ async def delete_user_account(
     auth_user_id = existing["auth_user_id"] if "auth_user_id" in existing else None
     
     api_logger.info(
-        f"Processing account deletion for user {user_id} ({user_email})",
-        extra={"user_id": user_id, "email": user_email, "event_type": "account_deletion_start"}
+        f"Processing account deletion for user {user_id}",
+        extra={"user_id": user_id, "event_type": "account_deletion_start"}
     )
 
     delete_supabase_user_records(user_id)

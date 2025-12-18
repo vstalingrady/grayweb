@@ -8,7 +8,7 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-TIERS = ("scout", "voyager", "pioneer")
+TIERS = ("scout", "pathfinder", "voyager", "pioneer")
 
 TIER_ALIASES = {
     # Legacy / internal labels that should still receive paid-tier capabilities.

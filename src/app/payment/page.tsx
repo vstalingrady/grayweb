@@ -7,7 +7,7 @@ import dynamic from "next/dynamic";
 import { CheckCircle, AlertCircle, Loader2, ArrowLeft, Search } from "lucide-react";
 import styles from "./payment.module.css";
 import pricingStyles from "../pricing/page.module.css";
-import { VOYAGER_FEATURES, PIONEER_FEATURES } from "../pricing/PricingPlansSection";
+import { PATHFINDER_FEATURES, VOYAGER_FEATURES, PIONEER_FEATURES } from "../pricing/PricingPlansSection";
 
 import { getSupabaseClient } from "@/lib/supabaseClient";
 
@@ -38,6 +38,11 @@ declare global {
     }
 }
 
+const PATHFINDER_PRICING = {
+    monthly: { price: "Rp 77.000,-", fullPrice: "Rp 77.000" },
+    annual: { price: "Rp 64.750,-", fullPrice: "Rp 777.000" },
+} as const;
+
 const VOYAGER_PRICING = {
     monthly: { price: "Rp 177.000,-", fullPrice: "Rp 177.000" },
     annual: { price: "Rp 148.083,-", fullPrice: "Rp 1.777.000" }, // 1.777m / 12 ≈ 148.083k
@@ -49,6 +54,11 @@ const PIONEER_PRICING = {
 } as const;
 
 // USD pricing for international users
+const PATHFINDER_PRICING_USD = {
+    monthly: { price: "$7", fullPrice: "$7" },
+    annual: { price: "$6.42", fullPrice: "$77" },
+} as const;
+
 const VOYAGER_PRICING_USD = {
     monthly: { price: "$17", fullPrice: "$17" },
     annual: { price: "$14.75", fullPrice: "$177" },
@@ -64,6 +74,7 @@ const PIONEER_PRICING_USD = {
 // Product permalink is 'gray', each tier has an option ID
 const GUMROAD_PRODUCT_PERMALINK = process.env.NEXT_PUBLIC_GUMROAD_PRODUCT_PERMALINK || "gray";
 const GUMROAD_OPTION_IDS: Record<string, string> = {
+    pathfinder: process.env.NEXT_PUBLIC_GUMROAD_OPTION_ID_PATHFINDER || "",
     voyager: process.env.NEXT_PUBLIC_GUMROAD_OPTION_ID_VOYAGER || "lZ9QZXSGeVuLLYzGSzk7Bw==",
     pioneer: process.env.NEXT_PUBLIC_GUMROAD_OPTION_ID_PIONEER || "1AKF6eGbTgVn1yq1m5YcXA==",
 };
@@ -188,19 +199,26 @@ function PaymentContent() {
 
 
     // Derived Data
-    const shortPlanName = planParam === "pioneer" ? "Pioneer" : "Voyager";
-    const planCardVariant = planParam === "pioneer" ? "primary" : "highlighted";
+    const shortPlanName = planParam === "pioneer" ? "Pioneer" : planParam === "voyager" ? "Voyager" : "Pathfinder";
+    const planCardVariant = planParam === "pioneer" ? "primary" : planParam === "voyager" ? "highlighted" : "neutral";
 
     // Fallback if pricing data is missing/invalid param
-    const pricingData =
-        isIndonesia === false
-            ? (planParam === "pioneer" ? PIONEER_PRICING_USD : VOYAGER_PRICING_USD)
-            : (planParam === "pioneer" ? PIONEER_PRICING : VOYAGER_PRICING);
+    const getPricingData = () => {
+        if (isIndonesia === false) {
+            if (planParam === "pioneer") return PIONEER_PRICING_USD;
+            if (planParam === "voyager") return VOYAGER_PRICING_USD;
+            return PATHFINDER_PRICING_USD;
+        }
+        if (planParam === "pioneer") return PIONEER_PRICING;
+        if (planParam === "voyager") return VOYAGER_PRICING;
+        return PATHFINDER_PRICING;
+    };
+    const pricingData = getPricingData();
     const currentPriceDisplay = pricingData[billingCycle].price;
     const fullPriceDisplay = pricingData[billingCycle].fullPrice;
 
     // Choose features
-    const features = planParam === "pioneer" ? PIONEER_FEATURES : VOYAGER_FEATURES;
+    const features = planParam === "pioneer" ? PIONEER_FEATURES : planParam === "voyager" ? VOYAGER_FEATURES : PATHFINDER_FEATURES;
 
     const handlePayment = async () => {
         setStatus("loading");
@@ -364,7 +382,9 @@ function PaymentContent() {
                         <p>
                             {planParam === "pioneer"
                                 ? "For heavy users: top limits, top models, and early access to new features."
-                                : "For real daily use: more messages, longer memory, and calendar routines."}
+                                : planParam === "voyager"
+                                    ? "For real daily use: more messages, longer memory, and calendar routines."
+                                    : "First step into paid: model choice and longer memory."}
                         </p>
                     </header>
                     <div className={pricingStyles.priceBlock}>

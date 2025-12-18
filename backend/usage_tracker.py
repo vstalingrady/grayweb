@@ -163,26 +163,32 @@ def calculate_cost(
 # ---------------------------------------------------------------------------
 
 # All limits are in USD
+# Credit structure: Scout = base, then 3x/6x/15x multipliers
 LIMITS = {
-    # Scout: free tier - conversion-optimized
-    # ~65 messages per 6-hour window, ~2,850 per month (at Grok lite pricing)
-    # Generous enough to hook users, restrictive enough for natural upgrade
+    # Scout: free tier - loss leader for conversions
+    # Base: $0.75/month
     "scout": {
-        "monthly_cost": 1.00,
-        "six_hour_cost": 0.023,
+        "monthly_cost": 0.75,
+        "six_hour_cost": 0.0173,
     },
-    # Voyager: Rp177k/month Indonesia
-    # ~459 messages per 6-hour, ~19,950 per month (7x Scout)
+    # Pathfinder: $7/month (Rp 77k Indonesia)
+    # 3x Scout credits
+    "pathfinder": {
+        "monthly_cost": 2.25,
+        "six_hour_cost": 0.052,
+    },
+    # Voyager: $17/month (Rp 177k Indonesia)
+    # 6x Scout credits
     "voyager": {
-        "monthly_cost": 7.00,
-        "six_hour_cost": 0.161,
+        "monthly_cost": 4.50,
+        "six_hour_cost": 0.104,
     },
-    # Pioneer: $37/month global, Rp377k Indonesia
-    # ~1,600 messages per 6-hour, ~71,400 per month (25x Scout)
-    # NOTE: Premium models (Claude, GPT, Gemini Pro) burn credits faster
+    # Pioneer: $37/month (Rp 377k Indonesia)
+    # 15x Scout credits
+    # NOTE: Premium models (Claude Opus, GPT Pro) burn credits faster
     "pioneer": {
-        "monthly_cost": 25.00,
-        "six_hour_cost": 0.56,
+        "monthly_cost": 11.25,
+        "six_hour_cost": 0.26,
     },
 }
 
@@ -211,13 +217,13 @@ def _coerce_datetime(value: object) -> Optional[datetime.datetime]:
         try:
             parsed = datetime.datetime.fromisoformat(value)
             return parsed if parsed.tzinfo else parsed.replace(tzinfo=datetime.timezone.utc)
-        except Exception:
+        except ValueError:
             pass
         for fmt in ("%Y-%m-%dT%H:%M:%S%z", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d"):
             try:
                 parsed = datetime.datetime.strptime(value, fmt)
                 return parsed if parsed.tzinfo else parsed.replace(tzinfo=datetime.timezone.utc)
-            except Exception:
+            except ValueError:
                 continue
     return None
 

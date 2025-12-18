@@ -12,12 +12,9 @@ import time
 
 from backend.tier_utils import bootstrap_plan_tier
 
-try:
-    import jwt  # type: ignore
-    from jwt import InvalidTokenError  # type: ignore
-except Exception:  # pragma: no cover - optional dependency
-    jwt = None
-    InvalidTokenError = Exception
+import jwt  # type: ignore
+from jwt import InvalidTokenError  # type: ignore
+from jwt import PyJWKClient  # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -30,10 +27,7 @@ _USER_CACHE_TTL = 10.0  # 10 seconds
 # Redis cache (L2 - longer TTL, shared across processes)
 from backend.redis_client import get_redis_client
 
-if callable(get_redis_client):
-    _redis_client = get_redis_client()
-else:
-    _redis_client = None
+_redis_client = get_redis_client()
 
 # Optional, explicitly gated insecure fallback for local development.
 # When enabled, the backend may accept JWTs that were NOT validated
@@ -124,8 +118,6 @@ async def invalidate_user_cache_redis(auth_user_id: str):
 
 def _decode_token_without_signature(token: str) -> Optional[Dict[str, Any]]:
     """Best-effort decode to recover payload when Supabase session lookup fails."""
-    if not jwt:
-        return None
     try:
         return jwt.decode(
             token,
@@ -197,10 +189,6 @@ def _get_jwk_client() -> Optional[Any]:
     if not jwks_url:
         return None
     if _jwk_client is None or _jwk_client_url != jwks_url:
-        try:
-            from jwt import PyJWKClient
-        except Exception:
-            return None
         _jwk_client = PyJWKClient(
             jwks_url,
             cache_keys=True,
@@ -213,10 +201,6 @@ def _get_jwk_client() -> Optional[Any]:
 
 def _verify_with_jwks(token: str) -> Optional[Dict[str, Any]]:
     """Verify JWT using Supabase's public keys (JWKS)."""
-    if not jwt:
-        logger.debug("JWKS: jwt library not available")
-        return None
-
     try:
         # Optimization: If token is HS256, it's not using JWKS (which is for RS256/ES256)
         # Skip JWKS check to avoid "Unable to find signing key" warnings for legacy tokens

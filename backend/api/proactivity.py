@@ -76,7 +76,11 @@ async def get_user_from_query_token(
                 user = await database.fetch_one(users.select().where(users.c.email == email))
             
             return dict(user) if user else None
-        except Exception:
+        except Exception as exc:
+            api_logger.debug(
+                "Failed to resolve user from query token",
+                extra={"event_type": "auth_token_invalid", "error": str(exc)},
+            )
             return None
     
     if credentials:

@@ -44,12 +44,35 @@ const FREE_FEATURES: FeatureItem[] = [
     { id: "discord_support", label: "Discord community support", icon: Users },
 ];
 
-export const VOYAGER_FEATURES: FeatureItem[] = [
+export const PATHFINDER_FEATURES: FeatureItem[] = [
     {
         id: "choose_model",
         label: "Choose your model",
         icon: Shuffle,
-        subtext: "Claude Sonnet 4.5, GPT 5.2, Gemini 3 Pro, DeepSeek V3.2, Kimi K2 Thinking",
+        subtext: "Claude Haiku 4.5, Gemini 3 Flash, DeepSeek V3.2, Kimi K2",
+    },
+    {
+        id: "more_messages",
+        label: "3x more messages",
+        icon: MessageSquare,
+    },
+    {
+        id: "longer_memory",
+        label: "256,000 token memory",
+        icon: Pin,
+    },
+    { id: "plans_habits_reminders", label: "Plans, habits, and reminders", icon: Clock },
+    { id: "daily_pulse", label: "Daily pulse", icon: CalendarClock },
+    { id: "discord_support", label: "Discord community support", icon: Users },
+    { id: "everything_in_scout", label: "Everything in Scout", icon: Plus, variant: "inherit" },
+];
+
+export const VOYAGER_FEATURES: FeatureItem[] = [
+    {
+        id: "choose_model",
+        label: "Premium models",
+        icon: Shuffle,
+        subtext: "Claude Sonnet 4.5, GPT 5.2, Gemini 3 Pro",
     },
     {
         id: "more_messages",
@@ -58,7 +81,7 @@ export const VOYAGER_FEATURES: FeatureItem[] = [
     },
     {
         id: "longer_memory",
-        label: "Longer memory",
+        label: "2M token memory",
         icon: Pin,
     },
     {
@@ -74,7 +97,7 @@ export const VOYAGER_FEATURES: FeatureItem[] = [
         subtext: "Coming soon",
         subtextParens: true,
     },
-    { id: "everything_in_scout", label: "Everything in Scout", icon: Plus, variant: "inherit" },
+    { id: "everything_in_pathfinder", label: "Everything in Pathfinder", icon: Plus, variant: "inherit" },
 ];
 
 export const PIONEER_FEATURES: FeatureItem[] = [
@@ -101,6 +124,17 @@ const BILLING_CYCLES = [
 ];
 
 // Dual pricing: Indonesia (IDR) and International (USD)
+const PATHFINDER_PRICING = {
+    monthly: {
+        idr: { price: "Rp 77.000,-", cadence: "month" },
+        usd: { price: "$7", cadence: "month" }
+    },
+    annual: {
+        idr: { price: "Rp 777.000,-", cadence: "year" },
+        usd: { price: "$77", cadence: "year" }
+    },
+} as const;
+
 const VOYAGER_PRICING = {
     monthly: {
         idr: { price: "Rp 177.000,-", cadence: "month" },
@@ -164,16 +198,18 @@ export function PricingPlansSection() {
     // Determine currency based on region (default to IDR during loading)
     const currency = isIndonesia === false ? "usd" : "idr";
 
+    const { price: pathfinderPrice, cadence: pathfinderCadence } = PATHFINDER_PRICING[billingCycle][currency];
     const { price: voyagerPrice, cadence: voyagerCadence } = VOYAGER_PRICING[billingCycle][currency];
     const { price: pioneerPrice, cadence: pioneerCadence } = PIONEER_PRICING[billingCycle][currency];
     const annualSavingsPercent = Math.max(
+        computeAnnualSavingsPercent(PATHFINDER_PRICING.monthly.idr.price, PATHFINDER_PRICING.annual.idr.price) ?? 0,
         computeAnnualSavingsPercent(VOYAGER_PRICING.monthly.idr.price, VOYAGER_PRICING.annual.idr.price) ?? 0,
         computeAnnualSavingsPercent(PIONEER_PRICING.monthly.idr.price, PIONEER_PRICING.annual.idr.price) ?? 0,
     );
     const annualSavingsLabel =
         annualSavingsPercent > 0 ? t("Save ~{percent}%", { percent: annualSavingsPercent }) : undefined;
 
-    const handleUpgrade = (plan: "voyager" | "pioneer") => {
+    const handleUpgrade = (plan: "pathfinder" | "voyager" | "pioneer") => {
         const paymentPath = `/payment?plan=${plan}&cycle=${billingCycle}`;
         const paymentBase = process.env.NEXT_PUBLIC_PAYMENT_SITE_URL;
         const paymentUrl = paymentBase
@@ -257,6 +293,47 @@ export function PricingPlansSection() {
                     <div className={styles.cardFooter}>
                         <button type="button" className={styles.planButton} disabled>
                             {t("Current Plan")}
+                        </button>
+                    </div>
+                </article>
+
+                <article className={styles.planCard} data-variant="neutral">
+                    <div className={styles.cardBody}>
+                        <div className={styles.cardIntro}>
+                            <header className={styles.cardHeader}>
+                                <h2>{t("Pathfinder")}</h2>
+                                <p>{t("First step into paid: model choice and longer memory.")}</p>
+                            </header>
+                            <div className={styles.priceHeader}>
+                                <div className={styles.priceBlock}>
+                                    <span className={styles.priceValue}>{pathfinderPrice}</span>
+                                    <span className={styles.priceMeta}>/ {t(pathfinderCadence)}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <ul className={styles.featureList}>
+                            {PATHFINDER_FEATURES.map(({ id, label, icon: Icon, variant, subtext }) => (
+                                <li key={id} data-variant={variant ?? undefined}>
+                                    <Icon size={16} aria-hidden="true" />
+                                    <span
+                                        className={
+                                            variant === "inherit" ? `${styles.featureLabel} ${styles.featureLabelInherit}` : styles.featureLabel
+                                        }
+                                    >
+                                        {t(label)}
+                                        {subtext ? <span className={styles.featureSubtext}>{t(subtext)}</span> : null}
+                                    </span>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                    <div className={styles.cardFooter}>
+                        <button
+                            type="button"
+                            className={`${styles.planButton} ${styles.planButtonOutline}`}
+                            onClick={() => handleUpgrade("pathfinder")}
+                        >
+                            {t("Upgrade")}
                         </button>
                     </div>
                 </article>

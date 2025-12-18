@@ -58,7 +58,7 @@ def sanitize_for_logging(data: Union[str, Mapping[str, Any], Any]) -> Union[str,
     if isinstance(data, bytes):
         try:
             return _sanitize_string(data.decode("utf-8"))
-        except Exception:
+        except UnicodeDecodeError:
             return "[BYTES_REDACTED]"
     if isinstance(data, str):
         return _sanitize_string(data)

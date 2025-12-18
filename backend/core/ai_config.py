@@ -43,6 +43,7 @@ VALIDATE_GEMINI_ON_STARTUP = os.getenv("VALIDATE_GEMINI_ON_STARTUP", "true").str
 # "64,000 token memory" refers to tokens of conversation history included as context.
 TIER_CONVERSATION_TOKEN_LIMITS: Dict[str, int] = {
     "scout": 65_536,
+    "pathfinder": 256_000,
     "voyager": 2_000_000,
     "pioneer": 2_000_000,
 }

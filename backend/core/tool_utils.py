@@ -31,7 +31,7 @@ def parse_remind_at(value: Any) -> Optional[datetime]:
             return None
         try:
             parsed = parse_iso_datetime(trimmed)
-        except Exception:
+        except ValueError:
             return None
         return normalize_remind_at(parsed)
     return None

@@ -36,22 +36,22 @@ def _coerce_message_dict(message: Any) -> Optional[Dict[str, Any]]:
     if mapping is not None:
         try:
             return dict(mapping)
-        except Exception:
+        except (TypeError, ValueError):
             return None
     asdict = getattr(message, "_asdict", None)
     if callable(asdict):
         try:
             return dict(asdict())
-        except Exception:
+        except (TypeError, ValueError):
             return None
     if hasattr(message, "__dict__"):
         try:
             return dict(vars(message))
-        except Exception:
+        except TypeError:
             return None
     try:
         return dict(message)
-    except Exception:
+    except (TypeError, ValueError):
         return None
 
 

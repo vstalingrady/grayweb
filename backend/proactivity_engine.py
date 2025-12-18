@@ -13,22 +13,16 @@ import requests
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone as dt_timezone
 from typing import Any, AsyncIterator, Dict, List, Optional, Sequence, Tuple
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import databases
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from backend.ai_message_generator import AIMessageGenerator
-try:
-    from pywebpush import webpush, WebPushException
-except ImportError:  # graceful fallback if pywebpush isn't available
-    webpush = None  # type: ignore[assignment]
-
-    class WebPushException(Exception):
-        pass
+from pywebpush import webpush, WebPushException
 
 logger = logging.getLogger(__name__)
-_pywebpush_missing_logged = False
+_INVALID_TIMEZONES_LOGGED: set[str] = set()
 
 # Avoid duplicate sends if a user gets evaluated twice in a short window.
 # Keep the guard short so scheduled touchpoints aren't skipped after manual triggers.
@@ -285,7 +279,19 @@ class ProactivityEngine:
     def _resolve_timezone(value: str) -> ZoneInfo:
         try:
             return ZoneInfo(value)
-        except Exception:
+        except (ZoneInfoNotFoundError, ValueError) as exc:
+            normalized = (value or "").strip()
+            if normalized and normalized not in _INVALID_TIMEZONES_LOGGED and len(_INVALID_TIMEZONES_LOGGED) < 50:
+                _INVALID_TIMEZONES_LOGGED.add(normalized)
+                logger.warning(
+                    "Invalid timezone; falling back to UTC",
+                    extra={
+                        "event_type": "fallback_activation",
+                        "fallback": "proactivity_timezone_invalid",
+                        "timezone": normalized,
+                        "error": str(exc),
+                    },
+                )
             return ZoneInfo("UTC")
 
     @staticmethod
@@ -325,7 +331,7 @@ class ProactivityEngine:
         if isinstance(value, str):
             try:
                 return datetime.fromisoformat(value)
-            except Exception:
+            except ValueError:
                 return None
         return None
 
@@ -559,16 +565,6 @@ class ProactivityEngine:
             return None
 
     async def _send_web_push_notification(self, user_id: int, title: str, message: str) -> None:
-        if webpush is None:
-            global _pywebpush_missing_logged
-            if not _pywebpush_missing_logged:
-                _pywebpush_missing_logged = True
-                logger.warning(
-                    "pywebpush not installed; web push notifications disabled",
-                    extra={"event_type": "fallback_activation", "fallback": "pywebpush_missing"},
-                )
-            return
-
         # Only attempt web push in production by default, or when explicitly enabled.
         enable_flag = os.getenv("ENABLE_WEB_PUSH")
         if enable_flag is not None:

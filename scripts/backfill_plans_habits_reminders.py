@@ -138,7 +138,7 @@ def _upsert_rows(client: Client, table: str, rows: List[Dict[str, Any]]) -> None
 
 
 def main() -> None:
-    database_url = os.getenv("DATABASE_URL", "sqlite:///data/users.db")
+    database_url = os.getenv("DATABASE_URL", "sqlite:///../data/users.db")
     sqlite_path = _resolve_sqlite_path(database_url)
     supabase_url = _require_env("SUPABASE_URL")
     supabase_key = (

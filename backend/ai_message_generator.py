@@ -6,27 +6,23 @@ It uses Grok (via OpenRouter) to improvise each message directly. If generation 
 error is logged and no message is sent.
 """
 
+import asyncio
+import json
+import logging
 import os
 import re
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
+from typing import Any, AsyncGenerator, Dict, List, Optional
 from zoneinfo import ZoneInfo
-from typing import List, Dict, Any, Optional, AsyncGenerator
-import json
-import asyncio
-import logging
-from pathlib import Path
 
-logger = logging.getLogger("backend.ai_message_generator")
 import databases
 
-try:
-    from backend.openrouter_client import OpenRouterService
-    from backend.gemini_client import GeminiService
-    from backend.usage_tracker import UsageTracker, UsageLimitExceeded
-except ImportError:
-    from openrouter_client import OpenRouterService
-    from gemini_client import GeminiService
-    from usage_tracker import UsageTracker, UsageLimitExceeded
+from backend.env_utils import ROOT_DIR
+from backend.gemini_client import GeminiService
+from backend.openrouter_client import OpenRouterService
+from backend.usage_tracker import UsageLimitExceeded, UsageTracker
+
+logger = logging.getLogger("backend.ai_message_generator")
 
 
 class AIMessageGenerator:
@@ -35,29 +31,26 @@ class AIMessageGenerator:
     def __init__(self) -> None:
         self.openrouter = OpenRouterService()
         self.gemini = GeminiService()
-        self.prompts = {}
-        # Load the shared Gray persona prompt once so proactivity matches
-        # the main chat experience. Falls back to a local default if the
-        # config file is missing.
+        prompts_path = ROOT_DIR / "public" / "system-prompts.json"
         try:
-            # Use centralized environment detection
-            try:
-                from backend.env_utils import ROOT_DIR
-            except ImportError:
-                from env_utils import ROOT_DIR
-            prompts_path = ROOT_DIR / "public" / "system-prompts.json"
             raw = prompts_path.read_text(encoding="utf-8")
-            self.prompts = json.loads(raw)
-        except Exception as e:
-            logger.error(f"CRITICAL: Failed to load system-prompts.json: {e}")
-        
-        self.persona_prompt = self.prompts["chat"]  # No fallback - must exist
-        
-        if self.openrouter.available:
-            pass  # Using Grok for proactive messaging
-        elif self.gemini.available:
-            pass  # Using Gemini fallback
-        # else: No AI provider available; proactive messages will be skipped
+        except FileNotFoundError as exc:
+            raise RuntimeError(f"Missing required prompts file: {prompts_path}") from exc
+
+        try:
+            prompts = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(f"Invalid JSON in prompts file: {prompts_path}") from exc
+
+        required_keys = ("chat", "proactivity_summary", "proactivity_daily")
+        missing_keys = [key for key in required_keys if key not in prompts]
+        if missing_keys:
+            raise RuntimeError(
+                f"Prompts file {prompts_path} missing required keys: {', '.join(missing_keys)}"
+            )
+
+        self.prompts: Dict[str, Any] = prompts
+        self.persona_prompt = str(self.prompts["chat"])
 
     async def generate_conversation_summary(
         self,
@@ -214,10 +207,12 @@ class AIMessageGenerator:
             if content:
                 parts_list = getattr(content, "parts", None)
                 if parts_list:
+                    text_parts = []
                     for part in parts_list:
                         value = getattr(part, "text", None)
                         if value:
-                            text += value
+                            text_parts.append(value)
+                    text = "".join(text_parts)
 
         cleaned = (text or "").strip()
         if not cleaned:
@@ -274,19 +269,7 @@ class AIMessageGenerator:
         Generate a habit nudge message
         Returns: (title, message)
         """
-        # Template-based message loaded from system-prompts.json when available
-        try:
-            # Use centralized environment detection
-            try:
-                from backend.env_utils import ROOT_DIR
-            except ImportError:
-                from env_utils import ROOT_DIR
-            prompts_path = ROOT_DIR / "public" / "system-prompts.json"
-            raw = prompts_path.read_text(encoding="utf-8")
-            data = json.loads(raw)
-            template = str(data.get("habit_nudge_template") or "").strip()
-        except Exception:
-            template = ""
+        template = str(self.prompts.get("habit_nudge_template") or "").strip()
 
         if not template:
             template = (

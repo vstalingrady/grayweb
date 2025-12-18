@@ -3,7 +3,7 @@ import json
 from dateutil import parser as date_parser
 from datetime import datetime, timezone
 
-DB_PATH = "data/users.db"
+DB_PATH = "../data/users.db"
 
 def normalize_timestamp(ts_str):
     if not ts_str:

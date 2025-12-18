@@ -58,7 +58,7 @@ async def get_pending_entity_reminder_map(
             continue
         try:
             entity_id = int(raw_entity_id)
-        except Exception:
+        except (TypeError, ValueError):
             continue
         if entity_id in reminder_map:
             continue
@@ -94,8 +94,19 @@ async def delete_pending_entity_reminders(
         try:
             if reminder_scheduler:
                 await reminder_scheduler.cancel_job(user_id=user_id, reminder_id=reminder_id)
-        except Exception:
-            pass
+        except Exception as exc:
+            api_logger.warning(
+                "Failed to cancel reminder scheduler job during entity reminder delete",
+                extra={
+                    "event_type": "fallback_activation",
+                    "fallback": "entity_reminder_cancel_job_failed",
+                    "user_id": user_id,
+                    "reminder_id": reminder_id,
+                    "entity_type": entity_type,
+                    "entity_id": entity_id,
+                    "error": str(exc),
+                },
+            )
         await db.execute(
             reminders.delete().where(
                 (reminders.c.id == reminder_id) & (reminders.c.user_id == user_id)
@@ -128,8 +139,19 @@ async def delete_all_entity_reminders(
         try:
             if reminder_scheduler:
                 await reminder_scheduler.cancel_job(user_id=user_id, reminder_id=reminder_id)
-        except Exception:
-            pass
+        except Exception as exc:
+            api_logger.warning(
+                "Failed to cancel reminder scheduler job during entity reminder delete",
+                extra={
+                    "event_type": "fallback_activation",
+                    "fallback": "entity_reminder_cancel_job_failed",
+                    "user_id": user_id,
+                    "reminder_id": reminder_id,
+                    "entity_type": entity_type,
+                    "entity_id": entity_id,
+                    "error": str(exc),
+                },
+            )
         await db.execute(
             reminders.delete().where(
                 (reminders.c.id == reminder_id) & (reminders.c.user_id == user_id)
