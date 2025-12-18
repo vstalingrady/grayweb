@@ -14,7 +14,7 @@ from google.genai import types
 
 # Use inline constants to avoid circular imports
 URL_CONTEXT_MODEL = os.getenv("URL_CONTEXT_MODEL", "models/gemini-flash-lite-latest")
-GEMINI_FLASH_MODEL = "models/gemini-2.0-flash"
+GEMINI_FLASH_MODEL = os.getenv("GEMINI_FLASH_MODEL", "models/gemini-2.0-flash")
 
 # URL Context Tool - allows AI to fetch and analyze content from URLs
 URL_CONTEXT_TOOL = types.Tool(
@@ -29,6 +29,19 @@ from backend.core.function_call_helpers import (
 from backend.core.ai_utils import candidate_text
 
 api_logger = logging.getLogger("backend.api")
+
+def _is_function_calling_unsupported(error: Exception) -> bool:
+    error_text = str(error).lower()
+    return (
+        "function calling is unsupported" in error_text
+        or "tool use with function calling is unsupported" in error_text
+    )
+
+def _filter_function_declaration_tools(tools: List[types.Tool]) -> List[types.Tool]:
+    # Gemini `generate_content` currently does not support mixing native tools
+    # like `google_search` with function declarations outside the Live API.
+    # For hybrid tool execution we only need our function_declarations.
+    return [t for t in (tools or []) if getattr(t, "function_declarations", None)]
 
 
 async def fetch_url_context_with_gemini(
@@ -180,6 +193,12 @@ async def execute_tools_with_gemini_flash(
     tool_cards: List[Dict[str, Any]] = []
     onboarding_completed = False
     
+    tool_list = _filter_function_declaration_tools(tool_list)
+
+    if tool_list and hasattr(gemini_service, "function_calling_supported"):
+        if not gemini_service.function_calling_supported(GEMINI_FLASH_MODEL):
+            return [], [], False
+
     try:
         # Initial generation with tools
         response = await gemini_service.generate(
@@ -261,11 +280,19 @@ async def execute_tools_with_gemini_flash(
                 break
     
     except Exception as gemini_error:
-        api_logger.error(
-            f"[Hybrid] Gemini Flash tool execution failed: {gemini_error}",
-            exc_info=True,
-            extra={"user_id": user_id}
-        )
+        if _is_function_calling_unsupported(gemini_error):
+            if hasattr(gemini_service, "mark_function_calling_unsupported"):
+                gemini_service.mark_function_calling_unsupported(GEMINI_FLASH_MODEL)
+            api_logger.warning(
+                f"[Hybrid] Gemini Flash function calling unsupported; disabling hybrid tool execution: {gemini_error}",
+                extra={"user_id": user_id},
+            )
+        else:
+            api_logger.error(
+                f"[Hybrid] Gemini Flash tool execution failed: {gemini_error}",
+                exc_info=True,
+                extra={"user_id": user_id}
+            )
     
     return tool_results, tool_cards, onboarding_completed
 

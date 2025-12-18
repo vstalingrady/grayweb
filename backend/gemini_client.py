@@ -67,6 +67,9 @@ class GeminiService:
             self._client = None
             self._enabled = False
 
+        # Track per-model function calling support (some Gemini models/configs reject it).
+        self._function_calling_supported_by_model: Dict[str, bool] = {}
+
     @property
     def available(self) -> bool:
         return self._enabled and self._client is not None
@@ -110,6 +113,14 @@ class GeminiService:
             return override
         # Default when no override is provided: use the configured default.
         return self._default_model
+
+    def function_calling_supported(self, model: Optional[str]) -> bool:
+        selected_model = self._choose_model(model)
+        return self._function_calling_supported_by_model.get(selected_model, True)
+
+    def mark_function_calling_unsupported(self, model: Optional[str]) -> None:
+        selected_model = self._choose_model(model)
+        self._function_calling_supported_by_model[selected_model] = False
 
     def _build_context_block(self, workspace_context: Optional[str], time_context: Optional[str]) -> Optional[str]:
         pieces: List[str] = []

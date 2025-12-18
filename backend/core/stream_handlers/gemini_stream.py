@@ -48,13 +48,13 @@ async def stream_gemini_response(
     tool_config: Optional[types.ToolConfig],
     reasoning_mode: bool,
     media_attachments: List[Any],
-    cached_contents: Optional[List[types.Content]],
-    history_token_budget: Optional[int],
     user_id: int,
-    response_format: Optional[Dict[str, Any]],
     execute_function_call_fn: Callable,
     db,
     user_timezone: Optional[str],
+    cached_contents: Optional[List[types.Content]] = None,
+    history_token_budget: Optional[int] = None,
+    response_format: Optional[Dict[str, Any]] = None,
     usage_tracker_cls = None,
 ) -> AsyncGenerator[Tuple[str, Any], None]:
     """Stream response from Gemini with multi-turn tool execution.

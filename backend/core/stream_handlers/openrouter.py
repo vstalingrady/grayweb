@@ -35,12 +35,12 @@ async def stream_openrouter_response(
     user_id: int,
     needs_structured_tools: bool,
     is_onboarding_tool: bool,
-    response_format: Optional[Dict[str, Any]],
-    provider_routing: Optional[Dict[str, Any]],
+    response_format: Optional[Dict[str, Any]] = None,
+    provider_routing: Optional[Dict[str, Any]] = None,
     # Tool execution function passed in to avoid circular imports
-    execute_function_call_fn,
-    db,
-    user_timezone: Optional[str],
+    execute_function_call_fn=None,
+    db=None,
+    user_timezone: Optional[str] = None,
     # Hybrid flow data
     hybrid_tool_results: Optional[List[Dict[str, Any]]] = None,
     hybrid_tool_cards: Optional[List[Dict[str, Any]]] = None,

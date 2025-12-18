@@ -407,7 +407,7 @@ function GrayEnhancedSidebarComponent(props: GrayEnhancedSidebarProps) {
                           <span className={styles.profileMenuUpgradeCard} data-variant={isPioneer ? "pioneer" : "voyager"}>
                             <span className={styles.profileMenuUpgradeSubtext}>{t("Current Plan")}</span>
                             <span className={styles.profileMenuUpgradeTitle}>{normalizedPlan}</span>
-                            <StarfieldCanvas className={styles.starfieldCanvas} density={0.008} minStars={12} maxStars={40} speed={16} orbitMode />
+                            <StarfieldCanvas className={styles.starfieldCanvas} density={0.008} minStars={12} maxStars={40} speed={16} orbitMode trailLength={0.15} />
                           </span>
                         </div>
                         <span className={styles.profileMenuDivider} aria-hidden="true" />

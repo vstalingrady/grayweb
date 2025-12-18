@@ -54,6 +54,7 @@ from backend.core.stream_handlers.hybrid import (
     execute_tools_with_gemini_flash as _execute_tools_with_gemini_flash_hybrid,
     fetch_url_context_with_gemini as _fetch_url_context_with_gemini_hybrid,
     has_onboarding_tool as _has_onboarding_tool_hybrid,
+    GEMINI_FLASH_MODEL as _GEMINI_FLASH_MODEL,
 )
 from backend.core.stream_handlers.openrouter import stream_openrouter_response
 from backend.core.stream_handlers.gemini_stream import stream_gemini_response
@@ -197,11 +198,14 @@ async def stream_ai_response(
 
     # Initialize context
     workspace_with_cache = workspace_context
+    cache_record = None
+    cached_contents = None
     if context_cache_id:
         cache_record = await deps["_load_context_cache"](context_cache_id, user_id, db)
         cache_text = deps["_row_get"](cache_record, "content")
         if isinstance(cache_text, str) and cache_text.strip():
             workspace_with_cache = "\n\n".join(filter(None, [workspace_context, f"Context cache:\n{cache_text.strip()}"]))
+        cached_contents = deps["_context_cache_contents"](cache_record)
 
     try:
         calendar_context_block = await deps["build_calendar_context"](
@@ -257,7 +261,15 @@ async def stream_ai_response(
                 ]))
 
         # Hybrid tool execution
-        use_hybrid_tools = needs_structured_tools and not is_onboarding_tool and deps["GEMINI_SERVICE"].available
+        use_hybrid_tools = (
+            needs_structured_tools
+            and not is_onboarding_tool
+            and deps["GEMINI_SERVICE"].available
+            and (
+                not hasattr(deps["GEMINI_SERVICE"], "function_calling_supported")
+                or deps["GEMINI_SERVICE"].function_calling_supported(_GEMINI_FLASH_MODEL)
+            )
+        )
         hybrid_tool_results = []
         if use_hybrid_tools:
             hybrid_tool_results, hybrid_tool_cards, _ = await deps["_execute_tools_with_gemini_flash_hybrid"](
@@ -290,6 +302,7 @@ async def stream_ai_response(
             user_id=user_id,
             needs_structured_tools=needs_structured_tools,
             is_onboarding_tool=is_onboarding_tool,
+            response_format=None,
             provider_routing=provider_routing,
             execute_function_call_fn=deps["_execute_function_call"],
             db=db,
@@ -322,8 +335,10 @@ async def stream_ai_response(
             tool_config=maps_tool_config,
             reasoning_mode=reasoning_mode,
             media_attachments=media_attachments,
+            cached_contents=cached_contents,
             history_token_budget=history_token_budget,
             user_id=user_id,
+            response_format=None,
             execute_function_call_fn=deps["_execute_function_call"],
             db=db,
             user_timezone=user_timezone,

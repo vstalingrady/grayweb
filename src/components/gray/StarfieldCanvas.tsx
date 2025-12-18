@@ -8,6 +8,7 @@ type StarfieldCanvasProps = {
   speed?: number;
   color?: string;
   orbitMode?: boolean;
+  trailLength?: number;
 };
 
 type Star = {
@@ -59,6 +60,7 @@ export function StarfieldCanvas({
   speed = 18,
   color,
   orbitMode = false,
+  trailLength = 0,
 }: StarfieldCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const rgbTriplet = useMemo(() => parseRgbTriplet(color), [color]);
@@ -150,18 +152,29 @@ export function StarfieldCanvas({
           star.angle += star.angularSpeed * dtSeconds;
         }
 
-        // Calculate position based on orbit
-        const x = centerX + Math.cos(star.angle) * star.orbitRadius;
-        const y = centerY + Math.sin(star.angle) * star.orbitRadius;
+        const twinkle = 0.55 + 0.45 * Math.sin((timestamp / 1000) * star.twinkleSpeed + star.twinklePhase);
+        const alpha = clamp(star.baseAlpha * twinkle, 0.1, 0.98);
 
-        // Only render if within canvas bounds (with some padding)
-        if (x >= -5 && x <= state.width + 5 && y >= -5 && y <= state.height + 5) {
-          const twinkle = 0.55 + 0.45 * Math.sin(timestamp / 1000 * star.twinkleSpeed + star.twinklePhase);
-          const alpha = clamp(star.baseAlpha * twinkle, 0.1, 0.98);
-          context.fillStyle = `rgba(${rgbTriplet}, ${alpha})`;
+        if (orbitMode && trailLength > 0 && !reducedMotion) {
+          // Draw trail as an arc
           context.beginPath();
-          context.arc(x, y, star.radius, 0, Math.PI * 2);
-          context.fill();
+          context.arc(centerX, centerY, star.orbitRadius, star.angle - trailLength, star.angle);
+          context.strokeStyle = `rgba(${rgbTriplet}, ${alpha})`;
+          context.lineWidth = star.radius * 2;
+          context.lineCap = "round";
+          context.stroke();
+        } else {
+          // Calculate position for a single point
+          const x = centerX + Math.cos(star.angle) * star.orbitRadius;
+          const y = centerY + Math.sin(star.angle) * star.orbitRadius;
+
+          // Only render if within canvas bounds (with some padding)
+          if (x >= -5 && x <= state.width + 5 && y >= -5 && y <= state.height + 5) {
+            context.fillStyle = `rgba(${rgbTriplet}, ${alpha})`;
+            context.beginPath();
+            context.arc(x, y, star.radius, 0, Math.PI * 2);
+            context.fill();
+          }
         }
       }
 
@@ -202,7 +215,7 @@ export function StarfieldCanvas({
         window.cancelAnimationFrame(state.animationFrameId);
       }
     };
-  }, [density, maxStars, minStars, speed, rgbTriplet, orbitMode]);
+  }, [density, maxStars, minStars, speed, rgbTriplet, orbitMode, trailLength]);
 
   return <canvas ref={canvasRef} className={className} aria-hidden="true" />;
 }
