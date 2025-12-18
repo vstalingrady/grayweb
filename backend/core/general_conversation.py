@@ -68,9 +68,16 @@ async def load_general_conversation_history(user_id: int) -> List[Dict[str, Any]
     database, general_chat_messages, _ = _get_database()
     logger = _get_logger()
     
+    # Ensure user_id is definitely an int to prevent SQLAlchemy clause issues
+    try:
+        user_id_int = int(user_id)
+    except (TypeError, ValueError):
+        logger.error(f"Invalid user_id type: {type(user_id)}, value: {user_id}")
+        return []
+    
     try:
         query = general_chat_messages.select().where(
-            general_chat_messages.c.user_id == user_id
+            general_chat_messages.c.user_id == user_id_int
         ).order_by(general_chat_messages.c.created_at.desc()).limit(100)
         rows = await database.fetch_all(query)
         
@@ -80,18 +87,22 @@ async def load_general_conversation_history(user_id: int) -> List[Dict[str, Any]
                 "role": row["role"],
                 "text": row["content"],
             }
-            if row["grounding_metadata"]:
-                entry["grounding_metadata"] = _parse_json_field(row["grounding_metadata"]) if isinstance(row["grounding_metadata"], str) else row["grounding_metadata"]
             
-            if row["created_at"]:
-                entry["timestamp"] = _datetime_to_ms(row["created_at"])
+            # Use explicit None checks to avoid SQLAlchemy clause boolean issues
+            grounding_val = row["grounding_metadata"]
+            if grounding_val is not None:
+                entry["grounding_metadata"] = _parse_json_field(grounding_val) if isinstance(grounding_val, str) else grounding_val
+            
+            created_val = row["created_at"]
+            if created_val is not None:
+                entry["timestamp"] = _datetime_to_ms(created_val)
             else:
                 entry["timestamp"] = 0
 
             # Include reminders if present (use try/except since older DB may not have column)
             try:
                 reminders_value = row["reminders"]
-                if reminders_value:
+                if reminders_value is not None:
                     entry["reminders"] = _parse_json_field(reminders_value) if isinstance(reminders_value, str) else reminders_value
             except (KeyError, IndexError):
                 pass  # Column doesn't exist or not accessible
