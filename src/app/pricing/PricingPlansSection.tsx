@@ -61,9 +61,6 @@ export const PATHFINDER_FEATURES: FeatureItem[] = [
         label: "256,000 token memory",
         icon: Pin,
     },
-    { id: "plans_habits_reminders", label: "Plans, habits, and reminders", icon: Clock },
-    { id: "daily_pulse", label: "Daily pulse", icon: CalendarClock },
-    { id: "discord_support", label: "Discord community support", icon: Users },
     { id: "everything_in_scout", label: "Everything in Scout", icon: Plus, variant: "inherit" },
 ];
 
