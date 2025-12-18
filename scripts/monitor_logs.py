@@ -27,11 +27,8 @@ from collections import deque
 from pathlib import Path
 
 # Configuration
-DISCORD_WEBHOOK_URL = os.getenv(
-    'DISCORD_WEBHOOK_URL',
-    'https://discord.com/api/webhooks/1450059573409873950/RvYql3tRU5pkyJjsAsN2Vwe8oK9kHMtuhnflBaZReTsA_HMJgxNc1zrva5GnrulWqptR'
-)
-DISCORD_USER_ID = os.getenv('DISCORD_USER_ID', '853296501882093598')
+DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL", "").strip()
+DISCORD_USER_ID = os.getenv("DISCORD_USER_ID", "").strip()
 CHECK_INTERVAL = 10  # seconds
 DEDUP_WINDOW = 300  # 5 minutes
 MAX_ERROR_LENGTH = 1500  # Discord message length limit
@@ -85,6 +82,9 @@ def should_notify(error_hash: str) -> bool:
 
 def send_discord_notification(error_text: str, source: str):
     """Send error notification to Discord."""
+    if not DISCORD_WEBHOOK_URL:
+        return
+
     error_hash = get_error_hash(error_text)
     
     if not should_notify(error_hash):
@@ -96,8 +96,9 @@ def send_discord_notification(error_text: str, source: str):
         error_text = error_text[:MAX_ERROR_LENGTH] + "\n... (truncated)"
     
     # Format message
+    mention = f"<@{DISCORD_USER_ID}> " if DISCORD_USER_ID else ""
     message = (
-        f"<@{DISCORD_USER_ID}> 🔥 **Runtime Error Detected**\n"
+        f"{mention}🔥 **Runtime Error Detected**\n"
         f"**Source**: {source}\n"
         f"**Time**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
         f"```\n{error_text}\n```"

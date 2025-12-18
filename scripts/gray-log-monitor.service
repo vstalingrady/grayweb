@@ -7,8 +7,8 @@ Requires=docker.service
 Type=simple
 User=ubuntu
 WorkingDirectory=/home/ubuntu/gray
-Environment="DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/1450059573409873950/RvYql3tRU5pkyJjsAsN2Vwe8oK9kHMtuhnflBaZReTsA_HMJgxNc1zrva5GnrulWqptR"
-Environment="DISCORD_USER_ID=853296501882093598"
+EnvironmentFile=-/gray/.env
+EnvironmentFile=-/home/ubuntu/gray/.env
 ExecStart=/usr/bin/python3 /home/ubuntu/gray/scripts/monitor_logs.py --daemon
 Restart=always
 RestartSec=10

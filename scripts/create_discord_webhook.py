@@ -38,7 +38,7 @@ def create_webhook():
         print(webhook_url)
         print(f"\nAdd this to your .env file:")
         print(f"DISCORD_WEBHOOK_URL={webhook_url}")
-        print(f"DISCORD_USER_ID=853296501882093598")
+        print("DISCORD_USER_ID=your-discord-user-id")
         return webhook_url
     else:
         print(f"❌ Failed to create webhook: {response.status_code}")

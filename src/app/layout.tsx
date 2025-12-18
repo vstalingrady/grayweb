@@ -153,20 +153,22 @@ export default async function RootLayout({
       }, 100);
     })();
   `;
-  const themeInitScript = `
-    (function() {
-      try {
-        var stored = localStorage.getItem("gray_theme");
-        var mode =
-          stored === "light" || stored === "dark" || stored === "system"
-            ? stored
-            : "system";
-        var prefersLight = window.matchMedia("(prefers-color-scheme: light)").matches;
-        var shouldBeLight = mode === "light" || (mode === "system" && prefersLight);
-        document.documentElement.classList.toggle("light", shouldBeLight);
-      } catch (e) {}
-    })();
-  `;
+	  const themeInitScript = `
+	    (function() {
+	      try {
+	        var stored = localStorage.getItem("gray_theme");
+	        var mode =
+	          stored === "light" || stored === "dark" || stored === "system"
+	            ? stored
+	            : "system";
+	        var prefersLight = window.matchMedia("(prefers-color-scheme: light)").matches;
+	        var shouldBeLight = mode === "light" || (mode === "system" && prefersLight);
+	        document.documentElement.classList.toggle("light", shouldBeLight);
+	      } catch (e) {
+	        console.warn("Theme init failed", e);
+	      }
+	    })();
+	  `;
   return (
    <html
       lang="en"

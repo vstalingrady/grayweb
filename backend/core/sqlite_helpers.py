@@ -15,6 +15,14 @@ from backend.database import DATABASE_URL
 
 app_logger = create_logger("backend.sqlite")
 
+def _quote_identifier(identifier: str) -> str:
+    return '"' + identifier.replace('"', '""') + '"'
+
+
+def _quote_identifier_list(identifiers: str) -> str:
+    parts = [part.strip() for part in identifiers.split(",") if part.strip()]
+    return ", ".join(_quote_identifier(part) for part in parts)
+
 
 def _get_db_path() -> Optional[str]:
     """Extract the SQLite database path from DATABASE_URL."""
@@ -40,6 +48,7 @@ def ensure_sqlite_columns(
     db_path = _get_db_path()
     if not db_path:
         return
+    quoted_table = _quote_identifier(table)
     try:
         conn = sqlite3.connect(db_path)
         try:
@@ -49,20 +58,26 @@ def ensure_sqlite_columns(
             )
             if cursor.fetchone() is None:
                 return
-            cursor = conn.execute(f"PRAGMA table_info({table})")
+            cursor = conn.execute(f"PRAGMA table_info({quoted_table})")
             existing = {row[1] for row in cursor.fetchall()}
             added = False
             for col_name, col_type, default in columns:
                 if col_name not in existing:
+                    quoted_col = _quote_identifier(col_name)
                     default_clause = f" DEFAULT {default}" if default is not None else ""
-                    conn.execute(f"ALTER TABLE {table} ADD COLUMN {col_name} {col_type}{default_clause}")
+                    conn.execute(
+                        f"ALTER TABLE {quoted_table} ADD COLUMN {quoted_col} {col_type}{default_clause}"
+                    )
                     added = True
             if added:
                 conn.commit()
             # Backfill NULLs if specified
             if backfill_nulls:
-                updates = ", ".join(f"{col} = COALESCE({col}, {val})" for col, val in backfill_nulls.items())
-                conn.execute(f"UPDATE {table} SET {updates}")
+                updates = ", ".join(
+                    f"{_quote_identifier(col)} = COALESCE({_quote_identifier(col)}, {val})"
+                    for col, val in backfill_nulls.items()
+                )
+                conn.execute(f"UPDATE {quoted_table} SET {updates}")
                 conn.commit()
         finally:
             conn.close()
@@ -81,7 +96,10 @@ def ensure_sqlite_table(table: str, create_sql: str) -> None:
     try:
         conn = sqlite3.connect(db_path)
         try:
-            cursor = conn.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name='{table}'")
+            cursor = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+                (table,),
+            )
             if not cursor.fetchone():
                 conn.execute(create_sql)
                 conn.commit()
@@ -99,19 +117,25 @@ def ensure_sqlite_index(table: str, index_name: str, column: str) -> None:
     db_path = _get_db_path()
     if not db_path:
         return
+    quoted_table = _quote_identifier(table)
     try:
         conn = sqlite3.connect(db_path)
         try:
             # Check if table exists first
-            cursor = conn.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name='{table}'")
+            cursor = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+                (table,),
+            )
             if not cursor.fetchone():
                 app_logger.info(f"Skipping index check; {table} table does not exist")
                 return
-            cursor = conn.execute(f"PRAGMA index_list({table})")
+            cursor = conn.execute(f"PRAGMA index_list({quoted_table})")
             indices = {row[1] for row in cursor.fetchall()}
             if index_name not in indices:
                 app_logger.info(f"Creating missing index {index_name} on {table}.{column}")
-                conn.execute(f"CREATE INDEX {index_name} ON {table} ({column})")
+                quoted_index = _quote_identifier(index_name)
+                quoted_columns = _quote_identifier_list(column)
+                conn.execute(f"CREATE INDEX {quoted_index} ON {quoted_table} ({quoted_columns})")
                 conn.commit()
         finally:
             conn.close()

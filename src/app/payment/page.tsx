@@ -60,16 +60,12 @@ const PIONEER_PRICING_USD = {
 } as const;
 
 
-// Gumroad Product IDs - configure in .env
-const GUMROAD_PRODUCT_IDS: Record<string, Record<string, string>> = {
-    voyager: {
-        monthly: process.env.NEXT_PUBLIC_GUMROAD_PRODUCT_ID_MONTHLY_VOYAGER || "",
-        annual: process.env.NEXT_PUBLIC_GUMROAD_PRODUCT_ID_YEARLY_VOYAGER || "",
-    },
-    pioneer: {
-        monthly: process.env.NEXT_PUBLIC_GUMROAD_PRODUCT_ID_MONTHLY_PIONEER || "",
-        annual: process.env.NEXT_PUBLIC_GUMROAD_PRODUCT_ID_YEARLY_PIONEER || "",
-    },
+// Gumroad tiered membership configuration
+// Product permalink is 'gray', each tier has an option ID
+const GUMROAD_PRODUCT_PERMALINK = process.env.NEXT_PUBLIC_GUMROAD_PRODUCT_PERMALINK || "gray";
+const GUMROAD_OPTION_IDS: Record<string, string> = {
+    voyager: process.env.NEXT_PUBLIC_GUMROAD_OPTION_ID_VOYAGER || "lZ9QZXSGeVuLLYzGSzk7Bw==",
+    pioneer: process.env.NEXT_PUBLIC_GUMROAD_OPTION_ID_PIONEER || "1AKF6eGbTgVn1yq1m5YcXA==",
 };
 
 
@@ -238,12 +234,16 @@ function PaymentContent() {
 
             // Route to Gumroad
             if (selectedMethod.type === "gumroad") {
-                const productId = GUMROAD_PRODUCT_IDS[planParam || "voyager"]?.[billingCycle];
-                if (!productId) {
+                const optionId = GUMROAD_OPTION_IDS[planParam || "voyager"];
+                if (!optionId) {
                     throw new Error("Gumroad payment is not configured. Please contact support.");
                 }
 
-                const gumroadUrl = `https://gumroad.com/l/${productId}?email=${encodeURIComponent(userEmail || "")}&custom_fields[user_id]=${userId}`;
+                // Map billing cycle to Gumroad recurrence format
+                const recurrence = billingCycle === "annual" ? "yearly" : "monthly";
+
+                // Build Gumroad checkout URL with option ID and recurrence
+                const gumroadUrl = `https://gumroad.com/l/${GUMROAD_PRODUCT_PERMALINK}?option=${encodeURIComponent(optionId)}&recurrence=${recurrence}&email=${encodeURIComponent(userEmail || "")}&custom_fields[user_id]=${userId}`;
                 window.location.href = gumroadUrl;
                 setStatus("idle");
                 return;

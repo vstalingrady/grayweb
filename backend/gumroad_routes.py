@@ -14,23 +14,26 @@ logger = logging.getLogger("backend.gumroad_webhook")
 
 router = APIRouter()
 
-def get_gumroad_product_info() -> Dict[str, Dict[str, str]]:
+# Default option IDs for Gray tiered membership
+DEFAULT_VOYAGER_OPTION_ID = "lZ9QZXSGeVuLLYzGSzk7Bw=="
+DEFAULT_PIONEER_OPTION_ID = "1AKF6eGbTgVn1yq1m5YcXA=="
+
+def get_gumroad_option_info() -> Dict[str, Dict[str, str]]:
     """
-    Get product mapping dynamically to support environment variable changes and testing.
+    Get option/tier mapping for tiered membership product.
+    Maps option IDs to tier names. Billing cycle comes from 'recurrence' field in webhook.
     """
     mapping = {}
     
-    # Voyager
-    v_m = os.getenv("GUMROAD_PRODUCT_ID_VOYAGER_MONTHLY")
-    if v_m: mapping[v_m] = {"tier": "voyager", "billing_cycle": "monthly"}
-    v_y = os.getenv("GUMROAD_PRODUCT_ID_VOYAGER_YEARLY")
-    if v_y: mapping[v_y] = {"tier": "voyager", "billing_cycle": "annual"}
+    # Voyager tier option ID
+    voyager_option = os.getenv("GUMROAD_OPTION_ID_VOYAGER", DEFAULT_VOYAGER_OPTION_ID)
+    if voyager_option:
+        mapping[voyager_option] = {"tier": "voyager"}
     
-    # Pioneer
-    p_m = os.getenv("GUMROAD_PRODUCT_ID_PIONEER_MONTHLY")
-    if p_m: mapping[p_m] = {"tier": "pioneer", "billing_cycle": "monthly"}
-    p_y = os.getenv("GUMROAD_PRODUCT_ID_PIONEER_YEARLY")
-    if p_y: mapping[p_y] = {"tier": "pioneer", "billing_cycle": "annual"}
+    # Pioneer tier option ID  
+    pioneer_option = os.getenv("GUMROAD_OPTION_ID_PIONEER", DEFAULT_PIONEER_OPTION_ID)
+    if pioneer_option:
+        mapping[pioneer_option] = {"tier": "pioneer"}
     
     return mapping
 
@@ -84,27 +87,36 @@ async def handle_gumroad_sale(data: Dict[str, Any], db: Any = None):
         logger.warning(f"Could not identify user for Gumroad sale {data.get('sale_id')}")
         return
 
-    product_id = data.get("product_id")
-    info = get_gumroad_product_info().get(product_id)
+    # For tiered memberships, we need to identify the tier from the variant/option
+    # Gumroad sends 'variants' field which contains the tier info
+    variants = data.get("variants") or ""
+    product_name = (data.get("product_name") or "").lower()
     
-    if not info:
-        # Check if we can identify by product name as fallback
-        product_name = (data.get("product_name") or "").lower()
-        if "voyager" in product_name:
-            tier = "voyager"
-            billing_cycle = "annual" if "year" in product_name or "annual" in product_name else "monthly"
-            info = {"tier": tier, "billing_cycle": billing_cycle}
-        elif "pioneer" in product_name:
-            tier = "pioneer"
-            billing_cycle = "annual" if "year" in product_name or "annual" in product_name else "monthly"
-            info = {"tier": tier, "billing_cycle": billing_cycle}
+    # Try to identify tier from variants field or product name
+    tier = None
+    if "voyager" in variants.lower() or "voyager" in product_name:
+        tier = "voyager"
+    elif "pioneer" in variants.lower() or "pioneer" in product_name:
+        tier = "pioneer"
+    
+    # Fallback: try option ID lookup (if we can get it from custom fields or URL params)
+    if not tier:
+        option_mapping = get_gumroad_option_info()
+        # Check if any option ID is in the data
+        for option_id, option_info in option_mapping.items():
+            if option_id in str(data):
+                tier = option_info["tier"]
+                break
+    
+    if not tier:
+        logger.warning(f"Could not identify tier for Gumroad sale {data.get('sale_id')} - variants: {variants}, product: {product_name}")
+        # Default to voyager if we can't identify
+        tier = "voyager"
+        logger.info(f"Defaulting to tier: {tier}")
 
-    if not info:
-        logger.warning(f"Unknown Gumroad product: {product_id} ({data.get('product_name')})")
-        return
-
-    tier = info["tier"]
-    billing_cycle = info["billing_cycle"]
+    # Get billing cycle from 'recurrence' field (monthly, yearly, etc.)
+    recurrence = (data.get("recurrence") or "monthly").lower()
+    billing_cycle = "annual" if recurrence in ["yearly", "annual"] else "monthly"
     
     # Extract IDs
     subscription_id = data.get("subscription_id")
@@ -163,6 +175,7 @@ async def verify_gumroad_license_manual(
 ):
     """
     Manually trigger license verification for Gumroad.
+    For tiered membership products, we use the product permalink and extract tier from response.
     """
     user_id = current_user["id"]
     query = users.select().where(users.c.id == user_id)
@@ -172,48 +185,61 @@ async def verify_gumroad_license_manual(
     if not license_key:
         raise HTTPException(status_code=400, detail="No Gumroad license key found for this user")
     
-    found_product_info = None
-    product_mapping = get_gumroad_product_info()
-    for product_id, info in product_mapping.items():
-        if not product_id:
-            continue
-        res = await gumroad_client.verify_license(product_id, license_key)
-        if res.get("success"):
-            found_product_info = info
-            # Extract subscription end date if available
-            purchase = res.get("purchase", {})
-            ended_at_str = purchase.get("subscription_ended_at") or purchase.get("subscription_cancelled_at") or purchase.get("subscription_failed_at")
-            
-            # If not explicitly ended, set a default based on cycle
-            if not ended_at_str:
-                days = 366 if info["billing_cycle"] == "annual" else 31
-                expires_at = utcnow() + timedelta(days=days)
-            else:
-                # Parse Gumroad date (usually ISO)
-                from datetime import datetime
-                try:
-                    expires_at = datetime.fromisoformat(ended_at_str.replace("Z", "+00:00")).replace(tzinfo=None)
-                except ValueError:
-                    expires_at = utcnow() # Fallback
-            
-            # Update user
-            update_query = (
-                users.update()
-                .where(users.c.id == user_id)
-                .values(
-                    plan_tier=info["tier"],
-                    subscription_expires_at=expires_at,
-                    gumroad_license_key=license_key
-                )
-            )
-            await db.execute(update_query)
-            break
-            
-    if not found_product_info:
-        return {"success": False, "message": "License verification failed or product not recognized"}
+    # Use the product permalink for verification
+    product_permalink = os.getenv("GUMROAD_PRODUCT_PERMALINK", "gray")
+    
+    res = await gumroad_client.verify_license(product_permalink, license_key)
+    
+    if not res.get("success"):
+        return {"success": False, "message": "License verification failed"}
+    
+    purchase = res.get("purchase", {})
+    
+    # Extract tier from variants field
+    variants = (purchase.get("variants") or "").lower()
+    product_name = (purchase.get("product_name") or "").lower()
+    
+    tier = "voyager"  # default
+    if "pioneer" in variants or "pioneer" in product_name:
+        tier = "pioneer"
+    elif "voyager" in variants or "voyager" in product_name:
+        tier = "voyager"
+    
+    # Get billing cycle from recurrence
+    recurrence = (purchase.get("recurrence") or "monthly").lower()
+    billing_cycle = "annual" if recurrence in ["yearly", "annual"] else "monthly"
+    
+    # Check if subscription is still active
+    ended_at_str = purchase.get("subscription_ended_at") or purchase.get("subscription_cancelled_at") or purchase.get("subscription_failed_at")
+    
+    if ended_at_str:
+        # Subscription has ended
+        from datetime import datetime
+        try:
+            expires_at = datetime.fromisoformat(ended_at_str.replace("Z", "+00:00")).replace(tzinfo=None)
+        except ValueError:
+            expires_at = utcnow()
+    else:
+        # Active subscription - set expiry based on billing cycle
+        days = 366 if billing_cycle == "annual" else 31
+        expires_at = utcnow() + timedelta(days=days)
+    
+    # Update user
+    update_query = (
+        users.update()
+        .where(users.c.id == user_id)
+        .values(
+            plan_tier=tier,
+            subscription_expires_at=expires_at,
+            gumroad_license_key=license_key
+        )
+    )
+    await db.execute(update_query)
+    
+    logger.info(f"License verified for user {user_id}: tier={tier}, billing_cycle={billing_cycle}")
         
     return {
         "success": True, 
-        "message": f"License verified. Plan updated to {found_product_info['tier']}",
-        "tier": found_product_info["tier"]
+        "message": f"License verified. Plan updated to {tier}",
+        "tier": tier
     }
