@@ -243,6 +243,23 @@
 .planCard[data-variant="muted"] {
   background: rgba(8, 8, 8, 1);
   box-shadow: 0 10px 26px rgba(0, 0, 0, 0.55);
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.planCard[data-variant="muted"] .cardHeader h2 {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.planCard[data-variant="muted"] .priceValue {
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.planCard[data-variant="muted"] .featureList li {
+  color: rgba(246, 247, 251, 0.5);
+}
+
+.planCard[data-variant="muted"] .featureList svg {
+  color: rgba(255, 255, 255, 0.4);
 }
 
 .planCard[data-variant="highlighted"] {
