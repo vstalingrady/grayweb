@@ -23,7 +23,7 @@ Add these lines to your `.env` file:
 SUPABASE_DB_PASSWORD=your_actual_password_here
 
 # Local database (already set, just verify)
-LOCAL_DATABASE_URL=sqlite:///./backend/users.db
+LOCAL_DATABASE_URL=sqlite:///./data/users.db
 ```
 
 The `REMOTE_DATABASE_URL` will be auto-constructed from your existing `SUPABASE_URL` + `SUPABASE_DB_PASSWORD`.

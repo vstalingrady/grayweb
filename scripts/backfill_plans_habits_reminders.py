@@ -3,7 +3,7 @@
 Backfill existing plans/habits/reminders from the local SQLite database into Supabase.
 
 Usage:
-  export DATABASE_URL=sqlite:////absolute/path/to/backend/users.db
+  export DATABASE_URL=sqlite:////absolute/path/to/data/users.db
   export SUPABASE_URL=...
   export SUPABASE_SERVICE_ROLE_KEY=...
   python scripts/backfill_plans_habits_reminders.py
@@ -138,7 +138,7 @@ def _upsert_rows(client: Client, table: str, rows: List[Dict[str, Any]]) -> None
 
 
 def main() -> None:
-    database_url = os.getenv("DATABASE_URL", "sqlite:///backend/users.db")
+    database_url = os.getenv("DATABASE_URL", "sqlite:///data/users.db")
     sqlite_path = _resolve_sqlite_path(database_url)
     supabase_url = _require_env("SUPABASE_URL")
     supabase_key = (

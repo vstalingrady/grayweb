@@ -73,7 +73,7 @@ SUPABASE_URL=https://xxxxx.supabase.co
 SUPABASE_DB_PASSWORD=your-database-password
 
 # Local database (SQLite)
-LOCAL_DATABASE_URL=sqlite:///./backend/users.db
+LOCAL_DATABASE_URL=sqlite:///./data/users.db
 ```
 
 ### 2. Run Migrations
@@ -148,7 +148,7 @@ Supabase automatically backs up:
 Recommended backup approach:
 ```bash
 # Backup local database
-cp backend/users.db backend/backups/users_$(date +%Y%m%d).db
+cp data/users.db backups/users_$(date +%Y%m%d).db
 
 # Or use automated backup script
 python scripts/backup_local_db.py
@@ -158,13 +158,13 @@ python scripts/backup_local_db.py
 
 ### Current: All Local
 ```
-DATABASE_URL=sqlite:///./backend/users.db
+DATABASE_URL=sqlite:///./data/users.db
 ```
 
 ### Hybrid: Dual Database (Recommended)
 ```
 REMOTE_DATABASE_URL=postgresql://...
-LOCAL_DATABASE_URL=sqlite:///./backend/users.db
+LOCAL_DATABASE_URL=sqlite:///./data/users.db
 ```
 
 ### Future: All Remote (Optional)
@@ -182,7 +182,7 @@ DATABASE_URL=postgresql://...
 
 ### Local database locked
 - Close other processes accessing the SQLite file
-- Check file permissions on `backend/users.db`
+- Check file permissions on `data/users.db`
 
 ### Table not found
 - Verify table is in correct database (see table distribution above)

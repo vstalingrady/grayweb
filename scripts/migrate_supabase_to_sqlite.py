@@ -5,10 +5,10 @@ Supabase is intended to be auth-only at runtime. If you previously stored
 application data in Supabase public tables, run this before dropping them.
 
 Typical usage (dry run first):
-  python scripts/migrate_supabase_to_sqlite.py --dry-run --sqlite-path ./backend/users.db
+  python scripts/migrate_supabase_to_sqlite.py --dry-run --sqlite-path ./data/users.db
 
 Then apply:
-  python scripts/migrate_supabase_to_sqlite.py --sqlite-path ./backend/users.db
+  python scripts/migrate_supabase_to_sqlite.py --sqlite-path ./data/users.db
 """
 
 from __future__ import annotations
@@ -90,7 +90,7 @@ def _parse_args(argv: Sequence[str]) -> argparse.Namespace:
         "--sqlite-path",
         type=str,
         default=None,
-        help="Target SQLite DB filepath (defaults to env DATABASE_URL/LOCAL_DATABASE_URL or ./backend/users.db).",
+        help="Target SQLite DB filepath (defaults to env DATABASE_URL/LOCAL_DATABASE_URL or ./data/users.db).",
     )
     parser.add_argument(
         "--dry-run",
@@ -131,7 +131,7 @@ def _sqlite_path_from_env() -> Path:
             raw_path = candidate.replace("sqlite:////", "/", 1)
             return Path(raw_path).expanduser()
 
-    return Path("./backend/users.db")
+    return Path("./data/users.db")
 
 
 def _sqlite_url_from_path(sqlite_path: Path) -> str:

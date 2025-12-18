@@ -27,7 +27,7 @@ def check_env_vars():
         "SUPABASE_URL": os.getenv("SUPABASE_URL"),
         "SUPABASE_DB_PASSWORD": os.getenv("SUPABASE_DB_PASSWORD"),
         "REMOTE_DATABASE_URL": os.getenv("REMOTE_DATABASE_URL"),
-        "LOCAL_DATABASE_URL": os.getenv("LOCAL_DATABASE_URL", "sqlite:///./backend/users.db"),
+        "LOCAL_DATABASE_URL": os.getenv("LOCAL_DATABASE_URL", "sqlite:///./data/users.db"),
     }
     
     for key, value in checks.items():
@@ -65,7 +65,7 @@ def check_local_db():
     print("🔍 Checking local database...")
     print()
     
-    local_url = os.getenv("LOCAL_DATABASE_URL", "sqlite:///./backend/users.db")
+    local_url = os.getenv("LOCAL_DATABASE_URL", "sqlite:///./data/users.db")
     
     if local_url.startswith("sqlite:///"):
         db_path = local_url.replace("sqlite:///", "")
