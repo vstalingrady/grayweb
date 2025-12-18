@@ -67,6 +67,22 @@ export const useChatViewScroll = ({
     isAtBottomRef.current = isNearBottom;
   }, []);
 
+  // When streaming begins (activeStreamingMessageId becomes non-null), auto-scroll to bottom
+  // This ensures users see the AI response even if they weren't at the bottom
+  const prevStreamingIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    // Detect when streaming just started
+    if (activeStreamingMessageId && !prevStreamingIdRef.current) {
+      // Reset to bottom state so streaming auto-scrolls
+      isAtBottomRef.current = true;
+      // Immediately scroll to bottom
+      if (scrollAnchorRef.current) {
+        scrollAnchorRef.current.scrollIntoView({ behavior: "instant" });
+      }
+    }
+    prevStreamingIdRef.current = activeStreamingMessageId;
+  }, [activeStreamingMessageId]);
+
   useEffect(() => {
     if (!streamingContentSignature || !scrollAnchorRef.current || !isAtBottomRef.current) {
       return;
