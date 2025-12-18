@@ -145,19 +145,16 @@ export function DashboardPulseGrid({
   return (
     <div className={styles.dashboardGridFinal}>
       <div className={styles.dashboardHeaderArea}>
-        <div>
-          <h1 className={styles.dashboardGreeting}>
-            {greetingForDate(currentDate)}, {viewerFirstName}
-          </h1>
-          <div className={styles.dashboardDate}>
-            {currentDate.toLocaleDateString(undefined, {
-              weekday: "long",
-              month: "long",
-              day: "numeric",
-            })}
-          </div>
+        <h1 className={styles.dashboardGreeting}>
+          {greetingForDate(currentDate)}, {viewerFirstName}
+        </h1>
+        <div className={styles.dashboardDate}>
+          {currentDate.toLocaleDateString(undefined, {
+            weekday: "long",
+            month: "long",
+            day: "numeric",
+          })}
         </div>
-        <div className={styles.dashboardHeaderSide}>{null}</div>
       </div>
 
       <div className={`${styles.dashboardCard} ${styles.dashboardCardProactivity}`}>

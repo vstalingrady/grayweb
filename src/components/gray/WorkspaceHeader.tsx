@@ -18,39 +18,28 @@ function GrayWorkspaceHeader({
   hideDesktopMeta = false,
 }: GrayWorkspaceHeaderProps) {
   const { t } = useI18n();
-  const normalizedPlanLabel = planLabel.trim().length ? planLabel.trim() : t("Pioneer");
-  const normalizedPlanLower = normalizedPlanLabel.toLowerCase();
-  const isDepthMember = normalizedPlanLower === "depth";
-  const isUpgradeVisible = showUpgradeButton
-    && !isDepthMember
-    && normalizedPlanLower !== "voyager"
-    && normalizedPlanLower !== "pioneer";
+  const normalizedPlanLower = (planLabel || "").trim().toLowerCase();
 
-  const handlePlanBadgeClick = () => {
-    if (isDepthMember || !isUpgradeVisible) {
-      return;
-    }
+  // Only show Upgrade button if user is "scout" (free tier)
+  const isScout = normalizedPlanLower === "scout" || normalizedPlanLower === "";
+  const shouldShowUpgrade = showUpgradeButton && isScout;
+
+  const handleUpgradeClick = () => {
     onUpgradeClick?.();
   };
+
   return (
     <header className={styles.header}>
       {children ? <div className={styles.headerLeft}>{children}</div> : null}
-      {!hideDesktopMeta ? (
+      {!hideDesktopMeta && shouldShowUpgrade ? (
         <div className={`${styles.headerRight} hidden md:flex`}>
           <button
             type="button"
             className={styles.planBadge}
-            onClick={handlePlanBadgeClick}
-            data-state={!isUpgradeVisible ? "active" : undefined}
-            disabled={!isUpgradeVisible || !onUpgradeClick}
-            aria-label={
-              isUpgradeVisible
-                ? t("Upgrade plan from {plan}", { plan: normalizedPlanLabel })
-                : t("Current plan: {plan}", { plan: normalizedPlanLabel })
-            }
+            onClick={handleUpgradeClick}
+            aria-label={t("Upgrade plan")}
           >
-            <span className={styles.planBadgeLabel}>{normalizedPlanLabel}</span>
-            {isUpgradeVisible ? <span className={styles.planBadgeHint}>{t("Upgrade")}</span> : null}
+            <span className={styles.planBadgeLabel}>{t("Upgrade")}</span>
           </button>
         </div>
       ) : null}
