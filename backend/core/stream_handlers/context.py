@@ -233,16 +233,7 @@ def build_effective_system_prompt(
             "- If the user wants reminders/plans, ask them to enable the Reminders & Plans toggle."
         )
     
-    # Add tool instructions for structured tools
-    if needs_structured_tools and tool_list:
-        prompt += "\n\n" + (
-            "TOOLS REQUIRED:\n"
-            "- When the user asks to create/update/delete a plan, habit, or reminder, "
-            "you MUST call the appropriate tool.\n"
-            "- Do NOT claim 'reminders set', 'scheduled', or similar unless you "
-            "actually invoked the tool and it succeeded.\n"
-            "- If the user intent is ambiguous, ask a clarifying question before calling tools."
-        )
+    # No longer adding tool instructions to system prompt - tools work better without explicit instructions
     
     # Add search capability note
     if search_enabled:

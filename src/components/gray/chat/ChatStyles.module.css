@@ -707,7 +707,7 @@
   color: rgba(255, 255, 255, 0.82);
   padding: 0;
   width: fit-content;
-  margin-bottom: clamp(4px, 1vh, 10px);
+  margin: 0 auto clamp(4px, 1vh, 10px);
 }
 
 .chatStreamingSpinner {

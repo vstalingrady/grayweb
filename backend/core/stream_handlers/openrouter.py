@@ -103,15 +103,8 @@ async def stream_openrouter_response(
         is_collecting_tool = False
         intercepted_legacy_tool_call = False
         
-        # Build system prompt with tool instructions if needed
+        # Build system prompt - no longer adding tool instructions as they're redundant
         run_system_prompt = system_prompt
-        if needs_structured_tools and tool_list:
-            run_system_prompt = (run_system_prompt or "") + "\n\n" + (
-                "TOOLS REQUIRED:\n"
-                "- When the user asks to create/update/delete a plan, habit, or reminder, you MUST call the appropriate tool.\n"
-                "- Do NOT claim 'reminders set', 'scheduled', or similar unless you actually invoked the tool and it succeeded.\n"
-                "- If the user intent is ambiguous, ask a clarifying question before calling tools."
-            )
         
         if search_enabled:
             # Track web search cost ($10/K = $0.01 per search)

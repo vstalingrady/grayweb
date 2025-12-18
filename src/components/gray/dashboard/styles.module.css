@@ -1232,6 +1232,23 @@
   overflow: visible !important;
 }
 
+:global(.toastui-calendar-weekday-event-title),
+:global(.toastui-calendar-event-title),
+:global(.toastui-calendar-event-time .toastui-calendar-event-time-content) {
+  font-weight: 400 !important;
+  font-size: 11px !important;
+  text-align: left !important;
+}
+
+:global(.toastui-calendar-weekday-event-title) {
+  padding-left: 2px !important;
+}
+
+:global(.toastui-calendar-event-time .toastui-calendar-event-time-content) {
+  padding: 0 4px !important;
+  line-height: 1.2 !important;
+}
+
 :global(.tui-full-calendar-popup) {
   z-index: 1001 !important;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5) !important;

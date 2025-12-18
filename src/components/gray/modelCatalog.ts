@@ -33,8 +33,8 @@ export const PIONEER_GROUPS: ModelGroup[] = [
     label: "Google",
     iconPath: "/logos/gemini-color.svg",
     models: [
-      { id: "google/gemini-3-pro-preview", label: "Gemini 3 Pro Preview", cost: "$$$", tierRequired: "voyager" },
-      { id: "google/gemini-3-flash-preview", label: "Gemini 3 Flash Preview", cost: "$$", tierRequired: "voyager" },
+      { id: "google/gemini-3-pro-preview", label: "Gemini 3 Pro", cost: "$$$", tierRequired: "voyager" },
+      { id: "google/gemini-3-flash-preview", label: "Gemini 3 Flash", cost: "$$", tierRequired: "voyager" },
     ],
   },
   {
