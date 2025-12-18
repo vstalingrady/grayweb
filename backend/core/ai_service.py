@@ -13,72 +13,108 @@ from fastapi import HTTPException
 if TYPE_CHECKING:
     import databases
 
-# Global API logger
+from backend.logging_config import create_logger
+from backend.usage_tracker import UsageTracker, UsageLimitExceeded
+from backend.gemini_client import GeminiService
+from backend.openrouter_client import OpenRouterService
+from backend.calendar_context import build_calendar_context
+from backend.calendar_tools import CALENDAR_TOOLS
+from backend.plan_tools import PLAN_TOOLS
+from backend.tier_utils import normalize_plan_tier
+from backend.core.ai_config import (
+    GEMINI_DEFAULT_MODEL,
+    get_default_chat_tools,
+    get_search_tool,
+    get_url_context_tool,
+    tier_conversation_token_limit as _tier_conversation_token_limit,
+)
+from backend.core.ai_utils import materialize_structured_reminders, fallback_title_from_message
+from backend.core.cache import load_context_cache as _load_context_cache, context_cache_contents as _context_cache_contents
+from backend.core.chat_history import normalize_conversation_history
+from backend.core.message_detection import (
+    needs_structured_tools as _needs_structured_tools,
+    should_request_structured_reminders as _should_request_structured_reminders,
+    should_enable_search as _should_enable_search,
+    extract_urls_from_message as _extract_urls_from_message,
+)
+from backend.core.media_attachments import (
+    resolve_media_attachments as _resolve_media_attachments,
+    generate_image_descriptions as _generate_image_descriptions,
+)
+from backend.core.serializers import row_get as _row_get
+from backend.core.stream_handlers.context import (
+    build_intent_window_text,
+    determine_provider_and_model,
+    add_maps_tool_if_needed,
+    consolidate_gemini_tools,
+    add_url_context_tool_if_needed,
+    build_maps_tool_and_config,
+)
+from backend.core.stream_handlers.hybrid import (
+    execute_tools_with_gemini_flash as _execute_tools_with_gemini_flash_hybrid,
+    fetch_url_context_with_gemini as _fetch_url_context_with_gemini_hybrid,
+    has_onboarding_tool as _has_onboarding_tool_hybrid,
+)
+from backend.core.stream_handlers.openrouter import stream_openrouter_response
+from backend.core.stream_handlers.gemini_stream import stream_gemini_response
+from backend.core.function_call_helpers import format_tool_results_for_context as _format_tool_results_for_context
+from backend.core.tool_execution import execute_function_call as _execute_function_call
+
+GEMINI_SERVICE = GeminiService()
+OPENROUTER_SERVICE = OpenRouterService()
+DEFAULT_CHAT_TOOLS = get_default_chat_tools()
+SEARCH_TOOL = get_search_tool()
+URL_CONTEXT_TOOL = get_url_context_tool()
+
+
 def _get_api_logger():
-    try:
-        from backend.logging_config import create_logger
-    except ImportError:
-        from logging_config import create_logger
     return create_logger("backend.api")
 
-# Lazy imports for core functions
 def _get_deps():
-    try:
-        from backend.main import (
-            GEMINI_SERVICE,
-            OPENROUTER_SERVICE,
-            UsageTracker,
-            UsageLimitExceeded,
-            GEMINI_DEFAULT_MODEL,
-        )
-        from backend.compat_imports import (
-            normalize_conversation_history,
-            tier_conversation_token_limit,
-            build_intent_window_text,
-            determine_provider_and_model,
-            add_maps_tool_if_needed,
-            consolidate_gemini_tools,
-            add_url_context_tool_if_needed,
-            build_calendar_context,
-            build_maps_tool_and_config,
-            materialize_structured_reminders,
-            fallback_title_from_message,
-        )
-        from backend.core.ai_config import (
-            DEFAULT_CHAT_TOOLS,
-            SEARCH_TOOL,
-            PLAN_TOOLS,
-            CALENDAR_TOOLS,
-            URL_CONTEXT_TOOL,
-        )
-        from backend.core.message_detection import (
-            needs_structured_tools as _needs_structured_tools,
-            should_request_structured_reminders as _should_request_structured_reminders,
-            should_enable_search as _should_enable_search,
-            extract_urls_from_message as _extract_urls_from_message,
-        )
-        from backend.core.media_attachments import (
-            resolve_media_attachments as _resolve_media_attachments,
-            generate_image_descriptions as _generate_image_descriptions,
-        )
-        from backend.core.conversation_manager import (
-            execute_tools_with_gemini_flash as _execute_tools_with_gemini_flash_hybrid,
-            format_tool_results_for_context as _format_tool_results_for_context,
-            has_onboarding_tool as _has_onboarding_tool_hybrid,
-            fetch_url_context_with_gemini as _fetch_url_context_with_gemini_hybrid,
-        )
-        from backend.core.stream_handlers.openrouter import stream_openrouter_response
-        from backend.core.stream_handlers.gemini import stream_gemini_response
-        from backend.core.tool_execution import execute_function_call as _execute_function_call
-        from backend.core.cache import (
-            load_context_cache as _load_context_cache,
-            context_cache_contents as _context_cache_contents,
-        )
-        from backend.core.serializers import row_get as _row_get
-    except ImportError:
-        # Fallback for local dev/different paths
-        pass
-    return locals()
+    tier_conversation_token_limit = lambda plan_tier: _tier_conversation_token_limit(  # noqa: E731
+        plan_tier,
+        normalize_fn=normalize_plan_tier,
+    )
+
+    return {
+        "GEMINI_SERVICE": GEMINI_SERVICE,
+        "OPENROUTER_SERVICE": OPENROUTER_SERVICE,
+        "UsageTracker": UsageTracker,
+        "UsageLimitExceeded": UsageLimitExceeded,
+        "GEMINI_DEFAULT_MODEL": GEMINI_DEFAULT_MODEL,
+        "normalize_conversation_history": normalize_conversation_history,
+        "tier_conversation_token_limit": tier_conversation_token_limit,
+        "build_intent_window_text": build_intent_window_text,
+        "determine_provider_and_model": determine_provider_and_model,
+        "add_maps_tool_if_needed": add_maps_tool_if_needed,
+        "consolidate_gemini_tools": consolidate_gemini_tools,
+        "add_url_context_tool_if_needed": add_url_context_tool_if_needed,
+        "build_calendar_context": build_calendar_context,
+        "build_maps_tool_and_config": build_maps_tool_and_config,
+        "materialize_structured_reminders": materialize_structured_reminders,
+        "fallback_title_from_message": fallback_title_from_message,
+        "DEFAULT_CHAT_TOOLS": DEFAULT_CHAT_TOOLS,
+        "SEARCH_TOOL": SEARCH_TOOL,
+        "URL_CONTEXT_TOOL": URL_CONTEXT_TOOL,
+        "PLAN_TOOLS": PLAN_TOOLS,
+        "CALENDAR_TOOLS": CALENDAR_TOOLS,
+        "_needs_structured_tools": _needs_structured_tools,
+        "_should_request_structured_reminders": _should_request_structured_reminders,
+        "_should_enable_search": _should_enable_search,
+        "_extract_urls_from_message": _extract_urls_from_message,
+        "_resolve_media_attachments": _resolve_media_attachments,
+        "_generate_image_descriptions": _generate_image_descriptions,
+        "_execute_tools_with_gemini_flash_hybrid": _execute_tools_with_gemini_flash_hybrid,
+        "_format_tool_results_for_context": _format_tool_results_for_context,
+        "_has_onboarding_tool_hybrid": _has_onboarding_tool_hybrid,
+        "_fetch_url_context_with_gemini_hybrid": _fetch_url_context_with_gemini_hybrid,
+        "stream_openrouter_response": stream_openrouter_response,
+        "stream_gemini_response": stream_gemini_response,
+        "_execute_function_call": _execute_function_call,
+        "_load_context_cache": _load_context_cache,
+        "_context_cache_contents": _context_cache_contents,
+        "_row_get": _row_get,
+    }
 
 async def stream_ai_response(
     message: str,
@@ -389,18 +425,11 @@ async def generate_chat_starter(
         time_context=time_context
     )
     
-    try:
-        from backend.core.chat_starter_helpers import (
-            starter_profile_context, 
-            build_starter_prompt, 
-            starter_fallback_message
-        )
-    except ImportError:
-        from core.chat_starter_helpers import (
-            starter_profile_context, 
-            build_starter_prompt, 
-            starter_fallback_message
-        )
+    from backend.core.chat_starter_helpers import (
+        starter_profile_context,
+        build_starter_prompt,
+        starter_fallback_message,
+    )
         
     profile_context = starter_profile_context(payload)
     prompt = build_starter_prompt(payload, profile_context, prompt_locale)

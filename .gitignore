@@ -37,8 +37,14 @@ __pycache__/
 # sqlite / local db artifacts
 *.db
 *.db.*
+*.db-wal
+*.db-shm
 *.sqlite
 *.sqlite3
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite3-wal
+*.sqlite3-shm
 
 # logs
 *.log
@@ -49,6 +55,8 @@ logs/
 
 # env files (can opt-in for committing if needed)
 .env
+.env.local
+.env.*.local
 
 # vercel
 .vercel

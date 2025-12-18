@@ -51,7 +51,7 @@ export const isPayHost = (host?: string | null): boolean => {
   if (!normalized) {
     return false;
   }
-  return normalized.startsWith("pay.") || normalized === "pay";
+  return normalized.startsWith("payment.") || normalized === "payment";
 };
 
 export const resolveDefaultWorkspacePath = (
@@ -213,6 +213,9 @@ export const resolveWorkspaceHost = (
   }
 
   if (normalized === "alignment.id" || normalized.endsWith(".alignment.id")) {
+    if (normalized.startsWith("payment.")) {
+      return normalized;
+    }
     return PROD_DOMAIN;
   }
 

@@ -15,52 +15,44 @@ from fastapi import FastAPI
 
 # Lazy imports to handle global dependencies
 def _get_deps():
-    try:
-        from backend.main import (
-            database, 
-            db_logger, 
-            app_logger, 
-            init_audit_logger,
-            proactivity_realtime_broker,
-            AI_MESSAGE_GENERATOR,
-            AI_PROVIDER,
-            VALIDATE_GEMINI_ON_STARTUP,
-            GEMINI_SERVICE,
-            GEMINI_DEFAULT_MODEL,
-        )
-        from backend.compat_imports import (
-            ProactivityEngine,
-            ProactivitySchedulerManager,
-            ReminderSchedulerManager,
-            set_entity_reminder_scheduler,
-            set_workspace_reminder_scheduler,
-        )
-    except ImportError:
-        from main import (
-            database, 
-            db_logger, 
-            app_logger, 
-            init_audit_logger,
-            proactivity_realtime_broker,
-            AI_MESSAGE_GENERATOR,
-            AI_PROVIDER,
-            VALIDATE_GEMINI_ON_STARTUP,
-            GEMINI_SERVICE,
-            GEMINI_DEFAULT_MODEL,
-        )
-        from compat_imports import (
-            ProactivityEngine,
-            ProactivitySchedulerManager,
-            ReminderSchedulerManager,
-            set_entity_reminder_scheduler,
-            set_workspace_reminder_scheduler,
-        )
+    from backend.main import (
+        database,
+        db_logger,
+        app_logger,
+        init_audit_logger,
+        proactivity_realtime_broker,
+        AI_MESSAGE_GENERATOR,
+        AI_PROVIDER,
+        VALIDATE_GEMINI_ON_STARTUP,
+        GEMINI_SERVICE,
+        GEMINI_DEFAULT_MODEL,
+    )
+    from backend.compat_imports import (
+        ProactivityEngine,
+        ProactivitySchedulerManager,
+        ReminderSchedulerManager,
+        set_entity_reminder_scheduler,
+        set_workspace_reminder_scheduler,
+    )
     return locals()
 
 # Global instances (to be set by lifespan)
 proactivity_engine = None
 proactivity_scheduler = None
 reminder_scheduler = None
+
+
+def _sync_scheduler_state_to_main(
+    engine: Any,
+    scheduler: Any,
+    reminder: Any,
+) -> None:
+    """Keep legacy `backend.main` globals in sync with lifespan-managed instances."""
+    import backend.main as main_module
+
+    main_module.proactivity_engine = engine
+    main_module.proactivity_scheduler = scheduler
+    main_module.reminder_scheduler = reminder
 
 async def connect_database():
     """Connect to the database on startup."""
@@ -130,9 +122,12 @@ async def initialize_proactivity_engine():
             # Update tool handlers with the new scheduler
             deps['set_entity_reminder_scheduler'](reminder_scheduler)
             deps['set_workspace_reminder_scheduler'](reminder_scheduler)
-            
+
+        _sync_scheduler_state_to_main(proactivity_engine, proactivity_scheduler, reminder_scheduler)
+
     except Exception as e:
         app_logger.error(f"Failed to initialize proactivity engine: {e}", exc_info=True)
+        _sync_scheduler_state_to_main(None, None, None)
 
 async def validate_gemini_api_key_on_startup():
     deps = _get_deps()
@@ -155,18 +150,10 @@ async def validate_gemini_api_key_on_startup():
 async def lifespan(app: FastAPI):
     """Centralized startup/shutdown context manager."""
     # We'll need access to core migration functions
-    try:
-        from backend.core.migrations import (
-            run_startup_migrations as _run_startup_migrations,
-            run_basic_migrations as _run_basic_migrations,
-            ensure_paddle_columns as _ensure_paddle_columns,
-        )
-    except ImportError:
-        from core.migrations import (  # type: ignore
-            run_startup_migrations as _run_startup_migrations,
-            run_basic_migrations as _run_basic_migrations,
-            ensure_paddle_columns as _ensure_paddle_columns,
-        )
+    from backend.core.migrations import (
+        run_startup_migrations as _run_startup_migrations,
+        run_basic_migrations as _run_basic_migrations,
+    )
 
     _run_startup_migrations()
     await connect_database()

@@ -11,30 +11,11 @@ from typing import Any, Dict, List, Optional
 import databases
 
 # Use centralized time helper
-try:
-    from backend.time_utils import utcnow
-except Exception:
-    from time_utils import utcnow  # type: ignore
-
-try:
-    from backend.core.env_helpers import ensure_datetime_value
-except ImportError:
-    from core.env_helpers import ensure_datetime_value  # type: ignore
-
-try:
-    from backend.core.serializers import serialize_reminder_row
-except ImportError:
-    from core.serializers import serialize_reminder_row  # type: ignore
-
-try:
-    from backend.logging_config import create_logger
-except ImportError:
-    from logging_config import create_logger  # type: ignore
-
-try:
-    from backend.database import reminders, plans
-except ImportError:
-    from database import reminders, plans  # type: ignore
+from backend.time_utils import utcnow
+from backend.core.env_helpers import ensure_datetime_value
+from backend.core.serializers import serialize_reminder_row
+from backend.logging_config import create_logger
+from backend.database import reminders, plans
 
 api_logger = create_logger("backend.api")
 

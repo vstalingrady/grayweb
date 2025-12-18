@@ -46,24 +46,71 @@ async def test_notify_payment_success_posts(monkeypatch):
     monkeypatch.setattr(notifier, "_post_discord_webhook", fake_post)
 
     await notifier.notify_payment_success(
-        provider="paddle",
-        status="completed",
-        order_id="txn_123",
+        provider="gumroad",
+        status="sale",
+        order_id="sale_123",
         amount="9.99",
         currency="USD",
         user_id=42,
         plan_tier="pioneer",
         billing_cycle="annual",
-        extra={"subscription_id": "sub_123"},
+        extra={"sale_id": "sale_123"},
     )
 
     assert captured["url"] == "https://discord.example/webhook"
-    assert captured["payload"]["embeds"][0]["title"] == "Payment received (paddle)"
+    assert captured["payload"]["embeds"][0]["title"] == "Payment received (gumroad)"
     fields = {field["name"]: field["value"] for field in captured["payload"]["embeds"][0]["fields"]}
-    assert fields["Order ID"] == "txn_123"
+    assert fields["Order ID"] == "sale_123"
     assert fields["User ID"] == "42"
     assert fields["Amount"] == "9.99"
     assert fields["Currency"] == "USD"
     assert fields["Plan"] == "pioneer"
     assert fields["Billing"] == "annual"
-    assert fields["subscription_id"] == "sub_123"
+    assert fields["sale_id"] == "sale_123"
+
+
+@pytest.mark.asyncio
+async def test_notify_alert_posts(monkeypatch):
+    import backend.discord_notifier as notifier
+
+    monkeypatch.setenv("DISCORD_ALERTS_WEBHOOK_URL", "https://discord.example/alerts")
+
+    captured = {}
+
+    async def fake_post(url, payload):
+        captured["url"] = url
+        captured["payload"] = payload
+
+    monkeypatch.setattr(notifier, "_post_discord_webhook", fake_post)
+
+    await notifier.notify_alert(
+        title="Slow DB query",
+        message="A database query exceeded threshold.",
+        severity="warning",
+        fields={"duration_ms": 1234, "query_preview": "SELECT 1"},
+        dedupe_key="slow-db-1",
+    )
+
+    assert captured["url"] == "https://discord.example/alerts"
+    assert captured["payload"]["embeds"][0]["title"] == "Slow DB query"
+    assert captured["payload"]["embeds"][0]["color"] != 0
+
+
+@pytest.mark.asyncio
+async def test_notify_alert_dedupes(monkeypatch):
+    import backend.discord_notifier as notifier
+
+    monkeypatch.setenv("DISCORD_ALERTS_WEBHOOK_URL", "https://discord.example/alerts")
+    monkeypatch.setenv("DISCORD_ALERT_COOLDOWN_SECONDS", "9999")
+
+    calls = {"count": 0}
+
+    async def fake_post(url, payload):
+        calls["count"] += 1
+
+    monkeypatch.setattr(notifier, "_post_discord_webhook", fake_post)
+
+    await notifier.notify_alert(title="X", message="Y", dedupe_key="k")
+    await notifier.notify_alert(title="X", message="Y", dedupe_key="k")
+
+    assert calls["count"] == 1

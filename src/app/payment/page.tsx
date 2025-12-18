@@ -35,8 +35,6 @@ declare global {
     interface Window {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         MidtransNew3ds: any;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        Paddle: any;
     }
 }
 
@@ -61,20 +59,19 @@ const PIONEER_PRICING_USD = {
     annual: { price: "$31.42", fullPrice: "$377" },
 } as const;
 
-// Paddle Price IDs - configure in .env
-const PADDLE_PRICE_IDS: Record<string, Record<string, string>> = {
+
+// Gumroad Product IDs - configure in .env
+const GUMROAD_PRODUCT_IDS: Record<string, Record<string, string>> = {
     voyager: {
-        monthly: process.env.NEXT_PUBLIC_PADDLE_PRICE_ID_MONTHLY_VOYAGER || "",
-        annual: process.env.NEXT_PUBLIC_PADDLE_PRICE_ID_YEARLY_VOYAGER || "",
+        monthly: process.env.NEXT_PUBLIC_GUMROAD_PRODUCT_ID_MONTHLY_VOYAGER || "",
+        annual: process.env.NEXT_PUBLIC_GUMROAD_PRODUCT_ID_YEARLY_VOYAGER || "",
     },
     pioneer: {
-        monthly: process.env.NEXT_PUBLIC_PADDLE_PRICE_ID_MONTHLY_PIONEER || "",
-        annual: process.env.NEXT_PUBLIC_PADDLE_PRICE_ID_YEARLY_PIONEER || "",
+        monthly: process.env.NEXT_PUBLIC_GUMROAD_PRODUCT_ID_MONTHLY_PIONEER || "",
+        annual: process.env.NEXT_PUBLIC_GUMROAD_PRODUCT_ID_YEARLY_PIONEER || "",
     },
 };
 
-// Paddle config
-const PADDLE_CLIENT_TOKEN = process.env.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN || "";
 
 
 const PAYMENT_METHODS = [
@@ -133,13 +130,12 @@ const PAYMENT_METHODS = [
         type: "bank_transfer",
         bank: "permata"
     },
-    // Paddle payment method (international)
     {
-        id: "card",
-        label: "Credit/Debit Card",
-        type: "paddle"
+        id: "gumroad",
+        label: "Gumroad",
+        type: "gumroad"
     }
-].filter(m => m.type !== "paddle");
+].filter(m => m.type !== "gumroad");
 
 function PaymentContent() {
     const router = useRouter();
@@ -153,14 +149,13 @@ function PaymentContent() {
     const [methodGroup, setMethodGroup] = useState<"wallet" | "va" | "card">("wallet");
     const [bankSearch, setBankSearch] = useState<string>("");
     const [isIndonesia, setIsIndonesia] = useState<boolean | null>(null);
-    const [isPaddleReady, setIsPaddleReady] = useState(false);
 
     const [status, setStatus] = useState<PaymentStatus>("idle");
     const [chargeData, setChargeData] = useState<ChargeResponse | null>(null);
     const [errorMessage, setErrorMessage] = useState("");
 
     const walletMethods = PAYMENT_METHODS.filter((m) => ["gopay", "qris"].includes(m.id));
-    const virtualAccountMethods = PAYMENT_METHODS.filter((m) => !["gopay", "qris"].includes(m.id) && m.type !== "paddle");
+    const virtualAccountMethods = PAYMENT_METHODS.filter((m) => !["gopay", "qris"].includes(m.id));
     const activeMethods = methodGroup === "wallet" ? walletMethods : virtualAccountMethods;
     const filteredActiveMethods =
         methodGroup === "va" && bankSearch.trim().length
@@ -169,7 +164,7 @@ function PaymentContent() {
             )
             : activeMethods;
 
-    // Check geo on mount and initialize Paddle
+    // Check geo on mount
     useEffect(() => {
         fetch("/api/geo")
             .then(res => res.json())
@@ -177,25 +172,16 @@ function PaymentContent() {
                 setIsIndonesia(data.isIndonesia ?? true);
                 // If international, default to card payment
                 if (data.isIndonesia === false) {
-                    setSelectedMethodId("card");
+                    setSelectedMethodId("gumroad");
                 }
             })
             .catch(() => setIsIndonesia(true)); // Default to Indonesia on error
     }, []);
 
-    // Initialize Paddle when SDK loads
-    useEffect(() => {
-        if (typeof window !== "undefined" && window.Paddle && PADDLE_CLIENT_TOKEN) {
-            window.Paddle.Initialize({
-                token: PADDLE_CLIENT_TOKEN,
-            });
-            setIsPaddleReady(true);
-        }
-    }, []);
 
     useEffect(() => {
         // Keep group in sync with selected method (e.g., deep links)
-        if (selectedMethodId === "card") {
+        if (selectedMethodId === "gumroad") {
             setMethodGroup("card");
         } else if (["gopay", "qris"].includes(selectedMethodId)) {
             setMethodGroup("wallet");
@@ -246,35 +232,20 @@ function PaymentContent() {
                 return;
             }
 
-            const selectedMethod = PAYMENT_METHODS.find(m => m.id === selectedMethodId);
+            const selectedMethod = [...PAYMENT_METHODS, { id: "gumroad", type: "gumroad" }].find(m => m.id === selectedMethodId);
             if (!selectedMethod) throw new Error("Invalid payment method");
 
-            // Route to Paddle for card payments
-            if (selectedMethod.type === "paddle") {
-                if (!PADDLE_CLIENT_TOKEN) {
-                    throw new Error("Card payments are not configured. Please contact support.");
-                }
-                const priceId = PADDLE_PRICE_IDS[planParam || "voyager"]?.[billingCycle];
-                if (!priceId) {
-                    throw new Error("Paddle payment is not configured. Please contact support.");
-                }
-                if (!window.Paddle || !isPaddleReady) {
-                    throw new Error("Payment system couldn't load. Please disable ad blockers and refresh.");
+
+            // Route to Gumroad
+            if (selectedMethod.type === "gumroad") {
+                const productId = GUMROAD_PRODUCT_IDS[planParam || "voyager"]?.[billingCycle];
+                if (!productId) {
+                    throw new Error("Gumroad payment is not configured. Please contact support.");
                 }
 
-                // Open Paddle inline checkout
-                window.Paddle.Checkout.open({
-                    items: [{ priceId, quantity: 1 }],
-                    customer: userEmail ? { email: userEmail } : undefined,
-                    customData: { user_id: userId },
-                    settings: {
-                        displayMode: "overlay",
-                        theme: "dark",
-                        locale: "en",
-                        successUrl: `${window.location.origin}/payment/success?provider=paddle`,
-                    },
-                });
-                setStatus("idle"); // Reset since Paddle handles the flow
+                const gumroadUrl = `https://gumroad.com/l/${productId}?email=${encodeURIComponent(userEmail || "")}&custom_fields[user_id]=${userId}`;
+                window.location.href = gumroadUrl;
+                setStatus("idle");
                 return;
             }
 
@@ -521,7 +492,10 @@ function PaymentContent() {
                 data-environment={process.env.NEXT_PUBLIC_MIDTRANS_IS_PRODUCTION === 'true' ? 'production' : 'sandbox'}
                 data-client-key={process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY}
             />
-            {/* Paddle removed as per request */}
+            <Script
+                src="https://gumroad.com/js/gumroad.js"
+                strategy="lazyOnload"
+            />
 
             <div className={styles.topRow}>
                 <button
@@ -590,11 +564,11 @@ function PaymentContent() {
                                         aria-selected={methodGroup === "card"}
                                         onClick={() => {
                                             setMethodGroup("card");
-                                            setSelectedMethodId("card");
+                                            setSelectedMethodId("gumroad");
                                             setBankSearch("");
                                         }}
                                     >
-                                        Card
+                                        International
                                     </button>
                                     <button
                                         type="button"
@@ -628,11 +602,11 @@ function PaymentContent() {
                                         <button
                                             type="button"
                                             className={styles.methodOption}
-                                            data-selected={selectedMethodId === "card"}
-                                            onClick={() => setSelectedMethodId("card")}
+                                            data-selected={selectedMethodId === "gumroad"}
+                                            onClick={() => setSelectedMethodId("gumroad")}
                                             style={{ gridColumn: "1 / -1" }}
                                         >
-                                            <span className={styles.methodLabel}>💳 Pay with Credit/Debit Card</span>
+                                            <span className={styles.methodLabel}>💳 Pay with Gumroad</span>
                                         </button>
                                         <p style={{ gridColumn: "1 / -1", color: "rgba(255,255,255,0.5)", fontSize: "0.85rem", textAlign: "center", margin: "0.5rem 0 0" }}>
                                             Visa, Mastercard, American Express, PayPal, Apple Pay, Google Pay
@@ -696,25 +670,18 @@ function PaymentContent() {
                                 <button
                                     className={styles.payButton}
                                     onClick={handlePayment}
-                                    disabled={
-                                        status === "loading" ||
-                                        (selectedMethodId === "card" && Boolean(PADDLE_CLIENT_TOKEN) && !isPaddleReady)
-                                    }
+                                    disabled={status === "loading"}
                                 >
                                     {status === "loading" ? (
                                         <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem" }}>
                                             <Loader2 size={20} className="animate-spin" /> Processing
-                                        </span>
-                                    ) : selectedMethodId === "card" && Boolean(PADDLE_CLIENT_TOKEN) && !isPaddleReady ? (
-                                        <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem" }}>
-                                            <Loader2 size={20} className="animate-spin" /> Loading payment system
                                         </span>
                                     ) : (
                                         `Subscribe for ${fullPriceDisplay}`
                                     )}
                                 </button>
                                 <div style={{ marginTop: "1rem", display: "flex", justifyContent: "center", gap: "0.5rem", color: "rgba(255,255,255,0.3)", fontSize: "0.8rem" }}>
-                                    {selectedMethodId === "card" ? "Secure checkout" : "Powered by Midtrans • Secure 256-bit SSL Header"}
+                                    {selectedMethodId === "gumroad" ? "Secure checkout" : "Powered by Midtrans • Secure 256-bit SSL Header"}
                                 </div>
                             </div>
                         </div>

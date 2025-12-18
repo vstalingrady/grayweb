@@ -60,7 +60,7 @@ GOOGLE_TOKEN_ENCRYPTION_KEY=your_fernet_key
 # Set this flag to false if you want to fall back to the curated localhost list.
 # CORS_ALLOW_ALL_ORIGINS=false
 # Switch providers by setting AI_PROVIDER=anthropic and providing ANTHROPIC_API_KEY
-# Optional: Discord notifications for successful payments (Midtrans + Paddle webhooks)
+# Optional: Discord notifications for successful payments (Midtrans + Gumroad webhooks)
 # DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
 # (or) DISCORD_PAYMENTS_WEBHOOK_URL=https://discord.com/api/webhooks/...
 ```
@@ -77,6 +77,7 @@ no extra round trip when a conversation starts. You can opt out by setting
 #### Getting API Keys
 
 **Google Gemini API:**
+
 1. Go to [Google AI Studio](https://aistudio.google.com/app/apikey)
 2. Create a new API key
 3. Replace `your_gemini_api_key_here` with your key
@@ -86,6 +87,7 @@ no extra round trip when a conversation starts. You can opt out by setting
 > and keeps that secret synchronized on both variables so either name can hold the active key.
 
 **Anthropic Claude (optional):**
+
 1. Create an API key at [console.anthropic.com](https://console.anthropic.com/)
 2. Add `ANTHROPIC_API_KEY` to your `.env`
 3. Set `AI_PROVIDER=anthropic` to route chat and streaming requests through Claude instead of Gemini.
@@ -96,6 +98,7 @@ Both the backend and frontend now read exclusively from the repo root `.env`, an
 The backend now validates that key on startup by issuing a brief prompt through `GeminiService`. Set `VALIDATE_GEMINI_ON_STARTUP=false` in `.env` if you need to skip the validation call (e.g., to avoid extra quota while iterating locally).
 
 **Supabase (Auth):**
+
 1. Create a free account at [supabase.com](https://supabase.com)
 2. Create a new project
 3. Go to Settings > API to get your URL and anon key
@@ -127,28 +130,32 @@ npm run dev:full
 
 ### 4. Access the Application
 
-- Frontend: http://localhost:3000
-- Backend API: http://localhost:8000
-- API Documentation: http://localhost:8000/docs
+- Frontend: <http://localhost:3000>
+- Backend API: <http://localhost:8000>
+- API Documentation: <http://localhost:8000/docs>
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the application.
 
 ## Deployment (Dev + Prod on one server)
 
 - Production (ports `3000/8000`):
+
   ```bash
   cd /home/ubuntu/gray
   git checkout prod   # or main, if you don't use a prod branch
   git pull
   docker compose -f docker-compose.yml up -d --build --remove-orphans
   ```
+
 - Optional staging/dev stack on the same server (default ports `3000/8000`, separate SQLite in `data-dev/`):
+
   ```bash
   cd /home/ubuntu/gray
   git checkout main
   git pull
   docker compose -p gray-dev -f docker-compose.yml -f docker-compose.dev.yml up -d --build --remove-orphans
   ```
+
 - Captcha (Turnstile) is automatically disabled on localhost and port `3000`.
 
 ## Auth experience
@@ -216,5 +223,5 @@ The easiest way to deploy your Next.js app is to use the [Vercel Platform](https
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
 
-https://github.com/vladyslav-soltanovskyi/react-calendar.git
-https://github.com/assistant-ui/assistant-ui.git
+<https://github.com/vladyslav-soltanovskyi/react-calendar.git>
+<https://github.com/assistant-ui/assistant-ui.git>

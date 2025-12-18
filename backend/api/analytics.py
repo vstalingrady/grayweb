@@ -14,58 +14,30 @@ import databases
 import sqlalchemy
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
-try:
-    from backend.database import (
-        get_database,
-        DATABASE_URL,
-        users,
-        user_data,
-        general_chat_messages,
-        reminders,
-        plans,
-        habits,
-        calendars,
-        calendar_events,
-        dashboard_pulses,
-        proactivity_settings,
-        proactivity_logs,
-        proactivity_push_subscriptions,
-        proactive_notifications,
-        context_cache,
-        media_uploads,
-        google_calendar_credentials,
-    )
-except ImportError:
-    from database import (  # type: ignore
-        get_database,
-        DATABASE_URL,
-        users,
-        user_data,
-        general_chat_messages,
-        reminders,
-        plans,
-        habits,
-        calendars,
-        calendar_events,
-        dashboard_pulses,
-        proactivity_settings,
-        proactivity_logs,
-        proactivity_push_subscriptions,
-        proactive_notifications,
-        context_cache,
-        media_uploads,
-        google_calendar_credentials,
-    )
+from backend.database import (
+    get_database,
+    DATABASE_URL,
+    users,
+    user_data,
+    general_chat_messages,
+    reminders,
+    plans,
+    habits,
+    calendars,
+    calendar_events,
+    dashboard_pulses,
+    proactivity_settings,
+    proactivity_logs,
+    proactivity_push_subscriptions,
+    proactive_notifications,
+    context_cache,
+    media_uploads,
+    google_calendar_credentials,
+)
 
-try:
-    from backend.core.cors_utils import IS_PRODUCTION
-except ImportError:
-    from core.cors_utils import IS_PRODUCTION  # type: ignore
+from backend.core.cors_utils import IS_PRODUCTION
 
-try:
-    from backend.time_utils import utcnow_aware
-except ImportError:
-    from time_utils import utcnow_aware  # type: ignore
+from backend.time_utils import utcnow_aware
 
 
 router = APIRouter(tags=["analytics"])
@@ -113,10 +85,7 @@ async def dev_analytics_summary(
     if not is_localhost and not token_ok:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
 
-    try:
-        from backend.database import user_chat_threads, user_chat_messages, transactions
-    except Exception:
-        from database import user_chat_threads, user_chat_messages, transactions  # type: ignore
+    from backend.database import user_chat_threads, user_chat_messages, transactions
 
     tables: Dict[str, sqlalchemy.Table] = {
         "users": users,

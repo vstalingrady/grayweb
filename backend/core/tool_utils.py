@@ -5,10 +5,7 @@ Centralized helpers for date parsing, normalization, and payload building.
 from datetime import datetime, date, timezone
 from typing import Any, Dict, Optional
 
-try:
-    from backend.time_utils import utcnow
-except ImportError:
-    from time_utils import utcnow  # type: ignore
+from backend.time_utils import utcnow
 
 def parse_iso_datetime(value: str) -> datetime:
     """Parse an ISO 8601 datetime string, handling 'Z' suffix."""

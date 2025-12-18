@@ -14,12 +14,8 @@ from google.genai import types
 api_logger = logging.getLogger("backend.api")
 
 # Import helpers
-try:
-    from backend.core.function_call_helpers import format_tool_results_for_context
-    from backend.core.ai_utils import materialize_structured_reminders
-except ImportError:
-    from core.function_call_helpers import format_tool_results_for_context  # type: ignore
-    from core.ai_utils import materialize_structured_reminders  # type: ignore
+from backend.core.function_call_helpers import format_tool_results_for_context
+from backend.core.ai_utils import materialize_structured_reminders
 
 
 

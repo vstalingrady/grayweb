@@ -18,10 +18,7 @@ def _get_database():
     """Lazily get database module components."""
     global _database_module
     if _database_module is None:
-        try:
-            from backend.database import users, proactivity_settings
-        except ImportError:
-            from database import users, proactivity_settings
+        from backend.database import users, proactivity_settings
         _database_module = {"users": users, "proactivity_settings": proactivity_settings}
     return _database_module
 
@@ -30,56 +27,38 @@ def _get_logger():
     """Lazily get API logger."""
     global _logger
     if _logger is None:
-        try:
-            from backend.logging_config import create_logger
-        except ImportError:
-            from logging_config import create_logger
+        from backend.logging_config import create_logger
         _logger = create_logger("backend.onboarding")
     return _logger
 
 
 def _get_utcnow():
     """Lazily get utcnow function."""
-    try:
-        from backend.time_utils import utcnow
-    except ImportError:
-        from time_utils import utcnow
+    from backend.time_utils import utcnow
     return utcnow
 
 
 def _row_get(row, key):
     """Safe accessor for database rows."""
-    try:
-        from backend.core.serializers import row_get
-    except ImportError:
-        from core.serializers import row_get
+    from backend.core.serializers import row_get
     return row_get(row, key)
 
 
 def _payload_log_summary(payload):
     """Get log summary for payload."""
-    try:
-        from backend.core.log_utils import payload_log_summary
-    except ImportError:
-        from core.log_utils import payload_log_summary
+    from backend.core.log_utils import payload_log_summary
     return payload_log_summary(payload)
 
 
 def _get_user_cache():
     """Get user cache for invalidation."""
-    try:
-        from backend.core.cache import USER_CACHE
-    except ImportError:
-        from core.cache import USER_CACHE
+    from backend.core.cache import USER_CACHE
     return USER_CACHE
 
 
 def _get_auth_invalidation():
     """Get auth cache invalidation functions."""
-    try:
-        from backend.auth import invalidate_user_cache, invalidate_user_cache_redis
-    except ImportError:
-        from auth import invalidate_user_cache, invalidate_user_cache_redis
+    from backend.auth import invalidate_user_cache, invalidate_user_cache_redis
     return invalidate_user_cache, invalidate_user_cache_redis
 
 

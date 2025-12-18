@@ -32,8 +32,14 @@ class RedisClient:
 
     async def connect(self) -> bool:
         """Establish connection to Redis. Returns True if successful."""
+        global _REDIS_MISSING_LOGGED
         if not REDIS_AVAILABLE:
-            logger.warning("Redis not available (redis package not installed)")
+            if not _REDIS_MISSING_LOGGED:
+                _REDIS_MISSING_LOGGED = True
+                logger.warning(
+                    "Redis not available (redis package not installed)",
+                    extra={"event_type": "fallback_activation", "fallback": "redis_package_missing"},
+                )
             return False
 
         try:
@@ -44,6 +50,32 @@ class RedisClient:
         except Exception as e:
             logger.warning("Failed to connect to Redis: %s", e)
             self._client = None
+            return False
+
+    async def ensure_connected(self) -> bool:
+        """Ensure a Redis connection is available (connects lazily)."""
+        if not self._available or not REDIS_AVAILABLE:
+            return False
+        if self._client is not None:
+            return True
+        return await self.connect()
+
+    async def get_connection(self) -> Optional[Any]:
+        """Return the underlying redis client connection if connected."""
+        if not await self.ensure_connected():
+            return None
+        return self._client
+
+    async def ping(self) -> bool:
+        """Ping Redis and return True if healthy."""
+        client = await self.get_connection()
+        if client is None:
+            return False
+        try:
+            await client.ping()
+            return True
+        except Exception as e:
+            logger.warning("Redis ping failed: %s", e)
             return False
 
     async def disconnect(self) -> None:
@@ -109,6 +141,7 @@ class RedisClient:
 
 # Singleton instance
 _redis_client: Optional[RedisClient] = None
+_REDIS_MISSING_LOGGED = False
 
 
 def get_redis_client() -> RedisClient:

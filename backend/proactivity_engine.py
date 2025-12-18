@@ -18,10 +18,7 @@ from zoneinfo import ZoneInfo
 import databases
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
-try:
-    from backend.ai_message_generator import AIMessageGenerator
-except ImportError:
-    from ai_message_generator import AIMessageGenerator
+from backend.ai_message_generator import AIMessageGenerator
 try:
     from pywebpush import webpush, WebPushException
 except ImportError:  # graceful fallback if pywebpush isn't available
@@ -31,6 +28,7 @@ except ImportError:  # graceful fallback if pywebpush isn't available
         pass
 
 logger = logging.getLogger(__name__)
+_pywebpush_missing_logged = False
 
 # Avoid duplicate sends if a user gets evaluated twice in a short window.
 # Keep the guard short so scheduled touchpoints aren't skipped after manual triggers.
@@ -562,7 +560,13 @@ class ProactivityEngine:
 
     async def _send_web_push_notification(self, user_id: int, title: str, message: str) -> None:
         if webpush is None:
-            # Optional dependency; if it's not installed, skip silently.
+            global _pywebpush_missing_logged
+            if not _pywebpush_missing_logged:
+                _pywebpush_missing_logged = True
+                logger.warning(
+                    "pywebpush not installed; web push notifications disabled",
+                    extra={"event_type": "fallback_activation", "fallback": "pywebpush_missing"},
+                )
             return
 
         # Only attempt web push in production by default, or when explicitly enabled.

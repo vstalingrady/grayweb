@@ -7,10 +7,7 @@ from typing import Any, AsyncIterator, Dict, List, Optional
 from google import genai
 from google.genai import types
 
-try:
-    from backend.token_utils import trim_history_by_token_budget
-except Exception:  # pragma: no cover - fallback when running backend/ directly
-    from token_utils import trim_history_by_token_budget  # type: ignore
+from backend.token_utils import trim_history_by_token_budget
 
 
 def _parse_float_env(name: str) -> Optional[float]:

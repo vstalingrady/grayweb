@@ -3,14 +3,32 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Any, Dict, Iterable, List, Mapping, Optional
 
+import logging
+
+logger = logging.getLogger("backend.token_utils")
+_tiktoken_missing_logged = False
+
 
 @lru_cache(maxsize=1)
 def _tiktoken_encoding():
+    global _tiktoken_missing_logged
     try:
         import tiktoken  # type: ignore
 
         return tiktoken.get_encoding("cl100k_base")
-    except Exception:
+    except ImportError:
+        if not _tiktoken_missing_logged:
+            _tiktoken_missing_logged = True
+            logger.warning(
+                "tiktoken not installed; falling back to heuristic token estimation",
+                extra={"event_type": "fallback_activation", "fallback": "tiktoken_missing"},
+            )
+        return None
+    except Exception as exc:
+        logger.warning(
+            "tiktoken unavailable; falling back to heuristic token estimation",
+            extra={"event_type": "fallback_activation", "fallback": "tiktoken_error", "error": str(exc)},
+        )
         return None
 
 
@@ -70,4 +88,3 @@ def trim_history_by_token_budget(
 
     kept_reversed.reverse()
     return kept_reversed
-

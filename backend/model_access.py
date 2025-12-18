@@ -2,10 +2,7 @@ from __future__ import annotations
 
 from typing import Optional, Tuple
 
-try:
-    from backend.tier_utils import normalize_plan_tier
-except Exception:  # pragma: no cover - fallback when running backend/ directly
-    from tier_utils import normalize_plan_tier  # type: ignore
+from backend.tier_utils import normalize_plan_tier
 
 TIERS = ("scout", "voyager", "pioneer")
 

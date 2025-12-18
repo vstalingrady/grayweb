@@ -10,47 +10,25 @@ import databases
 from fastapi import HTTPException
 
 # Import database tables
-try:
-    from backend.database import plans, habits, reminders
-except ImportError:
-    from database import plans, habits, reminders  # type: ignore
+from backend.database import plans, habits, reminders
 
 # Import shared utilities
-try:
-    from backend.core.serializers import (
-        serialize_reminder_row as _serialize_reminder_row,
-        serialize_habit_record as _serialize_habit_record,
-    )
-    from backend.core.tool_utils import (
-        build_reminder_payload as _build_reminder_payload,
-        parse_remind_at as _parse_remind_at,
-        parse_iso_datetime as _parse_iso_datetime,
-    )
-    from backend.core.entity_reminders import (
-        upsert_entity_reminder as _upsert_entity_reminder,
-        delete_all_entity_reminders as _delete_all_entity_reminders,
-    )
-except ImportError:
-    from core.serializers import (  # type: ignore
-        serialize_reminder_row as _serialize_reminder_row,
-        serialize_habit_record as _serialize_habit_record,
-    )
-    from core.tool_utils import (  # type: ignore
-        build_reminder_payload as _build_reminder_payload,
-        parse_remind_at as _parse_remind_at,
-        parse_iso_datetime as _parse_iso_datetime,
-    )
-    from core.entity_reminders import (  # type: ignore
-        upsert_entity_reminder as _upsert_entity_reminder,
-        delete_all_entity_reminders as _delete_all_entity_reminders,
-    )
+from backend.core.serializers import (
+    serialize_reminder_row as _serialize_reminder_row,
+    serialize_habit_record as _serialize_habit_record,
+)
+from backend.core.tool_utils import (
+    build_reminder_payload as _build_reminder_payload,
+    parse_remind_at as _parse_remind_at,
+    parse_iso_datetime as _parse_iso_datetime,
+)
+from backend.core.entity_reminders import (
+    upsert_entity_reminder as _upsert_entity_reminder,
+    delete_all_entity_reminders as _delete_all_entity_reminders,
+)
 
-try:
-    from backend.time_utils import utcnow
-    from backend.logging_config import create_logger
-except ImportError:
-    from time_utils import utcnow  # type: ignore
-    from logging_config import create_logger  # type: ignore
+from backend.time_utils import utcnow
+from backend.logging_config import create_logger
 
 api_logger = create_logger("backend.api")
 

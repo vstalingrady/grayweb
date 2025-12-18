@@ -1,17 +1,11 @@
 import os
-import sys
 import pytest
 import pytest_asyncio
 from datetime import datetime, timezone, timedelta
 from unittest.mock import AsyncMock, MagicMock
 from pathlib import Path
 
-# Ensure backend module is importable
 ROOT = Path(__file__).resolve().parents[2]
-BACKEND_PATH = ROOT / "backend"
-if str(BACKEND_PATH) not in sys.path:
-    sys.path.insert(0, str(BACKEND_PATH))
-
 TEST_DB_PATH = ROOT / "backend" / "tests" / "proactivity_test.db"
 if TEST_DB_PATH.exists():
     TEST_DB_PATH.unlink()
@@ -19,8 +13,8 @@ os.environ["DATABASE_URL"] = f"sqlite:///{TEST_DB_PATH}"
 os.environ["SUPABASE_URL"] = ""
 os.environ["SUPABASE_KEY"] = ""
 
-import main
-from proactivity_engine import ProactivityEngine, ProactivityUserSettings
+import backend.main as main
+from backend.proactivity_engine import ProactivityEngine, ProactivityUserSettings
 
 @pytest_asyncio.fixture
 async def connected_db():

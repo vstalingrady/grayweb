@@ -15,20 +15,11 @@ from backend.auth import get_current_user, require_same_user
 from backend.database import get_database
 from backend.logging_config import create_logger
 
-try:
-    from backend.core.rate_limit import limiter
-except ImportError:
-    from core.rate_limit import limiter  # type: ignore
+from backend.core.rate_limit import limiter
 
-try:
-    from backend.tier_utils import normalize_plan_tier
-except ImportError:
-    from tier_utils import normalize_plan_tier  # type: ignore
+from backend.tier_utils import normalize_plan_tier
 
-try:
-    from backend.chat_cache import cache_messages, get_cached_messages, invalidate_conversation_cache
-except ImportError:  # pragma: no cover
-    from chat_cache import cache_messages, get_cached_messages, invalidate_conversation_cache  # type: ignore
+from backend.chat_cache import cache_messages, get_cached_messages, invalidate_conversation_cache
 
 router = APIRouter(tags=["conversations"])
 
@@ -100,6 +91,7 @@ def _get_conversation_helpers():
 
 
 @router.post("/api/conversation/{conversation_id}/message")
+@router.post("/api/conversation/{conversation_id}/messages")
 @limiter.limit("30/minute")
 async def create_conversation_message(
     request: Request,
@@ -184,6 +176,7 @@ async def get_conversation(
         GEMINI_SERVICE,
         OPENROUTER_SERVICE,
         chat_sessions,
+        tier_conversation_token_limit,
         MessageCreateRequest,
         ConversationCreateRequest,
         ConversationHistoryPayload,
@@ -242,6 +235,7 @@ async def create_conversation(
         GEMINI_SERVICE,
         OPENROUTER_SERVICE,
         chat_sessions,
+        tier_conversation_token_limit,
         MessageCreateRequest,
         ConversationCreateRequest,
         ConversationHistoryPayload,
@@ -295,6 +289,7 @@ async def delete_conversation(
         GEMINI_SERVICE,
         OPENROUTER_SERVICE,
         chat_sessions,
+        tier_conversation_token_limit,
         MessageCreateRequest,
         ConversationCreateRequest,
         ConversationHistoryPayload,
@@ -313,10 +308,10 @@ async def delete_conversation(
 
         if _is_valid_uuid(conversation_id):
             try:
-                try:
-                    from backend.database import user_chat_threads as _user_chat_threads, user_chat_messages as _user_chat_messages
-                except Exception:
-                    from database import user_chat_threads as _user_chat_threads, user_chat_messages as _user_chat_messages
+                from backend.database import (
+                    user_chat_threads as _user_chat_threads,
+                    user_chat_messages as _user_chat_messages,
+                )
 
                 await database.execute(_user_chat_messages.delete().where(_user_chat_messages.c.thread_id == conversation_id))
                 await database.execute(_user_chat_threads.delete().where(_user_chat_threads.c.id == conversation_id))
@@ -355,6 +350,7 @@ async def delete_all_conversations(
         GEMINI_SERVICE,
         OPENROUTER_SERVICE,
         chat_sessions,
+        tier_conversation_token_limit,
         MessageCreateRequest,
         ConversationCreateRequest,
         ConversationHistoryPayload,
@@ -373,13 +369,10 @@ async def delete_all_conversations(
 
         # 2. Delete All Named Threads (and their messages)
         try:
-            try:
-                from backend.database import (
-                    user_chat_threads as _user_chat_threads,
-                    user_chat_messages as _user_chat_messages,
-                )
-            except Exception:
-                from database import user_chat_threads as _user_chat_threads, user_chat_messages as _user_chat_messages
+            from backend.database import (
+                user_chat_threads as _user_chat_threads,
+                user_chat_messages as _user_chat_messages,
+            )
 
             query = _user_chat_threads.select().where(_user_chat_threads.c.user_identifier == user_id)
             rows = await db.fetch_all(query)
@@ -426,6 +419,7 @@ async def _overwrite_conversation_history_logic(
         GEMINI_SERVICE,
         OPENROUTER_SERVICE,
         chat_sessions,
+        tier_conversation_token_limit,
         MessageCreateRequest,
         ConversationCreateRequest,
         ConversationHistoryPayload,
@@ -510,6 +504,7 @@ async def update_conversation(
         GEMINI_SERVICE,
         OPENROUTER_SERVICE,
         chat_sessions,
+        tier_conversation_token_limit,
         MessageCreateRequest,
         ConversationCreateRequest,
         ConversationHistoryPayload,
@@ -549,6 +544,7 @@ async def update_conversation_metadata(
         GEMINI_SERVICE,
         OPENROUTER_SERVICE,
         chat_sessions,
+        tier_conversation_token_limit,
         MessageCreateRequest,
         ConversationCreateRequest,
         ConversationHistoryPayload,
@@ -587,6 +583,7 @@ async def get_conversation_usage(
         GEMINI_SERVICE,
         OPENROUTER_SERVICE,
         chat_sessions,
+        tier_conversation_token_limit,
         MessageCreateRequest,
         ConversationCreateRequest,
         ConversationHistoryPayload,
@@ -692,6 +689,7 @@ async def compress_conversation(
         GEMINI_SERVICE,
         OPENROUTER_SERVICE,
         chat_sessions,
+        tier_conversation_token_limit,
         MessageCreateRequest,
         ConversationCreateRequest,
         ConversationHistoryPayload,
@@ -802,6 +800,7 @@ async def create_chat_session(
         GEMINI_SERVICE,
         OPENROUTER_SERVICE,
         chat_sessions,
+        tier_conversation_token_limit,
         MessageCreateRequest,
         ConversationCreateRequest,
         ConversationHistoryPayload,
@@ -848,6 +847,7 @@ async def list_user_conversations(
         GEMINI_SERVICE,
         OPENROUTER_SERVICE,
         chat_sessions,
+        tier_conversation_token_limit,
         MessageCreateRequest,
         ConversationCreateRequest,
         ConversationHistoryPayload,
@@ -860,10 +860,7 @@ async def list_user_conversations(
     user_id = current_user["id"]
     
     try:
-        try:
-            from backend.database import user_chat_threads
-        except ImportError:
-            from database import user_chat_threads
+        from backend.database import user_chat_threads
 
         query = (
             user_chat_threads.select()

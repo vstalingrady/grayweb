@@ -6,10 +6,7 @@ import os
 import httpx
 from typing import Any, AsyncIterator, Dict, List, Optional
 
-try:
-    from backend.token_utils import trim_history_by_token_budget
-except Exception:  # pragma: no cover - fallback when running backend/ directly
-    from token_utils import trim_history_by_token_budget  # type: ignore
+from backend.token_utils import trim_history_by_token_budget
 
 
 def _int_env(name: str, default: int) -> int:

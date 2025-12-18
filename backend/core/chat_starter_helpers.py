@@ -19,12 +19,8 @@ def _get_load_prompt():
     """Get prompt loading function."""
     global _load_prompt_fn, _prompts_path
     if _load_prompt_fn is None:
-        try:
-            from backend.core.prompt_utils import load_prompt_from_json
-            from backend.main import GLOBAL_SYSTEM_PROMPTS_PATH
-        except ImportError:
-            from core.prompt_utils import load_prompt_from_json
-            from main import GLOBAL_SYSTEM_PROMPTS_PATH
+        from backend.core.prompt_utils import load_prompt_from_json
+        from backend.core.ai_config import GLOBAL_SYSTEM_PROMPTS_PATH
         _load_prompt_fn = load_prompt_from_json
         _prompts_path = GLOBAL_SYSTEM_PROMPTS_PATH
     return _load_prompt_fn, _prompts_path

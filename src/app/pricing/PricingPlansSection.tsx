@@ -174,12 +174,21 @@ export function PricingPlansSection() {
         annualSavingsPercent > 0 ? t("Save ~{percent}%", { percent: annualSavingsPercent }) : undefined;
 
     const handleUpgrade = (plan: "voyager" | "pioneer") => {
-        const paymentUrl = `/payment?plan=${plan}&cycle=${billingCycle}`;
+        const paymentPath = `/payment?plan=${plan}&cycle=${billingCycle}`;
+        const paymentBase = process.env.NEXT_PUBLIC_PAYMENT_SITE_URL;
+        const paymentUrl = paymentBase
+            ? `${paymentBase.replace(/\/+$/, "")}${paymentPath}`
+            : paymentPath;
+
         if (!user) {
             // Redirect to login with return URL to complete purchase
             router.push(`/login?returnTo=${encodeURIComponent(paymentUrl)}`);
         } else {
-            router.push(paymentUrl);
+            if (paymentUrl.startsWith("http")) {
+                window.location.href = paymentUrl;
+            } else {
+                router.push(paymentUrl);
+            }
         }
     };
 

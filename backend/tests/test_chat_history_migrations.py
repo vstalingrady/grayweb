@@ -1,14 +1,9 @@
-import sys
 import sqlite3
 from pathlib import Path
 
 import pytest
 
-# Ensure backend module is importable
 ROOT = Path(__file__).resolve().parents[2]
-BACKEND_PATH = ROOT / "backend"
-if str(BACKEND_PATH) not in sys.path:
-    sys.path.insert(0, str(BACKEND_PATH))
 
 
 def _ensure_sqlite_columns_at_path(

@@ -11,46 +11,23 @@ import databases
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import FileResponse
 
-try:
-    from backend.auth import get_current_user
-except ImportError:
-    from auth import get_current_user  # type: ignore
+from backend.auth import get_current_user
 
-try:
-    from backend.database import get_database, media_uploads
-except ImportError:
-    from database import get_database, media_uploads  # type: ignore
+from backend.database import get_database, media_uploads
 
-try:
-    from backend.core.file_utils import (
-        CHAT_UPLOAD_MIME_TYPES,
-        CHAT_UPLOAD_EXTENSIONS,
-        MAX_MEDIA_UPLOAD_SIZE_BYTES,
-        MEDIA_UPLOAD_ROOT,
-        STORAGE_BASE_URL,
-        persist_upload_file as _persist_upload_file,
-        resolve_storage_path_from_record as _resolve_storage_path_from_record,
-    )
-except ImportError:
-    from core.file_utils import (  # type: ignore
-        CHAT_UPLOAD_MIME_TYPES,
-        CHAT_UPLOAD_EXTENSIONS,
-        MAX_MEDIA_UPLOAD_SIZE_BYTES,
-        MEDIA_UPLOAD_ROOT,
-        STORAGE_BASE_URL,
-        persist_upload_file as _persist_upload_file,
-        resolve_storage_path_from_record as _resolve_storage_path_from_record,
-    )
+from backend.core.file_utils import (
+    CHAT_UPLOAD_MIME_TYPES,
+    CHAT_UPLOAD_EXTENSIONS,
+    MAX_MEDIA_UPLOAD_SIZE_BYTES,
+    MEDIA_UPLOAD_ROOT,
+    STORAGE_BASE_URL,
+    persist_upload_file as _persist_upload_file,
+    resolve_storage_path_from_record as _resolve_storage_path_from_record,
+)
 
-try:
-    from backend.time_utils import utcnow
-except ImportError:
-    from time_utils import utcnow  # type: ignore
+from backend.time_utils import utcnow
 
-try:
-    from backend.models import MediaUpload
-except ImportError:
-    from models import MediaUpload  # type: ignore
+from backend.models import MediaUpload
 
 router = APIRouter(tags=["uploads"])
 

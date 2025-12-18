@@ -6,16 +6,10 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 import databases
 
-try:
-    from backend.time_utils import utcnow
-    from backend.database import calendar_events
-    from backend.logging_config import create_logger
-    from backend.core.tool_utils import parse_iso_datetime
-except ImportError:
-    from time_utils import utcnow  # type: ignore
-    from database import calendar_events  # type: ignore
-    from logging_config import create_logger  # type: ignore
-    from core.tool_utils import parse_iso_datetime  # type: ignore
+from backend.time_utils import utcnow
+from backend.database import calendar_events
+from backend.logging_config import create_logger
+from backend.core.tool_utils import parse_iso_datetime
 
 api_logger = create_logger("backend.api")
 

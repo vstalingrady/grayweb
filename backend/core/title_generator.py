@@ -19,10 +19,7 @@ def _get_gemini_service():
     """Lazily get Gemini service."""
     global _gemini_service
     if _gemini_service is None:
-        try:
-            from backend.gemini_client import GeminiService
-        except ImportError:
-            from gemini_client import GeminiService
+        from backend.gemini_client import GeminiService
         _gemini_service = GeminiService()
     return _gemini_service
 
@@ -31,10 +28,7 @@ def _get_openrouter_service():
     """Lazily get OpenRouter service."""
     global _openrouter_service
     if _openrouter_service is None:
-        try:
-            from backend.openrouter_client import OpenRouterService
-        except ImportError:
-            from openrouter_client import OpenRouterService
+        from backend.openrouter_client import OpenRouterService
         _openrouter_service = OpenRouterService()
     return _openrouter_service
 
@@ -43,29 +37,20 @@ def _get_logger():
     """Lazily get logger."""
     global _logger
     if _logger is None:
-        try:
-            from backend.logging_config import create_logger
-        except ImportError:
-            from logging_config import create_logger
+        from backend.logging_config import create_logger
         _logger = create_logger("backend.title")
     return _logger
 
 
 def _load_prompt_from_json(path, key, fallback, locale="en"):
     """Load prompt from JSON file."""
-    try:
-        from backend.core.prompt_utils import load_prompt_from_json
-    except ImportError:
-        from core.prompt_utils import load_prompt_from_json
+    from backend.core.prompt_utils import load_prompt_from_json
     return load_prompt_from_json(path, key, fallback, locale=locale)
 
 
 def _candidate_text(candidate):
     """Extract text from candidate."""
-    try:
-        from backend.core.ai_utils import candidate_text
-    except ImportError:
-        from core.ai_utils import candidate_text
+    from backend.core.ai_utils import candidate_text
     return candidate_text(candidate)
 
 

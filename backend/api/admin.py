@@ -5,16 +5,10 @@ import databases
 import sqlalchemy
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-try:
-    from backend.auth import get_current_user_optional, require_admin
-    from backend.database import get_database, users, general_chat_messages
-    from backend.time_utils import utcnow
-    from backend.api.analytics import _is_localhost_request
-except ImportError:
-    from auth import get_current_user_optional, require_admin  # type: ignore
-    from database import get_database, users, general_chat_messages  # type: ignore
-    from time_utils import utcnow  # type: ignore
-    from api.analytics import _is_localhost_request  # type: ignore
+from backend.auth import get_current_user_optional, require_admin
+from backend.database import get_database, users, general_chat_messages
+from backend.time_utils import utcnow
+from backend.api.analytics import _is_localhost_request
 
 router = APIRouter(tags=["admin"])
 

@@ -9,30 +9,15 @@ from typing import Any, Dict
 import databases
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
-try:
-    from backend.auth import get_current_user, require_same_user
-except ImportError:
-    from auth import get_current_user, require_same_user  # type: ignore
+from backend.auth import get_current_user, require_same_user
 
-try:
-    from backend.database import context_cache, get_database
-except ImportError:
-    from database import context_cache, get_database  # type: ignore
+from backend.database import context_cache, get_database
 
-try:
-    from backend.time_utils import utcnow
-except ImportError:
-    from time_utils import utcnow  # type: ignore
+from backend.time_utils import utcnow
 
-try:
-    from backend.models import ContextCache, ContextCacheBase
-except ImportError:
-    from models import ContextCache, ContextCacheBase  # type: ignore
+from backend.models import ContextCache, ContextCacheBase
 
-try:
-    from backend.core.serializers import serialize_context_cache as _serialize_context_cache
-except ImportError:
-    from core.serializers import serialize_context_cache as _serialize_context_cache  # type: ignore
+from backend.core.serializers import serialize_context_cache as _serialize_context_cache
 
 router = APIRouter(tags=["context-cache"])
 

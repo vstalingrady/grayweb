@@ -9,16 +9,10 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
-try:
-    from backend.core.prompt_utils import load_prompt_from_json
-    from backend.core.ai_config import GLOBAL_SYSTEM_PROMPTS_PATH
-    from backend.onboarding_tools import ONBOARDING_TOOLS
-    from backend.plan_tools import PLAN_TOOLS
-except ImportError:
-    from core.prompt_utils import load_prompt_from_json  # type: ignore
-    from core.ai_config import GLOBAL_SYSTEM_PROMPTS_PATH  # type: ignore
-    from onboarding_tools import ONBOARDING_TOOLS  # type: ignore
-    from plan_tools import PLAN_TOOLS  # type: ignore
+from backend.core.prompt_utils import load_prompt_from_json
+from backend.core.ai_config import GLOBAL_SYSTEM_PROMPTS_PATH
+from backend.onboarding_tools import ONBOARDING_TOOLS
+from backend.plan_tools import PLAN_TOOLS
 
 
 def has_personalization(value: Optional[str]) -> bool:

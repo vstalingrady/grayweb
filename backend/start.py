@@ -12,13 +12,14 @@ import sqlalchemy
 import uvicorn
 from dotenv import load_dotenv
 
-try:
-    from backend.env_utils import ROOT_DIR, UVICORN_APP_MODULE
-except ImportError:  # pragma: no cover
-    from env_utils import ROOT_DIR, UVICORN_APP_MODULE  # type: ignore
+# Ensure the repository root is on the Python path so `import backend` works,
+# even when this file is executed directly as a script.
+_backend_dir = Path(__file__).resolve().parent
+_repo_root = _backend_dir.parent
+if str(_repo_root) not in sys.path:
+    sys.path.insert(0, str(_repo_root))
 
-# Ensure the repository root is on the Python path so `import backend` works.
-sys.path.insert(0, str(ROOT_DIR))
+from backend.env_utils import ROOT_DIR, UVICORN_APP_MODULE
 
 
 def _configure_logging() -> logging.Logger:
@@ -29,30 +30,15 @@ def _configure_logging() -> logging.Logger:
     `npm run backend` / `npm run dev:full` clearly show what the process is doing
     (database setup, workspace seed, server bind, etc.).
     """
-    try:
-        from logging_config import create_logger, get_log_level, setup_logging
+    from backend.logging_config import create_logger, get_log_level, setup_logging
 
-        setup_logging(
-            log_level=get_log_level(),
-            enable_console=True,
-            enable_file=False,
-            structured_format=False,
-        )
-        return create_logger("backend.startup")
-    except ImportError:  # pragma: no cover
-        log_level = getattr(logging, os.getenv("LOG_LEVEL", "WARNING").upper(), logging.WARNING)
-        logger = logging.getLogger("backend.startup")
-        if logger.handlers:
-            return logger
-
-        logger.setLevel(log_level)
-        handler = logging.StreamHandler()
-        formatter = logging.Formatter("[backend.startup] %(asctime)s %(levelname)s: %(message)s")
-        handler.setFormatter(formatter)
-        logger.addHandler(handler)
-        logger.propagate = False
-        logging.getLogger("uvicorn.access").disabled = True
-        return logger
+    setup_logging(
+        log_level=get_log_level(),
+        enable_console=True,
+        enable_file=False,
+        structured_format=False,
+    )
+    return create_logger("backend.startup")
 
 
 LOG = _configure_logging()
@@ -122,4 +108,3 @@ if __name__ == "__main__":
         log_level=uvicorn_log_level,
         access_log=False,
     )
-

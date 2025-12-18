@@ -1,14 +1,8 @@
 import os
-import sys
 from pathlib import Path
 
 
-# Ensure backend module is importable
 ROOT = Path(__file__).resolve().parents[2]
-BACKEND_PATH = ROOT / "backend"
-if str(BACKEND_PATH) not in sys.path:
-    sys.path.insert(0, str(BACKEND_PATH))
-
 TEST_DB_PATH = ROOT / "backend" / "tests" / "web_search_test.db"
 if TEST_DB_PATH.exists():
     TEST_DB_PATH.unlink()
@@ -17,7 +11,7 @@ os.environ["DATABASE_URL"] = f"sqlite:///{TEST_DB_PATH}"
 os.environ["SUPABASE_URL"] = ""
 os.environ["SUPABASE_KEY"] = ""
 
-import main  # noqa: E402
+import backend.main as main  # noqa: E402
 
 
 def test_should_enable_search_explicit_request():

@@ -21,15 +21,8 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 from contextvars import ContextVar
 
-try:
-    from backend.security_utils import sanitize_for_logging
-except ImportError:
-    from security_utils import sanitize_for_logging
-
-try:
-    from backend.time_utils import utcnow, utcnow_aware
-except Exception:  # pragma: no cover
-    from time_utils import utcnow, utcnow_aware  # type: ignore
+from backend.security_utils import sanitize_for_logging
+from backend.time_utils import utcnow, utcnow_aware
 
 # Context variables for request tracing
 request_id: ContextVar[Optional[str]] = ContextVar('request_id', default=None)
@@ -267,6 +260,17 @@ def setup_logging(
     # Configure specific loggers
     _configure_specific_loggers()
 
+    # Optional Discord alerts handler (best-effort, rate-limited in notifier)
+    try:
+        from backend.discord_notifier import get_discord_alerts_webhook_url
+    except Exception:
+        get_discord_alerts_webhook_url = None  # type: ignore[assignment]
+
+    if callable(get_discord_alerts_webhook_url) and get_discord_alerts_webhook_url():
+        min_level_name = (os.getenv("DISCORD_ALERT_MIN_LEVEL") or "ERROR").strip().upper()
+        min_level = getattr(logging, min_level_name, logging.ERROR)
+        root_logger.addHandler(DiscordAlertHandler(level=min_level))
+
     return logging.getLogger(__name__)
 
 
@@ -289,6 +293,97 @@ def _configure_specific_loggers():
 
     # Enable detailed logging for our application
     logging.getLogger("backend").setLevel(logging.DEBUG)
+
+
+class DiscordAlertHandler(logging.Handler):
+    """
+    Logging handler that forwards selected events to Discord.
+
+    Selection logic:
+    - Always forwards `event_type` in `DISCORD_ALERT_EVENT_TYPES` (comma-separated).
+    - Always forwards critical operational events like `db_slow_query` and `fallback_activation`.
+    - For everything else, forwards at/above `DISCORD_ALERT_MIN_LEVEL` (default ERROR).
+    """
+
+    def emit(self, record: logging.LogRecord) -> None:
+        if record.name.startswith("backend.discord_notifier"):
+            return
+        try:
+            from backend import discord_notifier
+        except Exception:
+            return
+
+        extra = _sanitize_record_extras(record)
+        event_type = str(extra.get("event_type") or "")
+
+        min_level_name = (os.getenv("DISCORD_ALERT_MIN_LEVEL") or "ERROR").strip().upper()
+        min_level = getattr(logging, min_level_name, logging.ERROR)
+
+        always_event_types = {
+            "db_slow_query",
+            "fallback_activation",
+            "database_url_invalid",
+            "security_violation",
+        }
+        configured = {
+            part.strip()
+            for part in (os.getenv("DISCORD_ALERT_EVENT_TYPES") or "").split(",")
+            if part.strip()
+        }
+        always_event_types |= configured
+
+        should_forward = record.levelno >= min_level or (event_type and event_type in always_event_types)
+        if not should_forward:
+            return
+
+        title = f"{record.levelname}: {record.name}"
+        message = sanitize_for_logging(record.getMessage())
+
+        field_allowlist = {
+            "event_type",
+            "duration_ms",
+            "threshold_ms",
+            "method",
+            "query_preview",
+            "service",
+            "url",
+            "status_code",
+            "function",
+            "fallback",
+            "model_id",
+            "error",
+            "request_id",
+            "user_id",
+            "conversation_id",
+            "order_id",
+        }
+        fields = {k: v for k, v in extra.items() if k in field_allowlist}
+
+        severity = "warning"
+        if record.levelno >= logging.CRITICAL:
+            severity = "critical"
+        elif record.levelno >= logging.ERROR:
+            severity = "error"
+        elif record.levelno >= logging.WARNING:
+            severity = "warning"
+        else:
+            severity = "info"
+
+        dedupe_key = (
+            f"{event_type}:{record.levelno}:{record.name}:{message[:120]}"
+            if event_type
+            else f"{record.levelno}:{record.name}:{message[:120]}"
+        )
+
+        discord_notifier.schedule_alert_if_possible(
+            discord_notifier.notify_alert(
+                title=title,
+                message=message,
+                severity=severity,
+                fields=fields,
+                dedupe_key=dedupe_key,
+            )
+        )
 
 
 def create_logger(name: str) -> logging.Logger:

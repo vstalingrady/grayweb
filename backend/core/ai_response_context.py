@@ -7,15 +7,13 @@ Consolidates duplicated context building, tool preparation, and limit checking.
 from typing import Any, Dict, List, Optional, Tuple
 import time
 import logging
+from importlib.util import find_spec
 
-try:
-    import databases
-except ImportError:
-    databases = None  # type: ignore
+import databases
 
-try:
+if find_spec("google.genai") is not None:
     from google.genai import types
-except ImportError:
+else:
     types = None  # type: ignore
 
 # Get logger from parent module

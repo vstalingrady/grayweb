@@ -9,27 +9,20 @@ between stream_ai_response and generate_ai_response.
 """
 import logging
 from dataclasses import dataclass, field
+from importlib.util import find_spec
 from typing import Any, Dict, List, Optional, Tuple
 
-try:
+if find_spec("google.genai") is not None:
     from google.genai import types
-except ImportError:
+else:
     types = None  # type: ignore
 
-try:
-    from backend.core.ai_config import (
-        AI_PROVIDER,
-        REMINDER_MODEL,
-        OPENROUTER_LITE_MODEL,
-        GEMINI_LIGHT_MODEL,
-    )
-except ImportError:
-    from core.ai_config import (  # type: ignore
-        AI_PROVIDER,
-        REMINDER_MODEL,
-        OPENROUTER_LITE_MODEL,
-        GEMINI_LIGHT_MODEL,
-    )
+from backend.core.ai_config import (
+    AI_PROVIDER,
+    REMINDER_MODEL,
+    OPENROUTER_LITE_MODEL,
+    GEMINI_LIGHT_MODEL,
+)
 
 api_logger = logging.getLogger("backend.api")
 
@@ -335,10 +328,9 @@ def build_maps_tool_and_config(
     if not maps_enabled:
         return [], None
 
-    try:
-        from google.genai import types
-    except ImportError:
+    if find_spec("google.genai") is None:
         return [], None
+    from google.genai import types
 
     tool = types.Tool(
         google_maps=types.GoogleMaps(enable_widget=maps_widget)

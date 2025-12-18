@@ -4,34 +4,17 @@ Database migration helpers.
 Extracted from main.py to improve modularity.
 """
 
-try:
-    from backend.database import database, DATABASE_URL
-except ImportError:
-    from database import database, DATABASE_URL  # type: ignore
-
-try:
-    from backend.core.sqlite_helpers import (
-        ensure_sqlite_columns as _ensure_sqlite_columns,
-        ensure_sqlite_index as _ensure_sqlite_index,
-        ensure_sqlite_unique_index as _ensure_sqlite_unique_index,
-        drop_sqlite_table as _drop_sqlite_table,
-        rename_sqlite_column_if_needed as _rename_sqlite_column_if_needed,
-        rebuild_sqlite_table_without_columns as _rebuild_sqlite_table_without_columns,
-    )
-except ImportError:
-    from core.sqlite_helpers import (  # type: ignore
-        ensure_sqlite_columns as _ensure_sqlite_columns,
-        ensure_sqlite_index as _ensure_sqlite_index,
-        ensure_sqlite_unique_index as _ensure_sqlite_unique_index,
-        drop_sqlite_table as _drop_sqlite_table,
-        rename_sqlite_column_if_needed as _rename_sqlite_column_if_needed,
-        rebuild_sqlite_table_without_columns as _rebuild_sqlite_table_without_columns,
-    )
-
-try:
-    from backend.logging_config import create_logger
-except ImportError:
-    from logging_config import create_logger  # type: ignore
+from backend.database import database, DATABASE_URL
+from backend.core.sqlite_helpers import (
+    ensure_sqlite_columns as _ensure_sqlite_columns,
+    ensure_sqlite_index as _ensure_sqlite_index,
+    ensure_sqlite_unique_index as _ensure_sqlite_unique_index,
+    ensure_sqlite_table as _ensure_sqlite_table,
+    drop_sqlite_table as _drop_sqlite_table,
+    rename_sqlite_column_if_needed as _rename_sqlite_column_if_needed,
+    rebuild_sqlite_table_without_columns as _rebuild_sqlite_table_without_columns,
+)
+from backend.logging_config import create_logger
 
 api_logger = create_logger("backend.api")
 app_logger = create_logger("backend.core")
@@ -41,8 +24,8 @@ app_logger = create_logger("backend.core")
 _USER_COLUMNS = [
     ("auth_user_id", "TEXT", None),
     ("subscription_expires_at", "DATETIME", None),
-    ("paddle_customer_id", "TEXT", None),
-    ("paddle_subscription_id", "TEXT", None),
+    ("gumroad_subscription_id", "TEXT", None),
+    ("gumroad_license_key", "TEXT", None),
     ("has_seen_general_chat", "BOOLEAN", "0"),
     ("maps_enabled", "BOOLEAN", "0"),
     ("improve_model_for_everyone", "BOOLEAN", "0"),
@@ -67,6 +50,10 @@ _USER_COLUMNS = [
     ("conversation_memory_enabled", "BOOLEAN", "1"),
     ("auto_web_search_enabled", "BOOLEAN", "0"),
     ("visible_model_ids", "TEXT", None),
+    ("gumroad_access_token", "TEXT", None),
+    ("gumroad_refresh_token", "TEXT", None),
+    ("gumroad_user_id", "TEXT", None),
+    ("gumroad_email", "TEXT", None),
 ]
 
 _USER_BACKFILL_NULLS = {
@@ -107,11 +94,6 @@ def run_startup_migrations():
     ])
     
     # General chat messages table
-    try:
-        from backend.core.sqlite_helpers import ensure_sqlite_table as _ensure_sqlite_table
-    except ImportError:
-        from core.sqlite_helpers import ensure_sqlite_table as _ensure_sqlite_table  # type: ignore
-    
     _ensure_sqlite_table("general_chat_messages", """
         CREATE TABLE general_chat_messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -159,14 +141,17 @@ def run_startup_migrations():
     _ensure_sqlite_index("reminders", "ix_reminders_user_status_remind_at", "user_id, status, remind_at")
     _ensure_sqlite_unique_index("dashboard_pulses", "uq_dashboard_pulses_user_date", "user_id, date_key")
     _ensure_sqlite_unique_index("proactivity_settings", "uq_proactivity_settings_user_id", "user_id")
+    _ensure_sqlite_index("users", "ix_users_gumroad_subscription_id", "gumroad_subscription_id")
 
     # Transaction columns
     _ensure_sqlite_columns("transactions", [
         ("billing_cycle", "VARCHAR", None),
         ("subscription_starts_at", "DATETIME", None),
         ("subscription_ends_at", "DATETIME", None),
-        ("paddle_transaction_id", "TEXT", None),
+        ("gumroad_sale_id", "TEXT", None),
     ])
+
+    _ensure_sqlite_index("transactions", "ix_transactions_gumroad_sale_id", "gumroad_sale_id")
 
     _ensure_sqlite_columns(
         "plans",
@@ -248,35 +233,3 @@ async def run_basic_migrations():
         ]
     )
 
-
-async def ensure_paddle_columns():
-    """Ensure Paddle columns exist in SQLite."""
-    try:
-        # Check users table
-        api_logger.info("Checking for Paddle columns...")
-        query = "PRAGMA table_info(users)"
-        columns = await database.fetch_all(query)
-        col_names = [col["name"] for col in columns]
-
-        if "paddle_customer_id" not in col_names:
-            api_logger.info("Adding paddle_customer_id to users")
-            await database.execute("ALTER TABLE users ADD COLUMN paddle_customer_id TEXT")
-            await database.execute("CREATE INDEX ix_users_paddle_customer_id ON users (paddle_customer_id)")
-        
-        if "paddle_subscription_id" not in col_names:
-            api_logger.info("Adding paddle_subscription_id to users")
-            await database.execute("ALTER TABLE users ADD COLUMN paddle_subscription_id TEXT")
-            await database.execute("CREATE INDEX ix_users_paddle_subscription_id ON users (paddle_subscription_id)")
-
-        # Check transactions table
-        query = "PRAGMA table_info(transactions)"
-        columns = await database.fetch_all(query)
-        col_names = [col["name"] for col in columns]
-        
-        if "paddle_transaction_id" not in col_names:
-            api_logger.info("Adding paddle_transaction_id to transactions")
-            await database.execute("ALTER TABLE transactions ADD COLUMN paddle_transaction_id TEXT")
-            await database.execute("CREATE UNIQUE INDEX ix_transactions_paddle_transaction_id ON transactions (paddle_transaction_id)")
-
-    except Exception as e:
-        api_logger.error(f"Failed to ensure Paddle columns: {e}")

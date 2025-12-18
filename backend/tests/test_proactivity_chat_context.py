@@ -1,18 +1,14 @@
 import os
-import sys
 from pathlib import Path
 
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
-BACKEND_PATH = ROOT / "backend"
-if str(BACKEND_PATH) not in sys.path:
-    sys.path.insert(0, str(BACKEND_PATH))
 
 os.environ.setdefault("SUPABASE_URL", "")
 os.environ.setdefault("SUPABASE_KEY", "")
 
-from proactivity_engine import ProactivityEngine  # noqa: E402
+from backend.proactivity_engine import ProactivityEngine  # noqa: E402
 
 
 class _FakeDb:
@@ -65,4 +61,3 @@ async def test_proactivity_falls_back_to_thread_history_when_general_empty():
     assert "- Gray: Newest reply" in context
     assert any("FROM general_chat_messages" in call for call in db.calls)
     assert any("FROM user_chat_messages" in call for call in db.calls)
-

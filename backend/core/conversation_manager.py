@@ -23,10 +23,7 @@ def _get_database():
     """Get database connection."""
     global _database
     if _database is None:
-        try:
-            from backend.database import database
-        except ImportError:
-            from database import database
+        from backend.database import database
         _database = database
     return _database
 
@@ -35,10 +32,7 @@ def _get_tables():
     """Get database tables."""
     global _tables
     if _tables is None:
-        try:
-            from backend.database import user_chat_threads, user_chat_messages
-        except ImportError:
-            from database import user_chat_threads, user_chat_messages
+        from backend.database import user_chat_threads, user_chat_messages
         _tables = {"threads": user_chat_threads, "messages": user_chat_messages}
     return _tables
 
@@ -47,20 +41,14 @@ def _get_logger():
     """Get logger."""
     global _logger
     if _logger is None:
-        try:
-            from backend.logging_config import create_logger
-        except ImportError:
-            from logging_config import create_logger
+        from backend.logging_config import create_logger
         _logger = create_logger("backend.conversation_manager")
     return _logger
 
 
 def _get_utcnow():
     """Get utcnow function."""
-    try:
-        from backend.time_utils import utcnow
-    except ImportError:
-        from time_utils import utcnow
+    from backend.time_utils import utcnow
     return utcnow
 
 
@@ -77,26 +65,14 @@ def _is_valid_uuid(value):
 
 def _get_conversation_store_helpers():
     """Get conversation store helpers."""
-    try:
-        from backend.core.chat_history import load_thread_history
-    except ImportError:  # pragma: no cover
-        from core.chat_history import load_thread_history  # type: ignore
-    try:
-        from backend.core.conversation_store import (
-            CONVERSATION_OWNER_CACHE,
-            GENERAL_CONVERSATION_PREFIX,
-            _handle_conversation_store_error,
-            _general_conversation_user_id,
-            append_to_conversation_cache,
-        )
-    except ImportError:
-        from core.conversation_store import (
-            CONVERSATION_OWNER_CACHE,
-            GENERAL_CONVERSATION_PREFIX,
-            _handle_conversation_store_error,
-            _general_conversation_user_id,
-            append_to_conversation_cache,
-        )
+    from backend.core.chat_history import load_thread_history
+    from backend.core.conversation_store import (
+        CONVERSATION_OWNER_CACHE,
+        GENERAL_CONVERSATION_PREFIX,
+        _handle_conversation_store_error,
+        _general_conversation_user_id,
+        append_to_conversation_cache,
+    )
     return {
         "CONVERSATION_OWNER_CACHE": CONVERSATION_OWNER_CACHE,
         "GENERAL_CONVERSATION_PREFIX": GENERAL_CONVERSATION_PREFIX,
@@ -109,18 +85,11 @@ def _get_conversation_store_helpers():
 
 def _get_general_conversation_funcs():
     """Get general conversation functions."""
-    try:
-        from backend.core.general_conversation import (
-            load_general_conversation_history,
-            insert_general_conversation_message,
-            ensure_user_data_record,
-        )
-    except ImportError:
-        from core.general_conversation import (
-            load_general_conversation_history,
-            insert_general_conversation_message,
-            ensure_user_data_record,
-        )
+    from backend.core.general_conversation import (
+        load_general_conversation_history,
+        insert_general_conversation_message,
+        ensure_user_data_record,
+    )
     return {
         "load_history": load_general_conversation_history,
         "insert_message": insert_general_conversation_message,

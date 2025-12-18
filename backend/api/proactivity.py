@@ -30,6 +30,10 @@ from backend.database import (
 )
 from backend.auth import get_current_user, require_same_user
 from backend.time_utils import utcnow
+from backend.core.async_utils import create_logged_task
+from backend.logging_config import create_logger
+
+api_logger = create_logger("backend.api.proactivity")
 
 router = APIRouter(tags=["proactivity"])
 
@@ -57,10 +61,7 @@ async def get_user_from_query_token(
 ) -> Optional[Dict[str, Any]]:
     """Get authenticated user from query token or Authorization header (for SSE)."""
     if token:
-        try:
-            from backend.auth import verify_supabase_token
-        except ImportError:
-            from auth import verify_supabase_token
+        from backend.auth import verify_supabase_token
         
         try:
             payload = await verify_supabase_token(token)
@@ -168,7 +169,11 @@ async def stream_user_proactivity(
     async def event_stream() -> AsyncGenerator[str, None]:
         try:
             yield _sse_event("ready", {"user_id": user_id})
-            asyncio.create_task(proactivity_engine.dispatch_user_if_due(user_id, source="realtime"))
+            create_logged_task(
+                proactivity_engine.dispatch_user_if_due(user_id, source="realtime"),
+                logger=api_logger,
+                name="proactivity.dispatch_user_if_due",
+            )
 
             while True:
                 try:

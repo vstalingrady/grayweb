@@ -18,10 +18,7 @@ def _get_tables():
     """Get database tables."""
     global _tables
     if _tables is None:
-        try:
-            from backend.database import plans, habits
-        except ImportError:
-            from database import plans, habits
+        from backend.database import plans, habits
         _tables = {"plans": plans, "habits": habits}
     return _tables
 
@@ -30,10 +27,7 @@ def _get_row_get():
     """Get _row_get helper function."""
     global _row_get_fn
     if _row_get_fn is None:
-        try:
-            from backend.core.serializers import _row_get
-        except ImportError:
-            from core.serializers import _row_get
+        from backend.core.serializers import _row_get
         _row_get_fn = _row_get
     return _row_get_fn
 

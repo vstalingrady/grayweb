@@ -3,10 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from typing import Literal, Optional, Tuple
 
-try:
-    from backend.time_utils import utcnow
-except Exception:  # pragma: no cover
-    from time_utils import utcnow  # type: ignore
+from backend.time_utils import utcnow
 
 BillingCycle = Literal["monthly", "annual"]
 

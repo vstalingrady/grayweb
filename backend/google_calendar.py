@@ -18,10 +18,7 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from pydantic import BaseModel, ConfigDict
 
-try:
-    from backend.time_utils import utcnow, utcnow_aware
-except Exception:  # pragma: no cover
-    from time_utils import utcnow, utcnow_aware  # type: ignore
+from backend.time_utils import utcnow, utcnow_aware
 
 # Environment variables for Google Calendar
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")

@@ -22,10 +22,7 @@ def _get_media_uploads():
     """Get media_uploads table."""
     global _database_module
     if _database_module is None:
-        try:
-            from backend.database import media_uploads
-        except ImportError:
-            from database import media_uploads
+        from backend.database import media_uploads
         _database_module = {"media_uploads": media_uploads}
     return _database_module["media_uploads"]
 
@@ -34,29 +31,20 @@ def _get_logger():
     """Get API logger."""
     global _logger
     if _logger is None:
-        try:
-            from backend.logging_config import create_logger
-        except ImportError:
-            from logging_config import create_logger
+        from backend.logging_config import create_logger
         _logger = create_logger("backend.media")
     return _logger
 
 
 def _resolve_storage_path_from_record(path_str: str) -> Path:
     """Resolve storage path from record."""
-    try:
-        from backend.core.file_utils import resolve_storage_path_from_record
-    except ImportError:
-        from core.file_utils import resolve_storage_path_from_record
+    from backend.core.file_utils import resolve_storage_path_from_record
     return resolve_storage_path_from_record(path_str)
 
 
 def _candidate_text(candidate):
     """Extract text from candidate."""
-    try:
-        from backend.core.ai_utils import candidate_text
-    except ImportError:
-        from core.ai_utils import candidate_text
+    from backend.core.ai_utils import candidate_text
     return candidate_text(candidate)
 
 
@@ -171,10 +159,7 @@ async def generate_image_descriptions(
     
     # Get Gemini service
     if gemini_service is None:
-        try:
-            from backend.gemini_client import GeminiService
-        except ImportError:
-            from gemini_client import GeminiService
+        from backend.gemini_client import GeminiService
         gemini_service = GeminiService()
     
     if not attachments or not gemini_service.available:

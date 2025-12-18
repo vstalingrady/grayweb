@@ -31,7 +31,7 @@ import { useI18n } from "@/contexts/I18nContext";
 import { useUser } from "@/contexts/UserContext";
 import { useChatStore } from "@/components/gray/ChatProvider";
 import { clampPercent, getContextUsageUsedTokens, getContextUsageVisualizationLimit } from "@/components/gray/contextUsage";
-import { utilityService, chatService } from "@/lib/api";
+import { utilityService, chatService, userService } from "@/lib/api";
 import { requestNotificationPermission } from "@/lib/notificationUtils";
 import { clearGrayLocalCache } from "@/lib/localCache";
 import { AccountSection } from "./sections/AccountSection";
@@ -129,6 +129,8 @@ export function SettingsModal({
   const [apiKeyStatus, setApiKeyStatus] = useState<string | null>(null);
   const [isDeletingAllConversations, setIsDeletingAllConversations] = useState(false);
   const [isClearingLocalCache, setIsClearingLocalCache] = useState(false);
+  const [gumroadRefreshStatus, setGumroadRefreshStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [gumroadRefreshMessage, setGumroadRefreshMessage] = useState<string | null>(null);
 
   // Mobile View State
   const [isMobile, setIsMobile] = useState(false);
@@ -506,6 +508,27 @@ export function SettingsModal({
     setCustomInstructions("");
   };
 
+  const handleRefreshGumroadSubscription = async () => {
+    setGumroadRefreshStatus("loading");
+    setGumroadRefreshMessage(t("Verifying license…"));
+    try {
+      const res = await userService.verifyGumroadLicense();
+      if (res.success) {
+        setGumroadRefreshStatus("success");
+        setGumroadRefreshMessage(res.message);
+        if (res.tier && user) {
+          await updateUser({ plan_tier: res.tier });
+        }
+      } else {
+        setGumroadRefreshStatus("error");
+        setGumroadRefreshMessage(res.message);
+      }
+    } catch (e) {
+      setGumroadRefreshStatus("error");
+      setGumroadRefreshMessage(e instanceof Error ? e.message : t("Manual verification failed."));
+    }
+  };
+
   const handleCompressConversation = async () => {
     const conversationId = contextUsage?.conversationId;
     if (!conversationId) {
@@ -860,6 +883,9 @@ export function SettingsModal({
                 router.push("/pricing");
               }}
               onDeleteAccount={handleDeleteAccount}
+              onRefreshGumroadSubscription={handleRefreshGumroadSubscription}
+              gumroadRefreshStatus={gumroadRefreshStatus}
+              gumroadRefreshMessage={gumroadRefreshMessage}
             />
           )}
 

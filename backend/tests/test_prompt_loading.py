@@ -5,7 +5,7 @@ from pathlib import Path
 
 
 def test_load_prompt_from_json_uses_fallback_when_key_missing():
-    from backend.main import load_prompt_from_json
+    from backend.core.prompt_utils import load_prompt_from_json
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         prompt_path = Path(tmp_dir) / "prompts.json"
@@ -18,7 +18,7 @@ def test_load_prompt_from_json_uses_fallback_when_key_missing():
 
 
 def test_load_prompt_from_json_uses_fallback_when_key_empty():
-    from backend.main import load_prompt_from_json
+    from backend.core.prompt_utils import load_prompt_from_json
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         prompt_path = Path(tmp_dir) / "prompts.json"

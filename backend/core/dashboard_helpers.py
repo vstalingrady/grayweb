@@ -10,10 +10,7 @@ from typing import Any, Dict, List, Optional
 
 # Lazy utilities
 def _get_utcnow():
-    try:
-        from backend.time_utils import utcnow
-    except ImportError:
-        from time_utils import utcnow
+    from backend.time_utils import utcnow
     return utcnow
 
 def _timestamp_ms_to_datetime(ms: Optional[int]) -> Optional[datetime]:
@@ -75,10 +72,7 @@ def serialize_dashboard_pulse_record(record: Any) -> Optional[Dict[str, Any]]:
 
 async def load_dashboard_pulse_by_date(db: Any, user_id: int, date_key: str) -> Any:
     """Load a dashboard pulse by user and date."""
-    try:
-        from backend.database import dashboard_pulses
-    except ImportError:
-        from database import dashboard_pulses
+    from backend.database import dashboard_pulses
         
     query = dashboard_pulses.select().where(
         (dashboard_pulses.c.user_id == user_id) & (dashboard_pulses.c.date_key == date_key)
@@ -87,10 +81,7 @@ async def load_dashboard_pulse_by_date(db: Any, user_id: int, date_key: str) -> 
 
 async def load_previous_dashboard_pulse(db: Any, user_id: int, current_date_key: str) -> Any:
     """Load the most recent dashboard pulse before the given date."""
-    try:
-        from backend.database import dashboard_pulses
-    except ImportError:
-        from database import dashboard_pulses
+    from backend.database import dashboard_pulses
 
     query = (
         dashboard_pulses.select()

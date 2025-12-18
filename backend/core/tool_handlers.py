@@ -5,25 +5,15 @@ This module contains handlers for calendar, habit, plan, and reminder tool calls
 that are invoked by the AI during chat interactions.
 """
 from datetime import datetime, date, timedelta, timezone
+from importlib.util import find_spec
 from typing import Any, Dict, List, Optional, Tuple
 import databases
 from fastapi import HTTPException
 
 # Import from core modules
-try:
-    from backend.time_utils import utcnow
-except ImportError:
-    from time_utils import utcnow  # type: ignore
-
-try:
-    from backend.database import calendar_events, plans, habits, reminders
-except ImportError:
-    from database import calendar_events, plans, habits, reminders  # type: ignore
-
-try:
-    from backend.logging_config import create_logger
-except ImportError:
-    from logging_config import create_logger  # type: ignore
+from backend.time_utils import utcnow
+from backend.database import calendar_events, plans, habits, reminders
+from backend.logging_config import create_logger
 
 api_logger = create_logger("backend.api")
 
@@ -906,10 +896,9 @@ def build_maps_tool_and_config(
     if not maps_enabled:
         return [], None
 
-    try:
-        from google.genai import types
-    except ImportError:
+    if find_spec("google.genai") is None:
         return [], None
+    from google.genai import types
 
     tool = types.Tool(
         google_maps=types.GoogleMaps(enable_widget=maps_widget)

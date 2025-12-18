@@ -12,18 +12,9 @@ from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
-try:
-    from backend.redis_client import get_redis_client
-except ImportError:  # pragma: no cover
-    try:
-        from redis_client import get_redis_client  # type: ignore
-    except ImportError:  # pragma: no cover
-        get_redis_client = None  # type: ignore[assignment]
+from backend.redis_client import get_redis_client
 
-if callable(get_redis_client):
-    _redis = get_redis_client()
-else:
-    _redis = None
+_redis = get_redis_client()
 
 
 CHAT_CACHE_PREFIX = "chat:"
@@ -64,13 +55,11 @@ def _coerce_message_dict(message: Any) -> Optional[Dict[str, Any]]:
         return None
 
 
-async def _get_redis():
-    """Get connected Redis client."""
-    if not _redis or not _redis.available:
+async def _get_redis_connection():
+    """Get connected Redis client connection."""
+    if not _redis.available:
         return None
-    if not _redis._client:
-        await _redis.connect()
-    return _redis._client
+    return await _redis.get_connection()
 
 
 async def get_cached_messages(
@@ -82,7 +71,7 @@ async def get_cached_messages(
     
     Returns None if not cached (cache miss).
     """
-    redis = await _get_redis()
+    redis = await _get_redis_connection()
     if not redis:
         return None
     
@@ -111,7 +100,7 @@ async def cache_messages(
     
     Returns True if cached successfully.
     """
-    redis = await _get_redis()
+    redis = await _get_redis_connection()
     if not redis:
         return False
     
@@ -140,7 +129,7 @@ async def cache_messages(
 
 async def invalidate_conversation_cache(conversation_id: str) -> bool:
     """Invalidate cache when conversation is updated."""
-    redis = await _get_redis()
+    redis = await _get_redis_connection()
     if not redis:
         return False
     
@@ -162,7 +151,7 @@ async def get_cached_conversation_metadata(
     conversation_id: str
 ) -> Optional[Dict[str, Any]]:
     """Get cached conversation metadata (title, created_at, etc.)."""
-    redis = await _get_redis()
+    redis = await _get_redis_connection()
     if not redis:
         return None
     
@@ -185,7 +174,7 @@ async def cache_conversation_metadata(
     ttl: int = 300  # 5 minutes for metadata
 ) -> bool:
     """Cache conversation metadata."""
-    redis = await _get_redis()
+    redis = await _get_redis_connection()
     if not redis:
         return False
     

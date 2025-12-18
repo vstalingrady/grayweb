@@ -2,6 +2,7 @@ import asyncio
 import contextlib
 import os
 import sys
+import time
 import weakref
 import databases
 import sqlalchemy
@@ -11,10 +12,7 @@ from datetime import datetime
 import logging
 
 # Use centralized environment detection
-try:
-    from backend.env_utils import ROOT_DIR, IN_DOCKER
-except ImportError:
-    from env_utils import ROOT_DIR, IN_DOCKER
+from backend.env_utils import ROOT_DIR, IN_DOCKER
 
 if "pytest" in sys.modules:
     # Tests should not inherit NODE_ENV/ENVIRONMENT from a developer's local .env.
@@ -145,6 +143,102 @@ async def _disconnect_with_pytest_ticker(*args, **kwargs):  # type: ignore[no-un
 database.connect = _connect_with_pytest_ticker  # type: ignore[method-assign]
 database.disconnect = _disconnect_with_pytest_ticker  # type: ignore[method-assign]
 
+# ---------------------------------------------------------------------------
+# Database query instrumentation (slow queries, errors)
+# ---------------------------------------------------------------------------
+
+from backend.logging_config import create_logger, request_id as _request_id_ctx, user_id as _user_id_ctx
+
+_db_logger = create_logger("backend.database.queries")
+_DB_SLOW_QUERY_MS = float(os.getenv("DB_SLOW_QUERY_MS") or os.getenv("DISCORD_SLOW_QUERY_MS") or "500")
+
+_db_execute = database.execute
+_db_execute_many = database.execute_many
+_db_fetch_one = database.fetch_one
+_db_fetch_all = database.fetch_all
+_db_fetch_val = database.fetch_val
+
+
+def _query_preview(query: Any) -> str:
+    text = str(query or "")
+    text = " ".join(text.split())
+    if len(text) > 240:
+        return text[:240] + "..."
+    return text
+
+
+def _log_db_event(*, level: int, message: str, extra: Dict[str, Any]) -> None:
+    extra_with_context = dict(extra)
+    req = _request_id_ctx.get()
+    usr = _user_id_ctx.get()
+    if req:
+        extra_with_context.setdefault("request_id", req)
+    if usr:
+        extra_with_context.setdefault("user_id", usr)
+    _db_logger.log(level, message, extra=extra_with_context)
+
+
+async def _instrument_call(method: str, query: Any, values: Any, coro):  # type: ignore[no-untyped-def]
+    t0 = time.perf_counter()
+    try:
+        result = await coro
+        return result
+    except Exception as exc:
+        duration_ms = (time.perf_counter() - t0) * 1000.0
+        _log_db_event(
+            level=logging.ERROR,
+            message="Database operation failed",
+            extra={
+                "event_type": "db_query_error",
+                "method": method,
+                "duration_ms": round(duration_ms, 2),
+                "query_preview": _query_preview(query),
+                "error": str(exc),
+            },
+        )
+        raise
+    finally:
+        duration_ms = (time.perf_counter() - t0) * 1000.0
+        if duration_ms >= _DB_SLOW_QUERY_MS:
+            _log_db_event(
+                level=logging.WARNING,
+                message="Slow database query",
+                extra={
+                    "event_type": "db_slow_query",
+                    "method": method,
+                    "duration_ms": round(duration_ms, 2),
+                    "threshold_ms": _DB_SLOW_QUERY_MS,
+                    "query_preview": _query_preview(query),
+                },
+            )
+
+
+async def _execute_instrumented(query, values=None):  # type: ignore[no-untyped-def]
+    return await _instrument_call("execute", query, values, _db_execute(query, values))
+
+
+async def _execute_many_instrumented(query, values=None):  # type: ignore[no-untyped-def]
+    return await _instrument_call("execute_many", query, values, _db_execute_many(query, values))
+
+
+async def _fetch_one_instrumented(query, values=None):  # type: ignore[no-untyped-def]
+    return await _instrument_call("fetch_one", query, values, _db_fetch_one(query, values))
+
+
+async def _fetch_all_instrumented(query, values=None):  # type: ignore[no-untyped-def]
+    return await _instrument_call("fetch_all", query, values, _db_fetch_all(query, values))
+
+
+async def _fetch_val_instrumented(query, values=None, column=0):  # type: ignore[no-untyped-def]
+    return await _instrument_call("fetch_val", query, values, _db_fetch_val(query, values, column=column))
+
+
+database.execute = _execute_instrumented  # type: ignore[method-assign]
+database.execute_many = _execute_many_instrumented  # type: ignore[method-assign]
+database.fetch_one = _fetch_one_instrumented  # type: ignore[method-assign]
+database.fetch_all = _fetch_all_instrumented  # type: ignore[method-assign]
+database.fetch_val = _fetch_val_instrumented  # type: ignore[method-assign]
+
 # Define users table
 users = sqlalchemy.Table(
     "users",
@@ -169,8 +263,8 @@ users = sqlalchemy.Table(
     sqlalchemy.Column("personalization_time_zone", sqlalchemy.String, nullable=True),
     sqlalchemy.Column("plan_tier", sqlalchemy.String, nullable=True),
     sqlalchemy.Column("subscription_expires_at", sqlalchemy.DateTime, nullable=True),  # When subscription expires
-    sqlalchemy.Column("paddle_customer_id", sqlalchemy.String, nullable=True),
-    sqlalchemy.Column("paddle_subscription_id", sqlalchemy.String, nullable=True),
+    sqlalchemy.Column("gumroad_subscription_id", sqlalchemy.String, nullable=True),
+    sqlalchemy.Column("gumroad_license_key", sqlalchemy.String, nullable=True),
     sqlalchemy.Column("has_seen_general_chat", sqlalchemy.Boolean, default=False),
     sqlalchemy.Column("daily_token_usage", sqlalchemy.Integer, default=0),
     sqlalchemy.Column("monthly_cost_usage", sqlalchemy.Float, default=0.0),
@@ -208,7 +302,7 @@ transactions = sqlalchemy.Table(
     sqlalchemy.Column("billing_cycle", sqlalchemy.String, nullable=True),  # monthly, annual
     sqlalchemy.Column("subscription_starts_at", sqlalchemy.DateTime, nullable=True),
     sqlalchemy.Column("subscription_ends_at", sqlalchemy.DateTime, nullable=True),
-    sqlalchemy.Column("paddle_transaction_id", sqlalchemy.String, nullable=True),
+    sqlalchemy.Column("gumroad_sale_id", sqlalchemy.String, nullable=True),
     sqlalchemy.Column("snap_token", sqlalchemy.String, nullable=True),
     sqlalchemy.Column("snap_redirect_url", sqlalchemy.String, nullable=True),
     sqlalchemy.Column("created_at", sqlalchemy.DateTime, default=datetime.utcnow),

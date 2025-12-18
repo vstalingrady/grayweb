@@ -12,6 +12,7 @@ import os
 from typing import Any, Dict, Optional
 
 import httpx
+from backend.tier_utils import normalize_plan_tier
 
 logger = logging.getLogger(__name__)
 
@@ -107,7 +108,10 @@ async def _fetch_openrouter_pricing() -> Dict[str, Dict[str, float]]:
             return pricing
             
     except Exception as e:
-        logger.warning(f"Failed to fetch OpenRouter pricing: {e}")
+        logger.warning(
+            "Failed to fetch OpenRouter pricing; using cached/fallback pricing",
+            extra={"event_type": "fallback_activation", "fallback": "openrouter_pricing_fetch_failed", "error": str(e)},
+        )
     
     return {}
 
@@ -129,7 +133,10 @@ def _get_model_pricing(model_id: str) -> Dict[str, float]:
             return value
     
     # Return default pricing
-    logger.warning(f"No pricing found for model {model_id}, using defaults")
+    logger.warning(
+        "No pricing found for model; using default pricing",
+        extra={"event_type": "fallback_activation", "fallback": "model_pricing_missing", "model_id": model_id},
+    )
     return DEFAULT_PRICING
 
 
@@ -318,11 +325,6 @@ class UsageTracker:
         usage_data = await self._reset_counters_if_needed(user_id, usage_data)
 
         # Get user tier with subscription expiration check
-        try:
-            from backend.tier_utils import normalize_plan_tier
-        except ImportError:
-            from tier_utils import normalize_plan_tier
-        
         subscription_expires_at = usage_data.get("subscription_expires_at")
         tier = normalize_plan_tier(
             usage_data.get("plan_tier"),
@@ -398,11 +400,6 @@ class UsageTracker:
         usage_data = await self._reset_counters_if_needed(user_id, usage_data)
 
         # Get user tier with subscription expiration check
-        try:
-            from backend.tier_utils import normalize_plan_tier
-        except ImportError:
-            from tier_utils import normalize_plan_tier
-        
         subscription_expires_at = usage_data.get("subscription_expires_at")
         tier = normalize_plan_tier(
             usage_data.get("plan_tier"),

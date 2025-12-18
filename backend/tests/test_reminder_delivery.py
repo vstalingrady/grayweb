@@ -1,5 +1,4 @@
 import os
-import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -7,12 +6,7 @@ import pytest
 import pytest_asyncio
 import sqlalchemy
 
-# Ensure backend module is importable
 ROOT = Path(__file__).resolve().parents[2]
-BACKEND_PATH = ROOT / "backend"
-if str(BACKEND_PATH) not in sys.path:
-    sys.path.insert(0, str(BACKEND_PATH))
-
 TEST_DB_PATH = ROOT / "backend" / "tests" / "reminder_delivery_test.db"
 if TEST_DB_PATH.exists():
     TEST_DB_PATH.unlink()
@@ -20,8 +14,8 @@ os.environ["DATABASE_URL"] = f"sqlite:///{TEST_DB_PATH}"
 os.environ["SUPABASE_URL"] = ""
 os.environ["SUPABASE_KEY"] = ""
 
-import main  # noqa: E402
-from proactivity_engine import ProactivityEngine, ProactivityRealtimeBroker  # noqa: E402
+import backend.main as main  # noqa: E402
+from backend.proactivity_engine import ProactivityEngine, ProactivityRealtimeBroker  # noqa: E402
 
 
 @pytest_asyncio.fixture

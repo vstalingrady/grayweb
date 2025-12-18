@@ -22,21 +22,11 @@ URL_CONTEXT_TOOL = types.Tool(
 )
 
 # Import helpers
-try:
-    from backend.core.function_call_helpers import (
-        build_function_call_contents,
-        extract_function_call,
-    )
-except ImportError:
-    from core.function_call_helpers import (  # type: ignore
-        build_function_call_contents,
-        extract_function_call,
-    )
-
-try:
-    from backend.core.ai_utils import candidate_text
-except ImportError:
-    from core.ai_utils import candidate_text  # type: ignore
+from backend.core.function_call_helpers import (
+    build_function_call_contents,
+    extract_function_call,
+)
+from backend.core.ai_utils import candidate_text
 
 api_logger = logging.getLogger("backend.api")
 

@@ -7,82 +7,47 @@ import databases
 from fastapi import APIRouter, BackgroundTasks, Depends, Request, HTTPException
 from fastapi.responses import StreamingResponse
 
-try:
-    from backend.auth import get_current_user, require_same_user
-    from backend.database import database, get_database
-    from backend.logging_config import create_logger, set_request_context, clear_request_context
-    from backend.api.chat_models import (
-        ChatRequest, ChatResponse, ChatStarterRequest, ChatStarterResponse,
-        ChatTitleRequest, ChatTitleResponse, MessageCreateRequest,
-        ConversationCreateRequest, ConversationUpdateRequest, ConversationHistoryPayload,
-    )
-    from backend.core.ai_config import (
-        AI_PROVIDER,
-        GEMINI_DEFAULT_MODEL,
-        GLOBAL_SYSTEM_PROMPTS_PATH,
-        get_default_chat_tools,
-    )
-    from backend.core.rate_limit import limiter
-    from backend.core.ai_service import (
-        stream_ai_response as _stream_ai_response,
-        generate_ai_response as _generate_ai_response,
-        generate_chat_starter as _ai_generate_chat_starter
-    )
-    from backend.compat_imports import (
-        utcnow,
-        get_cached_user,
-        _general_conversation_user_id,
-        _load_conversation_history,
-        save_conversation_message,
-        get_or_create_conversation,
-        _prompt_locale_from_request,
-        fallback_title_from_message as _fallback_title_from_message,
-        _is_valid_uuid,
-        update_conversation_title,
-        load_prompt_from_json,
-        row_get as _row_get,
-        normalize_plan_tier,
-        coerce_model_for_tier,
-        _timezone_from_time_context,
-    )
-    from backend.core.chat_starter_helpers import sse_event as _sse_event
-    from backend.core.title_generator import generate_chat_title_inline as _generate_chat_title_inline
-except ImportError:
-    from auth import get_current_user, require_same_user  # type: ignore
-    from database import database, get_database  # type: ignore
-    from logging_config import create_logger, set_request_context, clear_request_context  # type: ignore
-    from api.chat_models import (  # type: ignore
-        ChatRequest, ChatResponse, ChatStarterRequest, ChatStarterResponse,
-        ChatTitleRequest, ChatTitleResponse, MessageCreateRequest,
-        ConversationCreateRequest, ConversationUpdateRequest, ConversationHistoryPayload,
-    )
-    from core.rate_limit import limiter  # type: ignore
-    from core.ai_service import (  # type: ignore
-        stream_ai_response as _stream_ai_response,
-        generate_ai_response as _generate_ai_response,
-        generate_chat_starter as _ai_generate_chat_starter
-    )
-    from compat_imports import (  # type: ignore
-        utcnow, utcnow_aware,
-        get_cached_user,
-        _general_conversation_user_id,
-        _insert_general_conversation_message,
-        _load_general_conversation_history,
-        _load_conversation_history,
-        save_conversation_message,
-        get_or_create_conversation,
-        _prompt_locale_from_request,
-        _fallback_title_from_message,
-        _is_valid_uuid,
-        update_conversation_title,
-        load_prompt_from_json,
-        _row_get,
-        normalize_plan_tier,
-        coerce_model_for_tier,
-        _timezone_from_time_context,
-    )
-    from core.chat_starter_helpers import sse_event as _sse_event  # type: ignore
-    from core.title_generator import generate_chat_title_inline as _generate_chat_title_inline  # type: ignore
+from backend.auth import get_current_user, require_same_user
+from backend.database import database, get_database
+from backend.logging_config import create_logger, set_request_context, clear_request_context
+from backend.core.async_utils import create_logged_task
+from backend.api.chat_models import (
+    ChatRequest, ChatResponse, ChatStarterRequest, ChatStarterResponse,
+    ChatTitleRequest, ChatTitleResponse, MessageCreateRequest,
+    ConversationCreateRequest, ConversationUpdateRequest, ConversationHistoryPayload,
+)
+from backend.core.ai_config import (
+    AI_PROVIDER,
+    GEMINI_DEFAULT_MODEL,
+    GLOBAL_SYSTEM_PROMPTS_PATH,
+    get_default_chat_tools,
+)
+from backend.core.rate_limit import limiter
+from backend.core.ai_service import (
+    stream_ai_response as _stream_ai_response,
+    generate_ai_response as _generate_ai_response,
+    generate_chat_starter as _ai_generate_chat_starter,
+)
+from backend.compat_imports import (
+    utcnow,
+    get_cached_user,
+    _general_conversation_user_id,
+    _insert_general_conversation_message,
+    _load_conversation_history,
+    save_conversation_message,
+    get_or_create_conversation,
+    _prompt_locale_from_request,
+    fallback_title_from_message as _fallback_title_from_message,
+    _is_valid_uuid,
+    update_conversation_title,
+    load_prompt_from_json,
+    row_get as _row_get,
+    normalize_plan_tier,
+    coerce_model_for_tier,
+    _timezone_from_time_context,
+)
+from backend.core.chat_starter_helpers import sse_event as _sse_event
+from backend.core.title_generator import generate_chat_title_inline as _generate_chat_title_inline
 
 api_logger = create_logger("api.chat")
 
@@ -465,7 +430,11 @@ async def chat_stream_route(
                 except Exception as e:
                     api_logger.error(f"Failed to persist user message: {e}", extra={"user_id": chat_request.user_id})
 
-            asyncio.create_task(_persist_user_msg())
+            create_logged_task(
+                _persist_user_msg(),
+                logger=api_logger,
+                name="chat.persist_user_message",
+            )
 
         # Enforce tier restrictions for streaming
         normalized_tier = normalize_plan_tier(
@@ -558,7 +527,13 @@ async def chat_stream_route(
                         if generated_title:
                             final_title = generated_title
                             background_tasks.add_task(update_conversation_title, conversation_id, generated_title)
-                    except Exception: pass
+                    except Exception as title_error:
+                        api_logger.warning(
+                            "Title generation failed: %s",
+                            title_error,
+                            exc_info=True,
+                            extra={"user_id": chat_request.user_id, "conversation_id": conversation_id},
+                        )
 
                 end_payload: Dict[str, Any] = {"conversation_id": conversation_id, "response": final_response, "title": final_title}
                 if grounding_metadata_payload:
@@ -584,143 +559,4 @@ async def chat_stream_route(
         api_logger.error(f"Chat stream failed: {error}", exc_info=True)
         clear_request_context()
         raise HTTPException(status_code=500, detail=str(error))
-
-
-@router.post("/api/conversation/{conversation_id}/messages")
-@limiter.limit("60/minute")
-async def create_conversation_message_route(
-    request: Request,
-    conversation_id: str,
-    payload: MessageCreateRequest,
-    current_user: Dict[str, Any] = Depends(get_current_user),
-):
-    backend_main = _get_backend_main()
-    return await backend_main.create_conversation_message(
-        request,
-        conversation_id,
-        payload,
-        current_user,
-    )
-
-
-@router.get("/api/conversation/{conversation_id}")
-@limiter.limit("120/minute")
-async def get_conversation_route(
-    request: Request,
-    conversation_id: str,
-    current_user: Dict[str, Any] = Depends(get_current_user),
-):
-    backend_main = _get_backend_main()
-    return await backend_main.get_conversation(
-        request,
-        conversation_id,
-        current_user,
-    )
-
-
-@router.post("/api/conversation")
-@limiter.limit("30/minute")
-async def create_conversation_route(
-    request: Request,
-    payload: ConversationCreateRequest,
-    current_user: Dict[str, Any] = Depends(get_current_user),
-):
-    backend_main = _get_backend_main()
-    return await backend_main.create_conversation(request, payload, current_user)
-
-
-@router.delete("/api/conversation/{conversation_id}", status_code=204)
-@limiter.limit("20/minute")
-async def delete_conversation_route(
-    request: Request,
-    conversation_id: str,
-    current_user: Dict[str, Any] = Depends(get_current_user),
-):
-    backend_main = _get_backend_main()
-    return await backend_main.delete_conversation(
-        request,
-        conversation_id,
-        current_user,
-    )
-
-
-@router.put("/api/conversation/{conversation_id}/history")
-@limiter.limit("20/minute")
-async def overwrite_conversation_history_route(
-    request: Request,
-    conversation_id: str,
-    payload: ConversationHistoryPayload,
-    current_user: Dict[str, Any] = Depends(get_current_user),
-):
-    backend_main = _get_backend_main()
-    return await backend_main.overwrite_conversation_history(
-        request,
-        conversation_id,
-        payload,
-        current_user,
-    )
-
-
-@router.patch("/api/conversation/{conversation_id}")
-@limiter.limit("60/minute")
-async def update_conversation_route(
-    request: Request,
-    conversation_id: str,
-    payload: ConversationUpdateRequest,
-    current_user: Dict[str, Any] = Depends(get_current_user),
-):
-    backend_main = _get_backend_main()
-    return await backend_main.update_conversation(
-        request,
-        conversation_id,
-        payload,
-        current_user,
-    )
-
-
-@router.post("/api/conversation/{conversation_id}/metadata")
-@limiter.limit("60/minute")
-async def update_conversation_metadata_route(
-    request: Request,
-    conversation_id: str,
-    payload: ConversationUpdateRequest,
-    current_user: Dict[str, Any] = Depends(get_current_user),
-):
-    backend_main = _get_backend_main()
-    return await backend_main.update_conversation_metadata(
-        request,
-        conversation_id,
-        payload,
-        current_user,
-    )
-
-
-@router.get("/api/conversation/{conversation_id}/usage")
-@limiter.limit("120/minute")
-async def get_conversation_usage_route(
-    request: Request,
-    conversation_id: str,
-    current_user: Dict[str, Any] = Depends(get_current_user),
-):
-    backend_main = _get_backend_main()
-    return await backend_main.get_conversation_usage(
-        request,
-        conversation_id,
-        current_user,
-    )
-
-
-@router.post("/api/conversation/{conversation_id}/compress")
-@limiter.limit("10/minute")
-async def compress_conversation_route(
-    request: Request,
-    conversation_id: str,
-    current_user: Dict[str, Any] = Depends(get_current_user),
-):
-    backend_main = _get_backend_main()
-    return await backend_main.compress_conversation(
-        request,
-        conversation_id,
-        current_user,
-    )
 

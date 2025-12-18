@@ -140,77 +140,41 @@ from backend.core.workspace_tools import (
 from backend.core.stream_handlers.context import build_maps_tool_and_config
 
 # General conversation
-try:
-    from backend.core.general_conversation import (
-        load_general_conversation_history as _load_general_conversation_history,
-        insert_general_conversation_message as _insert_general_conversation_message,
-        delete_general_conversation_history as _delete_general_conversation_history,
-    )
-except ImportError:
-    from core.general_conversation import (
-        load_general_conversation_history as _load_general_conversation_history,
-        insert_general_conversation_message as _insert_general_conversation_message,
-        delete_general_conversation_history as _delete_general_conversation_history,
-    )
+from backend.core.general_conversation import (
+    load_general_conversation_history as _load_general_conversation_history,
+    insert_general_conversation_message as _insert_general_conversation_message,
+    delete_general_conversation_history as _delete_general_conversation_history,
+)
 
 # Conversation manager core utilities
-try:
-    from backend.core.conversation_manager import (
-        load_conversation_history as _load_conversation_history,
-        get_or_create_conversation,
-        save_conversation_message,
-    )
-except ImportError:
-    from core.conversation_manager import (
-        load_conversation_history as _load_conversation_history,
-        get_or_create_conversation,
-        save_conversation_message,
-    )
+from backend.core.conversation_manager import (
+    load_conversation_history as _load_conversation_history,
+    get_or_create_conversation,
+    save_conversation_message,
+)
 
 # Env Helpers
-try:
-    from backend.core.env_helpers import (
-        is_valid_uuid as _is_valid_uuid,
-        timezone_from_time_context as _timezone_from_time_context,
-    )
-except ImportError:
-    from core.env_helpers import (
-        is_valid_uuid as _is_valid_uuid,
-        timezone_from_time_context as _timezone_from_time_context,
-    )
+from backend.core.env_helpers import (
+    is_valid_uuid as _is_valid_uuid,
+    timezone_from_time_context as _timezone_from_time_context,
+)
 
 # Dashboard Helpers (missing ones)
-try:
-    from backend.core.dashboard_helpers import (
-        normalize_plan_items,
-        normalize_habit_items,
-        normalize_proactivity,
-    )
-except ImportError:
-    from core.dashboard_helpers import (
-        normalize_plan_items,
-        normalize_habit_items,
-        normalize_proactivity,
-    )
+from backend.core.dashboard_helpers import (
+    normalize_plan_items,
+    normalize_habit_items,
+    normalize_proactivity,
+)
 
 # Tier utilities
-try:
-    from backend.tier_utils import normalize_plan_tier
-except ImportError:
-    from tier_utils import normalize_plan_tier # type: ignore
+from backend.tier_utils import normalize_plan_tier
 
 # Model access
-try:
-    from backend.model_access import coerce_model_for_tier
-except ImportError:
-    from model_access import coerce_model_for_tier # type: ignore
+from backend.model_access import coerce_model_for_tier
 
 # Proactivity and Reminder classes
 from backend.proactivity_engine import ProactivityEngine, ProactivitySchedulerManager
-try:
-    from backend.reminder_scheduler import ReminderSchedulerManager
-except ImportError:
-    from reminder_scheduler import ReminderSchedulerManager # type: ignore
+from backend.reminder_scheduler import ReminderSchedulerManager
 
 for _main_module_name in ("main", "backend.main"):
     _main_module = sys.modules.get(_main_module_name)

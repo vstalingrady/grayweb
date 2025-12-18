@@ -27,6 +27,12 @@ export interface User {
   plan_tier?: string | null;
   initials: string;
   workspace_background_id?: string | null;
+  gumroad_subscription_id?: string | null;
+  gumroad_license_key?: string | null;
+  gumroad_access_token?: string | null;
+  gumroad_refresh_token?: string | null;
+  gumroad_user_id?: string | null;
+  gumroad_email?: string | null;
   maps_enabled: boolean;
   improve_model_for_everyone?: boolean;
   has_seen_general_chat?: boolean;

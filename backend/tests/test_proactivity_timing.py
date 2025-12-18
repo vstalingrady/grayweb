@@ -1,19 +1,15 @@
 import os
-import sys
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
-BACKEND_PATH = ROOT / "backend"
-if str(BACKEND_PATH) not in sys.path:
-    sys.path.insert(0, str(BACKEND_PATH))
 
 os.environ.setdefault("SUPABASE_URL", "")
 os.environ.setdefault("SUPABASE_KEY", "")
 
-from proactivity_engine import ProactivityEngine  # noqa: E402
+from backend.proactivity_engine import ProactivityEngine  # noqa: E402
 
 
 def _engine():
@@ -46,4 +42,3 @@ def test_current_window_bounds_allows_grace_after_time():
 
     after_grace = datetime(2025, 1, 1, 9, 31, tzinfo=timezone.utc)
     assert engine._current_window_bounds(settings, "UTC", now_override=after_grace) is None
-

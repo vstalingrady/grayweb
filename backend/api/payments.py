@@ -22,20 +22,15 @@ router = APIRouter(tags=["payments"])
 
 def _get_logger():
     """Get app logger."""
-    try:
-        from backend.logging_config import create_logger
-    except ImportError:  # pragma: no cover
-        import logging
-        return logging.getLogger(__name__)
+    from backend.logging_config import create_logger
+
     return create_logger("backend.api.payments")
 
 
 def _get_cache_helpers():
     """Get cache invalidation helpers."""
-    try:
-        from backend.auth import invalidate_user_cache, invalidate_user_cache_redis
-    except ImportError:  # pragma: no cover
-        from auth import invalidate_user_cache, invalidate_user_cache_redis  # type: ignore
+    from backend.auth import invalidate_user_cache, invalidate_user_cache_redis
+
     return invalidate_user_cache, invalidate_user_cache_redis
 
 
@@ -46,10 +41,7 @@ async def create_payment_charge(
     user: Dict[str, Any] = Depends(get_current_user),
 ):
     """Create a transaction with Midtrans Core API."""
-    try:
-        from backend.payment_utils import create_core_api_transaction
-    except ImportError:  # pragma: no cover
-        from payment_utils import create_core_api_transaction  # type: ignore
+    from backend.payment_utils import create_core_api_transaction
     app_logger = _get_logger()
     
     # 1. Determine Amount & Item Details
@@ -171,19 +163,14 @@ async def create_payment_charge(
 @router.post("/payment/notification", include_in_schema=False)
 async def handle_payment_notification(notification: MidtransNotification, background_tasks: BackgroundTasks):
     """Handle Midtrans HTTP Notification (Webhook)."""
-    try:
-        from backend.payment_utils import verify_notification_signature
-    except ImportError:  # pragma: no cover
-        from payment_utils import verify_notification_signature  # type: ignore
+    from backend.payment_utils import verify_notification_signature
     app_logger = _get_logger()
     invalidate_user_cache, invalidate_user_cache_redis = _get_cache_helpers()
     
     # Get audit logger
-    try:
-        from audit_logger import get_audit_logger, AuditAction
-        audit = get_audit_logger()
-    except ImportError:
-        audit = None
+    from backend.audit_logger import get_audit_logger, AuditAction
+
+    audit = get_audit_logger()
     
     # 1. Verify Signature
     is_valid = verify_notification_signature(
@@ -310,10 +297,7 @@ async def handle_payment_notification(notification: MidtransNotification, backgr
                     )
 
                 if should_notify_success:
-                    try:
-                        from backend.discord_notifier import notify_payment_success
-                    except Exception:
-                        from discord_notifier import notify_payment_success  # type: ignore
+                    from backend.discord_notifier import notify_payment_success
                     background_tasks.add_task(
                         notify_payment_success,
                         provider="midtrans",
@@ -330,10 +314,7 @@ async def handle_payment_notification(notification: MidtransNotification, backgr
                         },
                     )
             elif should_notify_success:
-                try:
-                    from backend.discord_notifier import notify_payment_success
-                except Exception:
-                    from discord_notifier import notify_payment_success  # type: ignore
+                from backend.discord_notifier import notify_payment_success
                 background_tasks.add_task(
                     notify_payment_success,
                     provider="midtrans",

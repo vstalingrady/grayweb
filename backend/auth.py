@@ -7,16 +7,10 @@ from typing import Optional, Dict, Any
 import logging
 from datetime import datetime, timezone
 
-try:
-    from backend.time_utils import utcnow
-except Exception:  # pragma: no cover
-    from time_utils import utcnow  # type: ignore
+from backend.time_utils import utcnow
 import time
 
-try:
-    from backend.tier_utils import bootstrap_plan_tier
-except Exception:  # pragma: no cover
-    from tier_utils import bootstrap_plan_tier  # type: ignore
+from backend.tier_utils import bootstrap_plan_tier
 
 try:
     import jwt  # type: ignore
@@ -34,13 +28,7 @@ _user_cache: Dict[str, tuple[Dict[str, Any], float]] = {}
 _USER_CACHE_TTL = 10.0  # 10 seconds
 
 # Redis cache (L2 - longer TTL, shared across processes)
-try:
-    from backend.redis_client import get_redis_client
-except ImportError:  # pragma: no cover
-    try:
-        from redis_client import get_redis_client  # type: ignore
-    except ImportError:  # pragma: no cover
-        get_redis_client = None  # type: ignore[assignment]
+from backend.redis_client import get_redis_client
 
 if callable(get_redis_client):
     _redis_client = get_redis_client()
@@ -82,10 +70,7 @@ async def _get_cached_user_redis(auth_user_id: str) -> Optional[Dict[str, Any]]:
     if not _redis_client or not _redis_client.available:
         return None
     try:
-        import asyncio
-        # Connect if not already connected
-        if not _redis_client._client:
-            await _redis_client.connect()
+        await _redis_client.ensure_connected()
         data = await _redis_client.get_session(f"user:{auth_user_id}")
         if data:
             logger.debug(f"[REDIS] Cache hit for user {auth_user_id}")
@@ -112,8 +97,7 @@ async def _cache_user_redis(auth_user_id: str, user_data: Dict[str, Any]):
     if not _redis_client or not _redis_client.available:
         return
     try:
-        if not _redis_client._client:
-            await _redis_client.connect()
+        await _redis_client.ensure_connected()
         await _redis_client.set_session(f"user:{auth_user_id}", user_data, ttl=300)
         logger.debug(f"[REDIS] Cached user {auth_user_id}")
     except Exception as e:
@@ -131,8 +115,7 @@ async def invalidate_user_cache_redis(auth_user_id: str):
     if not _redis_client or not _redis_client.available:
         return
     try:
-        if not _redis_client._client:
-            await _redis_client.connect()
+        await _redis_client.ensure_connected()
         await _redis_client.delete_session(f"user:{auth_user_id}")
         logger.debug(f"[REDIS] Invalidated cache for user {auth_user_id}")
     except Exception as e:
@@ -177,10 +160,7 @@ def _derive_full_name(email: Optional[str], metadata: Dict[str, Any]) -> str:
     return email or "User"
 
 # Import Supabase client
-try:
-    from backend.supabase_utils import create_supabase_client, resolve_supabase_credentials
-except ImportError:
-    from supabase_utils import create_supabase_client, resolve_supabase_credentials
+from backend.supabase_utils import create_supabase_client, resolve_supabase_credentials
 
 
 # =============================================================================
@@ -447,10 +427,7 @@ async def get_current_user(
         HTTPException: If token is invalid or user not found
     """
     # Import here to avoid circular dependency
-    try:
-        from backend.database import users, database
-    except ImportError:
-        from database import users, database
+    from backend.database import users, database
     
     perf_start = time.time()
     token = credentials.credentials

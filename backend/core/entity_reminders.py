@@ -9,25 +9,13 @@ from typing import Any, Dict, List, Optional
 import databases
 
 # Import from core modules
-try:
-    from backend.time_utils import utcnow
-except ImportError:
-    from time_utils import utcnow  # type: ignore
+from backend.time_utils import utcnow
 
-try:
-    from backend.database import reminders
-except ImportError:
-    from database import reminders  # type: ignore
+from backend.database import reminders
 
-try:
-    from backend.logging_config import create_logger
-except ImportError:
-    from logging_config import create_logger  # type: ignore
+from backend.logging_config import create_logger
 
-try:
-    from backend.core.tool_utils import normalize_remind_at
-except ImportError:
-    from core.tool_utils import normalize_remind_at  # type: ignore
+from backend.core.tool_utils import normalize_remind_at
 
 api_logger = create_logger("backend.api")
 

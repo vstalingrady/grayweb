@@ -14,23 +14,12 @@ from google.genai import types
 api_logger = logging.getLogger("backend.api")
 
 # Import helpers
-try:
-    from backend.core.ai_utils import materialize_structured_reminders as _materialize_structured_reminders
-    from backend.core.ai_utils import candidate_text as _candidate_text
-    from backend.core.ai_utils import candidate_thought as _candidate_thought
-    from backend.core.ai_utils import candidate_grounding_payload as _candidate_grounding_payload
-    from backend.core.function_call_helpers import build_function_call_contents as _build_function_call_contents
-except ImportError:
-    from core.ai_utils import materialize_structured_reminders as _materialize_structured_reminders  # type: ignore
-    from core.ai_utils import candidate_text as _candidate_text  # type: ignore
-    from core.ai_utils import candidate_thought as _candidate_thought  # type: ignore
-    from core.ai_utils import candidate_grounding_payload as _candidate_grounding_payload  # type: ignore
-    from core.function_call_helpers import build_function_call_contents as _build_function_call_contents  # type: ignore
-
-try:
-    from backend.core.ai_config import REMINDER_FUNCTION_NAMES
-except ImportError:
-    from core.ai_config import REMINDER_FUNCTION_NAMES  # type: ignore
+from backend.core.ai_utils import materialize_structured_reminders as _materialize_structured_reminders
+from backend.core.ai_utils import candidate_text as _candidate_text
+from backend.core.ai_utils import candidate_thought as _candidate_thought
+from backend.core.ai_utils import candidate_grounding_payload as _candidate_grounding_payload
+from backend.core.function_call_helpers import build_function_call_contents as _build_function_call_contents
+from backend.core.ai_config import REMINDER_FUNCTION_NAMES
 
 # Set of mutating tool names - only execute once per turn
 SINGLE_CALL_PER_TURN = {

@@ -12,10 +12,7 @@ import os
 from datetime import datetime, timedelta
 from typing import Any, Callable, Dict, Optional
 
-try:
-    from backend.time_utils import utcnow_aware
-except Exception:  # pragma: no cover
-    from time_utils import utcnow_aware  # type: ignore
+from backend.time_utils import utcnow_aware
 
 logger = logging.getLogger(__name__)
 

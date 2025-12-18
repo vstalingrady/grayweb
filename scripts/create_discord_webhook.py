@@ -4,14 +4,20 @@ Create a Discord webhook for deployment notifications.
 Usage: python create_discord_webhook.py
 """
 import os
+import sys
+
 import requests
 
 # Configuration from environment
-DISCORD_TOKEN = os.getenv('DISCORD_TOKEN', 'MTQxNTIzMTU3NDkyMzgwODc3MA.GO-ufl.IqlWkjCBiqxnrfjOZPLlPrO0agZRTgankm1LzI')
-CHANNEL_ID = '1424229003593515090'  # The channel to send notifications to
+DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
+CHANNEL_ID = os.getenv("DISCORD_CHANNEL_ID", "1424229003593515090")  # The channel to send notifications to
 
 def create_webhook():
     """Create a Discord webhook for the specified channel."""
+    if not DISCORD_TOKEN:
+        print("Missing DISCORD_TOKEN; set it in your environment before running this script.", file=sys.stderr)
+        return None
+
     url = f'https://discord.com/api/v10/channels/{CHANNEL_ID}/webhooks'
     headers = {
         'Authorization': f'Bot {DISCORD_TOKEN}',

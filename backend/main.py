@@ -1,12 +1,4 @@
-# Ensure parent directory is on path so `backend.` imports work consistently
-import sys
-from pathlib import Path
-_backend_dir = Path(__file__).parent
-_parent_dir = _backend_dir.parent
-if str(_parent_dir) not in sys.path:
-    sys.path.insert(0, str(_parent_dir))
-if str(_backend_dir) not in sys.path:
-    sys.path.insert(0, str(_backend_dir))
+from importlib.util import find_spec
 
 import logging
 import asyncio
@@ -31,661 +23,320 @@ import time
 from dotenv import load_dotenv
 from supabase import Client
 
-try:
-    from backend.core.app_setup import lifespan
-    from backend.core.tool_execution import get_tool_handlers as _get_tool_handlers, execute_function_call as _execute_function_call
-    from backend.core.ai_service import stream_ai_response as _stream_ai_response, generate_ai_response as _generate_ai_response, generate_chat_starter as _ai_generate_chat_starter
-except ImportError:
-    from core.app_setup import lifespan  # type: ignore
-    from core.tool_execution import get_tool_handlers as _get_tool_handlers, execute_function_call as _execute_function_call  # type: ignore
-    from core.ai_service import stream_ai_response as _stream_ai_response, generate_ai_response as _generate_ai_response, generate_chat_starter as _ai_generate_chat_starter  # type: ignore
+from backend.core.app_setup import lifespan
+from backend.core.tool_execution import get_tool_handlers as _get_tool_handlers, execute_function_call as _execute_function_call
+from backend.core.ai_service import stream_ai_response as _stream_ai_response, generate_ai_response as _generate_ai_response, generate_chat_starter as _ai_generate_chat_starter
 
-try:
-    from backend.compat_imports import (
-        utcnow, utcnow_aware,
-        create_supabase_client,
-        create_supabase_service_client,
-        resolve_supabase_credentials,
-        conversation_store,
-        configure_conversation_store,
-        get_cached_user,
-        cache_conversation_history,
-        append_to_conversation_cache,
-        invalidate_conversation_cache,
-        delete_supabase_user_records,
-        CONVERSATION_OWNER_CACHE,
-        GENERAL_CONVERSATION_PREFIX,
-        _conversation_store_available,
-        _handle_conversation_store_error,
-        _general_conversation_user_id,
-        _load_general_conversation_history,
-        _insert_general_conversation_message,
-        _delete_general_conversation_history,
-        _load_conversation_history,
-        get_or_create_conversation,
-        save_conversation_message,
-        _is_valid_uuid,
-        _timezone_from_time_context,
-        normalize_conversation_history,
-        normalize_conversation_title,
-        apply_conversation_update,
-        update_conversation_title,
-        MEDIA_UPLOAD_DIR,
-        MEDIA_UPLOAD_ROOT,
-        sanitize_filename as _sanitize_filename,
-        load_prompt_from_file,
-        load_prompt_from_json,
-        normalize_prompt_locale as _normalize_prompt_locale,
-        _prompt_locale_from_request,
-        IS_PRODUCTION,
-        local_network_origin_regex as _local_network_origin_regex,
-        build_allowed_origins as _build_allowed_origins,
-        TTLCache,
-        AsyncTTLCache,
-        USER_CACHE,
-        CONVERSATION_HISTORY_CACHE,
-        load_context_cache as _load_context_cache,
-        context_cache_contents as _context_cache_contents,
-        needs_structured_tools as _needs_structured_tools,
-        should_request_structured_reminders as _should_request_structured_reminders,
-        should_use_web_search as _should_use_web_search,
-        extract_urls_from_message as _extract_urls_from_message,
-        row_get as _row_get,
-        parse_json_field as _parse_json_field,
-        serialize_reminder_row as _serialize_reminder_row,
-        serialize_habit_record as _serialize_habit_record,
-        datetime_to_ms as _datetime_to_ms,
-        candidate_text as _candidate_text,
-        candidate_thought as _candidate_thought,
-        candidate_grounding_payload as _candidate_grounding_payload,
-        merge_extra_contents as _merge_extra_contents,
-        materialize_structured_reminders as _materialize_structured_reminders,
-        fallback_title_from_message as _fallback_title_from_message,
-        list_calendar_events as _list_calendar_events,
-        create_calendar_event as _create_calendar_event,
-        update_calendar_event as _update_calendar_event,
-        delete_calendar_event as _delete_calendar_event,
-        build_maps_tool_and_config as _build_maps_tool_and_config,
-        set_entity_reminder_scheduler as _set_entity_reminder_scheduler,
-        set_workspace_reminder_scheduler as _set_workspace_reminder_scheduler,
-        list_plans_tool as _list_plans_tool,
-        create_plan_tool as _create_plan_tool,
-        update_plan_tool as _update_plan_tool,
-        delete_plan_tool as _delete_plan_tool,
-        list_habits_tool as _list_habits_tool,
-        create_habit_tool as _create_habit_tool,
-        update_habit_tool as _update_habit_tool,
-        delete_habit_tool as _delete_habit_tool,
-        list_reminders_tool as _list_reminders_tool,
-        create_reminder_tool as _create_reminder_tool,
-        update_reminder_tool as _update_reminder_tool,
-        delete_reminder_tool as _delete_reminder_tool,
-        delete_latest_reminder_tool as _delete_latest_reminder_tool,
-        get_workspace_state_tool as _get_workspace_state_tool,
-        normalize_plan_items as _normalize_plan_items,
-        normalize_habit_items as _normalize_habit_items,
-        normalize_proactivity as _normalize_proactivity,
-        normalize_plan_tier,
-        coerce_model_for_tier,
-    )
-except ImportError:
-    from compat_imports import (  # type: ignore
-        utcnow, utcnow_aware,
-        create_supabase_client,
-        create_supabase_service_client,
-        resolve_supabase_credentials,
-        conversation_store,
-        configure_conversation_store,
-        get_cached_user,
-        cache_conversation_history,
-        append_to_conversation_cache,
-        invalidate_conversation_cache,
-        delete_supabase_user_records,
-        CONVERSATION_OWNER_CACHE,
-        GENERAL_CONVERSATION_PREFIX,
-        _conversation_store_available,
-        _handle_conversation_store_error,
-        _general_conversation_user_id,
-        _load_general_conversation_history,
-        _insert_general_conversation_message,
-        _delete_general_conversation_history,
-        _load_conversation_history,
-        get_or_create_conversation,
-        save_conversation_message,
-        _is_valid_uuid,
-        _timezone_from_time_context,
-        normalize_conversation_history,
-        normalize_conversation_title,
-        apply_conversation_update,
-        update_conversation_title,
-        MEDIA_UPLOAD_DIR,
-        MEDIA_UPLOAD_ROOT,
-        sanitize_filename as _sanitize_filename,
-        load_prompt_from_file,
-        load_prompt_from_json,
-        _normalize_prompt_locale,
-        _prompt_locale_from_request,
-        IS_PRODUCTION,
-        local_network_origin_regex as _local_network_origin_regex,
-        build_allowed_origins as _build_allowed_origins,
-        TTLCache,
-        AsyncTTLCache,
-        USER_CACHE,
-        CONVERSATION_HISTORY_CACHE,
-        load_context_cache as _load_context_cache,
-        context_cache_contents as _context_cache_contents,
-        needs_structured_tools as _needs_structured_tools,
-        should_request_structured_reminders as _should_request_structured_reminders,
-        should_use_web_search as _should_use_web_search,
-        extract_urls_from_message as _extract_urls_from_message,
-        row_get as _row_get,
-        parse_json_field as _parse_json_field,
-        serialize_reminder_row as _serialize_reminder_row,
-        serialize_habit_record as _serialize_habit_record,
-        datetime_to_ms as _datetime_to_ms,
-        candidate_text as _candidate_text,
-        candidate_thought as _candidate_thought,
-        candidate_grounding_payload as _candidate_grounding_payload,
-        merge_extra_contents as _merge_extra_contents,
-        materialize_structured_reminders as _materialize_structured_reminders,
-        fallback_title_from_message as _fallback_title_from_message,
-        list_calendar_events as _list_calendar_events,
-        create_calendar_event as _create_calendar_event,
-        update_calendar_event as _update_calendar_event,
-        delete_calendar_event as _delete_calendar_event,
-        build_maps_tool_and_config as _build_maps_tool_and_config,
-        set_entity_reminder_scheduler as _set_entity_reminder_scheduler,
-        set_workspace_reminder_scheduler as _set_workspace_reminder_scheduler,
-        list_plans_tool as _list_plans_tool,
-        create_plan_tool as _create_plan_tool,
-        update_plan_tool as _update_plan_tool,
-        delete_plan_tool as _delete_plan_tool,
-        list_habits_tool as _list_habits_tool,
-        create_habit_tool as _create_habit_tool,
-        update_habit_tool as _update_habit_tool,
-        delete_habit_tool as _delete_habit_tool,
-        list_reminders_tool as _list_reminders_tool,
-        create_reminder_tool as _create_reminder_tool,
-        update_reminder_tool as _update_reminder_tool,
-        delete_reminder_tool as _delete_reminder_tool,
-        delete_latest_reminder_tool as _delete_latest_reminder_tool,
-        get_workspace_state_tool as _get_workspace_state_tool,
-        _normalize_plan_items,
-        _normalize_habit_items,
-        _normalize_proactivity,
-        normalize_plan_tier,
-        coerce_model_for_tier,
-    )
+from backend.compat_imports import (
+    utcnow, utcnow_aware,
+    create_supabase_client,
+    create_supabase_service_client,
+    resolve_supabase_credentials,
+    conversation_store,
+    configure_conversation_store,
+    get_cached_user,
+    cache_conversation_history,
+    append_to_conversation_cache,
+    invalidate_conversation_cache,
+    delete_supabase_user_records,
+    CONVERSATION_OWNER_CACHE,
+    GENERAL_CONVERSATION_PREFIX,
+    _conversation_store_available,
+    _handle_conversation_store_error,
+    _general_conversation_user_id,
+    _load_general_conversation_history,
+    _insert_general_conversation_message,
+    _delete_general_conversation_history,
+    _load_conversation_history,
+    get_or_create_conversation,
+    save_conversation_message,
+    _is_valid_uuid,
+    _timezone_from_time_context,
+    normalize_conversation_history,
+    normalize_conversation_title,
+    apply_conversation_update,
+    update_conversation_title,
+    MEDIA_UPLOAD_DIR,
+    MEDIA_UPLOAD_ROOT,
+    sanitize_filename as _sanitize_filename,
+    load_prompt_from_file,
+    load_prompt_from_json,
+    normalize_prompt_locale as _normalize_prompt_locale,
+    _prompt_locale_from_request,
+    IS_PRODUCTION,
+    local_network_origin_regex as _local_network_origin_regex,
+    build_allowed_origins as _build_allowed_origins,
+    TTLCache,
+    AsyncTTLCache,
+    USER_CACHE,
+    CONVERSATION_HISTORY_CACHE,
+    load_context_cache as _load_context_cache,
+    context_cache_contents as _context_cache_contents,
+    needs_structured_tools as _needs_structured_tools,
+    should_request_structured_reminders as _should_request_structured_reminders,
+    should_use_web_search as _should_use_web_search,
+    extract_urls_from_message as _extract_urls_from_message,
+    row_get as _row_get,
+    parse_json_field as _parse_json_field,
+    serialize_reminder_row as _serialize_reminder_row,
+    serialize_habit_record as _serialize_habit_record,
+    datetime_to_ms as _datetime_to_ms,
+    candidate_text as _candidate_text,
+    candidate_thought as _candidate_thought,
+    candidate_grounding_payload as _candidate_grounding_payload,
+    merge_extra_contents as _merge_extra_contents,
+    materialize_structured_reminders as _materialize_structured_reminders,
+    fallback_title_from_message as _fallback_title_from_message,
+    list_calendar_events as _list_calendar_events,
+    create_calendar_event as _create_calendar_event,
+    update_calendar_event as _update_calendar_event,
+    delete_calendar_event as _delete_calendar_event,
+    build_maps_tool_and_config as _build_maps_tool_and_config,
+    set_entity_reminder_scheduler as _set_entity_reminder_scheduler,
+    set_workspace_reminder_scheduler as _set_workspace_reminder_scheduler,
+    list_plans_tool as _list_plans_tool,
+    create_plan_tool as _create_plan_tool,
+    update_plan_tool as _update_plan_tool,
+    delete_plan_tool as _delete_plan_tool,
+    list_habits_tool as _list_habits_tool,
+    create_habit_tool as _create_habit_tool,
+    update_habit_tool as _update_habit_tool,
+    delete_habit_tool as _delete_habit_tool,
+    list_reminders_tool as _list_reminders_tool,
+    create_reminder_tool as _create_reminder_tool,
+    update_reminder_tool as _update_reminder_tool,
+    delete_reminder_tool as _delete_reminder_tool,
+    delete_latest_reminder_tool as _delete_latest_reminder_tool,
+    get_workspace_state_tool as _get_workspace_state_tool,
+    normalize_plan_items as _normalize_plan_items,
+    normalize_habit_items as _normalize_habit_items,
+    normalize_proactivity as _normalize_proactivity,
+    normalize_plan_tier,
+    coerce_model_for_tier,
+)
 
 from uuid import UUID, uuid4
 from pathlib import Path
 from urllib.parse import urlparse
 
-try:
-    from backend.logging_config import (
-        setup_logging, create_logger, set_request_context, clear_request_context,
-        RequestLoggingMiddleware, log_performance, log_database_query, log_api_call,
-        get_log_level
-    )
-except ImportError:
-    from logging_config import (
-        setup_logging, create_logger, set_request_context, clear_request_context,
-        RequestLoggingMiddleware, log_performance, log_database_query, log_api_call,
-        get_log_level
-    )
+from backend.logging_config import (
+    setup_logging, create_logger, set_request_context, clear_request_context,
+    RequestLoggingMiddleware, log_performance, log_database_query, log_api_call,
+    get_log_level,
+)
 
-try:
-    from backend.google_calendar import (
-        GoogleCalendarCredentials,
-        GoogleCalendarInfo,
-        GoogleCalendarEvent,
-        GoogleAuthRequest,
-        GoogleAuthCallbackRequest,
-        GoogleAuthResponse,
-        get_google_auth_url,
-        decode_state_token,
-        exchange_code_for_tokens,
-        get_google_calendar_service,
-        list_google_calendars,
-        list_google_events,
-        create_google_event,
-        encrypt_refresh_token,
-        decrypt_refresh_token,
-    )
-    from google.genai import types
-    from backend.gemini_client import GeminiAttachment, GeminiService
-    from backend.openrouter_client import OpenRouterService
-    from backend.usage_tracker import UsageTracker, UsageLimitExceeded
-except ImportError:
-    from google_calendar import (
-        GoogleCalendarCredentials,
-        GoogleCalendarInfo,
-        GoogleCalendarEvent,
-        GoogleAuthRequest,
-        GoogleAuthCallbackRequest,
-        GoogleAuthResponse,
-        get_google_auth_url,
-        decode_state_token,
-        exchange_code_for_tokens,
-        get_google_calendar_service,
-        list_google_calendars,
-        list_google_events,
-        create_google_event,
-        encrypt_refresh_token,
-        decrypt_refresh_token,
-    )
-    from google.genai import types
-    from gemini_client import GeminiAttachment, GeminiService
-    from openrouter_client import OpenRouterService
-    from usage_tracker import UsageTracker, UsageLimitExceeded
-try:
-    from backend.calendar_tools import CALENDAR_TOOLS
-    from backend.calendar_context import build_calendar_context
-except ImportError:
-    from calendar_tools import CALENDAR_TOOLS
-    from calendar_context import build_calendar_context
-try:
-    from backend.onboarding_tools import ONBOARDING_TOOLS
-    from backend.plan_tools import PLAN_TOOLS
-except ImportError:
-    from onboarding_tools import ONBOARDING_TOOLS
-    from plan_tools import PLAN_TOOLS
-
-try:
-    from backend.ai_message_generator import AIMessageGenerator
-    from backend.proactivity_engine import (
-        ProactivityEngine,
-        ProactivityRealtimeBroker,
-        ProactivitySchedulerManager,
-    )
-except ImportError:
-    from ai_message_generator import AIMessageGenerator
-    from proactivity_engine import (
-        ProactivityEngine,
-        ProactivityRealtimeBroker,
-        ProactivitySchedulerManager,
-    )
-
-try:
-    from backend.model_access import coerce_model_for_tier
-except ImportError:
-    from model_access import coerce_model_for_tier
-
-try:
-    from backend.tier_utils import normalize_plan_tier
-except ImportError:
-    from tier_utils import normalize_plan_tier  # type: ignore
+from backend.google_calendar import (
+    GoogleCalendarCredentials,
+    GoogleCalendarInfo,
+    GoogleCalendarEvent,
+    GoogleAuthRequest,
+    GoogleAuthCallbackRequest,
+    GoogleAuthResponse,
+    get_google_auth_url,
+    decode_state_token,
+    exchange_code_for_tokens,
+    get_google_calendar_service,
+    list_google_calendars,
+    list_google_events,
+    create_google_event,
+    encrypt_refresh_token,
+    decrypt_refresh_token,
+)
+from google.genai import types
+from backend.gemini_client import GeminiAttachment, GeminiService
+from backend.openrouter_client import OpenRouterService
+from backend.usage_tracker import UsageTracker, UsageLimitExceeded
+from backend.calendar_tools import CALENDAR_TOOLS
+from backend.calendar_context import build_calendar_context
+from backend.onboarding_tools import ONBOARDING_TOOLS
+from backend.plan_tools import PLAN_TOOLS
+from backend.ai_message_generator import AIMessageGenerator
+from backend.proactivity_engine import (
+    ProactivityEngine,
+    ProactivityRealtimeBroker,
+    ProactivitySchedulerManager,
+)
+from backend.model_access import coerce_model_for_tier
+from backend.tier_utils import normalize_plan_tier
 
 # Pydantic models
-try:
-    from backend.models import (
-        UserBase, UserCreate, UserUpdate, UsageStatus, User,
-        CalendarBase, CalendarCreate, CalendarUpdate, Calendar,
-        CalendarEventBase, CalendarEventCreate, CalendarEventUpdate, CalendarEvent,
-        PlanBase, PlanCreate, PlanUpdate, Plan,
-        HabitBase, HabitCreate, HabitUpdate, Habit,
-        ReminderBase, ReminderCreate, ReminderUpdate,
-        ProactivitySettings, ProactivitySettingsUpdate,
-        ProactivityLogBase, ProactivityLogCreate, ProactivityLog, DailyCheckIn,
-        ProactivityNotification,
-        DashboardPulsePlanItem, DashboardPulseHabitItem, DashboardPulseProactivity,
-        DashboardPulseBase, DashboardPulseCreate, DashboardPulseUpdate, DashboardPulse,
-        DashboardProactivitySummary, DashboardSummary,
-        ChatSessionBase, ChatSessionCreate, ChatSession,
-        WorkspaceBackground, ContextCacheBase, ContextCache,
-        MediaUploadBase, MediaUpload, ChatAttachment,
-        PaymentRequest, PaymentChargeResponse, MidtransNotification,
-    )
-    from backend.models.user import serialize_user_row as _serialize_user_row
-except ImportError:
-    from models import (  # type: ignore
-        UserBase, UserCreate, UserUpdate, UsageStatus, User,
-        CalendarBase, CalendarCreate, CalendarUpdate, Calendar,
-        CalendarEventBase, CalendarEventCreate, CalendarEventUpdate, CalendarEvent,
-        PlanBase, PlanCreate, PlanUpdate, Plan,
-        HabitBase, HabitCreate, HabitUpdate, Habit,
-        ReminderBase, ReminderCreate, ReminderUpdate,
-        ProactivitySettings, ProactivitySettingsUpdate,
-        ProactivityLogBase, ProactivityLogCreate, ProactivityLog, DailyCheckIn,
-        ProactivityNotification,
-        DashboardPulsePlanItem, DashboardPulseHabitItem, DashboardPulseProactivity,
-        DashboardPulseBase, DashboardPulseCreate, DashboardPulseUpdate, DashboardPulse,
-        DashboardProactivitySummary, DashboardSummary,
-        ChatSessionBase, ChatSessionCreate, ChatSession,
-        WorkspaceBackground, ContextCacheBase, ContextCache,
-        MediaUploadBase, MediaUpload, ChatAttachment,
-        PaymentRequest, PaymentChargeResponse, MidtransNotification,
-    )
-    from models.user import serialize_user_row as _serialize_user_row  # type: ignore
+from backend.models import (
+    UserBase, UserCreate, UserUpdate, UsageStatus, User,
+    CalendarBase, CalendarCreate, CalendarUpdate, Calendar,
+    CalendarEventBase, CalendarEventCreate, CalendarEventUpdate, CalendarEvent,
+    PlanBase, PlanCreate, PlanUpdate, Plan,
+    HabitBase, HabitCreate, HabitUpdate, Habit,
+    ReminderBase, ReminderCreate, ReminderUpdate,
+    ProactivitySettings, ProactivitySettingsUpdate,
+    ProactivityLogBase, ProactivityLogCreate, ProactivityLog, DailyCheckIn,
+    ProactivityNotification,
+    DashboardPulsePlanItem, DashboardPulseHabitItem, DashboardPulseProactivity,
+    DashboardPulseBase, DashboardPulseCreate, DashboardPulseUpdate, DashboardPulse,
+    DashboardProactivitySummary, DashboardSummary,
+    ChatSessionBase, ChatSessionCreate, ChatSession,
+    WorkspaceBackground, ContextCacheBase, ContextCache,
+    MediaUploadBase, MediaUpload, ChatAttachment,
+    PaymentRequest, PaymentChargeResponse, MidtransNotification,
+)
+from backend.models.user import serialize_user_row as _serialize_user_row
 
 # Authentication module
-try:
-    from backend.auth import (
-        get_current_user,
-        get_current_user_optional,
-        require_same_user,
-        require_admin,
-        invalidate_user_cache,
-        invalidate_user_cache_redis,
-    )
-except ImportError:
-    from auth import (  # type: ignore
-        get_current_user,
-        get_current_user_optional,
-        require_same_user,
-        require_admin,
-        invalidate_user_cache,
-        invalidate_user_cache_redis,
-    )
+from backend.auth import (
+    get_current_user,
+    get_current_user_optional,
+    require_same_user,
+    require_admin,
+    invalidate_user_cache,
+    invalidate_user_cache_redis,
+)
 
 # Security utilities
-try:
-    from backend.security_utils import sanitize_for_logging
-except ImportError:
-    from security_utils import sanitize_for_logging
+from backend.security_utils import sanitize_for_logging
 
 # Database module
-try:
-    from backend.database import (
-        database,
-        metadata,
-        users,
-        DATABASE_URL,
-        calendars,
-        calendar_events,
-        dashboard_pulses,
-        proactivity_settings,
-        proactivity_push_subscriptions,
-        proactivity_logs,
-        media_uploads,
-        context_cache,
-        proactive_notifications,
-        google_calendar_credentials,
-        user_data,
-        general_chat_messages,
-        archived_chat_messages,
-        user_chat_threads,
-        user_chat_messages,
-        reminders,
-        plans,
-        habits,
-        chat_sessions,
-        google_calendar_states,
-    )
-except ImportError:
-    from database import (
-        database,
-        metadata,
-        users,
-        DATABASE_URL,
-        calendars,
-        calendar_events,
-        dashboard_pulses,
-        proactivity_settings,
-        proactivity_push_subscriptions,
-        proactivity_logs,
-        media_uploads,
-        context_cache,
-        proactive_notifications,
-        google_calendar_credentials,
-        user_data,
-        general_chat_messages,
-        archived_chat_messages,
-        user_chat_threads,
-        user_chat_messages,
-        reminders,
-        plans,
-        habits,
-        chat_sessions,
-        google_calendar_states,
-    )
+from backend.database import (
+    database,
+    metadata,
+    users,
+    DATABASE_URL,
+    calendars,
+    calendar_events,
+    dashboard_pulses,
+    proactivity_settings,
+    proactivity_push_subscriptions,
+    proactivity_logs,
+    media_uploads,
+    context_cache,
+    proactive_notifications,
+    google_calendar_credentials,
+    user_data,
+    general_chat_messages,
+    archived_chat_messages,
+    user_chat_threads,
+    user_chat_messages,
+    reminders,
+    plans,
+    habits,
+    chat_sessions,
+    google_calendar_states,
+)
 
-try:
-    from backend.core.rate_limit import (
-        limiter,
-        DEFAULT_RATE_LIMIT,
-        RateLimitExceeded,
-        _rate_limit_exceeded_handler,
-    )
-except Exception:
-    from core.rate_limit import (  # type: ignore
-        limiter,
-        DEFAULT_RATE_LIMIT,
-        RateLimitExceeded,
-        _rate_limit_exceeded_handler,
-    )
+from backend.core.rate_limit import (
+    limiter,
+    DEFAULT_RATE_LIMIT,
+    RateLimitExceeded,
+    _rate_limit_exceeded_handler,
+)
 
-try:
-    from backend.api.chat_models import (
-        ChatAttachment,
-        ChatMessage,
-        ConversationCreateRequest,
-        ConversationUpdateRequest,
-        ChatRequest,
-        ChatResponse,
-        ChatStarterRequest,
-        ChatStarterResponse,
-        ChatTitleRequest,
-        ChatTitleResponse,
-        MessageCreateRequest,
-        ConversationHistoryPayload,
-    )
-except Exception:
-    from api.chat_models import (  # type: ignore
-        ChatAttachment,
-        ChatMessage,
-        ConversationCreateRequest,
-        ConversationUpdateRequest,
-        ChatRequest,
-        ChatResponse,
-        ChatStarterRequest,
-        ChatStarterResponse,
-        ChatTitleRequest,
-        ChatTitleResponse,
-        MessageCreateRequest,
-        ConversationHistoryPayload,
-    )
+from backend.api.chat_models import (
+    ChatAttachment,
+    ChatMessage,
+    ConversationCreateRequest,
+    ConversationUpdateRequest,
+    ChatRequest,
+    ChatResponse,
+    ChatStarterRequest,
+    ChatStarterResponse,
+    ChatTitleRequest,
+    ChatTitleResponse,
+    MessageCreateRequest,
+    ConversationHistoryPayload,
+)
 
 # Payment imports
-try:
-    from backend.payment_utils import create_core_api_transaction, verify_notification_signature
-except ImportError:
-    from payment_utils import create_core_api_transaction, verify_notification_signature
+from backend.payment_utils import create_core_api_transaction, verify_notification_signature
 
-try:
-    from backend.database import transactions
-except ImportError:
-    from database import transactions
+from backend.database import transactions
 
-try:
-    from backend.paddle_routes import router as paddle_router
-except ImportError:
-    from paddle_routes import router as paddle_router
+from backend.gumroad_routes import router as gumroad_router
+from backend.api.gumroad_oauth import router as gumroad_oauth_router
 
 # Use centralized environment detection
-try:
-    from backend.env_utils import ROOT_DIR
-except ImportError:
-    from env_utils import ROOT_DIR
+from backend.env_utils import ROOT_DIR
 
-try:
-    from backend.core.env_helpers import (
-        float_env as _float_env,
-        int_env as _int_env,
-        is_valid_uuid as _is_valid_uuid,
-        timestamp_ms_to_datetime as _timestamp_ms_to_datetime,
-        datetime_to_ms as _datetime_to_ms,
-        timezone_from_time_context as _timezone_from_time_context,
-        ensure_datetime_value as _ensure_datetime_value,
-    )
-except ImportError:
-    from core.env_helpers import (  # type: ignore
-        float_env as _float_env,
-        int_env as _int_env,
-        is_valid_uuid as _is_valid_uuid,
-        timestamp_ms_to_datetime as _timestamp_ms_to_datetime,
-        datetime_to_ms as _datetime_to_ms,
-        timezone_from_time_context as _timezone_from_time_context,
-        ensure_datetime_value as _ensure_datetime_value,
-    )
+from backend.core.env_helpers import (
+    float_env as _float_env,
+    int_env as _int_env,
+    is_valid_uuid as _is_valid_uuid,
+    timestamp_ms_to_datetime as _timestamp_ms_to_datetime,
+    datetime_to_ms as _datetime_to_ms,
+    timezone_from_time_context as _timezone_from_time_context,
+    ensure_datetime_value as _ensure_datetime_value,
+)
 
-try:
-    from backend.core.dashboard_helpers import (
-        serialize_dashboard_pulse_record as _serialize_dashboard_pulse_record,
-        carry_forward_dashboard_entries as _carry_forward_dashboard_entries,
-    )
-except ImportError:
-    from core.dashboard_helpers import (  # type: ignore
-        serialize_dashboard_pulse_record as _serialize_dashboard_pulse_record,
-        carry_forward_dashboard_entries as _carry_forward_dashboard_entries,
-    )
+from backend.core.dashboard_helpers import (
+    serialize_dashboard_pulse_record as _serialize_dashboard_pulse_record,
+    carry_forward_dashboard_entries as _carry_forward_dashboard_entries,
+)
 
-try:
-    from backend.core.log_utils import payload_log_summary as _payload_log_summary
-except ImportError:
-    from core.log_utils import payload_log_summary as _payload_log_summary  # type: ignore
+from backend.core.log_utils import payload_log_summary as _payload_log_summary
 
-try:
-    from backend.core.general_conversation import (
-        load_general_conversation_history as _load_general_conversation_history,
-        insert_general_conversation_message as _insert_general_conversation_message,
-        replace_general_conversation_history as _replace_general_conversation_history,
-        delete_general_conversation_history as _delete_general_conversation_history,
-        ensure_user_data_record as _ensure_user_data_record,
-    )
-except ImportError:
-    from core.general_conversation import (  # type: ignore
-        load_general_conversation_history as _load_general_conversation_history,
-        insert_general_conversation_message as _insert_general_conversation_message,
-        replace_general_conversation_history as _replace_general_conversation_history,
-        delete_general_conversation_history as _delete_general_conversation_history,
-        ensure_user_data_record as _ensure_user_data_record,
-    )
+from backend.core.general_conversation import (
+    load_general_conversation_history as _load_general_conversation_history,
+    insert_general_conversation_message as _insert_general_conversation_message,
+    replace_general_conversation_history as _replace_general_conversation_history,
+    delete_general_conversation_history as _delete_general_conversation_history,
+    ensure_user_data_record as _ensure_user_data_record,
+)
 
-try:
-    from backend.core.onboarding_handler import complete_onboarding as _complete_onboarding
-except ImportError:
-    from core.onboarding_handler import complete_onboarding as _complete_onboarding  # type: ignore
+from backend.core.onboarding_handler import complete_onboarding as _complete_onboarding
 
-try:
-    from backend.core.title_generator import generate_chat_title_inline as _generate_chat_title_inline
-except ImportError:
-    from core.title_generator import generate_chat_title_inline as _generate_chat_title_inline  # type: ignore
+from backend.core.title_generator import generate_chat_title_inline as _generate_chat_title_inline
 
-try:
-    from backend.core.media_attachments import (
-        resolve_media_attachments as _resolve_media_attachments,
-        generate_image_descriptions as _generate_image_descriptions,
-    )
-except ImportError:
-    from core.media_attachments import (  # type: ignore
-        resolve_media_attachments as _resolve_media_attachments,
-        generate_image_descriptions as _generate_image_descriptions,
-    )
+from backend.core.media_attachments import (
+    resolve_media_attachments as _resolve_media_attachments,
+    generate_image_descriptions as _generate_image_descriptions,
+)
 
-try:
-    from backend.core.conversation_manager import (
-        load_conversation_history as _load_conversation_history,
-        get_or_create_conversation,
-        save_conversation_message,
-    )
-except ImportError:
-    from core.conversation_manager import (  # type: ignore
-        load_conversation_history as _load_conversation_history,
-        get_or_create_conversation,
-        save_conversation_message,
-    )
+from backend.core.conversation_manager import (
+    load_conversation_history as _load_conversation_history,
+    get_or_create_conversation,
+    save_conversation_message,
+)
 
-try:
-    from backend.core.proactivity_helpers import fetch_proactivity_summary as _fetch_proactivity_summary
-except ImportError:
-    from core.proactivity_helpers import fetch_proactivity_summary as _fetch_proactivity_summary  # type: ignore
+from backend.core.proactivity_helpers import fetch_proactivity_summary as _fetch_proactivity_summary
 
-try:
-    from backend.core.chat_context_helpers import prepare_chat_context as _prepare_chat_context
-except ImportError:
-    from core.chat_context_helpers import prepare_chat_context as _prepare_chat_context  # type: ignore
+from backend.core.chat_context_helpers import prepare_chat_context as _prepare_chat_context
 
-try:
-    from backend.core.chat_starter_helpers import (
-        sse_event as _sse_event,
-        starter_profile_context as _starter_profile_context,
-        starter_fallback_message as _starter_fallback_message,
-        build_starter_prompt as _build_starter_prompt,
-    )
-except ImportError:
-    from core.chat_starter_helpers import (  # type: ignore
-        sse_event as _sse_event,
-        starter_profile_context as _starter_profile_context,
-        starter_fallback_message as _starter_fallback_message,
-        build_starter_prompt as _build_starter_prompt,
-    )
+from backend.core.chat_starter_helpers import (
+    sse_event as _sse_event,
+    starter_profile_context as _starter_profile_context,
+    starter_fallback_message as _starter_fallback_message,
+    build_starter_prompt as _build_starter_prompt,
+)
 
 load_dotenv(ROOT_DIR / ".env")
 
-try:
-    from backend.core.function_call_helpers import (
-        build_function_call_contents as _build_function_call_contents,
-        extract_function_call as _extract_function_call,
-        format_tool_results_for_context as _format_tool_results_for_context,
-    )
-except ImportError:
-    from core.function_call_helpers import (  # type: ignore
-        build_function_call_contents as _build_function_call_contents,
-        extract_function_call as _extract_function_call,
-        format_tool_results_for_context as _format_tool_results_for_context,
-    )
+from backend.core.function_call_helpers import (
+    build_function_call_contents as _build_function_call_contents,
+    extract_function_call as _extract_function_call,
+    format_tool_results_for_context as _format_tool_results_for_context,
+)
 
-try:
-    from backend.core.stream_handlers.hybrid import (
-        fetch_url_context_with_gemini as _fetch_url_context_with_gemini_hybrid,
-        execute_tools_with_gemini_flash as _execute_tools_with_gemini_flash_hybrid,
-        has_onboarding_tool as _has_onboarding_tool_hybrid,
-    )
-    from backend.core.stream_handlers.gemini_stream import stream_gemini_response
-    from backend.core.stream_handlers.openrouter import stream_openrouter_response
-    from backend.core.stream_handlers.context import (
-        build_intent_window_text,
-        consolidate_gemini_tools,
-        add_url_context_tool_if_needed,
-        add_maps_tool_if_needed,
-        determine_provider_and_model,
-    )
-except ImportError:
-    from core.stream_handlers.hybrid import (  # type: ignore
-        fetch_url_context_with_gemini as _fetch_url_context_with_gemini_hybrid,
-        execute_tools_with_gemini_flash as _execute_tools_with_gemini_flash_hybrid,
-        has_onboarding_tool as _has_onboarding_tool_hybrid,
-    )
-    from core.stream_handlers.gemini_stream import stream_gemini_response  # type: ignore
-    from core.stream_handlers.openrouter import stream_openrouter_response  # type: ignore
-    from core.stream_handlers.context import (  # type: ignore
-        build_intent_window_text,
-        consolidate_gemini_tools,
-        add_url_context_tool_if_needed,
-        add_maps_tool_if_needed,
-        determine_provider_and_model,
-    )
+from backend.core.stream_handlers.hybrid import (
+    fetch_url_context_with_gemini as _fetch_url_context_with_gemini_hybrid,
+    execute_tools_with_gemini_flash as _execute_tools_with_gemini_flash_hybrid,
+    has_onboarding_tool as _has_onboarding_tool_hybrid,
+)
+from backend.core.stream_handlers.gemini_stream import stream_gemini_response
+from backend.core.stream_handlers.openrouter import stream_openrouter_response
+from backend.core.stream_handlers.context import (
+    build_intent_window_text,
+    consolidate_gemini_tools,
+    add_url_context_tool_if_needed,
+    add_maps_tool_if_needed,
+    determine_provider_and_model,
+)
 
 # AI Response context helpers (extracted shared logic)
-try:
-    from backend.core.ai_response_context import (
-        load_context_cache as _load_context_cache_helper,
-        build_workspace_context as _build_workspace_context,
-        prepare_tool_list as _prepare_tool_list,
-        build_effective_system_prompt as _build_effective_system_prompt,
-        resolve_media_with_timing as _resolve_media_with_timing,
-        REMINDERS_DISABLED_NOTE,
-    )
-except ImportError:
-    from core.ai_response_context import (  # type: ignore
-        load_context_cache as _load_context_cache_helper,
-        build_workspace_context as _build_workspace_context,
-        prepare_tool_list as _prepare_tool_list,
-        build_effective_system_prompt as _build_effective_system_prompt,
-        resolve_media_with_timing as _resolve_media_with_timing,
-        REMINDERS_DISABLED_NOTE,
-    )
+from backend.core.ai_response_context import (
+    load_context_cache as _load_context_cache_helper,
+    build_workspace_context as _build_workspace_context,
+    prepare_tool_list as _prepare_tool_list,
+    build_effective_system_prompt as _build_effective_system_prompt,
+    resolve_media_with_timing as _resolve_media_with_timing,
+    REMINDERS_DISABLED_NOTE,
+)
 
 # Initialize enhanced logging system
 app_logger = setup_logging(
@@ -708,28 +359,16 @@ logging.getLogger("uvicorn.access").disabled = True
 app_logger.info(f"Backend starting (env={os.getenv('ENVIRONMENT', 'development')}, provider={os.getenv('AI_PROVIDER', 'openrouter')})")
 
 # AI Configuration imports (centralized in core.ai_config)
-try:
-    from backend.core.ai_config import (
-        AI_PROVIDER,
-        GEMINI_DEFAULT_MODEL,
-        VALIDATE_GEMINI_ON_STARTUP,
-        tier_conversation_token_limit as _tier_conversation_token_limit_base,
-        get_search_tool,
-        get_url_context_tool,
-        get_default_chat_tools,
-        GLOBAL_SYSTEM_PROMPTS_PATH,
-    )
-except ImportError:
-    from core.ai_config import (  # type: ignore
-        AI_PROVIDER,
-        GEMINI_DEFAULT_MODEL,
-        VALIDATE_GEMINI_ON_STARTUP,
-        tier_conversation_token_limit as _tier_conversation_token_limit_base,
-        get_search_tool,
-        get_url_context_tool,
-        get_default_chat_tools,
-        GLOBAL_SYSTEM_PROMPTS_PATH,
-    )
+from backend.core.ai_config import (
+    AI_PROVIDER,
+    GEMINI_DEFAULT_MODEL,
+    VALIDATE_GEMINI_ON_STARTUP,
+    tier_conversation_token_limit as _tier_conversation_token_limit_base,
+    get_search_tool,
+    get_url_context_tool,
+    get_default_chat_tools,
+    GLOBAL_SYSTEM_PROMPTS_PATH,
+)
 
 # tier_conversation_token_limit wrapper that uses normalize_plan_tier
 def tier_conversation_token_limit(plan_tier: Optional[str]) -> int:
@@ -746,10 +385,7 @@ SEARCH_TOOL = get_search_tool()
 URL_CONTEXT_TOOL = get_url_context_tool()
 DEFAULT_CHAT_TOOLS = get_default_chat_tools()
 
-try:
-    from backend.core.migrations import run_startup_migrations as _run_startup_migrations
-except ImportError:
-    from core.migrations import run_startup_migrations as _run_startup_migrations  # type: ignore
+from backend.core.migrations import run_startup_migrations as _run_startup_migrations
 # Note: _run_startup_migrations is called in lifespan(), not at import time
 
 
@@ -794,10 +430,7 @@ async def _require_conversation_owner(conversation_id: str, current_user: Dict[s
         return
 
     # Prefer the local conversation store first; this matches how we persist threads.
-    try:
-        from backend.database import user_chat_threads, database
-    except ImportError:
-        from database import user_chat_threads, database
+    from backend.database import user_chat_threads, database
 
     if _is_valid_uuid(conversation_id):
         try:
@@ -828,16 +461,10 @@ async def _require_conversation_owner(conversation_id: str, current_user: Dict[s
     # NOTE: Supabase ownership check removed - now strictly local-only.
 
 # Reminder enrichment helpers (extracted to core/reminder_enrichment.py)
-try:
-    from backend.core.reminder_enrichment import (
-        maybe_enrich_actions_with_reminder_time as _maybe_enrich_actions_with_reminder_time,
-        create_reminders_from_actions as _create_reminders_from_actions_base,
-    )
-except ImportError:
-    from core.reminder_enrichment import (  # type: ignore
-        maybe_enrich_actions_with_reminder_time as _maybe_enrich_actions_with_reminder_time,
-        create_reminders_from_actions as _create_reminders_from_actions_base,
-    )
+from backend.core.reminder_enrichment import (
+    maybe_enrich_actions_with_reminder_time as _maybe_enrich_actions_with_reminder_time,
+    create_reminders_from_actions as _create_reminders_from_actions_base,
+)
 
 async def _create_reminders_from_actions(
     db: databases.Database,
@@ -854,11 +481,6 @@ async def _create_reminders_from_actions(
 
 
 
-# Migration functions (extracted to core/migrations.py)
-try:
-    from backend.core.migrations import ensure_paddle_columns as _ensure_paddle_columns
-except ImportError:
-    from core.migrations import ensure_paddle_columns as _ensure_paddle_columns  # type: ignore
 
 
 app = FastAPI(title="User Profile API with AI Chat", version="1.0.0", lifespan=lifespan)
@@ -867,13 +489,11 @@ app = FastAPI(title="User Profile API with AI Chat", version="1.0.0", lifespan=l
 # This allows access to uploaded images via /uploads/<filename>
 if MEDIA_UPLOAD_DIR.exists():
     app.mount("/uploads", StaticFiles(directory=MEDIA_UPLOAD_DIR), name="uploads")
-app.include_router(paddle_router)
+app.include_router(gumroad_router)
+app.include_router(gumroad_oauth_router)
 
 # Security Headers Middleware (extracted to core/security_middleware.py)
-try:
-    from backend.core.security_middleware import add_security_headers
-except ImportError:
-    from core.security_middleware import add_security_headers  # type: ignore
+from backend.core.security_middleware import add_security_headers
 app.middleware("http")(add_security_headers)
 
 
@@ -882,141 +502,94 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Structured error handlers
-try:
-    from error_handlers import register_error_handlers
+if find_spec("backend.error_handlers") is not None:
+    from backend.error_handlers import register_error_handlers
+
     register_error_handlers(app)
-except ImportError:
-    pass  # Optional module
 
 # Middleware
 app.add_middleware(RequestLoggingMiddleware, logger=api_logger)
 
 # Caching headers middleware
-try:
-    from caching_headers import caching_middleware
+if find_spec("backend.caching_headers") is not None:
+    from backend.caching_headers import caching_middleware
+
     @app.middleware("http")
     async def add_caching_headers(request, call_next):
         return await caching_middleware(request, call_next)
-except ImportError:
-    pass  # Optional module
 
 # Mount API routers
-try:
-    from backend.api.chat import router as chat_router
-except Exception:  # pragma: no cover
-    from api.chat import router as chat_router  # type: ignore
+from backend.api.chat import router as chat_router
 
 app.include_router(chat_router)
 
-try:
-    from backend.api.admin import router as admin_router
-except ImportError:
-    from api.admin import router as admin_router  # type: ignore
+from backend.api.admin import router as admin_router
 
 app.include_router(admin_router)
 
 # Health check endpoints
-try:
-    from backend.health_check import router as health_router
-except ImportError:
-    from health_check import router as health_router
+from backend.health_check import router as health_router
 
 app.include_router(health_router)
 
 # Plans and Habits routes
-try:
-    from backend.api.plans import router as plans_router
-except ImportError:
-    from api.plans import router as plans_router  # type: ignore
+from backend.api.plans import router as plans_router
 
 app.include_router(plans_router)
 
 # Calendar routes
-try:
-    from backend.api.calendars import router as calendars_router
-except ImportError:
-    from api.calendars import router as calendars_router  # type: ignore
+from backend.api.calendars import router as calendars_router
 
 app.include_router(calendars_router)
 
 # Reminder routes
-try:
-    from backend.api.reminders import router as reminders_router
-except ImportError:
-    from api.reminders import router as reminders_router  # type: ignore
+from backend.api.reminders import router as reminders_router
 
 app.include_router(reminders_router)
 
 # Dashboard routes
-try:
-    from backend.api.dashboard import router as dashboard_router
-except ImportError:
-    from api.dashboard import router as dashboard_router  # type: ignore
+from backend.api.dashboard import router as dashboard_router
 
 app.include_router(dashboard_router)
 
 # Payment routes (Midtrans)
-try:
-    from backend.api.payments import router as payments_router
-except ImportError:
-    from api.payments import router as payments_router  # type: ignore
+from backend.api.payments import router as payments_router
 
 app.include_router(payments_router)
 
 # Proactivity routes
-try:
-    from backend.api.proactivity import router as proactivity_router
-except ImportError:
-    from api.proactivity import router as proactivity_router  # type: ignore
+from backend.api.proactivity import router as proactivity_router
 
 app.include_router(proactivity_router)
 
 # Users routes
-try:
-    from backend.api.users import router as users_router
-except ImportError:
-    from api.users import router as users_router  # type: ignore
+from backend.api.users import router as users_router
 
 app.include_router(users_router)
 
 # Conversations routes
-try:
-    from backend.api.conversations import router as conversations_router
-except ImportError:
-    from api.conversations import router as conversations_router  # type: ignore
+from backend.api.conversations import router as conversations_router
 
 app.include_router(conversations_router)
 
 # Analytics routes
-try:
-    from backend.api.analytics import router as analytics_router
-except ImportError:
-    from api.analytics import router as analytics_router  # type: ignore
+from backend.api.analytics import router as analytics_router
 
 app.include_router(analytics_router)
 
 # Uploads routes
-try:
-    from backend.api.uploads import router as uploads_router
-except ImportError:
-    from api.uploads import router as uploads_router  # type: ignore
+from backend.api.uploads import router as uploads_router
 
 app.include_router(uploads_router)
 
 # Context Cache routes
-try:
-    from backend.api.context_cache import router as context_cache_router
-except ImportError:
-    from api.context_cache import router as context_cache_router  # type: ignore
+from backend.api.context_cache import router as context_cache_router
 
 app.include_router(context_cache_router)
 
 # Initialize audit logger with database
 
-try:
-    from backend.audit_logger import init_audit_logger
-except ImportError:
-    from audit_logger import init_audit_logger
+from backend.audit_logger import init_audit_logger
 
 # Global proactivity services
 proactivity_engine: Optional[ProactivityEngine] = None
@@ -1024,13 +597,7 @@ proactivity_scheduler: Optional[ProactivitySchedulerManager] = None
 proactivity_realtime_broker = ProactivityRealtimeBroker()
 reminder_scheduler: Optional["ReminderSchedulerManager"] = None
 
-try:
-    from backend.reminder_scheduler import ReminderSchedulerManager
-except Exception:  # pragma: no cover
-    try:
-        from reminder_scheduler import ReminderSchedulerManager  # type: ignore
-    except Exception:  # pragma: no cover
-        ReminderSchedulerManager = None  # type: ignore
+from backend.reminder_scheduler import ReminderSchedulerManager
 
 # Lifespan and database management extracted to core/app_setup.py
 
@@ -1063,6 +630,3 @@ async def get_database():
 @app.get("/")
 async def root():
     return {"message": "User Profile API with AI Chat"}
-
-
-

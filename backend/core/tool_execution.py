@@ -13,31 +13,19 @@ if TYPE_CHECKING:
 
 # Lazy imports to avoid circular dependencies
 def _get_calendar_tools_module():
-    try:
-        from backend.core import calendar_tools
-    except ImportError:
-        import core.calendar_tools as calendar_tools  # type: ignore
+    from backend.core import calendar_tools
     return calendar_tools
 
 def _get_workspace_tools_module():
-    try:
-        from backend.core import workspace_tools
-    except ImportError:
-        import core.workspace_tools as workspace_tools  # type: ignore
+    from backend.core import workspace_tools
     return workspace_tools
 
 def _get_proactivity_helpers():
-    try:
-        from backend.core import proactivity_helpers
-    except ImportError:
-        import core.proactivity_helpers as proactivity_helpers  # type: ignore
+    from backend.core import proactivity_helpers
     return proactivity_helpers
 
 def _get_onboarding_handler():
-    try:
-        from backend.core import onboarding_handler
-    except ImportError:
-        import core.onboarding_handler as onboarding_handler  # type: ignore
+    from backend.core import onboarding_handler
     return onboarding_handler
 
 

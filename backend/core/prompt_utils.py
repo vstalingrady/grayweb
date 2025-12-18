@@ -10,10 +10,7 @@ from typing import Any, Optional
 from fastapi import Request
 
 # Enhanced logging imports
-try:
-    from backend.logging_config import create_logger
-except ImportError:
-    from logging_config import create_logger
+from backend.logging_config import create_logger
 
 app_logger = create_logger("backend.prompts")
 

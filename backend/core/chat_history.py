@@ -1,39 +1,28 @@
 from __future__ import annotations
 
+import asyncio
 import logging
+from importlib import import_module
+from importlib.util import find_spec
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-try:
-    from backend.time_utils import utcnow, utcnow_aware
-except Exception:  # pragma: no cover
-    from time_utils import utcnow, utcnow_aware  # type: ignore
+from backend.time_utils import utcnow, utcnow_aware
+from backend.core.async_utils import create_logged_task
 
 from fastapi import HTTPException, status
 
 logger = logging.getLogger("backend.chat_history")
 
-try:
-    from backend.database import database, user_chat_messages, user_chat_threads
-except Exception:  # pragma: no cover - fallback when running backend/ directly
-    from database import database, user_chat_messages, user_chat_threads  # type: ignore
+from backend.database import database, user_chat_messages, user_chat_threads
 
-try:
-    from backend.core.conversation_store import (
-        CONVERSATION_HISTORY_CACHE,
-        CONVERSATION_OWNER_CACHE,
-        _handle_conversation_store_error,
-        ensure_user_data_record,
-        cache_conversation_history,
-    )
-except Exception:  # pragma: no cover - fallback when running backend/ directly
-    from core.conversation_store import (  # type: ignore
-        CONVERSATION_HISTORY_CACHE,
-        CONVERSATION_OWNER_CACHE,
-        _handle_conversation_store_error,
-        ensure_user_data_record,
-        cache_conversation_history,
-    )
+from backend.core.conversation_store import (
+    CONVERSATION_HISTORY_CACHE,
+    CONVERSATION_OWNER_CACHE,
+    _handle_conversation_store_error,
+    ensure_user_data_record,
+    cache_conversation_history,
+)
 
 
 def _is_valid_uuid(val: Optional[Any]) -> bool:
@@ -211,16 +200,14 @@ async def overwrite_thread_history(
                 "Error overwriting conversation history in local SQLite", error
             )
 
-    # 3. Invalidate Redis cache so deleted messages don't reappear
-    try:
-        from backend.chat_cache import invalidate_conversation_cache
-    except ImportError:  # pragma: no cover
-        from chat_cache import invalidate_conversation_cache  # type: ignore
-    try:
-        import asyncio
-        asyncio.create_task(invalidate_conversation_cache(conversation_id))
-    except ImportError:
-        pass  # Redis cache module not available
+    # 3. Invalidate Redis cache so deleted messages don't reappear (best-effort)
+    if find_spec("backend.chat_cache") is not None:
+        invalidate_conversation_cache = import_module("backend.chat_cache").invalidate_conversation_cache
+        create_logged_task(
+            invalidate_conversation_cache(conversation_id),
+            logger=logger,
+            name="chat_cache.invalidate_conversation_cache",
+        )
 
     # 4. Update in-memory cache
     cache_conversation_history(conversation_id, user_id, normalized_history)

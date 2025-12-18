@@ -6,6 +6,9 @@ modularity and reduce main.py's size.
 from __future__ import annotations
 
 import json
+import asyncio
+from importlib import import_module
+from importlib.util import find_spec
 from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -22,10 +25,7 @@ def _get_database():
     """Lazily get database connection."""
     global _database, _general_chat_messages, _user_data
     if _database is None:
-        try:
-            from backend.database import database, general_chat_messages, user_data
-        except ImportError:
-            from database import database, general_chat_messages, user_data
+        from backend.database import database, general_chat_messages, user_data
         _database = database
         _general_chat_messages = general_chat_messages
         _user_data = user_data
@@ -36,45 +36,31 @@ def _get_logger():
     """Lazily get app logger."""
     global _app_logger
     if _app_logger is None:
-        try:
-            from backend.logging_config import create_logger
-        except ImportError:
-            from logging_config import create_logger
+        from backend.logging_config import create_logger
         _app_logger = create_logger("backend.general_conversation")
     return _app_logger
 
 
 def _get_utcnow():
     """Lazily get utcnow function."""
-    try:
-        from backend.time_utils import utcnow
-    except ImportError:
-        from time_utils import utcnow
+    from backend.time_utils import utcnow
     return utcnow
 
 
 def _parse_json_field(value: Any) -> Any:
     """Parse a JSON field."""
-    try:
-        from backend.core.serializers import parse_json_field
-    except ImportError:
-        from core.serializers import parse_json_field
+    from backend.core.serializers import parse_json_field
     return parse_json_field(value)
 
 
 def _datetime_to_ms(dt) -> int:
     """Convert datetime to milliseconds timestamp."""
-    try:
-        from backend.core.serializers import datetime_to_ms
-    except ImportError:
-        from core.serializers import datetime_to_ms
+    from backend.core.serializers import datetime_to_ms
     return datetime_to_ms(dt)
 
 
-try:
-    from backend.core.conversation_store import ensure_user_data_record
-except ImportError:  # pragma: no cover
-    from core.conversation_store import ensure_user_data_record  # type: ignore
+from backend.core.conversation_store import ensure_user_data_record
+from backend.core.async_utils import create_logged_task
 
 
 async def load_general_conversation_history(user_id: int) -> List[Dict[str, Any]]:
@@ -253,17 +239,15 @@ async def replace_general_conversation_history(user_id: int, history: List[Dict[
         )
         raise  # Re-raise so caller knows the operation failed
 
-    # Invalidate Redis cache for General conversation
-    try:
-        from backend.chat_cache import invalidate_conversation_cache
-    except ImportError:  # pragma: no cover
-        from chat_cache import invalidate_conversation_cache  # type: ignore
-    try:
-        import asyncio
+    # Invalidate Redis cache for General conversation (best-effort)
+    if find_spec("backend.chat_cache") is not None:
+        invalidate_conversation_cache = import_module("backend.chat_cache").invalidate_conversation_cache
         general_conv_id = f"general:{user_id}"
-        asyncio.create_task(invalidate_conversation_cache(general_conv_id))
-    except ImportError:
-        pass  # Redis cache module not available
+        create_logged_task(
+            invalidate_conversation_cache(general_conv_id),
+            logger=logger,
+            name="chat_cache.invalidate_general_conversation_cache",
+        )
 
 
 async def delete_general_conversation_history(

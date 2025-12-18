@@ -1,18 +1,14 @@
 import os
-import sys
 from pathlib import Path
 
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
-BACKEND_PATH = ROOT / "backend"
-if str(BACKEND_PATH) not in sys.path:
-    sys.path.insert(0, str(BACKEND_PATH))
 
 os.environ.setdefault("SUPABASE_URL", "")
 os.environ.setdefault("SUPABASE_KEY", "")
 
-from calendar_context import build_calendar_context  # noqa: E402
+from backend.calendar_context import build_calendar_context  # noqa: E402
 
 
 class _FakeDb:
@@ -88,4 +84,3 @@ async def test_build_calendar_context_reports_empty_schedule():
 
     assert context is not None
     assert "Events (next 7 days): none" in context
-

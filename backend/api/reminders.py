@@ -35,20 +35,15 @@ def _serialize_reminder_row(row: Any) -> Dict[str, Any]:
 
 def _get_reminder_scheduler():
     """Lazy import reminder scheduler to avoid circular imports."""
-    try:
-        from backend.main import reminder_scheduler
-    except ImportError:
-        reminder_scheduler = None
-    return reminder_scheduler
+    import backend.main as main_module
+
+    return getattr(main_module, "reminder_scheduler", None)
 
 
 def _get_api_logger():
     """Get a configured API logger."""
-    try:
-        from backend.logging_config import create_logger
-    except ImportError:  # pragma: no cover
-        import logging
-        return logging.getLogger(__name__)
+    from backend.logging_config import create_logger
+
     return create_logger("backend.api.reminders")
 
 

@@ -3,40 +3,21 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, List, Optional
 
-try:
-    from backend.time_utils import utcnow
-except Exception:  # pragma: no cover
-    from time_utils import utcnow  # type: ignore
+from backend.time_utils import utcnow
 
-try:  # Prefer package-relative imports when running as a package
-    from backend.database import (
-        database,
-        users,
-        user_chat_threads,
-        user_chat_messages,
-        user_data,
-    )
-except Exception:  # pragma: no cover - fallback for direct backend/ execution
-    from database import (  # type: ignore
-        database,
-        users,
-        user_chat_threads,
-        user_chat_messages,
-        user_data,
-    )
+from backend.database import (
+    database,
+    users,
+    user_chat_threads,
+    user_chat_messages,
+    user_data,
+)
 
-try:
-    from backend.core.cache import (
-        CONVERSATION_HISTORY_CACHE,
-        CONVERSATION_OWNER_CACHE,
-        USER_CACHE,
-    )
-except Exception:  # pragma: no cover - fallback when running with backend/ on sys.path
-    from core.cache import (  # type: ignore
-        CONVERSATION_HISTORY_CACHE,
-        CONVERSATION_OWNER_CACHE,
-        USER_CACHE,
-    )
+from backend.core.cache import (
+    CONVERSATION_HISTORY_CACHE,
+    CONVERSATION_OWNER_CACHE,
+    USER_CACHE,
+)
 
 logger = logging.getLogger("backend.conversation_store")
 

@@ -5,11 +5,7 @@ from datetime import datetime, time, timedelta, timezone, tzinfo
 from typing import Any, Dict, Mapping, Optional, Tuple
 from zoneinfo import ZoneInfo
 
-
-try:
-    from backend.database import calendars, calendar_events
-except ImportError:  # pragma: no cover
-    from database import calendars, calendar_events  # type: ignore
+from backend.database import calendars, calendar_events
 
 
 _ISO_TIMESTAMP_RE = re.compile(r"ISO timestamp:\s*([0-9T:\.\-:+Z]+)")

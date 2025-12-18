@@ -138,26 +138,26 @@ const nextConfig: NextConfig = {
           },
           // Content Security Policy - strict but functional
           // Note: 'unsafe-inline' required for Next.js styles, 'unsafe-eval' for react-three-fiber
-	          {
-	            key: 'Content-Security-Policy',
-	            value: [
-	              "default-src 'self'",
-	              // Scripts: self + specific trusted CDNs only
-	              "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://static.cloudflareinsights.com https://challenges.cloudflare.com https://api.midtrans.com https://api.sandbox.midtrans.com https://app.midtrans.com https://simulator.sandbox.midtrans.com https://cdn.paddle.com",
-	              // Styles: self + Google Fonts
-	              "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.paddle.com",
-	              // Images: self + trusted sources
-	              "img-src 'self' blob: data: https://*.supabase.co https://*.googleusercontent.com https://avatars.githubusercontent.com https://*.githubusercontent.com https://cdn.discordapp.com https://secure.gravatar.com https://www.gravatar.com https://api.midtrans.com https://api.sandbox.midtrans.com",
-	              // Fonts: self + Google Fonts
-	              "font-src 'self' https://fonts.gstatic.com",
-	              // XHR/Fetch: self + trusted APIs
-	              "connect-src 'self' https://*.supabase.co https://*.googleusercontent.com https://www.youtube.com https://challenges.cloudflare.com wss://*.supabase.co https://api.midtrans.com https://api.sandbox.midtrans.com https://app.midtrans.com https://simulator.sandbox.midtrans.com https://*.paddle.com",
-	              // Frames: limited to YouTube and Cloudflare
-	              "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://challenges.cloudflare.com https://api.midtrans.com https://api.sandbox.midtrans.com https://app.midtrans.com https://simulator.sandbox.midtrans.com https://*.paddle.com",
-	              // Ancestors: prevent embedding
-	              "frame-ancestors 'none'",
-	              // Base URI: prevent base tag hijacking
-	              "base-uri 'self'",
+          {
+            key: 'Content-Security-Policy',
+            value: [
+              "default-src 'self'",
+              // Scripts: self + specific trusted CDNs only
+              "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://static.cloudflareinsights.com https://challenges.cloudflare.com https://api.midtrans.com https://api.sandbox.midtrans.com https://app.midtrans.com https://simulator.sandbox.midtrans.com https://gumroad.com https://payment.alignment.id",
+              // Styles: self + Google Fonts
+              "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://gumroad.com",
+              // Images: self + trusted sources
+              "img-src 'self' blob: data: https://*.supabase.co https://*.googleusercontent.com https://avatars.githubusercontent.com https://*.githubusercontent.com https://cdn.discordapp.com https://secure.gravatar.com https://www.gravatar.com https://api.midtrans.com https://api.sandbox.midtrans.com https://gumroad.com",
+              // Fonts: self + Google Fonts
+              "font-src 'self' https://fonts.gstatic.com",
+              // XHR/Fetch: self + trusted APIs
+              "connect-src 'self' https://*.supabase.co https://*.googleusercontent.com https://www.youtube.com https://challenges.cloudflare.com wss://*.supabase.co https://api.midtrans.com https://api.sandbox.midtrans.com https://app.midtrans.com https://simulator.sandbox.midtrans.com https://gumroad.com https://payment.alignment.id",
+              // Frames: limited to YouTube and Cloudflare
+              "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://challenges.cloudflare.com https://api.midtrans.com https://api.sandbox.midtrans.com https://app.midtrans.com https://simulator.sandbox.midtrans.com https://gumroad.com https://payment.alignment.id",
+              // Ancestors: prevent embedding
+              "frame-ancestors 'none'",
+              // Base URI: prevent base tag hijacking
+              "base-uri 'self'",
               // Forms: only submit to self
               "form-action 'self'",
               // Objects: disabled
@@ -167,13 +167,13 @@ const nextConfig: NextConfig = {
             ].join('; '),
           },
           // Restrict browser features
-	          {
-	            key: 'Permissions-Policy',
-	            value:
-	              'camera=(), microphone=(), geolocation=(), payment=(self "https://api.midtrans.com" "https://api.sandbox.midtrans.com" "https://checkout.paddle.com" "https://sandbox-checkout.paddle.com"), usb=(), magnetometer=(), gyroscope=(), accelerometer=()',
-	          },
-	        ],
-	      },
+          {
+            key: 'Permissions-Policy',
+            value:
+              'camera=(), microphone=(), geolocation=(), payment=(self "https://api.midtrans.com" "https://api.sandbox.midtrans.com" "https://gumroad.com" "https://payment.alignment.id"), usb=(), magnetometer=(), gyroscope=(), accelerometer=()',
+          },
+        ],
+      },
       // Additional headers for API routes
       {
         source: '/api/:path*',

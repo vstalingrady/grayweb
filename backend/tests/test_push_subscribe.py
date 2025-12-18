@@ -4,17 +4,12 @@ Test push subscription upsert behavior.
 Tests the _upsert_push_subscription function in api/proactivity.py.
 """
 import os
-import sys
 import sqlite3
 from pathlib import Path
 
 import pytest
 
-# Ensure backend module is importable
 ROOT = Path(__file__).resolve().parents[2]
-BACKEND_PATH = ROOT / "backend"
-if str(BACKEND_PATH) not in sys.path:
-    sys.path.insert(0, str(BACKEND_PATH))
 
 TEST_DB_PATH = ROOT / "backend" / "tests" / "push_subscribe_test.db"
 if TEST_DB_PATH.exists():
@@ -30,7 +25,7 @@ os.environ["SUPABASE_KEY"] = ""
 @pytest.mark.asyncio
 async def test_upsert_push_subscription_unique_violation_falls_back_to_update():
     from sqlalchemy.dialects import sqlite as sqlite_dialect
-    from api.proactivity import PushSubscriptionCreate, _upsert_push_subscription
+    from backend.api.proactivity import PushSubscriptionCreate, _upsert_push_subscription
 
     class FakeDB:
         def __init__(self) -> None:

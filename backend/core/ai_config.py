@@ -7,11 +7,12 @@ Extracted from main.py for better modularity.
 import os
 from pathlib import Path
 from typing import Dict, List, Optional, Any
+from importlib.util import find_spec
 
 # Google GenAI types
-try:
+if find_spec("google.genai") is not None:
     from google.genai import types
-except ImportError:
+else:
     types = None  # type: ignore
 
 # Path setup

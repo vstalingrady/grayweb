@@ -41,15 +41,9 @@ from backend.auth import (
 from backend.time_utils import utcnow
 from backend.usage_tracker import UsageTracker
 from backend.logging_config import create_logger
-try:
-    from backend.tier_utils import bootstrap_plan_tier
-except ImportError:  # pragma: no cover
-    from tier_utils import bootstrap_plan_tier  # type: ignore
+from backend.tier_utils import bootstrap_plan_tier
 
-try:
-    from backend.core.rate_limit import limiter
-except ImportError:
-    from core.rate_limit import limiter  # type: ignore
+from backend.core.rate_limit import limiter
 
 
 def generate_initials(full_name: str) -> str:

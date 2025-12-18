@@ -1,20 +1,31 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
+import time
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 import httpx
 
 logger = logging.getLogger("backend.discord_notifier")
 
 
-_WEBHOOK_ENV_VARS = ("DISCORD_PAYMENTS_WEBHOOK_URL", "DISCORD_WEBHOOK_URL")
+_PAYMENTS_WEBHOOK_ENV_VARS = ("DISCORD_PAYMENTS_WEBHOOK_URL", "DISCORD_WEBHOOK_URL")
+_ALERTS_WEBHOOK_ENV_VARS = ("DISCORD_ALERTS_WEBHOOK_URL", "DISCORD_WEBHOOK_URL")
 
 
 def get_discord_webhook_url() -> Optional[str]:
-    for key in _WEBHOOK_ENV_VARS:
+    for key in _PAYMENTS_WEBHOOK_ENV_VARS:
+        value = (os.getenv(key) or "").strip()
+        if value:
+            return value
+    return None
+
+
+def get_discord_alerts_webhook_url() -> Optional[str]:
+    for key in _ALERTS_WEBHOOK_ENV_VARS:
         value = (os.getenv(key) or "").strip()
         if value:
             return value
@@ -81,6 +92,132 @@ async def _post_discord_webhook(url: str, payload: Dict[str, Any]) -> None:
                 "Discord webhook request failed",
                 extra={"status_code": response.status_code, "body": response.text[:500]},
             )
+
+
+_ALERT_DEDUPE: Dict[str, float] = {}
+_ALERT_RATE: Dict[int, int] = {}  # epoch minute -> count
+
+
+def _alert_config() -> Tuple[int, float, int]:
+    min_level_name = (os.getenv("DISCORD_ALERT_MIN_LEVEL") or "ERROR").strip().upper()
+    min_level = getattr(logging, min_level_name, logging.ERROR)
+    cooldown_seconds = float(os.getenv("DISCORD_ALERT_COOLDOWN_SECONDS") or "120")
+    max_per_minute = int(os.getenv("DISCORD_ALERT_MAX_PER_MINUTE") or "12")
+    return min_level, max(0.0, cooldown_seconds), max(1, max_per_minute)
+
+
+def _alert_color(severity: str) -> int:
+    normalized = (severity or "").strip().lower()
+    if normalized in {"critical"}:
+        return 0x992D22
+    if normalized in {"error"}:
+        return 0xE74C3C
+    if normalized in {"warning", "warn"}:
+        return 0xF1C40F
+    return 0x3498DB
+
+
+def build_alert_webhook_payload(
+    *,
+    title: str,
+    message: str,
+    severity: str = "warning",
+    fields: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    embed_fields: list[Dict[str, Any]] = []
+    if fields:
+        for key, value in fields.items():
+            if value is None:
+                continue
+            embed_fields.append({"name": str(key), "value": str(value), "inline": True})
+
+    return {
+        "content": None,
+        "embeds": [
+            {
+                "title": title,
+                "description": str(message or "").strip()[:1800] or None,
+                "color": _alert_color(severity),
+                "timestamp": _now_iso(),
+                "fields": embed_fields[:25],
+            }
+        ],
+    }
+
+
+def should_send_alert(*, dedupe_key: str) -> bool:
+    url = get_discord_alerts_webhook_url()
+    if not url:
+        return False
+
+    _, cooldown_seconds, max_per_minute = _alert_config()
+    now = time.time()
+
+    last = _ALERT_DEDUPE.get(dedupe_key)
+    if last is not None and cooldown_seconds and now - last < cooldown_seconds:
+        return False
+
+    minute_bucket = int(now // 60)
+    count = _ALERT_RATE.get(minute_bucket, 0)
+    if count >= max_per_minute:
+        return False
+
+    _ALERT_DEDUPE[dedupe_key] = now
+    _ALERT_RATE[minute_bucket] = count + 1
+    for bucket in list(_ALERT_RATE.keys()):
+        if bucket < minute_bucket - 2:
+            _ALERT_RATE.pop(bucket, None)
+    return True
+
+
+async def notify_alert(
+    *,
+    title: str,
+    message: str,
+    severity: str = "warning",
+    fields: Optional[Dict[str, Any]] = None,
+    dedupe_key: Optional[str] = None,
+) -> None:
+    url = get_discord_alerts_webhook_url()
+    if not url:
+        return
+
+    safe_key = dedupe_key or f"{title}:{severity}:{(message or '')[:80]}"
+    if not should_send_alert(dedupe_key=safe_key):
+        return
+
+    try:
+        payload = build_alert_webhook_payload(
+            title=title,
+            message=message,
+            severity=severity,
+            fields=fields,
+        )
+        await _post_discord_webhook(url, payload)
+    except Exception as exc:
+        logger.warning("Discord alert notification failed", extra={"error": str(exc)})
+
+
+def schedule_alert_if_possible(coro: "asyncio.Future[Any] | asyncio.coroutines.Coroutine[Any, Any, Any]") -> None:
+    """
+    Best-effort scheduling helper for calling `notify_alert` from sync code.
+    No-op when no event loop is running.
+    """
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        return
+    task = loop.create_task(coro)
+
+    def _log_failure(done_task: "asyncio.Task[Any]") -> None:
+        try:
+            exc = done_task.exception()
+        except Exception:
+            return
+        if exc:
+            logger.warning("Discord alert task failed", extra={"error": str(exc)})
+
+    task.add_done_callback(_log_failure)
 
 
 async def notify_payment_success(

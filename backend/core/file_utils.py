@@ -12,10 +12,7 @@ from uuid import uuid4
 from fastapi import HTTPException, UploadFile, status
 
 # Enhanced logging imports
-try:
-    from backend.logging_config import create_logger
-except ImportError:
-    from logging_config import create_logger
+from backend.logging_config import create_logger
 
 file_logger = create_logger("backend.files")
 

@@ -8,16 +8,10 @@ from typing import Dict, List, Optional, Tuple
 from uuid import uuid4
 
 # Enhanced logging imports
-try:
-    from backend.logging_config import create_logger
-except ImportError:
-    from logging_config import create_logger
+from backend.logging_config import create_logger
 
 # Database URL import
-try:
-    from backend.database import DATABASE_URL
-except ImportError:
-    from database import DATABASE_URL
+from backend.database import DATABASE_URL
 
 app_logger = create_logger("backend.sqlite")
 

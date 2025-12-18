@@ -5,6 +5,7 @@ Provides TTL-based caching for synchronous and asynchronous operations.
 Extracted from main.py to reduce its size and improve modularity.
 """
 import time
+from importlib.util import find_spec
 from typing import Any, Callable, Dict, Optional, Tuple
 
 
@@ -100,10 +101,7 @@ def _get_context_cache_table():
     """Get context_cache database table."""
     global _context_cache_table
     if _context_cache_table is None:
-        try:
-            from backend.database import context_cache
-        except ImportError:
-            from database import context_cache
+        from backend.database import context_cache
         _context_cache_table = context_cache
     return _context_cache_table
 
@@ -112,10 +110,7 @@ def _get_row_get():
     """Get _row_get helper function."""
     global _row_get_fn
     if _row_get_fn is None:
-        try:
-            from backend.core.serializers import _row_get
-        except ImportError:
-            from core.serializers import _row_get
+        from backend.core.serializers import _row_get
         _row_get_fn = _row_get
     return _row_get_fn
 
@@ -124,11 +119,11 @@ def _get_types():
     """Get google.genai types module."""
     global _types_module
     if _types_module is None:
-        try:
-            from google.genai import types
-        except ImportError:
-            types = None
-        _types_module = types
+        if find_spec("google.genai") is not None:
+            from google.genai import types as _types
+        else:
+            _types = None
+        _types_module = _types
     return _types_module
 
 
