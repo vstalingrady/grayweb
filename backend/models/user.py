@@ -56,17 +56,19 @@ class UserBase(BaseModel):
     auto_web_search_enabled: Optional[bool] = False
 
 
-class UserCreate(UserBase):
-    """Model for creating a new user."""
-    pass
+class UserCreate(BaseModel):
+    """Model for creating or initializing a user profile."""
+    email: EmailStr
+    full_name: str
+    profile_picture_url: Optional[str] = None
+    workspace_background_id: Optional[str] = None
+    model_config = ConfigDict(extra="ignore")
 
 
 class UserUpdate(BaseModel):
     """Model for updating user fields."""
     full_name: Optional[str] = None
     profile_picture_url: Optional[str] = None
-    role: Optional[str] = None
-    plan_tier: Optional[str] = None
     workspace_background_id: Optional[str] = None
     maps_enabled: Optional[bool] = None
     improve_model_for_everyone: Optional[bool] = None
@@ -87,6 +89,7 @@ class UserUpdate(BaseModel):
     notification_preferences: Optional[Dict[str, bool]] = None
     conversation_memory_enabled: Optional[bool] = None
     auto_web_search_enabled: Optional[bool] = None
+    model_config = ConfigDict(extra="ignore")
 
 
 class User(UserBase):

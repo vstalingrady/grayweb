@@ -3176,6 +3176,11 @@
   position: relative;
 }
 
+.mainContent[data-view="general"] .header {
+  width: min(calc(var(--chat-column-max-width, 840px) + 40px), 100%);
+  max-width: min(calc(var(--chat-column-max-width, 840px) + 40px), 100%);
+}
+
 .headerLeft {
   flex: 1 1 auto;
   min-width: 0;

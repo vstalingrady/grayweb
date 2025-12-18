@@ -16,7 +16,7 @@ if [[ -z "${DISCORD_WEBHOOK_URL:-}" ]]; then
   exit 1
 fi
 
-DISCORD_USER_ID="${DISCORD_USER_ID:-}"
+DISCORD_USER_ID="${DISCORD_USER_ID:-853296501882093598}"
 mention_prefix=""
 if [[ -n "${DISCORD_USER_ID}" ]]; then
   mention_prefix="<@${DISCORD_USER_ID}> "

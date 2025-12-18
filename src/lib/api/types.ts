@@ -510,20 +510,12 @@ export interface UserCreate {
   email: string;
   full_name: string;
   profile_picture_url?: string;
-  role?: string;
-  personalization_nickname?: string | null;
-  personalization_occupation?: string | null;
-  personalization_about?: string | null;
-  personalization_custom_instructions?: string | null;
-  personalization_location?: string | null;
-  personalization_time_zone?: string | null;
+  workspace_background_id?: string | null;
 }
 
 export interface UserUpdate {
   full_name?: string;
   profile_picture_url?: string;
-  role?: string;
-  plan_tier?: string | null;
   workspace_background_id?: string | null;
   maps_enabled?: boolean;
   improve_model_for_everyone?: boolean;

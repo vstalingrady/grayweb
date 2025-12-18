@@ -18,8 +18,61 @@ from backend.core.function_call_helpers import format_tool_results_for_context
 from backend.core.ai_utils import materialize_structured_reminders
 
 
-
 async def stream_openrouter_response(
+    openrouter_service,
+    message: str,
+    conversation_history: List[Dict[str, Any]],
+    workspace_context: Optional[str],
+    system_prompt: Optional[str],
+    time_context: Optional[str],
+    model: Optional[str],
+    tool_list: List[types.Tool],
+    search_enabled: bool,
+    reasoning_mode: bool,
+    media_attachments: List[Any],
+    history_token_budget: int,
+    user_id: int,
+    needs_structured_tools: bool,
+    is_onboarding_tool: bool,
+    response_format: Optional[Dict[str, Any]] = None,
+    provider_routing: Optional[Dict[str, Any]] = None,
+    execute_function_call_fn=None,
+    db=None,
+    user_timezone: Optional[str] = None,
+    hybrid_tool_results: Optional[List[Dict[str, Any]]] = None,
+    hybrid_tool_cards: Optional[List[Dict[str, Any]]] = None,
+    usage_tracker_cls=None,
+) -> AsyncGenerator[Tuple[str, Any], None]:
+    """Wrapper for _stream_openrouter_response_impl to maintain compatibility."""
+    async for event in _stream_openrouter_response_impl(
+        openrouter_service=openrouter_service,
+        message=message,
+        conversation_history=conversation_history,
+        workspace_context=workspace_context,
+        system_prompt=system_prompt,
+        time_context=time_context,
+        model=model,
+        tool_list=tool_list,
+        search_enabled=search_enabled,
+        reasoning_mode=reasoning_mode,
+        media_attachments=media_attachments,
+        history_token_budget=history_token_budget,
+        user_id=user_id,
+        needs_structured_tools=needs_structured_tools,
+        is_onboarding_tool=is_onboarding_tool,
+        response_format=response_format,
+        provider_routing=provider_routing,
+        execute_function_call_fn=execute_function_call_fn,
+        db=db,
+        user_timezone=user_timezone,
+        hybrid_tool_results=hybrid_tool_results,
+        hybrid_tool_cards=hybrid_tool_cards,
+        usage_tracker_cls=usage_tracker_cls,
+    ):
+        yield event
+
+
+async def _stream_openrouter_response_impl(
     openrouter_service,
     message: str,
     conversation_history: List[Dict[str, Any]],

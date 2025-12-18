@@ -368,6 +368,9 @@ async def generate_ai_response(
     search_enabled: bool = True,
     tools: Optional[List[Any]] = None,
     plan_tier: Optional[str] = None,
+    response_schema: Optional[Dict[str, Any]] = None,
+    response_mime_type: Optional[str] = None,
+    **kwargs,
 ) -> Tuple[str, Optional[Dict[str, Any]]]:
     """Generate a non-streaming AI response."""
     deps = _get_deps()

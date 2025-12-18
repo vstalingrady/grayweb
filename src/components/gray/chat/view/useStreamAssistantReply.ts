@@ -11,6 +11,7 @@ import {
   resolveConversationMemoryEnabled,
   resolveClientTimezone,
   shouldIncludeWorkspaceContext,
+  deriveTitleFromMessage,
   shouldRequestAutoTitleForSession,
 } from "../utils";
 
@@ -117,12 +118,19 @@ export const useStreamAssistantReply = ({
       }
 
       const requestTitleHint = shouldRequestAutoTitleForSession(session);
+      const fallbackTitle = requestTitleHint ? deriveTitleFromMessage(prompt) : null;
+      const applyFallbackTitle = () => {
+        if (fallbackTitle) {
+          applyAutoTitle(targetSessionId, fallbackTitle);
+        }
+      };
       if (requestTitleHint) {
         updateSession(targetSessionId, { isGeneratingTitle: true });
       }
 
       const resolvedUser = await resolveChatUser();
       if (!resolvedUser) {
+        applyFallbackTitle();
         const fallback = buildAssistantReply(prompt);
         if (assistantMessageId) {
           const baseVariants = previousVariants.length > 0 ? previousVariants : [];
@@ -137,7 +145,11 @@ export const useStreamAssistantReply = ({
         } else {
           appendMessage(targetSessionId, "assistant", fallback);
         }
-        updateSession(targetSessionId, { isResponding: false, pendingAutoStream: false });
+        updateSession(targetSessionId, {
+          isResponding: false,
+          pendingAutoStream: false,
+          isGeneratingTitle: false,
+        });
         setActiveStreamingMessageId(null);
         return fallback;
       }
@@ -250,6 +262,8 @@ export const useStreamAssistantReply = ({
             accumulated = normalizedResponse;
             if (event.title) {
               applyAutoTitle(targetSessionId, event.title);
+            } else {
+              applyFallbackTitle();
             }
             const metadata = event.groundingMetadata ?? undefined;
             const baseVariants = previousVariants.length > 0 ? previousVariants : [];
@@ -288,6 +302,7 @@ export const useStreamAssistantReply = ({
 
         const normalized = normalizeAssistantContent(accumulated, prompt);
         accumulated = normalized;
+        applyFallbackTitle();
         const baseVariants = previousVariants.length > 0 ? previousVariants : [];
         const nextVariants = normalized ? [...baseVariants, normalized] : baseVariants;
         const nextActiveIndex = nextVariants.length > 0 ? nextVariants.length - 1 : undefined;
@@ -311,7 +326,12 @@ export const useStreamAssistantReply = ({
         return accumulated;
       } catch (error) {
         if (abortController.signal.aborted) {
-          updateSession(targetSessionId, { isResponding: false, pendingAutoStream: false });
+          applyFallbackTitle();
+          updateSession(targetSessionId, {
+            isResponding: false,
+            pendingAutoStream: false,
+            isGeneratingTitle: false,
+          });
           clearAttachments();
           return normalizeAssistantContent(accumulated, prompt);
         }
@@ -343,6 +363,8 @@ export const useStreamAssistantReply = ({
           const fallbackMetadata = fallbackResponse.groundingMetadata ?? undefined;
           if (fallbackResponse.title) {
             applyAutoTitle(targetSessionId, fallbackResponse.title);
+          } else {
+            applyFallbackTitle();
           }
           const baseVariants = previousVariants.length > 0 ? previousVariants : [];
           const nextVariants = finalResponse ? [...baseVariants, finalResponse] : baseVariants;
@@ -373,11 +395,13 @@ export const useStreamAssistantReply = ({
               : session?.conversationId ?? undefined,
             isResponding: false,
             pendingAutoStream: false,
+            isGeneratingTitle: false,
           });
           clearAttachments();
           return finalResponse;
         } catch (fallbackError) {
           console.warn("Fallback chat request failed:", fallbackError);
+          applyFallbackTitle();
           const fallback = buildAssistantReply(prompt);
           const baseVariants = previousVariants.length > 0 ? previousVariants : [];
           const nextVariants = fallback ? [...baseVariants, fallback] : baseVariants;
@@ -399,7 +423,11 @@ export const useStreamAssistantReply = ({
               });
             }
           }
-          updateSession(targetSessionId, { isResponding: false, pendingAutoStream: false });
+          updateSession(targetSessionId, {
+            isResponding: false,
+            pendingAutoStream: false,
+            isGeneratingTitle: false,
+          });
           clearAttachments();
           return fallback;
         }
@@ -410,7 +438,7 @@ export const useStreamAssistantReply = ({
         if (streamingMessageId) {
           setActiveStreamingMessageId((previous) => (previous === streamingMessageId ? null : previous));
         }
-        updateSession(targetSessionId, { isResponding: false, pendingAutoStream: false });
+        updateSession(targetSessionId, { isResponding: false, pendingAutoStream: false, isGeneratingTitle: false });
       }
     },
     [

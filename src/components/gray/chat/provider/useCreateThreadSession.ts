@@ -40,7 +40,7 @@ export const useCreateThreadSession = ({
         scope: "thread",
         conversationId: sessionId,
         pendingAutoStream: willAutoStream,
-        isGeneratingTitle: willAutoStream,
+        isGeneratingTitle: false,
       };
 
       if (trimmedInitial) {

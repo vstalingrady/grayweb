@@ -180,8 +180,8 @@
   .chatMessages {
     padding-left: max(14px, env(safe-area-inset-left, 0px));
     padding-right: max(14px, env(safe-area-inset-right, 0px));
-    padding-bottom: 0px;
-    scroll-padding-bottom: 0px;
+    padding-bottom: calc(var(--chat-composer-height, 80px) + 12px);
+    scroll-padding-bottom: calc(var(--chat-composer-height, 80px) + 12px);
   }
 
   .chatIntro {
@@ -318,6 +318,7 @@
   max-width: min(70%, calc(var(--chat-column-max-width, 680px) * 0.7));
   border-radius: 18px;
   border-top-right-radius: 5px;
+  text-align: left;
 }
 
 /* When editing, expand the bubble to allow edit container */
@@ -545,7 +546,7 @@
   align-self: stretch;
   max-width: 100%;
   width: 100%;
-  align-items: flex-end;
+  align-items: flex-start;
   font-size: 0.95rem;
 }
 
@@ -707,7 +708,8 @@
   color: rgba(255, 255, 255, 0.82);
   padding: 0;
   width: fit-content;
-  margin: 0 auto clamp(4px, 1vh, 10px);
+  margin: 0 0 clamp(4px, 1vh, 10px);
+  align-self: flex-start;
 }
 
 .chatStreamingSpinner {
@@ -1714,7 +1716,7 @@
 
 @media (max-width: 768px) {
   .chatViewport {
-    padding-bottom: 16px !important;
+    padding-bottom: calc(var(--chat-composer-height, 80px) + env(safe-area-inset-bottom, 0px) + 12px) !important;
   }
 
   .chatView {

@@ -33,8 +33,7 @@ api_logger = logging.getLogger("backend.api")
 def _is_function_calling_unsupported(error: Exception) -> bool:
     error_text = str(error).lower()
     return (
-        "function calling is unsupported" in error_text
-        or "tool use with function calling is unsupported" in error_text
+        "function calling" in error_text and "unsupported" in error_text
     )
 
 def _filter_function_declaration_tools(tools: List[types.Tool]) -> List[types.Tool]:

@@ -4,8 +4,10 @@ Message detection utilities for determining tool/search requirements.
 This module provides keyword matching and heuristics to determine whether
 a user message requires tool execution, web search, or reminder functionality.
 """
+import ipaddress
 import re
 from typing import Optional
+from urllib.parse import urlparse
 
 # ==============================================================================
 # Keyword Sets
@@ -155,11 +157,37 @@ def extract_urls_from_message(message: str, max_urls: int = 20) -> list:
     
     urls = url_pattern.findall(message)
     
+    def _is_private_hostname(hostname: str) -> bool:
+        if not hostname:
+            return True
+        normalized = hostname.strip().lower().strip(".")
+        if not normalized:
+            return True
+        if normalized in {"localhost"} or normalized.endswith((".localhost", ".local", ".internal")):
+            return True
+        normalized = normalized.split("%", 1)[0]
+        try:
+            ip = ipaddress.ip_address(normalized)
+        except ValueError:
+            return False
+        return (
+            ip.is_private
+            or ip.is_loopback
+            or ip.is_link_local
+            or ip.is_reserved
+            or ip.is_multicast
+            or ip.is_unspecified
+        )
+
     # Filter out localhost/internal URLs
     filtered = []
     for url in urls:
-        lower_url = url.lower()
-        if "localhost" in lower_url or "127.0.0.1" in lower_url:
+        try:
+            parsed = urlparse(url)
+        except Exception:
+            continue
+        hostname = parsed.hostname or ""
+        if _is_private_hostname(hostname):
             continue
         filtered.append(url)
         if len(filtered) >= max_urls:

@@ -71,7 +71,7 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
     userRef.current = user;
   }, [user]);
 
-  const fetchSupabaseProfile = useCallback(async (): Promise<{ fullName: string | null; avatarUrl: string | null; planTier: string | null } | null> => {
+  const fetchSupabaseProfile = useCallback(async (): Promise<{ fullName: string | null; avatarUrl: string | null } | null> => {
     try {
       const supabase = getSupabaseClient();
       if (!supabase) {
@@ -152,16 +152,9 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
         }
       }
 
-      const planTierRaw = (metadata.plan_tier ?? metadata.planTier) as unknown;
-      const planTier =
-        typeof planTierRaw === 'string' && planTierRaw.trim().length > 0
-          ? planTierRaw.trim().toLowerCase()
-          : null;
-
       return {
         fullName: fullName ?? null,
         avatarUrl: normalizedAvatarUrl,
-        planTier,
       };
     } catch (supabaseError) {
       // Avoid crashing the UI when Supabase is not configured.
@@ -238,8 +231,6 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
       const derivedName = deriveNameFromEmail(email);
       const preferredName = supabaseName ?? derivedName;
       const preferredAvatar = supabaseProfile?.avatarUrl ?? undefined;
-      const preferredPlanTier = supabaseProfile?.planTier ?? null;
-
       // console.log('loadUser: Preferred name:', preferredName, 'Avatar:', preferredAvatar);
 
       try {
@@ -250,7 +241,7 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
         }
         // console.log('loadUser: User data retrieved:', userData);
 
-        const updates: { full_name?: string; profile_picture_url?: string; plan_tier?: string | null } = {};
+        const updates: { full_name?: string; profile_picture_url?: string } = {};
 
         // Only update name if:
         // 1. We have a name from Supabase (authoritative source)
@@ -267,10 +258,6 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
         if (preferredAvatar && preferredAvatar !== userData.profile_picture_url) {
           updates.profile_picture_url = preferredAvatar;
         }
-        if (preferredPlanTier && preferredPlanTier !== (userData.plan_tier ?? null)) {
-          updates.plan_tier = preferredPlanTier;
-        }
-
         if (Object.keys(updates).length > 0) {
           try {
             // console.log('loadUser: Updating user profile with:', updates);
@@ -311,8 +298,6 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
             email,
             full_name: preferredName,
             profile_picture_url: preferredAvatar,
-            role: 'user',
-            plan_tier: preferredPlanTier,
           };
           const newUser = await userService.createUser(defaultUserData);
           // console.log('[v2] loadUser: New user created:', newUser);
@@ -368,12 +353,6 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
     }
     if (typeof userData.profile_picture_url === 'string') {
       payload.profile_picture_url = userData.profile_picture_url;
-    }
-    if (typeof userData.role === 'string') {
-      payload.role = userData.role;
-    }
-    if (Object.prototype.hasOwnProperty.call(userData, 'plan_tier')) {
-      payload.plan_tier = userData.plan_tier ?? null;
     }
     if (Object.prototype.hasOwnProperty.call(userData, 'personalization_nickname')) {
       payload.personalization_nickname = userData.personalization_nickname ?? null;

@@ -1,3 +1,4 @@
+# Backend entry point - Triggering reload for API fixes
 from importlib.util import find_spec
 
 import logging
@@ -485,9 +486,14 @@ async def _create_reminders_from_actions(
 
 app = FastAPI(title="User Profile API with AI Chat", version="1.0.0", lifespan=lifespan)
 
-# Mount media upload directory to serve files statically
-# This allows access to uploaded images via /uploads/<filename>
-if MEDIA_UPLOAD_DIR.exists():
+# Mount media upload directory to serve files statically (dev-only by default).
+public_uploads_env = os.getenv("ENABLE_PUBLIC_UPLOADS", "").strip().lower()
+if public_uploads_env:
+    allow_public_uploads = public_uploads_env in ("1", "true", "yes", "on")
+else:
+    allow_public_uploads = not IS_PRODUCTION
+
+if allow_public_uploads and MEDIA_UPLOAD_DIR.exists():
     app.mount("/uploads", StaticFiles(directory=MEDIA_UPLOAD_DIR), name="uploads")
 app.include_router(gumroad_router)
 app.include_router(gumroad_oauth_router)

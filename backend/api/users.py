@@ -41,7 +41,6 @@ from backend.auth import (
 from backend.time_utils import utcnow
 from backend.usage_tracker import UsageTracker
 from backend.logging_config import create_logger
-from backend.tier_utils import bootstrap_plan_tier
 
 from backend.core.rate_limit import limiter
 
@@ -90,9 +89,10 @@ def _get_user_helpers():
 async def create_user(
     request: Request,
     user: UserCreate,
+    current_user: Dict[str, Any] = Depends(get_current_user),
     db: databases.Database = Depends(get_database)
 ):
-    """Create a new user account."""
+    """Create or update the authenticated user's profile."""
     (
         _serialize_user_row,
         _row_get,
@@ -104,33 +104,29 @@ async def create_user(
         _chat_sessions,
     ) = _get_user_helpers()
     
-    initials = generate_initials(user.full_name)
-    now = utcnow()
-    
-    # Ignore any incoming `user.plan_tier`; clients should not be able to self-assign tiers.
-    assigned_plan_tier = bootstrap_plan_tier(user.email)
+    user_id = current_user["id"]
+    update_data: Dict[str, Any] = {}
 
-    query = users.insert().values(
-        email=user.email.lower(),
-        full_name=user.full_name,
-        profile_picture_url=user.profile_picture_url,
-        role=user.role,
-        plan_tier=assigned_plan_tier,
-        initials=initials,
-        workspace_background_id=user.workspace_background_id,
-        auth_user_id=user.auth_user_id,
-        created_at=now,
-        updated_at=now
-    )
-    user_id = await db.execute(query)
+    incoming_name = (user.full_name or "").strip()
+    if incoming_name and incoming_name != (current_user.get("full_name") or ""):
+        update_data["full_name"] = incoming_name
+        update_data["initials"] = generate_initials(incoming_name)
 
-    return _serialize_user_row({
-        **user.dict(),
-        "id": user_id,
-        "initials": initials,
-        "created_at": now,
-        "updated_at": now
-    })
+    if user.profile_picture_url and user.profile_picture_url != current_user.get("profile_picture_url"):
+        update_data["profile_picture_url"] = user.profile_picture_url
+
+    if user.workspace_background_id is not None:
+        update_data["workspace_background_id"] = user.workspace_background_id
+
+    if update_data:
+        update_data["updated_at"] = utcnow()
+        await db.execute(users.update().where(users.c.id == user_id).values(**update_data))
+
+    updated = await db.fetch_one(users.select().where(users.c.id == user_id))
+    if not updated:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    return _serialize_user_row(updated)
 
 
 @router.get("/users/email/{email}", response_model=User)
@@ -235,6 +231,8 @@ async def update_user(
 
     # Update fields
     update_data = user_update.dict(exclude_unset=True)
+    update_data.pop("role", None)
+    update_data.pop("plan_tier", None)
     if "full_name" in update_data:
         update_data["initials"] = generate_initials(update_data["full_name"])
 

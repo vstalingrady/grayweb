@@ -28,7 +28,7 @@ from pathlib import Path
 
 # Configuration
 DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL", "").strip()
-DISCORD_USER_ID = os.getenv("DISCORD_USER_ID", "").strip()
+DISCORD_USER_ID = os.getenv("DISCORD_USER_ID", "853296501882093598").strip()
 CHECK_INTERVAL = 10  # seconds
 DEDUP_WINDOW = 300  # 5 minutes
 MAX_ERROR_LENGTH = 1500  # Discord message length limit

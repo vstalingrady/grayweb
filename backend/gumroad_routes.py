@@ -1,4 +1,3 @@
-from fastapi import APIRouter, Request, HTTPException, BackgroundTasks
 from fastapi import APIRouter, Request, HTTPException, BackgroundTasks, Depends
 import logging
 from typing import Dict, Any, Optional
@@ -43,6 +42,66 @@ def get_gumroad_option_info() -> Dict[str, Dict[str, str]]:
     
     return mapping
 
+
+def _is_production() -> bool:
+    return (
+        os.getenv("ENVIRONMENT", "").strip().lower() == "production"
+        or os.getenv("NODE_ENV", "").strip().lower() == "production"
+    )
+
+
+async def _fetch_verified_sale(sale_id: str) -> Optional[Dict[str, Any]]:
+    if not gumroad_client.access_token:
+        if _is_production():
+            raise HTTPException(
+                status_code=503,
+                detail="Gumroad webhook verification unavailable (missing GUMROAD_ACCESS_TOKEN).",
+            )
+        logger.warning("GUMROAD_ACCESS_TOKEN missing; accepting unverified Gumroad webhook in non-production.")
+        return None
+
+    try:
+        response = await gumroad_client.get_sale(sale_id)
+    except Exception as exc:
+        logger.error(f"Failed to verify Gumroad sale {sale_id}: {exc}", exc_info=True)
+        raise HTTPException(status_code=502, detail="Failed to verify Gumroad sale.")
+
+    sale = response.get("sale") if isinstance(response, dict) else None
+    if not isinstance(sale, dict):
+        raise HTTPException(status_code=400, detail="Invalid Gumroad sale payload.")
+
+    return sale
+
+
+def _merge_verified_sale_data(data: Dict[str, Any], sale: Dict[str, Any]) -> Dict[str, Any]:
+    merged = dict(data)
+    sale_id = sale.get("sale_id") or sale.get("id")
+    if sale_id is not None:
+        merged["sale_id"] = sale_id
+
+    for key in (
+        "order_number",
+        "email",
+        "product_name",
+        "product_permalink",
+        "price",
+        "recurrence",
+        "variants",
+        "subscription_id",
+        "license_key",
+    ):
+        value = sale.get(key)
+        if value is not None:
+            merged[key] = value
+
+    custom_fields = sale.get("custom_fields")
+    if isinstance(custom_fields, dict):
+        merged["custom_fields"] = custom_fields
+        if "user_id" in custom_fields and "custom_fields[user_id]" not in merged:
+            merged["custom_fields[user_id]"] = custom_fields.get("user_id")
+
+    return merged
+
 @router.post("/api/webhooks/gumroad")
 async def gumroad_webhook(request: Request, background_tasks: BackgroundTasks):
     """
@@ -52,7 +111,14 @@ async def gumroad_webhook(request: Request, background_tasks: BackgroundTasks):
     try:
         form_data = await request.form()
         data = dict(form_data)
-        
+        sale_id = data.get("sale_id")
+        if not sale_id:
+            raise HTTPException(status_code=400, detail="Missing Gumroad sale_id.")
+
+        verified_sale = await _fetch_verified_sale(str(sale_id))
+        if verified_sale:
+            data = _merge_verified_sale_data(data, verified_sale)
+
         logger.info(f"Received Gumroad Ping: {data.get('sale_id')} for product {data.get('product_name')}")
 
         await handle_gumroad_sale(data, db=database)
@@ -71,7 +137,14 @@ async def handle_gumroad_sale(data: Dict[str, Any], db: Any = None):
 
     # Gumroad sends custom fields as individual parameters if they are simple.
     # If the custom field name is 'user_id', it arrives as 'custom_fields[user_id]'.
-    user_id_str = data.get("custom_fields[user_id]") or data.get("user_id")
+    custom_fields = data.get("custom_fields")
+    user_id_str: Optional[str] = None
+    if isinstance(custom_fields, dict):
+        raw_user_id = custom_fields.get("user_id") or custom_fields.get("userId")
+        if raw_user_id is not None:
+            user_id_str = str(raw_user_id)
+    if not user_id_str:
+        user_id_str = data.get("custom_fields[user_id]") or data.get("user_id")
     
     user_id: Optional[int] = None
     if user_id_str:
@@ -95,7 +168,11 @@ async def handle_gumroad_sale(data: Dict[str, Any], db: Any = None):
 
     # For tiered memberships, we need to identify the tier from the variant/option
     # Gumroad sends 'variants' field which contains the tier info
-    variants = data.get("variants") or ""
+    variants_value = data.get("variants") or ""
+    if isinstance(variants_value, dict):
+        variants = " ".join(str(value) for value in variants_value.values() if value)
+    else:
+        variants = str(variants_value)
     product_name = (data.get("product_name") or "").lower()
     
     # Try to identify tier from variants field or product name

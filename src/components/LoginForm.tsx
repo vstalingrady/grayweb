@@ -2,10 +2,9 @@
 
 import Image from "next/image";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { LoaderCircle } from "lucide-react";
 import { FaDiscord, FaGoogle } from "react-icons/fa6";
-import { Turnstile, type TurnstileInstance } from "@marsidev/react-turnstile";
 import ShaderBackground from "@/components/shaders/ShaderBackground";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { getSupabaseAuthStorageKeys } from "@/lib/supabaseStorage";
@@ -15,12 +14,7 @@ import {
   ensureAbsoluteUrl,
   resolvePostAuthDestination,
 } from "@/components/login/loginRedirect";
-import {
-  isLocalHostname,
-  normalizeWorkspaceRedirect,
-  resolveWorkspaceHost,
-  resolveWorkspaceOrigin,
-} from "@/lib/grayRouting";
+import { isLocalHostname, normalizeWorkspaceRedirect, resolveWorkspaceHost, resolveWorkspaceOrigin } from "@/lib/grayRouting";
 import styles from "./LoginForm.module.css";
 import { persistAuthCookies, clearAuthCookies } from "@/lib/auth/cookies";
 
@@ -46,8 +40,6 @@ const providers = [
   { id: "discord" as const, label: "Discord", icon: FaDiscord },
 ];
 
-const FALLBACK_TURNSTILE_SITE_KEY = "0x4AAAAAACDfOE8EWig4fsrM";
-const envTurnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim();
 const SUPABASE_STORAGE_KEYS = getSupabaseAuthStorageKeys();
 const MIN_PASSWORD_LENGTH = 8;
 export default function LoginForm({
@@ -81,38 +73,6 @@ export default function LoginForm({
     return () => observer.disconnect();
   }, []);
 
-  const shouldEnableCaptcha = useMemo(() => {
-    // Return false during SSR and initial client render to avoid hydration mismatch
-    if (!isMounted) {
-      return false;
-    }
-    const { hostname, port } = window.location;
-    const isLocal = isLocalHostname(hostname) || port === "3000" || port === "3001";
-    if (isLocal) {
-      return false;
-    }
-    if (process.env.NODE_ENV !== "production") {
-      return false;
-    }
-    return true;
-  }, [isMounted]);
-
-  const shouldUseDevPasswordAuth = useMemo(() => {
-    if (!isMounted) {
-      return false;
-    }
-    if (process.env.NODE_ENV === "production") {
-      return false;
-    }
-    const { hostname, port } = window.location;
-    return isLocalHostname(hostname) || port === "3000";
-  }, [isMounted]);
-  const turnstileSiteKey =
-    shouldEnableCaptcha
-      ? envTurnstileSiteKey && envTurnstileSiteKey.length > 0
-        ? envTurnstileSiteKey
-        : FALLBACK_TURNSTILE_SITE_KEY
-      : undefined;
   const pathname = usePathname();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -137,9 +97,7 @@ export default function LoginForm({
   );
   const [authMode, setAuthMode] = useState<AuthMode>(initialMode);
   const [showPassword, setShowPassword] = useState(false);
-  const [captchaToken, setCaptchaToken] = useState<string | undefined>();
   const [pendingEmailConfirmation, setPendingEmailConfirmation] = useState(false);
-  const turnstileRef = useRef<TurnstileInstance | undefined>(undefined);
 
   const searchParams = useSearchParams();
 
@@ -153,7 +111,6 @@ export default function LoginForm({
       setPassword("");
     }
     setShowPassword(false);
-    setCaptchaToken(undefined);
     setPendingEmailConfirmation(false);
   }, [authMode]);
 
@@ -171,20 +128,12 @@ export default function LoginForm({
       normalized.includes("timeout-or-duplicate");
 
     if (isVerificationFailed || isTimeoutOrDuplicate) {
-      setCaptchaToken(undefined);
-      try {
-        turnstileRef.current?.reset();
-      } catch {
-        // Best-effort reset; ignore failures.
-      }
       if (isTimeoutOrDuplicate) {
         return t(
           "Captcha verification expired or was already used. Please complete the verification again to continue."
         );
       }
-      return t(
-        "Turnstile verification failed. Please complete the captcha check again to continue."
-      );
+      return t("Turnstile verification failed. Please complete the captcha check again to continue.");
     }
     return raw;
   };
@@ -236,15 +185,6 @@ export default function LoginForm({
       return;
     }
 
-    // Require captcha completion when Turnstile is enabled
-    if (turnstileSiteKey && !captchaToken) {
-      setMessage({
-        type: "error",
-        text: t("Please complete the verification step before continuing."),
-      });
-      return;
-    }
-
     if (typeof window !== "undefined") {
       try {
         window.sessionStorage.removeItem("auth-callback-processed");
@@ -268,7 +208,6 @@ export default function LoginForm({
             provider === "discord"
               ? "identify email guilds"
               : "email profile openid",
-          captchaToken,
         },
       });
       if (error) {
@@ -349,15 +288,6 @@ export default function LoginForm({
       return;
     }
 
-    // Enforce captcha when Turnstile is configured
-    if (turnstileSiteKey && !captchaToken) {
-      setMessage({
-        type: "error",
-        text: t("Please complete the verification step before continuing."),
-      });
-      return;
-    }
-
     if (authMode === "signup" && password.length < MIN_PASSWORD_LENGTH) {
       setMessage({
         type: "error",
@@ -385,39 +315,10 @@ export default function LoginForm({
       const isSignIn = authMode === "signin";
       if (isSignIn) {
         const authStart = performance.now();
-        const { data, error } = shouldUseDevPasswordAuth
-          ? await (async () => {
-            const response = await fetch("/api/auth/dev/password", {
-              method: "POST",
-              headers: { "content-type": "application/json" },
-              body: JSON.stringify({ email: trimmedEmail, password, mode: "signin" }),
-            });
-
-            const payload = (await response.json().catch(() => null)) as
-              | { accessToken?: unknown; refreshToken?: unknown; detail?: unknown }
-              | null;
-
-            if (!response.ok) {
-              const detail =
-                typeof payload?.detail === "string" ? payload.detail : t("Unable to sign in.");
-              throw new Error(detail);
-            }
-
-            const accessToken = typeof payload?.accessToken === "string" ? payload.accessToken : "";
-            const refreshToken =
-              typeof payload?.refreshToken === "string" ? payload.refreshToken : "";
-
-            if (!accessToken || !refreshToken) {
-              throw new Error(t("Unable to sign in."));
-            }
-
-            return supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
-          })()
-          : await supabase.auth.signInWithPassword({
-            email: trimmedEmail,
-            password,
-            options: { captchaToken },
-          });
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: trimmedEmail,
+          password,
+        });
 
         console.log(
           `[AUTH PERF] Sign in request took ${(performance.now() - authStart).toFixed(2)}ms`
@@ -456,42 +357,13 @@ export default function LoginForm({
       }
 
       const authStart = performance.now();
-      const { data, error } = shouldUseDevPasswordAuth
-        ? await (async () => {
-          const response = await fetch("/api/auth/dev/password", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ email: trimmedEmail, password, mode: "signup" }),
-          });
-
-          const payload = (await response.json().catch(() => null)) as
-            | { accessToken?: unknown; refreshToken?: unknown; detail?: unknown }
-            | null;
-
-          if (!response.ok) {
-            const detail =
-              typeof payload?.detail === "string" ? payload.detail : t("Unable to sign up.");
-            throw new Error(detail);
-          }
-
-          const accessToken = typeof payload?.accessToken === "string" ? payload.accessToken : "";
-          const refreshToken =
-            typeof payload?.refreshToken === "string" ? payload.refreshToken : "";
-
-          if (!accessToken || !refreshToken) {
-            throw new Error(t("Unable to sign up."));
-          }
-
-          return supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
-        })()
-        : await supabase.auth.signUp({
-          email: trimmedEmail,
-          password,
-          options: {
-            emailRedirectTo: ensureAbsoluteUrl(buildCallbackDestination(redirectTo)),
-            captchaToken,
-          },
-        });
+      const { data, error } = await supabase.auth.signUp({
+        email: trimmedEmail,
+        password,
+        options: {
+          emailRedirectTo: ensureAbsoluteUrl(buildCallbackDestination(redirectTo)),
+        },
+      });
       console.log(`[AUTH PERF] Sign up request took ${(performance.now() - authStart).toFixed(2)}ms`);
 
       if (error) {
@@ -562,14 +434,6 @@ export default function LoginForm({
       return;
     }
 
-    if (turnstileSiteKey && !captchaToken) {
-      setMessage({
-        type: "error",
-        text: t("Please complete the verification step before continuing."),
-      });
-      return;
-    }
-
     setLoading(true);
     setMessage({ type: "idle" });
 
@@ -579,7 +443,6 @@ export default function LoginForm({
         email: trimmedEmail,
         options: {
           emailRedirectTo: ensureAbsoluteUrl(buildCallbackDestination(redirectTo)),
-          captchaToken,
         },
       });
 
@@ -837,19 +700,6 @@ export default function LoginForm({
                   {t("Forgot password?")}
                 </button>
               </div>
-
-              {turnstileSiteKey && (
-                <div style={{ marginBottom: "1rem" }}>
-                  <Turnstile
-                    ref={turnstileRef}
-                    siteKey={turnstileSiteKey}
-                    onSuccess={(token) => setCaptchaToken(token)}
-                    onExpire={() => setCaptchaToken(undefined)}
-                    onError={() => setCaptchaToken(undefined)}
-                    options={{ theme: "auto", appearance: "always" }}
-                  />
-                </div>
-              )}
 
               {renderedMessage}
 

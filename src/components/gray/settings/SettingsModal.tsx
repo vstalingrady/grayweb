@@ -77,7 +77,7 @@ export function SettingsModal({
   contextUsage = null,
 }: SettingsModalProps) {
   const { t, locale: activeLocale, setLocale } = useI18n();
-  const { user, updateUser } = useUser();
+  const { user, updateUser, refreshUser } = useUser();
   const {
     autoWebSearchEnabled,
     setAutoWebSearchEnabled,
@@ -519,8 +519,8 @@ export function SettingsModal({
       if (res.success) {
         setGumroadRefreshStatus("success");
         setGumroadRefreshMessage(res.message);
-        if (res.tier && user) {
-          await updateUser({ plan_tier: res.tier });
+        if (user) {
+          await refreshUser();
         }
       } else {
         setGumroadRefreshStatus("error");
@@ -543,7 +543,7 @@ export function SettingsModal({
       await GumroadService.disconnect();
       setGumroadConnectionStatus("idle");
       // Refresh user to update UI
-      await updateUser({});
+      await refreshUser();
     } catch (e) {
       setGumroadConnectionStatus("idle");
       console.error("Failed to disconnect Gumroad:", e);
@@ -560,7 +560,7 @@ export function SettingsModal({
         setGumroadRefreshStatus("success");
         setGumroadRefreshMessage(t("Successfully connected to Gumroad!"));
         // Refresh user to show updated info
-        updateUser({}).catch(console.error);
+        refreshUser().catch(console.error);
       } else if (callbackResult.error) {
         setGumroadRefreshStatus("error");
         setGumroadRefreshMessage(

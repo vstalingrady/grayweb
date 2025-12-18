@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { IBM_Plex_Mono, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import "katex/dist/katex.min.css";
 import "react-loading-skeleton/dist/skeleton.css";
@@ -64,6 +65,22 @@ export const metadata: Metadata = {
     shortcut: ["/favicondarktheme.ico"],
   },
 };
+
+const plusJakartaSans = Plus_Jakarta_Sans({
+  subsets: ["latin"],
+  weight: ["200", "300", "400", "500", "600", "700", "800"],
+  style: ["normal", "italic"],
+  display: "swap",
+  variable: "--font-sans",
+});
+
+const ibmPlexMono = IBM_Plex_Mono({
+  subsets: ["latin"],
+  weight: ["100", "200", "300", "400", "500", "600", "700"],
+  style: ["normal", "italic"],
+  display: "swap",
+  variable: "--font-mono",
+});
 
 export const viewport = {
   width: 'device-width',
@@ -173,6 +190,7 @@ export default async function RootLayout({
    <html
       lang="en"
       suppressHydrationWarning
+      className={`${plusJakartaSans.variable} ${ibmPlexMono.variable}`}
     >
       <head>
         <script dangerouslySetInnerHTML={{ __html: reactDevtoolsHotfix }} suppressHydrationWarning />
@@ -192,7 +210,7 @@ export default async function RootLayout({
         <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
 
         {/* Apple Touch Icons */}
-        <link rel="apple-touch-icon" href="/grayai.png" />
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
       </head>
       <body>
         <GrayProviders viewerEmail={session?.email ?? null}>

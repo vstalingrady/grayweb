@@ -24,6 +24,7 @@ export const useConversationSync = ({
   const pendingHistorySyncRef = useRef<Set<string>>(new Set());
   const pendingTitleSyncRef = useRef<Map<string, string>>(new Map());
   const historySyncTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const titleSyncTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   const scheduleHistorySync = useCallback(
     (conversationId: string, payload: ConversationHistoryEntryPayload[]) => {
@@ -62,6 +63,14 @@ export const useConversationSync = ({
   }, []);
 
   useEffect(() => {
+    const timers = titleSyncTimersRef.current;
+    return () => {
+      timers.forEach((timer) => clearTimeout(timer));
+      timers.clear();
+    };
+  }, []);
+
+  useEffect(() => {
     if (!pendingHistorySyncRef.current.size) {
       return;
     }
@@ -83,14 +92,13 @@ export const useConversationSync = ({
   }, [sessions, scheduleHistorySync, sessionsRef]);
 
   const syncConversationTitle = useCallback(
-    async (sessionId: string, conversationId: string, title: string) => {
+    async (sessionId: string, conversation_id: string, title: string) => {
       const trimmed = title.trim();
-      const normalizedConversationId = normalizeConversationIdValue(conversationId);
+      const normalizedConversationId = normalizeConversationIdValue(conversation_id);
       if (!trimmed || !normalizedConversationId) {
         return;
       }
       if (!userId) {
-        // Wait until we know the numeric user so the backend can create or update the row.
         return;
       }
       try {
@@ -99,8 +107,30 @@ export const useConversationSync = ({
           user_id: userId,
         });
         pendingTitleSyncRef.current.delete(sessionId);
+        const timer = titleSyncTimersRef.current.get(sessionId);
+        if (timer) {
+          clearTimeout(timer);
+          titleSyncTimersRef.current.delete(sessionId);
+        }
       } catch (error) {
-        pendingTitleSyncRef.current.delete(sessionId);
+        if (!pendingTitleSyncRef.current.has(sessionId)) {
+          pendingTitleSyncRef.current.set(sessionId, trimmed);
+        }
+        if (!titleSyncTimersRef.current.has(sessionId)) {
+          const retryTimer = setTimeout(() => {
+            titleSyncTimersRef.current.delete(sessionId);
+            // Using a direct call to chatService here to avoid recursive useCallback dependency issues
+            void chatService.updateConversation(normalizedConversationId, {
+              title: trimmed,
+              user_id: userId,
+            }).then(() => {
+              pendingTitleSyncRef.current.delete(sessionId);
+            }).catch(() => {
+              // Ignore silent retry failure, it will stay in pendingTitleSyncRef
+            });
+          }, 10_000);
+          titleSyncTimersRef.current.set(sessionId, retryTimer);
+        }
         console.warn(
           "Skipping remote conversation title update (falling back to local title only):",
           error
