@@ -81,7 +81,7 @@ async def load_thread_history(conversation_id: str, user_id: int) -> List[Dict[s
         return []
 
     cached_owner = CONVERSATION_OWNER_CACHE.get(conversation_id)
-    if cached_owner == user_id:
+    if str(cached_owner) == str(user_id):
         cached_history = CONVERSATION_HISTORY_CACHE.get(conversation_id)
         if cached_history is not None:
             return [dict(message) for message in cached_history]

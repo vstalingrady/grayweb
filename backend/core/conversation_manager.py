@@ -147,7 +147,7 @@ async def get_or_create_conversation(
     valid_id = conversation_id if _is_valid_uuid(conversation_id) else None
     if valid_id:
         cached_owner = CONVERSATION_OWNER_CACHE.get(valid_id)
-        if cached_owner == user_id:
+        if str(cached_owner) == str(user_id):
             return valid_id
         try:
             query = user_chat_threads.select().where(

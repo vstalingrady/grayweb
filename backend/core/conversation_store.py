@@ -90,7 +90,7 @@ def append_to_conversation_cache(
     if cached_history is None:
         return
     owner = CONVERSATION_OWNER_CACHE.get(conversation_id) or user_id
-    if user_id is not None and owner is not None and owner != user_id:
+    if user_id is not None and owner is not None and str(owner) != str(user_id):
         return
     normalized = {
         "role": message.get("role"),
