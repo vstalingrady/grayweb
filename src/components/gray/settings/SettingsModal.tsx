@@ -32,6 +32,7 @@ import { useUser } from "@/contexts/UserContext";
 import { useChatStore } from "@/components/gray/ChatProvider";
 import { clampPercent, getContextUsageUsedTokens, getContextUsageVisualizationLimit } from "@/components/gray/contextUsage";
 import { utilityService, chatService, userService } from "@/lib/api";
+import { GumroadService } from "@/lib/api/GumroadService";
 import { requestNotificationPermission } from "@/lib/notificationUtils";
 import { clearGrayLocalCache } from "@/lib/localCache";
 import { AccountSection } from "./sections/AccountSection";
@@ -508,6 +509,8 @@ export function SettingsModal({
     setCustomInstructions("");
   };
 
+  const [gumroadConnectionStatus, setGumroadConnectionStatus] = useState<"idle" | "connecting" | "disconnecting">("idle");
+
   const handleRefreshGumroadSubscription = async () => {
     setGumroadRefreshStatus("loading");
     setGumroadRefreshMessage(t("Verifying license…"));
@@ -528,6 +531,45 @@ export function SettingsModal({
       setGumroadRefreshMessage(e instanceof Error ? e.message : t("Manual verification failed."));
     }
   };
+
+  const handleConnectGumroad = () => {
+    setGumroadConnectionStatus("connecting");
+    GumroadService.initiateOAuth();
+  };
+
+  const handleDisconnectGumroad = async () => {
+    setGumroadConnectionStatus("disconnecting");
+    try {
+      await GumroadService.disconnect();
+      setGumroadConnectionStatus("idle");
+      // Refresh user to update UI
+      await updateUser({});
+    } catch (e) {
+      setGumroadConnectionStatus("idle");
+      console.error("Failed to disconnect Gumroad:", e);
+    }
+  };
+
+  // Check for OAuth callback on mount
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const callbackResult = GumroadService.checkOAuthCallback();
+    if (callbackResult) {
+      if (callbackResult.success) {
+        setGumroadRefreshStatus("success");
+        setGumroadRefreshMessage(t("Successfully connected to Gumroad!"));
+        // Refresh user to show updated info
+        updateUser({}).catch(console.error);
+      } else if (callbackResult.error) {
+        setGumroadRefreshStatus("error");
+        setGumroadRefreshMessage(
+          t("Failed to connect Gumroad: {error}", { error: callbackResult.error })
+        );
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
 
   const handleCompressConversation = async () => {
     const conversationId = contextUsage?.conversationId;
@@ -886,6 +928,9 @@ export function SettingsModal({
               onRefreshGumroadSubscription={handleRefreshGumroadSubscription}
               gumroadRefreshStatus={gumroadRefreshStatus}
               gumroadRefreshMessage={gumroadRefreshMessage}
+              onConnectGumroad={handleConnectGumroad}
+              onDisconnectGumroad={handleDisconnectGumroad}
+              gumroadConnectionStatus={gumroadConnectionStatus}
             />
           )}
 
