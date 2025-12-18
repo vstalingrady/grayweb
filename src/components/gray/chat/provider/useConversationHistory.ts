@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, type MutableRefObject, type SetStateAction } from "react";
 import { usePathname } from "next/navigation";
-import { apiService } from "@/lib/api";
+import { chatService } from "@/lib/api";
 import type { ChatSession } from "../types";
 import { buildGeneralConversationId, normalizeConversationIdValue } from "../utils";
 import { mapApiMessagesToChatMessages, normalizeSessionsList } from "./sessionStore";
@@ -42,7 +42,7 @@ export const useConversationHistory = ({
       }
 
       try {
-        const history = await apiService.getConversation(normalizedConversationId);
+        const history = await chatService.getConversation(normalizedConversationId);
         if (!Array.isArray(history) || history.length === 0) {
           return;
         }
@@ -107,7 +107,7 @@ export const useConversationHistory = ({
         return;
       }
       try {
-        const history = await apiService.getConversation(generalConversationId);
+        const history = await chatService.getConversation(generalConversationId);
         if (cancelled || !Array.isArray(history) || history.length === 0) {
           return;
         }

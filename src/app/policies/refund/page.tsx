@@ -48,8 +48,7 @@ export default function RefundPolicyPage() {
               ]}
             />
             <p>
-              Alignment uses Paddle as our payment processor. Our refund policy aligns with{" "}
-              <a href="https://www.paddle.com/legal/invoiced-consumer-terms-and-conditions">Paddle&apos;s Consumer Terms</a>.
+              Alignment handles all payment processing through secure, industry-standard partners.
             </p>
           </section>
 

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import type { ContextUsageSummary } from "@/components/gray/types";
-import { apiService, type ConversationUsage } from "@/lib/api";
+import { chatService, type ConversationUsage } from "@/lib/api";
 import type { ChatMessage } from "../types";
 import { estimateTokenCount } from "./formatting";
 
@@ -59,7 +59,7 @@ export const useChatConversationUsage = ({
 
     const loadUsage = async () => {
       try {
-        const usage = await apiService.getConversationUsage(activeConversationId);
+        const usage = await chatService.getConversationUsage(activeConversationId);
         if (!cancelled) {
           setStoredConversationUsage(usage);
         }

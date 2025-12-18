@@ -1,5 +1,5 @@
 import { useCallback, useEffect } from "react";
-import { apiService, isApiNetworkError } from "@/lib/api";
+import { calendarService, isApiNetworkError } from "@/lib/api";
 
 const OAUTH_STORAGE_KEY = "gray_google_calendar_oauth";
 const OAUTH_BROADCAST_CHANNEL = "gray-oauth";
@@ -136,7 +136,7 @@ export const useGoogleCalendarIntegration = (userId: number | null) => {
 
     void (async () => {
       try {
-        const response = await apiService.requestGoogleCalendarAuth(userId, {
+        const response = await calendarService.requestGoogleCalendarAuth(userId, {
           redirectUri: callbackUrl,
         });
         const authUrl = response?.authorization_url;

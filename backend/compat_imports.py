@@ -57,7 +57,7 @@ from backend.core.prompt_utils import (
     load_prompt_from_file,
     load_prompt_from_json,
     normalize_prompt_locale,
-    prompt_locale_from_request,
+    prompt_locale_from_request as _prompt_locale_from_request,
 )
 
 # CORS utilities
@@ -101,14 +101,17 @@ from backend.core.ai_utils import (
     merge_extra_contents,
 )
 
-# Tool handlers
-from backend.core.tool_handlers import (
-    build_maps_tool_and_config,
+from backend.core.calendar_tools import (
     create_calendar_event,
     delete_calendar_event,
     list_calendar_events,
-    set_reminder_scheduler as set_tool_reminder_scheduler,
     update_calendar_event,
+)
+from backend.core.tool_utils import (
+    parse_iso_datetime,
+    normalize_remind_at,
+    parse_remind_at,
+    build_reminder_payload,
 )
 
 # Entity reminders
@@ -134,6 +137,80 @@ from backend.core.workspace_tools import (
     update_plan_tool,
     update_reminder_tool,
 )
+from backend.core.stream_handlers.context import build_maps_tool_and_config
+
+# General conversation
+try:
+    from backend.core.general_conversation import (
+        load_general_conversation_history as _load_general_conversation_history,
+        insert_general_conversation_message as _insert_general_conversation_message,
+        delete_general_conversation_history as _delete_general_conversation_history,
+    )
+except ImportError:
+    from core.general_conversation import (
+        load_general_conversation_history as _load_general_conversation_history,
+        insert_general_conversation_message as _insert_general_conversation_message,
+        delete_general_conversation_history as _delete_general_conversation_history,
+    )
+
+# Conversation manager core utilities
+try:
+    from backend.core.conversation_manager import (
+        load_conversation_history as _load_conversation_history,
+        get_or_create_conversation,
+        save_conversation_message,
+    )
+except ImportError:
+    from core.conversation_manager import (
+        load_conversation_history as _load_conversation_history,
+        get_or_create_conversation,
+        save_conversation_message,
+    )
+
+# Env Helpers
+try:
+    from backend.core.env_helpers import (
+        is_valid_uuid as _is_valid_uuid,
+        timezone_from_time_context as _timezone_from_time_context,
+    )
+except ImportError:
+    from core.env_helpers import (
+        is_valid_uuid as _is_valid_uuid,
+        timezone_from_time_context as _timezone_from_time_context,
+    )
+
+# Dashboard Helpers (missing ones)
+try:
+    from backend.core.dashboard_helpers import (
+        normalize_plan_items,
+        normalize_habit_items,
+        normalize_proactivity,
+    )
+except ImportError:
+    from core.dashboard_helpers import (
+        normalize_plan_items,
+        normalize_habit_items,
+        normalize_proactivity,
+    )
+
+# Tier utilities
+try:
+    from backend.tier_utils import normalize_plan_tier
+except ImportError:
+    from tier_utils import normalize_plan_tier # type: ignore
+
+# Model access
+try:
+    from backend.model_access import coerce_model_for_tier
+except ImportError:
+    from model_access import coerce_model_for_tier # type: ignore
+
+# Proactivity and Reminder classes
+from backend.proactivity_engine import ProactivityEngine, ProactivitySchedulerManager
+try:
+    from backend.reminder_scheduler import ReminderSchedulerManager
+except ImportError:
+    from reminder_scheduler import ReminderSchedulerManager # type: ignore
 
 for _main_module_name in ("main", "backend.main"):
     _main_module = sys.modules.get(_main_module_name)
@@ -176,7 +253,7 @@ __all__ = [
     "load_prompt_from_file",
     "load_prompt_from_json",
     "normalize_prompt_locale",
-    "prompt_locale_from_request",
+    "_prompt_locale_from_request",
     # CORS utilities
     "IS_PRODUCTION",
     "local_network_origin_regex",
@@ -232,4 +309,20 @@ __all__ = [
     "delete_reminder_tool",
     "delete_latest_reminder_tool",
     "get_workspace_state_tool",
+    "_load_general_conversation_history",
+    "_insert_general_conversation_message",
+    "_delete_general_conversation_history",
+    "_load_conversation_history",
+    "get_or_create_conversation",
+    "save_conversation_message",
+    "_is_valid_uuid",
+    "_timezone_from_time_context",
+    "normalize_plan_items",
+    "normalize_habit_items",
+    "normalize_proactivity",
+    "normalize_plan_tier",
+    "coerce_model_for_tier",
+    "ProactivityEngine",
+    "ProactivitySchedulerManager",
+    "ReminderSchedulerManager",
 ]

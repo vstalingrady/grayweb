@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { apiService, isApiNetworkError, type Reminder } from "@/lib/api";
+import { workspaceService, isApiNetworkError, type Reminder } from "@/lib/api";
 import { REMINDER_POLL_MIN_INTERVAL, REMINDER_POLL_SHORT_INTERVAL } from "../constants";
 import type { ChatContextValue } from "../types";
 import { buildReminderPingMessage, sendReminderNotification } from "./reminderNotifications";
@@ -67,7 +67,7 @@ export const useReminderPolling = ({
       }
       let fetchedReminders: Reminder[] = [];
       try {
-        const reminders = await apiService.getUserReminders(userId, { status: "pending", limit: 50 });
+        const reminders = await workspaceService.getUserReminders(userId, { status: "pending", limit: 50 });
         fetchedReminders = reminders;
         const now = Date.now();
         for (const reminder of reminders) {
@@ -93,7 +93,7 @@ export const useReminderPolling = ({
           }
 
           try {
-            await apiService.updateReminder(userId, reminder.id, { status: "delivered" });
+            await workspaceService.updateReminder(userId, reminder.id, { status: "delivered" });
           } catch (updateError) {
             console.error("Failed to update reminder status:", updateError);
           }

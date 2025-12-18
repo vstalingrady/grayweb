@@ -1,0 +1,42 @@
+.mobileSuggestionGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  padding: 0 16px;
+  margin-bottom: 16px;
+  width: 100%;
+  overflow-x: auto;
+}
+
+.mobileSuggestionCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 12px 8px;
+  min-height: 80px;
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+}
+
+.mobileSuggestionIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.mobileSuggestionLabel {
+  font-size: 0.7rem;
+  text-align: center;
+  line-height: 1.2;
+}
+

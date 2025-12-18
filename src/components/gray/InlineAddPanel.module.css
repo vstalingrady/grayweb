@@ -1,0 +1,303 @@
+.inlineAddPanel {
+  width: min(560px, 100%);
+  border-radius: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(10, 10, 10, 0.92);
+  padding: clamp(16px, 3vw, 22px);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-shadow:
+    0 30px 60px rgba(0, 0, 0, 0.55),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+}
+
+.inlineAddPanelHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.inlineAddPanelTitleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.inlineAddPanelTitle {
+  margin: 0;
+  font-size: 0.8rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(240, 240, 240, 0.92);
+}
+
+.inlineAddPanelClose {
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  border: none;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(250, 250, 250, 0.86);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+}
+
+.inlineAddPanelClose:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.inlineAddPanelClose:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.inlineAddPanelBody {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.inlineAddPanelPlanRow {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.inlineAddPanelTwoCol {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 12px;
+}
+
+.inlineAddPanelStack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+@media (max-width: 480px) {
+  .inlineAddPanelTwoCol {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.inlineAddPanelActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.dashboardTasksToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  border-radius: 999px;
+  padding: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: #121212;
+}
+
+.dashboardTasksToggleButton {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.55);
+  cursor: pointer;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  transition: background 0.18s ease, color 0.18s ease;
+}
+
+.dashboardTasksToggleButton[data-active="true"] {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.dashboardTasksToggleButton:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.22);
+  outline-offset: 2px;
+}
+
+.personalizationFieldGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.personalizationFieldGroup label {
+  font-size: 0.76rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(210, 210, 210, 0.6);
+}
+
+.personalizationField {
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(18, 18, 22, 0.86);
+  color: rgba(234, 234, 234, 0.88);
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+.personalizationHint {
+  margin: 4px 0 0;
+  font-size: 0.74rem;
+  color: rgba(188, 188, 188, 0.72);
+}
+
+.reminderCheckboxRow {
+  display: flex;
+  align-items: center;
+}
+
+.reminderCheckboxLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.75rem;
+  letter-spacing: 0.35em;
+  text-transform: uppercase;
+  color: rgba(215, 215, 215, 0.78);
+}
+
+.reminderCheckboxInput {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.26);
+  background: rgba(255, 255, 255, 0.02);
+  position: relative;
+  transition: border 0.2s ease, background 0.2s ease;
+}
+
+.reminderCheckboxInput::after {
+  content: "";
+  position: absolute;
+  inset: 4px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0);
+  transform: scale(0.6);
+  opacity: 0;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.reminderCheckboxInput:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.7);
+  outline-offset: 2px;
+}
+
+.reminderCheckboxInput:checked {
+  border-color: rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.reminderCheckboxInput:checked::after {
+  opacity: 1;
+  transform: scale(1);
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.reminderDatePicker {
+  margin-top: 6px;
+  min-height: 44px;
+  transition: opacity 0.2s ease;
+}
+
+.reminderDatePicker[data-hidden="true"] {
+  opacity: 0;
+  visibility: hidden;
+}
+
+.dashboardButtonNeutral {
+  appearance: none;
+  -webkit-appearance: none;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  padding: 10px 20px;
+  border-radius: 16px;
+  cursor: pointer;
+  box-shadow: none;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease,
+    border-color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.dashboardButtonNeutral:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.25);
+  color: #fff;
+  transform: translateY(-1px);
+}
+
+.dashboardButtonNeutral:disabled,
+.dashboardButtonNeutral[data-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.6;
+  transform: none;
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.secondaryAction {
+  align-self: flex-start;
+  width: auto;
+  display: inline-flex;
+  justify-content: center;
+  padding: 10px 20px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 0.68rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  cursor: pointer;
+  box-shadow: none;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease,
+    border-color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.secondaryAction:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.25);
+  color: #fff;
+  transform: translateY(-1px);
+}
+
+.secondaryAction[disabled],
+.secondaryAction[data-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.6;
+  transform: none;
+  border-color: rgba(255, 255, 255, 0.15);
+}
+

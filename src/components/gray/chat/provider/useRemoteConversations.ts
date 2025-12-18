@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type SetStateAction } from "react";
-import { apiService, type ConversationSummary } from "@/lib/api";
+import { chatService, type ConversationSummary } from "@/lib/api";
 import { REMOTE_SESSION_MERGE_WINDOW_MS, SHARED_CHAT_PLACEHOLDER_TITLE } from "../constants";
 import type { ChatSession } from "../types";
 import { isGeneralConversationId, isGenericSessionTitle, normalizeConversationIdValue, toTimestamp } from "../utils";
@@ -223,7 +223,7 @@ export const useRemoteConversations = ({
     let cancelled = false;
     const loadRemoteConversations = async () => {
       try {
-        const records = await apiService.listUserConversations(userId, 200);
+        const records = await chatService.listUserConversations(userId, 200);
         if (cancelled || !records) {
           return;
         }

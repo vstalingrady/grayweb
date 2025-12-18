@@ -25,9 +25,9 @@ except ImportError:
     from logging_config import create_logger  # type: ignore
 
 try:
-    from backend.core.tool_handlers import normalize_remind_at
+    from backend.core.tool_utils import normalize_remind_at
 except ImportError:
-    from core.tool_handlers import normalize_remind_at  # type: ignore
+    from core.tool_utils import normalize_remind_at  # type: ignore
 
 api_logger = create_logger("backend.api")
 

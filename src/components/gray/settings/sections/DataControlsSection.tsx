@@ -3,7 +3,7 @@
 import type { Dispatch, SetStateAction } from "react";
 import { ChevronRight } from "lucide-react";
 import styles from "../SettingsStyles.module.css";
-import { apiService, type UserUpdate } from "@/lib/api";
+import { chatService, type UserUpdate } from "@/lib/api";
 import { SettingsToggle } from "@/components/gray/settings/components/SettingsToggle";
 
 type Translator = (message: string, vars?: Record<string, string | number>) => string;
@@ -142,7 +142,7 @@ export function DataControlsSection({
               setIsDeletingAllConversations(true);
               try {
                 if (typeof userId === "number") {
-                  await apiService.deleteAllConversations(userId);
+                  await chatService.deleteAllConversations(userId);
                 }
                 clearAllConversations();
               } catch (error) {

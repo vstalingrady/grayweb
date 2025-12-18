@@ -13,7 +13,7 @@ import {
   FileSpreadsheet,
   FileJson,
 } from "lucide-react";
-import { apiService } from "@/lib/api";
+import { utilityService } from "@/lib/api";
 import { useUser } from "@/contexts/UserContext";
 import { useI18n } from "@/contexts/I18nContext";
 
@@ -47,7 +47,7 @@ export function ReferenceView() {
 
     const fetchUploads = async () => {
       try {
-        const uploads = await apiService.listUploads({ limit: 100 });
+        const uploads = await utilityService.listUploads({ limit: 100 });
         const docs: UploadedDocument[] = uploads.map((upload) => ({
           id: upload.id,
           filename: upload.filename,
@@ -92,7 +92,7 @@ export function ReferenceView() {
 
     try {
       // Upload the file
-      const result = await apiService.uploadMediaFile(file);
+      const result = await utilityService.uploadMediaFile(file);
 
       // Update the document status
       setDocuments(prev => prev.map(doc =>

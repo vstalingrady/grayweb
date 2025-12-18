@@ -1,0 +1,436 @@
+.dashboardGrid {
+  display: grid;
+  --dashboard-grid-gap: clamp(6px, 1vw, 10px);
+  width: 100%;
+  margin: 0;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 7fr);
+  grid-template-areas:
+    "calendar tasks"
+    "proactivity tasks";
+  column-gap: var(--dashboard-grid-gap);
+  row-gap: var(--dashboard-grid-gap);
+  align-items: stretch;
+}
+
+.dashboardGridItemCalendar {
+  grid-area: calendar;
+}
+
+.dashboardGridItemProactivity {
+  grid-area: proactivity;
+}
+
+.dashboardGridItemTasks {
+  grid-area: tasks;
+}
+
+@media (max-width: 900px) {
+  .dashboardGrid {
+    width: min(var(--chat-column-max-width, 680px), 100%);
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "calendar"
+      "proactivity"
+      "tasks";
+  }
+}
+
+.dashboardSectionCard {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.dashboardSectionCard > * {
+  width: 100%;
+  flex: 1;
+}
+
+.dashboardCard {
+  padding: clamp(20px, 2.6vw, 28px);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+  background: rgba(4, 4, 4, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 24px;
+  box-shadow:
+    0 28px 42px rgba(0, 0, 0, 0.45),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+}
+
+.dashboardCardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.7rem;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: rgba(235, 235, 235, 0.66);
+}
+
+.dashboardCardTitle {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.5);
+  margin: 0;
+}
+
+.dashboardCardBody {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  flex: 1;
+  justify-content: flex-start;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.secondaryAction {
+  align-self: flex-start;
+  margin-top: auto;
+  width: auto;
+  display: inline-flex;
+  justify-content: center;
+  padding: 10px 20px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 0.68rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  cursor: pointer;
+  box-shadow: none;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease,
+    border-color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.secondaryAction[disabled],
+.secondaryAction[data-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.6;
+  transform: none;
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.miniCalendarHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 12px;
+}
+
+.miniCalendarMonthLabel {
+  font-size: 0.8rem;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  color: rgba(240, 240, 240, 0.82);
+  white-space: nowrap;
+}
+
+.miniCalendarHeaderControls {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.miniCalendarNavButton {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+  color: rgba(245, 245, 245, 0.9);
+  cursor: pointer;
+}
+
+.miniCalendarNavButton:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.miniCalendarBody {
+  padding-top: 0;
+  gap: 12px;
+}
+
+.miniCalendarCard {
+  gap: 10px;
+}
+
+.miniCalendarCompact {
+  --mini-month-gap: 8px;
+  --mini-month-week-gap: 3px;
+  --mini-month-day-gap: 1px;
+  --mini-month-cell-max: clamp(
+    22px,
+    calc((100% - (6 * var(--mini-month-day-gap))) / 7),
+    34px
+  );
+  --mini-month-day-font: 0.62rem;
+  --mini-month-weekday-font: 0.48rem;
+  --mini-month-weekday-letter-spacing: 0.22em;
+  --mini-month-cell-radius: 8px;
+}
+
+.planList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
+  max-height: 100%;
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  box-sizing: border-box;
+}
+
+.planList::-webkit-scrollbar {
+  width: 6px;
+}
+
+.planList::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+}
+
+.planListItem {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  border-radius: 18px;
+  border: none;
+  background: rgba(12, 12, 12, 0.82);
+  transition: background 0.2s ease;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.planItemButton {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: rgba(232, 232, 232, 0.9);
+  text-align: left;
+  min-width: 0;
+  transition: color 0.18s ease;
+}
+
+.planItemButton:hover {
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.planItemButton:focus-within {
+  outline: none;
+  border-radius: 14px;
+}
+
+.planItemButton[data-completed="true"] {
+  color: rgba(205, 205, 215, 0.48);
+  text-decoration: line-through;
+}
+
+.planItemButton[data-completed="true"] .planLabel,
+.planItemButton[data-completed="true"] .planDetails {
+  text-decoration: line-through;
+  opacity: 0.5;
+  color: rgba(236, 236, 236, 0.5);
+}
+
+.planItemButton[data-completed="true"] .planDetails {
+  color: rgba(188, 188, 188, 0.4);
+}
+
+.planCheckboxButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  margin: -4px 0 -4px -6px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  border-radius: 10px;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.planCheckboxButton:hover,
+.planCheckboxButton:focus-visible {
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.98);
+  outline: none;
+}
+
+.planCheckbox {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: rgba(210, 210, 220, 0.82);
+  flex-shrink: 0;
+  transition: color 0.18s ease;
+}
+
+.planLabelGroup {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+}
+
+.planLabel {
+  font-family: "Plus Jakarta Sans", var(--font-sans), system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 0.9rem;
+  font-weight: 400;
+  line-height: 1.4;
+  color: rgba(236, 236, 236, 0.95);
+}
+
+.planDetails {
+  display: block;
+  font-family: "IBM Plex Mono", var(--font-mono), monospace;
+  font-size: 0.7rem;
+  line-height: 1.5;
+  color: rgba(188, 188, 188, 0.72);
+  margin-top: 2px;
+}
+
+.listItemActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 0.18s ease,
+    color 0.18s ease;
+}
+
+.planListItem:hover .listItemActions,
+.planListItem:focus-within .listItemActions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.listItemActionButton {
+  border: none;
+  background: transparent;
+  color: rgba(235, 235, 235, 0.9);
+  border-radius: 0;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition:
+    background 0.18s ease,
+    color 0.18s ease;
+}
+
+.listItemActionButton:hover {
+  color: rgba(255, 255, 255, 1);
+}
+
+.listItemActionButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+  transform: none;
+}
+
+.listEmptyMessage {
+  padding: 18px;
+  border-radius: 18px;
+  border: none;
+  background: rgba(8, 8, 8, 0.6);
+  color: rgba(235, 235, 235, 0.6);
+  font-size: 0.82rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.proactivityCard {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.proactivityChecklist {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  flex: 1;
+}
+
+.proactivityChecklistItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0;
+  min-height: 32px;
+}
+
+.proactivityChecklistIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #525252;
+}
+
+.proactivityChecklistItem .proactivityChecklistIcon svg {
+  stroke-width: 2;
+}
+
+.proactivityChecklistLabel {
+  color: #e4e4e7;
+  font-size: 0.9rem;
+}
+
+.proactivityEmptyState {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #525252;
+  font-size: 0.85rem;
+  padding: 24px 0;
+}
+

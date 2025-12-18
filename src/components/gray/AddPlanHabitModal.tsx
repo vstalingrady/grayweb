@@ -4,7 +4,7 @@ import { useEffect, useState, type MouseEvent } from "react";
 import { X, ChevronDown } from "lucide-react";
 import styles from "@/app/gray/GrayPageClient.module.css";
 import { useUser } from "@/contexts/UserContext";
-import { apiService } from "@/lib/api";
+import { workspaceService } from "@/lib/api";
 import type { HabitItem, HabitUpdates, PlanItem, PlanUpdates } from "./types";
 import { useI18n } from "@/contexts/I18nContext";
 import { splitScheduleSlot, toDateTimeLocalValue } from "./planHabitInlineEditor/dateUtils";
@@ -206,7 +206,7 @@ export function AddPlanHabitModal({
 
         } else {
 
-          await apiService.createPlan(user.id, {
+          await workspaceService.createPlan(user.id, {
 
             label: trimmed,
 
@@ -244,7 +244,7 @@ export function AddPlanHabitModal({
 
             const habitId = Number(habitToEdit.id);
 
-            await apiService.updateHabit(user.id, habitId, {
+            await workspaceService.updateHabit(user.id, habitId, {
 
               label: payload.label,
 
@@ -258,7 +258,7 @@ export function AddPlanHabitModal({
 
           // console.log('[AddPlanHabitModal] Creating new habit');
 
-          await apiService.createHabit(user.id, {
+          await workspaceService.createHabit(user.id, {
 
             label: trimmed,
 

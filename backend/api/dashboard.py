@@ -30,24 +30,24 @@ MAX_DASHBOARD_PULSE_HISTORY = 30
 
 def _get_dashboard_helpers():
     """Lazy import dashboard helpers to avoid circular imports."""
-    from backend.main import (
-        _serialize_dashboard_pulse_record,
-        _load_dashboard_pulse_by_date,
-        _load_previous_dashboard_pulse,
-        _normalize_plan_items,
-        _normalize_habit_items,
-        _normalize_proactivity,
-        _carry_forward_dashboard_entries,
+    from backend.core.dashboard_helpers import (
+        serialize_dashboard_pulse_record,
+        load_dashboard_pulse_by_date,
+        load_previous_dashboard_pulse,
+        normalize_plan_items,
+        normalize_habit_items,
+        normalize_proactivity,
+        carry_forward_dashboard_entries,
         _timestamp_ms_to_datetime,
     )
     return (
-        _serialize_dashboard_pulse_record,
-        _load_dashboard_pulse_by_date,
-        _load_previous_dashboard_pulse,
-        _normalize_plan_items,
-        _normalize_habit_items,
-        _normalize_proactivity,
-        _carry_forward_dashboard_entries,
+        serialize_dashboard_pulse_record,
+        load_dashboard_pulse_by_date,
+        load_previous_dashboard_pulse,
+        normalize_plan_items,
+        normalize_habit_items,
+        normalize_proactivity,
+        carry_forward_dashboard_entries,
         _timestamp_ms_to_datetime,
     )
 

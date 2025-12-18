@@ -64,6 +64,9 @@ venv/
 backend/logs/
 # Staging/dev media uploads
 backend/media_uploads-dev/
+# Runtime media uploads (stored on disk, not in git)
+backend/media_uploads/*
+!backend/media_uploads/.gitkeep
 # Local API client caches
 discovery_cache/
 .config/

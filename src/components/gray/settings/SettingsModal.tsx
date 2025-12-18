@@ -31,7 +31,7 @@ import { useI18n } from "@/contexts/I18nContext";
 import { useUser } from "@/contexts/UserContext";
 import { useChatStore } from "@/components/gray/ChatProvider";
 import { clampPercent, getContextUsageUsedTokens, getContextUsageVisualizationLimit } from "@/components/gray/contextUsage";
-import { apiService } from "@/lib/api";
+import { utilityService, chatService } from "@/lib/api";
 import { requestNotificationPermission } from "@/lib/notificationUtils";
 import { clearGrayLocalCache } from "@/lib/localCache";
 import { AccountSection } from "./sections/AccountSection";
@@ -227,7 +227,7 @@ export function SettingsModal({
     setAvatarUploadState("uploading");
     setAvatarUploadError(null);
     try {
-      const upload = await apiService.uploadMediaFile(file);
+      const upload = await utilityService.uploadMediaFile(file);
       const avatarUrl = upload.public_url ?? `/api/uploads/${upload.id}/file`;
       await updateUser({ profile_picture_url: avatarUrl });
       setAvatarUploadState("idle");
@@ -517,7 +517,7 @@ export function SettingsModal({
     setContextActionState("loading");
     setContextActionMessage(t("Compressing..."));
     try {
-      const result = await apiService.compressConversation(conversationId);
+      const result = await chatService.compressConversation(conversationId);
       setContextActionState("success");
       setContextActionMessage(result.message || t("Conversation compressed successfully"));
     } catch (e) {
@@ -608,14 +608,14 @@ export function SettingsModal({
               <h3 className={styles.mobileProfileName}>{user?.full_name || "Gray User"}</h3>
               {user?.personalization_nickname ? (
                 <span className={styles.mobileProfileHandle}>@{user.personalization_nickname}</span>
-	              ) : null}
-	              <button
-	                className={railNavStyles.railNav}
-	                style={{ width: "auto", height: 32, padding: "0 16px", borderRadius: 16, background: "#1c1c1e", fontSize: "0.9rem", color: "#fff" }}
-	                onClick={() => {
-	                  setActiveSection("account");
-	                  setMobileView("detail");
-	                }}
+              ) : null}
+              <button
+                className={railNavStyles.railNav}
+                style={{ width: "auto", height: 32, padding: "0 16px", borderRadius: 16, background: "#1c1c1e", fontSize: "0.9rem", color: "#fff" }}
+                onClick={() => {
+                  setActiveSection("account");
+                  setMobileView("detail");
+                }}
               >
                 {t("Edit profile")}
               </button>

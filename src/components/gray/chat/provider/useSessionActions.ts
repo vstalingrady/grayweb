@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, type MutableRefObject, type SetStateAction } from "react";
-import { apiService, type GroundingMetadata, type MediaUpload } from "@/lib/api";
+import { chatService, type GroundingMetadata, type MediaUpload } from "@/lib/api";
 import type {
   ChatMessage,
   ChatRole,
@@ -309,7 +309,7 @@ export const useSessionActions = ({
       const conversationId = normalizeConversationIdValue(session.conversationId);
       if (conversationId) {
         try {
-          await apiService.updateConversation(conversationId, {
+          await chatService.updateConversation(conversationId, {
             metadata: { is_pinned: pinned },
           });
         } catch (err) {
@@ -423,7 +423,7 @@ export const useSessionActions = ({
       if (normalizedConversationId) {
         void (async () => {
           try {
-            await apiService.deleteConversation(normalizedConversationId);
+            await chatService.deleteConversation(normalizedConversationId);
           } catch (error) {
             console.error("Failed to delete remote conversation:", error);
           }

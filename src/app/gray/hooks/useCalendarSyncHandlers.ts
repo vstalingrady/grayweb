@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import type { Dispatch, SetStateAction } from "react";
 
-import { apiService, isApiNetworkError } from "@/lib/api";
+import { workspaceService, calendarService, isApiNetworkError } from "@/lib/api";
 import type { CalendarEvent, CalendarInfo } from "@/components/calendar/types";
 import type { PlanItem, PlanUpdates } from "@/components/gray/types";
 import { PLAN_EVENT_ID_PREFIX } from "@/components/gray/planCalendarUtils";
@@ -40,19 +40,19 @@ export const useCalendarSyncHandlers = ({
       const updatedPlans = previousPlans.map((plan) =>
         plan.id === planId
           ? {
-              ...plan,
-              label: updates.label,
-              deadline: updates.deadline ?? null,
-              scheduleSlot: updates.scheduleSlot ?? null,
-              details: updates.details ?? null,
-            }
+            ...plan,
+            label: updates.label,
+            deadline: updates.deadline ?? null,
+            scheduleSlot: updates.scheduleSlot ?? null,
+            details: updates.details ?? null,
+          }
           : plan
       );
 
       setPlans(updatedPlans);
 
       try {
-        await apiService.updatePlan(userId, numericPlanId, {
+        await workspaceService.updatePlan(userId, numericPlanId, {
           label: updates.label,
           description: updates.details ?? null,
           deadline: updates.deadline ?? null,
@@ -92,7 +92,7 @@ export const useCalendarSyncHandlers = ({
           return;
         }
 
-        apiService
+        calendarService
           .updateCalendar(userId, calendarId, {
             label: calendar.label,
             color: calendar.color,
@@ -235,7 +235,7 @@ export const useCalendarSyncHandlers = ({
         }
 
         try {
-          await apiService.deleteCalendarEvent(userId, numericId);
+          await calendarService.deleteCalendarEvent(userId, numericId);
         } catch (error) {
           logCalendarSyncError("delete calendar event", error);
           revertDelete(eventId);
@@ -250,7 +250,7 @@ export const useCalendarSyncHandlers = ({
         }
 
         try {
-          const createdEvent = await apiService.createCalendarEvent(userId, {
+          const createdEvent = await calendarService.createCalendarEvent(userId, {
             calendar_id: event.calendarId === "default" ? null : numericCalendarId,
             title: event.title,
             description: event.description,
@@ -282,7 +282,7 @@ export const useCalendarSyncHandlers = ({
           }
 
           try {
-            const createdEvent = await apiService.createCalendarEvent(userId, {
+            const createdEvent = await calendarService.createCalendarEvent(userId, {
               calendar_id: event.calendarId === "default" ? null : numericCalendarId,
               title: event.title,
               description: event.description,
@@ -317,7 +317,7 @@ export const useCalendarSyncHandlers = ({
         }
 
         try {
-          await apiService.updateCalendarEvent(userId, numericEventId, {
+          await calendarService.updateCalendarEvent(userId, numericEventId, {
             calendar_id: event.calendarId === "default" ? null : numericCalendarId,
             title: event.title,
             description: event.description,

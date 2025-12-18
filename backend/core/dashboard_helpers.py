@@ -1,194 +1,150 @@
+"""Dashboard helper functions and serializers.
+
+Extracted from main.py to handle dashboard-specific logic and data normalization.
 """
-Dashboard pulse helper functions.
+from __future__ import annotations
 
-Extracted from main.py to improve modularity.
-"""
-from datetime import date, datetime
-from typing import Any, Dict, List, Optional, Tuple
-from uuid import uuid4
+import json
+from datetime import datetime, date
+from typing import Any, Dict, List, Optional
 
-import databases
+# Lazy utilities
+def _get_utcnow():
+    try:
+        from backend.time_utils import utcnow
+    except ImportError:
+        from time_utils import utcnow
+    return utcnow
 
-# Import serialization helpers
-try:
-    from backend.core.serializers import (
-        normalize_plan_items,
-        normalize_habit_items,
-        normalize_proactivity,
-    )
-    from backend.core.env_helpers import datetime_to_ms
-except ImportError:
-    from core.serializers import (  # type: ignore
-        normalize_plan_items,
-        normalize_habit_items,
-        normalize_proactivity,
-    )
-    from core.env_helpers import datetime_to_ms  # type: ignore
-
-
-# ==============================================================================
-# Serialization
-# ==============================================================================
-
+def _timestamp_ms_to_datetime(ms: Optional[int]) -> Optional[datetime]:
+    """Convert a millisecond timestamp to a datetime object."""
+    if ms is None:
+        return None
+    try:
+        return datetime.fromtimestamp(ms / 1000.0)
+    except Exception:
+        return None
 
 def serialize_dashboard_pulse_record(record: Any) -> Optional[Dict[str, Any]]:
-    """Serialize a dashboard pulse database record to a dictionary."""
-    if not record:
+    """Serialize a dashboard_pulses row to a dictionary."""
+    if record is None:
         return None
-    plans = normalize_plan_items(record["plans"])
-    habits = normalize_habit_items(record["habits"])
-    proactivity = normalize_proactivity(record["proactivity"])
-    timestamp_ms = datetime_to_ms(record["timestamp"])
+    
+    # Handle dict or Row object
+    if not isinstance(record, dict):
+        try:
+            record = dict(record)
+        except Exception:
+            return None
+
+    def _parse_json(field_name: str) -> List[Any]:
+        val = record.get(field_name)
+        if isinstance(val, str):
+            try:
+                return json.loads(val)
+            except Exception:
+                return []
+        if isinstance(val, list):
+            return val
+        if isinstance(val, dict):
+            return [val]
+        return []
+
+    def _parse_json_dict(field_name: str) -> Dict[str, Any]:
+        val = record.get(field_name)
+        if isinstance(val, str):
+            try:
+                return json.loads(val)
+            except Exception:
+                return {}
+        if isinstance(val, dict):
+            return val
+        return {}
+
     return {
-        "id": record["id"],
-        "user_id": record["user_id"],
-        "date_key": record["date_key"],
-        "timestamp": timestamp_ms,
-        "plans": plans,
-        "habits": habits,
-        "proactivity": proactivity,
-        "created_at": record["created_at"],
-        "updated_at": record["updated_at"],
+        "id": record.get("id"),
+        "user_id": record.get("user_id"),
+        "date_key": record.get("date_key"),
+        "timestamp": record.get("timestamp"),
+        "plans": _parse_json("plans"),
+        "habits": _parse_json("habits"),
+        "proactivity": _parse_json_dict("proactivity"),
+        "created_at": record.get("created_at"),
+        "updated_at": record.get("updated_at"),
     }
 
+async def load_dashboard_pulse_by_date(db: Any, user_id: int, date_key: str) -> Any:
+    """Load a dashboard pulse by user and date."""
+    try:
+        from backend.database import dashboard_pulses
+    except ImportError:
+        from database import dashboard_pulses
+        
+    query = dashboard_pulses.select().where(
+        (dashboard_pulses.c.user_id == user_id) & (dashboard_pulses.c.date_key == date_key)
+    )
+    return await db.fetch_one(query)
 
-# ==============================================================================
-# Dashboard Entry Carry-Forward
-# ==============================================================================
+async def load_previous_dashboard_pulse(db: Any, user_id: int, current_date_key: str) -> Any:
+    """Load the most recent dashboard pulse before the given date."""
+    try:
+        from backend.database import dashboard_pulses
+    except ImportError:
+        from database import dashboard_pulses
 
+    query = (
+        dashboard_pulses.select()
+        .where(
+            (dashboard_pulses.c.user_id == user_id) & (dashboard_pulses.c.date_key < current_date_key)
+        )
+        .order_by(dashboard_pulses.c.date_key.desc())
+        .limit(1)
+    )
+    return await db.fetch_one(query)
+
+def normalize_plan_items(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Ensure plan items have required fields for JSON storage."""
+    normalized = []
+    for item in items:
+        normalized.append({
+            "id": item.get("id"),
+            "label": str(item.get("label", "")),
+            "completed": bool(item.get("completed", False)),
+            "deadline": item.get("deadline"),
+        })
+    return normalized
+
+def normalize_habit_items(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Ensure habit items have required fields for JSON storage."""
+    normalized = []
+    for item in items:
+        normalized.append({
+            "id": item.get("id"),
+            "label": str(item.get("label", "")),
+            "streak": int(item.get("streak", 0)),
+        })
+    return normalized
+
+def normalize_proactivity(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Ensure proactivity data has required fields for JSON storage."""
+    return {
+        "score": float(data.get("score", 0.0)),
+        "summary": str(data.get("summary", "")),
+        "notes": str(data.get("notes", "")),
+    }
 
 def carry_forward_dashboard_entries(
-    previous: Optional[Dict[str, Any]],
-    plans: List[Dict[str, Any]],
-    habits: List[Dict[str, Any]],
-) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
-    """Carry forward incomplete plans and habits from previous day's dashboard."""
-    if not previous:
-        return plans, habits
-
-    carry_plans = list(plans)
-    carry_habits = list(habits)
-
-    existing_plan_ids = {item["id"] for item in carry_plans}
-    existing_plan_labels = {item["label"].lower() for item in carry_plans}
-
-    for entry in previous.get("plans", []):
-        if entry.get("completed"):
-            continue
-        identifier = str(entry.get("id") or "").strip()
-        label = str(entry.get("label") or "").strip()
-        if not label:
-            continue
-        if identifier and identifier in existing_plan_ids:
-            continue
-        if label.lower() in existing_plan_labels:
-            continue
-        carry_plans.append(
-            {
-                "id": identifier or f"plan-{uuid4().hex[:8]}",
-                "label": label,
-                "completed": False,
-            }
-        )
-        if identifier:
-            existing_plan_ids.add(identifier)
-        existing_plan_labels.add(label.lower())
-
-    existing_habit_ids = {item["id"] for item in carry_habits}
-    for entry in previous.get("habits", []):
-        identifier = str(entry.get("id") or "").strip()
-        label = str(entry.get("label") or "").strip()
-        if not label:
-            continue
-        if identifier and identifier in existing_habit_ids:
-            continue
-        carry_habits.append(
-            {
-                "id": identifier or f"habit-{uuid4().hex[:8]}",
-                "label": label,
-                "previous_label": str(entry.get("previous_label") or ""),
-                "completed": False,
-            }
-        )
-        if identifier:
-            existing_habit_ids.add(identifier)
-
-    return carry_plans, carry_habits
-
-
-# ==============================================================================
-# Database Loading
-# ==============================================================================
-
-
-async def load_dashboard_pulse_by_date(
-    db: databases.Database,
-    user_id: int,
-    date_key: str,
-    dashboard_pulses_table: Any,
-) -> Optional[Any]:
-    """Load a dashboard pulse for a specific date."""
-    query = (
-        dashboard_pulses_table.select()
-        .where(
-            (dashboard_pulses_table.c.user_id == user_id)
-            & (dashboard_pulses_table.c.date_key == date_key)
-        )
-        .limit(1)
-    )
-    return await db.fetch_one(query)
-
-
-async def load_previous_dashboard_pulse(
-    db: databases.Database,
-    user_id: int,
-    date_key: str,
-    dashboard_pulses_table: Any,
-) -> Optional[Any]:
-    """Load the most recent dashboard pulse before the given date."""
-    query = (
-        dashboard_pulses_table.select()
-        .where(
-            (dashboard_pulses_table.c.user_id == user_id)
-            & (dashboard_pulses_table.c.date_key < date_key)
-        )
-        .order_by(dashboard_pulses_table.c.date_key.desc())
-        .limit(1)
-    )
-    return await db.fetch_one(query)
-
-
-# ==============================================================================
-# Date Coercion
-# ==============================================================================
-
-
-def coerce_activity_day(value: Any) -> Optional[date]:
-    """Coerce a value to a date object for activity tracking."""
-    if value is None:
-        return None
-    if isinstance(value, date) and not isinstance(value, datetime):
-        return value
-    if isinstance(value, datetime):
-        return value.date()
-    if isinstance(value, str):
-        candidate = value.strip()
-        if not candidate:
-            return None
-        try:
-            parsed = datetime.fromisoformat(candidate.replace("Z", "+00:00"))
-        except ValueError:
-            try:
-                parsed = datetime.strptime(candidate.split(".")[0], "%Y-%m-%dT%H:%M:%S")
-            except ValueError:
-                return None
-        return parsed.date()
-    return None
-
-
-# Backwards compatibility aliases
-_serialize_dashboard_pulse_record = serialize_dashboard_pulse_record
-_carry_forward_dashboard_entries = carry_forward_dashboard_entries
-_load_dashboard_pulse_by_date = load_dashboard_pulse_by_date
-_load_previous_dashboard_pulse = load_previous_dashboard_pulse
-_coerce_activity_day = coerce_activity_day
+    previous: Dict[str, Any], current_plans: List[Dict[str, Any]], current_habits: List[Dict[str, Any]]
+) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    """Merge uncompleted items from previous day into current lists."""
+    # Logic to merge entries (carry forward uncompleted)
+    merged_plans = list(current_plans)
+    existing_plan_ids = {p.get("id") for p in merged_plans if p.get("id")}
+    
+    for prev_plan in previous.get("plans", []):
+        if not prev_plan.get("completed") and prev_plan.get("id") not in existing_plan_ids:
+            # Carry forward uncompleted plans
+            merged_plans.append(prev_plan)
+            
+    # Habits are usually ongoing, so we might just keep the current list or update streaks
+    return merged_plans, current_habits

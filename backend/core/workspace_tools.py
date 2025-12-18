@@ -17,20 +17,28 @@ except ImportError:
 
 # Import shared utilities
 try:
-    from backend.core.serializers import serialize_reminder_row as _serialize_reminder_row
-    from backend.core.tool_handlers import (
+    from backend.core.serializers import (
+        serialize_reminder_row as _serialize_reminder_row,
+        serialize_habit_record as _serialize_habit_record,
+    )
+    from backend.core.tool_utils import (
         build_reminder_payload as _build_reminder_payload,
         parse_remind_at as _parse_remind_at,
+        parse_iso_datetime as _parse_iso_datetime,
     )
     from backend.core.entity_reminders import (
         upsert_entity_reminder as _upsert_entity_reminder,
         delete_all_entity_reminders as _delete_all_entity_reminders,
     )
 except ImportError:
-    from core.serializers import serialize_reminder_row as _serialize_reminder_row  # type: ignore
-    from core.tool_handlers import (  # type: ignore
+    from core.serializers import (  # type: ignore
+        serialize_reminder_row as _serialize_reminder_row,
+        serialize_habit_record as _serialize_habit_record,
+    )
+    from core.tool_utils import (  # type: ignore
         build_reminder_payload as _build_reminder_payload,
         parse_remind_at as _parse_remind_at,
+        parse_iso_datetime as _parse_iso_datetime,
     )
     from core.entity_reminders import (  # type: ignore
         upsert_entity_reminder as _upsert_entity_reminder,
@@ -39,12 +47,9 @@ except ImportError:
 
 try:
     from backend.time_utils import utcnow
-except ImportError:
-    from time_utils import utcnow  # type: ignore
-
-try:
     from backend.logging_config import create_logger
 except ImportError:
+    from time_utils import utcnow  # type: ignore
     from logging_config import create_logger  # type: ignore
 
 api_logger = create_logger("backend.api")
@@ -52,18 +57,10 @@ api_logger = create_logger("backend.api")
 # Reference to reminder scheduler - set by main.py
 reminder_scheduler = None
 
-
 def set_reminder_scheduler(scheduler) -> None:
     """Set the reminder scheduler reference for job management."""
     global reminder_scheduler
     reminder_scheduler = scheduler
-
-
-def _serialize_habit_record(row) -> Dict[str, Any]:
-    """Serialize a habit row to a dictionary."""
-    if not row:
-        return {}
-    return dict(row)
 
 
 # --- Plan Tools ---

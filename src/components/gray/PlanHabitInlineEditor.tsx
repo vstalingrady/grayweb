@@ -6,7 +6,7 @@ import calendarStyles from "@/components/calendar/GrayDashboardCalendar.module.c
 import { MiniMonth } from "@/components/calendar/MiniMonth";
 import { useUser } from "@/contexts/UserContext";
 import { useI18n } from "@/contexts/I18nContext";
-import { apiService } from "@/lib/api";
+import { workspaceService } from "@/lib/api";
 import type { HabitItem, HabitUpdates, PlanItem, PlanUpdates } from "./types";
 import { useDismissableLayer } from "./hooks/useDismissableLayer";
 import {
@@ -284,7 +284,7 @@ export function PlanHabitInlineEditor({
             if (Number.isNaN(numericId)) {
               throw new Error(t("Invalid plan id."));
             }
-            await apiService.updatePlan(user.id, numericId, {
+            await workspaceService.updatePlan(user.id, numericId, {
               label: payload.label,
               description: payload.details ?? null,
               deadline: payload.deadline ?? null,
@@ -294,7 +294,7 @@ export function PlanHabitInlineEditor({
             });
           }
         } else {
-          await apiService.createPlan(user.id, {
+          await workspaceService.createPlan(user.id, {
             label: payload.label,
             completed: false,
             deadline: payload.deadline ?? null,
@@ -319,14 +319,14 @@ export function PlanHabitInlineEditor({
             if (Number.isNaN(numericId)) {
               throw new Error(t("Invalid habit id."));
             }
-            await apiService.updateHabit(user.id, numericId, {
+            await workspaceService.updateHabit(user.id, numericId, {
               label: payload.label,
               description: payload.details ?? null,
               reminderAt: payload.reminderAt ?? null,
             });
           }
         } else {
-          await apiService.createHabit(user.id, {
+          await workspaceService.createHabit(user.id, {
             label: payload.label,
             previous_label: t("No history yet"),
             description: payload.details ?? null,
@@ -430,9 +430,9 @@ export function PlanHabitInlineEditor({
 
         <hr className={calendarStyles.composerSectionDivider} />
 
-	        <div className={calendarStyles.composerTimeSection}>
-	          <div className={calendarStyles.composerTimeRow}>
-	            <div className={calendarStyles.composerTimeInputGroup}>
+        <div className={calendarStyles.composerTimeSection}>
+          <div className={calendarStyles.composerTimeRow}>
+            <div className={calendarStyles.composerTimeInputGroup}>
               <input
                 type="time"
                 value={startTime}
@@ -451,10 +451,10 @@ export function PlanHabitInlineEditor({
                 disabled={isSubmitting}
               />
             </div>
-	            <span className={calendarStyles.composerDuration}>
-	              {formatInlineDurationLabel(startTime, endTime)}
-	            </span>
-		          </div>
+            <span className={calendarStyles.composerDuration}>
+              {formatInlineDurationLabel(startTime, endTime)}
+            </span>
+          </div>
           <div className={calendarStyles.composerTimeMetaRow}>
             <div className={calendarStyles.composerDateRow}>
               <button

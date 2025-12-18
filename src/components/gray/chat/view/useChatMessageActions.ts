@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { apiService } from "@/lib/api";
+import { chatService } from "@/lib/api";
 import type { ChatMessage, ChatSession } from "../types";
 import { buildConversationHistoryPayload, normalizeConversationIdValue } from "../utils";
 import { formatDurationLabel } from "./formatting";
@@ -98,7 +98,7 @@ export const useChatMessageActions = ({
       pendingHistorySyncRef.current = false;
 
       const payload = buildConversationHistoryPayload(messages);
-      void apiService.overwriteConversationHistory(conversationId, payload).catch((error) => {
+      void chatService.overwriteConversationHistory(conversationId, payload).catch((error) => {
         console.warn("Failed to sync conversation history:", error);
       });
     }, 250);

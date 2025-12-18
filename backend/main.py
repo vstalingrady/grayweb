@@ -32,13 +32,20 @@ from dotenv import load_dotenv
 from supabase import Client
 
 try:
+    from backend.core.app_setup import lifespan
+    from backend.core.tool_execution import get_tool_handlers as _get_tool_handlers, execute_function_call as _execute_function_call
+    from backend.core.ai_service import stream_ai_response as _stream_ai_response, generate_ai_response as _generate_ai_response, generate_chat_starter as _ai_generate_chat_starter
+except ImportError:
+    from core.app_setup import lifespan  # type: ignore
+    from core.tool_execution import get_tool_handlers as _get_tool_handlers, execute_function_call as _execute_function_call  # type: ignore
+    from core.ai_service import stream_ai_response as _stream_ai_response, generate_ai_response as _generate_ai_response, generate_chat_starter as _ai_generate_chat_starter  # type: ignore
+
+try:
     from backend.compat_imports import (
         utcnow, utcnow_aware,
-        # Supabase utilities
         create_supabase_client,
         create_supabase_service_client,
         resolve_supabase_credentials,
-        # Conversation store
         conversation_store,
         configure_conversation_store,
         get_cached_user,
@@ -51,61 +58,55 @@ try:
         _conversation_store_available,
         _handle_conversation_store_error,
         _general_conversation_user_id,
-        # Chat history
+        _load_general_conversation_history,
+        _insert_general_conversation_message,
+        _delete_general_conversation_history,
+        _load_conversation_history,
+        get_or_create_conversation,
+        save_conversation_message,
+        _is_valid_uuid,
+        _timezone_from_time_context,
         normalize_conversation_history,
-        load_thread_history,
-        overwrite_thread_history,
         normalize_conversation_title,
         apply_conversation_update,
         update_conversation_title,
-        # File utilities
         MEDIA_UPLOAD_DIR,
         MEDIA_UPLOAD_ROOT,
         sanitize_filename as _sanitize_filename,
-        # Prompt utilities
         load_prompt_from_file,
         load_prompt_from_json,
         normalize_prompt_locale as _normalize_prompt_locale,
-        prompt_locale_from_request as _prompt_locale_from_request,
-        # CORS utilities
+        _prompt_locale_from_request,
         IS_PRODUCTION,
         local_network_origin_regex as _local_network_origin_regex,
         build_allowed_origins as _build_allowed_origins,
-        # Cache
         TTLCache,
         AsyncTTLCache,
         USER_CACHE,
         CONVERSATION_HISTORY_CACHE,
         load_context_cache as _load_context_cache,
         context_cache_contents as _context_cache_contents,
-        # Message detection
         needs_structured_tools as _needs_structured_tools,
         should_request_structured_reminders as _should_request_structured_reminders,
         should_use_web_search as _should_use_web_search,
         extract_urls_from_message as _extract_urls_from_message,
-        # Serializers
         row_get as _row_get,
         parse_json_field as _parse_json_field,
         serialize_reminder_row as _serialize_reminder_row,
         serialize_habit_record as _serialize_habit_record,
         datetime_to_ms as _datetime_to_ms,
-        # AI utilities
         candidate_text as _candidate_text,
         candidate_thought as _candidate_thought,
         candidate_grounding_payload as _candidate_grounding_payload,
         merge_extra_contents as _merge_extra_contents,
         materialize_structured_reminders as _materialize_structured_reminders,
         fallback_title_from_message as _fallback_title_from_message,
-        # Tool handlers
-        set_tool_reminder_scheduler as _set_tool_reminder_scheduler,
         list_calendar_events as _list_calendar_events,
         create_calendar_event as _create_calendar_event,
         update_calendar_event as _update_calendar_event,
         delete_calendar_event as _delete_calendar_event,
         build_maps_tool_and_config as _build_maps_tool_and_config,
-        # Entity reminders
         set_entity_reminder_scheduler as _set_entity_reminder_scheduler,
-        # Workspace tools
         set_workspace_reminder_scheduler as _set_workspace_reminder_scheduler,
         list_plans_tool as _list_plans_tool,
         create_plan_tool as _create_plan_tool,
@@ -121,6 +122,11 @@ try:
         delete_reminder_tool as _delete_reminder_tool,
         delete_latest_reminder_tool as _delete_latest_reminder_tool,
         get_workspace_state_tool as _get_workspace_state_tool,
+        normalize_plan_items as _normalize_plan_items,
+        normalize_habit_items as _normalize_habit_items,
+        normalize_proactivity as _normalize_proactivity,
+        normalize_plan_tier,
+        coerce_model_for_tier,
     )
 except ImportError:
     from compat_imports import (  # type: ignore
@@ -140,9 +146,15 @@ except ImportError:
         _conversation_store_available,
         _handle_conversation_store_error,
         _general_conversation_user_id,
+        _load_general_conversation_history,
+        _insert_general_conversation_message,
+        _delete_general_conversation_history,
+        _load_conversation_history,
+        get_or_create_conversation,
+        save_conversation_message,
+        _is_valid_uuid,
+        _timezone_from_time_context,
         normalize_conversation_history,
-        load_thread_history,
-        overwrite_thread_history,
         normalize_conversation_title,
         apply_conversation_update,
         update_conversation_title,
@@ -151,8 +163,8 @@ except ImportError:
         sanitize_filename as _sanitize_filename,
         load_prompt_from_file,
         load_prompt_from_json,
-        normalize_prompt_locale as _normalize_prompt_locale,
-        prompt_locale_from_request as _prompt_locale_from_request,
+        _normalize_prompt_locale,
+        _prompt_locale_from_request,
         IS_PRODUCTION,
         local_network_origin_regex as _local_network_origin_regex,
         build_allowed_origins as _build_allowed_origins,
@@ -177,7 +189,6 @@ except ImportError:
         merge_extra_contents as _merge_extra_contents,
         materialize_structured_reminders as _materialize_structured_reminders,
         fallback_title_from_message as _fallback_title_from_message,
-        set_tool_reminder_scheduler as _set_tool_reminder_scheduler,
         list_calendar_events as _list_calendar_events,
         create_calendar_event as _create_calendar_event,
         update_calendar_event as _update_calendar_event,
@@ -199,6 +210,11 @@ except ImportError:
         delete_reminder_tool as _delete_reminder_tool,
         delete_latest_reminder_tool as _delete_latest_reminder_tool,
         get_workspace_state_tool as _get_workspace_state_tool,
+        _normalize_plan_items,
+        _normalize_habit_items,
+        _normalize_proactivity,
+        normalize_plan_tier,
+        coerce_model_for_tier,
     )
 
 from uuid import UUID, uuid4
@@ -517,13 +533,11 @@ try:
     from backend.core.dashboard_helpers import (
         serialize_dashboard_pulse_record as _serialize_dashboard_pulse_record,
         carry_forward_dashboard_entries as _carry_forward_dashboard_entries,
-        coerce_activity_day as _coerce_activity_day,
     )
 except ImportError:
     from core.dashboard_helpers import (  # type: ignore
         serialize_dashboard_pulse_record as _serialize_dashboard_pulse_record,
         carry_forward_dashboard_entries as _carry_forward_dashboard_entries,
-        coerce_activity_day as _coerce_activity_day,
     )
 
 try:
@@ -763,16 +777,6 @@ if SUPABASE_URL and SUPABASE_KEY and SUPABASE_URL != "your_supabase_url_here":
 
 
 # Stub functions for admin metrics (not yet implemented)
-def _count_error_entries(since: datetime) -> Dict[str, Any]:
-    """Placeholder for error counting - not yet implemented."""
-    return {"count": 0, "note": "Error counting not implemented"}
-
-
-def _collect_latency_stats(since: datetime) -> Dict[str, Any]:
-    """Placeholder for latency stats - not yet implemented."""
-    return {"note": "Latency stats not implemented"}
-
-
 async def _require_conversation_owner(conversation_id: str, current_user: Dict[str, Any]) -> None:
     """Ensure the authenticated user owns the conversation being accessed."""
     general_user_id = _general_conversation_user_id(conversation_id)
@@ -846,23 +850,7 @@ async def _create_reminders_from_actions(
 
 
 # FastAPI app
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Centralized startup/shutdown without deprecated on_event hooks."""
-    # Run sync migrations first (schema must exist before async operations)
-    _run_startup_migrations()
-    await _connect_database()
-    await _run_basic_migrations()
-    # Run independent checks in parallel for faster startup
-    await asyncio.gather(
-        _ensure_paddle_columns(),
-        _initialize_proactivity_engine(),
-        _validate_gemini_api_key_on_startup(),
-    )
-    try:
-        yield
-    finally:
-        await _disconnect_database()
+# FastAPI app (lifespan extracted to core/app_setup.py)
 
 
 
@@ -919,6 +907,13 @@ except Exception:  # pragma: no cover
     from api.chat import router as chat_router  # type: ignore
 
 app.include_router(chat_router)
+
+try:
+    from backend.api.admin import router as admin_router
+except ImportError:
+    from api.admin import router as admin_router  # type: ignore
+
+app.include_router(admin_router)
 
 # Health check endpoints
 try:
@@ -1037,142 +1032,7 @@ except Exception:  # pragma: no cover
     except Exception:  # pragma: no cover
         ReminderSchedulerManager = None  # type: ignore
 
-async def _connect_database():
-    """Connect to the database on startup."""
-    try:
-        await database.connect()
-        # Enable WAL mode for SQLite to improve concurrency
-        db_url_str = str(database.url)
-        if "sqlite" in db_url_str:
-            await database.fetch_val("PRAGMA journal_mode=WAL;")
-            await database.execute("PRAGMA synchronous=NORMAL;")
-        # Initialize audit logger with database
-        init_audit_logger(database)
-    except Exception as e:
-        db_logger.error(f"Database connection failed: {e}", exc_info=True)
-        raise
-
-try:
-    from backend.core.migrations import run_basic_migrations as _run_basic_migrations
-except ImportError:
-    from core.migrations import run_basic_migrations as _run_basic_migrations  # type: ignore
-
-
-async def _disconnect_database():
-    """Disconnect from the database on shutdown."""
-    try:
-        if proactivity_scheduler:
-            await proactivity_scheduler.shutdown(timeout=10.0)
-            app_logger.info("Proactivity scheduler shut down", extra={
-                "event_type": "proactivity_scheduler_shutdown"
-            })
-    except Exception as e:
-        app_logger.warning(
-            f"Proactivity scheduler shutdown failed: {e}",
-            exc_info=True,
-            extra={"event_type": "proactivity_scheduler_shutdown_failed", "error": str(e)},
-        )
-
-    try:
-        global reminder_scheduler
-        if reminder_scheduler:
-            await reminder_scheduler.shutdown(timeout=10.0)
-            app_logger.info("Reminder scheduler shut down", extra={"event_type": "reminder_scheduler_shutdown"})
-    except Exception as e:  # pragma: no cover
-        app_logger.warning(
-            f"Reminder scheduler shutdown failed: {e}",
-            exc_info=True,
-            extra={"event_type": "reminder_scheduler_shutdown_failed", "error": str(e)},
-        )
-
-    try:
-        await wait_for(database.disconnect(), timeout=10.0)
-        db_logger.info("Database connection closed via shutdown event", extra={
-            "event_type": "database_disconnected_shutdown"
-        })
-    except TimeoutError:
-        db_logger.warning(
-            "Timed out disconnecting database; asyncpg pool may still be closing",
-            extra={"event_type": "database_disconnection_timeout"},
-        )
-    except Exception as e:
-        db_logger.error(
-            f"Database disconnection failed on shutdown: {e}",
-            exc_info=True,
-            extra={
-                "event_type": "database_disconnection_failed_shutdown",
-                "error": str(e),
-            },
-        )
-
-async def _initialize_proactivity_engine():
-    """Initialize the hybrid proactivity engine + scheduler."""
-    global proactivity_engine, proactivity_scheduler, reminder_scheduler
-
-    try:
-        proactivity_engine = ProactivityEngine(
-            database,
-            proactivity_realtime_broker,
-            AI_MESSAGE_GENERATOR,
-        )
-        proactivity_scheduler = ProactivitySchedulerManager(proactivity_engine)
-        await proactivity_scheduler.start()
-
-        if ReminderSchedulerManager:
-            reminder_scheduler = ReminderSchedulerManager(proactivity_engine, database)
-            await reminder_scheduler.start()
-    except Exception as e:
-        app_logger.error(
-            f"Failed to initialize proactivity engine: {e}",
-            exc_info=True,
-            extra={
-                "event_type": "proactivity_engine_init_error",
-                "error": str(e),
-            },
-        )
-
-async def _shutdown_proactivity_engine():
-    """Stop the APScheduler + clean up."""
-    global proactivity_scheduler
-
-    try:
-        if proactivity_scheduler:
-            await proactivity_scheduler.shutdown()
-
-        app_logger.info("Proactivity engine stopped", extra={
-            "event_type": "proactivity_engine_shutdown"
-        })
-    except Exception as e:
-        app_logger.error(f"Error stopping proactivity engine: {e}", extra={
-            "event_type": "proactivity_engine_shutdown_error",
-            "error": str(e)
-        })
-
-async def _validate_gemini_api_key_on_startup():
-    # Skip validation if not using Gemini or validation disabled
-    if AI_PROVIDER != "gemini" or not VALIDATE_GEMINI_ON_STARTUP:
-        return
-
-    if not GEMINI_SERVICE.available:
-        app_logger.warning("Gemini validation skipped; no API key configured", extra={
-            "event_type": "gemini_validation_skipped",
-            "reason": "no_api_key"
-        })
-        return
-
-    app_logger.debug("Validating Gemini API key...")
-
-    try:
-        await GEMINI_SERVICE.validate_connection()
-    except Exception as exc:  # pragma: no cover - best effort logging
-        app_logger.error(
-            f"Gemini API validation failed: {exc}",
-            exc_info=True,
-            extra={
-                "event_type": "gemini_validation_failure",
-                "error": str(exc),
-            },
-        )
+# Lifespan and database management extracted to core/app_setup.py
 
 # CORS middleware
 app.add_middleware(
@@ -1195,48 +1055,8 @@ async def get_database():
     """
     yield database
 
-def _get_tool_handlers(user_timezone: Optional[str] = None) -> Dict[str, Any]:
-    """Return a dictionary of tool name -> handler function.
-    
-    This is shared between _execute_function_call and stream_ai_response
-    to avoid code duplication.
-    """
-    return {
-        "fetch_proactivity_summary": lambda u, a, d: _fetch_proactivity_summary(u, a.get("info_type"), d),
-        "list_calendar_events": lambda u, a, d: _list_calendar_events(u, a, d),
-        "create_calendar_event": lambda u, a, d: _create_calendar_event(u, a, d),
-        "update_calendar_event": lambda u, a, d: _update_calendar_event(u, a, d),
-        "delete_calendar_event": lambda u, a, d: _delete_calendar_event(u, a, d),
-        "complete_onboarding": lambda u, a, d: _complete_onboarding(u, a, d, user_timezone=user_timezone, proactivity_scheduler=proactivity_scheduler),
-        "list_plans": lambda u, a, d: _list_plans_tool(u, a, d),
-        "create_plan": lambda u, a, d: _create_plan_tool(u, a, d),
-        "update_plan": lambda u, a, d: _update_plan_tool(u, a, d),
-        "delete_plan": lambda u, a, d: _delete_plan_tool(u, a, d),
-        "list_habits": lambda u, a, d: _list_habits_tool(u, a, d),
-        "create_habit": lambda u, a, d: _create_habit_tool(u, a, d),
-        "update_habit": lambda u, a, d: _update_habit_tool(u, a, d),
-        "delete_habit": lambda u, a, d: _delete_habit_tool(u, a, d),
-        "list_reminders": lambda u, a, d: _list_reminders_tool(u, a, d),
-        "create_reminder": lambda u, a, d: _create_reminder_tool(u, a, d),
-        "update_reminder": lambda u, a, d: _update_reminder_tool(u, a, d),
-        "delete_reminder": lambda u, a, d: _delete_reminder_tool(u, a, d),
-        "delete_latest_reminder": lambda u, a, d: _delete_latest_reminder_tool(u, a, d),
-        "get_workspace_state": lambda u, a, d: _get_workspace_state_tool(u, a, d),
-    }
 
-async def _execute_function_call(
-    function_call: types.FunctionCall,
-    user_id: int,
-    db: databases.Database,
-    user_timezone: Optional[str] = None,
-) -> Dict[str, Any]:
-    handlers = _get_tool_handlers(user_timezone)
-    handler = handlers.get(function_call.name)
-    if not handler:
-        raise HTTPException(status_code=501, detail=f"Unsupported function: {function_call.name}")
-
-    args = function_call.args or {}
-    return await handler(user_id, args, db)
+# Tool execution logic moved to core/tool_execution.py
 
 # API Routes
 
@@ -1244,1393 +1064,5 @@ async def _execute_function_call(
 async def root():
     return {"message": "User Profile API with AI Chat"}
 
-@app.get("/admin/metrics")
-async def get_admin_metrics(
-    request: Request,
-    db: databases.Database = Depends(get_database),
-    current_user: Optional[Dict[str, Any]] = Depends(get_current_user_optional),
-):
-    """Lightweight metrics for local admin use."""
-    is_localhost = _is_localhost_request(request)
 
-    # In production, localhost bypass is disabled (see _is_localhost_request).
-    if current_user:
-        require_admin(current_user)
-    elif not is_localhost:
-        raise HTTPException(status_code=401, detail="Authentication required")
-    now = utcnow()
-    start_of_today = datetime.combine(now.date(), datetime.min.time())
 
-    total_users = await db.fetch_val(
-        sqlalchemy.select(sqlalchemy.func.count()).select_from(users)
-    )
-    messages_today = await db.fetch_val(
-        sqlalchemy.select(sqlalchemy.func.count())
-        .select_from(general_chat_messages)
-        .where(general_chat_messages.c.created_at >= start_of_today)
-    )
-
-    error_stats = _count_error_entries(since=start_of_today)
-    latency_stats = _collect_latency_stats(since=now - timedelta(days=1))
-
-    return {
-        "generated_at": now.replace(tzinfo=timezone.utc).isoformat(),
-        "totals": {"users": int(total_users or 0)},
-        "messages": {"today": int(messages_today or 0)},
-        "errors": error_stats,
-        "latency": latency_stats,
-        "manual_checks": {
-            "stability_mobile_keyboard": "Confirm the mobile keyboard does not cover the chat input.",
-            "onboarding_speed": "Verify signup finishes in under 60 seconds.",
-        },
-    }
-async def stream_ai_response(
-    message: str,
-    conversation_history: Optional[List[Dict[str, Any]]] = None,
-    workspace_context: Optional[str] = None,
-    system_prompt: Optional[str] = None,
-    time_context: Optional[str] = None,
-    model: Optional[str] = None,
-    attachments: Optional[List[ChatAttachment]] = None,
-    *,
-    user_id: int,
-    db: databases.Database,
-    user_timezone: Optional[str] = None,
-    context_cache_id: Optional[int] = None,
-    maps_enabled: bool = False,
-    maps_latitude: Optional[float] = None,
-    maps_longitude: Optional[float] = None,
-    maps_widget: bool = False,
-    search_enabled: bool = True,
-    should_generate_title: bool = False,
-    reasoning_mode: bool = False,
-    reminders_enabled: bool = False,
-    tools: Optional[List[types.Tool]] = None,
-    plan_tier: Optional[str] = None,
-    provider_routing: Optional[Dict[str, Any]] = None,
-) -> AsyncGenerator[Tuple[str, Any], None]:
-    """Yield token chunks using the configured AI provider."""
-
-    conversation_history = normalize_conversation_history(conversation_history)
-    history_token_budget = tier_conversation_token_limit(plan_tier)
-
-    # Determine whether this turn is part of a reminder/plan/habit flow.
-    # Uses the current message plus a short window of recent history.
-    intent_window_text = build_intent_window_text(message, conversation_history)
-
-    request_structured_reminders = _should_request_structured_reminders(intent_window_text)
-    needs_structured_tools = reminders_enabled or request_structured_reminders or _needs_structured_tools(intent_window_text)
-
-    # Enable structured tools if keyword heuristics triggered
-    if needs_structured_tools:
-        request_structured_reminders = True
-
-    # Auto-enable search based on heuristic if not explicitly requested
-    if not search_enabled and _should_enable_search(message):
-        api_logger.info(f"Auto-enabling search for message: {message[:50]}...")
-        search_enabled = True
-
-    explicit_model = (model or "").strip()
-    normalized_model = explicit_model.lower()
-    explicit_model_provided = bool(explicit_model) and normalized_model not in {"lite", "gray-lite", "pro", "gray-pro"}
-
-    # Check for onboarding tools so we can route through a provider that supports
-    # real function calling (Gemini) instead of relying on brittle JSON parsing.
-    is_onboarding_tool = _has_onboarding_tool_hybrid(tools)
-
-    # Use extracted function for provider/model determination
-    provider, model, explicit_model_is_tier_alias = determine_provider_and_model(
-        model=model,
-        openrouter_available=bool(OPENROUTER_SERVICE and OPENROUTER_SERVICE.available),
-        gemini_default_model=GEMINI_SERVICE.default_model if GEMINI_SERVICE else GEMINI_DEFAULT_MODEL,
-        needs_structured_tools=needs_structured_tools,
-        is_onboarding_tool=is_onboarding_tool,
-        maps_enabled=maps_enabled,
-    )
-    
-    # Add maps tool if enabled
-    if maps_enabled:
-        tools = add_maps_tool_if_needed(tools, maps_enabled)
-
-
-    # Check usage limits (now that we know the effective model)
-    if user_id is not None and db is not None:
-        t0_limits = time.perf_counter()
-        tracker = UsageTracker(db)
-        try:
-            await tracker.check_limits(user_id, model=model)
-        except UsageLimitExceeded as e:
-            reset_msg = ""
-            if e.next_reset_time:
-                reset_msg = f"\n\nLimit resets at {e.next_reset_time.strftime('%Y-%m-%d %H:%M')} UTC."
-
-            limit_msg = (
-                f"**Usage Limit Reached**\n\n"
-                f"I've hit the usage cap for your **{e.tier.capitalize()}** plan. {e.message}{reset_msg}\n\n"
-                f"To keep chatting without interruption, consider upgrading to a higher tier, or wait for the limit to reset."
-            )
-            # Yield the message as a delta so it appears, then finish.
-            yield ("delta", limit_msg)
-            yield ("final", {"text": limit_msg, "grounding_metadata": None})
-            return
-        limits_ms = (time.perf_counter() - t0_limits) * 1000
-        if limits_ms > 50:
-            api_logger.info(f"[Timing] Usage limits check: {limits_ms:.1f}ms")
-
-    # Initialize cached contents
-    cached_contents = None
-    cache_text_block: Optional[str] = None
-    if context_cache_id:
-        cache_record = await _load_context_cache(context_cache_id, user_id, db)
-        cached_contents = _context_cache_contents(cache_record)
-        cache_text = _row_get(cache_record, "content")
-        if isinstance(cache_text, str) and cache_text.strip():
-            cache_text_block = f"Context cache:\n{cache_text.strip()}"
-
-    workspace_with_cache = workspace_context
-    if cache_text_block:
-        workspace_with_cache = "\n\n".join(filter(None, [workspace_context, cache_text_block]))
-
-    try:
-        calendar_context_block = await build_calendar_context(
-            user_id=user_id,
-            db=db,
-            user_timezone=user_timezone,
-            time_context=time_context,
-        )
-    except Exception as error:  # pragma: no cover - best effort logging
-        api_logger.debug(
-            f"Failed to build calendar context for user {user_id}: {error}",
-            extra={"event_type": "calendar_context_error", "user_id": user_id, "error": str(error)},
-        )
-        calendar_context_block = None
-
-    if calendar_context_block:
-        workspace_with_cache = "\n\n".join(filter(None, [workspace_with_cache, calendar_context_block]))
-
-    effective_system_prompt = system_prompt
-    if not reminders_enabled:
-        effective_system_prompt = (effective_system_prompt or "") + "\n\n" + (
-            "CAPABILITY NOTE:\n"
-            "- Reminders & plans are disabled for this session unless explicitly enabled.\n"
-            "- Do not claim that you scheduled/set reminders or created plans/habits.\n"
-            "- If the user wants reminders/plans, ask them to enable the Reminders & Plans toggle."
-        )
-
-    # Prepare tools for all providers
-    t0_media = time.perf_counter()
-    media_attachments = await _resolve_media_attachments(db, attachments, user_id)
-    media_ms = (time.perf_counter() - t0_media) * 1000
-    if media_ms > 50:
-        api_logger.info(f"[Timing] Media attachments: {media_ms:.1f}ms")
-    
-    maps_tools, maps_tool_config = _build_maps_tool_and_config(
-        maps_enabled,
-        maps_latitude,
-        maps_longitude,
-        maps_widget,
-    )
-
-    if tools is not None:
-        base_tools = tools
-    else:
-        base_tools = DEFAULT_CHAT_TOOLS
-        if not search_enabled:
-            base_tools = [t for t in base_tools if t != SEARCH_TOOL]
-    
-    # Common tool list
-    tool_list = [*base_tools, *maps_tools]
-    # Add PLAN_TOOLS and CALENDAR_TOOLS only when message intent suggests scheduling operations
-    # BUT skip for onboarding flow - it only needs complete_onboarding tool, extra tools add latency
-    if needs_structured_tools and not is_onboarding_tool:
-        tool_list = [*tool_list, *PLAN_TOOLS, *CALENDAR_TOOLS]
-    effective_tool_config = maps_tool_config
-
-    # Initialize response_format
-    # If tools are available (which they are), disable legacy JSON mode to prefer tool use.
-    # Exception: if we specifically need JSON mode for some reason, but for reminders/plans we now have tools.
-    response_format = None
-    
-    # DEBUG: Log the final provider selection
-    api_logger.info(
-        f"Provider selected: {provider}, Model: {model}",
-        extra={"event_type": "ai_provider_selection", "provider": provider, "model": model}
-    )
-
-    if provider == "openrouter":
-        if not OPENROUTER_SERVICE.available:
-            # Lite tier requires OpenRouter - fail if unavailable
-            error_msg = "OpenRouter service is currently unavailable. Please try again later or switch to Pro tier."
-            yield ("delta", error_msg)
-            yield ("final", {"text": error_msg, "grounding_metadata": None})
-            return
-        else:
-            try:
-                t0_provider = time.perf_counter()
-                
-                # HYBRID URL CONTEXT: When URLs are detected in the message,
-                # use Gemini Flash Lite to fetch URL content, then pass to OpenRouter.
-                message_urls = _extract_urls_from_message(message)
-                if message_urls and GEMINI_SERVICE.available:
-                    api_logger.info(
-                        f"[URL Context] Detected {len(message_urls)} URLs, fetching with Gemini",
-                        extra={"event_type": "url_context_hybrid_start", "url_count": len(message_urls)}
-                    )
-                    url_content, url_metadata = await _fetch_url_context_with_gemini_hybrid(
-                        GEMINI_SERVICE, message, message_urls, workspace_with_cache, time_context
-                    )
-                    if url_content:
-                        # Inject URL content as context for OpenRouter
-                        url_context_section = f"--- URL Content ---\n{url_content}\n--- End URL Content ---"
-                        workspace_with_cache = "\n\n".join(filter(None, [
-                            workspace_with_cache,
-                            url_context_section,
-                        ]))
-                        api_logger.info(
-                            "[URL Context] Injected URL content into workspace context",
-                            extra={"event_type": "url_context_injected", "content_len": len(url_content)}
-                        )
-                
-                # HYBRID FLOW: When structured tools are needed (reminders, plans, habits),
-                # use Gemini Flash for fast tool execution, then OpenRouter for personality response.
-                # Exception: onboarding flow stays native to preserve tool state handling.
-                use_hybrid_tools = needs_structured_tools and not is_onboarding_tool and GEMINI_SERVICE.available
-                
-                hybrid_tool_results: List[Dict[str, Any]] = []
-                hybrid_tool_cards: List[Dict[str, Any]] = []
-                hybrid_workspace_context = workspace_with_cache
-                
-                if use_hybrid_tools:
-                    api_logger.info(
-                        "[Hybrid] Using Gemini Flash for tool execution",
-                        extra={"user_id": user_id, "model": model}
-                    )
-                    
-                    # Inject explicit tool usage instructions so the model knows to CALL the tools
-                    tool_instruction = """
-You have tools available and MUST use them when the user requests:
-- create_plan: Use for plans/tasks AND reminders (reminders are plans with an optional `reminder_at`)
-- create_habit: Use when user wants to track a recurring habit
-- update_plan/update_habit: Use when user wants to modify existing items (including setting/clearing `reminder_at`)
-- delete_plan/delete_habit: Use when user wants to remove items
-- list_plans/list_habits/list_reminders: Use to look up existing items when needed
-
-When the user asks for a reminder: create/update a plan for the actual event time, then ask how long before the start they want to be reminded, and set `reminder_at` (ISO 8601 with timezone offset).
-
-CRITICAL: When the user asks to create/update a plan or habit, you MUST call the appropriate tool. Do not just describe what you would do - actually invoke the function."""
-                    hybrid_system_prompt = (effective_system_prompt or "") + "\n\n" + tool_instruction
-                    
-                    # Execute tools with Gemini Flash
-                    hybrid_tool_results, hybrid_tool_cards, onboarding_done = await _execute_tools_with_gemini_flash_hybrid(
-                        GEMINI_SERVICE,
-                        _execute_function_call,
-                        message,
-                        conversation_history,
-                        tool_list,
-                        hybrid_system_prompt,
-                        time_context,
-                        workspace_with_cache,
-                        user_id,
-                        db,
-                        user_timezone,
-                        history_token_budget,
-                    )
-                    
-                    # Emit tool cards (reminders, plans, habits) to frontend
-                    for card in hybrid_tool_cards:
-                        yield ("reminders", [card])
-                    
-                    # If tools were executed, inject results into context for OpenRouter
-                    if hybrid_tool_results:
-                        tool_context = _format_tool_results_for_context(hybrid_tool_results)
-                        if tool_context:
-                            hybrid_workspace_context = "\n\n".join(filter(None, [
-                                workspace_with_cache,
-                                tool_context,
-                            ]))
-                        
-                        api_logger.info(
-                            f"[Hybrid] Tool execution complete: {len(hybrid_tool_results)} tools executed",
-                            extra={"user_id": user_id, "tools": [tr["tool_name"] for tr in hybrid_tool_results]}
-                        )
-                    
-                    # For hybrid mode, don't pass tools to OpenRouter (they're already executed)
-                    # This ensures OpenRouter generates conversation, not tool calls
-                    tool_list = []
-                
-                # Use extracted stream_openrouter_response function for all OpenRouter streaming
-                async for event_type, data in stream_openrouter_response(
-                    openrouter_service=OPENROUTER_SERVICE,
-                    message=message,
-                    conversation_history=conversation_history,
-                    workspace_context=hybrid_workspace_context,
-                    system_prompt=effective_system_prompt,
-                    time_context=time_context,
-                    model=model,
-                    tool_list=tool_list,
-                    search_enabled=search_enabled,
-                    reasoning_mode=reasoning_mode,
-                    media_attachments=media_attachments,
-                    history_token_budget=history_token_budget,
-                    user_id=user_id,
-                    needs_structured_tools=needs_structured_tools,
-                    is_onboarding_tool=is_onboarding_tool,
-                    response_format=response_format,
-                    provider_routing=provider_routing,
-                    execute_function_call_fn=_execute_function_call,
-                    db=db,
-                    user_timezone=user_timezone,
-                    hybrid_tool_results=hybrid_tool_results if use_hybrid_tools else None,
-                    hybrid_tool_cards=None,  # Already emitted above
-                    usage_tracker_cls=UsageTracker,
-                ):
-                    yield (event_type, data)
-                return
-                
-            except Exception as openrouter_error:
-                api_logger.error(
-                    f"OpenRouter streaming failed: {type(openrouter_error).__name__}: {openrouter_error}",
-                    extra={
-                        "event_type": "ai_provider_error",
-                        "provider": provider,
-                        "error": str(openrouter_error),
-                    },
-                    exc_info=True,
-                )
-                yield ("error", {"message": "AI service encountered an error. Please try again."})
-                return
-
-    # URL Context: Add URL context tool when URLs are detected in the message
-    message_urls = _extract_urls_from_message(message)
-    if provider == "gemini" and message_urls:
-        tool_list = add_url_context_tool_if_needed(tool_list or [], message_urls, URL_CONTEXT_TOOL)
-
-    # Gemini-specific tool list adjustment (consolidating)
-    if provider == "gemini" and tool_list:
-        tool_list = consolidate_gemini_tools(tool_list)
-
-    
-    grounding_metadata: Optional[Dict[str, Any]] = None
-    # Only invoke Gemini when it is the selected provider
-    if provider == "gemini" and GEMINI_SERVICE.available:
-        async for event_type, data in stream_gemini_response(
-            gemini_service=GEMINI_SERVICE,
-            message=message,
-            conversation_history=conversation_history,
-            workspace_context=workspace_with_cache,
-            system_prompt=effective_system_prompt,
-            time_context=time_context,
-            model=model,
-            tool_list=tool_list,
-            tool_config=effective_tool_config,
-            reasoning_mode=reasoning_mode,
-            media_attachments=media_attachments,
-            cached_contents=cached_contents,
-            history_token_budget=history_token_budget,
-            user_id=user_id,
-            response_format=response_format,
-            execute_function_call_fn=_execute_function_call,
-            db=db,
-            user_timezone=user_timezone,
-            usage_tracker_cls=UsageTracker,
-        ):
-            yield (event_type, data)
-        return
-
-    raise RuntimeError("AI service unavailable")
-
-async def generate_ai_response(
-    message: str,
-    conversation_history: List[Dict[str, Any]] = None,
-    workspace_context: Optional[str] = None,
-    system_prompt: Optional[str] = None,
-    time_context: Optional[str] = None,
-    model: Optional[str] = None,
-    attachments: Optional[List[ChatAttachment]] = None,
-    user_id: Optional[int] = None,
-    db: Optional[databases.Database] = None,
-    response_schema: Optional[Dict[str, Any]] = None,
-    response_mime_type: Optional[str] = None,
-    user_timezone: Optional[str] = None,
-    *,
-    context_cache_id: Optional[int] = None,
-    maps_enabled: bool = False,
-    maps_latitude: Optional[float] = None,
-    maps_longitude: Optional[float] = None,
-    maps_widget: bool = False,
-    search_enabled: bool = True,
-    should_generate_title: bool = False,
-    reasoning_mode: bool = False,
-    tools: Optional[List[types.Tool]] = None,
-    plan_tier: Optional[str] = None,
-) -> Tuple[str, Optional[Dict[str, Any]]]:
-    """Generate a structured response using the configured AI provider."""
-    # Check usage limits if user context is available
-    if user_id is not None and db is not None:
-        tracker = UsageTracker(db)
-        try:
-            await tracker.check_limits(user_id)
-        except UsageLimitExceeded as e:
-            reset_msg = ""
-            if e.next_reset_time:
-                reset_msg = f"\n\nLimit resets at {e.next_reset_time.strftime('%Y-%m-%d %H:%M')} UTC."
-            
-            limit_msg = (
-                f"**Usage Limit Reached**\n\n"
-                f"I've hit the usage cap for your **{e.tier.capitalize()}** plan. {e.message}{reset_msg}\n\n"
-                f"To keep chatting without interruption, consider upgrading to a higher tier, or wait for the limit to reset."
-            )
-            return limit_msg, None
-
-    conversation_history = normalize_conversation_history(conversation_history)
-    history_token_budget = tier_conversation_token_limit(plan_tier)
-    if not (message or "").strip() and not conversation_history and not (attachments or []):
-        message = "Let's get started."
-
-    # Determine whether this turn is part of a reminder/plan/habit flow.
-    intent_window_text = build_intent_window_text(message, conversation_history)
-
-    request_structured_reminders = _should_request_structured_reminders(intent_window_text)
-    needs_structured_tools = request_structured_reminders or _needs_structured_tools(intent_window_text)
-    if needs_structured_tools:
-        request_structured_reminders = True
-
-    explicit_model = (model or "").strip()
-    normalized_model = explicit_model.lower()
-    explicit_model_provided = bool(explicit_model) and normalized_model not in {"lite", "gray-lite", "pro", "gray-pro"}
-
-    # Use extracted function for provider/model determination
-    # Note: is_onboarding_tool is False for non-streaming (no onboarding in non-streaming)
-    provider, model, explicit_model_is_tier_alias = determine_provider_and_model(
-        model=model,
-        openrouter_available=bool(OPENROUTER_SERVICE and OPENROUTER_SERVICE.available),
-        gemini_default_model=GEMINI_SERVICE.default_model if GEMINI_SERVICE else GEMINI_DEFAULT_MODEL,
-        needs_structured_tools=needs_structured_tools or bool(tools),
-        is_onboarding_tool=False,
-        maps_enabled=maps_enabled,
-    )
-
-    cached_contents = None
-    cache_text_block: Optional[str] = None
-    if context_cache_id:
-        if user_id is None or db is None:
-            raise HTTPException(status_code=400, detail="User context is required for cached contexts.")
-        cache_record = await _load_context_cache(context_cache_id, user_id, db)
-        cached_contents = _context_cache_contents(cache_record)
-        cache_text = _row_get(cache_record, "content")
-        if isinstance(cache_text, str) and cache_text.strip():
-            cache_text_block = f"Context cache:\n{cache_text.strip()}"
-
-    workspace_with_cache = workspace_context
-    if cache_text_block:
-        workspace_with_cache = "\n\n".join(filter(None, [workspace_context, cache_text_block]))
-    
-    if user_id is not None and db is not None:
-        try:
-            calendar_context_block = await build_calendar_context(
-                user_id=user_id,
-                db=db,
-                user_timezone=user_timezone,
-                time_context=time_context,
-            )
-        except Exception as error:  # pragma: no cover - best effort logging
-            api_logger.debug(
-                f"Failed to build calendar context for user {user_id}: {error}",
-                extra={"event_type": "calendar_context_error", "user_id": user_id, "error": str(error)},
-            )
-            calendar_context_block = None
-
-        if calendar_context_block:
-            workspace_with_cache = "\n\n".join(filter(None, [workspace_with_cache, calendar_context_block]))
-
-    effective_system_prompt = system_prompt
-
-    # Prepare tools and attachments for all providers
-    attachment_payloads: List[GeminiAttachment] = []
-    if attachments:
-        if user_id is None or db is None:
-            raise HTTPException(status_code=400, detail="User information is required for attachments.")
-        attachment_payloads = await _resolve_media_attachments(db, attachments, user_id)
-
-    tool_list: List[types.Tool] = []
-    effective_tool_config: Optional[types.ToolConfig] = None
-    
-    maps_tools, maps_tool_config = _build_maps_tool_and_config(
-        maps_enabled,
-        maps_latitude,
-        maps_longitude,
-        maps_widget,
-    )
-
-    if tools is not None:
-        base_tools = tools
-    else:
-        base_tools = DEFAULT_CHAT_TOOLS
-        if not search_enabled:
-            base_tools = [t for t in base_tools if t != SEARCH_TOOL]
-    tool_list = [*base_tools, *maps_tools]
-    # Add PLAN_TOOLS and CALENDAR_TOOLS only when message intent suggests scheduling operations
-    # BUT skip for onboarding flow - it only needs complete_onboarding tool, extra tools add latency
-    is_onboarding_tool = _has_onboarding_tool_hybrid(tools)
-
-    if needs_structured_tools and not is_onboarding_tool:
-        tool_list = [*tool_list, *PLAN_TOOLS, *CALENDAR_TOOLS]
-    effective_tool_config = maps_tool_config
-
-    # Initialize response_format
-    # If tools are available (which they are), disable legacy JSON mode to prefer tool use.
-    # Exception: if we specifically want JSON mode for some reason, but for reminders/plans we now have tools.
-    response_format = None
-
-    if provider == "openrouter":
-        if not OPENROUTER_SERVICE.available:
-            api_logger.warning(
-                "OpenRouter unavailable; falling back to Gemini",
-                extra={"event_type": "ai_provider_unavailable", "provider": provider},
-            )
-            # Fall back to Gemini
-            provider = "gemini"
-            if not model or "/" in model:
-                model = GEMINI_DEFAULT_MODEL
-        else:
-            # Generate image descriptions for OpenRouter (non-vision models like DeepSeek)
-            effective_message = message
-            if attachment_payloads:
-                api_logger.info(
-                    "Generating image descriptions for OpenRouter model (non-streaming)",
-                    extra={"event_type": "ai_image_description_start", "provider": provider, "count": len(attachment_payloads)},
-                )
-                image_desc = await _generate_image_descriptions(attachment_payloads)
-                if image_desc:
-                    effective_message = image_desc + message
-                    api_logger.info(
-                        f"Added image descriptions to message for OpenRouter (non-streaming)",
-                        extra={"event_type": "ai_image_description_added", "count": len(attachment_payloads)},
-                    )
-            try:
-                # response_format initialized in outer scope
-                grounding_metadata = None  # Initialize before potential use
-                response_text = await OPENROUTER_SERVICE.generate(
-                    effective_message,
-                    conversation_history,
-                    workspace_with_cache,
-                    effective_system_prompt,
-                    time_context,
-                    model,
-                    include_usage=False,
-                    response_format=response_format,
-                    history_token_budget=history_token_budget,
-                )
-                if response_format:
-                    text, structured_reminders = _materialize_structured_reminders(response_text)
-                    # Reminders sent separately, not embedded in text
-                    response_text = text
-                    # Return reminders in metadata for non-streaming responses
-                    grounding_metadata = grounding_metadata or {}
-                    if structured_reminders:
-                        grounding_metadata["reminders"] = structured_reminders
-                if not response_text:
-                    raise RuntimeError("AI response was empty")
-                return response_text, grounding_metadata
-            except Exception as openrouter_error:
-                api_logger.error(
-                    f"OpenRouter generation failed: {type(openrouter_error).__name__}: {openrouter_error}",
-                    extra={
-                        "event_type": "ai_provider_error",
-                        "provider": provider,
-                        "error": str(openrouter_error),
-                    },
-                    exc_info=True,
-                )
-                raise  # Propagate the error instead of falling back
-
-    # Ensure we have an explicit tool_config when tools are present
-    # Keep function calling enabled so the model can return calls we execute manually
-    if tool_list and not effective_tool_config:
-        effective_tool_config = types.ToolConfig(
-            function_calling_config=types.FunctionCallingConfig(
-                mode=types.FunctionCallingConfigMode.AUTO
-            )
-        )
-
-    # Gemini-specific tool list adjustment (consolidating)
-    if provider == "gemini" and tool_list:
-        tool_list = consolidate_gemini_tools(tool_list)
-
-    
-    grounding_metadata: Optional[Dict[str, Any]] = None
-    # Only invoke Gemini when it is the selected provider (or when a previous
-    # provider explicitly fell back by setting provider='gemini').
-    if provider == "gemini" and GEMINI_SERVICE.available:
-        try:
-            response = await GEMINI_SERVICE.generate(
-                message,
-                conversation_history,
-                workspace_with_cache,
-                effective_system_prompt,
-                time_context,
-                model,
-                attachments=attachment_payloads,
-                extra_contents=cached_contents,
-                response_schema=response_schema,
-                response_mime_type=response_mime_type,
-                tools=tool_list,
-                tool_config=effective_tool_config,
-                reasoning_mode=reasoning_mode,
-                history_token_budget=history_token_budget,
-            )
-
-            # Track usage
-            if user_id is not None and db is not None and response.usage_metadata:
-                tracker = UsageTracker(db)
-                await tracker.track_usage(
-                    user_id,
-                    response.usage_metadata.prompt_token_count or 0,
-                    response.usage_metadata.candidates_token_count or 0
-                )
-
-            if response.candidates:
-                candidate = response.candidates[0]
-                for part in candidate.content.parts:
-                    if part.function_call:
-                        try:
-                            await _execute_function_call(part.function_call, user_id, db, user_timezone=user_timezone)
-                        except Exception as e:
-                            api_logger.error(f"Tool execution failed: {e}")
-
-            if response.candidates:
-                candidate = response.candidates[0]
-                if candidate.grounding_metadata:
-                    grounding_metadata = candidate.grounding_metadata.model_dump(exclude_none=True)
-            attempts = 0
-            while attempts < 3:
-                function_call = _extract_function_call(response)
-                if not function_call:
-                    break
-                if user_id is None or db is None:
-                    raise HTTPException(
-                        status_code=400,
-                        detail="User context is required to execute function calls.",
-                    )
-                tool_result = await _execute_function_call(function_call, user_id, db, user_timezone=user_timezone)
-                tool_contents = _build_function_call_contents(function_call, tool_result)
-                extra_payloads = _merge_extra_contents(
-                    cached_contents,
-                    tool_contents,
-                )
-                response = await GEMINI_SERVICE.generate(
-                    message,
-                    conversation_history,
-                    workspace_with_cache,
-                    system_prompt,
-                    time_context,
-                    model,
-                    attachments=attachment_payloads,
-                    extra_contents=extra_payloads,
-                    response_schema=response_schema,
-                    response_mime_type=response_mime_type,
-                    tools=tool_list,
-                    tool_config=effective_tool_config,
-                    reasoning_mode=reasoning_mode,
-                    history_token_budget=history_token_budget,
-                )
-                
-                # Track usage for follow-up generation
-                if user_id is not None and db is not None and response.usage_metadata:
-                    tracker = UsageTracker(db)
-                    await tracker.track_usage(
-                        user_id,
-                        response.usage_metadata.prompt_token_count or 0,
-                        response.usage_metadata.candidates_token_count or 0
-                    )
-
-                if response.candidates:
-                    candidate = response.candidates[0]
-                    payload = _candidate_grounding_payload(candidate)
-                    if payload:
-                        grounding_metadata = payload
-                attempts += 1
-            final_text = _candidate_text(response.candidates[0]) if response.candidates else ""
-            if final_text:
-                return final_text, grounding_metadata
-            raise RuntimeError("AI response was empty")
-        except Exception as gemini_error:  # pragma: no cover - best effort logging
-            print(f"[Gemini] Unable to generate response: {gemini_error}")
-            raise
-    raise HTTPException(status_code=503, detail="AI service unavailable")
-
-async def generate_chat_starter(
-    request: Request,
-    payload: ChatStarterRequest,
-    current_user: Dict[str, Any] = Depends(get_current_user),
-) -> ChatStarterResponse:
-    """Return an AI-authored greeting for the General workspace."""
-    require_same_user(payload.user_id, current_user)
-    prompt_locale = _prompt_locale_from_request(request)
-    profile_context = _starter_profile_context(payload)
-    prompt = _build_starter_prompt(payload, profile_context, prompt_locale)
-    fallback_message = _starter_fallback_message(payload)
-    try:
-        ai_logger.info(
-            "Generating chat starter",
-            extra={
-                "event_type": "chat_starter_request",
-                "user_id": payload.user_id,
-                "has_profile_context": bool(profile_context),
-            },
-        )
-        response_text, _ = await generate_ai_response(
-            prompt,
-            conversation_history=[],
-            workspace_context=payload.workspace_context,
-            system_prompt=payload.system_prompt,
-            time_context=payload.time_context,
-            model=None,
-            attachments=None,
-            user_id=payload.user_id,
-            db=database,
-            search_enabled=False,
-            should_generate_title=False,
-        )
-        cleaned = (response_text or "").strip()
-        if not cleaned:
-            raise RuntimeError("Starter response was empty")
-        return ChatStarterResponse(message=cleaned, used_fallback=False)
-    except Exception as error:  # pragma: no cover - best effort logging
-        ai_logger.error(
-            "Chat starter generation failed",
-            extra={
-                "event_type": "chat_starter_error",
-                "event_type": "chat_starter_error",
-                "user_id": payload.user_id,
-            },
-            exc_info=True,
-        )
-        return ChatStarterResponse(message=fallback_message, used_fallback=True)
-
-# AI Chat endpoints
-async def create_chat_title(
-    request: Request,
-    payload: ChatTitleRequest,
-    current_user: Dict[str, Any] = Depends(get_current_user),
-):
-    """Generate a chat title suggestion using local heuristics."""
-    _ = current_user  # Auth enforced via dependency
-    suggestion: Optional[str] = None
-    try:
-        trimmed = (payload.message or "").strip()
-        suggestion = _fallback_title_from_message(trimmed) if trimmed else None
-    except Exception as error:  # pragma: no cover - best effort logging
-        print(f"Title generation error: {error}")
-    if suggestion:
-        return ChatTitleResponse(title=suggestion)
-    return ChatTitleResponse(title=_fallback_title_from_message(payload.message))
-
-async def chat_endpoint(
-
-    request: Request,
-    chat_request: ChatRequest,
-    background_tasks: BackgroundTasks,
-    current_user: Dict[str, Any] = Depends(get_current_user),
-    db: databases.Database = Depends(get_database)
-):
-    """Send a message to AI and get a response"""
-
-    # Force the request user to the authenticated user to avoid mismatches from stale client state.
-    authenticated_user_id = current_user["id"]
-    chat_request.user_id = authenticated_user_id
-    prompt_locale = _prompt_locale_from_request(request)
-
-    # Set request context for logging
-    correlation_id = str(uuid4())
-    set_request_context(correlation_id, str(chat_request.user_id)[:8])
-
-    api_logger.info("Chat request received", extra={
-        "event_type": "chat_request_start",
-        "user_id": chat_request.user_id,
-        "message_length": len(chat_request.message),
-        "conversation_id": chat_request.conversation_id,
-        "model": chat_request.model,
-        "correlation_id": correlation_id
-    })
-
-    # Initialize tools (currently unused in non-streaming endpoint, but required by generate_ai_response)
-    tool_list = None
-
-    try:
-        # Generate a title for the chat session (only if requested)
-        session_title = _fallback_title_from_message(chat_request.message)
-
-        # Determine conversation_id
-        requested_conversation_id = chat_request.conversation_id
-        valid_requested_conversation_id = _is_valid_uuid(requested_conversation_id)
-        if requested_conversation_id and not valid_requested_conversation_id:
-            conversation_id = requested_conversation_id
-        else:
-            conversation_id = await get_or_create_conversation(
-                requested_conversation_id if valid_requested_conversation_id else None,
-                chat_request.user_id,
-                title=session_title,
-            )
-
-        # Get conversation history for context
-        conversation_history: List[Dict[str, Any]] = await _load_conversation_history(conversation_id, chat_request.user_id)
-
-        # For thread conversations, inject General chat context as background memory.
-        is_general_conversation = _general_conversation_user_id(conversation_id) is not None
-        if not is_general_conversation:
-            try:
-                general_history = await _load_general_conversation_history(chat_request.user_id)
-                if general_history:
-                    recent_general = general_history[-10:]
-                    if recent_general:
-                        general_context_marker = {
-                            "role": "user",
-                            "text": "[CONTEXT FROM GENERAL CHAT - This is background context from the user's main conversation area. Use this to maintain continuity and remember what the user has discussed previously.]"
-                        }
-                        general_context_end = {
-                            "role": "model",
-                            "text": "[I understand and will remember this context while responding in this thread.]"
-                        }
-                        conversation_history = [general_context_marker] + recent_general + [general_context_end] + conversation_history
-            except Exception as e:
-                api_logger.debug(f"Could not load general context: {e}", extra={"user_id": chat_request.user_id})
-
-        # Save user message to local conversation store (after capturing prior history),
-        # but avoid writing an identical message twice in a row (e.g., when a fallback
-        # request replays the same prompt after a streaming failure).
-        user_message_payload: Dict[str, Any] = {
-            "role": "user",
-            "text": chat_request.message
-        }
-        last_history_entry: Optional[Dict[str, Any]] = conversation_history[-1] if conversation_history else None
-        should_persist_user = not (
-            last_history_entry
-            and last_history_entry.get("role") in {"user", "assistant", "model"}
-            and (last_history_entry.get("text") or "") == chat_request.message
-        )
-        if is_general_conversation:
-             # General chat messages are not handled by save_conversation_message
-             # We must manually insert them using the general chat persistence logic
-             if should_persist_user:
-                 await _insert_general_conversation_message(
-                     user_id=authenticated_user_id,
-                     role="user",
-                     text=chat_request.message
-                 )
-        elif should_persist_user:
-            await save_conversation_message(conversation_id, user_message_payload, user_id=chat_request.user_id)
-
-        # Enforce tier restrictions
-        # Only Voyager and Pioneer users can use reasoning mode.
-        normalized_tier = normalize_plan_tier(
-            current_user.get("plan_tier"),
-            current_user.get("role"),
-            current_user.get("subscription_expires_at")
-        )
-
-        # If user requested reasoning but is not eligible, disable it silently (or we could raise 403)
-        effective_reasoning_mode = chat_request.reasoning_mode
-        if effective_reasoning_mode and normalized_tier not in ("voyager", "pioneer"):
-            api_logger.info(f"Disabling reasoning mode for user {chat_request.user_id} (tier: {normalized_tier})")
-            effective_reasoning_mode = False
-
-        effective_model, model_coerced = coerce_model_for_tier(chat_request.model, normalized_tier)
-        if model_coerced:
-            api_logger.info(
-                "Coerced requested model for user tier",
-                extra={
-                    "event_type": "model_coerced",
-                    "user_id": chat_request.user_id,
-                    "plan_tier": normalized_tier,
-                    "requested_model": chat_request.model,
-                    "effective_model": effective_model,
-                },
-            )
-
-        # Generate AI response
-        ai_response, grounding_metadata = await generate_ai_response(
-            chat_request.message,
-            conversation_history,
-            chat_request.context,
-            chat_request.system_prompt,
-            chat_request.time_context,
-            effective_model,
-            chat_request.attachments,
-            chat_request.user_id,
-            db,
-            response_schema=chat_request.response_json_schema,
-            response_mime_type=chat_request.response_mime_type,
-            context_cache_id=chat_request.context_cache_id,
-            maps_enabled=chat_request.maps_enabled,
-            maps_latitude=chat_request.maps_latitude,
-            maps_longitude=chat_request.maps_longitude,
-            maps_widget=chat_request.maps_widget,
-            search_enabled=chat_request.web_search_enabled,
-            should_generate_title=chat_request.should_generate_title,
-            reasoning_mode=effective_reasoning_mode,
-            tools=tool_list,
-            user_timezone=chat_request.timezone,
-            plan_tier=normalized_tier,
-        )
-
-        # Save AI response (including grounding metadata for downstream UI)
-        assistant_message_payload: Dict[str, Any] = {
-            "role": "model",
-            "text": ai_response,
-        }
-        if grounding_metadata:
-            assistant_message_payload["grounding_metadata"] = grounding_metadata
-        assistant_message_id = None
-        if is_general_conversation:
-            # General Chat persistence
-            assistant_message_id = await _insert_general_conversation_message(
-                 user_id=authenticated_user_id,
-                 role="model",
-                 text=ai_response,
-                 grounding_metadata=grounding_metadata
-            )
-        else:
-             # Regular thread persistence
-             assistant_message_id = await save_conversation_message(conversation_id, assistant_message_payload, user_id=authenticated_user_id)
-
-        # Generate title inline so it's returned with the response.
-        # This adds ~100-300ms latency but only on first message of new conversations.
-        final_title = session_title
-        if chat_request.should_generate_title:
-            try:
-                generated_title = await _generate_chat_title_inline(
-                    chat_request.message,
-                    ai_response,
-                    prompt_locale=prompt_locale,
-                )
-                if generated_title:
-                    final_title = generated_title
-                    # Store in DB in background (non-blocking)
-                    background_tasks.add_task(
-                        update_conversation_title,
-                        conversation_id,
-                        generated_title,
-                    )
-            except Exception as title_error:
-                api_logger.warning(
-                    f"Inline title generation failed: {title_error}",
-                    extra={"event_type": "title_generation_error"}
-                )
-                # Fall back to session_title, already set above
-
-        return ChatResponse(
-            response=ai_response,
-            conversation_id=conversation_id,
-            grounding_metadata=grounding_metadata,
-            title=final_title,
-            message_id=assistant_message_id,
-        )
-
-    except Exception as e:
-        api_logger.error(f"CHAT_ERROR_DEBUG: Chat endpoint failed: {e}", exc_info=True, extra={"user_id": chat_request.user_id})
-        raise HTTPException(status_code=500, detail=f"Chat error: {str(e)}")
-
-ONBOARDING_SYSTEM_PROMPT = load_prompt_from_json(
-    GLOBAL_SYSTEM_PROMPTS_PATH,
-    "onboarding",
-    "You are Gray.",
-)
-
-DEFAULT_SYSTEM_PROMPT = load_prompt_from_json(
-    GLOBAL_SYSTEM_PROMPTS_PATH,
-    "chat",
-    "You are Gray.",
-)
-
-async def chat_stream(
-    request: Request,
-    chat_request: ChatRequest,
-    background_tasks: BackgroundTasks,
-    current_user: Dict[str, Any] = Depends(get_current_user),
-    db: databases.Database = Depends(get_database)
-):
-    """Stream an AI response token-by-token using Server-Sent Events."""
-    chat_request.user_id = current_user["id"]
-    start_time = utcnow()
-    prompt_locale = _prompt_locale_from_request(request)
-
-    # Set request context for logging
-    correlation_id = str(uuid4())
-    set_request_context(correlation_id, str(chat_request.user_id)[:8])
-
-    api_logger.info("Chat stream request received", extra={
-        "event_type": "chat_stream_request_start",
-        "user_id": chat_request.user_id,
-        "message_length": len(chat_request.message),
-        "conversation_id": chat_request.conversation_id,
-        "model": chat_request.model,
-        "correlation_id": correlation_id
-    })
-
-    try:
-        # 1. Start User Lookup (Async + Cached)
-        t0_user = time.perf_counter()
-        user_task = asyncio.create_task(get_cached_user(chat_request.user_id))
-
-        # 2. Prepare Session Title (Sync, fast)
-        effective_message = chat_request.message
-        session_title = _fallback_title_from_message(effective_message)
-
-        # 4. Start Conversation Setup (Async)
-        t0_conv = time.perf_counter()
-        requested_conversation_id = chat_request.conversation_id
-        
-        # FIX: If no conversation_id provided, default to General Chat format
-        # This prevents creating UUID threads when frontend hasn't loaded user yet
-        if not requested_conversation_id:
-            requested_conversation_id = f"general:{chat_request.user_id}"
-        
-        valid_requested_conversation_id = _is_valid_uuid(requested_conversation_id)
-        
-        async def _setup_conversation():
-            if requested_conversation_id and not valid_requested_conversation_id:
-                return requested_conversation_id
-            else:
-                return await get_or_create_conversation(
-                    requested_conversation_id if valid_requested_conversation_id else None,
-                    chat_request.user_id,
-                    title=session_title,
-                )
-        
-        conv_task = asyncio.create_task(_setup_conversation())
-
-        # Await critical data
-        user_record = await user_task
-        t1_user = time.perf_counter()
-        api_logger.info(f"User lookup time: {(t1_user - t0_user)*1000:.2f}ms", extra={"user_id": chat_request.user_id})
-
-        user_has_seen_general = bool(_row_get(user_record, "has_seen_general_chat"))
-        user_nickname = _row_get(user_record, "personalization_nickname")
-        user_occupation = _row_get(user_record, "personalization_occupation")
-        user_about = _row_get(user_record, "personalization_about")
-        user_plan_tier = _row_get(user_record, "plan_tier")
-
-        # Use the extracted chat context helper for onboarding and system prompt resolution
-        chat_context = _prepare_chat_context(
-            user_record=user_record,
-            user_has_seen_general=user_has_seen_general,
-            user_nickname=user_nickname,
-            user_occupation=user_occupation,
-            user_about=user_about,
-            message=effective_message,
-            client_system_prompt=chat_request.system_prompt,
-            prompt_locale=prompt_locale,
-        )
-        
-        effective_system_prompt = chat_context.effective_system_prompt
-        effective_message = chat_context.effective_message
-        tool_list = chat_context.tool_list
-        is_onboarding = chat_context.is_onboarding
-        force_onboarding_mode = chat_context.force_onboarding_mode
-        
-        if force_onboarding_mode:
-            api_logger.info(
-                f"User {chat_request.user_id} is in onboarding flow (forced: {force_onboarding_mode})",
-                extra={
-                    "event_type": "onboarding_flow",
-                    "is_onboarding": is_onboarding,
-                    "force_onboarding_mode": force_onboarding_mode,
-                },
-            )
-
-        effective_model = chat_request.model
-
-        # Infer timezone from time_context if not explicitly provided
-        if not chat_request.timezone and chat_request.time_context:
-            tz_label, _ = _timezone_from_time_context(chat_request.time_context)
-            if tz_label:
-                chat_request.timezone = tz_label
-
-        # Await conversation ID
-        conversation_id = await conv_task
-        t1_conv = time.perf_counter()
-        api_logger.info(f"Conversation setup time: {(t1_conv - t0_conv)*1000:.2f}ms", extra={"user_id": chat_request.user_id})
-
-        conversation_history: List[Dict[str, Any]] = []
-        if conversation_id:
-            t0_hist = time.perf_counter()
-            conversation_history = await _load_conversation_history(conversation_id, chat_request.user_id)
-            t1_hist = time.perf_counter()
-            api_logger.info(f"History load time: {(t1_hist - t0_hist)*1000:.2f}ms, loaded {len(conversation_history)} messages", extra={"user_id": chat_request.user_id, "conversation_id": conversation_id, "history_count": len(conversation_history)})
-
-            # NOTE: Previously we injected General chat context into threads here.
-            # Removed because: (1) adds ~2.5s latency, (2) threads should be independent contexts.
-
-        # Avoid sending an empty payload to the AI provider (Gemini rejects requests with no contents).
-        if not (effective_message or "").strip() and not conversation_history and not (chat_request.attachments or []):
-            effective_message = "Let's get started."
-
-        user_message_payload: Dict[str, Any] = {
-            "role": "user",
-            "text": effective_message,
-        }
-
-        last_history_entry: Optional[Dict[str, Any]] = conversation_history[-1] if conversation_history else None
-        should_persist_user = not (
-            last_history_entry
-            and last_history_entry.get("role") in {"user", "assistant", "model"}
-            and (last_history_entry.get("text") or "") == effective_message
-        )
-        if should_persist_user:
-            # Make persistence non-blocking to improve time-to-first-token
-            async def _persist_user_msg():
-                try:
-                    general_user_id = _general_conversation_user_id(conversation_id)
-                    if general_user_id is not None:
-                         await _insert_general_conversation_message(
-                            user_id=general_user_id,
-                            role="user",
-                            text=effective_message,
-                        )
-                    else:
-                        await save_conversation_message(
-                            conversation_id,
-                            user_message_payload,
-                            user_id=chat_request.user_id,
-                        )
-                except Exception as e:
-                    api_logger.error(f"Failed to persist user message: {e}", extra={"user_id": chat_request.user_id})
-
-            asyncio.create_task(_persist_user_msg())
-
-        # Enforce tier restrictions for streaming
-        # user_record was already fetched above
-        normalized_tier = normalize_plan_tier(
-            user_plan_tier,
-            _row_get(user_record, "role"),
-            _row_get(user_record, "subscription_expires_at")
-        )
-
-        effective_model, model_coerced = coerce_model_for_tier(effective_model, normalized_tier)
-        if model_coerced:
-            api_logger.info(
-                "Coerced requested model for user tier",
-                extra={
-                    "event_type": "model_coerced",
-                    "user_id": chat_request.user_id,
-                    "plan_tier": normalized_tier,
-                    "requested_model": chat_request.model,
-                    "effective_model": effective_model,
-                },
-            )
-
-        effective_reasoning_mode = chat_request.reasoning_mode
-        if effective_reasoning_mode and normalized_tier not in ("voyager", "pioneer"):
-            api_logger.info(f"Disabling reasoning mode for user {chat_request.user_id} (tier: {normalized_tier})")
-            effective_reasoning_mode = False
-
-        async def event_stream() -> AsyncGenerator[str, None]:
-            nonlocal session_title
-            start_time = time.perf_counter()
-            first_token_time: Optional[float] = None
-
-            # Send an immediate keep-alive to nudge proxies to flush the stream sooner.
-            yield ":streaming-start\n\n"
-            try:
-                accumulated_chunks: List[str] = []
-                final_response: Optional[str] = None
-                grounding_metadata_payload: Optional[Dict[str, Any]] = None
-                
-                t0_stream = time.perf_counter()
-                api_logger.info(f"Starting stream_ai_response for {effective_model}", extra={"user_id": chat_request.user_id})
-                
-                async for kind, payload in stream_ai_response(
-                    effective_message,
-                    conversation_history,
-                    chat_request.context,
-                    effective_system_prompt,
-                    user_id=chat_request.user_id,
-                    db=db,
-                    user_timezone=chat_request.timezone,
-                    time_context=chat_request.time_context,
-                    model=effective_model,
-                    attachments=chat_request.attachments,
-                    context_cache_id=chat_request.context_cache_id,
-                    maps_enabled=chat_request.maps_enabled,
-                    maps_latitude=chat_request.maps_latitude,
-                    maps_longitude=chat_request.maps_longitude,
-                    maps_widget=chat_request.maps_widget,
-                    search_enabled=chat_request.web_search_enabled,
-                    should_generate_title=chat_request.should_generate_title,
-                    reasoning_mode=effective_reasoning_mode,
-                    reminders_enabled=chat_request.reminders_enabled,
-                    tools=tool_list,
-                    plan_tier=normalized_tier,
-                ):
-                    if kind == "delta":
-                        if not payload:
-                            continue
-                        if first_token_time is None:
-                            first_token_time = time.perf_counter()
-                        accumulated_chunks.append(payload)
-                        yield _sse_event("token", {"delta": payload})
-                    elif kind == "tool_card":
-                        yield _sse_event("tool_card", payload)
-                    elif kind == "reminders":
-                        yield _sse_event("reminders", {"reminders": payload})
-                    elif kind == "final":
-                        reminders_payload = None
-                        if isinstance(payload, dict):
-                            final_response = payload.get("text") or "".join(accumulated_chunks)
-                            grounding_metadata_payload = payload.get("grounding_metadata")
-                            reminders_payload = payload.get("reminders")
-                        elif payload:
-                            final_response = payload
-
-                if final_response is None:
-                    final_response = "".join(accumulated_chunks)
-                
-                # Send reminders as a separate SSE event if they exist
-                if reminders_payload:
-                    yield _sse_event("reminders", {"reminders": reminders_payload})
-
-                async def _finalize_chat(
-                    cid: str,
-                    uid: int,
-                    text: str,
-                    metadata: Optional[Dict[str, Any]],
-                ):
-                    try:
-                        # Save Assistant Message in background
-                        # Check for General Chat ID format "general:123"
-                        general_user_id = _general_conversation_user_id(cid)
-                        
-                        if general_user_id is not None:
-                            # Use specialized helper for General Chat messages
-                            await _insert_general_conversation_message(
-                                user_id=general_user_id,
-                                role="model",
-                                text=text,
-                                grounding_metadata=metadata,
-                            )
-                        else:
-                            # Standard Thread persistence
-                            payload: Dict[str, Any] = {"role": "model", "text": text}
-                            if metadata:
-                                payload["grounding_metadata"] = metadata
-                            await save_conversation_message(cid, payload, user_id=uid)
-
-                    except Exception as e:
-                        api_logger.error(f"Failed to finalize chat (save message) in background: {e}", extra={"user_id": uid})
-
-                # Offload message persistence to background (but NOT title generation)
-                background_tasks.add_task(
-                    _finalize_chat,
-                    conversation_id,
-                    chat_request.user_id,
-                    final_response,
-                    grounding_metadata_payload,
-                )
-
-                # Generate title inline so it's returned with the SSE end event.
-                # This adds ~100-300ms latency but only on first message of new conversations.
-                # The generated title is also stored in the DB in the background.
-                final_title = session_title
-                if chat_request.should_generate_title:
-                    try:
-                        generated_title = await _generate_chat_title_inline(
-                            effective_message,
-                            final_response,
-                            prompt_locale=prompt_locale,
-                        )
-                        if generated_title:
-                            final_title = generated_title
-                            # Store in DB in background (non-blocking)
-                            background_tasks.add_task(
-                                update_conversation_title,
-                                conversation_id,
-                                generated_title,
-                            )
-                    except Exception as title_error:
-                        api_logger.warning(
-                            f"Inline title generation failed: {title_error}",
-                            extra={"event_type": "title_generation_error"}
-                        )
-                        # Fall back to session_title, already set above
-
-                end_payload: Dict[str, Any] = {
-                    "conversation_id": conversation_id,
-                    "response": final_response,
-                    "title": final_title,
-                }
-                if grounding_metadata_payload:
-                    end_payload["grounding_metadata"] = grounding_metadata_payload
-                final_time = time.perf_counter()
-                timing_payload: Dict[str, int] = {
-                    "total_ms": int(max(0.0, (final_time - start_time) * 1000)),
-                }
-                if first_token_time is not None:
-                    timing_payload["first_token_ms"] = int(max(0.0, (first_token_time - start_time) * 1000))
-                end_payload["timing"] = timing_payload
-                yield _sse_event("end", end_payload)
-            except asyncio.CancelledError:
-                # Client disconnected - don't log as error, just re-raise
-                api_logger.debug("Stream cancelled by client disconnect", extra={"user_id": chat_request.user_id})
-                raise
-            except Exception as stream_error:
-                api_logger.error(f"Stream loop error: {stream_error}", exc_info=True)
-                # Still save any accumulated response, even on error
-                if accumulated_chunks:
-                    try:
-                        general_user_id = _general_conversation_user_id(conversation_id)
-                        if general_user_id is not None:
-                            await _insert_general_conversation_message(
-                                user_id=general_user_id,
-                                role="model",
-                                text="".join(accumulated_chunks),
-                            )
-                        else:
-                            await save_conversation_message(
-                                conversation_id,
-                                {"role": "model", "text": "".join(accumulated_chunks)},
-                                user_id=chat_request.user_id,
-                            )
-                    except Exception as save_error:
-                        api_logger.error(f"Failed to save partial response on error: {save_error}", extra={"user_id": chat_request.user_id})
-                yield _sse_event("error", {"message": str(stream_error)})
-
-        headers = {
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
-        }
-
-        # Log successful completion
-        total_time = (utcnow() - start_time).total_seconds() * 1000
-        api_logger.info("Chat request completed successfully", extra={
-            "event_type": "chat_request_complete",
-            "user_id": chat_request.user_id,
-            "conversation_id": conversation_id,
-            "total_time_ms": total_time,
-            "response_length": len(final_response) if 'final_response' in locals() else 0,
-            "correlation_id": correlation_id
-        })
-
-        clear_request_context()
-        return StreamingResponse(event_stream(), media_type="text/event-stream", headers=headers)
-    except Exception as error:
-        total_time = (utcnow() - start_time).total_seconds() * 1000
-        error_msg = str(error)
-        api_logger.error(
-            f"Chat stream request failed: {error_msg}",
-            exc_info=True,
-            extra={
-                "event_type": "chat_stream_request_error",
-                "user_id": chat_request.user_id,
-                "error": error_msg,
-                "total_time_ms": total_time,
-                "correlation_id": correlation_id,
-            },
-        )
-
-        async def error_stream() -> AsyncGenerator[str, None]:
-            yield _sse_event("error", {"message": error_msg})
-
-        clear_request_context()
-        return StreamingResponse(error_stream(), status_code=500, media_type="text/event-stream")

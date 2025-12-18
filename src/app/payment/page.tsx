@@ -139,7 +139,7 @@ const PAYMENT_METHODS = [
         label: "Credit/Debit Card",
         type: "paddle"
     }
-];
+].filter(m => m.type !== "paddle");
 
 function PaymentContent() {
     const router = useRouter();
@@ -521,21 +521,7 @@ function PaymentContent() {
                 data-environment={process.env.NEXT_PUBLIC_MIDTRANS_IS_PRODUCTION === 'true' ? 'production' : 'sandbox'}
                 data-client-key={process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY}
             />
-            {PADDLE_CLIENT_TOKEN && (
-                <Script
-                    id="paddle-script"
-                    src="https://cdn.paddle.com/paddle/v2/paddle.js"
-                    onLoad={() => {
-                        if (window.Paddle) {
-                            window.Paddle.Initialize({
-                                token: PADDLE_CLIENT_TOKEN,
-                            });
-                            setIsPaddleReady(true);
-                        }
-                    }}
-                    onError={() => setIsPaddleReady(false)}
-                />
-            )}
+            {/* Paddle removed as per request */}
 
             <div className={styles.topRow}>
                 <button
@@ -728,7 +714,7 @@ function PaymentContent() {
                                     )}
                                 </button>
                                 <div style={{ marginTop: "1rem", display: "flex", justifyContent: "center", gap: "0.5rem", color: "rgba(255,255,255,0.3)", fontSize: "0.8rem" }}>
-                                    {selectedMethodId === "card" ? "Powered by Paddle • Secure checkout" : "Powered by Midtrans • Secure 256-bit SSL Header"}
+                                    {selectedMethodId === "card" ? "Secure checkout" : "Powered by Midtrans • Secure 256-bit SSL Header"}
                                 </div>
                             </div>
                         </div>

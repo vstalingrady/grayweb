@@ -81,7 +81,7 @@ class ReminderSchedulerManager:
             except (ValueError, KeyError, TypeError) as e:
                 logger.warning("Skipping malformed reminder row: %s", e)
                 continue
-            remind_at = row.get("remind_at")
+            remind_at = row["remind_at"]
             await self.refresh_job(user_id=user_id, reminder_id=reminder_id, remind_at=remind_at)
 
     async def refresh_job(self, *, user_id: int, reminder_id: int, remind_at: Optional[datetime] = None) -> None:
@@ -104,9 +104,9 @@ class ReminderSchedulerManager:
             )
             if not row:
                 return
-            if (row.get("status") or "").strip().lower() != "pending":
+            if (row["status"] or "").strip().lower() != "pending":
                 return
-            remind_at = row.get("remind_at")
+            remind_at = row["remind_at"]
 
         if not isinstance(remind_at, datetime):
             return

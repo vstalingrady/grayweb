@@ -1,0 +1,63 @@
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 18px;
+  width: min(var(--chat-column-max-width, 680px), 100%);
+  position: relative;
+}
+
+.headerLeft {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.headerLeft > * {
+  width: 100%;
+}
+
+.headerRight {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  flex: 0 0 auto;
+  justify-content: flex-end;
+}
+
+.planBadge {
+  display: inline-flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: none;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(248, 248, 248, 0.92);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  pointer-events: auto;
+  position: relative;
+}
+
+.planBadge[data-state="active"] {
+  cursor: default;
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow: none;
+}
+
+.planBadgeLabel {
+  font-size: inherit;
+}
+
+.planBadgeHint {
+  font-size: 0.5rem;
+  letter-spacing: 0.32em;
+  color: rgba(255, 255, 255, 0.68);
+}
+

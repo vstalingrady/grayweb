@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 
-import { apiService } from "@/lib/api";
+import { workspaceService, dashboardService } from "@/lib/api";
 import type {
   HabitItem,
   HabitUpdates,
@@ -71,7 +71,7 @@ export const usePlanHabitActions = ({
 
       setPlans(updatedPlans);
 
-      apiService.updatePlan(userId as number, numericPlanId, { completed: nextCompleted }).catch((error) => {
+      workspaceService.updatePlan(userId as number, numericPlanId, { completed: nextCompleted }).catch((error) => {
         console.error("Failed to update plan:", error);
         setPlans(previousPlans);
       });
@@ -94,15 +94,15 @@ export const usePlanHabitActions = ({
       const updatedPlans = previousPlans.map((plan) =>
         plan.id === planId
           ? {
-              ...plan,
-              label: updates.label,
-              deadline: updates.deadline ?? null,
-              scheduleSlot: updates.scheduleSlot ?? null,
-              details: updates.details ?? null,
-              reminderAt:
-                "reminderAt" in updates ? (updates.reminderAt ?? null) : plan.reminderAt ?? null,
-              color: "color" in updates ? (updates.color ?? null) : plan.color ?? null,
-            }
+            ...plan,
+            label: updates.label,
+            deadline: updates.deadline ?? null,
+            scheduleSlot: updates.scheduleSlot ?? null,
+            details: updates.details ?? null,
+            reminderAt:
+              "reminderAt" in updates ? (updates.reminderAt ?? null) : plan.reminderAt ?? null,
+            color: "color" in updates ? (updates.color ?? null) : plan.color ?? null,
+          }
           : plan
       );
 
@@ -113,7 +113,7 @@ export const usePlanHabitActions = ({
       void sendDashboardNotification("Plan saved", `${planLabel} updated in today's pulse.`);
 
       try {
-        const updatePayload: Parameters<typeof apiService.updatePlan>[2] = {
+        const updatePayload: Parameters<typeof workspaceService.updatePlan>[2] = {
           label: updates.label,
           description: updates.details ?? null,
           deadline: updates.deadline ?? null,
@@ -127,7 +127,7 @@ export const usePlanHabitActions = ({
           updatePayload.color = updates.color ?? null;
         }
 
-        await apiService.updatePlan(userId as number, numericPlanId, updatePayload);
+        await workspaceService.updatePlan(userId as number, numericPlanId, updatePayload);
       } catch (error) {
         console.error("Failed to update plan:", error);
         setPlans(previousPlans);
@@ -152,7 +152,7 @@ export const usePlanHabitActions = ({
       const updatedPlans = previousPlans.filter((plan) => plan.id !== planToDelete.id);
       setPlans(updatedPlans);
 
-      apiService.deletePlan(userId as number, numericPlanId).catch((error) => {
+      workspaceService.deletePlan(userId as number, numericPlanId).catch((error) => {
         console.error("Failed to delete plan:", error);
         setPlans(previousPlans);
       });
@@ -199,7 +199,7 @@ export const usePlanHabitActions = ({
       );
 
       try {
-        await apiService.createOrUpdateDashboardPulse(userId as number, {
+        await dashboardService.createOrUpdateDashboardPulse(userId as number, {
           date_key: newActivePulse.dateKey,
           timestamp: newActivePulse.timestamp,
           plans: newActivePulse.plans,
@@ -247,7 +247,7 @@ export const usePlanHabitActions = ({
       setHabits(updatedHabits);
 
       try {
-        await apiService.updateHabit(userId, numericId, {
+        await workspaceService.updateHabit(userId, numericId, {
           label: updates.label,
           description: updates.details ?? null,
         });
@@ -285,7 +285,7 @@ export const usePlanHabitActions = ({
       const updatedHabits = previousHabits.filter((habit) => habit.id !== habitToDelete.id);
       setHabits(updatedHabits);
 
-      apiService.deleteHabit(userId as number, habitId).catch((error: unknown) => {
+      workspaceService.deleteHabit(userId as number, habitId).catch((error: unknown) => {
         console.error("Failed to delete habit:", error);
         const message = error instanceof Error ? error.message : String(error);
         if (message.includes("Habit not found")) {

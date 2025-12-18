@@ -1,0 +1,274 @@
+.personalizationOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: clamp(16px, 4vw, 28px);
+}
+
+.personalizationPanel {
+  width: min(480px, 92vw);
+  max-height: calc(100vh - 40px);
+  overflow: auto;
+  border-radius: clamp(16px, 2.5vw, 24px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(10, 10, 10, 0.98);
+  box-shadow:
+    0 40px 80px rgba(0, 0, 0, 0.6),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+  display: flex;
+  flex-direction: column;
+  gap: clamp(16px, 2.5vh, 24px);
+  padding: clamp(18px, 2.5vw, 24px);
+  margin-top: 0;
+}
+
+.personalizationPanelHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.personalizationPanelHeader h2 {
+  font-size: clamp(1.6rem, 4vw, 2.2rem);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: rgba(242, 242, 242, 0.96);
+  margin: 0;
+}
+
+.personalizationEyebrow {
+  font-size: 0.68rem;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: rgba(220, 220, 220, 0.55);
+  margin-bottom: 6px;
+}
+
+.personalizationClose {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  border: none;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(250, 250, 250, 0.86);
+  cursor: pointer;
+}
+
+.personalizationPanel button {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.25);
+  color: rgba(246, 246, 246, 0.92);
+  box-shadow: none;
+}
+
+.personalizationPanel button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.45);
+}
+
+.personalizationGrid {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(20px, 3vw, 32px);
+}
+
+.personalizationColumn {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(14px, 2.6vh, 24px);
+  width: 100%;
+}
+
+.personalizationFieldGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.personalizationFieldGroup label {
+  font-size: 0.76rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(210, 210, 210, 0.6);
+}
+
+.personalizationField {
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(18, 18, 22, 0.86);
+  color: rgba(234, 234, 234, 0.88);
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+.personalizationHint {
+  margin: 4px 0 0;
+  font-size: 0.74rem;
+  color: rgba(188, 188, 188, 0.72);
+}
+
+.personalizationLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: transparent;
+  color: rgba(240, 240, 244, 0.88);
+  font-size: 0.72rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.secondaryAction {
+  align-self: flex-start;
+  margin-top: auto;
+  width: auto;
+  display: inline-flex;
+  justify-content: center;
+  padding: 10px 20px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 0.68rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  cursor: pointer;
+  box-shadow: none;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease,
+    border-color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.secondaryAction[disabled],
+.secondaryAction[data-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.6;
+  transform: none;
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.reminderCheckboxRow {
+  display: flex;
+  align-items: center;
+}
+
+.reminderCheckboxLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.75rem;
+  letter-spacing: 0.35em;
+  text-transform: uppercase;
+  color: rgba(215, 215, 215, 0.78);
+}
+
+.reminderCheckboxInput {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.26);
+  background: rgba(255, 255, 255, 0.02);
+  position: relative;
+  transition: border 0.2s ease, background 0.2s ease;
+}
+
+.reminderCheckboxInput::after {
+  content: "";
+  position: absolute;
+  inset: 4px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0);
+  transform: scale(0.6);
+  opacity: 0;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.reminderCheckboxInput:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.7);
+  outline-offset: 2px;
+}
+
+.reminderCheckboxInput:checked {
+  border-color: rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.reminderCheckboxInput:checked::after {
+  opacity: 1;
+  transform: scale(1);
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.reminderDatePicker {
+  margin-top: 6px;
+  min-height: 44px;
+  transition: opacity 0.2s ease;
+}
+
+.reminderDatePicker[data-hidden="true"] {
+  opacity: 0;
+  visibility: hidden;
+}
+
+.personalizationHeaderTypeSelect {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.personalizationHeaderSelect {
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  border: none;
+  color: rgba(242, 242, 242, 0.96);
+  font-size: clamp(1.6rem, 4vw, 2.2rem);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  padding: 0 42px 0 0;
+  margin: 0;
+  cursor: pointer;
+  font-family: inherit;
+  width: auto;
+}
+
+.personalizationHeaderSelect:focus {
+  outline: none;
+}
+
+.personalizationHeaderSelect option {
+  background-color: rgba(10, 10, 10, 0.98);
+  color: rgba(242, 242, 242, 0.96);
+  font-size: 1.1rem;
+  padding: 12px;
+}
+
+.personalizationHeaderSelectArrow {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: rgba(245, 245, 245, 0.65);
+  pointer-events: none;
+  width: 24px;
+  height: 24px;
+}
+

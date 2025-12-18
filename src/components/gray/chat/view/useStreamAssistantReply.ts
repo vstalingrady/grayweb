@@ -1,5 +1,5 @@
 import { useCallback, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
-import { apiService, type ConversationUsage, type User } from "@/lib/api";
+import { chatService, type ConversationUsage, type User } from "@/lib/api";
 import { buildLocalTimeContextWithOverrides } from "@/lib/timeContext";
 import type { ChatMessage, ChatSession } from "../types";
 import { resolveAssistantReminders } from "../reminderUtils";
@@ -170,7 +170,7 @@ export const useStreamAssistantReply = ({
 
       try {
         let localThinkingStartTime: number | null = null;
-        for await (const event of apiService.sendMessageStream(
+        for await (const event of chatService.sendMessageStream(
           {
             message: prompt,
             conversation_id: shouldAttachToConversation
@@ -317,7 +317,7 @@ export const useStreamAssistantReply = ({
         }
         console.warn("Failed to stream assistant reply:", error);
         try {
-          const fallbackResponse = await apiService.sendMessage({
+          const fallbackResponse = await chatService.sendMessage({
             message: prompt,
             conversation_id: shouldAttachToConversation
               ? isGeneralSession

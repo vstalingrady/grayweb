@@ -1,6 +1,6 @@
 import { useCallback, type MutableRefObject, type SetStateAction } from "react";
 
-import { apiService } from "@/lib/api";
+import { chatService } from "@/lib/api";
 
 import type { ChatSession, ChatSessionScope, ChatTitleMode } from "../types";
 import {
@@ -126,7 +126,7 @@ export const useSessionLifecycleActions = ({
       const conversationId = normalizeConversationIdValue(session.conversationId);
       if (conversationId) {
         try {
-          await apiService.updateConversation(conversationId, {
+          await chatService.updateConversation(conversationId, {
             metadata: { is_pinned: pinned },
           });
         } catch (err) {
@@ -159,7 +159,7 @@ export const useSessionLifecycleActions = ({
       if (normalizedConversationId) {
         void (async () => {
           try {
-            await apiService.deleteConversation(normalizedConversationId);
+            await chatService.deleteConversation(normalizedConversationId);
           } catch (error) {
             console.error("Failed to delete remote conversation:", error);
           }

@@ -39,18 +39,10 @@ def _get_conversation_helpers():
     """Lazy import conversation helpers to avoid circular imports."""
     from backend.main import (
         _require_conversation_owner,
-        _load_conversation_history,
         _general_conversation_user_id,
         _delete_general_conversation_history,
         _replace_general_conversation_history,
-        _is_valid_uuid,
         _handle_conversation_store_error,
-        save_conversation_message,
-        get_or_create_conversation,
-        normalize_conversation_history,
-        overwrite_thread_history,
-        apply_conversation_update,
-        invalidate_conversation_cache,
         database,
         app_logger,
         GEMINI_SERVICE,
@@ -58,11 +50,23 @@ def _get_conversation_helpers():
         chat_sessions,
         tier_conversation_token_limit,
     )
-    from backend.models import (
+    from backend.compat_imports import (
+        _load_conversation_history,
+        save_conversation_message,
+        get_or_create_conversation,
+        normalize_conversation_history,
+        overwrite_thread_history,
+        apply_conversation_update,
+        invalidate_conversation_cache,
+        _is_valid_uuid,
+    )
+    from backend.api.chat_models import (
         MessageCreateRequest,
         ConversationCreateRequest,
         ConversationHistoryPayload,
         ConversationUpdateRequest,
+    )
+    from backend.models import (
         ChatSession,
         ChatSessionCreate,
     )

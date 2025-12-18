@@ -323,3 +323,38 @@ def add_url_context_tool_if_needed(
         )
     
     return result
+
+
+def build_maps_tool_and_config(
+    maps_enabled: bool,
+    maps_latitude: Optional[float],
+    maps_longitude: Optional[float],
+    maps_widget: bool,
+) -> Tuple[List[Any], Optional[Any]]:
+    """Build Google Maps tool and config for Gemini."""
+    if not maps_enabled:
+        return [], None
+
+    try:
+        from google.genai import types
+    except ImportError:
+        return [], None
+
+    tool = types.Tool(
+        google_maps=types.GoogleMaps(enable_widget=maps_widget)
+    )
+
+    retrieval_config = None
+    if maps_latitude is not None and maps_longitude is not None:
+        retrieval_config = types.RetrievalConfig(
+            lat_lng=types.LatLng(latitude=maps_latitude, longitude=maps_longitude)
+        )
+
+    tool_config = types.ToolConfig(
+        retrieval_config=retrieval_config,
+        function_calling_config=types.FunctionCallingConfig(
+            mode="NONE" # Use string literal for flexibility
+        ),
+    )
+
+    return [tool], tool_config

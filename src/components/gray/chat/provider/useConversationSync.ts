@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, type MutableRefObject } from "react";
-import { apiService } from "@/lib/api";
+import { chatService } from "@/lib/api";
 import type { ChatSession, ConversationHistoryEntryPayload } from "../types";
 import { buildConversationHistoryPayload, normalizeConversationIdValue } from "../utils";
 
@@ -29,7 +29,7 @@ export const useConversationSync = ({
     (conversationId: string, payload: ConversationHistoryEntryPayload[]) => {
       void (async () => {
         try {
-          await apiService.overwriteConversationHistory(conversationId, payload);
+          await chatService.overwriteConversationHistory(conversationId, payload);
         } catch (error) {
           console.warn("Failed to sync conversation history after deletion:", error);
         }
@@ -94,7 +94,7 @@ export const useConversationSync = ({
         return;
       }
       try {
-        await apiService.updateConversation(normalizedConversationId, {
+        await chatService.updateConversation(normalizedConversationId, {
           title: trimmed,
           user_id: userId,
         });

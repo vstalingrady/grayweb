@@ -24,21 +24,20 @@ from backend.time_utils import utcnow
 router = APIRouter(tags=["plans", "habits"])
 
 
-# Import reminder helpers - these are defined in main.py, will be moved later
-# For now, we import them at call time to avoid circular imports
+# Import reminder helpers from modularized locations
 def _get_reminder_helpers():
     """Lazy import reminder helpers to avoid circular imports."""
-    from backend.main import (
-        _get_pending_entity_reminder_map,
-        _upsert_entity_reminder,
-        _delete_all_entity_reminders,
-        _serialize_habit_record,
+    from backend.core.entity_reminders import (
+        get_pending_entity_reminder_map,
+        upsert_entity_reminder,
+        delete_all_entity_reminders,
     )
+    from backend.core.serializers import serialize_habit_record
     return (
-        _get_pending_entity_reminder_map,
-        _upsert_entity_reminder,
-        _delete_all_entity_reminders,
-        _serialize_habit_record,
+        get_pending_entity_reminder_map,
+        upsert_entity_reminder,
+        delete_all_entity_reminders,
+        serialize_habit_record,
     )
 
 

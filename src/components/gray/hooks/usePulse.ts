@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { apiService, type DashboardPulse } from "@/lib/api";
+import { dashboardService, type DashboardPulse } from "@/lib/api";
 import { type PulseEntry, type PlanItem, type HabitItem, type ProactivityItem } from "@/components/gray/types";
 import { toDateKey } from "@/app/gray/utils"; // We'll need to extract utils too
 
@@ -190,7 +190,7 @@ export function usePulse(
 
     const loadPulses = async () => {
       try {
-        const pulses = await apiService.getDashboardPulses(userId, MAX_PULSE_HISTORY);
+        const pulses = await dashboardService.getDashboardPulses(userId, MAX_PULSE_HISTORY);
         if (cancelled) {
           return;
         }

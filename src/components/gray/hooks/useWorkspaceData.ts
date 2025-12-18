@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import {
-  apiService,
+  workspaceService,
+  calendarService,
   type Calendar,
   type CalendarEvent as ApiCalendarEvent,
   type GoogleCalendarInfo,
@@ -52,8 +53,8 @@ export function useWorkspaceData(userId: number | null, variant: "general" | "da
 
     try {
       const [planResponse, habitResponse] = await Promise.all([
-        apiService.getPlans(userId),
-        apiService.getUserHabits(userId),
+        workspaceService.getPlans(userId),
+        workspaceService.getUserHabits(userId),
       ]);
 
       const mappedPlans: PlanItem[] = Array.isArray(planResponse)
@@ -129,19 +130,19 @@ export function useWorkspaceData(userId: number | null, variant: "general" | "da
 
         const results = await Promise.allSettled([
           shouldLoadCalendarData
-            ? apiService.getUserCalendars(userId)
+            ? calendarService.getUserCalendars(userId)
             : Promise.resolve<Calendar[]>([]),
           shouldLoadCalendarData
-            ? apiService.getUserCalendarEvents(userId, {
+            ? calendarService.getUserCalendarEvents(userId, {
               startDate: startWindow.toISOString(),
               endDate: endWindow.toISOString(),
             })
             : Promise.resolve<ApiCalendarEvent[]>([]),
           shouldLoadCalendarData
-            ? apiService.getGoogleCalendars(userId)
+            ? calendarService.getGoogleCalendars(userId)
             : Promise.resolve<GoogleCalendarInfo[]>([]),
-          apiService.getPlans(userId),
-          apiService.getUserHabits(userId),
+          workspaceService.getPlans(userId),
+          workspaceService.getUserHabits(userId),
         ]);
 
         if (!isMounted) {
@@ -236,7 +237,7 @@ export function useWorkspaceData(userId: number | null, variant: "general" | "da
         const googleEventsResults = mappedGoogleCalendars.length > 0
           ? await Promise.allSettled(
             googleCalendarsResponse.map((calendar) =>
-              apiService.getGoogleCalendarEvents(userId, calendar.id, {
+              calendarService.getGoogleCalendarEvents(userId, calendar.id, {
                 timeMin: startWindow.toISOString(),
                 timeMax: endWindow.toISOString(),
               })

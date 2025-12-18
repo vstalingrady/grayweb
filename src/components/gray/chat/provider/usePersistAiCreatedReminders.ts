@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { apiService, type ReminderCreatePayload } from "@/lib/api";
+import { workspaceService, type ReminderCreatePayload } from "@/lib/api";
 import { WORKSPACE_REFRESH_EVENT } from "../../hooks/useWorkspaceData";
 import { buildReminderKey } from "../reminderUtils";
 import type { ChatSession } from "../types";
@@ -189,7 +189,7 @@ export const usePersistAiCreatedReminders = ({
 
         // Persist to Supabase
         persistedReminderKeysRef.current.add(reminderKey);
-        apiService
+        workspaceService
           .createReminder(userId, payload)
           .then(() => {
             // Dispatch custom event so useWorkspaceData can refresh reminder list

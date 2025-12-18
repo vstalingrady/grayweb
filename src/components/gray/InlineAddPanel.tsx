@@ -5,7 +5,7 @@ import { X } from "lucide-react";
 import styles from "@/app/gray/GrayPageClient.module.css";
 import { useI18n } from "@/contexts/I18nContext";
 import { useUser } from "@/contexts/UserContext";
-import { apiService } from "@/lib/api";
+import { workspaceService } from "@/lib/api";
 
 export type InlineAddType = "plan" | "habit" | "reminder";
 
@@ -101,7 +101,7 @@ export function InlineAddPanel({ activeType, onTypeChange, onClose, onSuccess, d
         const deadlineValue = planReminderEnabled && planReminderAt ? planReminderAt : null;
         const descriptionValue = trimmedDetails.length > 0 ? trimmedDetails : null;
 
-        await apiService.createPlan(user.id, {
+        await workspaceService.createPlan(user.id, {
           label: trimmedLabel,
           completed: false,
           deadline: deadlineValue,
@@ -109,7 +109,7 @@ export function InlineAddPanel({ activeType, onTypeChange, onClose, onSuccess, d
           description: descriptionValue,
         });
       } else if (activeType === "habit") {
-        await apiService.createHabit(user.id, {
+        await workspaceService.createHabit(user.id, {
           label: trimmedLabel,
           previous_label: t("No history yet"),
           description: trimmedDetails.length > 0 ? trimmedDetails : null,
@@ -120,7 +120,7 @@ export function InlineAddPanel({ activeType, onTypeChange, onClose, onSuccess, d
           setError(t("Please provide a reminder time."));
           return;
         }
-        await apiService.createReminder(user.id, {
+        await workspaceService.createReminder(user.id, {
           label: trimmedLabel,
           remind_at: remindAtIso,
           description: trimmedDetails.length > 0 ? trimmedDetails : null,

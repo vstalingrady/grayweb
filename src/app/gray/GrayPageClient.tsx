@@ -6,7 +6,7 @@ import dynamic from "next/dynamic";
 import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useUser } from "@/contexts/UserContext";
 import {
-  apiService,
+  workspaceService,
 } from "@/lib/api";
 import { requestNotificationPermission } from "@/lib/notificationUtils";
 import { formatDisplayName } from "@/lib/names";
@@ -238,7 +238,7 @@ function GrayPageClientInner({
     const endStr = formatTime(payload.end);
     const scheduleSlot = `${startStr}-${endStr}`;
 
-    await apiService.createPlan(user.id, {
+    await workspaceService.createPlan(user.id, {
       label: payload.title,
       completed: false,
       deadline: null,
@@ -252,7 +252,7 @@ function GrayPageClientInner({
   const handleCreateHabit = useCallback(async (payload: EventComposerPayload) => {
     if (!user?.id) return;
 
-    await apiService.createHabit(user.id, {
+    await workspaceService.createHabit(user.id, {
       label: payload.title,
       previous_label: t("No history yet"),
       description: payload.description || null,
@@ -454,7 +454,7 @@ function GrayPageClientInner({
         return;
       }
       try {
-        await apiService.triggerProactivityForUser(userId);
+        await workspaceService.triggerProactivityForUser(userId);
         // We don't need to do anything else, the SSE stream will handle the notification
       } catch (err) {
         console.error("Failed to trigger proactivity test:", err);
@@ -627,8 +627,8 @@ function GrayPageClientInner({
           {/* Welcome overlay for the main "/" (threads) surface */}
           {pathname === "/" && activeNav === "threads" ? (
             <div className={chatStyles.mobileWelcomeScreen} aria-hidden="true">
-                <div className={chatStyles.mobileWelcomeContent}>
-                  <div className={chatStyles.mobileWelcomeLogo}>
+              <div className={chatStyles.mobileWelcomeContent}>
+                <div className={chatStyles.mobileWelcomeLogo}>
                   <Image
                     src="/grayaiwhitenotspinning.svg"
                     alt=""
@@ -636,9 +636,9 @@ function GrayPageClientInner({
                     height={40}
                     className="uiIconImage"
                   />
-                  </div>
-                  <p className={chatStyles.mobileWelcomeGreeting}>Ready when you are.</p>
                 </div>
+                <p className={chatStyles.mobileWelcomeGreeting}>Ready when you are.</p>
+              </div>
             </div>
           ) : null}
           {!shouldHideDesktopWorkspaceChrome ? (

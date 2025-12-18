@@ -99,7 +99,18 @@ def serialize_reminder_row(row: Any) -> Dict[str, Any]:
     """Serialize a reminder row to a dictionary with ISO formatted dates."""
     if not row:
         return {}
-    record = dict(row)
+    
+    # Handle both dict and Row/mapping
+    if hasattr(row, "_mapping"):
+        record = dict(row._mapping)
+    elif isinstance(row, Mapping):
+        record = dict(row)
+    else:
+        try:
+            record = dict(row)
+        except (TypeError, ValueError):
+            return {}
+
     for key in ("remind_at", "created_at", "updated_at", "delivered_at"):
         value = record.get(key)
         if isinstance(value, datetime):
@@ -107,6 +118,33 @@ def serialize_reminder_row(row: Any) -> Dict[str, Any]:
                 value = value.replace(tzinfo=timezone.utc)
             record[key] = value.isoformat()
     return record
+
+
+def serialize_calendar_event(row: Any) -> Dict[str, Any]:
+    """Serialize a calendar event row to a dictionary."""
+    if not row:
+        return {}
+    
+    # Handle both dict and Row/mapping
+    if hasattr(row, "_mapping"):
+        record = dict(row._mapping)
+    elif isinstance(row, Mapping):
+        record = dict(row)
+    else:
+        try:
+            record = dict(row)
+        except (TypeError, ValueError):
+            return {}
+
+    return {
+        "id": record.get("id"),
+        "title": record.get("title"),
+        "start": datetime_to_iso(record.get("start_time")),
+        "end": datetime_to_iso(record.get("end_time")),
+        "description": record.get("description"),
+        "calendar_id": record.get("calendar_id"),
+        "color": record.get("color"),
+    }
 
 
 def serialize_habit_record(record: Any) -> Dict[str, Any]:

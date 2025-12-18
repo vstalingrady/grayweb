@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from "react";
-import { apiService, type MediaUpload, type User } from "@/lib/api";
+import { utilityService, type MediaUpload, type User } from "@/lib/api";
 import { compressImage } from "@/lib/imageCompression";
 
 type UseAttachmentsOptions = {
@@ -65,7 +65,7 @@ export const useAttachments = ({ resolveChatUser }: UseAttachmentsOptions): UseA
           }
           // Compress image before uploading
           const processedFile = await compressImage(file);
-          const upload = await apiService.uploadMediaFile(processedFile);
+          const upload = await utilityService.uploadMediaFile(processedFile);
           const previewUrl = file.type?.toLowerCase().startsWith("image/")
             ? URL.createObjectURL(file)
             : upload.public_url ?? undefined;

@@ -1,5 +1,5 @@
 import { useCallback, useRef, type MutableRefObject } from "react";
-import { apiService, type MediaUpload, type User } from "@/lib/api";
+import { chatService, type MediaUpload, type User } from "@/lib/api";
 import { buildLocalTimeContextWithOverrides } from "@/lib/timeContext";
 import type { ChatMessage, ChatSession, ChatRole } from "../types";
 import {
@@ -194,7 +194,7 @@ export const useSendGeneralMessage = ({
 
           const conversationMemoryEnabled = resolveConversationMemoryEnabled(resolvedUser);
 
-          for await (const event of apiService.sendMessageStream({
+          for await (const event of chatService.sendMessageStream({
             message: trimmed,
             system_prompt: systemPromptForRequest,
             user_id: streamingUserId,

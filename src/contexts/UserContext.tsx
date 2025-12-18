@@ -10,7 +10,7 @@ import React, {
   ReactNode,
 } from 'react';
 import { AuthApiError } from '@supabase/supabase-js';
-import { apiService, isApiNetworkError, type User, type UserUpdate } from '@/lib/api';
+import { userService, isApiNetworkError, type User, type UserUpdate } from '@/lib/api';
 import { humanizeIdentifier } from '@/lib/names';
 import { getSupabaseClient } from '@/lib/supabaseClient';
 import { clearSupabaseAuthStorage } from '@/lib/supabaseStorage';
@@ -244,7 +244,7 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
 
       try {
         // console.log('loadUser: Attempting to get user by email from API...');
-        const userData = await apiService.getUserByEmail(email);
+        const userData = await userService.getUserByEmail(email);
         if (isStale()) {
           return;
         }
@@ -274,7 +274,7 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
         if (Object.keys(updates).length > 0) {
           try {
             // console.log('loadUser: Updating user profile with:', updates);
-            const updatedUser = await apiService.updateUser(userData.id, updates);
+            const updatedUser = await userService.updateUser(userData.id, updates);
             if (isStale()) {
               return;
             }
@@ -314,7 +314,7 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
             role: 'user',
             plan_tier: preferredPlanTier,
           };
-          const newUser = await apiService.createUser(defaultUserData);
+          const newUser = await userService.createUser(defaultUserData);
           // console.log('[v2] loadUser: New user created:', newUser);
           if (!isStale()) {
             const hydratedUser = {
@@ -347,7 +347,7 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
 
   const createUser = async (userData: { email: string; full_name: string; profile_picture_url?: string }) => {
     try {
-      const newUser = await apiService.createUser(userData);
+      const newUser = await userService.createUser(userData);
       setUser(newUser);
       return newUser;
     } catch (err) {
@@ -440,7 +440,7 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
     }
 
     try {
-      const updatedUser = await apiService.updateUser(user.id, payload);
+      const updatedUser = await userService.updateUser(user.id, payload);
 
       // Ensure local state reflects latest profile so viewerName and panel baselines
       // immediately pick up nickname / full_name changes.
@@ -456,7 +456,7 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
     if (!user) return;
 
     try {
-      const updatedUser = await apiService.getUser(user.id);
+      const updatedUser = await userService.getUser(user.id);
       setUser(updatedUser);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to refresh user');
@@ -469,7 +469,7 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
     }
 
     try {
-      await apiService.deleteUser(user.id);
+      await userService.deleteUser(user.id);
       const supabaseClient = getSupabaseClient();
       if (supabaseClient) {
         try {

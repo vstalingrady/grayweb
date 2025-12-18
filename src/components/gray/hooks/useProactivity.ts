@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { ApiError, apiService, type ProactivitySettings } from "@/lib/api";
+import { ApiError, workspaceService, type ProactivitySettings } from "@/lib/api";
 import { type ProactivityItem } from "@/components/gray/types";
 import { normalizeProactivityTimes, primaryProactivityTime, normalizeProactivityChannels } from "@/app/gray/utils";
 
@@ -132,7 +132,7 @@ export function useProactivity(userId: number | null, resolvedTimezone: string) 
     let cancelled = false;
     const loadProactivitySettings = async () => {
       try {
-        const settings = await apiService.getProactivitySettings(userId);
+        const settings = await workspaceService.getProactivitySettings(userId);
         if (cancelled) {
           return;
         }
@@ -162,7 +162,7 @@ export function useProactivity(userId: number | null, resolvedTimezone: string) 
     }
     const payload = buildProactivitySettingsPayload(next, resolvedTimezone);
     try {
-      const response = await apiService.updateProactivitySettings(userId, payload);
+      const response = await workspaceService.updateProactivitySettings(userId, payload);
 
       // Patch: ensure we preserve the ID if the backend dropped it or reset it,
       // preventing the UI from falling back to "Select a preset"
