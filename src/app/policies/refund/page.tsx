@@ -1,5 +1,9 @@
 export const metadata = {
   title: "Refund Policy",
+  description: "Refund policy for Gray subscriptions purchased on alignment.id.",
+  alternates: {
+    canonical: "/policies/refund",
+  },
 };
 
 const LAST_UPDATED = "November 2025";

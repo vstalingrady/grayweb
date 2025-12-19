@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import GrayPageClient from "@/app/gray/GrayPageClient";
@@ -5,6 +6,15 @@ import { hostFromHeaders, isGrayWorkspaceHost } from "@/lib/grayRouting";
 import { resolveTryGrayUrl } from "@/lib/grayCta";
 import MarketingLanding from "./components/MarketingLanding";
 import MarketingStyles from "./components/MarketingStyles";
+
+export const metadata: Metadata = {
+  title: "Alignment",
+  description:
+    "Your personal accelerator. An AI mentor that checks in throughout the day, remembers your goals, and helps you maximize your potential.",
+  alternates: {
+    canonical: "/",
+  },
+};
 
 export default async function HomePage() {
   const requestHeaders = await headers();

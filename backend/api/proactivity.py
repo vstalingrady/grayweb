@@ -77,16 +77,14 @@ async def get_user_from_query_token(
         
         try:
             payload = await verify_supabase_token(token)
-            auth_user_id = payload.get("sub")
-            if not auth_user_id:
-                return None
-            
-            user = await database.fetch_one(users.select().where(users.c.auth_user_id == auth_user_id))
             email = payload.get("email")
-            
-            if not user and email:
-                user = await database.fetch_one(users.select().where(users.c.email == email))
-            
+            normalized_email = email.strip().lower() if isinstance(email, str) else None
+            if not normalized_email:
+                return None
+
+            user = await database.fetch_one(
+                users.select().where(sqlalchemy.func.lower(users.c.email) == normalized_email)
+            )
             return dict(user) if user else None
         except Exception as exc:
             api_logger.debug(

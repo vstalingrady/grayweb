@@ -241,8 +241,8 @@
 }
 
 .planCard[data-variant="muted"] {
-  background: rgba(8, 8, 8, 1);
-  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.55);
+  background: rgba(5, 5, 5, 1);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.6);
   color: rgba(255, 255, 255, 0.55);
 }
 
@@ -268,7 +268,7 @@
 }
 
 .planCard[data-variant="highlighted"] {
-  background-image: linear-gradient(135deg, rgba(220, 220, 220, 0.08), rgba(32, 32, 32, 0.92) 60%, rgba(240, 240, 240, 0.15));
+  background-image: linear-gradient(135deg, rgba(236, 236, 236, 0.14), rgba(38, 38, 38, 0.88) 60%, rgba(245, 245, 245, 0.22));
   box-shadow: 0 25px 70px rgba(0, 0, 0, 0.75);
 }
 
@@ -282,6 +282,10 @@
   flex-direction: column;
   gap: 1.25rem;
   flex: 1;
+}
+
+.cardBodyCentered {
+  justify-content: center;
 }
 
 .cardFooter {
@@ -312,10 +316,10 @@
   line-height: 1.4;
   font-size: 0.85rem;
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  min-height: calc(1.4em * 2);
+  min-height: calc(1.4em * 3);
 }
 
 .priceBlock {
@@ -327,6 +331,12 @@
   min-width: 0;
 }
 
+.priceBlockStacked {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.2rem;
+}
+
 .priceHeader {
   display: flex;
   width: 100%;
@@ -336,7 +346,7 @@
 }
 
 .priceValue {
-  font-size: clamp(1.5rem, 2.5vw, 2rem);
+  font-size: clamp(1.35rem, 2.1vw, 1.8rem);
   font-weight: 600;
   letter-spacing: -0.02em;
   margin: 0;

@@ -470,16 +470,16 @@ async def handle_payment_notification(notification: MidtransNotification, backgr
 
                 try:
                     updated_user = await database.fetch_one(users.select().where(users.c.id == user_id))
-                    auth_user_id_value = None
+                    user_email = None
                     if updated_user:
                         try:
-                            auth_user_id_value = updated_user["auth_user_id"]
+                            user_email = updated_user["email"]
                         except Exception:
-                            auth_user_id_value = None
-                    if auth_user_id_value:
-                        auth_user_id = str(auth_user_id_value)
-                        invalidate_user_cache(auth_user_id)
-                        await invalidate_user_cache_redis(auth_user_id)
+                            user_email = None
+                    if isinstance(user_email, str) and user_email.strip():
+                        normalized_email = user_email.strip().lower()
+                        invalidate_user_cache(normalized_email)
+                        await invalidate_user_cache_redis(normalized_email)
                 except Exception as exc:
                     app_logger.warning(
                         "Failed to invalidate auth cache after plan upgrade",
@@ -681,11 +681,11 @@ async def handle_dodo_webhook(request: Request, background_tasks: BackgroundTask
 
             try:
                 updated_user = await database.fetch_one(users.select().where(users.c.id == user_id_int))
-                auth_user_id_value = updated_user["auth_user_id"] if updated_user else None
-                if auth_user_id_value:
-                    auth_user_id = str(auth_user_id_value)
-                    invalidate_user_cache(auth_user_id)
-                    await invalidate_user_cache_redis(auth_user_id)
+                user_email = updated_user["email"] if updated_user else None
+                if isinstance(user_email, str) and user_email.strip():
+                    normalized_email = user_email.strip().lower()
+                    invalidate_user_cache(normalized_email)
+                    await invalidate_user_cache_redis(normalized_email)
             except Exception as exc:
                 app_logger.warning(
                     "Failed to invalidate auth cache after Dodo plan upgrade",

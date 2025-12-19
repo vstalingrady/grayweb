@@ -1007,7 +1007,7 @@ a:hover {
 
 .code-block code {
   display: block;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-family: var(--font-mono, "IBM Plex Mono");
   white-space: pre;
 }
 

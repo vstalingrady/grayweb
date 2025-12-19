@@ -1025,7 +1025,6 @@ function GrayPageClientInner({
   const { handleCalendarsChange, handleEventsChange } = useCalendarSyncHandlers({
     userId,
     plans,
-    setPlans,
     calendars: calendarCalendars,
     setCalendars: setCalendarCalendars,
     events: calendarEvents,
@@ -1277,13 +1276,17 @@ function GrayPageClientInner({
       if (!shouldShowWorkspaceGreeting) {
         return null;
       }
+      const isPioneer = normalizedTier === "pioneer";
       return (
-        <div className={`${greetingStyles.greetingStack} hidden md:block`}>
+        <div
+          className={`${greetingStyles.greetingStack} hidden md:block`}
+          {...(isPioneer ? { "data-centered": "true" } : {})}
+        >
           <h1 className={greetingStyles.greeting}>{greeting}</h1>
         </div>
       );
     },
-    [greeting, shouldShowWorkspaceGreeting]
+    [greeting, shouldShowWorkspaceGreeting, normalizedTier]
   );
   const dashboardTabAttr = isDashboardView ? dashboardTab : undefined;
 

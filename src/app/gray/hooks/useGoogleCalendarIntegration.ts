@@ -25,12 +25,12 @@ const writePopupStatus = (popup: Window, title: string, message: string) => {
           <meta name="viewport" content="width=device-width, initial-scale=1" />
           <title>${escapedTitle}</title>
           <style>
-            body { margin: 0; font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif; background: #0f0f0f; color: #f5f5f5; }
+            body { margin: 0; font-family: "Plus Jakarta Sans", sans-serif; background: #0f0f0f; color: #f5f5f5; }
             .wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
             .card { width: 100%; max-width: 420px; background: #181818; border-radius: 16px; padding: 28px; box-shadow: 0 25px 45px rgba(0,0,0,0.45); }
             h1 { font-size: 1.2rem; margin: 0 0 10px; }
             p { margin: 0; color: rgba(255,255,255,0.75); line-height: 1.45; white-space: pre-wrap; }
-            code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 0.9em; }
+            code { font-family: "IBM Plex Mono", monospace; font-size: 0.9em; }
           </style>
         </head>
         <body>
@@ -188,4 +188,3 @@ export const useGoogleCalendarIntegration = (userId: number | null) => {
     })();
   }, [userId]);
 };
-

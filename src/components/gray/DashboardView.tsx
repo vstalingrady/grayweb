@@ -214,6 +214,7 @@ export function GrayDashboardView({
   const [isProactivityModalOpen, setIsProactivityModalOpen] = useState(false);
   const activeProactivityTimes = useMemo(() => getProactivityTimes(displayProactivity), [displayProactivity]);
   const isChatBarVisible = Boolean(chatBar);
+  const canResizePanel = isChatBarVisible;
   const calendarContainerRef = useRef<HTMLDivElement | null>(null);
   const chatDockRef = useRef<HTMLDivElement | null>(null);
   const [panelAvailableHeightPx, setPanelAvailableHeightPx] = useState<number | null>(null);
@@ -225,6 +226,11 @@ export function GrayDashboardView({
     if (typeof window === "undefined") {
       return;
     }
+    if (!canResizePanel) {
+      setPanelUserHeightPx(null);
+      window.localStorage.removeItem(CALENDAR_PANEL_HEIGHT_STORAGE_KEY);
+      return;
+    }
     const stored = window.localStorage.getItem(CALENDAR_PANEL_HEIGHT_STORAGE_KEY);
     if (!stored) {
       return;
@@ -233,19 +239,23 @@ export function GrayDashboardView({
     if (Number.isFinite(parsed) && parsed > 0) {
       Promise.resolve().then(() => setPanelUserHeightPx(parsed));
     }
-  }, []);
+  }, [canResizePanel]);
 
   const effectivePanelHeightPx = useMemo(() => {
     if (panelAvailableHeightPx === null) {
       return null;
     }
     const maximum = Math.max(panelAvailableHeightPx, CALENDAR_PANEL_MIN_HEIGHT_PX);
-    const desired = panelUserHeightPx ?? maximum;
+    const desired = canResizePanel ? (panelUserHeightPx ?? maximum) : maximum;
     return Math.max(CALENDAR_PANEL_MIN_HEIGHT_PX, Math.min(desired, maximum));
-  }, [panelAvailableHeightPx, panelUserHeightPx]);
+  }, [canResizePanel, panelAvailableHeightPx, panelUserHeightPx]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
+      return;
+    }
+    if (!canResizePanel) {
+      window.localStorage.removeItem(CALENDAR_PANEL_HEIGHT_STORAGE_KEY);
       return;
     }
     if (panelUserHeightPx === null) {
@@ -253,7 +263,7 @@ export function GrayDashboardView({
       return;
     }
     window.localStorage.setItem(CALENDAR_PANEL_HEIGHT_STORAGE_KEY, String(panelUserHeightPx));
-  }, [panelUserHeightPx]);
+  }, [canResizePanel, panelUserHeightPx]);
 
   const panelSizingStyle = useMemo(() => {
     const style = buildPanelSizingStyle(isChatBarVisible);
@@ -567,7 +577,7 @@ export function GrayDashboardView({
           >
             {surfaceContent}
           </div>
-          {isCompactLayout || activeTab !== "calendar" ? null : (
+          {isCompactLayout || activeTab !== "calendar" || !canResizePanel ? null : (
             <div
               className={styles.dashboardCalendarResizeHandle}
               data-active={isPanelResizing ? "true" : "false"}

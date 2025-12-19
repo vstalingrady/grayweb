@@ -13,14 +13,23 @@ const isApiNetworkError = (error: unknown) => {
   );
 };
 
-export const useCalendarSyncHandlers = (
-  userId: number | null,
-  plans: PlanItem[],
-  events: CalendarEvent[],
-  calendars: CalendarInfo[],
-  setEvents: React.Dispatch<React.SetStateAction<CalendarEvent[]>>,
-  setCalendars: React.Dispatch<React.SetStateAction<CalendarInfo[]>>
-) => {
+type UseCalendarSyncHandlersOptions = {
+  userId: number | null;
+  plans: PlanItem[];
+  events: CalendarEvent[];
+  calendars: CalendarInfo[];
+  setEvents: React.Dispatch<React.SetStateAction<CalendarEvent[]>>;
+  setCalendars: React.Dispatch<React.SetStateAction<CalendarInfo[]>>;
+};
+
+export const useCalendarSyncHandlers = ({
+  userId,
+  plans,
+  events,
+  calendars,
+  setEvents,
+  setCalendars,
+}: UseCalendarSyncHandlersOptions) => {
   const persistPlanFromCalendarMove = useCallback(
     async (planId: number, update: { label: string; deadline: string | null; scheduleSlot: string | null; description: string | null }) => {
       if (userId === null) return;

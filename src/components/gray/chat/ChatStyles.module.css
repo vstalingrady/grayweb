@@ -8,6 +8,8 @@
   display: none;
   position: absolute;
   inset: 0;
+  width: 100%;
+  max-width: none;
   z-index: 1;
   pointer-events: none;
   align-items: center;

@@ -2,6 +2,10 @@ import Link from "next/link";
 
 export const metadata = {
   title: "Policies & Legal",
+  description: "Legal policies for Gray, including terms of service, privacy, and refunds.",
+  alternates: {
+    canonical: "/policies",
+  },
 };
 
 const policies = [

@@ -2,6 +2,10 @@ import Link from "next/link";
 
 export const metadata = {
   title: "Privacy Policy",
+  description: "Privacy policy for the Gray workspace by Alignment.",
+  alternates: {
+    canonical: "/policies/privacy",
+  },
 };
 
 const LAST_UPDATED = "November 2025";

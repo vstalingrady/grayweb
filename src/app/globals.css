@@ -247,7 +247,7 @@ body {
   min-height: 100vh;
   height: 100vh;
   overflow: hidden;
-  font-family: var(--font-sans);
+  font-family: var(--font-sans, "Plus Jakarta Sans");
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -291,7 +291,7 @@ button {
 
 code,
 pre {
-  font-family: var(--font-mono), "IBM Plex Mono", SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+  font-family: var(--font-mono, "IBM Plex Mono");
 }
 
 .sr-only {

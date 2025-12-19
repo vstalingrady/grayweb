@@ -11,6 +11,7 @@ import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
 
 const resolveMetadataBase = (): URL | undefined => {
   const candidate =
+    process.env.NEXT_PUBLIC_MAIN_SITE_URL ??
     process.env.NEXT_PUBLIC_SITE_URL ??
     process.env.SITE_URL ??
     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined) ??
@@ -38,12 +39,21 @@ export const metadata: Metadata = {
     siteName: "Gray",
     locale: "en_US",
     type: "website",
+    images: [
+      {
+        url: "/grayai.png",
+        alt: "Gray",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
     title: "Gray",
     description:
       "Your personal accelerator. An AI mentor that checks in throughout the day, remembers your goals, and helps you maximize your potential.",
+    images: ["/grayai.png"],
+    site: "@alignmentid",
+    creator: "@alignmentid",
   },
   icons: {
     icon: [

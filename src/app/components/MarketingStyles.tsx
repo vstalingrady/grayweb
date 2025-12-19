@@ -23,7 +23,6 @@ function loadMarketingCss() {
 const coexistenceOverrides = `
 :root {
   color-scheme: dark;
-  --font-sans: "Plus Jakarta Sans";
 }
 
 /* Ensure marketing layout isn't affected by Gray dashboard globals */

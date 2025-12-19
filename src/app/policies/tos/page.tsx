@@ -1,6 +1,10 @@
 /* eslint-disable react/no-unescaped-entities */
 export const metadata = {
   title: "Terms of Service",
+  description: "Terms of service for using the Gray workspace from Alignment.",
+  alternates: {
+    canonical: "/policies/tos",
+  },
 };
 
 export default function TermsOfServicePage() {

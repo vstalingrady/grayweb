@@ -857,7 +857,7 @@
   font-size: 0.66rem;
   letter-spacing: 0;
   text-transform: uppercase;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-family: var(--font-mono, "IBM Plex Mono");
   line-height: 1;
   text-align: center;
 }
@@ -874,7 +874,7 @@
   border: 1px solid transparent;
   font-size: 0.86rem;
   letter-spacing: 0.02em;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-family: var(--font-mono, "IBM Plex Mono");
   color: rgba(245, 245, 245, 0.9);
   transition:
     background 0.2s ease,
@@ -946,7 +946,7 @@
   grid-template-rows: repeat(24, var(--calendar-hour-height, 64px));
   font-size: 0.56rem;
   letter-spacing: 0.12em;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-family: var(--font-mono, "IBM Plex Mono");
   color: rgba(225, 225, 225, 0.32);
   text-align: right;
   padding: 0 6px 0 0;
@@ -2026,11 +2026,13 @@
 }
 
 .composerFooter button[type="submit"] {
-  background: #525cf4;
-  border-color: #525cf4;
-  color: #050505;
-  font-weight: 600;
-  border-radius: 5px;
+  background: rgba(248, 248, 248, 0.92);
+  border-color: rgba(255, 255, 255, 0.45);
+  color: #141414;
+  font-weight: 400;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  padding: 6px 14px;
   box-shadow: none;
 }
 

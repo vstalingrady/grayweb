@@ -1507,7 +1507,7 @@
 }
 
 .personalizationBackgroundSub code {
-  font-family: "JetBrains Mono", "Fira Code", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-family: var(--font-mono, "IBM Plex Mono");
   font-size: 0.7rem;
   color: rgba(236, 236, 246, 0.82);
   background: rgba(20, 20, 28, 0.7);

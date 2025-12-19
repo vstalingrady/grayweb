@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useUser } from "@/contexts/UserContext";
 import { useI18n } from "@/contexts/I18nContext";
 import { isLocalHostname } from "@/lib/grayRouting";
+import { normalizePlanTier, PLAN_TIER_LEVELS } from "@/components/gray/utils/helperFunctions";
 import {
     Brain,
     CalendarClock,
@@ -75,7 +76,7 @@ export const VOYAGER_FEATURES: FeatureItem[] = [
     },
     {
         id: "more_messages",
-        label: "6x more messages",
+        label: "9x more messages",
         icon: MessageSquare,
     },
     {
@@ -107,7 +108,7 @@ export const PIONEER_FEATURES: FeatureItem[] = [
     },
     {
         id: "more_messages",
-        label: "15x more messages",
+        label: "21x more messages",
         icon: MessageSquare,
         subtext: "Built for heavy daily use",
     },
@@ -195,6 +196,26 @@ export function PricingPlansSection() {
 
     // Determine currency based on region (default to IDR during loading)
     const currency = isIndonesia === false ? "usd" : "idr";
+    const currentPlan = normalizePlanTier(user);
+    const currentPlanLevel = PLAN_TIER_LEVELS[currentPlan] ?? 0;
+    const hidePaidCtas = currentPlan !== "scout";
+    const paidCardBodyClassName = hidePaidCtas
+        ? `${styles.cardBody} ${styles.cardBodyCentered}`
+        : styles.cardBody;
+    const getPlanAction = (tier: keyof typeof PLAN_TIER_LEVELS) => {
+        const tierLevel = PLAN_TIER_LEVELS[tier] ?? 0;
+        if (currentPlan === tier) {
+            return { label: t("Current Plan"), disabled: true, status: "current" as const };
+        }
+        if (currentPlanLevel > tierLevel) {
+            return { label: t("Lower tier"), disabled: true, status: "lower" as const };
+        }
+        return { label: t("Upgrade"), disabled: false, status: "upgrade" as const };
+    };
+    const scoutAction = getPlanAction("scout");
+    const pathfinderAction = getPlanAction("pathfinder");
+    const voyagerAction = getPlanAction("voyager");
+    const pioneerAction = getPlanAction("pioneer");
 
     const { price: pathfinderPrice, cadence: pathfinderCadence } = PATHFINDER_PRICING[billingCycle][currency];
     const { price: voyagerPrice, cadence: voyagerCadence } = VOYAGER_PRICING[billingCycle][currency];
@@ -273,7 +294,7 @@ export function PricingPlansSection() {
                                 <h2>{t("Scout")}</h2>
                                 <p>{t("Try Gray for free. Great for getting the feel without committing.")}</p>
                             </header>
-                            <div className={styles.priceBlock}>
+                            <div className={`${styles.priceBlock} ${styles.priceBlockStacked}`}>
                                 <span className={styles.priceValue}>{t("Free")}</span>
                                 <span className={styles.priceMeta}>{t("/ forever")}</span>
                             </div>
@@ -292,13 +313,13 @@ export function PricingPlansSection() {
                     </div>
                     <div className={styles.cardFooter}>
                         <button type="button" className={styles.planButton} disabled>
-                            {t("Current Plan")}
+                            {scoutAction.label}
                         </button>
                     </div>
                 </article>
 
                 <article className={styles.planCard} data-variant="neutral">
-                    <div className={styles.cardBody}>
+                    <div className={paidCardBodyClassName}>
                         <div className={styles.cardIntro}>
                             <header className={styles.cardHeader}>
                                 <h2>{t("Pathfinder")}</h2>
@@ -327,19 +348,22 @@ export function PricingPlansSection() {
                             ))}
                         </ul>
                     </div>
-                    <div className={styles.cardFooter}>
-                        <button
-                            type="button"
-                            className={`${styles.planButton} ${styles.planButtonOutline}`}
-                            onClick={() => handleUpgrade("pathfinder")}
-                        >
-                            {t("Upgrade")}
-                        </button>
-                    </div>
+                    {!hidePaidCtas ? (
+                        <div className={styles.cardFooter}>
+                            <button
+                                type="button"
+                                className={`${styles.planButton} ${pathfinderAction.status === "upgrade" ? styles.planButtonOutline : ""}`}
+                                onClick={() => handleUpgrade("pathfinder")}
+                                disabled={pathfinderAction.disabled}
+                            >
+                                {pathfinderAction.label}
+                            </button>
+                        </div>
+                    ) : null}
                 </article>
 
                 <article className={styles.planCard} data-variant="highlighted">
-                    <div className={styles.cardBody}>
+                    <div className={paidCardBodyClassName}>
                         <div className={styles.cardIntro}>
                             <header className={styles.cardHeader}>
                                 <h2>{t("Voyager")}</h2>
@@ -372,19 +396,22 @@ export function PricingPlansSection() {
                             ))}
                         </ul>
                     </div>
-                    <div className={styles.cardFooter}>
-                        <button
-                            type="button"
-                            className={`${styles.planButton} ${styles.planButtonOutline}`}
-                            onClick={() => handleUpgrade("voyager")}
-                        >
-                            {t("Upgrade")}
-                        </button>
-                    </div>
+                    {!hidePaidCtas ? (
+                        <div className={styles.cardFooter}>
+                            <button
+                                type="button"
+                                className={`${styles.planButton} ${voyagerAction.status === "upgrade" ? styles.planButtonOutline : ""}`}
+                                onClick={() => handleUpgrade("voyager")}
+                                disabled={voyagerAction.disabled}
+                            >
+                                {voyagerAction.label}
+                            </button>
+                        </div>
+                    ) : null}
                 </article>
 
                 <article className={styles.planCard} data-variant="primary">
-                    <div className={styles.cardBody}>
+                    <div className={paidCardBodyClassName}>
                         <div className={styles.cardIntro}>
                             <header className={styles.cardHeader}>
                                 <h2>{t("Pioneer")}</h2>
@@ -413,15 +440,18 @@ export function PricingPlansSection() {
                             ))}
                         </ul>
                     </div>
-                    <div className={styles.cardFooter}>
-                        <button
-                            type="button"
-                            className={`${styles.planButton} ${styles.planButtonPrimary}`}
-                            onClick={() => handleUpgrade("pioneer")}
-                        >
-                            {t("Upgrade")}
-                        </button>
-                    </div>
+                    {!hidePaidCtas ? (
+                        <div className={styles.cardFooter}>
+                            <button
+                                type="button"
+                                className={`${styles.planButton} ${pioneerAction.status === "upgrade" ? styles.planButtonPrimary : ""}`}
+                                onClick={() => handleUpgrade("pioneer")}
+                                disabled={pioneerAction.disabled}
+                            >
+                                {pioneerAction.label}
+                            </button>
+                        </div>
+                    ) : null}
                 </article>
             </section>
             <p className={styles.disclaimer}>

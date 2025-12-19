@@ -58,6 +58,11 @@ const isMissingUserError = (error: unknown): boolean => {
 
 const deriveNameFromEmail = (email: string) => humanizeIdentifier(email) ?? 'Operator';
 
+const normalizeEmail = (value?: string | null): string | null => {
+  const trimmed = (value ?? '').trim();
+  return trimmed.length > 0 ? trimmed : null;
+};
+
 export function UserProvider({ children, userEmail }: UserProviderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(() => Boolean(userEmail));
@@ -71,102 +76,104 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
     userRef.current = user;
   }, [user]);
 
-  const fetchSupabaseProfile = useCallback(async (): Promise<{ fullName: string | null; avatarUrl: string | null } | null> => {
-    try {
-      const supabase = getSupabaseClient();
-      if (!supabase) {
-        return null;
-      }
-
-
-
-      const { data, error: supabaseError } = await supabase.auth.getUser();
-      if (supabaseError) {
-        if (
-          supabaseError instanceof AuthApiError &&
-          typeof supabaseError.message === 'string' &&
-          supabaseError.message.toLowerCase().includes('invalid refresh token')
-        ) {
-          clearSupabaseAuthStorage();
-          try {
-            await supabase.auth.signOut({ scope: 'local' });
-          } catch {
-            // Ignore sign out errors; the storage is already cleared
-          }
+  const fetchSupabaseProfile = useCallback(
+    async (): Promise<{ fullName: string | null; avatarUrl: string | null; email: string | null } | null> => {
+      try {
+        const supabase = getSupabaseClient();
+        if (!supabase) {
           return null;
         }
-        throw supabaseError;
-      }
 
-      const authUser = data?.user;
-      if (!authUser) {
+        const { data, error: supabaseError } = await supabase.auth.getUser();
+        if (supabaseError) {
+          if (
+            supabaseError instanceof AuthApiError &&
+            typeof supabaseError.message === 'string' &&
+            supabaseError.message.toLowerCase().includes('invalid refresh token')
+          ) {
+            clearSupabaseAuthStorage();
+            try {
+              await supabase.auth.signOut({ scope: 'local' });
+            } catch {
+              // Ignore sign out errors; the storage is already cleared
+            }
+            return null;
+          }
+          throw supabaseError;
+        }
+
+        const authUser = data?.user;
+        if (!authUser) {
+          return null;
+        }
+
+        const authEmail = normalizeEmail(authUser.email);
+        const metadata = (authUser.user_metadata ?? {}) as Record<string, unknown>;
+        const nameCandidates = [
+          metadata.full_name,
+          metadata.name,
+          metadata.preferred_username,
+          metadata.user_name,
+          metadata.username,
+          metadata.nickname,
+          metadata.display_name,
+          metadata.given_name && metadata.family_name
+            ? `${metadata.given_name as string} ${metadata.family_name as string}`.trim()
+            : undefined,
+        ].filter((value): value is string => typeof value === 'string' && value.trim().length > 0);
+
+        const fullName = nameCandidates[0]?.trim() ?? (authEmail ? deriveNameFromEmail(authEmail) : null);
+
+        const avatarUrlCandidate = [
+          metadata.avatar_url,
+          metadata.picture,
+          metadata.avatar,
+          metadata.image,
+        ].find((value) => typeof value === 'string' && value.trim().length > 0) as string | undefined;
+
+        // Normalize Supabase/Discord avatar URLs so they are absolute and usable by the browser.
+        let normalizedAvatarUrl: string | null = avatarUrlCandidate ?? null;
+        if (normalizedAvatarUrl) {
+          try {
+            const lower = normalizedAvatarUrl.toLowerCase();
+            const looksAbsolute = lower.startsWith('http://') || lower.startsWith('https://');
+            const isDataUrl = lower.startsWith('data:');
+            if (!looksAbsolute && !isDataUrl) {
+              // Some providers (or custom extensions) may store a relative Supabase
+              // storage path (e.g. `/storage/v1/object/public/avatars/...`). Prefer
+              // resolving those against the Supabase base URL so avatar URLs point
+              // at the actual storage bucket instead of the app origin.
+              const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+              if (supabaseUrl && normalizedAvatarUrl.startsWith('/')) {
+                normalizedAvatarUrl = new URL(normalizedAvatarUrl, supabaseUrl).toString();
+              } else if (typeof window !== 'undefined') {
+                normalizedAvatarUrl = new URL(normalizedAvatarUrl, window.location.origin).toString();
+              }
+            }
+          } catch {
+            // If normalization fails, fall back to the raw value.
+            normalizedAvatarUrl = avatarUrlCandidate ?? null;
+          }
+        }
+
+        return {
+          fullName: fullName ?? null,
+          avatarUrl: normalizedAvatarUrl,
+          email: authEmail,
+        };
+      } catch (supabaseError) {
+        // Avoid crashing the UI when Supabase is not configured.
+        if (process.env.NODE_ENV !== 'production') {
+          // Use log instead of warn to avoid triggering error overlays for non-critical failures
+          console.log('Supabase profile lookup failed (non-critical):', supabaseError);
+        }
         return null;
       }
+    },
+    []
+  );
 
-      const metadata = (authUser.user_metadata ?? {}) as Record<string, unknown>;
-      const nameCandidates = [
-        metadata.full_name,
-        metadata.name,
-        metadata.preferred_username,
-        metadata.user_name,
-        metadata.username,
-        metadata.nickname,
-        metadata.display_name,
-        metadata.given_name && metadata.family_name
-          ? `${metadata.given_name as string} ${metadata.family_name as string}`.trim()
-          : undefined,
-      ].filter((value): value is string => typeof value === 'string' && value.trim().length > 0);
-
-      const fullName =
-        nameCandidates[0]?.trim() ?? (authUser.email ? deriveNameFromEmail(authUser.email) : null);
-
-      const avatarUrlCandidate = [
-        metadata.avatar_url,
-        metadata.picture,
-        metadata.avatar,
-        metadata.image,
-      ].find((value) => typeof value === 'string' && value.trim().length > 0) as string | undefined;
-
-      // Normalize Supabase/Discord avatar URLs so they are absolute and usable by the browser.
-      let normalizedAvatarUrl: string | null = avatarUrlCandidate ?? null;
-      if (normalizedAvatarUrl) {
-        try {
-          const lower = normalizedAvatarUrl.toLowerCase();
-          const looksAbsolute = lower.startsWith('http://') || lower.startsWith('https://');
-          const isDataUrl = lower.startsWith('data:');
-          if (!looksAbsolute && !isDataUrl) {
-            // Some providers (or custom extensions) may store a relative Supabase
-            // storage path (e.g. `/storage/v1/object/public/avatars/...`). Prefer
-            // resolving those against the Supabase base URL so avatar URLs point
-            // at the actual storage bucket instead of the app origin.
-            const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
-            if (supabaseUrl && normalizedAvatarUrl.startsWith('/')) {
-              normalizedAvatarUrl = new URL(normalizedAvatarUrl, supabaseUrl).toString();
-            } else if (typeof window !== 'undefined') {
-              normalizedAvatarUrl = new URL(normalizedAvatarUrl, window.location.origin).toString();
-            }
-          }
-        } catch {
-          // If normalization fails, fall back to the raw value.
-          normalizedAvatarUrl = avatarUrlCandidate ?? null;
-        }
-      }
-
-      return {
-        fullName: fullName ?? null,
-        avatarUrl: normalizedAvatarUrl,
-      };
-    } catch (supabaseError) {
-      // Avoid crashing the UI when Supabase is not configured.
-      if (process.env.NODE_ENV !== 'production') {
-        // Use log instead of warn to avoid triggering error overlays for non-critical failures
-        console.log('Supabase profile lookup failed (non-critical):', supabaseError);
-      }
-      return null;
-    }
-  }, []);
-
-  const loadUser = useCallback(async (email: string, options?: { silent?: boolean }) => {
+  const loadUser = useCallback(async (emailHint: string | null | undefined, options?: { silent?: boolean }) => {
     const silent = Boolean(options?.silent);
     const requestId = ++activeRequestIdRef.current;
     const isStale = () => !isMountedRef.current || activeRequestIdRef.current !== requestId;
@@ -223,19 +230,38 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
       }
 
       if (!supabaseProfile) {
-        // Should be covered by session check, but double check
+        // Auth session is missing or invalid; clear any stale user state.
+        if (!isStale()) {
+          setUser(null);
+          setLoading(false);
+        }
         return;
       }
 
-      const supabaseName = supabaseProfile?.fullName;
-      const derivedName = deriveNameFromEmail(email);
+      const resolvedEmail = normalizeEmail(supabaseProfile.email) ?? normalizeEmail(emailHint);
+      if (!resolvedEmail) {
+        if (!isStale()) {
+          setUser(null);
+          setLoading(false);
+        }
+        return;
+      }
+      if (!isStale()) {
+        const currentEmail = normalizeEmail(userRef.current?.email);
+        if (currentEmail && currentEmail.toLowerCase() !== resolvedEmail.toLowerCase()) {
+          setUser(null);
+        }
+      }
+
+      const supabaseName = supabaseProfile.fullName;
+      const derivedName = deriveNameFromEmail(resolvedEmail);
       const preferredName = supabaseName ?? derivedName;
-      const preferredAvatar = supabaseProfile?.avatarUrl ?? undefined;
+      const preferredAvatar = supabaseProfile.avatarUrl ?? undefined;
       // console.log('loadUser: Preferred name:', preferredName, 'Avatar:', preferredAvatar);
 
       try {
         // console.log('loadUser: Attempting to get user by email from API...');
-        const userData = await userService.getUserByEmail(email);
+        const userData = await userService.getUserByEmail(resolvedEmail);
         if (isStale()) {
           return;
         }
@@ -295,7 +321,7 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
         if (isMissingUserError(userError)) {
           // console.log('[v2] loadUser: User not found, creating new user...');
           const defaultUserData = {
-            email,
+            email: resolvedEmail,
             full_name: preferredName,
             profile_picture_url: preferredAvatar,
           };

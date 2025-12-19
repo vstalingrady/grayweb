@@ -102,6 +102,14 @@
     overflow-y: visible;
 }
 
+@media (min-width: 901px) {
+    .inputColumn {
+        width: 480px;
+        max-width: 480px;
+        flex: 0 0 480px;
+    }
+}
+
 
 /* Common child width constraints handled by grid, but ensure max-width doesn't break it */
 .inputColumn>*,
@@ -799,7 +807,7 @@
 }
 
 .successMetaValue {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-family: var(--font-mono, "IBM Plex Mono");
     font-size: 1.05rem;
     color: rgba(255, 255, 255, 0.92);
     word-break: break-word;

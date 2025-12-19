@@ -6,6 +6,10 @@
   gap: 6px;
 }
 
+.greetingStack[data-centered="true"] {
+  align-items: center;
+}
+
 .greeting {
   font-size: clamp(1.3rem, 2.6vw, 1.7rem);
   font-weight: 500;
@@ -14,6 +18,10 @@
   width: auto;
   text-align: left;
   margin: 0;
+}
+
+.greetingStack[data-centered="true"] .greeting {
+  text-align: center;
 }
 
 .greeting,

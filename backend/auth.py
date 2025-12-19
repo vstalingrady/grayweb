@@ -2,6 +2,7 @@
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import databases
+import sqlalchemy
 import os
 from typing import Optional, Dict, Any
 import logging
@@ -47,35 +48,51 @@ if _ALLOW_INSECURE_JWT_FALLBACK_FLAG and _IS_PRODUCTION:
         extra={"event_type": "auth_insecure_fallback_disabled"},
     )
 
-def _get_cached_user(auth_user_id: str) -> Optional[Dict[str, Any]]:
-    """Get user from L1 (in-memory) cache if valid"""
-    if auth_user_id in _user_cache:
-        user_data, timestamp = _user_cache[auth_user_id]
+def _normalize_email(value: Optional[str]) -> Optional[str]:
+    if not value or not isinstance(value, str):
+        return None
+    normalized = value.strip().lower()
+    return normalized or None
+
+
+def _get_cached_user(email: str) -> Optional[Dict[str, Any]]:
+    """Get user from L1 (in-memory) cache if valid."""
+    normalized_email = _normalize_email(email)
+    if not normalized_email:
+        return None
+    if normalized_email in _user_cache:
+        user_data, timestamp = _user_cache[normalized_email]
         if time.time() - timestamp < _USER_CACHE_TTL:
             return user_data
         else:
             # Expired, remove from cache
-            del _user_cache[auth_user_id]
+            del _user_cache[normalized_email]
     return None
 
 
-async def _get_cached_user_redis(auth_user_id: str) -> Optional[Dict[str, Any]]:
-    """Get user from Redis (L2 cache) - 5 minute TTL"""
+async def _get_cached_user_redis(email: str) -> Optional[Dict[str, Any]]:
+    """Get user from Redis (L2 cache) - 5 minute TTL."""
+    normalized_email = _normalize_email(email)
+    if not normalized_email:
+        return None
     if not _redis_client or not _redis_client.available:
         return None
     try:
         await _redis_client.ensure_connected()
-        data = await _redis_client.get_session(f"user:{auth_user_id}")
+        data = await _redis_client.get_session(f"user:{normalized_email}")
         if data:
-            logger.debug(f"[REDIS] Cache hit for user {auth_user_id}")
+            logger.debug(f"[REDIS] Cache hit for user {normalized_email}")
             return data
     except Exception as e:
-        logger.debug(f"[REDIS] Cache miss or error for user {auth_user_id}: {e}")
+        logger.debug(f"[REDIS] Cache miss or error for user {normalized_email}: {e}")
     return None
 
 
-def _cache_user(auth_user_id: str, user_data: Dict[str, Any]):
-    """Cache user data in L1 (in-memory)"""
+def _cache_user(email: str, user_data: Dict[str, Any]):
+    """Cache user data in L1 (in-memory)."""
+    normalized_email = _normalize_email(email)
+    if not normalized_email:
+        return
     # Keep cache size reasonable (max 1000 entries)
     if len(_user_cache) > 1000:
         # Remove oldest 20% of entries
@@ -83,37 +100,46 @@ def _cache_user(auth_user_id: str, user_data: Dict[str, Any]):
         for key, _ in sorted_items[:200]:
             del _user_cache[key]
     
-    _user_cache[auth_user_id] = (user_data, time.time())
+    _user_cache[normalized_email] = (user_data, time.time())
 
 
-async def _cache_user_redis(auth_user_id: str, user_data: Dict[str, Any]):
-    """Cache user data in Redis (L2) with 5 minute TTL"""
+async def _cache_user_redis(email: str, user_data: Dict[str, Any]):
+    """Cache user data in Redis (L2) with 5 minute TTL."""
+    normalized_email = _normalize_email(email)
+    if not normalized_email:
+        return
     if not _redis_client or not _redis_client.available:
         return
     try:
         await _redis_client.ensure_connected()
-        await _redis_client.set_session(f"user:{auth_user_id}", user_data, ttl=300)
-        logger.debug(f"[REDIS] Cached user {auth_user_id}")
+        await _redis_client.set_session(f"user:{normalized_email}", user_data, ttl=300)
+        logger.debug(f"[REDIS] Cached user {normalized_email}")
     except Exception as e:
-        logger.debug(f"[REDIS] Failed to cache user {auth_user_id}: {e}")
+        logger.debug(f"[REDIS] Failed to cache user {normalized_email}: {e}")
 
 
-def invalidate_user_cache(auth_user_id: str):
-    """Manually invalidate user cache (e.g. after profile updates)"""
-    if auth_user_id in _user_cache:
-        del _user_cache[auth_user_id]
+def invalidate_user_cache(email: str):
+    """Manually invalidate user cache (e.g. after profile updates)."""
+    normalized_email = _normalize_email(email)
+    if not normalized_email:
+        return
+    if normalized_email in _user_cache:
+        del _user_cache[normalized_email]
 
 
-async def invalidate_user_cache_redis(auth_user_id: str):
-    """Invalidate user cache in Redis"""
+async def invalidate_user_cache_redis(email: str):
+    """Invalidate user cache in Redis."""
+    normalized_email = _normalize_email(email)
+    if not normalized_email:
+        return
     if not _redis_client or not _redis_client.available:
         return
     try:
         await _redis_client.ensure_connected()
-        await _redis_client.delete_session(f"user:{auth_user_id}")
-        logger.debug(f"[REDIS] Invalidated cache for user {auth_user_id}")
+        await _redis_client.delete_session(f"user:{normalized_email}")
+        logger.debug(f"[REDIS] Invalidated cache for user {normalized_email}")
     except Exception as e:
-        logger.debug(f"[REDIS] Cache invalidation failed for {auth_user_id}: {e}")
+        logger.debug(f"[REDIS] Cache invalidation failed for {normalized_email}: {e}")
 
 
 def _decode_token_without_signature(token: str) -> Optional[Dict[str, Any]]:
@@ -423,38 +449,48 @@ async def get_current_user(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token payload"
         )
+
+    email = _normalize_email(payload.get("email"))
+    if not email:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Email required for authentication"
+        )
     
     # Check L1 (in-memory) cache first
-    cached_user = _get_cached_user(auth_user_id)
+    cached_user = _get_cached_user(email)
     if cached_user:
-        logger.debug(f"[AUTH PERF] L1 cache hit for user {auth_user_id}, took {(time.time() - perf_start) * 1000:.2f}ms")
+        logger.debug(f"[AUTH PERF] L1 cache hit for user {email}, took {(time.time() - perf_start) * 1000:.2f}ms")
         return cached_user
     
     # Check L2 (Redis) cache
-    redis_cached_user = await _get_cached_user_redis(auth_user_id)
+    redis_cached_user = await _get_cached_user_redis(email)
     if redis_cached_user:
         # Promote to L1 cache
-        _cache_user(auth_user_id, redis_cached_user)
-        logger.debug(f"[AUTH PERF] L2 (Redis) cache hit for user {auth_user_id}, took {(time.time() - perf_start) * 1000:.2f}ms")
+        _cache_user(email, redis_cached_user)
+        logger.debug(f"[AUTH PERF] L2 (Redis) cache hit for user {email}, took {(time.time() - perf_start) * 1000:.2f}ms")
         return redis_cached_user
     
-    # Fetch user from database by auth_user_id
-    user = await database.fetch_one(users.select().where(users.c.auth_user_id == auth_user_id))
-    email = payload.get("email")
+    # Fetch user from database by email (single source of truth).
+    user = await database.fetch_one(
+        users.select().where(sqlalchemy.func.lower(users.c.email) == email)
+    )
 
-    # If no user row is linked, try to attach by email or create a new one.
-    if not user and email:
-        # Optimize: Try to find and link user by email in one go
-        linked_user = await database.fetch_one(users.select().where(users.c.email == email))
-        if linked_user:
-            # Link the auth_user_id to existing user
+    if user and auth_user_id:
+        existing_auth_user_id = user.get("auth_user_id")
+        if not existing_auth_user_id or str(existing_auth_user_id) != str(auth_user_id):
             await database.execute(
                 users.update()
-                .where(users.c.id == linked_user["id"])
+                .where(users.c.id == user["id"])
                 .values(auth_user_id=auth_user_id, updated_at=utcnow())
             )
-            user = await database.fetch_one(users.select().where(users.c.id == linked_user["id"]))
-            logger.info(f"Linked auth_user_id {auth_user_id} to existing user {linked_user['id']}")
+            user = await database.fetch_one(
+                users.select().where(sqlalchemy.func.lower(users.c.email) == email)
+            )
+            logger.info(
+                "Synced auth_user_id to existing user",
+                extra={"auth_user_id": auth_user_id, "user_id": user["id"] if user else None},
+            )
 
     # Create new user if still not found
     if not user:
@@ -465,7 +501,7 @@ async def get_current_user(
             assigned_plan_tier = bootstrap_plan_tier(email)
                 
             insert_values = {
-                "email": email or f"missing-email-{auth_user_id}@example.com",
+                "email": email,
                 "full_name": full_name,
                 "role": "user",
                 "plan_tier": assigned_plan_tier,
@@ -487,7 +523,7 @@ async def get_current_user(
             )
 
     if not user:
-        logger.warning(f"User not found for auth_user_id: {auth_user_id}")
+        logger.warning(f"User not found for email: {email}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found"
@@ -496,8 +532,8 @@ async def get_current_user(
     user_dict = dict(user)
     
     # Cache the user in L1 (in-memory) and L2 (Redis)
-    _cache_user(auth_user_id, user_dict)
-    await _cache_user_redis(auth_user_id, user_dict)
+    _cache_user(email, user_dict)
+    await _cache_user_redis(email, user_dict)
     
     perf_duration = (time.time() - perf_start) * 1000
     logger.debug(f"[AUTH PERF] get_current_user took {perf_duration:.2f}ms (DB fetch)")

@@ -390,11 +390,11 @@ async def update_user(
     # Invalidate cache
     USER_CACHE.invalidate(f"user_{user_id}")
     if current_user_record:
-        auth_user_id = current_user_record["auth_user_id"] if "auth_user_id" in current_user_record else None
-        if auth_user_id:
-            auth_user_id_str = str(auth_user_id)
-            invalidate_user_cache(auth_user_id_str)
-            await invalidate_user_cache_redis(auth_user_id_str)
+        user_email = current_user_record["email"] if "email" in current_user_record else None
+        if isinstance(user_email, str) and user_email.strip():
+            normalized_email = user_email.strip().lower()
+            invalidate_user_cache(normalized_email)
+            await invalidate_user_cache_redis(normalized_email)
 
     # Return updated user
     query = users.select().where(users.c.id == user_id)
