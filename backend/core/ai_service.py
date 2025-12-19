@@ -148,6 +148,8 @@ async def stream_ai_response(
     
     conversation_history = deps["normalize_conversation_history"](conversation_history)
     history_token_budget = deps["tier_conversation_token_limit"](plan_tier)
+    normalized_tier = normalize_plan_tier(plan_tier)
+    has_calendar_access = normalized_tier in ("voyager", "pioneer")
 
     # Determine whether this turn is part of a reminder/plan/habit flow.
     intent_window_text = deps["build_intent_window_text"](message, conversation_history)
@@ -207,17 +209,18 @@ async def stream_ai_response(
             workspace_with_cache = "\n\n".join(filter(None, [workspace_context, f"Context cache:\n{cache_text.strip()}"]))
         cached_contents = deps["_context_cache_contents"](cache_record)
 
-    try:
-        calendar_context_block = await deps["build_calendar_context"](
-            user_id=user_id,
-            db=db,
-            user_timezone=user_timezone,
-            time_context=time_context,
-        )
-        if calendar_context_block:
-            workspace_with_cache = "\n\n".join(filter(None, [workspace_with_cache, calendar_context_block]))
-    except Exception as error:
-        api_logger.debug(f"Failed to build calendar context: {error}")
+    if has_calendar_access:
+        try:
+            calendar_context_block = await deps["build_calendar_context"](
+                user_id=user_id,
+                db=db,
+                user_timezone=user_timezone,
+                time_context=time_context,
+            )
+            if calendar_context_block:
+                workspace_with_cache = "\n\n".join(filter(None, [workspace_with_cache, calendar_context_block]))
+        except Exception as error:
+            api_logger.debug(f"Failed to build calendar context: {error}")
 
     effective_system_prompt = system_prompt
     if not reminders_enabled:
@@ -239,7 +242,9 @@ async def stream_ai_response(
     
     tool_list = [*tools, *maps_tools]
     if needs_structured_tools and not is_onboarding_tool:
-        tool_list = [*tool_list, *deps["PLAN_TOOLS"], *deps["CALENDAR_TOOLS"]]
+        tool_list = [*tool_list, *deps["PLAN_TOOLS"]]
+        if has_calendar_access:
+            tool_list = [*tool_list, *deps["CALENDAR_TOOLS"]]
 
     # Routing
     if provider == "openrouter":

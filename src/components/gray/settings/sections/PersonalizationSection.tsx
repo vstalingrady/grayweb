@@ -1,8 +1,9 @@
 "use client";
 
-import { Check, Trash2 } from "lucide-react";
+import { Check } from "lucide-react";
 import styles from "../SettingsStyles.module.css";
 import { SettingsToggle } from "@/components/gray/settings/components/SettingsToggle";
+import { SettingsSelect } from "@/components/gray/settings/components/SettingsSelect";
 
 type Translator = (message: string, vars?: Record<string, string | number>) => string;
 
@@ -25,7 +26,6 @@ export type PersonalizationSectionProps = {
   resolvedDeviceTimeZone: string;
   supportedTimeZones: string[];
   localeSaveState: "idle" | "saving" | "success" | "error";
-  onClearLocationAndTimeZone: () => void;
   onUseDeviceTimeZone: () => void;
   onSaveLocale: () => void;
   customInstructions: string;
@@ -54,7 +54,6 @@ export function PersonalizationSection({
   resolvedDeviceTimeZone,
   supportedTimeZones,
   localeSaveState,
-  onClearLocationAndTimeZone,
   onUseDeviceTimeZone,
   onSaveLocale,
   customInstructions,
@@ -155,29 +154,26 @@ export function PersonalizationSection({
             <label className={styles.settingsFormLabel} htmlFor="settings-timezone">
               {t("Time zone")}
             </label>
-            <input
-              id="settings-timezone"
-              className={styles.settingsInput}
-              value={timeZone}
-              onChange={(e) => onTimeZoneChange(e.target.value)}
-              placeholder={resolvedDeviceTimeZone}
-              list={supportedTimeZones.length > 0 ? "settings-timezone-options" : undefined}
-            />
             {supportedTimeZones.length > 0 ? (
-              <datalist id="settings-timezone-options">
-                {supportedTimeZones.map((zone) => (
-                  <option key={zone} value={zone} />
-                ))}
-              </datalist>
-            ) : null}
+              <SettingsSelect
+                id="settings-timezone"
+                value={timeZone}
+                onChange={onTimeZoneChange}
+                options={supportedTimeZones.map((zone) => ({ value: zone, label: zone }))}
+              />
+            ) : (
+              <input
+                id="settings-timezone"
+                className={styles.settingsInput}
+                value={timeZone}
+                onChange={(e) => onTimeZoneChange(e.target.value)}
+                placeholder={resolvedDeviceTimeZone}
+              />
+            )}
           </div>
         </div>
 
         <div className={styles.settingsButtonGroup}>
-          <button type="button" className={styles.settingsSecondaryButton} onClick={onClearLocationAndTimeZone}>
-            <Trash2 size={14} />
-            {t("Clear")}
-          </button>
           <button type="button" className={styles.settingsSecondaryButton} onClick={onUseDeviceTimeZone}>
             <Check size={14} />
             {t("Use device time zone")}

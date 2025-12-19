@@ -399,6 +399,8 @@ async def _overwrite_conversation_history_logic(
     conversation_id: str,
     payload: Any,  # ConversationHistoryPayload
     current_user: Dict[str, Any],
+    *,
+    allow_truncate: bool = False,
 ):
     """Internal logic for overwriting conversation history."""
     (
@@ -439,8 +441,64 @@ async def _overwrite_conversation_history_logic(
             },
         )
         normalized_history = normalize_conversation_history(payload.messages)
+        incoming_len = len(normalized_history)
 
         general_user_id = _general_conversation_user_id(conversation_id)
+        if general_user_id is not None and not allow_truncate:
+            existing_len = 0
+            try:
+                existing_history = await _load_conversation_history(conversation_id, current_user["id"])
+                if isinstance(existing_history, list):
+                    existing_len = len(existing_history)
+            except Exception as error:
+                app_logger.warning(
+                    "Failed to load existing general history for overwrite guard",
+                    extra={
+                        "event_type": "history_overwrite_guard_load_failed",
+                        "conversation_id": conversation_id,
+                        "user_id": current_user.get("id"),
+                        "error": str(error),
+                    },
+                )
+
+            if incoming_len == 0:
+                app_logger.warning(
+                    "Refusing to overwrite general history with empty payload",
+                    extra={
+                        "event_type": "history_overwrite_rejected_empty",
+                        "conversation_id": conversation_id,
+                        "user_id": current_user.get("id"),
+                        "existing_count": existing_len,
+                    },
+                )
+                return {
+                    "id": conversation_id,
+                    "message_count": existing_len,
+                    "skipped": True,
+                    "reason": "empty_payload",
+                }
+
+            if existing_len >= 8:
+                min_keep = max(5, existing_len // 2)
+                if incoming_len < min_keep:
+                    app_logger.warning(
+                        "Refusing to overwrite general history with suspiciously small payload",
+                        extra={
+                            "event_type": "history_overwrite_rejected_truncation",
+                            "conversation_id": conversation_id,
+                            "user_id": current_user.get("id"),
+                            "existing_count": existing_len,
+                            "incoming_count": incoming_len,
+                            "min_keep": min_keep,
+                        },
+                    )
+                    return {
+                        "id": conversation_id,
+                        "message_count": existing_len,
+                        "skipped": True,
+                        "reason": "suspicious_truncation",
+                    }
+
         if general_user_id is not None:
             await _replace_general_conversation_history(
                 general_user_id, normalized_history
@@ -748,7 +806,8 @@ Summary:"""
         await _overwrite_conversation_history_logic(
             conversation_id,
             ConversationHistoryPayload(messages=compressed_history),
-            current_user
+            current_user,
+            allow_truncate=True,
         )
         
         new_chars = len(summary_text)

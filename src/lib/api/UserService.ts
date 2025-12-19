@@ -55,11 +55,6 @@ export class UserService {
         }
     }
 
-    async verifyGumroadLicense(): Promise<{ success: boolean; message: string; tier?: string }> {
-        return apiFetch<{ success: boolean; message: string; tier?: string }>('/api/payment/gumroad/verify', {
-            method: 'POST',
-        });
-    }
 }
 
 export const userService = new UserService();

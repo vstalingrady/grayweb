@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useUser } from "@/contexts/UserContext";
 import { useI18n } from "@/contexts/I18nContext";
+import { isLocalHostname } from "@/lib/grayRouting";
 import {
     Brain,
     CalendarClock,
@@ -61,6 +62,7 @@ export const PATHFINDER_FEATURES: FeatureItem[] = [
         label: "256,000 token memory",
         icon: Pin,
     },
+    { id: "reasoning_mode", label: "Reasoning mode", icon: Brain },
     { id: "everything_in_scout", label: "Everything in Scout", icon: Plus, variant: "inherit" },
 ];
 
@@ -86,7 +88,6 @@ export const VOYAGER_FEATURES: FeatureItem[] = [
         label: "Calendar access",
         icon: Clock,
     },
-    { id: "reasoning_mode", label: "Reasoning mode", icon: Brain },
     {
         id: "integrations",
         label: "Google Calendar, Gmail, Notion integrations",
@@ -208,14 +209,16 @@ export function PricingPlansSection() {
 
     const handleUpgrade = (plan: "pathfinder" | "voyager" | "pioneer") => {
         const paymentPath = `/payment?plan=${plan}&cycle=${billingCycle}`;
-        const paymentBase = process.env.NEXT_PUBLIC_PAYMENT_SITE_URL;
+        const isLocal =
+            typeof window !== "undefined" && isLocalHostname(window.location.hostname);
+        const paymentBase = isLocal ? undefined : process.env.NEXT_PUBLIC_PAYMENT_SITE_URL;
         const paymentUrl = paymentBase
             ? `${paymentBase.replace(/\/+$/, "")}${paymentPath}`
             : paymentPath;
 
         if (!user) {
             // Redirect to login with return URL to complete purchase
-            router.push(`/login?returnTo=${encodeURIComponent(paymentUrl)}`);
+            router.push(`/login?redirect=${encodeURIComponent(paymentPath)}`);
         } else {
             if (paymentUrl.startsWith("http")) {
                 window.location.href = paymentUrl;

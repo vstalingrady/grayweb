@@ -21,6 +21,7 @@ import { useI18n } from "@/contexts/I18nContext";
 import { getProactivityTimes } from "./proactivityUtils";
 import { ProactivitySettingsModal } from "./ProactivitySettingsModal";
 import { DashboardPulseGrid } from "./dashboard/DashboardPulseGrid";
+import { normalizePlanTier } from "@/components/gray/utils/helperFunctions";
 
 const isSameDay = (a: Date, b: Date) =>
   a.getFullYear() === b.getFullYear() &&
@@ -265,8 +266,8 @@ export function GrayDashboardView({
   }, [effectivePanelHeightPx, isChatBarVisible]);
 
   const { user } = useUser();
-  const planTier = (user?.plan_tier || "scout").toLowerCase();
-  const isScout = planTier === "scout";
+  const normalizedTier = normalizePlanTier(user);
+  const hasCalendarAccess = normalizedTier === "voyager" || normalizedTier === "pioneer";
 
   useLayoutEffect(() => {
     if (typeof window === "undefined") {
@@ -415,7 +416,7 @@ export function GrayDashboardView({
           className={headerClassName}
           onUpgradeClick={onUpgradeClick}
           showUpgradeButton={showUpgradeButton}
-          showTabs={!isScout}
+          showTabs={hasCalendarAccess}
         />
         <DashboardPulseGrid
           currentDate={currentDate}
@@ -444,7 +445,7 @@ export function GrayDashboardView({
         className={headerClassName}
         onUpgradeClick={onUpgradeClick}
         showUpgradeButton={showUpgradeButton}
-        showTabs={!isScout}
+        showTabs={hasCalendarAccess}
       />
       <div className={styles.dashboardCompact}>
         <DashboardPulseGrid
@@ -483,7 +484,7 @@ export function GrayDashboardView({
       currentDate={currentDate}
       showSidebar={true}
       showHeaderDates={true}
-      showCalendarList={!isScout}
+      showCalendarList={hasCalendarAccess}
       calendars={calendars}
       events={mergedEvents}
       onCalendarsChange={onCalendarsChange}

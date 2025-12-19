@@ -7,11 +7,14 @@ from pydantic import BaseModel
 
 class PaymentRequest(BaseModel):
     """Payment request model."""
-    plan_tier: str  # "voyager" or "pioneer"
-    payment_type: str = "gopay"  # gopay, bank_transfer, credit_card, echannel
-    bank: Optional[str] = None  # bca, bni, bri, permata (required if payment_type is bank_transfer)
-    token_id: Optional[str] = None  # required if payment_type is credit_card
+    plan_tier: str  # "pathfinder", "voyager", or "pioneer"
     billing_cycle: Optional[str] = "monthly"  # "monthly" or "annual"
+    provider: Optional[str] = None  # "midtrans" (default) or "dodo"
+    payment_type: Optional[str] = "gopay"  # midtrans: gopay, bank_transfer, credit_card, echannel
+    bank: Optional[str] = None  # midtrans: bca, bni, bri, permata
+    token_id: Optional[str] = None  # midtrans: required if payment_type is credit_card
+    billing_currency: Optional[str] = None  # ISO 4217 currency code override
+    return_url: Optional[str] = None  # Optional override for checkout return URL
 
 
 class PaymentChargeResponse(BaseModel):
@@ -22,9 +25,11 @@ class PaymentChargeResponse(BaseModel):
     qr_code_url: Optional[str] = None
     deeplink_url: Optional[str] = None
     va_numbers: Optional[List[Dict[str, Any]]] = None
-    redirect_url: Optional[str] = None  # for 3DS
-    bill_key: Optional[str] = None  # for Mandiri
-    biller_code: Optional[str] = None  # for Mandiri
+    redirect_url: Optional[str] = None  # midtrans 3DS
+    bill_key: Optional[str] = None  # midtrans Mandiri
+    biller_code: Optional[str] = None  # midtrans Mandiri
+    checkout_url: Optional[str] = None  # dodo
+    session_id: Optional[str] = None  # dodo
 
 
 class MidtransNotification(BaseModel):

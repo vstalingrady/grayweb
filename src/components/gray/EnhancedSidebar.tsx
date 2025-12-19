@@ -86,9 +86,10 @@ function GrayEnhancedSidebarComponent(props: GrayEnhancedSidebarProps) {
   const profileMenuRef = useRef<HTMLDivElement | null>(null);
   const normalizedPlan = viewerPlanLabel?.trim().length ? viewerPlanLabel : "Scout";
   const planLower = normalizedPlan.trim().toLowerCase();
+  const isPathfinder = planLower === "pathfinder";
   const isVoyager = planLower === "voyager";
   const isPioneer = planLower === "pioneer";
-  const isPaidUser = isVoyager || isPioneer;
+  const isPaidUser = isPathfinder || isVoyager || isPioneer;
 
   const historyNavItem = useMemo(() => navItems.find((item) => item.id === "history"), [navItems]);
 
@@ -398,7 +399,7 @@ function GrayEnhancedSidebarComponent(props: GrayEnhancedSidebarProps) {
                         </button>
                         <span className={styles.profileMenuDivider} aria-hidden="true" />
                       </>
-                    ) : (isVoyager || isPioneer) ? (
+                    ) : (isPathfinder || isVoyager || isPioneer) ? (
                       <>
                         <div
                           className={`${styles.profileMenuItem} ${styles.profileMenuUpgrade}`}
@@ -407,7 +408,7 @@ function GrayEnhancedSidebarComponent(props: GrayEnhancedSidebarProps) {
                           <span className={styles.profileMenuUpgradeCard} data-variant={isPioneer ? "pioneer" : "voyager"}>
                             <span className={styles.profileMenuUpgradeSubtext}>{t("Current Plan")}</span>
                             <span className={styles.profileMenuUpgradeTitle}>{normalizedPlan}</span>
-                            <StarfieldCanvas className={styles.starfieldCanvas} density={0.008} minStars={12} maxStars={40} speed={16} orbitMode trailLength={0.15} />
+                            <StarfieldCanvas className={styles.starfieldCanvas} density={0.008} minStars={12} maxStars={40} speed={16} orbitMode trailLength={0.45} respectReducedMotion={false} />
                           </span>
                         </div>
                         <span className={styles.profileMenuDivider} aria-hidden="true" />

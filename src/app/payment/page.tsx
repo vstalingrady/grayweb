@@ -18,6 +18,17 @@ const ParticleSphere = dynamic(
 );
 
 type PaymentStatus = "idle" | "loading" | "success" | "pending" | "error";
+type PaymentProvider = "midtrans" | "dodo";
+type PaymentMethod = {
+    id: string;
+    label: string;
+    provider: PaymentProvider;
+    logo?: string;
+    type?: string;
+    bank?: string;
+    isQris?: boolean;
+    isDeepLink?: boolean;
+};
 
 interface ChargeResponse {
     order_id: string;
@@ -29,6 +40,8 @@ interface ChargeResponse {
     redirect_url?: string;
     bill_key?: string;
     biller_code?: string;
+    checkout_url?: string;
+    session_id?: string;
 }
 
 declare global {
@@ -70,22 +83,17 @@ const PIONEER_PRICING_USD = {
 } as const;
 
 
-// Gumroad tiered membership configuration
-// Product permalink is 'gray', each tier has an option ID
-const GUMROAD_PRODUCT_PERMALINK = process.env.NEXT_PUBLIC_GUMROAD_PRODUCT_PERMALINK || "gray";
-const GUMROAD_OPTION_IDS: Record<string, string> = {
-    pathfinder: process.env.NEXT_PUBLIC_GUMROAD_OPTION_ID_PATHFINDER || "",
-    voyager: process.env.NEXT_PUBLIC_GUMROAD_OPTION_ID_VOYAGER || "lZ9QZXSGeVuLLYzGSzk7Bw==",
-    pioneer: process.env.NEXT_PUBLIC_GUMROAD_OPTION_ID_PIONEER || "1AKF6eGbTgVn1yq1m5YcXA==",
-};
-
-
-
-const PAYMENT_METHODS = [
+const PAYMENT_METHODS: PaymentMethod[] = [
+    {
+        id: "dodo_card",
+        label: "Card & Global Methods",
+        provider: "dodo",
+    },
     {
         id: "danamon",
         label: "Danamon",
         logo: "/logos/payment/danamon.png",
+        provider: "midtrans",
         type: "bank_transfer",
         bank: "danamon"
     },
@@ -93,6 +101,7 @@ const PAYMENT_METHODS = [
         id: "cimb",
         label: "CIMB Niaga",
         logo: "/logos/payment/cimb.svg",
+        provider: "midtrans",
         type: "bank_transfer",
         bank: "cimb"
     },
@@ -100,6 +109,7 @@ const PAYMENT_METHODS = [
         id: "qris",
         label: "GoPay Dynamic QRIS",
         logo: "/logos/payment/qris.png",
+        provider: "midtrans",
         type: "gopay",
         isQris: true
     },
@@ -107,6 +117,7 @@ const PAYMENT_METHODS = [
         id: "bni",
         label: "BNI",
         logo: "/logos/payment/bni.svg",
+        provider: "midtrans",
         type: "bank_transfer",
         bank: "bni"
     },
@@ -114,6 +125,7 @@ const PAYMENT_METHODS = [
         id: "bri",
         label: "BRI",
         logo: "/logos/payment/bri.svg",
+        provider: "midtrans",
         type: "bank_transfer",
         bank: "bri"
     },
@@ -121,6 +133,7 @@ const PAYMENT_METHODS = [
         id: "gopay",
         label: "GoPay",
         logo: "/logos/payment/gopay.svg",
+        provider: "midtrans",
         type: "gopay",
         isDeepLink: true
     },
@@ -128,21 +141,18 @@ const PAYMENT_METHODS = [
         id: "mandiri",
         label: "Bank Mandiri",
         logo: "/logos/payment/mandiri.png",
+        provider: "midtrans",
         type: "echannel"
     },
     {
         id: "permata",
         label: "PermataBank",
         logo: "/logos/payment/permata.svg",
+        provider: "midtrans",
         type: "bank_transfer",
         bank: "permata"
-    },
-    {
-        id: "gumroad",
-        label: "Gumroad",
-        type: "gumroad"
     }
-].filter(m => m.type !== "gumroad");
+];
 
 function PaymentContent() {
     const router = useRouter();
@@ -153,7 +163,7 @@ function PaymentContent() {
     // State
     const [billingCycle, setBillingCycle] = useState<"monthly" | "annual">((cycleParam as "monthly" | "annual") || "monthly");
     const [selectedMethodId, setSelectedMethodId] = useState<string>("gopay");
-    const [methodGroup, setMethodGroup] = useState<"wallet" | "va" | "card">("wallet");
+    const [methodGroup, setMethodGroup] = useState<"global" | "wallet" | "va">("wallet");
     const [bankSearch, setBankSearch] = useState<string>("");
     const [isIndonesia, setIsIndonesia] = useState<boolean | null>(null);
 
@@ -161,9 +171,22 @@ function PaymentContent() {
     const [chargeData, setChargeData] = useState<ChargeResponse | null>(null);
     const [errorMessage, setErrorMessage] = useState("");
 
-    const walletMethods = PAYMENT_METHODS.filter((m) => ["gopay", "qris"].includes(m.id));
-    const virtualAccountMethods = PAYMENT_METHODS.filter((m) => !["gopay", "qris"].includes(m.id));
-    const activeMethods = methodGroup === "wallet" ? walletMethods : virtualAccountMethods;
+    const globalMethods = PAYMENT_METHODS.filter((m) => m.provider === "dodo");
+    const walletMethods = PAYMENT_METHODS.filter(
+        (m) => m.provider === "midtrans" && ["gopay", "qris"].includes(m.id),
+    );
+    const virtualAccountMethods = PAYMENT_METHODS.filter(
+        (m) => m.provider === "midtrans" && !["gopay", "qris"].includes(m.id),
+    );
+    const defaultWalletId = walletMethods[0]?.id ?? "gopay";
+    const defaultVaId = virtualAccountMethods[0]?.id ?? "bni";
+    const defaultGlobalId = globalMethods[0]?.id ?? "dodo_card";
+    const activeMethods =
+        methodGroup === "global"
+            ? globalMethods
+            : methodGroup === "wallet"
+                ? walletMethods
+                : virtualAccountMethods;
     const filteredActiveMethods =
         methodGroup === "va" && bankSearch.trim().length
             ? activeMethods.filter((method) =>
@@ -177,25 +200,28 @@ function PaymentContent() {
             .then(res => res.json())
             .then(data => {
                 setIsIndonesia(data.isIndonesia ?? true);
-                // If international, default to card payment
-                if (data.isIndonesia === false) {
-                    setSelectedMethodId("gumroad");
-                }
             })
             .catch(() => setIsIndonesia(true)); // Default to Indonesia on error
     }, []);
 
 
     useEffect(() => {
-        // Keep group in sync with selected method (e.g., deep links)
-        if (selectedMethodId === "gumroad") {
-            setMethodGroup("card");
+        if (selectedMethodId === "dodo_card") {
+            setMethodGroup("global");
         } else if (["gopay", "qris"].includes(selectedMethodId)) {
             setMethodGroup("wallet");
         } else {
             setMethodGroup("va");
         }
     }, [selectedMethodId]);
+
+
+    useEffect(() => {
+        if (isIndonesia === false) {
+            setMethodGroup("global");
+            setSelectedMethodId(defaultGlobalId);
+        }
+    }, [isIndonesia, defaultGlobalId]);
 
 
     // Derived Data
@@ -219,6 +245,13 @@ function PaymentContent() {
 
     // Choose features
     const features = planParam === "pioneer" ? PIONEER_FEATURES : planParam === "voyager" ? VOYAGER_FEATURES : PATHFINDER_FEATURES;
+    const selectedMethodConfig = PAYMENT_METHODS.find(m => m.id === selectedMethodId);
+    const poweredByLabel = selectedMethodConfig?.provider === "dodo" ? "Dodo Payments" : "Midtrans";
+    const localPaymentsDisabled = isIndonesia === false;
+    const selectionHint =
+        methodGroup === "global"
+            ? "You'll complete payment on Dodo's secure checkout."
+            : "You can change this later in checkout.";
 
     const handlePayment = async () => {
         setStatus("loading");
@@ -232,8 +265,6 @@ function PaymentContent() {
 
             const { data: sessionData } = await supabase.auth.getSession();
             const accessToken = sessionData.session?.access_token ?? null;
-            const userEmail = sessionData.session?.user?.email ?? undefined;
-            const userId = sessionData.session?.user?.id ?? undefined;
 
             if (!accessToken) {
                 const returnTo =
@@ -242,37 +273,78 @@ function PaymentContent() {
                         : "/payment";
                 setStatus("error");
                 setErrorMessage("Please log in to continue.");
-                router.push(`/login?returnTo=${encodeURIComponent(returnTo)}`);
+                router.push(`/login?redirect=${encodeURIComponent(returnTo)}`);
                 return;
             }
 
-            const selectedMethod = [...PAYMENT_METHODS, { id: "gumroad", type: "gumroad" }].find(m => m.id === selectedMethodId);
+            const selectedMethod = PAYMENT_METHODS.find(m => m.id === selectedMethodId);
             if (!selectedMethod) throw new Error("Invalid payment method");
 
+            if (selectedMethod.provider === "dodo") {
+                const payload: Record<string, string> = {
+                    plan_tier: planParam ?? "pathfinder",
+                    billing_cycle: billingCycle
+                };
+                payload.provider = "dodo";
 
-            // Route to Gumroad
-            if (selectedMethod.type === "gumroad") {
-                const optionId = GUMROAD_OPTION_IDS[planParam || "voyager"];
-                if (!optionId) {
-                    throw new Error("Gumroad payment is not configured. Please contact support.");
+                const res = await fetch("/api/p/api/payment/charge", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${accessToken}`
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!res.ok) {
+                    if (res.status === 401 || res.status === 403) {
+                        const returnTo =
+                            typeof window !== "undefined"
+                                ? `${window.location.pathname}${window.location.search}`
+                                : "/payment";
+                        setStatus("error");
+                        setErrorMessage("Your session expired. Please log in again.");
+                        router.push(`/login?redirect=${encodeURIComponent(returnTo)}`);
+                        return;
+                    }
+                    const contentType = res.headers.get("content-type") || "";
+                    let detail = `Payment initialization failed (HTTP ${res.status})`;
+                    try {
+                        if (contentType.includes("application/json")) {
+                            const errData = await res.json();
+                            detail = errData?.detail || errData?.message || detail;
+                        } else {
+                            const text = await res.text();
+                            const trimmed = text.trim();
+                            if (trimmed) {
+                                if (contentType.includes("text/html") || trimmed.startsWith("<!DOCTYPE html")) {
+                                    detail = `Payment initialization failed (HTTP ${res.status})`;
+                                } else {
+                                    detail = trimmed;
+                                }
+                            }
+                        }
+                    } catch {
+                        // ignore parse errors; use default detail
+                    }
+                    throw new Error(detail);
                 }
 
-                // Map billing cycle to Gumroad recurrence format
-                const recurrence = billingCycle === "annual" ? "yearly" : "monthly";
-
-                // Build Gumroad checkout URL with option ID and recurrence
-                const gumroadUrl = `https://gumroad.com/l/${GUMROAD_PRODUCT_PERMALINK}?option=${encodeURIComponent(optionId)}&recurrence=${recurrence}&email=${encodeURIComponent(userEmail || "")}&custom_fields[user_id]=${userId}`;
-                window.location.href = gumroadUrl;
-                setStatus("idle");
+                        const data: ChargeResponse = await res.json();
+                        const checkoutUrl = data.checkout_url;
+                        if (!checkoutUrl) {
+                            throw new Error("Checkout URL missing from payment gateway.");
+                        }
+                window.location.href = checkoutUrl;
                 return;
             }
 
-            // Midtrans payment flow
             const payload = {
                 plan_tier: planParam,
-                payment_type: selectedMethod.type,
-                bank: (selectedMethod as { bank?: string }).bank,
-                billing_cycle: billingCycle
+                payment_type: selectedMethod.type ?? "gopay",
+                bank: selectedMethod.bank,
+                billing_cycle: billingCycle,
+                provider: "midtrans"
             };
 
             const res = await fetch("/api/p/api/payment/charge", {
@@ -292,7 +364,7 @@ function PaymentContent() {
                             : "/payment";
                     setStatus("error");
                     setErrorMessage("Your session expired. Please log in again.");
-                    router.push(`/login?returnTo=${encodeURIComponent(returnTo)}`);
+                    router.push(`/login?redirect=${encodeURIComponent(returnTo)}`);
                     return;
                 }
                 const contentType = res.headers.get("content-type") || "";
@@ -494,7 +566,7 @@ function PaymentContent() {
                                     fontSize: "0.8rem",
                                 }}
                             >
-                                Powered by Midtrans • Secure 256-bit SSL Header
+                                Powered by {poweredByLabel} • Secure 256-bit SSL Header
                             </div>
                         </div>
                     </div>
@@ -506,16 +578,14 @@ function PaymentContent() {
     return (
         <div className={styles.page}>
             <ParticleSphere />
-            <Script
-                id="midtrans-script"
-                src="https://api.midtrans.com/v2/assets/js/midtrans-new-3ds.min.js"
-                data-environment={process.env.NEXT_PUBLIC_MIDTRANS_IS_PRODUCTION === 'true' ? 'production' : 'sandbox'}
-                data-client-key={process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY}
-            />
-            <Script
-                src="https://gumroad.com/js/gumroad.js"
-                strategy="lazyOnload"
-            />
+            {selectedMethodConfig?.provider === "midtrans" && (
+                <Script
+                    id="midtrans-script"
+                    src="https://api.midtrans.com/v2/assets/js/midtrans-new-3ds.min.js"
+                    data-environment={process.env.NEXT_PUBLIC_MIDTRANS_IS_PRODUCTION === 'true' ? 'production' : 'sandbox'}
+                    data-client-key={process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY}
+                />
+            )}
 
             <div className={styles.topRow}>
                 <button
@@ -580,24 +650,25 @@ function PaymentContent() {
                                     <button
                                         type="button"
                                         role="tab"
-                                        data-active={methodGroup === "card"}
-                                        aria-selected={methodGroup === "card"}
+                                        data-active={methodGroup === "global"}
+                                        aria-selected={methodGroup === "global"}
                                         onClick={() => {
-                                            setMethodGroup("card");
-                                            setSelectedMethodId("gumroad");
+                                            setMethodGroup("global");
+                                            setSelectedMethodId(defaultGlobalId);
                                             setBankSearch("");
                                         }}
                                     >
-                                        International
+                                        Card & Global (Dodo)
                                     </button>
                                     <button
                                         type="button"
                                         role="tab"
                                         data-active={methodGroup === "wallet"}
                                         aria-selected={methodGroup === "wallet"}
+                                        disabled={localPaymentsDisabled}
                                         onClick={() => {
                                             setMethodGroup("wallet");
-                                            setSelectedMethodId(walletMethods[0]?.id ?? "gopay");
+                                            setSelectedMethodId(defaultWalletId);
                                             setBankSearch("");
                                         }}
                                     >
@@ -608,76 +679,62 @@ function PaymentContent() {
                                         role="tab"
                                         data-active={methodGroup === "va"}
                                         aria-selected={methodGroup === "va"}
+                                        disabled={localPaymentsDisabled}
                                         onClick={() => {
                                             setMethodGroup("va");
-                                            setSelectedMethodId(virtualAccountMethods[0]?.id ?? "bni");
+                                            setSelectedMethodId(defaultVaId);
                                         }}
                                     >
                                         Virtual Accounts
                                     </button>
                                 </div>
 
-                                {methodGroup === "card" && (
-                                    <div className={styles.methodGrid} role="tabpanel">
-                                        <button
-                                            type="button"
-                                            className={styles.methodOption}
-                                            data-selected={selectedMethodId === "gumroad"}
-                                            onClick={() => setSelectedMethodId("gumroad")}
-                                            style={{ gridColumn: "1 / -1" }}
-                                        >
-                                            <span className={styles.methodLabel}>💳 Pay with Gumroad</span>
-                                        </button>
-                                        <p style={{ gridColumn: "1 / -1", color: "rgba(255,255,255,0.5)", fontSize: "0.85rem", textAlign: "center", margin: "0.5rem 0 0" }}>
-                                            Visa, Mastercard, American Express, PayPal, Apple Pay, Google Pay
-                                        </p>
+                                {localPaymentsDisabled && (
+                                    <div className={styles.paymentSelectHint}>
+                                        Local methods are available only for Indonesia-based checkout.
                                     </div>
                                 )}
 
-                                {methodGroup !== "card" && (
-                                    <>
-                                        {methodGroup === "va" && (
-                                            <div className={styles.methodSearch}>
-                                                <Search size={16} aria-hidden="true" />
-                                                <input
-                                                    type="text"
-                                                    value={bankSearch}
-                                                    onChange={(e) => setBankSearch(e.target.value)}
-                                                    placeholder="Search for your bank"
-                                                    className={styles.methodSearchInput}
-                                                    aria-label="Search for your bank"
-                                                />
-                                            </div>
-                                        )}
-
-                                        <div className={styles.methodGrid} role="tabpanel">
-                                            {filteredActiveMethods.map((method) => (
-                                                <button
-                                                    key={method.id}
-                                                    type="button"
-                                                    className={styles.methodOption}
-                                                    data-selected={selectedMethodId === method.id}
-                                                    onClick={() => setSelectedMethodId(method.id)}
-                                                >
-                                                    {method.logo ? (
-                                                        // eslint-disable-next-line @next/next/no-img-element
-                                                        <img
-                                                            src={method.logo}
-                                                            alt=""
-                                                            className={styles.methodLogo}
-                                                            loading="lazy"
-                                                        />
-                                                    ) : null}
-                                                    <span className={styles.methodLabel}>{method.label}</span>
-                                                </button>
-                                            ))}
-                                            {filteredActiveMethods.length === 0 && (
-                                                <div className={styles.methodEmpty}>No banks match that search.</div>
-                                            )}
-                                        </div>
-                                    </>
+                                {methodGroup === "va" && !localPaymentsDisabled && (
+                                    <div className={styles.methodSearch}>
+                                        <Search size={16} aria-hidden="true" />
+                                        <input
+                                            type="text"
+                                            value={bankSearch}
+                                            onChange={(e) => setBankSearch(e.target.value)}
+                                            placeholder="Search for your bank"
+                                            className={styles.methodSearchInput}
+                                            aria-label="Search for your bank"
+                                        />
+                                    </div>
                                 )}
-                                <div className={styles.paymentSelectHint}>You can change this later in checkout.</div>
+
+                                <div className={styles.methodGrid} role="tabpanel">
+                                    {filteredActiveMethods.map((method) => (
+                                        <button
+                                            key={method.id}
+                                            type="button"
+                                            className={styles.methodOption}
+                                            data-selected={selectedMethodId === method.id}
+                                            onClick={() => setSelectedMethodId(method.id)}
+                                        >
+                                            {method.logo ? (
+                                                // eslint-disable-next-line @next/next/no-img-element
+                                                <img
+                                                    src={method.logo}
+                                                    alt=""
+                                                    className={styles.methodLogo}
+                                                    loading="lazy"
+                                                />
+                                            ) : null}
+                                            <span className={styles.methodLabel}>{method.label}</span>
+                                        </button>
+                                    ))}
+                                    {filteredActiveMethods.length === 0 && (
+                                        <div className={styles.methodEmpty}>No banks match that search.</div>
+                                    )}
+                                </div>
+                                <div className={styles.paymentSelectHint}>{selectionHint}</div>
                             </div>
 
                             <div className={styles.payButtonContainer}>
@@ -701,7 +758,7 @@ function PaymentContent() {
                                     )}
                                 </button>
                                 <div style={{ marginTop: "1rem", display: "flex", justifyContent: "center", gap: "0.5rem", color: "rgba(255,255,255,0.3)", fontSize: "0.8rem" }}>
-                                    {selectedMethodId === "gumroad" ? "Secure checkout" : "Powered by Midtrans • Secure 256-bit SSL Header"}
+                                    Powered by {poweredByLabel} • Secure 256-bit SSL Header
                                 </div>
                             </div>
                         </div>

@@ -18,6 +18,7 @@ google-genai
 tiktoken
 anthropic
 pywebpush
+dodopayments
 midtransclient
 slowapi
 python-dateutil

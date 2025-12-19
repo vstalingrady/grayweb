@@ -31,8 +31,7 @@ import { useI18n } from "@/contexts/I18nContext";
 import { useUser } from "@/contexts/UserContext";
 import { useChatStore } from "@/components/gray/ChatProvider";
 import { clampPercent, getContextUsageUsedTokens, getContextUsageVisualizationLimit } from "@/components/gray/contextUsage";
-import { utilityService, chatService, userService } from "@/lib/api";
-import { GumroadService } from "@/lib/api/GumroadService";
+import { utilityService, chatService } from "@/lib/api";
 import { requestNotificationPermission } from "@/lib/notificationUtils";
 import { clearGrayLocalCache } from "@/lib/localCache";
 import { AccountSection } from "./sections/AccountSection";
@@ -42,6 +41,7 @@ import { ModelsSection } from "./sections/ModelsSection";
 import { NotificationsSection } from "./sections/NotificationsSection";
 import { PersonalizationSection } from "./sections/PersonalizationSection";
 import { PreferencesSection } from "./sections/PreferencesSection";
+import { normalizePlanTier, PLAN_TIER_LEVELS } from "@/components/gray/utils/helperFunctions";
 import {
   API_KEY_PROVIDERS,
   DEFAULT_NOTIFICATION_PREFERENCES,
@@ -130,8 +130,6 @@ export function SettingsModal({
   const [apiKeyStatus, setApiKeyStatus] = useState<string | null>(null);
   const [isDeletingAllConversations, setIsDeletingAllConversations] = useState(false);
   const [isClearingLocalCache, setIsClearingLocalCache] = useState(false);
-  const [gumroadRefreshStatus, setGumroadRefreshStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
-  const [gumroadRefreshMessage, setGumroadRefreshMessage] = useState<string | null>(null);
 
   // Mobile View State
   const [isMobile, setIsMobile] = useState(false);
@@ -153,12 +151,9 @@ export function SettingsModal({
   }, [isOpen]);
 
   const tierLevel = useMemo(() => {
-    const raw = (user?.plan_tier ?? user?.role ?? "scout").trim().toLowerCase();
-    if (raw === "voyager") return 1;
-    const premiumTokens = new Set(["pioneer", "depth", "pro", "premium", "operator", "admin"]);
-    if (premiumTokens.has(raw)) return 2;
-    return 0;
-  }, [user?.plan_tier, user?.role]);
+    const normalized = normalizePlanTier(user);
+    return PLAN_TIER_LEVELS[normalized] ?? 0;
+  }, [user]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -508,68 +503,6 @@ export function SettingsModal({
   const handleClearCustomInstructions = () => {
     setCustomInstructions("");
   };
-
-  const [gumroadConnectionStatus, setGumroadConnectionStatus] = useState<"idle" | "connecting" | "disconnecting">("idle");
-
-  const handleRefreshGumroadSubscription = async () => {
-    setGumroadRefreshStatus("loading");
-    setGumroadRefreshMessage(t("Verifying license…"));
-    try {
-      const res = await userService.verifyGumroadLicense();
-      if (res.success) {
-        setGumroadRefreshStatus("success");
-        setGumroadRefreshMessage(res.message);
-        if (user) {
-          await refreshUser();
-        }
-      } else {
-        setGumroadRefreshStatus("error");
-        setGumroadRefreshMessage(res.message);
-      }
-    } catch (e) {
-      setGumroadRefreshStatus("error");
-      setGumroadRefreshMessage(e instanceof Error ? e.message : t("Manual verification failed."));
-    }
-  };
-
-  const handleConnectGumroad = () => {
-    setGumroadConnectionStatus("connecting");
-    GumroadService.initiateOAuth();
-  };
-
-  const handleDisconnectGumroad = async () => {
-    setGumroadConnectionStatus("disconnecting");
-    try {
-      await GumroadService.disconnect();
-      setGumroadConnectionStatus("idle");
-      // Refresh user to update UI
-      await refreshUser();
-    } catch (e) {
-      setGumroadConnectionStatus("idle");
-      console.error("Failed to disconnect Gumroad:", e);
-    }
-  };
-
-  // Check for OAuth callback on mount
-  useEffect(() => {
-    if (!isOpen) return;
-
-    const callbackResult = GumroadService.checkOAuthCallback();
-    if (callbackResult) {
-      if (callbackResult.success) {
-        setGumroadRefreshStatus("success");
-        setGumroadRefreshMessage(t("Successfully connected to Gumroad!"));
-        // Refresh user to show updated info
-        refreshUser().catch(console.error);
-      } else if (callbackResult.error) {
-        setGumroadRefreshStatus("error");
-        setGumroadRefreshMessage(
-          t("Failed to connect Gumroad: {error}", { error: callbackResult.error })
-        );
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen]);
 
   const handleCompressConversation = async () => {
     const conversationId = contextUsage?.conversationId;
@@ -925,12 +858,6 @@ export function SettingsModal({
                 router.push("/pricing");
               }}
               onDeleteAccount={handleDeleteAccount}
-              onRefreshGumroadSubscription={handleRefreshGumroadSubscription}
-              gumroadRefreshStatus={gumroadRefreshStatus}
-              gumroadRefreshMessage={gumroadRefreshMessage}
-              onConnectGumroad={handleConnectGumroad}
-              onDisconnectGumroad={handleDisconnectGumroad}
-              gumroadConnectionStatus={gumroadConnectionStatus}
             />
           )}
 
@@ -966,10 +893,6 @@ export function SettingsModal({
               resolvedDeviceTimeZone={resolvedDeviceTimeZone}
               supportedTimeZones={supportedTimeZones}
               localeSaveState={localeSaveState}
-              onClearLocationAndTimeZone={() => {
-                setLocation("");
-                setTimeZone("");
-              }}
               onUseDeviceTimeZone={() => setTimeZone(resolvedDeviceTimeZone)}
               onSaveLocale={handleSaveLocale}
               customInstructions={customInstructions}

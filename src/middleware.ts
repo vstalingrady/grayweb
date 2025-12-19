@@ -15,8 +15,8 @@ export function middleware(request: NextRequest) {
     const mainSiteUrl = process.env.NEXT_PUBLIC_MAIN_SITE_URL || defaultMain;
     const paymentSiteUrl = process.env.NEXT_PUBLIC_PAYMENT_SITE_URL || defaultPayment;
 
-    // 1. Redirect /payment on main domain to payment subdomain
-    if (!isPaymentSubdomain && pathname.startsWith("/payment")) {
+    // 1. Redirect /payment on main domain to payment subdomain (skip for local dev)
+    if (!isLocal && !isPaymentSubdomain && pathname.startsWith("/payment")) {
         try {
             const target = new URL(paymentSiteUrl);
             const redirectUrl = new URL(`${pathname}${search}`, target.origin);
@@ -30,6 +30,10 @@ export function middleware(request: NextRequest) {
     // We exclude paths starting with /payment, /api, /_next, and static assets
     const isAllowedOnPayment =
         pathname.startsWith("/payment") ||
+        pathname.startsWith("/login") ||
+        pathname.startsWith("/signup") ||
+        pathname.startsWith("/callback") ||
+        pathname.startsWith("/reset-password") ||
         pathname.startsWith("/api") ||
         pathname.startsWith("/_next") ||
         pathname.includes(".");

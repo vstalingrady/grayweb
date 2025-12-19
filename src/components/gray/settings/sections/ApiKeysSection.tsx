@@ -3,6 +3,7 @@
 import type { Dispatch, SetStateAction } from "react";
 import styles from "../SettingsStyles.module.css";
 import { API_KEY_PROVIDERS } from "@/components/gray/settings/types";
+import { PLAN_TIER_LEVELS } from "@/components/gray/utils/helperFunctions";
 
 type Translator = (message: string, vars?: Record<string, string | number>) => string;
 
@@ -47,7 +48,7 @@ export function ApiKeysSection({
         </p>
       </div>
 
-      {tierLevel < 1 ? (
+      {tierLevel < PLAN_TIER_LEVELS.voyager ? (
         <div
           className={styles.settingsSection}
           style={{

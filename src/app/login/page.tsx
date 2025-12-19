@@ -47,7 +47,9 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
     const workspaceHost = resolveWorkspaceHost(host) ?? host;
     const params = await searchParams;
     const redirectTarget =
-      sanitizeRedirect(params?.redirect) ?? resolveDefaultWorkspacePath(workspaceHost);
+      sanitizeRedirect(params?.redirect) ??
+      sanitizeRedirect(params?.returnTo) ??
+      resolveDefaultWorkspacePath(workspaceHost);
     const destination = normalizeWorkspaceRedirect(
       redirectTarget,
       workspaceHost

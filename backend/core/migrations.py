@@ -24,8 +24,6 @@ app_logger = create_logger("backend.core")
 _USER_COLUMNS = [
     ("auth_user_id", "TEXT", None),
     ("subscription_expires_at", "DATETIME", None),
-    ("gumroad_subscription_id", "TEXT", None),
-    ("gumroad_license_key", "TEXT", None),
     ("has_seen_general_chat", "BOOLEAN", "0"),
     ("maps_enabled", "BOOLEAN", "0"),
     ("improve_model_for_everyone", "BOOLEAN", "0"),
@@ -50,10 +48,6 @@ _USER_COLUMNS = [
     ("conversation_memory_enabled", "BOOLEAN", "1"),
     ("auto_web_search_enabled", "BOOLEAN", "0"),
     ("visible_model_ids", "TEXT", None),
-    ("gumroad_access_token", "TEXT", None),
-    ("gumroad_refresh_token", "TEXT", None),
-    ("gumroad_user_id", "TEXT", None),
-    ("gumroad_email", "TEXT", None),
 ]
 
 _USER_BACKFILL_NULLS = {
@@ -141,17 +135,14 @@ def run_startup_migrations():
     _ensure_sqlite_index("reminders", "ix_reminders_user_status_remind_at", "user_id, status, remind_at")
     _ensure_sqlite_unique_index("dashboard_pulses", "uq_dashboard_pulses_user_date", "user_id, date_key")
     _ensure_sqlite_unique_index("proactivity_settings", "uq_proactivity_settings_user_id", "user_id")
-    _ensure_sqlite_index("users", "ix_users_gumroad_subscription_id", "gumroad_subscription_id")
 
     # Transaction columns
     _ensure_sqlite_columns("transactions", [
         ("billing_cycle", "VARCHAR", None),
         ("subscription_starts_at", "DATETIME", None),
         ("subscription_ends_at", "DATETIME", None),
-        ("gumroad_sale_id", "TEXT", None),
     ])
 
-    _ensure_sqlite_index("transactions", "ix_transactions_gumroad_sale_id", "gumroad_sale_id")
 
     _ensure_sqlite_columns(
         "plans",
@@ -237,4 +228,3 @@ async def run_basic_migrations():
             ("delivered_at", "TIMESTAMP", "NULL"),
         ]
     )
-

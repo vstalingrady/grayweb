@@ -17,12 +17,6 @@ export type AccountSectionProps = {
   onAvatarFileChange: (event: ChangeEvent<HTMLInputElement>) => void | Promise<void>;
   onNavigateToPricing: () => void;
   onDeleteAccount: () => void;
-  onRefreshGumroadSubscription: () => void;
-  gumroadRefreshStatus: "idle" | "loading" | "success" | "error";
-  gumroadRefreshMessage: string | null;
-  onConnectGumroad?: () => void;
-  onDisconnectGumroad?: () => void;
-  gumroadConnectionStatus?: "idle" | "connecting" | "disconnecting";
 };
 
 export function AccountSection({
@@ -35,13 +29,47 @@ export function AccountSection({
   onAvatarFileChange,
   onNavigateToPricing,
   onDeleteAccount,
-  onRefreshGumroadSubscription,
-  gumroadRefreshStatus,
-  gumroadRefreshMessage,
-  onConnectGumroad,
-  onDisconnectGumroad,
-  gumroadConnectionStatus = "idle",
 }: AccountSectionProps) {
+  const parseExpiryDate = (value?: string | null): Date | null => {
+    if (!value) {
+      return null;
+    }
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return null;
+    }
+    const hasTimezone = /[zZ]$|[+-]\d{2}:\d{2}$/.test(trimmed);
+    const normalized = hasTimezone ? trimmed : `${trimmed}Z`;
+    const parsed = new Date(normalized);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  };
+
+  const buildRenewalLabel = (currentUser: User | null): string => {
+    const expiresAt = parseExpiryDate(currentUser?.subscription_expires_at);
+    if (!expiresAt) {
+      return "Next payment date unavailable.";
+    }
+
+    const now = Date.now();
+    const diffMs = expiresAt.getTime() - now;
+    const dayMs = 24 * 60 * 60 * 1000;
+    const daysRemaining = Math.ceil(diffMs / dayMs);
+
+    const formattedDate = new Intl.DateTimeFormat(undefined, {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    }).format(expiresAt);
+
+    if (daysRemaining <= 0) {
+      return `Renews today (${formattedDate}).`;
+    }
+    if (daysRemaining === 1) {
+      return `Renews in 1 day (${formattedDate}).`;
+    }
+    return `Renews in ${daysRemaining} days (${formattedDate}).`;
+  };
+
   return (
     <>
       <div className={styles.settingsPageHeader}>
@@ -109,21 +137,19 @@ export function AccountSection({
         ) : (
           <div
             className={styles.settingsSubscriptionCard}
-            data-variant={tierLevel >= 2 ? "primary" : "highlighted"}
+            data-variant={tierLevel >= 3 ? "primary" : "highlighted"}
           >
             <div className={styles.settingsUpgradeText}>
               <h4>
-                {t("Current Plan")}: {tierLevel >= 2 ? "Pioneer" : "Voyager"}
+                {t("Current Plan")}: {tierLevel >= 3 ? "Pioneer" : tierLevel >= 2 ? "Voyager" : "Pathfinder"}
               </h4>
               <p>
-                {tierLevel >= 2
-                  ? "Top-tier models, top limits, and early access."
-                  : "More messages, longer memory, and calendar routines."}
+                {buildRenewalLabel(user)}
               </p>
             </div>
             <button
               type="button"
-              className={`${styles.settingsSubscriptionButton} ${tierLevel >= 2
+              className={`${styles.settingsSubscriptionButton} ${tierLevel >= 3
                 ? styles.settingsSubscriptionButtonPrimary
                 : styles.settingsSubscriptionButtonOutline
                 }`}
@@ -131,85 +157,6 @@ export function AccountSection({
             >
               View plan
             </button>
-          </div>
-        )}
-        {user?.gumroad_license_key && (
-          <div className={styles.settingsSubscriptionHelp} style={{ marginTop: 12 }}>
-            <p className={styles.settingsItemDescription}>
-              Subscription not showing up?{" "}
-              <button
-                type="button"
-                className={styles.settingsTextLink}
-                onClick={onRefreshGumroadSubscription}
-                disabled={gumroadRefreshStatus === "loading"}
-                style={{
-                  background: "none",
-                  border: "none",
-                  padding: 0,
-                  color: "#3b82f6",
-                  textDecoration: "underline",
-                  cursor: "pointer",
-                  fontSize: "inherit"
-                }}
-              >
-                {gumroadRefreshStatus === "loading" ? t("Refreshing…") : t("Refresh status")}
-              </button>
-            </p>
-            {gumroadRefreshMessage && (
-              <p
-                className={styles.settingsItemDescription}
-                style={{
-                  marginTop: 4,
-                  color: gumroadRefreshStatus === "error" ? "#fca5a5" : "#4ade80",
-                  fontSize: "0.85rem"
-                }}
-              >
-                {gumroadRefreshMessage}
-              </p>
-            )}
-          </div>
-        )}
-      </div>
-
-      <div className={styles.settingsSection}>
-        <h3 className={styles.settingsSectionTitle}>{t("Gumroad Integration")}</h3>
-        {user?.gumroad_user_id ? (
-          <div className={styles.settingsItem} style={{ alignItems: "center" }}>
-            <div className={styles.settingsLabelGroup}>
-              <span className={styles.settingsLabel}>Connected to Gumroad</span>
-              <span className={styles.settingsItemDescription}>
-                {user.gumroad_email || "Account linked"}
-              </span>
-            </div>
-            {onDisconnectGumroad && (
-              <button
-                type="button"
-                className={styles.settingsAction}
-                onClick={onDisconnectGumroad}
-                disabled={gumroadConnectionStatus === "disconnecting"}
-              >
-                {gumroadConnectionStatus === "disconnecting" ? t("Disconnecting…") : t("Disconnect")}
-              </button>
-            )}
-          </div>
-        ) : (
-          <div className={styles.settingsItem} style={{ alignItems: "center" }}>
-            <div className={styles.settingsLabelGroup}>
-              <span className={styles.settingsLabel}>Connect with Gumroad</span>
-              <span className={styles.settingsItemDescription}>
-                Link your Gumroad account to automatically verify purchases
-              </span>
-            </div>
-            {onConnectGumroad && (
-              <button
-                type="button"
-                className={`${styles.settingsAction} ${styles.settingsPrimaryButton}`}
-                onClick={onConnectGumroad}
-                disabled={gumroadConnectionStatus === "connecting"}
-              >
-                {gumroadConnectionStatus === "connecting" ? t("Connecting…") : t("Connect")}
-              </button>
-            )}
           </div>
         )}
       </div>

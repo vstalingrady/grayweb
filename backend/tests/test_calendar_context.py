@@ -64,7 +64,7 @@ async def test_build_calendar_context_formats_events():
     )
 
     assert context is not None
-    assert "Timezone: UTC" in context
+    assert "Timezone: UTC+00:00" in context
     assert "Now: 2025-01-01 10:00" in context
     assert '- Today 11:00–12:00: "Standup" (Work) — Daily sync' in context
     assert '- Tomorrow 09:00–10:00: "Gym"' in context

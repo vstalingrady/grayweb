@@ -212,6 +212,11 @@
     color: rgba(255, 255, 255, 0.8);
 }
 
+.methodGroupTabs button:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+}
+
 .methodSearch {
     display: flex;
     align-items: center;

@@ -20,6 +20,7 @@ from backend.models import (
 from backend.database import calendars, calendar_events, get_database
 from backend.auth import get_current_user, require_same_user
 from backend.time_utils import utcnow
+from backend.tier_utils import normalize_plan_tier
 
 router = APIRouter(tags=["calendars"])
 
@@ -38,6 +39,19 @@ def _get_reminder_helpers():
     )
 
 
+def _require_calendar_access(current_user: Dict[str, Any]) -> None:
+    tier = normalize_plan_tier(
+        current_user.get("plan_tier"),
+        current_user.get("role"),
+        current_user.get("subscription_expires_at"),
+    )
+    if tier not in ("voyager", "pioneer"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Calendar access requires a Voyager or Pioneer plan.",
+        )
+
+
 # ==================== CALENDARS ====================
 
 @router.get("/users/{user_id}/calendars", response_model=List[Calendar])
@@ -48,6 +62,7 @@ async def get_user_calendars(
 ):
     user_id = current_user["id"]
     require_same_user(user_id, current_user)
+    _require_calendar_access(current_user)
     query = calendars.select().where(calendars.c.user_id == user_id).order_by(calendars.c.created_at.desc())
     return await db.fetch_all(query)
 
@@ -61,6 +76,7 @@ async def create_calendar(
 ):
     user_id = current_user["id"]
     require_same_user(user_id, current_user)
+    _require_calendar_access(current_user)
     now = utcnow()
     calendar_id = await db.execute(
         calendars.insert().values(
@@ -86,6 +102,7 @@ async def update_calendar(
 ):
     user_id = current_user["id"]
     require_same_user(user_id, current_user)
+    _require_calendar_access(current_user)
     existing = await db.fetch_one(
         calendars.select().where(
             (calendars.c.id == calendar_id) & (calendars.c.user_id == user_id)
@@ -121,6 +138,7 @@ async def get_user_calendar_events(
 ):
     user_id = current_user["id"]
     require_same_user(user_id, current_user)
+    _require_calendar_access(current_user)
     
     query = calendar_events.select().where(calendar_events.c.user_id == user_id)
     
@@ -175,6 +193,7 @@ async def create_calendar_event(
 ):
     user_id = current_user["id"]
     require_same_user(user_id, current_user)
+    _require_calendar_access(current_user)
     now = utcnow()
     event_id = await db.execute(
         calendar_events.insert().values(
@@ -230,6 +249,7 @@ async def update_calendar_event(
 ):
     user_id = current_user["id"]
     require_same_user(user_id, current_user)
+    _require_calendar_access(current_user)
     update_data = event_update.dict(exclude_unset=True)
 
     sqlite_update_data: Dict[str, Any] = {}
@@ -304,6 +324,7 @@ async def delete_calendar_event(
 ):
     user_id = current_user["id"]
     require_same_user(user_id, current_user)
+    _require_calendar_access(current_user)
     existing = await db.fetch_one(
         calendar_events.select().where(
             (calendar_events.c.id == event_id) & (calendar_events.c.user_id == user_id)

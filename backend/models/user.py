@@ -29,6 +29,7 @@ class UserBase(BaseModel):
     profile_picture_url: Optional[str] = None
     role: str = "user"
     plan_tier: Optional[str] = None
+    subscription_expires_at: Optional[datetime] = None
     workspace_background_id: Optional[str] = None
     maps_enabled: Optional[bool] = False
     improve_model_for_everyone: Optional[bool] = False

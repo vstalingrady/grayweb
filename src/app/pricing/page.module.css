@@ -3,7 +3,7 @@
   inset: 0;
   width: 100vw;
   height: 100vh;
-  background: #000000;
+  background: #040406;
   color: #f5f5f5;
   font-family: var(--font-sans, "Plus Jakarta Sans", system-ui, -apple-system, BlinkMacSystemFont, sans-serif);
   box-sizing: border-box;
@@ -17,7 +17,7 @@
   position: fixed;
   inset: 0;
   z-index: 0;
-  opacity: 0.65;
+  opacity: 0.45;
   pointer-events: none;
 }
 
@@ -41,12 +41,12 @@
     radial-gradient(1px 1px at 120px 80px, rgba(255, 255, 255, 0.25), transparent 55%),
     radial-gradient(2px 2px at 60px 140px, rgba(255, 255, 255, 0.35), transparent 60%);
   background-size: 180px 180px;
-  opacity: 0.35;
+  opacity: 0.2;
   animation: drift 60s linear infinite;
 }
 
 .starLayer[data-variant="dense"] {
-  opacity: 0.55;
+  opacity: 0.3;
   background-size: 240px 240px;
   animation-duration: 80s;
   filter: blur(0.4px);
@@ -260,6 +260,11 @@
 
 .planCard[data-variant="muted"] .featureList svg {
   color: rgba(255, 255, 255, 0.4);
+}
+
+.planCard[data-variant="neutral"] {
+  background: rgba(20, 18, 16, 0.92);
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.7);
 }
 
 .planCard[data-variant="highlighted"] {

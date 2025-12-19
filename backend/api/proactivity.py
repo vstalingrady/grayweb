@@ -37,6 +37,13 @@ api_logger = create_logger("backend.api.proactivity")
 
 router = APIRouter(tags=["proactivity"])
 
+PROACTIVITY_ID_BY_CADENCE = {
+    "frequent": "proactivity-frequent",
+    "daily": "proactivity-daily",
+    "manual": "proactivity-manual",
+    "custom": "proactivity-custom",
+}
+
 
 class PushSubscriptionCreate(BaseModel):
     endpoint: str
@@ -53,6 +60,11 @@ def _get_proactivity_services():
 def _sse_event(event: str, data: Dict[str, Any]) -> str:
     """Format SSE event."""
     return f"event: {event}\ndata: {json.dumps(data)}\n\n"
+
+
+def _infer_proactivity_id(cadence: Optional[str]) -> Optional[str]:
+    normalized = (cadence or "").strip().lower()
+    return PROACTIVITY_ID_BY_CADENCE.get(normalized)
 
 
 async def get_user_from_query_token(
@@ -369,17 +381,20 @@ async def get_proactivity_settings(
     if not record:
         return None
 
-    payload = proactivity_engine._deserialize_payload(record.payload)
+    payload = proactivity_engine._deserialize_payload(record.payload) or {}
+    cadence = payload.get("cadence")
+    payload_id = payload.get("id")
+    if payload_id in (None, "proactivity-1"):
+        payload_id = _infer_proactivity_id(cadence)
 
     return ProactivitySettings(
-        id=record.id,
-        user_id=record.user_id,
-        cadence=payload.get("cadence"),
+        id=payload_id,
+        label=payload.get("label"),
+        description=payload.get("description"),
+        cadence=cadence,
         time=payload.get("time"),
         times=payload.get("times"),
         channels=payload.get("channels"),
-        created_at=record.created_at,
-        updated_at=record.updated_at,
         timezone=payload.get("timezone"),
     )
 
@@ -409,6 +424,12 @@ async def update_proactivity_settings(
     current_payload = proactivity_engine._deserialize_payload(existing_record.payload) if existing_record else {}
 
     updated_payload = current_payload.copy()
+    if settings_update.id is not None:
+        updated_payload["id"] = settings_update.id
+    if settings_update.label is not None:
+        updated_payload["label"] = settings_update.label
+    if settings_update.description is not None:
+        updated_payload["description"] = settings_update.description
     if settings_update.cadence is not None:
         updated_payload["cadence"] = settings_update.cadence
     if settings_update.time is not None:
@@ -424,6 +445,10 @@ async def update_proactivity_settings(
         updated_payload["times"] = [updated_payload["time"]]
     elif updated_payload.get("cadence", "").lower() == "frequent" and updated_payload.get("times"):
         updated_payload["time"] = updated_payload["times"][0] if updated_payload["times"] else None
+    if updated_payload.get("id") in (None, "", "proactivity-1"):
+        inferred_id = _infer_proactivity_id(updated_payload.get("cadence"))
+        if inferred_id:
+            updated_payload["id"] = inferred_id
     
     now = utcnow()
     if existing_record:
@@ -444,19 +469,15 @@ async def update_proactivity_settings(
 
     await proactivity_scheduler.reload_user_settings(user_id)
 
-    updated_record = await db.fetch_one(
-        proactivity_settings.select().where(proactivity_settings.c.user_id == user_id)
-    )
-
+    cadence = updated_payload.get("cadence")
     return ProactivitySettings(
-        id=updated_record.id,
-        user_id=updated_record.user_id,
-        cadence=updated_payload.get("cadence"),
+        id=updated_payload.get("id"),
+        label=updated_payload.get("label"),
+        description=updated_payload.get("description"),
+        cadence=cadence,
         time=updated_payload.get("time"),
         times=updated_payload.get("times"),
         channels=updated_payload.get("channels"),
-        created_at=updated_record.created_at,
-        updated_at=updated_record.updated_at,
         timezone=updated_payload.get("timezone"),
     )
 

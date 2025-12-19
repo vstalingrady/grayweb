@@ -133,13 +133,23 @@ export type PlanCarrierUser = User & { plan_tier?: string | null };
 
 const PREMIUM_PLAN_TIER_TOKENS = new Set(["depth", "pro", "premium", "operator", "admin"]);
 
-export type NormalizedPlanTier = "scout" | "voyager" | "pioneer";
+export type NormalizedPlanTier = "scout" | "pathfinder" | "voyager" | "pioneer";
+
+export const PLAN_TIER_LEVELS: Record<NormalizedPlanTier, number> = {
+    scout: 0,
+    pathfinder: 1,
+    voyager: 2,
+    pioneer: 3,
+};
 
 export const normalizePlanTier = (candidate?: PlanCarrierUser | null): NormalizedPlanTier => {
     if (!candidate) {
         return "scout";
     }
     const rawTier = (candidate.plan_tier ?? candidate.role ?? "scout").trim().toLowerCase();
+    if (rawTier === "pathfinder") {
+        return "pathfinder";
+    }
     if (rawTier === "voyager") {
         return "voyager";
     }
@@ -164,6 +174,9 @@ export const derivePlanTierLabel = (candidate?: PlanCarrierUser | null): string 
         return "Scout";
     }
     const normalized = rawTier.toLowerCase();
+    if (normalized === "pathfinder") {
+        return "Pathfinder";
+    }
     if (normalized === "voyager") {
         return "Voyager";
     }

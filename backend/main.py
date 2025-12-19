@@ -249,8 +249,6 @@ from backend.payment_utils import create_core_api_transaction, verify_notificati
 
 from backend.database import transactions
 
-from backend.gumroad_routes import router as gumroad_router
-from backend.api.gumroad_oauth import router as gumroad_oauth_router
 
 # Use centralized environment detection
 from backend.env_utils import ROOT_DIR
@@ -495,8 +493,6 @@ else:
 
 if allow_public_uploads and MEDIA_UPLOAD_DIR.exists():
     app.mount("/uploads", StaticFiles(directory=MEDIA_UPLOAD_DIR), name="uploads")
-app.include_router(gumroad_router)
-app.include_router(gumroad_oauth_router)
 
 # Security Headers Middleware (extracted to core/security_middleware.py)
 from backend.core.security_middleware import add_security_headers
@@ -547,6 +543,11 @@ app.include_router(plans_router)
 from backend.api.calendars import router as calendars_router
 
 app.include_router(calendars_router)
+
+# Google Calendar routes
+from backend.api.google_calendar import router as google_calendar_router
+
+app.include_router(google_calendar_router)
 
 # Reminder routes
 from backend.api.reminders import router as reminders_router

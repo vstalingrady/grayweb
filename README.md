@@ -45,6 +45,23 @@ DATABASE_URL=sqlite:///../data/users.db
 GEMINI_API_KEY=your_gemini_api_key_here
 SUPABASE_URL=your_supabase_url_here
 SUPABASE_KEY=your_supabase_anon_key_here
+# Dodo Payments (hosted checkout)
+DODO_PAYMENTS_API_KEY=your_dodo_api_key_here
+DODO_PAYMENTS_ENVIRONMENT=test_mode
+DODO_PAYMENTS_WEBHOOK_KEY=your_dodo_webhook_key_here
+DODO_PAYMENTS_RETURN_URL=https://your-domain.com/payment/finish
+# Optional: limit Dodo checkout methods (defaults to credit,debit)
+# DODO_ALLOWED_PAYMENT_METHOD_TYPES=credit,debit,apple_pay,google_pay
+# Adaptive currency: enable in Dodo dashboard; leave billing_currency unset on the client.
+# Product IDs by plan/cycle (from Dodo dashboard)
+DODO_PRODUCT_PATHFINDER_MONTHLY=prod_xxx
+DODO_PRODUCT_PATHFINDER_ANNUAL=prod_xxx
+DODO_PRODUCT_VOYAGER_MONTHLY=prod_xxx
+DODO_PRODUCT_VOYAGER_ANNUAL=prod_xxx
+DODO_PRODUCT_PIONEER_MONTHLY=prod_xxx
+DODO_PRODUCT_PIONEER_ANNUAL=prod_xxx
+# Optional currency-specific overrides
+# DODO_PRODUCT_PATHFINDER_MONTHLY_USD=prod_xxx
 # Optional: Google Calendar integration
 GOOGLE_CLIENT_ID=your_google_oauth_client_id
 GOOGLE_CLIENT_SECRET=your_google_oauth_client_secret

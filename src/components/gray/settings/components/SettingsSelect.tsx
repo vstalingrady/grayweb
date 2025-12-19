@@ -7,13 +7,14 @@ import styles from "../SettingsStyles.module.css";
 type SelectOption = { value: string; label: string };
 
 export type SettingsSelectProps = {
+  id?: string;
   value: string;
   options: SelectOption[];
   onChange: (value: string) => void;
   icon?: ElementType;
 };
 
-export function SettingsSelect({ value, options, onChange, icon: Icon }: SettingsSelectProps) {
+export function SettingsSelect({ id, value, options, onChange, icon: Icon }: SettingsSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const activeLabel = useMemo(() => {
@@ -48,6 +49,7 @@ export function SettingsSelect({ value, options, onChange, icon: Icon }: Setting
     <div className={styles.settingsSelectButton} style={{ position: "relative" }} ref={containerRef}>
       <button
         type="button"
+        id={id}
         className={styles.settingsSelectTrigger}
         onClick={() => setIsOpen((prev) => !prev)}
         aria-haspopup="listbox"

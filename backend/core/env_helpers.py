@@ -5,7 +5,7 @@ Extracted from main.py to improve modularity.
 """
 import os
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional, Tuple
 from uuid import UUID
 from zoneinfo import ZoneInfo
@@ -109,10 +109,25 @@ def datetime_to_ms(value: Optional[datetime]) -> int:
 # ==============================================================================
 
 
+def _parse_utc_offset(label: str) -> Optional[timezone]:
+    cleaned = (label or "").strip()
+    if not cleaned:
+        return None
+    if cleaned.upper() in {"UTC", "GMT"}:
+        return timezone.utc
+    match = re.match(r"^(?:UTC|GMT)?([+-])(\d{1,2})(?::?(\d{2}))?$", cleaned, re.IGNORECASE)
+    if not match:
+        return None
+    sign = 1 if match.group(1) == "+" else -1
+    hours = int(match.group(2))
+    minutes = int(match.group(3) or "0")
+    return timezone(sign * timedelta(hours=hours, minutes=minutes))
+
+
 def timezone_from_time_context(time_context: str) -> Tuple[Optional[str], Any]:
     """Extract timezone information from a time_context string.
     
-    Expected format: "... (timezone: Region/City, UTC+HH:MM) ..."
+    Expected format: "... (timezone: Region/City, UTC+HH:MM) ..." or "... (timezone: UTC+HH:MM, UTC+HH:MM) ..."
     Returns (timezone_label, timezone_object) or (None, timezone.utc)
     """
     if not time_context:
@@ -126,6 +141,9 @@ def timezone_from_time_context(time_context: str) -> Tuple[Optional[str], Any]:
             tz = ZoneInfo(tz_label)
             return tz_label, tz
         except Exception as exc:
+            offset_tz = _parse_utc_offset(tz_label)
+            if offset_tz is not None:
+                return tz_label, offset_tz
             import logging
             logging.getLogger("backend.env_helpers").debug(
                 "Failed to resolve timezone label from time_context",

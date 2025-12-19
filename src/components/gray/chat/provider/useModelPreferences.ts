@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, type Dispatch, type SetStateAction } from "react";
 import type { User, UserUpdate } from "@/lib/api";
-import { ALL_PIONEER_MODEL_IDS, PIONEER_ONLY_MODEL_IDS } from "../../modelCatalog";
+import { ALL_PIONEER_MODEL_IDS, PIONEER_GROUPS, PIONEER_ONLY_MODEL_IDS } from "../../modelCatalog";
 import { normalizePlanTier } from "../../utils/helperFunctions";
 
 const VISIBLE_MODEL_IDS_STORAGE_PREFIX = "gray_visible_model_ids";
@@ -106,6 +106,20 @@ export const useModelPreferences = ({
       }
       if (reasoningMode) {
         setReasoningMode(false);
+      }
+      return;
+    }
+
+    const selectedModelTierRequired = selectedModelId
+      ? PIONEER_GROUPS.flatMap((group) => group.models)
+          .find((model) => model.id === selectedModelId)
+          ?.tierRequired
+      : null;
+
+    if (normalizedTier === "pathfinder") {
+      if (selectedModelId && selectedModelTierRequired !== "pathfinder") {
+        setSelectedModelId(null);
+        setModelTier("lite");
       }
       return;
     }

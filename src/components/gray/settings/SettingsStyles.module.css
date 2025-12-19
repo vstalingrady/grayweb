@@ -651,12 +651,14 @@
   top: calc(100% + 10px);
   right: 0;
   min-width: 220px;
+  max-height: 320px;
   padding: 6px;
   border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(24, 24, 28, 0.95);
   box-shadow: 0 22px 46px rgba(0, 0, 0, 0.5);
   backdrop-filter: blur(14px);
+  overflow-y: auto;
   z-index: 200;
 }
 
@@ -1038,4 +1040,3 @@ button.mobileGroupItem {
   align-items: center;
   justify-content: center;
 }
-

@@ -6,6 +6,7 @@ import styles from "../SettingsStyles.module.css";
 import { ALL_PIONEER_MODEL_IDS, GRAY_BRAND, PIONEER_GROUPS } from "@/components/gray/modelCatalog";
 import { SettingsLogo } from "@/components/gray/settings/components/SettingsLogo";
 import { SettingsToggle } from "@/components/gray/settings/components/SettingsToggle";
+import { PLAN_TIER_LEVELS } from "@/components/gray/utils/helperFunctions";
 
 type Translator = (message: string, vars?: Record<string, string | number>) => string;
 
@@ -58,7 +59,7 @@ export function ModelsSection({
             type="button"
             className={styles.settingsAction}
             onClick={() => {
-              if (tierLevel < 1) {
+              if (tierLevel < PLAN_TIER_LEVELS.voyager) {
                 onModelsStatusChange(t("Upgrade to Voyager to customize models."));
                 return;
               }
@@ -72,7 +73,7 @@ export function ModelsSection({
             type="button"
             className={styles.settingsAction}
             onClick={() => {
-              if (tierLevel < 1) {
+              if (tierLevel < PLAN_TIER_LEVELS.voyager) {
                 onModelsStatusChange(t("Upgrade to Voyager to customize models."));
                 return;
               }
@@ -135,7 +136,7 @@ export function ModelsSection({
 
         return (
           <>
-            {tierLevel < 1 && groupsToRender.length > 0 ? (
+            {tierLevel < PLAN_TIER_LEVELS.pathfinder && groupsToRender.length > 0 ? (
               <div className={styles.settingsTierSeparator} role="separator" aria-label={t("Premium models")}>
                 <div className={styles.settingsTierSeparatorTitle}>{t("Premium models")}</div>
                 <div className={styles.settingsTierSeparatorSubtitle}>{premiumNote}</div>
@@ -155,9 +156,9 @@ export function ModelsSection({
                     const isSelected = modelTier === "pioneer" && selectedModelId === model.id;
                     const isEnabled = visibleModelIds === null || visibleIds.includes(model.id);
                     const requiredTier = model.tierRequired ?? "voyager";
-                    const requiredLevel = requiredTier === "pioneer" ? 2 : 1;
+                    const requiredLevel = PLAN_TIER_LEVELS[requiredTier] ?? PLAN_TIER_LEVELS.voyager;
                     const isTierLocked = tierLevel < requiredLevel;
-                    const isScoutLocked = tierLevel < 1;
+                    const isScoutLocked = tierLevel < PLAN_TIER_LEVELS.pathfinder;
                     const isLocked = isScoutLocked || isTierLocked;
 
                     return { model, isSelected, isEnabled, requiredTier, isLocked };
@@ -173,7 +174,7 @@ export function ModelsSection({
 
                   return modelRows.map((row, index) => (
                     <Fragment key={row.model.id}>
-                      {tierLevel >= 1 && index === firstLockedIndex ? (
+                      {tierLevel >= PLAN_TIER_LEVELS.pathfinder && index === firstLockedIndex ? (
                         <div
                           className={styles.settingsTierSeparator}
                           role="separator"

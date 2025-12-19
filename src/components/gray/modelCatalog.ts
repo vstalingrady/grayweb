@@ -2,7 +2,7 @@ export type CatalogModel = {
   id: string;
   label: string;
   cost?: string;
-  tierRequired?: "voyager" | "pioneer";
+  tierRequired?: "pathfinder" | "voyager" | "pioneer";
 };
 
 export type ModelGroup = {
@@ -23,7 +23,7 @@ export const PIONEER_GROUPS: ModelGroup[] = [
     label: "Anthropic",
     iconPath: "/logos/claude-color.svg",
     models: [
-      { id: "anthropic/claude-haiku-4.5", label: "Claude Haiku 4.5", cost: "$$", tierRequired: "voyager" },
+      { id: "anthropic/claude-haiku-4.5", label: "Claude Haiku 4.5", cost: "$$", tierRequired: "pathfinder" },
       { id: "anthropic/claude-sonnet-4.5", label: "Claude Sonnet 4.5", cost: "$$$", tierRequired: "voyager" },
       { id: "anthropic/claude-opus-4.5", label: "Claude Opus 4.5", cost: "$$$$", tierRequired: "pioneer" },
     ],
@@ -34,7 +34,7 @@ export const PIONEER_GROUPS: ModelGroup[] = [
     iconPath: "/logos/gemini-color.svg",
     models: [
       { id: "google/gemini-3-pro-preview", label: "Gemini 3 Pro", cost: "$$$", tierRequired: "voyager" },
-      { id: "google/gemini-3-flash-preview", label: "Gemini 3 Flash", cost: "$$", tierRequired: "voyager" },
+      { id: "google/gemini-3-flash-preview", label: "Gemini 3 Flash", cost: "$$", tierRequired: "pathfinder" },
     ],
   },
   {
@@ -51,21 +51,21 @@ export const PIONEER_GROUPS: ModelGroup[] = [
     label: "DeepSeek",
     iconPath: "/logos/deepseek-color.svg",
     models: [
-      { id: "deepseek/deepseek-v3.2", label: "Deepseek V3.2", cost: "$", tierRequired: "voyager" },
-      { id: "deepseek/deepseek-v3.2-speciale", label: "Deepseek V3.2 Speciale", cost: "$", tierRequired: "voyager" },
+      { id: "deepseek/deepseek-v3.2", label: "Deepseek V3.2", cost: "$", tierRequired: "pathfinder" },
+      { id: "deepseek/deepseek-v3.2-speciale", label: "Deepseek V3.2 Speciale", cost: "$", tierRequired: "pathfinder" },
     ],
   },
   {
     id: "x-ai",
     label: "xAI",
     iconPath: "/logos/whitegrok.svg",
-    models: [{ id: "x-ai/grok-4.1-fast", label: "Grok 4.1 Fast", cost: "$", tierRequired: "voyager" }],
+    models: [{ id: "x-ai/grok-4.1-fast", label: "Grok 4.1 Fast", cost: "$", tierRequired: "pathfinder" }],
   },
   {
     id: "moonshot",
     label: "Moonshot AI",
     iconPath: "/logos/whitekimi.svg",
-    models: [{ id: "moonshotai/kimi-k2-thinking", label: "Kimi K2 Thinking", cost: "$$", tierRequired: "voyager" }],
+    models: [{ id: "moonshotai/kimi-k2-thinking", label: "Kimi K2", cost: "$$", tierRequired: "pathfinder" }],
   },
 ];
 

@@ -29,6 +29,20 @@ export const useSessionStorage = ({
   setSessions,
 }: UseSessionStorageOptions): UseSessionStorageResult => {
   const hasLoadedFromStorageRef = useRef(false);
+  const lastIdentityRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const identity =
+      typeof userId === "number" && Number.isFinite(userId)
+        ? `id:${userId}`
+        : userEmail
+          ? `email:${userEmail}`
+          : null;
+    if (identity !== lastIdentityRef.current) {
+      lastIdentityRef.current = identity;
+      hasLoadedFromStorageRef.current = false;
+    }
+  }, [userEmail, userId]);
 
   // Hydrate from local storage on mount
   useEffect(() => {
@@ -40,9 +54,12 @@ export const useSessionStorage = ({
       return;
     }
 
-    const { sessions: loadedSessions } = loadStoredSessions(
-      buildSessionStorageKeyCandidates(userId, userEmail)
-    );
+    const storageKeys = buildSessionStorageKeyCandidates(userId, userEmail);
+    if (storageKeys.length === 0) {
+      return;
+    }
+
+    const { sessions: loadedSessions } = loadStoredSessions(storageKeys);
 
     if (loadedSessions.length > 0) {
       setSessions((prev) => {

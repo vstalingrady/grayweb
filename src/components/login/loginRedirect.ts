@@ -115,7 +115,9 @@ export const resolvePostAuthDestination = (): string => {
 
   if (typeof window !== "undefined") {
     const url = new URL(window.location.href);
-    const sanitized = sanitizeRedirect(url.searchParams.get("redirect"));
+    const sanitized =
+      sanitizeRedirect(url.searchParams.get("redirect")) ??
+      sanitizeRedirect(url.searchParams.get("returnTo"));
     if (sanitized) {
       return normalizeWorkspaceRedirect(sanitized, workspaceHost);
     }
@@ -183,4 +185,3 @@ export const buildCallbackDestination = (customRedirect?: string): string => {
   const origin = resolveCallbackOrigin();
   return `${origin}${CALLBACK_PATH}?redirect=${encoded}`;
 };
-

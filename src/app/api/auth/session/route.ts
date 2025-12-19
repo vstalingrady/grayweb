@@ -18,6 +18,84 @@ type JwtPayload = {
 };
 
 const SUPABASE_JWT_SECRET = process.env.SUPABASE_JWT_SECRET ?? null;
+const CSRF_COOKIE_NAME = "gray-csrf";
+const CSRF_HEADER_NAME = "x-gray-csrf";
+const ALLOWED_FETCH_SITES = new Set(["same-origin", "same-site"]);
+const ALLOWED_FETCH_MODES = new Set(["cors", "same-origin"]);
+
+const resolveExpectedOrigin = (request: NextRequest): string | null => {
+  const forwardedProto = request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim();
+  const forwardedHost = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+  const rawHost = forwardedHost?.split(",")[0]?.trim();
+  const protocol = forwardedProto || request.nextUrl.protocol.replace(":", "") || "http";
+
+  if (rawHost) {
+    return `${protocol}://${rawHost}`;
+  }
+
+  try {
+    return new URL(request.url).origin;
+  } catch {
+    return null;
+  }
+};
+
+const isSameOrigin = (candidate: string | null, expectedOrigin: string | null): boolean => {
+  if (!candidate || !expectedOrigin) {
+    return false;
+  }
+  if (candidate === "null") {
+    return false;
+  }
+  try {
+    return new URL(candidate).origin === expectedOrigin;
+  } catch {
+    return false;
+  }
+};
+
+const isSameOriginRequest = (request: NextRequest): boolean => {
+  const expectedOrigin = resolveExpectedOrigin(request);
+  const origin = request.headers.get("origin");
+  if (isSameOrigin(origin, expectedOrigin)) {
+    return true;
+  }
+
+  const referer = request.headers.get("referer");
+  if (isSameOrigin(referer, expectedOrigin)) {
+    return true;
+  }
+
+  return false;
+};
+
+const isAllowedFetchMetadata = (request: NextRequest): boolean => {
+  const fetchSite = request.headers.get("sec-fetch-site")?.toLowerCase();
+  if (fetchSite && !ALLOWED_FETCH_SITES.has(fetchSite)) {
+    return false;
+  }
+  const fetchMode = request.headers.get("sec-fetch-mode")?.toLowerCase();
+  if (fetchMode && !ALLOWED_FETCH_MODES.has(fetchMode)) {
+    return false;
+  }
+  return true;
+};
+
+const isValidCsrf = (request: NextRequest): boolean => {
+  const cookieValue = request.cookies.get(CSRF_COOKIE_NAME)?.value ?? "";
+  const headerValue = request.headers.get(CSRF_HEADER_NAME) ?? "";
+
+  if (!cookieValue || !headerValue) {
+    return false;
+  }
+
+  const cookieBuffer = Buffer.from(cookieValue);
+  const headerBuffer = Buffer.from(headerValue);
+  if (cookieBuffer.length !== headerBuffer.length) {
+    return false;
+  }
+  return crypto.timingSafeEqual(cookieBuffer, headerBuffer);
+};
 
 const normalizeUrl = (value: string | null | undefined): string | null => {
   const trimmed = (value ?? "").trim();
@@ -192,6 +270,20 @@ const resolveCookieDomain = (request: NextRequest): string | undefined => {
 };
 
 export async function POST(request: NextRequest) {
+  const contentType = request.headers.get("content-type") ?? "";
+  if (!contentType.toLowerCase().includes("application/json")) {
+    return NextResponse.json({ detail: "Unsupported content type" }, { status: 415, headers: noStoreHeaders });
+  }
+  if (!isAllowedFetchMetadata(request)) {
+    return NextResponse.json({ detail: "Forbidden" }, { status: 403, headers: noStoreHeaders });
+  }
+  if (!isSameOriginRequest(request)) {
+    return NextResponse.json({ detail: "Forbidden" }, { status: 403, headers: noStoreHeaders });
+  }
+  if (!isValidCsrf(request)) {
+    return NextResponse.json({ detail: "Forbidden" }, { status: 403, headers: noStoreHeaders });
+  }
+
   const body = (await request.json().catch(() => null)) as { accessToken?: string } | null;
   const accessToken = typeof body?.accessToken === "string" ? body.accessToken.trim() : "";
 
@@ -210,6 +302,15 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
+  if (!isAllowedFetchMetadata(request)) {
+    return NextResponse.json({ detail: "Forbidden" }, { status: 403, headers: noStoreHeaders });
+  }
+  if (!isSameOriginRequest(request)) {
+    return NextResponse.json({ detail: "Forbidden" }, { status: 403, headers: noStoreHeaders });
+  }
+  if (!isValidCsrf(request)) {
+    return NextResponse.json({ detail: "Forbidden" }, { status: 403, headers: noStoreHeaders });
+  }
   const response = NextResponse.json({ ok: true }, { headers: noStoreHeaders });
   response.cookies.set(clearSessionCookie({ domain: resolveCookieDomain(request) }));
   return response;

@@ -8,26 +8,20 @@ import { useUser } from "@/contexts/UserContext";
 import { useI18n } from "@/contexts/I18nContext";
 import styles from "./ModelSelector.module.css";
 import { PIONEER_GROUPS } from "./modelCatalog";
-import { normalizePlanTier } from "@/components/gray/utils/helperFunctions";
+import { normalizePlanTier, PLAN_TIER_LEVELS } from "@/components/gray/utils/helperFunctions";
 
 type ModelOption = {
   id: string;
   label: string;
   description: string;
   icon: React.ElementType;
-  tierRequired: "scout" | "voyager" | "pioneer";
+  tierRequired: "scout" | "pathfinder" | "voyager" | "pioneer";
 };
 
 // Base model option - Lite is available to all tiers
 const OPTIONS: ModelOption[] = [
   { id: "lite", label: "Gray Lite", description: "Quick responses", icon: Zap, tierRequired: "scout" },
 ];
-
-const TIER_LEVELS: Record<string, number> = {
-  scout: 0,
-  voyager: 1,
-  pioneer: 2,
-};
 
 type ModelSelectorProps = {
   className?: string;
@@ -51,7 +45,7 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
 
   const currentTier = normalizePlanTier(user);
-  const currentLevel = TIER_LEVELS[currentTier] ?? 0;
+  const currentLevel = PLAN_TIER_LEVELS[currentTier] ?? 0;
   const isReasoningLocked = currentTier === "scout";
 
   const filteredPioneerGroups = useMemo(() => {
@@ -93,7 +87,7 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
   const handleSelect = useCallback(
     (index: number) => {
       const option = OPTIONS[index];
-      const requiredLevel = TIER_LEVELS[option.tierRequired];
+      const requiredLevel = PLAN_TIER_LEVELS[option.tierRequired];
 
       if (currentLevel < requiredLevel) {
         return;
@@ -114,7 +108,7 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
 
   const handlePioneerSelect = useCallback(
     (modelId: string) => {
-      if (currentLevel < TIER_LEVELS["voyager"]) return;
+      if (currentLevel < PLAN_TIER_LEVELS["pathfinder"]) return;
       setModelTier("pioneer");
       setSelectedModelId(modelId);
       setIsOpen(false);
@@ -125,7 +119,7 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
 
   const toggleAllModels = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
-    if (currentLevel >= TIER_LEVELS["voyager"]) {
+    if (currentLevel >= PLAN_TIER_LEVELS["pathfinder"]) {
       setShowAllModels((prev) => !prev);
     }
   }, [currentLevel]);
@@ -209,7 +203,7 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
                       <div className={styles.groupModels}>
                         {group.models.map((model) => {
                           const modelTierRequired = model.tierRequired || "voyager";
-                          const modelTierLevel = TIER_LEVELS[modelTierRequired] ?? 1;
+                          const modelTierLevel = PLAN_TIER_LEVELS[modelTierRequired] ?? 0;
                           const isModelLocked = currentLevel < modelTierLevel;
 
                           return (
@@ -339,7 +333,7 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
 
               {/* Standard Options */}
               {OPTIONS.map((option, index) => {
-                const requiredLevel = TIER_LEVELS[option.tierRequired];
+                const requiredLevel = PLAN_TIER_LEVELS[option.tierRequired];
                 const isLocked = currentLevel < requiredLevel;
                 const isActive = activeOption.id === option.id && !selectedModelId; // Only active if no specific model selected
                 const Icon = option.icon;
@@ -367,7 +361,7 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
               })}
 
               {/* Display Active Model if selected */}
-              {selectedModelId && activeOption.tierRequired === 'voyager' && (
+              {selectedModelId && (
                 <button className={`${styles.menuItem} ${styles.menuItemActive}`} disabled>
                   {/* We use activeOption.icon here which I will update in useMemo to be the group icon */}
                   <div className={styles.itemIconWrapper}>
@@ -393,10 +387,10 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
                 Clicking routes to pricing, matching the locked "upgrade" UX.
               */}
               <button
-                className={`${styles.actionItem} ${currentLevel < TIER_LEVELS["voyager"] ? styles.menuItemLocked : ''}`}
+                className={`${styles.actionItem} ${currentLevel < PLAN_TIER_LEVELS["pathfinder"] ? styles.menuItemLocked : ''}`}
                 type="button"
                 onClick={(event) => {
-                  if (currentLevel < TIER_LEVELS["voyager"]) {
+                  if (currentLevel < PLAN_TIER_LEVELS["pathfinder"]) {
                     event.stopPropagation();
                     if (typeof window !== "undefined") {
                       window.location.href = "/pricing";
@@ -408,7 +402,7 @@ export const ModelSelector = memo(({ className }: ModelSelectorProps) => {
               >
                 <Box size={16} />
                 <span>{t("All Models")}</span>
-                {currentLevel < TIER_LEVELS["voyager"] ? (
+                {currentLevel < PLAN_TIER_LEVELS["pathfinder"] ? (
                   <span className={styles.actionUpgradeRight}>
                     <a
                       href="/pricing"

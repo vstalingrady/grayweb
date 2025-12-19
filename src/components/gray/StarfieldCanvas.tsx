@@ -9,6 +9,7 @@ type StarfieldCanvasProps = {
   color?: string;
   orbitMode?: boolean;
   trailLength?: number;
+  respectReducedMotion?: boolean;
 };
 
 type Star = {
@@ -61,6 +62,7 @@ export function StarfieldCanvas({
   color,
   orbitMode = false,
   trailLength = 0,
+  respectReducedMotion = true,
 }: StarfieldCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const rgbTriplet = useMemo(() => parseRgbTriplet(color), [color]);
@@ -76,7 +78,7 @@ export function StarfieldCanvas({
       return;
     }
 
-    const reducedMotion = prefersReducedMotion();
+    const reducedMotion = respectReducedMotion && prefersReducedMotion();
     const stars: Star[] = [];
     const state = {
       width: 0,
@@ -156,13 +158,23 @@ export function StarfieldCanvas({
         const alpha = clamp(star.baseAlpha * twinkle, 0.1, 0.98);
 
         if (orbitMode && trailLength > 0 && !reducedMotion) {
-          // Draw trail as an arc
-          context.beginPath();
-          context.arc(centerX, centerY, star.orbitRadius, star.angle - trailLength, star.angle);
-          context.strokeStyle = `rgba(${rgbTriplet}, ${alpha})`;
-          context.lineWidth = star.radius * 2;
-          context.lineCap = "round";
-          context.stroke();
+          const segmentCount = Math.round(clamp(trailLength * 60, 8, 36));
+
+          for (let segmentIndex = 0; segmentIndex < segmentCount; segmentIndex += 1) {
+            const startProgress = segmentIndex / segmentCount;
+            const endProgress = (segmentIndex + 1) / segmentCount;
+            const startAngle = star.angle - trailLength * (1 - startProgress);
+            const endAngle = star.angle - trailLength * (1 - endProgress);
+            const fade = Math.pow(endProgress, 1.6);
+            const segmentAlpha = alpha * fade;
+
+            context.beginPath();
+            context.arc(centerX, centerY, star.orbitRadius, startAngle, endAngle);
+            context.strokeStyle = `rgba(${rgbTriplet}, ${segmentAlpha})`;
+            context.lineWidth = star.radius * 2 * (0.6 + 0.4 * fade);
+            context.lineCap = "round";
+            context.stroke();
+          }
         } else {
           // Calculate position for a single point
           const x = centerX + Math.cos(star.angle) * star.orbitRadius;

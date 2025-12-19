@@ -176,12 +176,14 @@ class AIMessageGenerator:
             # Give the model temporal context for the check-in in the user's local timezone.
             tzinfo = self._resolve_timezone(timezone_str)
             now_local = datetime.now(tzinfo)
+            tz_label = self._format_utc_offset_label(now_local.utcoffset())
             time_context = (
                 f"User's local time is {now_local.isoformat()} "
-                f"(timezone: {timezone_str}). "
+                f"(timezone: {tz_label}, {tz_label}). "
                 f"This proactive check-in is scheduled for their current local time "
                 f"based on cadence '{cadence or 'unspecified'}' and label '{label}'. "
-                "Respond as if it's that local time and avoid referencing UTC unless the user asks."
+                "Respond as if it's that local time. If you reference the timezone, "
+                "use only the UTC offset and do not name a city."
             )
 
             # Use OpenRouter Grok (Lite tier) for proactive messaging
@@ -238,6 +240,15 @@ class AIMessageGenerator:
         cleaned = _strip_explicit_dates(cleaned)
 
         return label, cleaned
+
+    @staticmethod
+    def _format_utc_offset_label(offset: Optional[timedelta]) -> str:
+        if offset is None:
+            return "UTC+00:00"
+        total_minutes = int(offset.total_seconds() // 60)
+        sign = "+" if total_minutes >= 0 else "-"
+        hours, minutes = divmod(abs(total_minutes), 60)
+        return f"UTC{sign}{hours:02d}:{minutes:02d}"
 
     @staticmethod
     def _resolve_timezone(timezone_str: str):

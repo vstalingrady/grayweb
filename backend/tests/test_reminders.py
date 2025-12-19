@@ -60,6 +60,14 @@ def test_timezone_extraction_from_time_context():
     assert tzinfo.utcoffset(datetime.now(timezone.utc)) is not None
 
 
+def test_timezone_extraction_from_time_context_offset():
+    label, tzinfo = main._timezone_from_time_context(
+        "Current local time: Monday 10:00 AM (timezone: UTC+07:00, UTC+07:00). ISO timestamp: 2025-01-01T03:00:00.000Z"
+    )
+    assert label == "UTC+07:00"
+    assert tzinfo.utcoffset(datetime.now(tzinfo)) == timedelta(hours=7)
+
+
 @pytest.mark.asyncio
 async def test_maybe_enrich_actions_with_relative_time():
     actions = [

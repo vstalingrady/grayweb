@@ -7,7 +7,7 @@ import json
 import os
 import secrets
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 from urllib.parse import urlencode, urlparse
 
@@ -408,6 +408,10 @@ async def get_google_calendar_service(credentials: GoogleCalendarCredentials) ->
                 scopes = [scope.strip() for scope in scopes.split() if scope.strip()]
 
         # Create credentials object
+        expiry = credentials.expires_at
+        if expiry and expiry.tzinfo is None:
+            expiry = expiry.replace(tzinfo=timezone.utc)
+
         creds = google.oauth2.credentials.Credentials(
             token=credentials.access_token,
             refresh_token=credentials.refresh_token,
@@ -415,6 +419,7 @@ async def get_google_calendar_service(credentials: GoogleCalendarCredentials) ->
             client_id=GOOGLE_CLIENT_ID or credentials.client_id,
             client_secret=_get_client_secret(),
             scopes=scopes or SCOPES,
+            expiry=expiry,
         )
 
         # Build calendar service

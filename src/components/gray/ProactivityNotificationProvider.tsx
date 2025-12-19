@@ -12,9 +12,11 @@ import {
 import { useUser } from "@/contexts/UserContext";
 import { useChatStore } from "./ChatProvider";
 import { GENERAL_CHAT_SESSION_ID } from "./chat/constants";
-import { resolveApiBaseUrl } from "@/lib/api";
+import { chatService, resolveApiBaseUrl } from "@/lib/api";
 import { useI18n } from "@/contexts/I18nContext";
 import { useNotificationPreferences } from "@/contexts/NotificationPreferencesContext";
+import { buildGeneralConversationId, normalizeAssistantMessage, parseGrayTitleMarkers } from "./chat/utils";
+import { mapApiMessagesToChatMessages } from "./chat/provider/sessionStore";
 
 type ProactivityNotificationContextValue = {
   deliveredKeys: ReadonlySet<string>;
@@ -43,10 +45,16 @@ export function ProactivityNotificationProvider({ children }: ProactivityNotific
   const { t } = useI18n();
   const { user } = useUser();
   const userId = typeof user?.id === "number" ? user.id : null;
-  const { appendMessage } = useChatStore();
+  const { appendMessage, sessions, updateSession } = useChatStore();
   const { notificationPreferences } = useNotificationPreferences();
   const [deliveredKeys, setDeliveredKeys] = useState<Set<string>>(new Set());
   const pushSetupRef = useRef<Promise<void> | null>(null);
+  const sessionsRef = useRef(sessions);
+  const isHydratingHistoryRef = useRef(false);
+
+  useEffect(() => {
+    sessionsRef.current = sessions;
+  }, [sessions]);
   const getAuthToken = useCallback(async (): Promise<string | null> => {
     const { getSupabaseClient } = await import("@/lib/supabaseClient");
     const supabase = getSupabaseClient();
@@ -61,12 +69,66 @@ export function ProactivityNotificationProvider({ children }: ProactivityNotific
     return data.session?.access_token ?? null;
   }, []);
 
+  const hydrateGeneralHistory = useCallback(async () => {
+    if (!userId || isHydratingHistoryRef.current) {
+      return;
+    }
+
+    const generalConversationId = buildGeneralConversationId(userId);
+    if (!generalConversationId) {
+      return;
+    }
+
+    const generalSession = sessionsRef.current.find((session) => session.scope === "general");
+    if (!generalSession || generalSession.isResponding) {
+      return;
+    }
+
+    const hasUserMessage = generalSession.messages.some((message) => message.role === "user");
+    if (hasUserMessage && generalSession.messages.length > 3) {
+      return;
+    }
+
+    isHydratingHistoryRef.current = true;
+    try {
+      const history = await chatService.getConversation(generalConversationId);
+      if (!Array.isArray(history) || history.length === 0) {
+        return;
+      }
+      const now = Date.now();
+      const mapped = mapApiMessagesToChatMessages(history, generalConversationId, now);
+      if (!mapped.length) {
+        return;
+      }
+
+      const latestSession = sessionsRef.current.find((session) => session.id === generalSession.id);
+      const currentCount = latestSession?.messages.length ?? 0;
+      if (mapped.length <= currentCount) {
+        return;
+      }
+
+      updateSession(generalSession.id, {
+        conversationId: generalConversationId,
+        messages: mapped,
+        updatedAt: now,
+        isResponding: false,
+      });
+    } catch (error) {
+      console.warn("[Proactivity] Failed to refresh general chat history:", error);
+    } finally {
+      isHydratingHistoryRef.current = false;
+    }
+  }, [updateSession, userId]);
+
   const handleProactivityMessage = useCallback(
     (payload: { session_id?: string; message?: string; delivery_key?: string }) => {
       // 1. Append to chat if we have a session ID
       const targetSessionId = payload.session_id || GENERAL_CHAT_SESSION_ID;
       if (targetSessionId && payload.message) {
-        appendMessage(targetSessionId, "assistant", payload.message);
+        const parsed = parseGrayTitleMarkers(payload.message);
+        const normalized = normalizeAssistantMessage("assistant", parsed.cleanText);
+        appendMessage(targetSessionId, "assistant", normalized.content);
+        void hydrateGeneralHistory();
       }
 
       // 2. Show browser notification if enabled and proactivity notifications are on
@@ -81,7 +143,13 @@ export function ProactivityNotificationProvider({ children }: ProactivityNotific
 
       // 3. In-app toast could be surfaced here if needed.
     },
-    [appendMessage, t, notificationPreferences.device, notificationPreferences.proactivity]
+    [
+      appendMessage,
+      hydrateGeneralHistory,
+      t,
+      notificationPreferences.device,
+      notificationPreferences.proactivity,
+    ]
   );
 
   useEffect(() => {

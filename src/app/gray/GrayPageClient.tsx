@@ -48,6 +48,7 @@ import { buildHistorySections } from "./buildHistorySections";
 import { GrayChatComposer } from "@/components/gray/ChatComposer";
 import {
   buildGeneralChatSession,
+  normalizePlanTier,
   derivePlanTierLabel,
   deriveInitials,
   greetingForDate,
@@ -146,6 +147,8 @@ function GrayPageClientInner({
 
   // Derived state for hooks
   const userId = typeof user?.id === "number" ? user.id : null;
+  const normalizedTier = useMemo(() => normalizePlanTier(user), [user]);
+  const hasCalendarAccess = normalizedTier === "voyager" || normalizedTier === "pioneer";
   const resolvedTimezone = useMemo(() => {
     try {
       return Intl.DateTimeFormat().resolvedOptions().timeZone ?? "UTC";
@@ -180,7 +183,7 @@ function GrayPageClientInner({
     calendarEvents,
     setCalendarEvents,
     refreshPlansAndHabits
-  } = useWorkspaceData(userId, variant);
+  } = useWorkspaceData(userId, variant, hasCalendarAccess);
 
   const {
     proactivity,
@@ -714,23 +717,22 @@ function GrayPageClientInner({
     return derivePlanTierLabel(planCarrier);
   }, [user]);
 
-  const isScout = viewerPlanLabel === "Scout";
 
   useEffect(() => {
-    if (isScout && dashboardTab === "calendar") {
+    if (!hasCalendarAccess && dashboardTab === "calendar") {
       setDashboardTab("pulse");
     }
-  }, [isScout, dashboardTab]);
+  }, [hasCalendarAccess, dashboardTab]);
 
   useEffect(() => {
-    if (!isScout) {
+    if (hasCalendarAccess) {
       return;
     }
 
     if (activeNav === "calendar" || pathname === "/cal") {
       router.replace(NAVIGATION_ROUTES.general ?? "/g");
     }
-  }, [activeNav, isScout, pathname, router]);
+  }, [activeNav, hasCalendarAccess, pathname, router]);
 
   const viewerInitials = useMemo(() => {
     if (userLoading) {
@@ -743,18 +745,18 @@ function GrayPageClientInner({
   }, [user, userLoading, viewerName]);
 
   const filteredSidebarItems = useMemo(() => {
-    if (isScout) {
+    if (!hasCalendarAccess) {
       return SIDEBAR_ITEMS.filter((item) => item.id !== "calendar");
     }
     return SIDEBAR_ITEMS;
-  }, [isScout]);
+  }, [hasCalendarAccess]);
 
   const filteredRailItems = useMemo(() => {
-    if (isScout) {
+    if (!hasCalendarAccess) {
       return SIDEBAR_RAIL_ITEMS.filter((item) => item.id !== "calendar");
     }
     return SIDEBAR_RAIL_ITEMS;
-  }, [isScout]);
+  }, [hasCalendarAccess]);
 
   const historySections = useMemo(() => buildHistorySections(sessions), [sessions]);
   const isDashboardView = viewMode === "dashboard";
@@ -1030,7 +1032,9 @@ function GrayPageClientInner({
     setEvents: setCalendarEvents,
   });
 
-  const handleCalendarIntegration = useGoogleCalendarIntegration(userId);
+  const handleCalendarIntegration = useGoogleCalendarIntegration(
+    hasCalendarAccess ? userId : null
+  );
 
   const handleChatSubmit = useCallback(
     async (

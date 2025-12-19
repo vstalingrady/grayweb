@@ -160,8 +160,11 @@ async def overwrite_thread_history(
     Uses local SQLite storage so message deletions persist across cache expiry
     and page reloads.
     """
-    if _is_valid_uuid(conversation_id):
-        try:
+    if not _is_valid_uuid(conversation_id):
+        return {"id": conversation_id, "message_count": 0, "skipped": True, "reason": "invalid_id"}
+
+    try:
+        async with database.transaction():
             # Delete existing messages for this thread
             delete_query = user_chat_messages.delete().where(
                 user_chat_messages.c.thread_id == conversation_id
@@ -195,10 +198,11 @@ async def overwrite_thread_history(
                 user_chat_threads.c.id == conversation_id
             ).values(updated_at=utcnow(), last_message_at=utcnow())
             await database.execute(update_query)
-        except Exception as error:
-            _handle_conversation_store_error(
-                "Error overwriting conversation history in local SQLite", error
-            )
+    except Exception as error:
+        _handle_conversation_store_error(
+            "Error overwriting conversation history in local SQLite", error
+        )
+        raise
 
     # 3. Invalidate Redis cache so deleted messages don't reappear (best-effort)
     if find_spec("backend.chat_cache") is not None:

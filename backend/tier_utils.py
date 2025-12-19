@@ -26,7 +26,7 @@ def normalize_plan_tier(
     subscription_expires_at: Optional[datetime] = None,
 ) -> str:
     """
-    Normalize a user tier label to one of: scout, voyager, pioneer.
+    Normalize a user tier label to one of: scout, pathfinder, voyager, pioneer.
     
     Automatically downgrades users with expired subscriptions to scout tier.
 
@@ -40,7 +40,7 @@ def normalize_plan_tier(
         subscription_expires_at: When the subscription expires (None means no expiration)
     
     Returns:
-        Normalized tier name (scout, voyager, or pioneer)
+        Normalized tier name (scout, pathfinder, voyager, or pioneer)
     """
     candidate = (plan_tier or "").strip().lower()
     if not candidate and role:
@@ -53,7 +53,7 @@ def normalize_plan_tier(
         normalized = mapped if mapped else "scout"
     
     # Check if subscription has expired (only for paid tiers)
-    if normalized in ("voyager", "pioneer") and subscription_expires_at is not None:
+    if normalized in ("pathfinder", "voyager", "pioneer") and subscription_expires_at is not None:
         now = datetime.now(timezone.utc)
         # Make subscription_expires_at timezone-aware if it isn't already
         if subscription_expires_at.tzinfo is None:

@@ -25,6 +25,9 @@ class ProactivitySettings(BaseModel):
 
 class ProactivitySettingsUpdate(BaseModel):
     """Model for updating proactivity settings."""
+    id: Optional[Union[str, int]] = None
+    label: Optional[str] = None
+    description: Optional[str] = None
     cadence: Optional[str] = None
     time: Optional[str] = None
     times: Optional[List[str]] = None

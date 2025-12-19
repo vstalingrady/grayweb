@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { getSupabaseAuthStorageKeys } from "@/lib/supabaseStorage";
+import { getCsrfHeaders } from "@/lib/auth/cookies";
 import {
   normalizeWorkspaceRedirect,
   resolveDefaultWorkspacePath,
@@ -313,9 +314,10 @@ export default function CallbackPage() {
 
         if (accessToken) {
           const syncStart = performance.now();
+          const csrfHeaders = getCsrfHeaders();
           await fetch("/api/auth/session", {
             method: "POST",
-            headers: { "content-type": "application/json" },
+            headers: { "content-type": "application/json", ...csrfHeaders },
             body: JSON.stringify({ accessToken }),
           }).catch(() => {
             // Continue even if cookie sync fails; the Supabase session is still active client-side.

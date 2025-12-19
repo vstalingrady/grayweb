@@ -46,7 +46,7 @@ async def test_notify_payment_success_posts(monkeypatch):
     monkeypatch.setattr(notifier, "_post_discord_webhook", fake_post)
 
     await notifier.notify_payment_success(
-        provider="gumroad",
+        provider="midtrans",
         status="sale",
         order_id="sale_123",
         amount="9.99",
@@ -58,7 +58,7 @@ async def test_notify_payment_success_posts(monkeypatch):
     )
 
     assert captured["url"] == "https://discord.example/webhook"
-    assert captured["payload"]["embeds"][0]["title"] == "Payment received (gumroad)"
+    assert captured["payload"]["embeds"][0]["title"] == "Payment received (midtrans)"
     fields = {field["name"]: field["value"] for field in captured["payload"]["embeds"][0]["fields"]}
     assert fields["Order ID"] == "sale_123"
     assert fields["User ID"] == "42"

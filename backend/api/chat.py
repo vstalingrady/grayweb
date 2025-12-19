@@ -192,7 +192,7 @@ async def chat_route(
             await save_conversation_message(conversation_id, user_message_payload, user_id=chat_request.user_id)
 
         # Enforce tier restrictions
-        # Only Voyager and Pioneer users can use reasoning mode.
+        # Pathfinder, Voyager, and Pioneer users can use reasoning mode.
         normalized_tier = normalize_plan_tier(
             current_user.get("plan_tier"),
             current_user.get("role"),
@@ -559,4 +559,3 @@ async def chat_stream_route(
         api_logger.error(f"Chat stream failed: {error}", exc_info=True)
         clear_request_context()
         raise HTTPException(status_code=500, detail=str(error))
-
