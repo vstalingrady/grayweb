@@ -13,8 +13,8 @@ import { useNotificationPreferences } from "@/contexts/NotificationPreferencesCo
 import {
   formatCustomTimeLabel,
   getProactivityTimes,
-  requestNotificationPermission,
 } from "@/components/gray/proactivityUtils";
+import { requestNotificationPermission } from "@/lib/notificationUtils";
 import type { ProactivityItem } from "@/components/gray/types";
 import type { CalendarEvent } from "@/components/calendar/types";
 
