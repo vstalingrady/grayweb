@@ -20,6 +20,7 @@ from backend.models import (
 from backend.database import plans, habits, get_database
 from backend.auth import get_current_user, require_same_user
 from backend.time_utils import utcnow
+from backend.compat_imports import row_get as _row_get
 
 router = APIRouter(tags=["plans", "habits"])
 
@@ -120,14 +121,16 @@ async def create_plan(
 
     if created and plan.reminder_at is not None:
         record = dict(created)
-        color = record.get("color")
+        # Try to get existing values from database record if it exists
+        color = _row_get(record, "color")
+        
         metadata = {"color": color} if color else None
         await _upsert_entity_reminder(
             user_id=user_id,
             entity_type="plan",
             entity_id=int(plan_id),
-            label=str(record.get("label") or plan.label),
-            description=record.get("description"),
+            label=str(_row_get(record, "label") or plan.label),
+            description=_row_get(record, "description"),
             remind_at=plan.reminder_at,
             metadata=metadata,
             color=color,
@@ -188,14 +191,16 @@ async def update_plan(
 
     if reminder_at_provided:
         record = dict(updated) if updated else dict(existing)
-        color = record.get("color")
+        # Try to get existing values from database record
+        color = _row_get(record, "color")
+        
         metadata = {"color": color} if color else None
         await _upsert_entity_reminder(
             user_id=user_id,
             entity_type="plan",
             entity_id=plan_id,
-            label=str(record.get("label") or ""),
-            description=record.get("description"),
+            label=str(_row_get(record, "label") or ""),
+            description=_row_get(record, "description"),
             remind_at=reminder_at_value,
             metadata=metadata,
             color=color,
@@ -330,8 +335,8 @@ async def create_habit(
             user_id=user_id,
             entity_type="habit",
             entity_id=int(habit_id),
-            label=str(record.get("label") or habit.label),
-            description=record.get("description"),
+            label=str(_row_get(record, "label") or habit.label),
+            description=_row_get(record, "description"),
             remind_at=habit.reminder_at,
             metadata=None,
             color=None,
@@ -396,8 +401,8 @@ async def update_habit(
             user_id=user_id,
             entity_type="habit",
             entity_id=habit_id,
-            label=str(record.get("label") or ""),
-            description=record.get("description"),
+            label=str(_row_get(record, "label") or ""),
+            description=_row_get(record, "description"),
             remind_at=reminder_at_value,
             metadata=None,
             color=None,

@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 
 from backend.time_utils import utcnow
 import time
+from backend.compat_imports import row_get as _row_get
 
 from backend.tier_utils import bootstrap_plan_tier
 
@@ -601,7 +602,7 @@ def require_admin(current_user: Dict[str, Any]):
     Raises:
         HTTPException: If user is not an admin
     """
-    user_role = current_user.get("role", "user")
+    user_role = _row_get(current_user, "role") or "user"
     if user_role != "admin":
         logger.warning(
             f"User {current_user['id']} attempted admin action without privileges"

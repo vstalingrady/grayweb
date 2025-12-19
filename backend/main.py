@@ -450,7 +450,7 @@ async def _require_conversation_owner(conversation_id: str, current_user: Dict[s
             # Log database lookup failures - don't silently fail security checks
             api_logger.warning(
                 f"Conversation ownership check failed for {conversation_id}: {e}",
-                extra={"conversation_id": conversation_id, "user_id": current_user.get("id"), "error": str(e)}
+                extra={"conversation_id": conversation_id, "user_id": _row_get(current_user, "id"), "error": str(e)}
             )
     else:
         # Non-UUID IDs are treated as local-only; require the current user context.

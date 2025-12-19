@@ -1,5 +1,5 @@
 /* eslint-disable react-hooks/refs */
-import { MutableRefObject, useCallback, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
 import { CalendarEvent, EventDraft } from "./types";
 
@@ -10,7 +10,6 @@ const snapToInterval = (value: number, interval: number) =>
     (interval > 0 ? Math.round(value / interval) * interval : value);
 
 type UseEventResizeParams = {
-    containerRef: MutableRefObject<HTMLElement | null>;
     hourHeight: number;
     snapMinutes?: number;
     onCommit?: (drafts: Record<string, EventDraft>) => void;
@@ -27,7 +26,6 @@ type ResizeState = {
 };
 
 export const useEventResize = ({
-    containerRef,
     hourHeight,
     snapMinutes = 15,
     onCommit,
@@ -39,7 +37,7 @@ export const useEventResize = ({
     const getResizeProps = useCallback(
         (event: CalendarEvent, edge: "start" | "end") => {
             const handlePointerDown = (pointerEvent: React.PointerEvent<HTMLElement>) => {
-                if (pointerEvent.pointerType === "touch" || !containerRef.current) {
+                if (pointerEvent.pointerType === "touch") {
                     return;
                 }
 
@@ -158,7 +156,7 @@ export const useEventResize = ({
                 onPointerDown: handlePointerDown,
             };
         },
-        [containerRef, hourHeight, onCommit, snapMinutes]
+        [hourHeight, onCommit, snapMinutes]
     );
 
     return {

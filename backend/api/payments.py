@@ -17,6 +17,7 @@ from backend.models import PaymentRequest, PaymentChargeResponse, MidtransNotifi
 from backend.database import database, transactions, users, get_database
 from backend.auth import get_current_user
 from backend.time_utils import utcnow
+from backend.compat_imports import row_get as _row_get
 
 router = APIRouter(tags=["payments"])
 
@@ -51,7 +52,13 @@ _PLAN_PRICING_USD: Dict[str, Dict[str, int]] = {
 def _normalize_provider(provider: Optional[str]) -> str:
     if not provider:
         return "midtrans"
-    return provider.strip().lower()
+    p = provider.strip().lower()
+    if p not in ("midtrans", "dodo"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported payment provider: {p}",
+        )
+    return p
 
 
 def _get_plan_amount(
@@ -173,14 +180,14 @@ async def _create_midtrans_charge(request: PaymentRequest, user: Dict[str, Any])
         }
     ]
 
-    user_id = user.get("id")
+    user_id = _row_get(user, "id")
     if not user_id:
         raise HTTPException(status_code=401, detail="User not found")
 
-    full_name = (user.get("full_name") or "").strip()
+    full_name = (_row_get(user, "full_name") or "").strip()
     first_name = full_name.split(" ")[0] if full_name else "User"
     last_name = " ".join(full_name.split(" ")[1:]) if " " in full_name else ""
-    email = (user.get("email") or "").strip()
+    email = (_row_get(user, "email") or "").strip()
     customer_details = {
         "first_name": first_name,
         "last_name": last_name,
@@ -269,7 +276,7 @@ async def _create_dodo_checkout(request: PaymentRequest, user: Dict[str, Any]) -
     from backend.dodo_payments import get_dodo_client
 
     app_logger = _get_logger()
-    user_id = user.get("id")
+    user_id = _row_get(user, "id")
     if not user_id:
         raise HTTPException(status_code=401, detail="User not found")
 
@@ -281,8 +288,8 @@ async def _create_dodo_checkout(request: PaymentRequest, user: Dict[str, Any]) -
 
     order_id = f"DODO-{user_id}-{int(datetime.now().timestamp())}"
 
-    full_name = (user.get("full_name") or "").strip()
-    email = (user.get("email") or "").strip()
+    full_name = (_row_get(user, "full_name") or "").strip()
+    email = (_row_get(user, "email") or "").strip()
     metadata = {
         "order_id": order_id,
         "user_id": str(user_id),

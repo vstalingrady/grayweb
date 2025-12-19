@@ -108,11 +108,11 @@ async def create_user(
     update_data: Dict[str, Any] = {}
 
     incoming_name = (user.full_name or "").strip()
-    if incoming_name and incoming_name != (current_user.get("full_name") or ""):
+    if incoming_name and incoming_name != (_row_get(current_user, "full_name") or ""):
         update_data["full_name"] = incoming_name
         update_data["initials"] = generate_initials(incoming_name)
 
-    if user.profile_picture_url and user.profile_picture_url != current_user.get("profile_picture_url"):
+    if user.profile_picture_url and user.profile_picture_url != _row_get(current_user, "profile_picture_url"):
         update_data["profile_picture_url"] = user.profile_picture_url
 
     if user.workspace_background_id is not None:
@@ -148,10 +148,10 @@ async def get_user_by_email(
     ) = _get_user_helpers()
     
     normalized_email = email.lower()
-    current_email = str(current_user.get("email") or "").lower()
+    current_email = str(_row_get(current_user, "email") or "").lower()
     
     # Users can only access their own data by email (admins can access any)
-    if current_user.get("role") != "admin" and current_email != normalized_email:
+    if _row_get(current_user, "role") != "admin" and current_email != normalized_email:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
 
     query = users.select().where(sqlalchemy.func.lower(users.c.email) == normalized_email)

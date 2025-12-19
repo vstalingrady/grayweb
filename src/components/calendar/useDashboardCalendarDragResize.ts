@@ -59,7 +59,6 @@ export const useDashboardCalendarDragResize = ({
   });
 
   const { getResizeProps, activeDraft: blockResizeDraft } = useEventResize({
-    containerRef: dayColumnRef,
     hourHeight,
     snapMinutes,
     onCommit: handleCommitDrag,
@@ -113,4 +112,3 @@ export const useDashboardCalendarDragResize = ({
     activeDrafts,
   };
 };
-

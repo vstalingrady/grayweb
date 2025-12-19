@@ -176,8 +176,8 @@ async def chat_route(
         last_history_entry: Optional[Dict[str, Any]] = conversation_history[-1] if conversation_history else None
         should_persist_user = not (
             last_history_entry
-            and last_history_entry.get("role") in {"user", "assistant", "model"}
-            and (last_history_entry.get("text") or "") == chat_request.message
+            and _row_get(last_history_entry, "role") in {"user", "assistant", "model"}
+            and (_row_get(last_history_entry, "text") or "") == chat_request.message
         )
         if is_general_conversation:
              # General chat messages are not handled by save_conversation_message
@@ -194,9 +194,9 @@ async def chat_route(
         # Enforce tier restrictions
         # Pathfinder, Voyager, and Pioneer users can use reasoning mode.
         normalized_tier = normalize_plan_tier(
-            current_user.get("plan_tier"),
-            current_user.get("role"),
-            current_user.get("subscription_expires_at")
+            _row_get(current_user, "plan_tier"),
+            _row_get(current_user, "role"),
+            _row_get(current_user, "subscription_expires_at")
         )
 
         # If user requested reasoning but is not eligible, disable it silently (or we could raise 403)
@@ -407,8 +407,8 @@ async def chat_stream_route(
         last_history_entry: Optional[Dict[str, Any]] = conversation_history[-1] if conversation_history else None
         should_persist_user = not (
             last_history_entry
-            and last_history_entry.get("role") in {"user", "assistant", "model"}
-            and (last_history_entry.get("text") or "") == effective_message
+            and _row_get(last_history_entry, "role") in {"user", "assistant", "model"}
+            and (_row_get(last_history_entry, "text") or "") == effective_message
         )
         if should_persist_user:
             # Make persistence non-blocking to improve time-to-first-token

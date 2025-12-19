@@ -30,15 +30,16 @@ from backend.google_calendar import (
 )
 from backend.time_utils import utcnow
 from backend.tier_utils import normalize_plan_tier
+from backend.compat_imports import row_get as _row_get
 
 router = APIRouter(tags=["google-calendar"])
 
 
 def _require_calendar_access(current_user: Dict[str, Any]) -> None:
     tier = normalize_plan_tier(
-        current_user.get("plan_tier"),
-        current_user.get("role"),
-        current_user.get("subscription_expires_at"),
+        _row_get(current_user, "plan_tier"),
+        _row_get(current_user, "role"),
+        _row_get(current_user, "subscription_expires_at"),
     )
     if tier not in ("voyager", "pioneer"):
         raise HTTPException(

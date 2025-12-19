@@ -50,8 +50,9 @@ def _make_helpers(*, require_owner_raises: bool, tier_limit: int = 42):
         lambda messages: messages,
         noop_async,
         noop_async,
-        noop_async,
-        None,
+        noop_async,  # invalidate_conversation_cache
+        lambda _obj, _key: _obj.get(_key) if hasattr(_obj, "get") else getattr(_obj, _key, None),  # _row_get
+        None,  # database
         dummy_logger,
         dummy_service,
         dummy_openrouter,

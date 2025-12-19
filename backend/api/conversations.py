@@ -51,6 +51,7 @@ def _get_conversation_helpers():
         apply_conversation_update,
         invalidate_conversation_cache,
         _is_valid_uuid,
+        row_get as _row_get,
     )
     from backend.api.chat_models import (
         MessageCreateRequest,
@@ -76,6 +77,7 @@ def _get_conversation_helpers():
         overwrite_thread_history,
         apply_conversation_update,
         invalidate_conversation_cache,
+        _row_get,
         database,
         app_logger,
         GEMINI_SERVICE,
@@ -115,6 +117,7 @@ async def create_conversation_message(
         overwrite_thread_history,
         apply_conversation_update,
         invalidate_conversation_cache,
+        _row_get,
         database,
         app_logger,
         GEMINI_SERVICE,
@@ -172,6 +175,7 @@ async def get_conversation(
         overwrite_thread_history,
         apply_conversation_update,
         invalidate_conversation_cache,
+        _row_get,
         database,
         app_logger,
         GEMINI_SERVICE,
@@ -231,6 +235,7 @@ async def create_conversation(
         overwrite_thread_history,
         apply_conversation_update,
         invalidate_conversation_cache,
+        _row_get,
         database,
         app_logger,
         GEMINI_SERVICE,
@@ -285,6 +290,7 @@ async def delete_conversation(
         overwrite_thread_history,
         apply_conversation_update,
         invalidate_conversation_cache,
+        _row_get,
         database,
         app_logger,
         GEMINI_SERVICE,
@@ -346,6 +352,7 @@ async def delete_all_conversations(
         overwrite_thread_history,
         apply_conversation_update,
         invalidate_conversation_cache,
+        _row_get,
         database,
         app_logger,
         GEMINI_SERVICE,
@@ -417,6 +424,7 @@ async def _overwrite_conversation_history_logic(
         overwrite_thread_history,
         apply_conversation_update,
         invalidate_conversation_cache,
+        _row_get,
         database,
         app_logger,
         GEMINI_SERVICE,
@@ -456,7 +464,7 @@ async def _overwrite_conversation_history_logic(
                     extra={
                         "event_type": "history_overwrite_guard_load_failed",
                         "conversation_id": conversation_id,
-                        "user_id": current_user.get("id"),
+                        "user_id": _row_get(current_user, "id"),
                         "error": str(error),
                     },
                 )
@@ -467,7 +475,7 @@ async def _overwrite_conversation_history_logic(
                     extra={
                         "event_type": "history_overwrite_rejected_empty",
                         "conversation_id": conversation_id,
-                        "user_id": current_user.get("id"),
+                        "user_id": _row_get(current_user, "id"),
                         "existing_count": existing_len,
                     },
                 )
@@ -486,7 +494,7 @@ async def _overwrite_conversation_history_logic(
                         extra={
                             "event_type": "history_overwrite_rejected_truncation",
                             "conversation_id": conversation_id,
-                            "user_id": current_user.get("id"),
+                            "user_id": _row_get(current_user, "id"),
                             "existing_count": existing_len,
                             "incoming_count": incoming_len,
                             "min_keep": min_keep,
@@ -558,6 +566,7 @@ async def update_conversation(
         overwrite_thread_history,
         apply_conversation_update,
         invalidate_conversation_cache,
+        _row_get,
         database,
         app_logger,
         GEMINI_SERVICE,
@@ -598,6 +607,7 @@ async def update_conversation_metadata(
         overwrite_thread_history,
         apply_conversation_update,
         invalidate_conversation_cache,
+        _row_get,
         database,
         app_logger,
         GEMINI_SERVICE,
@@ -637,6 +647,7 @@ async def get_conversation_usage(
         overwrite_thread_history,
         apply_conversation_update,
         invalidate_conversation_cache,
+        _row_get,
         database,
         app_logger,
         GEMINI_SERVICE,
@@ -657,12 +668,12 @@ async def get_conversation_usage(
         
         message_count = len(history)
         
-        total_tokens = sum(estimate_tokens(str(msg.get("text", ""))) for msg in history)
+        total_tokens = sum(estimate_tokens(str(_row_get(msg, "text") or "")) for msg in history)
 
         user_tier = normalize_plan_tier(
-            current_user.get("plan_tier"),
-            current_user.get("role"),
-            current_user.get("subscription_expires_at")
+            _row_get(current_user, "plan_tier"),
+            _row_get(current_user, "role"),
+            _row_get(current_user, "subscription_expires_at")
         )
 
         tier_context_limit = tier_conversation_token_limit(user_tier)
@@ -733,6 +744,7 @@ async def compress_conversation(
         overwrite_thread_history,
         apply_conversation_update,
         invalidate_conversation_cache,
+        _row_get,
         database,
         app_logger,
         GEMINI_SERVICE,
@@ -757,11 +769,11 @@ async def compress_conversation(
                 "message": "Conversation too short to compress (need at least 2 messages)"
             }
         
-        original_chars = sum(len(msg.get("text", "")) for msg in history)
+        original_chars = sum(len(_row_get(msg, "text") or "") for msg in history)
         original_tokens = original_chars // 4
         
         conversation_text = "\n\n".join([
-            f"{msg.get('role', 'unknown').upper()}: {msg.get('text', '')}"
+            f"{(_row_get(msg, 'role') or 'unknown').upper()}: {(_row_get(msg, 'text') or '')}"
             for msg in history
         ])
         
@@ -845,6 +857,7 @@ async def create_chat_session(
         overwrite_thread_history,
         apply_conversation_update,
         invalidate_conversation_cache,
+        _row_get,
         database,
         app_logger,
         GEMINI_SERVICE,
@@ -892,6 +905,7 @@ async def list_user_conversations(
         overwrite_thread_history,
         apply_conversation_update,
         invalidate_conversation_cache,
+        _row_get,
         database,
         app_logger,
         GEMINI_SERVICE,
