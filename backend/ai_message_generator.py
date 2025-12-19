@@ -67,8 +67,8 @@ class AIMessageGenerator:
         # Format conversation for the model
         transcript_parts = []
         for msg in messages:
-            role = str(msg.get("role", "unknown")).upper()
-            content = str(msg.get("content") or msg.get("text") or "").strip()
+            role = str(_row_get(msg, "role", "unknown")).upper()
+            content = str(_row_get(msg, "content") or _row_get(msg, "text") or "").strip()
             if content:
                 transcript_parts.append(f"{role}: {content}")
         

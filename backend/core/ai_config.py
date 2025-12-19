@@ -140,7 +140,10 @@ def get_url_context_tool():
     """Get the URL Context tool instance."""
     global _URL_CONTEXT_TOOL
     if _URL_CONTEXT_TOOL is None and types is not None:
-        _URL_CONTEXT_TOOL = types.Tool(url_context=types.UrlContext())
+        try:
+            _URL_CONTEXT_TOOL = types.Tool(url_context=types.UrlContext())
+        except (AttributeError, TypeError):
+            _URL_CONTEXT_TOOL = None
     return _URL_CONTEXT_TOOL
 
 

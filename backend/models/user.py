@@ -7,6 +7,7 @@ import logging
 from pydantic import BaseModel, ConfigDict, EmailStr
 
 logger = logging.getLogger("backend.models.user")
+from backend.core.serializers import row_get as _row_get
 
 
 class UsageStatus(BaseModel):
@@ -109,34 +110,34 @@ def serialize_user_row(row: Mapping[str, Any]) -> Dict[str, Any]:
     import json
     
     user_dict = dict(row)
-    if user_dict.get("auth_user_id") is not None:
-        user_dict["auth_user_id"] = str(user_dict["auth_user_id"])
+    if _row_get(row, "auth_user_id") is not None:
+        user_dict["auth_user_id"] = str(_row_get(row, "auth_user_id"))
     
     # Parse JSON fields that SQLite might return as strings
-    if isinstance(user_dict.get("visible_model_ids"), str):
+    if isinstance(_row_get(row, "visible_model_ids"), str):
         try:
-            user_dict["visible_model_ids"] = json.loads(user_dict["visible_model_ids"])
+            user_dict["visible_model_ids"] = json.loads(str(_row_get(row, "visible_model_ids")))
         except (json.JSONDecodeError, TypeError) as exc:
             logger.warning(
                 "Failed to parse visible_model_ids JSON; leaving as-is",
                 extra={
                     "event_type": "fallback_activation",
                     "fallback": "user_visible_model_ids_json_invalid",
-                    "user_id": user_dict.get("id"),
+                    "user_id": _row_get(row, "id"),
                     "error": str(exc),
                 },
             )
 
-    if isinstance(user_dict.get("notification_preferences"), str):
+    if isinstance(_row_get(row, "notification_preferences"), str):
         try:
-            user_dict["notification_preferences"] = json.loads(user_dict["notification_preferences"])
+            user_dict["notification_preferences"] = json.loads(str(_row_get(row, "notification_preferences")))
         except (json.JSONDecodeError, TypeError) as exc:
             logger.warning(
                 "Failed to parse notification_preferences JSON; leaving as-is",
                 extra={
                     "event_type": "fallback_activation",
                     "fallback": "user_notification_preferences_json_invalid",
-                    "user_id": user_dict.get("id"),
+                    "user_id": _row_get(row, "id"),
                     "error": str(exc),
                 },
             )

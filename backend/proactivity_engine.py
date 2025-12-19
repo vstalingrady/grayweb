@@ -317,7 +317,7 @@ class ProactivityEngine:
             return None
         value = None
         if isinstance(record, dict):
-            value = record.get("sent_at")
+            value = _row_get(record, "sent_at")
         elif hasattr(record, "sent_at"):
             value = record.sent_at
         elif len(record) > 0:

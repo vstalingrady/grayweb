@@ -478,7 +478,7 @@ async def get_current_user(
     )
 
     if user and auth_user_id:
-        existing_auth_user_id = user.get("auth_user_id")
+        existing_auth_user_id = _row_get(user, "auth_user_id")
         if not existing_auth_user_id or str(existing_auth_user_id) != str(auth_user_id):
             await database.execute(
                 users.update()

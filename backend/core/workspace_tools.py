@@ -16,6 +16,7 @@ from backend.database import plans, habits, reminders
 from backend.core.serializers import (
     serialize_reminder_row as _serialize_reminder_row,
     serialize_habit_record as _serialize_habit_record,
+    row_get as _row_get,
 )
 from backend.core.tool_utils import (
     build_reminder_payload as _build_reminder_payload,
@@ -75,11 +76,11 @@ async def create_plan_tool(user_id: int, args: Dict[str, Any], db: databases.Dat
 
     if created and reminder_at is not None:
         record = dict(created)
-        color = record.get("color")
+        color = _row_get(record, "color")
         metadata = {"color": color} if color else None
         await _upsert_entity_reminder(
             user_id=user_id, entity_type="plan", entity_id=int(plan_id),
-            label=str(record.get("label") or label), description=record.get("description"),
+            label=str(_row_get(record, "label") or label), description=_row_get(record, "description"),
             remind_at=reminder_at, metadata=metadata, color=color, db=db,
         )
     return _build_reminder_payload(dict(created), user_id, "created", entity="plan")
@@ -112,11 +113,11 @@ async def update_plan_tool(user_id: int, args: Dict[str, Any], db: databases.Dat
     if reminder_at_provided:
         updated = await db.fetch_one(plans.select().where(plans.c.id == plan_id))
         record = dict(updated) if updated else dict(existing)
-        color = record.get("color")
+        color = _row_get(record, "color")
         metadata = {"color": color} if color else None
         await _upsert_entity_reminder(
             user_id=user_id, entity_type="plan", entity_id=int(plan_id),
-            label=str(record.get("label") or ""), description=record.get("description"),
+            label=str(_row_get(record, "label") or ""), description=_row_get(record, "description"),
             remind_at=reminder_at, metadata=metadata, color=color, db=db,
         )
     return {"status": "success", "message": "Plan updated."}
@@ -204,7 +205,7 @@ async def update_habit_tool(user_id: int, args: Dict[str, Any], db: databases.Da
         record = dict(updated) if updated else dict(existing)
         await _upsert_entity_reminder(
             user_id=user_id, entity_type="habit", entity_id=int(habit_id),
-            label=str(record.get("label") or ""), description=record.get("description"),
+            label=str(_row_get(record, "label") or ""), description=_row_get(record, "description"),
             remind_at=reminder_at, metadata=None, color=None, db=db,
         )
     return {"status": "success", "message": f"Habit {habit_id} updated."}
@@ -373,7 +374,7 @@ async def delete_latest_reminder_tool(user_id: int, args: Dict[str, Any], db: da
 
     deleted_messages = []
     for record in records:
-        rid, rlabel, rtime = record["id"], record.get("label"), record.get("remind_at")
+        rid, rlabel, rtime = record["id"], _row_get(record, "label"), _row_get(record, "remind_at")
         try:
             global reminder_scheduler
             if reminder_scheduler:

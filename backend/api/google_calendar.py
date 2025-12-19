@@ -92,21 +92,21 @@ async def _load_google_credentials(
         return None
 
     record = dict(row)
-    encrypted_refresh_token = record.get("refresh_token")
+    encrypted_refresh_token = _row_get(record, "refresh_token")
     refresh_token = decrypt_refresh_token(encrypted_refresh_token)
-    scopes = _normalize_scopes(record.get("scopes"))
+    scopes = _normalize_scopes(_row_get(record, "scopes"))
 
     credentials = GoogleCalendarCredentials(
-        user_id=int(record.get("user_id", user_id)),
-        access_token=record.get("access_token") or "",
+        user_id=int(_row_get(record, "user_id", user_id)),
+        access_token=_row_get(record, "access_token") or "",
         refresh_token=refresh_token,
-        token_uri=record.get("token_uri") or "",
-        client_id=record.get("client_id") or "",
+        token_uri=_row_get(record, "token_uri") or "",
+        client_id=_row_get(record, "client_id") or "",
         client_secret=None,
         scopes=scopes,
-        expires_at=record.get("expires_at"),
-        created_at=record.get("created_at") or utcnow(),
-        updated_at=record.get("updated_at"),
+        expires_at=_row_get(record, "expires_at"),
+        created_at=_row_get(record, "created_at") or utcnow(),
+        updated_at=_row_get(record, "updated_at"),
     )
 
     if refresh_token and encrypted_refresh_token == refresh_token:
@@ -163,7 +163,7 @@ async def finalize_google_calendar_oauth(
 
     refresh_token = credentials.refresh_token
     if not refresh_token and existing:
-        refresh_token = decrypt_refresh_token(existing.get("refresh_token"))
+        refresh_token = decrypt_refresh_token(_row_get(existing, "refresh_token"))
 
     if not refresh_token:
         raise HTTPException(

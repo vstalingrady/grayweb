@@ -17,9 +17,13 @@ URL_CONTEXT_MODEL = os.getenv("URL_CONTEXT_MODEL", "models/gemini-flash-lite-lat
 GEMINI_FLASH_MODEL = os.getenv("GEMINI_FLASH_MODEL", "models/gemini-2.0-flash")
 
 # URL Context Tool - allows AI to fetch and analyze content from URLs
-URL_CONTEXT_TOOL = types.Tool(
-    url_context=types.UrlContext(),
-)
+try:
+    URL_CONTEXT_TOOL = types.Tool(
+        url_context=types.UrlContext(),
+    )
+except (AttributeError, TypeError):
+    # UrlContext might not be available in all SDK versions
+    URL_CONTEXT_TOOL = None
 
 # Import helpers
 from backend.core.function_call_helpers import (
@@ -99,7 +103,7 @@ async def fetch_url_context_with_gemini(
             extra_contents=None,
             response_schema=None,
             response_mime_type=None,
-            tools=[URL_CONTEXT_TOOL],
+            tools=[URL_CONTEXT_TOOL] if URL_CONTEXT_TOOL else [],
             tool_config=None,
             reasoning_mode=False,
         )

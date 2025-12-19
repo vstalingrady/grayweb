@@ -25,7 +25,7 @@ def _serialize_reminder_row(row: Any) -> Dict[str, Any]:
     """Serialize a reminder row to a dictionary with ISO formatted dates."""
     record = dict(row)
     for key in ("remind_at", "created_at", "updated_at", "delivered_at"):
-        value = record.get(key)
+        value = _row_get(record, key)
         if isinstance(value, datetime):
             if value.tzinfo is None:
                 value = value.replace(tzinfo=timezone.utc)
@@ -195,11 +195,11 @@ async def update_user_reminder(
         reminder_scheduler = _get_reminder_scheduler()
         if reminder_scheduler:
             existing_dict = dict(existing)
-            normalized_status = (update_values.get("status") or existing_dict.get("status") or "").strip().lower()
+            normalized_status = str(_row_get(update_values, "status") or _row_get(existing_dict, "status") or "").strip().lower()
             if normalized_status != "pending":
                 await reminder_scheduler.cancel_job(user_id=user_id, reminder_id=reminder_id)
             else:
-                remind_at_value = update_values.get("remind_at") or existing_dict.get("remind_at")
+                remind_at_value = _row_get(update_values, "remind_at") or _row_get(existing_dict, "remind_at")
                 if isinstance(remind_at_value, str):
                     try:
                         remind_at_value = datetime.fromisoformat(remind_at_value.replace("Z", "+00:00"))

@@ -17,18 +17,31 @@ from uuid import uuid4
 
 
 def row_get(row: Any, key: str, default: Any = None) -> Any:
-    """Safely retrieve a column from SQLAlchemy Row objects or dictionaries."""
+    """Safely retrieve a column from SQLAlchemy Row objects, dictionaries, or Pydantic models."""
     if row is None:
         return default
-    if isinstance(row, dict):
-        return row.get(key, default)
+    
+    # 1. Try dictionary-like .get() if available
+    getter = getattr(row, "get", None)
+    if callable(getter):
+        try:
+            return getter(key, default)
+        except Exception:
+            pass
+
+    # 2. Try _mapping (SQLAlchemy/Databases)
     mapping = getattr(row, "_mapping", None)
-    if isinstance(mapping, Mapping):
+    if mapping is not None and hasattr(mapping, "get"):
         return mapping.get(key, default)
+
+    # 3. Try indexing
     try:
         return row[key]
-    except (KeyError, TypeError):
-        return default
+    except (KeyError, TypeError, IndexError):
+        pass
+
+    # 4. Try getattr
+    return getattr(row, key, default)
 
 
 def parse_json_field(value: Optional[str]) -> Optional[Dict[str, Any]]:
@@ -112,7 +125,7 @@ def serialize_reminder_row(row: Any) -> Dict[str, Any]:
             return {}
 
     for key in ("remind_at", "created_at", "updated_at", "delivered_at"):
-        value = record.get(key)
+        value = row_get(row, key)
         if isinstance(value, datetime):
             if value.tzinfo is None:
                 value = value.replace(tzinfo=timezone.utc)
@@ -137,13 +150,13 @@ def serialize_calendar_event(row: Any) -> Dict[str, Any]:
             return {}
 
     return {
-        "id": record.get("id"),
-        "title": record.get("title"),
-        "start": datetime_to_iso(record.get("start_time")),
-        "end": datetime_to_iso(record.get("end_time")),
-        "description": record.get("description"),
-        "calendar_id": record.get("calendar_id"),
-        "color": record.get("color"),
+        "id": row_get(row, "id"),
+        "title": row_get(row, "title"),
+        "start": datetime_to_iso(row_get(row, "start_time")),
+        "end": datetime_to_iso(row_get(row, "end_time")),
+        "description": row_get(row, "description"),
+        "calendar_id": row_get(row, "calendar_id"),
+        "color": row_get(row, "color"),
     }
 
 
@@ -161,13 +174,13 @@ def serialize_habit_record(record: Any) -> Dict[str, Any]:
         return "" if value is None else str(value)
 
     return {
-        "id": record.get("id"),
-        "user_id": record.get("user_id"),
-        "label": _as_str(record.get("label")),
-        "previous_label": _as_str(record.get("previous_label")),
-        "description": record.get("description"),
-        "created_at": record.get("created_at"),
-        "updated_at": record.get("updated_at"),
+        "id": row_get(record, "id"),
+        "user_id": row_get(record, "user_id"),
+        "label": _as_str(row_get(record, "label")),
+        "previous_label": _as_str(row_get(record, "previous_label")),
+        "description": row_get(record, "description"),
+        "created_at": row_get(record, "created_at"),
+        "updated_at": row_get(record, "updated_at"),
     }
 
 

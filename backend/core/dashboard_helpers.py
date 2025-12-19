@@ -7,6 +7,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, date
 from typing import Any, Dict, List, Optional
+from backend.core.serializers import row_get as _row_get
 
 # Lazy utilities
 def _get_utcnow():
@@ -35,7 +36,7 @@ def serialize_dashboard_pulse_record(record: Any) -> Optional[Dict[str, Any]]:
             return None
 
     def _parse_json(field_name: str) -> List[Any]:
-        val = record.get(field_name)
+        val = _row_get(record, field_name)
         if isinstance(val, str):
             try:
                 return json.loads(val)
@@ -48,7 +49,7 @@ def serialize_dashboard_pulse_record(record: Any) -> Optional[Dict[str, Any]]:
         return []
 
     def _parse_json_dict(field_name: str) -> Dict[str, Any]:
-        val = record.get(field_name)
+        val = _row_get(record, field_name)
         if isinstance(val, str):
             try:
                 return json.loads(val)
@@ -59,15 +60,15 @@ def serialize_dashboard_pulse_record(record: Any) -> Optional[Dict[str, Any]]:
         return {}
 
     return {
-        "id": record.get("id"),
-        "user_id": record.get("user_id"),
-        "date_key": record.get("date_key"),
-        "timestamp": record.get("timestamp"),
+        "id": _row_get(record, "id"),
+        "user_id": _row_get(record, "user_id"),
+        "date_key": _row_get(record, "date_key"),
+        "timestamp": _row_get(record, "timestamp"),
         "plans": _parse_json("plans"),
         "habits": _parse_json("habits"),
         "proactivity": _parse_json_dict("proactivity"),
-        "created_at": record.get("created_at"),
-        "updated_at": record.get("updated_at"),
+        "created_at": _row_get(record, "created_at"),
+        "updated_at": _row_get(record, "updated_at"),
     }
 
 async def load_dashboard_pulse_by_date(db: Any, user_id: int, date_key: str) -> Any:
@@ -98,10 +99,10 @@ def normalize_plan_items(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     normalized = []
     for item in items:
         normalized.append({
-            "id": item.get("id"),
-            "label": str(item.get("label", "")),
-            "completed": bool(item.get("completed", False)),
-            "deadline": item.get("deadline"),
+            "id": _row_get(item, "id"),
+            "label": str(_row_get(item, "label", "")),
+            "completed": bool(_row_get(item, "completed", False)),
+            "deadline": _row_get(item, "deadline"),
         })
     return normalized
 
@@ -110,18 +111,18 @@ def normalize_habit_items(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     normalized = []
     for item in items:
         normalized.append({
-            "id": item.get("id"),
-            "label": str(item.get("label", "")),
-            "streak": int(item.get("streak", 0)),
+            "id": _row_get(item, "id"),
+            "label": str(_row_get(item, "label", "")),
+            "streak": int(_row_get(item, "streak", 0)),
         })
     return normalized
 
 def normalize_proactivity(data: Dict[str, Any]) -> Dict[str, Any]:
     """Ensure proactivity data has required fields for JSON storage."""
     return {
-        "score": float(data.get("score", 0.0)),
-        "summary": str(data.get("summary", "")),
-        "notes": str(data.get("notes", "")),
+        "score": float(_row_get(data, "score", 0.0)),
+        "summary": str(_row_get(data, "summary", "")),
+        "notes": str(_row_get(data, "notes", "")),
     }
 
 def carry_forward_dashboard_entries(
@@ -130,10 +131,10 @@ def carry_forward_dashboard_entries(
     """Merge uncompleted items from previous day into current lists."""
     # Logic to merge entries (carry forward uncompleted)
     merged_plans = list(current_plans)
-    existing_plan_ids = {p.get("id") for p in merged_plans if p.get("id")}
+    existing_plan_ids = {_row_get(p, "id") for p in merged_plans if _row_get(p, "id")}
     
-    for prev_plan in previous.get("plans", []):
-        if not prev_plan.get("completed") and prev_plan.get("id") not in existing_plan_ids:
+    for prev_plan in (_row_get(previous, "plans") or []):
+        if not _row_get(prev_plan, "completed") and _row_get(prev_plan, "id") not in existing_plan_ids:
             # Carry forward uncompleted plans
             merged_plans.append(prev_plan)
             

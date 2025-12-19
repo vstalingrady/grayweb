@@ -53,7 +53,7 @@ async def get_pending_entity_reminder_map(
 
     reminder_map: Dict[int, datetime] = {}
     for row in rows:
-        raw_entity_id = row.get("entity_id")
+        raw_entity_id = _row_get(row, "entity_id")
         if raw_entity_id is None:
             continue
         try:
@@ -62,7 +62,7 @@ async def get_pending_entity_reminder_map(
             continue
         if entity_id in reminder_map:
             continue
-        remind_at = row.get("remind_at")
+        remind_at = _row_get(row, "remind_at")
         if isinstance(remind_at, datetime):
             reminder_map[entity_id] = remind_at
     return reminder_map

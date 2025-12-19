@@ -178,7 +178,7 @@ async def get_user_calendar_events(
     
     for row in rows:
         record = dict(row)
-        if record.get("created_at") is None:
+        if _row_get(record, "created_at") is None:
             record["created_at"] = now
         record["reminder_at"] = reminder_map.get(int(record["id"]))
         normalized.append(record)
