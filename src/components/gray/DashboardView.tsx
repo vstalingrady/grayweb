@@ -227,7 +227,7 @@ export function GrayDashboardView({
       return;
     }
     if (!canResizePanel) {
-      setPanelUserHeightPx(null);
+      Promise.resolve().then(() => setPanelUserHeightPx(null));
       window.localStorage.removeItem(CALENDAR_PANEL_HEIGHT_STORAGE_KEY);
       return;
     }
