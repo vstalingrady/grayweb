@@ -492,9 +492,6 @@ function GrayPageClientInner({
 
   const handleMobileHeaderSelectChat = useCallback(() => {
     setMobilePulseActive(false);
-    if (isMobileViewport) {
-      setManualViewMode("chat");
-    }
     if (pathname !== "/") {
       router.push("/");
     }
@@ -505,9 +502,6 @@ function GrayPageClientInner({
 
   const handleMobileHeaderSelectPulse = useCallback(() => {
     setMobilePulseActive(true);
-    if (isMobileViewport) {
-      setManualViewMode(null);
-    }
     if (pathname !== "/") {
       router.push("/");
     }
@@ -529,29 +523,26 @@ function GrayPageClientInner({
       currentPulse={activePulse}
       isCurrentPulseEditable={isActivePulseEditable}
       onSelectPulse={setActivePulseId}
-      proactivityFallback={proactivity}
-      onProactivitySelect={selectProactivityPreset}
-      onProactivityRemove={removeProactivity}
-      onTestProactivity={handleTestProactivity}
-      onTogglePlan={togglePlan}
-      onToggleHabit={toggleHabit}
-      onSavePlan={savePlan}
-      onDeletePlan={deletePlan}
-      activeTab={dashboardTab}
-      onSelectTab={setDashboardTab}
+          proactivityFallback={proactivity}
+          onProactivitySelect={selectProactivityPreset}
+          onProactivityRemove={removeProactivity}
+          onTestProactivity={handleTestProactivity}
+          onSavePlan={savePlan}
+          onDeletePlan={deletePlan}
+          activeTab={dashboardTab}
+          onSelectTab={setDashboardTab}
       currentDate={now}
       calendars={derivedCalendars}
-      onCalendarsChange={handleCalendarsChange}
-      calendarEvents={derivedEvents}
-      onCalendarEventsChange={handleEventsChange}
-      calendarSelectedDate={calendarSelectedDate}
-      onCalendarSelectedDateChange={setCalendarSelectedDate}
-      onEditHabit={editHabit}
-      onDeleteHabit={deleteHabit}
-      onIntegrationAction={handleCalendarIntegration}
-      onRefreshData={refreshPlansAndHabits}
-      onCreatePlan={handleCreatePlan}
-      onCreateHabit={handleCreateHabit}
+          onCalendarsChange={handleCalendarsChange}
+          calendarEvents={derivedEvents}
+          onCalendarEventsChange={handleEventsChange}
+          calendarSelectedDate={calendarSelectedDate}
+          onCalendarSelectedDateChange={setCalendarSelectedDate}
+          onEditHabit={editHabit}
+          onDeleteHabit={deleteHabit}
+          onIntegrationAction={handleCalendarIntegration}
+          onCreatePlan={handleCreatePlan}
+          onCreateHabit={handleCreateHabit}
       chatBar={null}
       isCompactLayout={isCompactLayout}
       userId={userId}
@@ -597,6 +588,82 @@ function GrayPageClientInner({
         />
       </div>
     );
+  };
+
+  const renderMainSurfaceFor = (surfaceViewMode: ViewMode) => {
+    const hideWorkspaceChrome =
+      !isMobileViewport &&
+      (surfaceViewMode === "chat" ||
+        (pathname?.startsWith("/c/") ?? false) ||
+        pathname === "/g" ||
+        (pathname?.startsWith("/g/") ?? false));
+
+    if (surfaceViewMode === "chat") {
+      return (
+        <div
+          className={pageStyles.mainContent}
+          data-view={surfaceViewMode}
+          data-compact={isCompactLayout ? "true" : "false"}
+        >
+          {!hideWorkspaceChrome ? (
+            <GrayWorkspaceHeader
+              planLabel={viewerPlanLabel}
+              onUpgradeClick={handleUpgradePlan}
+              showUpgradeButton={shouldShowUpgradeButton}
+              hideDesktopMeta={hideWorkspaceChrome}
+            >
+              {renderWorkspaceGreeting()}
+            </GrayWorkspaceHeader>
+          ) : null}
+          <GrayChatView
+            sessionId={currentChatId ?? null}
+            onContextUsageChange={setContextUsageSummary}
+            hideThinkingIndicator={hideChatThinkingIndicator}
+            introContent={null}
+          />
+        </div>
+      );
+    }
+
+    if (surfaceViewMode === "general") {
+      return (
+        <div
+          className={pageStyles.mainContent}
+          data-view={surfaceViewMode}
+          data-compact={isCompactLayout ? "true" : "false"}
+        >
+          {!hideWorkspaceChrome ? (
+            <GrayWorkspaceHeader
+              planLabel={viewerPlanLabel}
+              onUpgradeClick={handleUpgradePlan}
+              showUpgradeButton={shouldShowUpgradeButton}
+              hideDesktopMeta={hideWorkspaceChrome}
+            >
+              {renderWorkspaceGreeting()}
+            </GrayWorkspaceHeader>
+          ) : null}
+          <GrayGeneralView
+            greeting={greeting}
+            currentDate={now}
+            plans={derivedPlans}
+            habits={derivedHabits}
+            proactivity={proactivity}
+            onSelectProactivity={selectProactivityPreset}
+            onRemoveProactivity={removeProactivity}
+            onTogglePlan={togglePlan}
+            onToggleHabit={toggleHabit}
+            onSavePlan={savePlan}
+            onDeletePlan={deletePlan}
+            onDeleteHabit={deleteHabit}
+            onRefreshData={refreshPlansAndHabits}
+            showGreeting={false}
+            hidePlans={isMobileViewport}
+          />
+        </div>
+      );
+    }
+
+    return renderDashboardSurface();
   };
 
   // Close mobile sidebar on navigation
@@ -669,6 +736,29 @@ function GrayPageClientInner({
     }
     return renderPrimaryView();
   };
+
+  const renderMobileChatSurface = () => (
+    <div
+      className={pageStyles.mainContent}
+      data-view="general"
+      data-compact={isCompactLayout ? "true" : "false"}
+    >
+      <div className={chatStyles.mobileWelcomeScreen} aria-hidden="true">
+        <div className={chatStyles.mobileWelcomeContent}>
+          <div className={chatStyles.mobileWelcomeLogo}>
+            <Image
+              src="/grayaiwhitenotspinning.svg"
+              alt=""
+              width={40}
+              height={40}
+              className="uiIconImage"
+            />
+          </div>
+          <p className={chatStyles.mobileWelcomeGreeting}>Ready when you are.</p>
+        </div>
+      </div>
+    </div>
+  );
 
   useEffect(() => {
     if (!isMobileViewport && manualViewMode && manualViewMode !== "history") {
@@ -1314,8 +1404,6 @@ function GrayPageClientInner({
       />
     ) : null;
 
-  const mobileSurfaceView = mobilePulseActive ? "pulse" : "chat";
-
   return (
     <>
       <div
@@ -1399,23 +1487,17 @@ function GrayPageClientInner({
 
 
               {isMobileViewport ? (
-                <div
-                  className={pageStyles.mobileSurfaceSwitcher}
-                  data-active={mobileSurfaceView}
-                >
-                  <div className={pageStyles.mobileSurfacePane} data-pane="chat">
-                    {renderMainSurface()}
-                  </div>
-                  <div className={pageStyles.mobileSurfacePane} data-pane="pulse">
-                    {renderDashboardSurface()}
-                  </div>
-                </div>
+                mobilePulseActive ? (
+                  renderDashboardSurface()
+                ) : (
+                  renderMobileChatSurface()
+                )
               ) : isDashboardView ? (
                 renderPrimaryView()
               ) : (
                 renderMainSurface()
               )}
-              {isMounted && viewMode === "general" ? (
+              {isMounted && viewMode === "general" && !(isMobileViewport && mobilePulseActive) ? (
                 <div className={composerStyles.chatComposerDock} data-surface="threads">
                   <div className={composerStyles.chatAttachmentTopTray}>{generalAttachmentTray}</div>
                   <input

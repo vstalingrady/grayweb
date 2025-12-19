@@ -22,20 +22,8 @@ import { getProactivityTimes } from "./proactivityUtils";
 import { ProactivitySettingsModal } from "./ProactivitySettingsModal";
 import { DashboardPulseGrid } from "./dashboard/DashboardPulseGrid";
 import { normalizePlanTier } from "@/components/gray/utils/helperFunctions";
-
-const isSameDay = (a: Date, b: Date) =>
-  a.getFullYear() === b.getFullYear() &&
-  a.getMonth() === b.getMonth() &&
-  a.getDate() === b.getDate();
-
-const formatTimeSlotLabel = (start: Date, end?: Date | null) => {
-  const startLabel = start.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-  if (!end) {
-    return startLabel;
-  }
-  const endLabel = end.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-  return `${startLabel}-${endLabel}`;
-};
+import { useCalendarComposer } from "@/components/calendar/useCalendarComposer";
+import { EventComposer } from "@/components/calendar/EventComposer";
 
 const CALENDAR_PANEL_MAX_HEIGHT_WITH_CHAT =
   "clamp(360px, calc(100vh - (320px + var(--gray-chat-bar-clearance, 112px))), 660px)";
@@ -65,8 +53,6 @@ type GrayDashboardViewProps = {
   onProactivitySelect?: (next: ProactivityItem) => void;
   onProactivityRemove?: () => void;
   onTestProactivity?: (proactivityId: string) => void;
-  onTogglePlan: (id: string) => void;
-  onToggleHabit?: (id: string) => void;
   onSavePlan?: (planId: string, updates: PlanUpdates) => Promise<void> | void;
   onDeletePlan?: (plan: PlanItem) => void;
   activeTab: "pulse" | "calendar";
@@ -83,7 +69,6 @@ type GrayDashboardViewProps = {
   onCreatePlan?: (plan: EventComposerPayload) => Promise<void> | void;
   onCreateHabit?: (habit: EventComposerPayload) => Promise<void> | void;
   onIntegrationAction?: () => void;
-  onRefreshData: () => Promise<void>;
   chatBar?: ReactNode;
   isCompactLayout?: boolean;
   userId?: number | null;
@@ -101,9 +86,7 @@ export function GrayDashboardView({
   proactivityFallback,
   onProactivitySelect,
   onProactivityRemove,
-  onTogglePlan,
   onDeletePlan,
-  onToggleHabit,
   activeTab,
   onSelectTab,
   currentDate,
@@ -116,7 +99,6 @@ export function GrayDashboardView({
   onCreatePlan,
   onCreateHabit,
   onIntegrationAction,
-  onRefreshData,
   chatBar,
   isCompactLayout = false,
   proactivityDeliveryKeys,
@@ -125,7 +107,9 @@ export function GrayDashboardView({
   isOverlay = false,
 }: GrayDashboardViewProps) {
   const { t } = useI18n();
+  const { user } = useUser();
   const hasPulseData = Boolean(currentPulse && pulseEntries.length > 0);
+
   const displayPlans = useMemo(() => {
     const fallbackPlans = currentPulse?.plans ?? [];
     if (isCurrentPulseEditable) {
@@ -142,50 +126,25 @@ export function GrayDashboardView({
       return true;
     });
   }, [currentPulse, hasPulseData, isCurrentPulseEditable, livePlans]);
-  const derivedTaskPlans = useMemo(() => {
-    if (!calendarEvents.length) {
-      return [];
-    }
-    return calendarEvents
-      .filter(
-        (event) =>
-          event.entryType === "task" &&
-          isSameDay(event.start, currentDate)
-      )
-      .map<PlanItem>((event) => ({
-        id: `task-${event.id}`,
-        label: event.title?.trim() || t("Untitled task"),
-        completed: false,
-        deadline: event.end ? event.end.toISOString() : null,
-        scheduleSlot: formatTimeSlotLabel(event.start, event.end),
-        details: event.description ?? null,
-      }));
-  }, [calendarEvents, currentDate, t]);
 
-  const displayHabits = useMemo(() => {
-    if (!hasPulseData) {
-      return [];
-    }
-    return currentPulse?.habits ?? [];
-  }, [currentPulse, hasPulseData]);
-  const visiblePlans = useMemo(() => {
-    const all = [...displayPlans, ...derivedTaskPlans];
-    const seen = new Set<string>();
-    return all.filter((item) => {
-      if (seen.has(item.id)) {
-        return false;
-      }
-      seen.add(item.id);
-      return true;
-    });
-  }, [displayPlans, derivedTaskPlans]);
-  const visibleHabits = displayHabits;
   const planCalendarEvents = useMemo(() => {
     if (activeTab !== "calendar") {
       return [];
     }
     return mapPlansToCalendarEvents(displayPlans);
   }, [activeTab, displayPlans]);
+
+  const mergedEvents = useMemo(() => {
+    const allEvents = [...calendarEvents, ...planCalendarEvents];
+    const seen = new Set<string>();
+    return allEvents.filter((event) => {
+      if (seen.has(event.id)) {
+        return false;
+      }
+      seen.add(event.id);
+      return true;
+    });
+  }, [calendarEvents, planCalendarEvents]);
 
   const handleCalendarEventDelete = useCallback(
     (event: CalendarEvent) => {
@@ -198,7 +157,6 @@ export function GrayDashboardView({
         const planId = event.id.slice(PLAN_EVENT_ID_PREFIX.length);
         const targetPlan = displayPlans.find((plan) => plan.id === planId);
         if (targetPlan) {
-          // console.log(`[CALENDAR] Deleting plan event: ${event.id}`);
           onDeletePlan(targetPlan);
           return;
         }
@@ -207,10 +165,37 @@ export function GrayDashboardView({
     },
     [displayPlans, onDeletePlan]
   );
+
+  const {
+    composerOpen,
+    editingEvent,
+    composerRange,
+    composerAnchorRect,
+    composerPreviewEvent,
+    setComposerDraft,
+    openComposerAt,
+    editEvent,
+    closeComposer,
+    handleComposerSubmit,
+    handleComposerDelete,
+  } = useCalendarComposer({
+    events: mergedEvents,
+    updateEvents: (updater) => {
+      const nextEvents = updater(mergedEvents);
+      const nonPlanEvents = nextEvents.filter((e) => !e.id.startsWith(PLAN_EVENT_ID_PREFIX));
+      onCalendarEventsChange(nonPlanEvents);
+    },
+    onEventDelete: handleCalendarEventDelete,
+    onCreatePlan,
+    onCreateHabit,
+    onClearSelection: () => { },
+  });
+
   const displayProactivity =
     hasPulseData && isCurrentPulseEditable
       ? currentPulse?.proactivity ?? proactivityFallback
       : proactivityFallback;
+
   const [isProactivityModalOpen, setIsProactivityModalOpen] = useState(false);
   const activeProactivityTimes = useMemo(() => getProactivityTimes(displayProactivity), [displayProactivity]);
   const isChatBarVisible = Boolean(chatBar);
@@ -223,18 +208,14 @@ export function GrayDashboardView({
   const [isPanelResizing, setIsPanelResizing] = useState(false);
 
   useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
+    if (typeof window === "undefined") return;
     if (!canResizePanel) {
       Promise.resolve().then(() => setPanelUserHeightPx(null));
       window.localStorage.removeItem(CALENDAR_PANEL_HEIGHT_STORAGE_KEY);
       return;
     }
     const stored = window.localStorage.getItem(CALENDAR_PANEL_HEIGHT_STORAGE_KEY);
-    if (!stored) {
-      return;
-    }
+    if (!stored) return;
     const parsed = Number.parseInt(stored, 10);
     if (Number.isFinite(parsed) && parsed > 0) {
       Promise.resolve().then(() => setPanelUserHeightPx(parsed));
@@ -242,23 +223,15 @@ export function GrayDashboardView({
   }, [canResizePanel]);
 
   const effectivePanelHeightPx = useMemo(() => {
-    if (panelAvailableHeightPx === null) {
-      return null;
-    }
+    if (panelAvailableHeightPx === null) return null;
     const maximum = Math.max(panelAvailableHeightPx, CALENDAR_PANEL_MIN_HEIGHT_PX);
     const desired = canResizePanel ? (panelUserHeightPx ?? maximum) : maximum;
     return Math.max(CALENDAR_PANEL_MIN_HEIGHT_PX, Math.min(desired, maximum));
   }, [canResizePanel, panelAvailableHeightPx, panelUserHeightPx]);
 
   useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-    if (!canResizePanel) {
-      window.localStorage.removeItem(CALENDAR_PANEL_HEIGHT_STORAGE_KEY);
-      return;
-    }
-    if (panelUserHeightPx === null) {
+    if (typeof window === "undefined") return;
+    if (!canResizePanel || panelUserHeightPx === null) {
       window.localStorage.removeItem(CALENDAR_PANEL_HEIGHT_STORAGE_KEY);
       return;
     }
@@ -275,34 +248,21 @@ export function GrayDashboardView({
     return style;
   }, [effectivePanelHeightPx, isChatBarVisible]);
 
-  const { user } = useUser();
   const normalizedTier = normalizePlanTier(user);
   const hasCalendarAccess = normalizedTier === "voyager" || normalizedTier === "pioneer";
 
   useLayoutEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
+    if (typeof window === "undefined") return;
 
     const computePanelHeight = () => {
       const container = calendarContainerRef.current;
-      if (!container) {
-        return;
-      }
+      if (!container) return;
       const viewportHeight = window.innerHeight;
       const rect = container.getBoundingClientRect();
-      const paddingBottom = Number.parseFloat(
-        window.getComputedStyle(container).paddingBottom || "0"
-      );
-      const chatDockHeight =
-        isChatBarVisible && chatDockRef.current
-          ? chatDockRef.current.getBoundingClientRect().height
-          : 0;
+      const paddingBottom = Number.parseFloat(window.getComputedStyle(container).paddingBottom || "0");
+      const chatDockHeight = isChatBarVisible && chatDockRef.current ? chatDockRef.current.getBoundingClientRect().height : 0;
       const clearance = paddingBottom + chatDockHeight + (isChatBarVisible ? 24 : 16);
-      const availableHeight = Math.max(
-        CALENDAR_PANEL_MIN_HEIGHT_PX,
-        viewportHeight - rect.top - clearance
-      );
+      const availableHeight = Math.max(CALENDAR_PANEL_MIN_HEIGHT_PX, viewportHeight - rect.top - clearance);
       setPanelAvailableHeightPx((previous) => {
         const rounded = Math.round(availableHeight);
         return previous === rounded ? previous : rounded;
@@ -337,12 +297,8 @@ export function GrayDashboardView({
 
   const handlePanelResizePointerDown = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
-      if (event.pointerType === "touch") {
-        return;
-      }
-      if (effectivePanelHeightPx === null || panelAvailableHeightPx === null) {
-        return;
-      }
+      if (event.pointerType === "touch") return;
+      if (effectivePanelHeightPx === null || panelAvailableHeightPx === null) return;
 
       event.preventDefault();
       event.stopPropagation();
@@ -358,15 +314,10 @@ export function GrayDashboardView({
 
       const onMove = (moveEvent: PointerEvent) => {
         const state = panelResizeRef.current;
-        if (!state || moveEvent.pointerId !== state.pointerId) {
-          return;
-        }
+        if (!state || moveEvent.pointerId !== state.pointerId) return;
         const deltaY = moveEvent.clientY - state.startY;
         const nextHeight = Math.round(state.startHeight + deltaY);
-        const clamped = Math.max(
-          CALENDAR_PANEL_MIN_HEIGHT_PX,
-          Math.min(nextHeight, panelAvailableHeightPx)
-        );
+        const clamped = Math.max(CALENDAR_PANEL_MIN_HEIGHT_PX, Math.min(nextHeight, panelAvailableHeightPx));
         setPanelUserHeightPx(clamped);
       };
 
@@ -392,10 +343,9 @@ export function GrayDashboardView({
     },
     [effectivePanelHeightPx, panelAvailableHeightPx]
   );
+
   const handleOpenProactivityModal = useCallback(() => {
-    if (!onProactivitySelect) {
-      return;
-    }
+    if (!onProactivitySelect) return;
     setIsProactivityModalOpen(true);
   }, [onProactivitySelect]);
 
@@ -416,39 +366,24 @@ export function GrayDashboardView({
       showRemoveButton={Boolean(onProactivityRemove && (displayProactivity ?? proactivityFallback))}
     />
   ) : null;
-  const pulseContent = (
-    <>
-      {proactivityModal}
-      <div className={styles.dashboardViewScrollContainer}>
-        <DashboardHeader
-          activeTab={activeTab}
-          onSelectTab={onSelectTab}
-          className={headerClassName}
-          onUpgradeClick={onUpgradeClick}
-          showUpgradeButton={showUpgradeButton}
-          showTabs={hasCalendarAccess}
-        />
-        <DashboardPulseGrid
-          currentDate={currentDate}
-          viewerName={user?.full_name ?? null}
-          isEditable={isCurrentPulseEditable}
-          plans={visiblePlans}
-          habits={visibleHabits}
-          proactivity={displayProactivity ?? null}
-          proactivityDeliveryKeys={proactivityDeliveryKeys}
-          onTogglePlan={onTogglePlan}
-          onToggleHabit={onToggleHabit}
-          canConfigureProactivity={Boolean(onProactivitySelect)}
-          onConfigureProactivity={handleOpenProactivityModal}
-          onRefreshData={onRefreshData}
-        />
-      </div>
-    </>
+
+  const eventComposer = (
+    <EventComposer
+      isOpen={composerOpen}
+      referenceDate={currentDate}
+      activeEvent={editingEvent}
+      initialRange={composerRange}
+      calendars={calendars}
+      anchorRect={composerAnchorRect}
+      onRequestClose={closeComposer}
+      onSubmit={handleComposerSubmit}
+      onDelete={handleComposerDelete}
+      onStateChange={setComposerDraft}
+    />
   );
 
-  const compactPulseContent = (
-    <>
-      {proactivityModal}
+  const pulseContent = (
+    <div className={styles.dashboardViewScrollContainer}>
       <DashboardHeader
         activeTab={activeTab}
         onSelectTab={onSelectTab}
@@ -457,36 +392,47 @@ export function GrayDashboardView({
         showUpgradeButton={showUpgradeButton}
         showTabs={hasCalendarAccess}
       />
-      <div className={styles.dashboardCompact}>
-        <DashboardPulseGrid
-          currentDate={currentDate}
-          viewerName={user?.full_name ?? null}
-          isEditable={isCurrentPulseEditable}
-          plans={visiblePlans}
-          habits={visibleHabits}
-          proactivity={displayProactivity ?? null}
-          proactivityDeliveryKeys={proactivityDeliveryKeys}
-          onTogglePlan={onTogglePlan}
-          onToggleHabit={onToggleHabit}
-          canConfigureProactivity={Boolean(onProactivitySelect)}
-          onConfigureProactivity={handleOpenProactivityModal}
-          onRefreshData={onRefreshData}
-        />
-      </div>
-    </>
+      <DashboardPulseGrid
+        currentDate={currentDate}
+        selectedDate={calendarSelectedDate ?? currentDate}
+        viewerName={user?.full_name ?? null}
+        proactivity={displayProactivity ?? null}
+        events={mergedEvents}
+        proactivityDeliveryKeys={proactivityDeliveryKeys}
+        canConfigureProactivity={Boolean(onProactivitySelect)}
+        onConfigureProactivity={handleOpenProactivityModal}
+        onSelectDate={(date) => onCalendarSelectedDateChange?.(date)}
+        isCompactLayout={isCompactLayout}
+        onAddEvent={(date) => openComposerAt(date)}
+      />
+    </div>
   );
 
-  const mergedEvents = useMemo(() => {
-    const allEvents = [...calendarEvents, ...planCalendarEvents];
-    const seen = new Set<string>();
-    return allEvents.filter((event) => {
-      if (seen.has(event.id)) {
-        return false;
-      }
-      seen.add(event.id);
-      return true;
-    });
-  }, [calendarEvents, planCalendarEvents]);
+  const compactPulseContent = (
+    <>
+      <DashboardHeader
+        activeTab={activeTab}
+        onSelectTab={onSelectTab}
+        className={headerClassName}
+        onUpgradeClick={onUpgradeClick}
+        showUpgradeButton={showUpgradeButton && !isCompactLayout}
+        showTabs={hasCalendarAccess}
+      />
+      <DashboardPulseGrid
+        currentDate={currentDate}
+        selectedDate={calendarSelectedDate ?? currentDate}
+        viewerName={user?.full_name ?? null}
+        proactivity={displayProactivity ?? null}
+        events={mergedEvents}
+        proactivityDeliveryKeys={proactivityDeliveryKeys}
+        canConfigureProactivity={Boolean(onProactivitySelect)}
+        onConfigureProactivity={handleOpenProactivityModal}
+        onSelectDate={(date) => onCalendarSelectedDateChange?.(date)}
+        isCompactLayout={isCompactLayout}
+        onAddEvent={(date) => openComposerAt(date)}
+      />
+    </>
+  );
 
   const calendarContent = (
     <GrayDashboardCalendar
@@ -504,6 +450,21 @@ export function GrayDashboardView({
       onCreateHabit={onCreateHabit}
       selectedDate={calendarSelectedDate}
       onSelectedDateChange={onCalendarSelectedDateChange}
+      composerState={{
+        isOpen: composerOpen,
+        editingEvent,
+        range: composerRange,
+        anchorRect: composerAnchorRect,
+        previewEvent: composerPreviewEvent,
+      }}
+      composerHandlers={{
+        onOpenAt: openComposerAt,
+        onEdit: editEvent,
+        onClose: closeComposer,
+        onSubmit: handleComposerSubmit,
+        onDelete: handleComposerDelete,
+        onStateChange: setComposerDraft,
+      }}
       hourHeight={CALENDAR_PANEL_HOUR_HEIGHT}
       onIntegrationAction={onIntegrationAction}
       dashboardTab="calendar"
@@ -559,6 +520,8 @@ export function GrayDashboardView({
 
   return (
     <>
+      {proactivityModal}
+      {eventComposer}
       <div
         className={styles.dashboardCalendarContainer}
         data-compact={isCompactLayout ? "true" : "false"}

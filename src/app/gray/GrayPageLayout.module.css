@@ -128,8 +128,8 @@
     flex-shrink: 0;
     padding-top: 48px;
     padding-top: calc(48px + env(safe-area-inset-top));
-    height: calc(100dvh - 48px - env(safe-area-inset-top, 0px));
-    height: calc(100vh - 48px);
+    height: 100dvh;
+    height: 100vh;
   }
 
   .layout[data-mobile-sidebar="true"][data-sidebar-expanded="true"] .main {
@@ -372,4 +372,3 @@
     padding-bottom: 0;
   }
 }
-

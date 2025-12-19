@@ -16,6 +16,7 @@ import { GrayDashboardCalendarHeader } from "./GrayDashboardCalendarHeader";
 import {
   EventComposer,
   type EventComposerPayload,
+  type ComposerState,
 } from "./EventComposer";
 import { GrayDashboardCalendarDayView } from "./GrayDashboardCalendarDayView";
 import { GrayDashboardCalendarWeekView } from "./GrayDashboardCalendarWeekView";
@@ -36,7 +37,7 @@ import {
 import { formatDateLabel } from "./timeUtils";
 import type { DashboardHeaderProps } from "@/components/gray/DashboardHeader";
 import { useI18n } from "@/contexts/I18nContext";
-import type { CalendarViewMode } from "./dashboardCalendarTypes";
+import type { CalendarViewMode, ComposerAnchorRect } from "./dashboardCalendarTypes";
 
 const DEFAULT_HOUR_HEIGHT = 64;
 const SNAP_MINUTES = 15;
@@ -88,6 +89,21 @@ type GrayDashboardCalendarProps = {
   onEventDelete?: (event: CalendarEvent) => void;
   onCreatePlan?: (payload: EventComposerPayload) => void;
   onCreateHabit?: (payload: EventComposerPayload) => void;
+  composerState?: {
+    isOpen: boolean;
+    editingEvent: CalendarEvent | null;
+    range: { start: Date; end: Date } | null;
+    anchorRect: ComposerAnchorRect | null;
+    previewEvent: CalendarEvent | null;
+  };
+  composerHandlers?: {
+    onOpenAt: (startDate: Date, anchorRect?: ComposerAnchorRect | null) => void;
+    onEdit: (event: CalendarEvent, anchorRect?: ComposerAnchorRect | null) => void;
+    onClose: () => void;
+    onSubmit: (payload: EventComposerPayload) => void;
+    onDelete: (eventId: string) => void;
+    onStateChange: (state: ComposerState | null) => void;
+  };
 };
 
 export function GrayDashboardCalendar({
@@ -120,6 +136,8 @@ export function GrayDashboardCalendar({
   onEventDelete,
   onCreatePlan,
   onCreateHabit,
+  composerState,
+  composerHandlers,
 }: GrayDashboardCalendarProps) {
   const { t } = useI18n();
   const hourHeight = hourHeightProp ?? DEFAULT_HOUR_HEIGHT;
@@ -152,6 +170,15 @@ export function GrayDashboardCalendar({
     onEventsChange,
   });
 
+  const internalComposer = useCalendarComposer({
+    events,
+    updateEvents,
+    onEventDelete,
+    onCreatePlan,
+    onCreateHabit,
+    onClearSelection: clearSelection,
+  });
+
   const {
     composerOpen,
     editingEvent,
@@ -164,14 +191,21 @@ export function GrayDashboardCalendar({
     closeComposer,
     handleComposerSubmit,
     handleComposerDelete,
-  } = useCalendarComposer({
-    events,
-    updateEvents,
-    onEventDelete,
-    onCreatePlan,
-    onCreateHabit,
-    onClearSelection: clearSelection,
-  });
+  } = (composerState && composerHandlers)
+      ? {
+        composerOpen: composerState.isOpen,
+        editingEvent: composerState.editingEvent,
+        composerRange: composerState.range,
+        composerAnchorRect: composerState.anchorRect,
+        composerPreviewEvent: composerState.previewEvent,
+        setComposerDraft: composerHandlers.onStateChange,
+        openComposerAt: composerHandlers.onOpenAt,
+        editEvent: composerHandlers.onEdit,
+        closeComposer: composerHandlers.onClose,
+        handleComposerSubmit: composerHandlers.onSubmit,
+        handleComposerDelete: composerHandlers.onDelete,
+      }
+      : internalComposer;
 
   const {
     dayColumnRef,

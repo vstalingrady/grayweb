@@ -26,7 +26,13 @@ export function GrayMobileHeader({
     >
       <div className={styles.mobileHeaderLeft}>
         {!isSidebarExpanded ? (
-          <button type="button" className={styles.mobileMenuButton} onClick={onToggleSidebar}>
+          <button
+            type="button"
+            className={styles.mobileMenuButton}
+            onClick={onToggleSidebar}
+            aria-label="Open menu"
+            title="Open menu"
+          >
             <Menu size={24} />
           </button>
         ) : null}

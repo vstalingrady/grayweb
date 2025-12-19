@@ -1,63 +1,60 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
-import { Check, Square } from "lucide-react";
+import {
+  Check,
+  Plus,
+  Settings,
+  Square,
+} from "lucide-react";
 import styles from "@/app/gray/GrayPageClient.module.css";
 import { useI18n } from "@/contexts/I18nContext";
 import { useNotificationPreferences } from "@/contexts/NotificationPreferencesContext";
-import { requestNotificationPermission } from "@/lib/notificationUtils";
-import { greetingForDate } from "@/components/gray/utils/helperFunctions";
-import { PlanHabitInlineEditor } from "@/components/gray/PlanHabitInlineEditor";
-import type { HabitItem, PlanItem, ProactivityItem } from "@/components/gray/types";
-import { formatCustomTimeLabel, getProactivityTimes } from "@/components/gray/proactivityUtils";
+import {
+  formatCustomTimeLabel,
+  getProactivityTimes,
+  requestNotificationPermission,
+} from "@/components/gray/proactivityUtils";
+import type { ProactivityItem } from "@/components/gray/types";
+import type { CalendarEvent } from "@/components/calendar/types";
 
-type ProactivityScheduleEntry = { label: string; delivered: boolean };
+type ProactivityScheduleEntry = {
+  label: string;
+  delivered: boolean;
+};
 
 type DashboardPulseGridProps = {
   currentDate: Date;
-  viewerName?: string | null;
-  isEditable: boolean;
-  plans: PlanItem[];
-  habits: HabitItem[];
+  selectedDate: Date;
+  viewerName: string | null;
   proactivity: ProactivityItem | null;
+  events: CalendarEvent[];
   proactivityDeliveryKeys?: ReadonlySet<string>;
-  onTogglePlan: (id: string) => void;
-  onToggleHabit?: (id: string) => void;
   canConfigureProactivity: boolean;
   onConfigureProactivity: () => void;
-  onRefreshData: () => Promise<void>;
+  onAddEvent?: (date: Date) => void;
 };
 
 const toDateKey = (date: Date) => {
-  const year = date.getFullYear();
-  const month = `${date.getMonth() + 1}`.padStart(2, "0");
-  const day = `${date.getDate()}`.padStart(2, "0");
-  return `${year}-${month}-${day}`;
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
 };
 
 export function DashboardPulseGrid({
   currentDate,
+  selectedDate,
   viewerName,
-  isEditable,
-  plans,
-  habits,
   proactivity,
+  events,
   proactivityDeliveryKeys,
-  onTogglePlan,
-  onToggleHabit,
   canConfigureProactivity,
   onConfigureProactivity,
-  onRefreshData,
+  onAddEvent,
 }: DashboardPulseGridProps) {
   const { t } = useI18n();
   const { notificationPreferences, setNotificationPreference } = useNotificationPreferences();
-  const [inlineEditorType, setInlineEditorType] = useState<"plan" | "habit" | null>(null);
-
-  const viewerFirstName = useMemo(() => {
-    const trimmed = viewerName?.trim();
-    if (!trimmed) return "there";
-    return trimmed.split(/\s+/)[0] || "there";
-  }, [viewerName]);
 
   const scheduleEntries = useMemo<ProactivityScheduleEntry[]>(() => {
     const times = getProactivityTimes(proactivity)
@@ -110,56 +107,72 @@ export function DashboardPulseGrid({
     setNotificationPreference("device", permission === "granted");
   }, [setNotificationPreference]);
 
-  const handleModalSuccess = useCallback(async () => {
-    await onRefreshData();
-  }, [onRefreshData]);
-
-  const openInlineEditor = useCallback(
-    (type: "plan" | "habit") => {
-      if (!isEditable) return;
-      setInlineEditorType(type);
-    },
-    [isEditable]
-  );
-
-  const closeInlineEditor = useCallback(() => {
-    setInlineEditorType(null);
-  }, []);
-
-  const handlePlanToggle = useCallback(
-    (planId: string) => {
-      if (!isEditable) return;
-      onTogglePlan(planId);
-    },
-    [isEditable, onTogglePlan]
-  );
-
-  const handleHabitToggle = useCallback(
-    (habitId: string) => {
-      if (!isEditable || !onToggleHabit) return;
-      onToggleHabit(habitId);
-    },
-    [isEditable, onToggleHabit]
-  );
+  const eventsForDay = useMemo(() => {
+    const target = selectedDate ?? currentDate;
+    const targetKey = toDateKey(target);
+    return events
+      .filter((event) => toDateKey(event.start) === targetKey)
+      .sort((a, b) => a.start.getTime() - b.start.getTime());
+  }, [currentDate, events, selectedDate]);
 
   return (
     <div className={styles.dashboardGridFinal}>
-      <div className={styles.dashboardHeaderArea}>
-        <h1 className={styles.dashboardGreeting}>
-          {greetingForDate(currentDate)}, {viewerFirstName}
-        </h1>
-        <div className={styles.dashboardDate}>
-          {currentDate.toLocaleDateString(undefined, {
-            weekday: "long",
-            month: "long",
-            day: "numeric",
-          })}
+      {/* EVENTS CARD FIRST */}
+      <div className={`${styles.dashboardCard} ${styles.dashboardCardEvents}`}>
+        <div className={styles.dashboardCardHeader}>
+          <h2 className={styles.dashboardCardTitle}>{t("Events")}</h2>
+          {onAddEvent && (
+            <button
+              type="button"
+              className={styles.dashboardCardAction}
+              onClick={() => onAddEvent(currentDate)}
+              aria-label={t("Add event")}
+            >
+              <Plus size={18} />
+            </button>
+          )}
+        </div>
+        <div className={styles.dashboardCardBody}>
+          <div className={styles.dashboardEventList}>
+            {eventsForDay.length > 0 ? (
+              eventsForDay.map((event) => (
+                <div key={event.id} className={styles.dashboardEventItem}>
+                  <div
+                    className={styles.dashboardEventMarker}
+                    style={{ backgroundColor: event.color }}
+                  />
+                  <div className={styles.dashboardEventInfo}>
+                    <div className={styles.dashboardEventTitle}>{event.title}</div>
+                    <div className={styles.dashboardEventTime}>
+                      {event.start.toLocaleTimeString(undefined, {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </div>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className={styles.dashboardListEmpty}>{t("No events for today")}</div>
+            )}
+          </div>
         </div>
       </div>
 
+      {/* PROACTIVITY CARD SECOND */}
       <div className={`${styles.dashboardCard} ${styles.dashboardCardProactivity}`}>
         <div className={styles.dashboardCardHeader}>
           <h2 className={styles.dashboardCardTitle}>{t("Proactivity")}</h2>
+          {canConfigureProactivity && (
+            <button
+              type="button"
+              className={styles.dashboardCardAction}
+              onClick={onConfigureProactivity}
+              aria-label={t("Configure proactivity")}
+            >
+              <Settings size={18} />
+            </button>
+          )}
         </div>
         <div className={styles.dashboardCardBody}>
           {shouldShowNotificationBanner ? (
@@ -192,115 +205,8 @@ export function DashboardPulseGrid({
               <span>{t("No check-ins scheduled")}</span>
             </div>
           )}
-          <button
-            type="button"
-            className={styles.dashboardButtonNeutral}
-            onClick={onConfigureProactivity}
-            disabled={!canConfigureProactivity}
-          >
-            {t("Configure")}
-          </button>
-        </div>
-      </div>
-
-      <div className={`${styles.dashboardCard} ${styles.dashboardCardPlans}`}>
-        <div className={styles.dashboardCardHeader}>
-          <div className={`${styles.dashboardCardIcon} ${styles.iconBlue}`}>
-            <Square size={16} />
-          </div>
-          <h2 className={styles.dashboardCardTitle}>{t("Plans")}</h2>
-        </div>
-        <div className={styles.dashboardCardBody}>
-          {plans.length > 0 ? (
-            <ul className={styles.dashboardList}>
-              {plans.map((plan) => (
-                <li key={plan.id} className={styles.dashboardListItem}>
-                  <button
-                    type="button"
-                    className={styles.planCheckboxButton}
-                    onClick={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      handlePlanToggle(plan.id);
-                    }}
-                  >
-                    {plan.completed ? <Check size={14} /> : <Square size={14} color="#52525b" />}
-                  </button>
-                  <span
-                    className={styles.dashboardTaskLabel}
-                    data-completed={plan.completed ? "true" : "false"}
-                  >
-                    {plan.label}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <div className={styles.dashboardListEmpty}>{t("No active plans")}</div>
-          )}
-          <button type="button" className={styles.dashboardButtonNeutral} onClick={() => openInlineEditor("plan")}>
-            {t("Add plans")}
-          </button>
-          {inlineEditorType === "plan" ? (
-            <PlanHabitInlineEditor
-              type="plan"
-              onCancel={closeInlineEditor}
-              onSuccess={handleModalSuccess}
-              onTypeChange={openInlineEditor}
-            />
-          ) : null}
-        </div>
-      </div>
-
-      <div className={`${styles.dashboardCard} ${styles.dashboardCardHabits}`}>
-        <div className={styles.dashboardCardHeader}>
-          <div className={`${styles.dashboardCardIcon} ${styles.iconCyan}`}>
-            <Check size={16} />
-          </div>
-          <h2 className={styles.dashboardCardTitle}>{t("Habits")}</h2>
-        </div>
-        <div className={styles.dashboardCardBody}>
-          {habits.length > 0 ? (
-            <ul className={styles.dashboardList}>
-              {habits.map((habit) => (
-                <li key={habit.id} className={styles.dashboardListItem}>
-                  <button
-                    type="button"
-                    className={styles.planCheckboxButton}
-                    onClick={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      handleHabitToggle(habit.id);
-                    }}
-                  >
-                    {habit.completed ? <Check size={14} /> : <Square size={14} color="#52525b" />}
-                  </button>
-                  <span
-                    className={styles.dashboardTaskLabel}
-                    data-completed={habit.completed ? "true" : "false"}
-                  >
-                    {habit.label}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <div className={styles.dashboardListEmpty}>{t("No active habits")}</div>
-          )}
-          <button type="button" className={styles.dashboardButtonNeutral} onClick={() => openInlineEditor("habit")}>
-            {t("Add habits")}
-          </button>
-          {inlineEditorType === "habit" ? (
-            <PlanHabitInlineEditor
-              type="habit"
-              onCancel={closeInlineEditor}
-              onSuccess={handleModalSuccess}
-              onTypeChange={openInlineEditor}
-            />
-          ) : null}
         </div>
       </div>
     </div>
   );
 }
-

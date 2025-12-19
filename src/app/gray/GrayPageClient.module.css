@@ -199,9 +199,9 @@
     padding-top: 48px;
     padding-top: calc(48px + env(safe-area-inset-top));
     /* Account for mobile header */
-    /* Use full viewport height minus header */
-    height: calc(100dvh - 48px - env(safe-area-inset-top, 0px));
-    height: calc(100vh - 48px);
+    /* Use full viewport height; padding offsets the header */
+    height: 100dvh;
+    height: 100vh;
     /* Fallback */
   }
 
@@ -2916,31 +2916,6 @@
   height: 100%;
   flex: 1 1 auto;
   padding-bottom: 0;
-}
-
-.mobileSurfaceSwitcher {
-  display: flex;
-  width: 200%;
-  height: 100%;
-  min-height: 0;
-  transform: translateX(0%);
-  transition: transform 0.4s ease;
-}
-
-.mobileSurfaceSwitcher[data-active="pulse"] {
-  transform: translateX(-50%);
-}
-
-.mobileSurfacePane {
-  flex: 0 0 50%;
-  width: 50%;
-  height: 100%;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  justify-content: flex-start;
-  overflow: hidden;
 }
 
 .mainContent[data-view="dashboard"] {
@@ -7577,17 +7552,36 @@ h1.greeting {
 .dashboardGridFinal {
   display: grid;
   width: 100%;
-  grid-template-columns: 320px 1fr;
-  grid-template-rows: min-content min-content 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-rows: min-content minmax(220px, auto) minmax(240px, auto);
   grid-template-areas:
     "header header"
-    "proactivity plans"
-    "proactivity habits";
+    "proactivity calendar"
+    "events events";
   gap: 24px;
   padding: 24px 0;
   max-width: 1400px;
   margin: 0 auto;
   align-items: start;
+}
+
+@media (max-width: 768px) {
+  .dashboardGridFinal {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "events"
+      "proactivity";
+    gap: 16px;
+    padding: 0;
+    max-width: none;
+  }
+
+  .dashboardCard {
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+    padding: 20px 16px;
+  }
 }
 
 .dashboardHeaderArea {
@@ -7648,54 +7642,47 @@ h1.greeting {
     0 20px 46px rgba(0, 0, 0, 0.55);
 }
 
-.dashboardCardPlans {
-  grid-area: plans;
-  min-height: 240px;
+.dashboardCardCalendar {
+  grid-area: calendar;
+  min-height: 300px;
 }
 
-.dashboardCardHabits {
-  grid-area: habits;
-  min-height: 240px;
+.dashboardCardEvents {
+  grid-area: events;
+  min-height: 280px;
 }
 
 .dashboardCardProactivity {
   grid-area: proactivity;
   height: 100%;
-  min-height: 480px;
+  min-height: 300px;
 }
 
 .dashboardCardHeader {
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: 14px;
-  margin-bottom: 0;
+  justify-content: space-between;
+  margin-bottom: 20px;
 }
 
-.dashboardCardIcon {
+.dashboardCardAction {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.4);
+  cursor: pointer;
+  padding: 4px;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.05);
-  color: rgba(255, 255, 255, 0.7);
+  border-radius: 4px;
+  transition: all 0.2s ease;
 }
 
-.iconBlue {
-  color: #60a5fa;
-  background: rgba(96, 165, 250, 0.1);
-}
-
-/* Kept for icons ONLY */
-.iconCyan {
-  color: #22d3ee;
-  background: rgba(34, 211, 238, 0.1);
-}
-
-.iconPurple {
-  background: #a855f7;
+.dashboardCardAction:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.8);
 }
 
 .dashboardCardTitle {
@@ -7705,6 +7692,7 @@ h1.greeting {
   text-transform: uppercase;
   color: rgba(255, 255, 255, 0.5);
   margin: 0;
+  text-align: left;
 }
 
 /* Card Body Area */
@@ -7713,6 +7701,38 @@ h1.greeting {
   display: flex;
   flex-direction: column;
   overflow-y: auto;
+}
+
+.dashboardEventList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dashboardEventItem {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.dashboardEventTime {
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(200, 200, 200, 0.7);
+  white-space: nowrap;
+}
+
+.dashboardEventTitle {
+  font-size: 0.9rem;
+  color: rgba(245, 245, 245, 0.92);
 }
 
 /* Neutral Buttons (No Blue) */
@@ -7860,8 +7880,8 @@ h1.greeting {
     grid-template-areas:
       "header"
       "proactivity"
-      "plans"
-      "habits";
+      "calendar"
+      "events";
     padding: 16px 0;
   }
 
@@ -7872,6 +7892,14 @@ h1.greeting {
   .dashboardCard {
     height: auto;
     min-height: 210px;
+  }
+
+  .dashboardCardBody {
+    overflow: visible;
+  }
+
+  .proactivityEmptyState {
+    display: none;
   }
 }
 

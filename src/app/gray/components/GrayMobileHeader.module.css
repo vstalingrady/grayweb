@@ -18,8 +18,22 @@
   transition: transform 0.3s ease;
 }
 
+.mobileHeader::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
 .mobileHeader[data-sidebar-expanded="true"] {
   transform: translateX(var(--mobile-sidebar-width));
+}
+
+.mobileHeader[data-sidebar-expanded="true"]::after {
+  opacity: 1;
 }
 
 .mobileHeaderLeft {
