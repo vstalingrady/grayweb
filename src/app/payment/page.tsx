@@ -9,7 +9,8 @@ import styles from "./payment.module.css";
 import pricingStyles from "../pricing/page.module.css";
 import { PATHFINDER_FEATURES, VOYAGER_FEATURES, PIONEER_FEATURES } from "../pricing/PricingPlansSection";
 
-import { getSupabaseClient } from "@/lib/supabaseClient";
+import { getSupabaseAccessToken } from "@/lib/auth/supabaseAccessToken";
+import { useI18n } from "@/contexts/I18nContext";
 
 // Dynamically import the 3D background with SSR disabled
 const ParticleSphere = dynamic(
@@ -159,6 +160,7 @@ function PaymentContent() {
     const searchParams = useSearchParams();
     const planParam = searchParams.get("plan");
     const cycleParam = searchParams.get("cycle");
+    const { t } = useI18n();
 
     // State
     const [billingCycle, setBillingCycle] = useState<"monthly" | "annual">((cycleParam as "monthly" | "annual") || "monthly");
@@ -253,18 +255,35 @@ function PaymentContent() {
             ? "You'll complete payment on Dodo's secure checkout."
             : "You can change this later in checkout.";
 
+    const getPaymentErrorDetail = async (res: Response) => {
+        const contentType = res.headers.get("content-type") || "";
+        const fallback = `Payment initialization failed (HTTP ${res.status})`;
+
+        try {
+            if (contentType.includes("application/json")) {
+                const errData = await res.json();
+                return errData?.detail || errData?.message || fallback;
+            }
+            const text = await res.text();
+            const trimmed = text.trim();
+            if (!trimmed) {
+                return fallback;
+            }
+            if (contentType.includes("text/html") || trimmed.startsWith("<!DOCTYPE html")) {
+                return fallback;
+            }
+            return trimmed;
+        } catch {
+            return fallback;
+        }
+    };
+
     const handlePayment = async () => {
         setStatus("loading");
         setErrorMessage("");
 
         try {
-            const supabase = getSupabaseClient();
-            if (!supabase) {
-                throw new Error("Authentication is not configured. Please refresh and try again.");
-            }
-
-            const { data: sessionData } = await supabase.auth.getSession();
-            const accessToken = sessionData.session?.access_token ?? null;
+            const accessToken = await getSupabaseAccessToken();
 
             if (!accessToken) {
                 const returnTo =
@@ -307,27 +326,10 @@ function PaymentContent() {
                         router.push(`/login?redirect=${encodeURIComponent(returnTo)}`);
                         return;
                     }
-                    const contentType = res.headers.get("content-type") || "";
-                    let detail = `Payment initialization failed (HTTP ${res.status})`;
-                    try {
-                        if (contentType.includes("application/json")) {
-                            const errData = await res.json();
-                            detail = errData?.detail || errData?.message || detail;
-                        } else {
-                            const text = await res.text();
-                            const trimmed = text.trim();
-                            if (trimmed) {
-                                if (contentType.includes("text/html") || trimmed.startsWith("<!DOCTYPE html")) {
-                                    detail = `Payment initialization failed (HTTP ${res.status})`;
-                                } else {
-                                    detail = trimmed;
-                                }
-                            }
-                        }
-                    } catch {
-                        // ignore parse errors; use default detail
-                    }
-                    throw new Error(detail);
+                    const detail = await getPaymentErrorDetail(res);
+                    setStatus("error");
+                    setErrorMessage(detail);
+                    return;
                 }
 
                         const data: ChargeResponse = await res.json();
@@ -367,27 +369,10 @@ function PaymentContent() {
                     router.push(`/login?redirect=${encodeURIComponent(returnTo)}`);
                     return;
                 }
-                const contentType = res.headers.get("content-type") || "";
-                let detail = `Payment initialization failed (HTTP ${res.status})`;
-                try {
-                    if (contentType.includes("application/json")) {
-                        const errData = await res.json();
-                        detail = errData?.detail || errData?.message || detail;
-                    } else {
-                        const text = await res.text();
-                        const trimmed = text.trim();
-                        if (trimmed) {
-                            if (contentType.includes("text/html") || trimmed.startsWith("<!DOCTYPE html")) {
-                                detail = `Payment initialization failed (HTTP ${res.status})`;
-                            } else {
-                                detail = trimmed;
-                            }
-                        }
-                    }
-                } catch {
-                    // ignore parse errors; use default detail
-                }
-                throw new Error(detail);
+                const detail = await getPaymentErrorDetail(res);
+                setStatus("error");
+                setErrorMessage(detail);
+                return;
             }
 
             const data = await res.json();
@@ -480,6 +465,60 @@ function PaymentContent() {
         </article>
     );
 
+    const successSteps = (() => {
+        if (!chargeData) return [];
+        const bankLabel = (() => {
+            const bankCode = selectedMethodConfig?.bank;
+            if (!bankCode) return selectedMethodConfig?.label || "your bank";
+            const bankNames: Record<string, string> = {
+                bni: "BNI",
+                bri: "BRI",
+                cimb: "CIMB Niaga",
+                danamon: "Danamon",
+                mandiri: "Mandiri",
+                permata: "PermataBank",
+            };
+            return bankNames[bankCode] || selectedMethodConfig?.label || "your bank";
+        })();
+        const bankCode = selectedMethodConfig?.bank || "";
+
+        if (selectedMethodId === "qris") {
+            return [
+                t("Open any QRIS-capable app and scan the QR code."),
+                t("Confirm payment to activate your plan."),
+            ];
+        }
+        if (selectedMethodId === "gopay") {
+            return [
+                t("Open GoPay and proceed with the payment."),
+                t("Confirm payment to activate your plan."),
+            ];
+        }
+        if (selectedMethodId === "mandiri") {
+            return [
+                t("Open Mandiri ATM, internet banking, or mobile banking and choose Multipayment."),
+                t("Enter the Biller Code and Bill Key shown below."),
+                t("Confirm payment to activate your plan."),
+            ];
+        }
+        if (methodGroup === "va") {
+            const bankSpecificFirstStep: Record<string, string> = {
+                bni: t("Open BNI Mobile Banking or ATM and choose Transfer > Virtual Account Billing."),
+                bri: t("Open BRImo or ATM and choose BRIVA / Virtual Account."),
+                cimb: t("Open CIMB Octo Mobile or ATM and choose Transfer > Virtual Account."),
+                danamon: t("Open D-Bank PRO or ATM and choose Transfer > Virtual Account."),
+                permata: t("Open PermataMobile X or ATM and choose Transfer > Virtual Account."),
+            };
+            return [
+                bankSpecificFirstStep[bankCode] ||
+                    t("Open {bank} app or ATM and choose Virtual Account transfer.", { bank: bankLabel }),
+                t("Enter the virtual account number shown below."),
+                t("Complete the transfer to activate your plan."),
+            ];
+        }
+        return [t("Complete the payment to activate your plan.")];
+    })();
+
     if (status === "success" && chargeData) {
         return (
             <div className={styles.page}>
@@ -512,14 +551,12 @@ function PaymentContent() {
                             <div className={styles.successBody}>
                                 <div className={styles.successDetails}>
                                     <div className={styles.successSteps}>
-                                        <div className={styles.successStep}>
-                                            <span className={styles.successStepNumber}>1</span>
-                                            <span>Scan the QR code in Gojek/GoPay.</span>
-                                        </div>
-                                        <div className={styles.successStep}>
-                                            <span className={styles.successStepNumber}>2</span>
-                                            <span>Confirm payment to activate your plan.</span>
-                                        </div>
+                                        {successSteps.map((step, index) => (
+                                            <div key={`${index}-${step}`} className={styles.successStep}>
+                                                <span className={styles.successStepNumber}>{index + 1}</span>
+                                                <span>{step}</span>
+                                            </div>
+                                        ))}
                                     </div>
 
                                     {chargeData.va_numbers ? (

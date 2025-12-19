@@ -59,6 +59,7 @@ export function GrayChatView({
     deleteMessage,
     updateSession,
     workspaceContext,
+    contextCacheId,
     applyAutoTitle,
     hasAutoStreamTriggered,
     markAutoStreamTriggered,
@@ -232,6 +233,7 @@ export function GrayChatView({
   const streamAssistantReply = useStreamAssistantReply({
     session,
     workspaceContext,
+    contextCacheId,
     personalizedSystemPrompt,
     autoWebSearchEnabled,
     webSearchEnabled,

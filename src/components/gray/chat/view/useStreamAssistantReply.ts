@@ -18,6 +18,7 @@ import {
 type UseStreamAssistantReplyOptions = {
   session?: ChatSession;
   workspaceContext: string | null;
+  contextCacheId: number | null;
   personalizedSystemPrompt: string;
   autoWebSearchEnabled: boolean;
   webSearchEnabled: boolean;
@@ -44,6 +45,7 @@ type UseStreamAssistantReplyOptions = {
 export const useStreamAssistantReply = ({
   session,
   workspaceContext,
+  contextCacheId,
   personalizedSystemPrompt,
   autoWebSearchEnabled,
   webSearchEnabled,
@@ -196,6 +198,7 @@ export const useStreamAssistantReply = ({
             time_context: timeContext,
             timezone: effectiveTimeZone,
             conversation_memory_enabled: conversationMemoryEnabled,
+            context_cache_id: contextCacheId ?? undefined,
             attachments: buildAttachmentPayloads(),
             should_generate_title: requestTitleHint,
             web_search_enabled: shouldUseWebSearch,
@@ -350,6 +353,7 @@ export const useStreamAssistantReply = ({
             time_context: timeContext,
             timezone: effectiveTimeZone,
             conversation_memory_enabled: conversationMemoryEnabled,
+            context_cache_id: contextCacheId ?? undefined,
             attachments: buildAttachmentPayloads(),
             web_search_enabled: shouldUseWebSearch,
             should_generate_title: requestTitleHint,
@@ -464,6 +468,7 @@ export const useStreamAssistantReply = ({
       updateSession,
       webSearchEnabled,
       workspaceContext,
+      contextCacheId,
       personalizedSystemPrompt,
     ]
   );

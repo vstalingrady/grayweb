@@ -12,7 +12,7 @@ export function middleware(request: NextRequest) {
     const portSuffix = port ? `:${port}` : "";
 
     const defaultMain = isLocal ? `http://localhost${portSuffix}` : "https://gray.alignment.id";
-    const defaultPayment = isLocal ? `http://payment.localhost${portSuffix}` : "https://payment.alignment.id";
+    const defaultPayment = isLocal ? `http://gray.localhost${portSuffix}` : "https://payment.alignment.id";
 
     const mainSiteUrl = process.env.NEXT_PUBLIC_MAIN_SITE_URL || defaultMain;
     const paymentSiteUrl = process.env.NEXT_PUBLIC_PAYMENT_SITE_URL || defaultPayment;

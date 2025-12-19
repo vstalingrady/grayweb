@@ -1,4 +1,4 @@
-import { getSupabaseClient } from "@/lib/supabaseClient";
+import { getSupabaseAccessToken } from "./supabaseAccessToken";
 
 const CSRF_COOKIE_NAME = "gray-csrf";
 const CSRF_HEADER_NAME = "x-gray-csrf";
@@ -76,13 +76,7 @@ const syncServerSession = async (accessToken?: string | null): Promise<boolean> 
   let token = accessToken?.trim() || null;
 
   if (!token) {
-    const supabase = getSupabaseClient();
-    if (!supabase) {
-      return false;
-    }
-
-    const { data } = await supabase.auth.getSession();
-    token = data.session?.access_token ?? null;
+    token = await getSupabaseAccessToken();
   }
 
   if (!token) {

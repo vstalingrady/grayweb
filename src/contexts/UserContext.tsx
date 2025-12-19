@@ -369,7 +369,10 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
   };
 
   const updateUser = async (userData: UserUpdate) => {
-    if (!user) throw new Error('No user logged in');
+    if (!user) {
+      setError('No user logged in');
+      return;
+    }
 
     // Build a sanitized payload restricted to fields the backend schema knows.
     const payload: UserUpdate = {};
@@ -453,7 +456,7 @@ export function UserProvider({ children, userEmail }: UserProviderProps) {
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to update user';
       setError(errorMessage);
-      throw new Error(errorMessage);
+      console.error('Failed to update user:', err);
     }
   };
 

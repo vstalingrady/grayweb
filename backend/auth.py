@@ -1,5 +1,5 @@
 """Authentication and authorization utilities for Gray backend"""
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import databases
 import sqlalchemy
@@ -8,6 +8,10 @@ from typing import Optional, Dict, Any
 import logging
 from datetime import datetime, timezone
 
+import json
+import hmac
+import hashlib
+import base64
 from backend.time_utils import utcnow
 import time
 from backend.compat_imports import row_get as _row_get
@@ -20,7 +24,7 @@ from jwt import PyJWKClient  # type: ignore
 
 logger = logging.getLogger(__name__)
 
-security = HTTPBearer()
+security = HTTPBearer(auto_error=False)
 
 # Simple in-memory cache for user lookups with TTL
 _user_cache: Dict[str, tuple[Dict[str, Any], float]] = {}
@@ -254,6 +258,69 @@ def _verify_with_jwks(token: str) -> Optional[Dict[str, Any]]:
         logger.warning(f"JWKS verification failed: {e}")
         return None
 
+def _base64url_decode(payload: str) -> bytes:
+    """Decode base64url string to bytes."""
+    rem = len(payload) % 4
+    if rem > 0:
+        payload += "=" * (4 - rem)
+    # base64url uses '-' instead of '+' and '_' instead of '/'
+    return base64.urlsafe_b64decode(payload)
+
+def _verify_session_cookie(cookie_value: str) -> Optional[Dict[str, Any]]:
+    """Decode and verify HMAC-signed session cookie (gray-auth-session)."""
+    if not cookie_value or "." not in cookie_value:
+        return None
+    
+    parts = cookie_value.split(".")
+    if len(parts) != 2:
+        return None
+        
+    body_b64, signature_b64 = parts
+    
+    # Resolve secret
+    secret = (
+        os.getenv("AUTH_COOKIE_SECRET") or 
+        os.getenv("COOKIE_SECRET") or 
+        os.getenv("NEXTAUTH_SECRET") or 
+        ""
+    )
+    if not secret:
+        if _IS_PRODUCTION:
+            logger.error("Missing AUTH_COOKIE_SECRET in production; cookie auth disabled.")
+            return None
+        secret = "development-gray-session-secret"
+        
+    # Verify signature
+    try:
+        expected_sig = hmac.new(
+            secret.encode("utf-8"),
+            body_b64.encode("utf-8"),
+            hashlib.sha256
+        ).digest()
+        
+        # Base64url decode signature
+        try:
+            provided_sig = _base64url_decode(signature_b64)
+        except Exception:
+            return None
+            
+        if not hmac.compare_digest(provided_sig, expected_sig):
+            return None
+            
+        # Decode body
+        body_json = _base64url_decode(body_b64).decode("utf-8")
+        payload = json.loads(body_json)
+        
+        # Check expiration
+        exp = payload.get("exp")
+        if not isinstance(exp, (int, float)) or exp < time.time():
+            return None
+            
+        return payload
+    except Exception as e:
+        logger.debug(f"Session cookie verification failed: {e}")
+        return None
+
 
 # Token cache to avoid hitting Supabase Auth on every request
 _token_cache: Dict[str, tuple[Dict[str, Any], float]] = {}
@@ -420,42 +487,55 @@ async def verify_supabase_token(token: str) -> Dict[str, Any]:
 
 
 async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security)
+    request: Request,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)
 ) -> Dict[str, Any]:
     """
-    Get current authenticated user from JWT token.
+    Get current authenticated user from JWT token or session cookie.
     
-    Verifies the token and fetches the user from the database.
+    Verifies the token or cookie and fetches the user from the database.
     Uses in-memory cache to reduce database queries.
     
     Args:
-        credentials: Bearer token credentials
+        request: FastAPI request object (for cookies)
+        credentials: Optional Bearer token credentials
         
     Returns:
         User record from database
         
     Raises:
-        HTTPException: If token is invalid or user not found
+        HTTPException: If authentication fails or user not found
     """
     # Import here to avoid circular dependency
     from backend.database import users, database
     
     perf_start = time.time()
-    token = credentials.credentials
-    payload = await verify_supabase_token(token)
     
-    auth_user_id = payload.get("sub")
-    if not auth_user_id:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token payload"
-        )
+    email = None
+    auth_user_id = None
+    payload = None
 
-    email = _normalize_email(payload.get("email"))
+    # Try Bearer token first
+    token = credentials.credentials if credentials else None
+    if token:
+        payload = await verify_supabase_token(token)
+        auth_user_id = payload.get("sub")
+        email = _normalize_email(payload.get("email"))
+    else:
+        # Fallback to session cookie
+        # We look for 'gray-auth-session'
+        session_cookie = request.cookies.get("gray-auth-session")
+        if session_cookie:
+            payload = _verify_session_cookie(session_cookie)
+            if payload:
+                email = _normalize_email(payload.get("email"))
+                # auth_user_id might not be in the session cookie, 
+                # but we'll lookup by email in the DB.
+
     if not email:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Email required for authentication"
+            detail="Authentication required"
         )
     
     # Check L1 (in-memory) cache first
@@ -546,6 +626,7 @@ async def get_current_user(
 
 
 async def get_current_user_optional(
+    request: Request,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(
         HTTPBearer(auto_error=False)
     )
@@ -556,16 +637,14 @@ async def get_current_user_optional(
     Used for endpoints that can work with or without authentication.
     
     Args:
+        request: FastAPI request object (for cookies)
         credentials: Optional bearer token credentials
         
     Returns:
         User record if authenticated, None otherwise
     """
-    if not credentials:
-        return None
-    
     try:
-        return await get_current_user(credentials)
+        return await get_current_user(request, credentials)
     except HTTPException:
         return None
 

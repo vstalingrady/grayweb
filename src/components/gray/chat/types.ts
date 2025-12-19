@@ -84,6 +84,8 @@ export type ChatContextValue = {
     generalSessionId: string | null;
     workspaceContext: string | null;
     setWorkspaceContext: (context: string | null) => void;
+    contextCacheId: number | null;
+    setContextCacheId: (id: number | null) => void;
     applyAutoTitle: (sessionId: string, candidate?: string | null) => void;
     hasAutoStreamTriggered: (sessionId: string, messageId?: string | null) => boolean;
     markAutoStreamTriggered: (sessionId: string, messageId?: string | null) => void;

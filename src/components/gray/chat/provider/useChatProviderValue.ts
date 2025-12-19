@@ -28,6 +28,8 @@ import { useSessionStorage } from "./useSessionStorage";
 import { useWorkspaceContextAttachment } from "./useWorkspaceContextAttachment";
 import { createEmptyGeneralSession } from "./sessionStore";
 
+const CONTEXT_CACHE_STORAGE_PREFIX = "gray_context_cache_id";
+
 export const useChatProviderValue = (workspaceContext?: string): ChatContextValue => {
   const { user, waitForUser, updateUser, refreshUser } = useUser();
   const { locale } = useI18n();
@@ -89,6 +91,51 @@ export const useChatProviderValue = (workspaceContext?: string): ChatContextValu
     setWorkspaceContext: setWorkspaceContextState,
     shouldAttachWorkspaceContextForSession,
   } = useWorkspaceContextAttachment({ workspaceContext });
+  const contextCacheStorageKey = `${CONTEXT_CACHE_STORAGE_PREFIX}:${user?.id ?? "anon"}`;
+  const [contextCacheIdState, setContextCacheIdState] = useState<number | null>(() => {
+    if (typeof window === "undefined") {
+      return null;
+    }
+    try {
+      const stored = window.localStorage.getItem(contextCacheStorageKey);
+      const parsed = stored ? Number(stored) : null;
+      return typeof parsed === "number" && Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+    } catch {
+      return null;
+    }
+  });
+  const setContextCacheId = useCallback(
+    (next: number | null) => {
+      setContextCacheIdState(next);
+      if (typeof window === "undefined") {
+        return;
+      }
+      try {
+        if (typeof next === "number" && Number.isFinite(next) && next > 0) {
+          window.localStorage.setItem(contextCacheStorageKey, String(next));
+        } else {
+          window.localStorage.removeItem(contextCacheStorageKey);
+        }
+      } catch {
+        // ignore storage failures
+      }
+    },
+    [contextCacheStorageKey]
+  );
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    try {
+      const stored = window.localStorage.getItem(contextCacheStorageKey);
+      const parsed = stored ? Number(stored) : null;
+      const nextValue = typeof parsed === "number" && Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Necessary to sync state when storage key changes (e.g. user ID change)
+      setContextCacheIdState(nextValue);
+    } catch {
+      setContextCacheIdState(null);
+    }
+  }, [contextCacheStorageKey]);
   const {
     mapsEnabled,
     mapsWidgetEnabled,
@@ -187,6 +234,7 @@ export const useChatProviderValue = (workspaceContext?: string): ChatContextValu
     attachmentsRef,
     resolveChatUser,
     workspaceContext: workspaceContextValue,
+    contextCacheId: contextCacheIdState,
     shouldAttachWorkspaceContextForSession,
     autoWebSearchEnabled,
     webSearchEnabled,
@@ -257,6 +305,8 @@ export const useChatProviderValue = (workspaceContext?: string): ChatContextValu
     generalSessionId,
     workspaceContext: workspaceContextValue,
     setWorkspaceContext: setWorkspaceContextState,
+    contextCacheId: contextCacheIdState,
+    setContextCacheId,
     hasAutoStreamTriggered,
     markAutoStreamTriggered,
     resetAutoStreamState,
@@ -299,4 +349,3 @@ export const useChatProviderValue = (workspaceContext?: string): ChatContextValu
     remoteConversationsLoaded,
   };
 };
-

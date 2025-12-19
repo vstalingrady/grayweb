@@ -1,9 +1,9 @@
 "use client";
 
-import type { Dispatch, SetStateAction } from "react";
+import { useRef, useState, type ChangeEvent, type Dispatch, type SetStateAction } from "react";
 import { ChevronRight } from "lucide-react";
 import styles from "../SettingsStyles.module.css";
-import { chatService, type UserUpdate } from "@/lib/api";
+import { chatService, utilityService, type UserUpdate } from "@/lib/api";
 import { SettingsToggle } from "@/components/gray/settings/components/SettingsToggle";
 
 type Translator = (message: string, vars?: Record<string, string | number>) => string;
@@ -18,6 +18,8 @@ export type DataControlsSectionProps = {
   conversationMemoryEnabled: boolean;
   setConversationMemoryEnabled: Dispatch<SetStateAction<boolean>>;
   conversationMemoryStorageKey: string;
+  contextCacheId: number | null;
+  setContextCacheId: (id: number | null) => void;
   onClearLocalCache: () => void;
   isDeletingAllConversations: boolean;
   setIsDeletingAllConversations: Dispatch<SetStateAction<boolean>>;
@@ -34,11 +36,51 @@ export function DataControlsSection({
   conversationMemoryEnabled,
   setConversationMemoryEnabled,
   conversationMemoryStorageKey,
+  contextCacheId,
+  setContextCacheId,
   onClearLocalCache,
   isDeletingAllConversations,
   setIsDeletingAllConversations,
   clearAllConversations,
 }: DataControlsSectionProps) {
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
+  const [importStatus, setImportStatus] = useState<string | null>(null);
+
+  const handleImportClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleImportChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] ?? null;
+    event.target.value = "";
+    if (!file) {
+      return;
+    }
+    if (!file.name.toLowerCase().endsWith(".zip")) {
+      setImportStatus(t("Please upload a ChatGPT .zip export."));
+      return;
+    }
+    setIsImporting(true);
+    setImportStatus(null);
+    try {
+      const response = await utilityService.importChatGptMemory(file);
+      setContextCacheId(response.context_cache_id);
+      setImportStatus(
+        t("Imported ChatGPT memory: {conversations} conversations, {messages} messages, {facts} features.", {
+          conversations: response.conversation_count,
+          messages: response.message_count,
+          facts: response.fact_count,
+        })
+      );
+    } catch (error) {
+      console.error("Failed to import ChatGPT memory:", error);
+      setImportStatus(t("Failed to import ChatGPT export. Please try again."));
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
   return (
     <>
       <div className={styles.settingsPageHeader}>
@@ -109,6 +151,47 @@ export function DataControlsSection({
             }}
             label={t("Toggle Conversation memory")}
           />
+        </div>
+
+        <div className={`${styles.settingsRow} ${styles.settingsRowFlexStart}`}>
+          <div className={styles.settingsLabelGroup}>
+            <span className={styles.settingsLabel}>{t("Import ChatGPT memory")}</span>
+            <span className={styles.settingsItemDescription}>
+              {t("Upload your ChatGPT export (.zip) to add memories to Gray.")}
+            </span>
+            {importStatus ? (
+              <span className={styles.settingsItemDescription}>{importStatus}</span>
+            ) : null}
+          </div>
+          <div className={styles.settingsFlexRow}>
+            {contextCacheId ? (
+              <button
+                type="button"
+                className={styles.settingsAction}
+                onClick={() => {
+                  setContextCacheId(null);
+                  setImportStatus(t("ChatGPT memory disabled."));
+                }}
+              >
+                {t("Disable")}
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className={styles.settingsAction}
+              onClick={handleImportClick}
+              disabled={isImporting}
+            >
+              {isImporting ? t("Importing...") : t("Import")}
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".zip,application/zip"
+              onChange={handleImportChange}
+              style={{ display: "none" }}
+            />
+          </div>
         </div>
       </div>
 

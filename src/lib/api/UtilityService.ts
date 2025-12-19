@@ -4,6 +4,7 @@ import type {
     ContextCache,
     ContextCacheBase,
     FileSearchUploadResponse,
+    ChatGptImportResponse,
     WorkspaceBackground,
     WorkspaceBackgroundCreate,
     WorkspaceBackgroundAssetUploadResponse
@@ -106,6 +107,15 @@ export class UtilityService {
         return apiFetch<WorkspaceBackgroundAssetUploadResponse>('/api/workspace-backgrounds/assets', {
             method: 'POST',
             body: formData,
+        });
+    }
+
+    async importChatGptMemory(file: File): Promise<ChatGptImportResponse> {
+        const form = new FormData();
+        form.append('file', file);
+        return apiFetch<ChatGptImportResponse>('/api/imports/chatgpt', {
+            method: 'POST',
+            body: form,
         });
     }
 }

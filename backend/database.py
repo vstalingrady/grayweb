@@ -203,7 +203,13 @@ _db_fetch_val = database.fetch_val
 
 
 def _query_preview(query: Any) -> str:
-    text = str(query or "")
+    if query is None:
+        text = ""
+    else:
+        try:
+            text = str(query)
+        except Exception:
+            text = "<unprintable query>"
     text = " ".join(text.split())
     if len(text) > 240:
         return text[:240] + "..."

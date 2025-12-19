@@ -4,7 +4,7 @@ Calendar and Calendar Events API routes.
 This router handles CRUD operations for calendars and calendar events.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional
 
 import databases
@@ -38,6 +38,20 @@ def _get_reminder_helpers():
         upsert_entity_reminder,
         delete_all_entity_reminders,
     )
+
+
+def _resolve_event_reminder_at(
+    start_time: Optional[datetime],
+    reminder_at: Optional[datetime],
+    reminder_minutes_before: Optional[int],
+) -> Optional[datetime]:
+    if reminder_minutes_before is not None:
+        if reminder_minutes_before < 0:
+            return None
+        if not start_time:
+            return None
+        return start_time - timedelta(minutes=reminder_minutes_before)
+    return reminder_at
 
 
 def _require_calendar_access(current_user: Dict[str, Any]) -> None:
@@ -196,6 +210,11 @@ async def create_calendar_event(
     require_same_user(user_id, current_user)
     _require_calendar_access(current_user)
     now = utcnow()
+    resolved_reminder_at = _resolve_event_reminder_at(
+        event.start_time,
+        event.reminder_at,
+        event.reminder_minutes_before,
+    )
     event_id = await db.execute(
         calendar_events.insert().values(
             user_id=user_id,
@@ -210,12 +229,12 @@ async def create_calendar_event(
             is_completed=event.is_completed,
             recurrence=event.recurrence,
             habit_id=event.habit_id,
-            reminder_at=event.reminder_at,
+            reminder_at=resolved_reminder_at,
             created_at=now,
         )
     )
     
-    if event.reminder_at:
+    if resolved_reminder_at:
         (
             _,
             _upsert_entity_reminder,
@@ -227,7 +246,7 @@ async def create_calendar_event(
             entity_id=int(event_id),
             label=event.title,
             description=event.description,
-            remind_at=event.reminder_at,
+            remind_at=resolved_reminder_at,
             metadata=None,
             color=event.color,
             db=db,
@@ -236,7 +255,7 @@ async def create_calendar_event(
     query = calendar_events.select().where(calendar_events.c.id == event_id)
     result = await db.fetch_one(query)
     record = dict(result)
-    record["reminder_at"] = event.reminder_at
+    record["reminder_at"] = resolved_reminder_at
     return record
 
 
@@ -283,22 +302,38 @@ async def update_calendar_event(
         _upsert_entity_reminder,
         _,
     ) = _get_reminder_helpers()
-    
-    if "reminder_at" in update_data:
-        rem_at = update_data.get("reminder_at")
+
+    should_resolve_reminder = any(
+        key in update_data for key in ("reminder_at", "reminder_minutes_before", "start_time")
+    )
+
+    if should_resolve_reminder:
         recent = await db.fetch_one(calendar_events.select().where(calendar_events.c.id == event_id))
         rec_dict = dict(recent)
+        effective_start_time = update_data.get("start_time", rec_dict.get("start_time"))
+        effective_minutes = update_data.get("reminder_minutes_before", rec_dict.get("reminder_minutes_before"))
+        resolved_reminder_at = _resolve_event_reminder_at(
+            effective_start_time,
+            update_data.get("reminder_at"),
+            effective_minutes,
+        )
         await _upsert_entity_reminder(
             user_id=user_id,
             entity_type="event",
             entity_id=event_id,
             label=rec_dict.get("title", ""),
             description=rec_dict.get("description"),
-            remind_at=rem_at,
+            remind_at=resolved_reminder_at,
             metadata=None,
             color=rec_dict.get("color"),
             db=db,
         )
+        if resolved_reminder_at is not None or "reminder_at" in update_data or "reminder_minutes_before" in update_data:
+            await db.execute(
+                calendar_events.update()
+                .where((calendar_events.c.id == event_id) & (calendar_events.c.user_id == user_id))
+                .values(reminder_at=resolved_reminder_at)
+            )
 
     query = calendar_events.select().where(calendar_events.c.id == event_id)
     updated = await db.fetch_one(query)

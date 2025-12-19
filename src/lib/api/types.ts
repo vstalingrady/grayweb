@@ -266,6 +266,17 @@ export interface ContextCache extends ContextCacheBase {
   created_at: string;
 }
 
+export interface ChatGptImportResponse {
+  context_cache_id: number;
+  label: string;
+  summary_preview: string;
+  conversation_count: number;
+  message_count: number;
+  user_message_count: number;
+  fact_count: number;
+  title_count: number;
+}
+
 export interface GroundingChunkMaps {
   uri?: string;
   title?: string;

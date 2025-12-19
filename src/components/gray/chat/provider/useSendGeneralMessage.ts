@@ -47,6 +47,7 @@ type UseSendGeneralMessageOptions = {
   attachmentsRef: MutableRefObject<MediaUpload[]>;
   resolveChatUser: () => Promise<User | null>;
   workspaceContext: string | null;
+  contextCacheId: number | null;
   shouldAttachWorkspaceContextForSession: (sessionId: string, message: string) => boolean;
   autoWebSearchEnabled: boolean;
   webSearchEnabled: boolean;
@@ -76,6 +77,7 @@ export const useSendGeneralMessage = ({
   attachmentsRef,
   resolveChatUser,
   workspaceContext,
+  contextCacheId,
   shouldAttachWorkspaceContextForSession,
   autoWebSearchEnabled,
   webSearchEnabled,
@@ -203,6 +205,7 @@ export const useSendGeneralMessage = ({
             time_context: timeContext,
             timezone: effectiveTimeZone,
             conversation_memory_enabled: conversationMemoryEnabled,
+            context_cache_id: contextCacheId ?? undefined,
             attachments: attachmentPayloads,
             should_generate_title: shouldGenerateTitle,
             web_search_enabled: shouldUseWebSearch,
@@ -323,6 +326,7 @@ export const useSendGeneralMessage = ({
       attachmentsRef,
       autoWebSearchEnabled,
       clearAttachments,
+      contextCacheId,
       defaultSystemPrompt,
       ensureGeneralSession,
       generalConversationIdRef,

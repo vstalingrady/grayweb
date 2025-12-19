@@ -1,7 +1,103 @@
-import { getSupabaseClient } from "../supabaseClient";
 import { resolveApiBaseUrl } from "./baseUrl";
 import { ApiError, ApiNetworkError } from "./errors";
 import { buildBodyPreview } from "./utils";
+import { getSupabaseAccessToken } from "../auth/supabaseAccessToken";
+
+const stringifyErrorValue = (value: unknown): string | null => {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  if (typeof value === "string") {
+    return value;
+  }
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return null;
+  }
+};
+
+const extractErrorDetail = (detail: unknown): string | null => {
+  if (typeof detail === "string") {
+    return detail;
+  }
+  if (Array.isArray(detail)) {
+    const messages = detail
+      .map((entry) => {
+        if (typeof entry === "string") {
+          return entry;
+        }
+        if (entry && typeof entry === "object") {
+          const record = entry as Record<string, unknown>;
+          const msg =
+            typeof record.msg === "string"
+              ? record.msg
+              : typeof record.message === "string"
+                ? record.message
+                : typeof record.error === "string"
+                  ? record.error
+                  : null;
+          return msg ?? stringifyErrorValue(record);
+        }
+        return stringifyErrorValue(entry);
+      })
+      .filter((value): value is string => Boolean(value && value.trim()));
+    if (messages.length) {
+      return messages.join("; ");
+    }
+  }
+  if (detail && typeof detail === "object") {
+    const record = detail as Record<string, unknown>;
+    const message =
+      typeof record.message === "string"
+        ? record.message
+        : typeof record.error === "string"
+          ? record.error
+          : typeof record.detail === "string"
+            ? record.detail
+            : null;
+    return message ?? stringifyErrorValue(record);
+  }
+  return stringifyErrorValue(detail);
+};
+
+const resolveApiErrorMessage = (errorData: unknown, status: number): string => {
+  if (!errorData) {
+    return `HTTP error! status: ${status}`;
+  }
+  if (typeof errorData === "string") {
+    return errorData;
+  }
+  if (errorData instanceof Error) {
+    return errorData.message;
+  }
+  if (Array.isArray(errorData)) {
+    const arrayMessage = extractErrorDetail(errorData);
+    if (arrayMessage) {
+      return arrayMessage;
+    }
+    return stringifyErrorValue(errorData) ?? `HTTP error! status: ${status}`;
+  }
+  if (typeof errorData === "object") {
+    const record = errorData as Record<string, unknown>;
+    if (Object.keys(record).length === 0) {
+      return `HTTP error! status: ${status}`;
+    }
+    const detailMessage = extractErrorDetail(record.detail);
+    if (detailMessage) {
+      return detailMessage;
+    }
+    const messageCandidate = extractErrorDetail(record.message ?? record.error);
+    if (messageCandidate) {
+      return messageCandidate;
+    }
+    return stringifyErrorValue(record) ?? `HTTP error! status: ${status}`;
+  }
+  return String(errorData);
+};
 
 export const apiFetch = async <T>(endpoint: string, options: RequestInit = {}): Promise<T> => {
   const startTime = performance.now();
@@ -42,19 +138,9 @@ export const apiFetch = async <T>(endpoint: string, options: RequestInit = {}): 
     headers.set("Content-Type", "application/json");
   }
 
-  const supabase = getSupabaseClient();
-  if (supabase) {
-    const { data, error } = await supabase.auth.getSession();
-    if (error) {
-      console.warn("[ApiService] Failed to load auth session:", error);
-    }
-    const token = data.session?.access_token ?? null;
-    if (typeof token === "string" && token.length > 20 && token.split(".").length === 3) {
-      headers.set("Authorization", `Bearer ${token}`);
-    } else if (token) {
-      console.warn("[ApiService] Invalid auth token detected. Clearing session.");
-      await supabase.auth.signOut().catch(() => {});
-    }
+  const accessToken = await getSupabaseAccessToken();
+  if (accessToken) {
+    headers.set("Authorization", `Bearer ${accessToken}`);
   }
 
   const config: RequestInit = {
@@ -63,13 +149,26 @@ export const apiFetch = async <T>(endpoint: string, options: RequestInit = {}): 
   };
 
   try {
-    const response = await fetch(url, config);
+    let response = await fetch(url, config);
+
+    if (response.status === 401) {
+      const refreshedToken = await getSupabaseAccessToken({ forceRefresh: true });
+      if (refreshedToken) {
+        headers.set("Authorization", `Bearer ${refreshedToken}`);
+        response = await fetch(url, config);
+      } else if (headers.has("Authorization")) {
+        headers.delete("Authorization");
+        response = await fetch(url, config);
+      }
+    }
 
     if (!response.ok) {
       if (response.status === 401) {
-        const isUserLookup = endpoint.includes("/users/email/") || endpoint.includes("/users/");
+        const isUserLookup =
+          normalizedEndpoint.includes("/users/email/") || normalizedEndpoint.includes("/users/");
         const isBackgroundFetch =
-          endpoint.includes("/api/conversation/") || endpoint.includes("/proactivity/");
+          normalizedEndpoint.includes("/api/conversation/") ||
+          normalizedEndpoint.includes("/proactivity/");
 
         if (typeof window !== "undefined" && !isUserLookup && !isBackgroundFetch) {
           if (!window.location.pathname.includes("/login")) {
@@ -84,6 +183,7 @@ export const apiFetch = async <T>(endpoint: string, options: RequestInit = {}): 
       }
 
       const errorData = await response.json().catch(() => ({}));
+      const errorMessage = resolveApiErrorMessage(errorData, response.status);
       const responseTime = performance.now() - startTime;
       const upstreamTimeoutStatuses = [520, 521, 522, 523, 524, 525, 526, 527, 598, 599];
       const isUpstreamTimeout = upstreamTimeoutStatuses.includes(response.status);
@@ -106,7 +206,7 @@ export const apiFetch = async <T>(endpoint: string, options: RequestInit = {}): 
             method: config.method ?? "GET",
             status: response.status,
             statusText: response.statusText,
-            errorDetail: (errorData as { detail?: unknown })?.detail ?? null,
+            errorDetail: errorMessage,
             responseTimeMs: responseTime,
             timestamp: new Date().toISOString(),
             eventType: "api_upstream_timeout",
@@ -119,7 +219,7 @@ export const apiFetch = async <T>(endpoint: string, options: RequestInit = {}): 
             method: config.method ?? "GET",
             status: response.status,
             statusText: response.statusText,
-            errorDetail: (errorData as { detail?: unknown })?.detail ?? null,
+            errorDetail: errorMessage,
             responseTimeMs: responseTime,
             contentType: response.headers.get("content-type"),
             timestamp: new Date().toISOString(),
@@ -132,10 +232,7 @@ export const apiFetch = async <T>(endpoint: string, options: RequestInit = {}): 
         throw new ApiNetworkError(`Upstream timeout (${response.status}) while calling ${endpoint}`);
       }
 
-      throw new ApiError(
-        response.status,
-        (errorData as { detail?: string }).detail || `HTTP error! status: ${response.status}`,
-      );
+      throw new ApiError(response.status, errorMessage);
     }
 
     if (response.status === 204) {

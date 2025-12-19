@@ -1,6 +1,6 @@
-import { getSupabaseClient } from "../supabaseClient";
 import { resolveApiBaseUrl } from "./baseUrl";
 import { buildBodyPreview } from "./utils";
+import { getSupabaseAccessToken } from "../auth/supabaseAccessToken";
 import type { ChatRequest, ChatStreamEvent, ChatStreamTiming } from "./types";
 
 export async function* sendChatMessageStream(
@@ -61,32 +61,36 @@ export async function* sendChatMessageStream(
     });
   }
 
-  const headers: HeadersInit = {
+  const headers: Record<string, string> = {
     Accept: "text/event-stream",
     "Content-Type": "application/json",
   };
 
-  const supabase = getSupabaseClient();
-  if (supabase) {
-    const { data, error } = await supabase.auth.getSession();
-    if (error) {
-      console.warn("[ApiService.stream] Failed to load auth session:", error);
-    }
-    const token = data.session?.access_token ?? null;
-    if (typeof token === "string" && token.length > 20 && token.split(".").length === 3) {
-      headers["Authorization"] = `Bearer ${token}`;
-    } else if (token) {
-      console.warn("[ApiService.stream] Invalid auth token detected. Clearing session.");
-      await supabase.auth.signOut().catch(() => {});
-    }
+  const token = await getSupabaseAccessToken();
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
   }
 
-  const response = await fetch(url, {
+  const requestBody = JSON.stringify(request);
+  const requestInit = {
     method: "POST",
     headers,
-    body: JSON.stringify(request),
+    body: requestBody,
     signal: options?.signal,
-  });
+  };
+
+  let response = await fetch(url, requestInit);
+
+  if (response.status === 401 && headers["Authorization"]) {
+    const refreshedToken = await getSupabaseAccessToken({ forceRefresh: true });
+    if (refreshedToken) {
+      headers["Authorization"] = `Bearer ${refreshedToken}`;
+      response = await fetch(url, requestInit);
+    } else {
+      delete headers["Authorization"];
+      response = await fetch(url, requestInit);
+    }
+  }
 
   if (!response.ok) {
     let detail = `HTTP error! status: ${response.status}`;

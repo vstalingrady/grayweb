@@ -594,6 +594,11 @@ from backend.api.context_cache import router as context_cache_router
 
 app.include_router(context_cache_router)
 
+# Import routes
+from backend.api.imports import router as imports_router
+
+app.include_router(imports_router)
+
 # Initialize audit logger with database
 
 from backend.audit_logger import init_audit_logger

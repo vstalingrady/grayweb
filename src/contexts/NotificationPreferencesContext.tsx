@@ -1,12 +1,22 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { useUser } from "@/contexts/UserContext";
 import {
   buildNotificationPreferencesStorageKey,
   clearNotificationPreferences,
   DEFAULT_NOTIFICATION_PREFERENCES,
   loadNotificationPreferences,
+  parseNotificationPreferences,
   saveNotificationPreferences,
   type NotificationPreferences,
 } from "@/lib/notificationPreferences";
@@ -21,17 +31,48 @@ type NotificationPreferencesContextValue = {
 const NotificationPreferencesContext = createContext<NotificationPreferencesContextValue | null>(null);
 
 export function NotificationPreferencesProvider({ children }: { children: ReactNode }) {
-  const { user } = useUser();
+  const { user, updateUser } = useUser();
   const userId = typeof user?.id === "number" ? user.id : null;
   const storageKey = useMemo(() => buildNotificationPreferencesStorageKey(userId), [userId]);
 
   const [notificationPreferences, setNotificationPreferencesState] = useState<NotificationPreferences>(() =>
     loadNotificationPreferences(storageKey)
   );
+  const lastPersistedRef = useRef<NotificationPreferences | null>(null);
+
+  const arePreferencesEqual = useCallback(
+    (a: NotificationPreferences | null | undefined, b: NotificationPreferences | null | undefined) => {
+      if (!a || !b) {
+        return false;
+      }
+      return (
+        a.device === b.device &&
+        a.tasks === b.tasks &&
+        a.proactivity === b.proactivity &&
+        a.calendarEvents === b.calendarEvents
+      );
+    },
+    []
+  );
 
   useEffect(() => {
     setNotificationPreferencesState(loadNotificationPreferences(storageKey));
   }, [storageKey]);
+
+  useEffect(() => {
+    if (!user) {
+      return;
+    }
+    if (!user.notification_preferences) {
+      return;
+    }
+    const parsed = parseNotificationPreferences(user.notification_preferences);
+    if (arePreferencesEqual(parsed, notificationPreferences)) {
+      return;
+    }
+    setNotificationPreferencesState(parsed);
+    saveNotificationPreferences(storageKey, parsed);
+  }, [arePreferencesEqual, notificationPreferences, storageKey, user]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -70,6 +111,24 @@ export function NotificationPreferencesProvider({ children }: { children: ReactN
     clearNotificationPreferences(storageKey);
   }, [storageKey]);
 
+  useEffect(() => {
+    if (!userId || typeof userId !== "number") {
+      return;
+    }
+    const serverPrefs = user?.notification_preferences
+      ? parseNotificationPreferences(user.notification_preferences)
+      : null;
+    if (serverPrefs && arePreferencesEqual(serverPrefs, notificationPreferences)) {
+      lastPersistedRef.current = notificationPreferences;
+      return;
+    }
+    if (lastPersistedRef.current && arePreferencesEqual(lastPersistedRef.current, notificationPreferences)) {
+      return;
+    }
+    lastPersistedRef.current = notificationPreferences;
+    void updateUser({ notification_preferences: notificationPreferences });
+  }, [arePreferencesEqual, notificationPreferences, updateUser, user, userId]);
+
   const value = useMemo(
     () => ({
       notificationPreferences,
@@ -94,4 +153,3 @@ export function useNotificationPreferences() {
   }
   return ctx;
 }
-

@@ -29,6 +29,7 @@ import railNavStyles from "../sidebar/RailNav.module.css";
 import styles from "./SettingsStyles.module.css";
 import { useI18n } from "@/contexts/I18nContext";
 import { useUser } from "@/contexts/UserContext";
+import { useNotificationPreferences } from "@/contexts/NotificationPreferencesContext";
 import { useChatStore } from "@/components/gray/ChatProvider";
 import { clampPercent, getContextUsageUsedTokens, getContextUsageVisualizationLimit } from "@/components/gray/contextUsage";
 import { utilityService, chatService } from "@/lib/api";
@@ -44,15 +45,12 @@ import { PreferencesSection } from "./sections/PreferencesSection";
 import { normalizePlanTier, PLAN_TIER_LEVELS } from "@/components/gray/utils/helperFunctions";
 import {
   API_KEY_PROVIDERS,
-  DEFAULT_NOTIFICATION_PREFERENCES,
-  type NotificationPreferences,
   type SettingsModalProps,
   type SettingsSection,
   type ThemeMode,
 } from "./types";
 
 const THEME_STORAGE_KEY = "gray_theme";
-const NOTIFICATIONS_STORAGE_PREFIX = "gray_notifications";
 const CONVERSATION_MEMORY_STORAGE_PREFIX = "gray_conversation_memory";
 const MODEL_IMPROVEMENT_STORAGE_PREFIX = "gray_model_improvement";
 const API_KEYS_STORAGE_PREFIX = "gray_api_keys";
@@ -78,6 +76,7 @@ export function SettingsModal({
 }: SettingsModalProps) {
   const { t, locale: activeLocale, setLocale } = useI18n();
   const { user, updateUser } = useUser();
+  const { notificationPreferences, setNotificationPreference } = useNotificationPreferences();
   const {
     autoWebSearchEnabled,
     setAutoWebSearchEnabled,
@@ -86,6 +85,8 @@ export function SettingsModal({
     selectedModelId,
     modelTier,
     clearAllConversations,
+    contextCacheId,
+    setContextCacheId,
   } = useChatStore();
   const router = useRouter();
   const resolveSection = (value: string): SettingsSection => {
@@ -106,14 +107,10 @@ export function SettingsModal({
     resolveSection(initialSection)
   );
 
-  const notificationsStorageKey = `${NOTIFICATIONS_STORAGE_PREFIX}:${user?.id ?? "anon"}`;
   const conversationMemoryStorageKey = `${CONVERSATION_MEMORY_STORAGE_PREFIX}:${user?.id ?? "anon"}`;
   const modelImprovementStorageKey = `${MODEL_IMPROVEMENT_STORAGE_PREFIX}:${user?.id ?? "anon"}`;
   const apiKeysStorageKey = `${API_KEYS_STORAGE_PREFIX}:${user?.id ?? "anon"}`;
 
-  const [notificationPreferences, setNotificationPreferences] = useState<NotificationPreferences>(
-    DEFAULT_NOTIFICATION_PREFERENCES
-  );
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | "unsupported">(
     "unsupported"
   );
@@ -294,21 +291,6 @@ export function SettingsModal({
     }
 
     if (typeof window !== "undefined") {
-      try {
-        const storedPrefs = window.localStorage.getItem(notificationsStorageKey);
-        if (storedPrefs) {
-          const parsed = JSON.parse(storedPrefs) as Partial<NotificationPreferences>;
-          setNotificationPreferences({
-            ...DEFAULT_NOTIFICATION_PREFERENCES,
-            ...parsed,
-          });
-        } else {
-          setNotificationPreferences(DEFAULT_NOTIFICATION_PREFERENCES);
-        }
-      } catch {
-        setNotificationPreferences(DEFAULT_NOTIFICATION_PREFERENCES);
-      }
-
       if (typeof Notification !== "undefined") {
         setNotificationPermission(Notification.permission);
       } else {
@@ -349,7 +331,6 @@ export function SettingsModal({
   }, [
     conversationMemoryStorageKey,
     modelImprovementStorageKey,
-    notificationsStorageKey,
     isOpen,
     user?.improve_model_for_everyone,
     onClose,
@@ -389,23 +370,6 @@ export function SettingsModal({
   const handleDeleteAccount = () => {
     onClose();
     router.push("/delete-account");
-  };
-
-  const setNotificationPreference = (
-    key: keyof NotificationPreferences,
-    value: boolean
-  ) => {
-    setNotificationPreferences((current) => {
-      const next = { ...current, [key]: value };
-      if (typeof window !== "undefined") {
-        try {
-          window.localStorage.setItem(notificationsStorageKey, JSON.stringify(next));
-        } catch {
-          // ignore storage failures
-        }
-      }
-      return next;
-    });
   };
 
   const handleToggleDeviceNotifications = async () => {
@@ -946,6 +910,8 @@ export function SettingsModal({
               conversationMemoryEnabled={conversationMemoryEnabled}
               setConversationMemoryEnabled={setConversationMemoryEnabled}
               conversationMemoryStorageKey={conversationMemoryStorageKey}
+              contextCacheId={contextCacheId}
+              setContextCacheId={setContextCacheId}
               onClearLocalCache={handleClearLocalCache}
               isDeletingAllConversations={isDeletingAllConversations}
               setIsDeletingAllConversations={setIsDeletingAllConversations}

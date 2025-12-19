@@ -34,25 +34,25 @@ export class CalendarService {
 
     async getCalendarEvents(userId: number, calendarId?: number): Promise<CalendarEvent[]> {
         const query = calendarId ? `?calendar_id=${calendarId}` : '';
-        return apiFetch<CalendarEvent[]>(`users/${userId}/calendar-events${query}`);
+        return apiFetch<CalendarEvent[]>(`/users/${userId}/calendar-events${query}`);
     }
 
     async createCalendarEvent(userId: number, event: Partial<CalendarEvent>): Promise<CalendarEvent> {
-        return apiFetch<CalendarEvent>(`users/${userId}/calendar-events`, {
+        return apiFetch<CalendarEvent>(`/users/${userId}/calendar-events`, {
             method: 'POST',
             body: JSON.stringify(event),
         });
     }
 
     async updateCalendarEvent(userId: number, eventId: number, event: Partial<CalendarEvent>): Promise<CalendarEvent> {
-        return apiFetch<CalendarEvent>(`users/${userId}/calendar-events/${eventId}`, {
+        return apiFetch<CalendarEvent>(`/users/${userId}/calendar-events/${eventId}`, {
             method: 'PATCH',
             body: JSON.stringify(event),
         });
     }
 
     async deleteCalendarEvent(userId: number, eventId: number): Promise<void> {
-        await apiFetch<void>(`users/${userId}/calendar-events/${eventId}`, {
+        await apiFetch<void>(`/users/${userId}/calendar-events/${eventId}`, {
             method: 'DELETE',
         });
     }

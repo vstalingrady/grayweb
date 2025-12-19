@@ -483,6 +483,7 @@ function GrayPageClientInner({
     }
     return activeNav === "history" && baseViewMode !== "chat" ? "history" : null;
   });
+  const [mobilePulseActive, setMobilePulseActive] = useState(false);
 
   const viewMode: ViewMode =
     baseViewMode === "chat"
@@ -490,7 +491,10 @@ function GrayPageClientInner({
       : manualViewMode ?? (activeNav === "history" ? "history" : baseViewMode);
 
   const handleMobileHeaderSelectChat = useCallback(() => {
-    setManualViewMode(null);
+    setMobilePulseActive(false);
+    if (isMobileViewport) {
+      setManualViewMode("chat");
+    }
     if (pathname !== "/") {
       router.push("/");
     }
@@ -500,9 +504,12 @@ function GrayPageClientInner({
   }, [collapseAllSidebars, isMobileViewport, pathname, router]);
 
   const handleMobileHeaderSelectPulse = useCallback(() => {
-    setManualViewMode(null);
-    if (pathname !== "/pulse") {
-      router.push("/pulse");
+    setMobilePulseActive(true);
+    if (isMobileViewport) {
+      setManualViewMode(null);
+    }
+    if (pathname !== "/") {
+      router.push("/");
     }
     if (isMobileViewport) {
       collapseAllSidebars();
@@ -515,48 +522,50 @@ function GrayPageClientInner({
       (pathname?.startsWith("/c/") ?? false) ||
       pathname === "/g" ||
       (pathname?.startsWith("/g/") ?? false));
+
+  const renderDashboardSurface = () => (
+    <GrayDashboardView
+      pulseEntries={pulseEntries}
+      currentPulse={activePulse}
+      isCurrentPulseEditable={isActivePulseEditable}
+      onSelectPulse={setActivePulseId}
+      proactivityFallback={proactivity}
+      onProactivitySelect={selectProactivityPreset}
+      onProactivityRemove={removeProactivity}
+      onTestProactivity={handleTestProactivity}
+      onTogglePlan={togglePlan}
+      onToggleHabit={toggleHabit}
+      onSavePlan={savePlan}
+      onDeletePlan={deletePlan}
+      activeTab={dashboardTab}
+      onSelectTab={setDashboardTab}
+      currentDate={now}
+      calendars={derivedCalendars}
+      onCalendarsChange={handleCalendarsChange}
+      calendarEvents={derivedEvents}
+      onCalendarEventsChange={handleEventsChange}
+      calendarSelectedDate={calendarSelectedDate}
+      onCalendarSelectedDateChange={setCalendarSelectedDate}
+      onEditHabit={editHabit}
+      onDeleteHabit={deleteHabit}
+      onIntegrationAction={handleCalendarIntegration}
+      onRefreshData={refreshPlansAndHabits}
+      onCreatePlan={handleCreatePlan}
+      onCreateHabit={handleCreateHabit}
+      chatBar={null}
+      isCompactLayout={isCompactLayout}
+      userId={userId}
+      proactivityDeliveryKeys={deliveredProactivityKeys}
+      onUpgradeClick={handleUpgradePlan}
+      showUpgradeButton={shouldShowUpgradeButton}
+    />
+  );
+
   const renderPrimaryView = () => {
     if (isDashboardView) {
-      return (
-        <GrayDashboardView
-          pulseEntries={pulseEntries}
-          currentPulse={activePulse}
-          isCurrentPulseEditable={isActivePulseEditable}
-          onSelectPulse={setActivePulseId}
-          proactivityFallback={proactivity}
-          onProactivitySelect={selectProactivityPreset}
-          onProactivityRemove={removeProactivity}
-          onTestProactivity={handleTestProactivity}
-          onTogglePlan={togglePlan}
-          onToggleHabit={toggleHabit}
-          onSavePlan={savePlan}
-          onDeletePlan={deletePlan}
-          activeTab={dashboardTab}
-          onSelectTab={setDashboardTab}
-          currentDate={now}
-          calendars={derivedCalendars}
-          onCalendarsChange={handleCalendarsChange}
-          calendarEvents={derivedEvents}
-          onCalendarEventsChange={handleEventsChange}
-          calendarSelectedDate={calendarSelectedDate}
-          onCalendarSelectedDateChange={setCalendarSelectedDate}
-          onEditHabit={editHabit}
-          onDeleteHabit={deleteHabit}
-          onIntegrationAction={handleCalendarIntegration}
-          onRefreshData={refreshPlansAndHabits}
-          onCreatePlan={handleCreatePlan}
-          onCreateHabit={handleCreateHabit}
-          chatBar={null}
-          isCompactLayout={isCompactLayout}
-          userId={userId}
-          proactivityDeliveryKeys={deliveredProactivityKeys}
-          onUpgradeClick={handleUpgradePlan}
-          showUpgradeButton={shouldShowUpgradeButton}
-        />
-      );
+      return renderDashboardSurface();
     }
     if (isChatView) {
-
       return (
         <GrayChatView
           sessionId={currentChatId ?? null}
@@ -662,6 +671,9 @@ function GrayPageClientInner({
   };
 
   useEffect(() => {
+    if (!isMobileViewport && manualViewMode && manualViewMode !== "history") {
+      setManualViewMode(null);
+    }
     if (baseViewMode === "chat") {
       return;
     }
@@ -1302,6 +1314,8 @@ function GrayPageClientInner({
       />
     ) : null;
 
+  const mobileSurfaceView = mobilePulseActive ? "pulse" : "chat";
+
   return (
     <>
       <div
@@ -1315,7 +1329,7 @@ function GrayPageClientInner({
         {isMounted ? (
           <GrayMobileHeader
             isSidebarExpanded={sidebarExpandedForLayout}
-            isPulseActive={isPulseRoute}
+            isPulseActive={isMobileViewport ? mobilePulseActive : isPulseRoute}
             onToggleSidebar={toggleSidebarExpandedForLayout}
             onSelectChat={handleMobileHeaderSelectChat}
             onSelectPulse={handleMobileHeaderSelectPulse}
@@ -1384,7 +1398,23 @@ function GrayPageClientInner({
               {/* Centered Transparent Logo (mobile only; hidden on desktop via CSS) */}
 
 
-              {isDashboardView ? renderPrimaryView() : renderMainSurface()}
+              {isMobileViewport ? (
+                <div
+                  className={pageStyles.mobileSurfaceSwitcher}
+                  data-active={mobileSurfaceView}
+                >
+                  <div className={pageStyles.mobileSurfacePane} data-pane="chat">
+                    {renderMainSurface()}
+                  </div>
+                  <div className={pageStyles.mobileSurfacePane} data-pane="pulse">
+                    {renderDashboardSurface()}
+                  </div>
+                </div>
+              ) : isDashboardView ? (
+                renderPrimaryView()
+              ) : (
+                renderMainSurface()
+              )}
               {isMounted && viewMode === "general" ? (
                 <div className={composerStyles.chatComposerDock} data-surface="threads">
                   <div className={composerStyles.chatAttachmentTopTray}>{generalAttachmentTray}</div>

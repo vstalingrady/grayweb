@@ -17,6 +17,7 @@ import { useI18n } from "@/contexts/I18nContext";
 import { useNotificationPreferences } from "@/contexts/NotificationPreferencesContext";
 import { buildGeneralConversationId, normalizeAssistantMessage, parseGrayTitleMarkers } from "./chat/utils";
 import { mapApiMessagesToChatMessages } from "./chat/provider/sessionStore";
+import { getSupabaseAccessToken } from "@/lib/auth/supabaseAccessToken";
 
 type ProactivityNotificationContextValue = {
   deliveredKeys: ReadonlySet<string>;
@@ -56,17 +57,7 @@ export function ProactivityNotificationProvider({ children }: ProactivityNotific
     sessionsRef.current = sessions;
   }, [sessions]);
   const getAuthToken = useCallback(async (): Promise<string | null> => {
-    const { getSupabaseClient } = await import("@/lib/supabaseClient");
-    const supabase = getSupabaseClient();
-    if (!supabase) {
-      return null;
-    }
-    const { data, error } = await supabase.auth.getSession();
-    if (error) {
-      console.warn("[Proactivity] Failed to get auth session:", error);
-      return null;
-    }
-    return data.session?.access_token ?? null;
+    return getSupabaseAccessToken();
   }, []);
 
   const hydrateGeneralHistory = useCallback(async () => {

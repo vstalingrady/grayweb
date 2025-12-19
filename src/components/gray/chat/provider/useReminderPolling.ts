@@ -3,6 +3,7 @@ import { workspaceService, isApiNetworkError, type Reminder } from "@/lib/api";
 import { REMINDER_POLL_MIN_INTERVAL, REMINDER_POLL_SHORT_INTERVAL } from "../constants";
 import type { ChatContextValue } from "../types";
 import { buildReminderPingMessage, sendReminderNotification } from "./reminderNotifications";
+import { useNotificationPreferences } from "@/contexts/NotificationPreferencesContext";
 
 type UseReminderPollingOptions = {
   userId: number | undefined;
@@ -27,6 +28,7 @@ export const useReminderPolling = ({
   appendMessage,
 }: UseReminderPollingOptions) => {
   const reminderDeliveryCacheRef = useRef<Set<number>>(new Set());
+  const { notificationPreferences } = useNotificationPreferences();
 
   useEffect(() => {
     if (!userId || !generalSessionId) {
@@ -89,7 +91,16 @@ export const useReminderPolling = ({
 
           if (!isStale) {
             appendMessage(generalSessionId, "assistant", buildReminderPingMessage(reminder));
-            sendReminderNotification(reminder);
+            const deliveryMode = (reminder.delivery_mode || reminder.entity_type || "").toLowerCase();
+            const isCalendarReminder = deliveryMode === "event";
+            const isTaskReminder = !isCalendarReminder;
+            if (
+              notificationPreferences.device &&
+              ((isCalendarReminder && notificationPreferences.calendarEvents) ||
+                (isTaskReminder && notificationPreferences.tasks))
+            ) {
+              sendReminderNotification(reminder);
+            }
           }
 
           try {
@@ -123,6 +134,5 @@ export const useReminderPolling = ({
         clearTimeout(timeoutId);
       }
     };
-  }, [appendMessage, generalSessionId, userId]);
+  }, [appendMessage, generalSessionId, notificationPreferences, userId]);
 };
-
