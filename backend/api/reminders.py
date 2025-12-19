@@ -194,11 +194,12 @@ async def update_user_reminder(
     try:
         reminder_scheduler = _get_reminder_scheduler()
         if reminder_scheduler:
-            normalized_status = (update_values.get("status") or existing.get("status") or "").strip().lower()
+            existing_dict = dict(existing)
+            normalized_status = (update_values.get("status") or existing_dict.get("status") or "").strip().lower()
             if normalized_status != "pending":
                 await reminder_scheduler.cancel_job(user_id=user_id, reminder_id=reminder_id)
             else:
-                remind_at_value = update_values.get("remind_at") or existing.get("remind_at")
+                remind_at_value = update_values.get("remind_at") or existing_dict.get("remind_at")
                 if isinstance(remind_at_value, str):
                     try:
                         remind_at_value = datetime.fromisoformat(remind_at_value.replace("Z", "+00:00"))
