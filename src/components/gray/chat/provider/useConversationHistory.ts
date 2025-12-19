@@ -85,17 +85,15 @@ export const useConversationHistory = ({
 
   // Hydrate the General workspace (`/g`) from Supabase-backed history so that
   // existing `general_chat_messages` rows render as the canonical General chat.
+  // On the dashboard and other routes, we also want to load the general chat
+  // history to show the full conversation including past messages.
   useEffect(() => {
     const general = sessionsRef.current.find((session) => session.scope === "general");
-    const generalHasMessages = Boolean(general?.messages && general.messages.length > 0);
 
-    // Reset hydration flag if we're on /g but the session has no messages
-    // This handles page refreshes where the session state is lost
-    if (pathname === "/g" && !generalHasMessages) {
-      generalHistoryHydratedRef.current = false;
-    }
-
-    if (!general || !userId || pathname !== "/g" || generalHistoryHydratedRef.current || generalHasMessages) {
+    // We now always try to hydrate if we haven't yet and we have a userId
+    // This ensures that even if local storage has some messages (like a proactivity
+    // message injected via SSE), we still load the full history from the backend.
+    if (!general || !userId || generalHistoryHydratedRef.current) {
       return;
     }
 
@@ -109,6 +107,8 @@ export const useConversationHistory = ({
       try {
         const history = await chatService.getConversation(generalConversationId);
         if (cancelled || !Array.isArray(history) || history.length === 0) {
+          // Still mark as hydrated to prevent repeated empty fetches
+          generalHistoryHydratedRef.current = true;
           return;
         }
 
@@ -116,6 +116,7 @@ export const useConversationHistory = ({
         const mapped = mapApiMessagesToChatMessages(history, generalConversationId, now);
 
         if (!mapped.length) {
+          generalHistoryHydratedRef.current = true;
           return;
         }
 
@@ -125,9 +126,10 @@ export const useConversationHistory = ({
             return prev;
           }
           const current = prev[index];
-          if (current.messages && current.messages.length > 0) {
-            return prev;
-          }
+
+          // Always replace with server data since the backend is the source of truth.
+          // This fixes the issue where only proactivity messages showed after refresh
+          // because local storage had fewer messages than the database.
           const updated: ChatSession = {
             ...current,
             conversationId: generalConversationId,
@@ -144,6 +146,8 @@ export const useConversationHistory = ({
         generalHistoryHydratedRef.current = true;
       } catch (error) {
         console.error("Failed to load general conversation history:", error);
+        // Mark as hydrated even on error to prevent infinite retry loops
+        generalHistoryHydratedRef.current = true;
       }
     };
 
@@ -151,7 +155,8 @@ export const useConversationHistory = ({
     return () => {
       cancelled = true;
     };
-  }, [pathname, persistSessions, setSessions, sessionsRef, userId]);
+  }, [persistSessions, setSessions, sessionsRef, userId]);
+
 
   return { loadConversationMessages };
 };

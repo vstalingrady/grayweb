@@ -188,9 +188,6 @@ export function HistoryOverlay({
                                     setActiveIndex(0);
                                 }}
                             />
-                            <div className={styles.keyHint}>
-                                <span className={styles.key}>Esc</span>
-                            </div>
                         </div>
 
                         <div className={styles.scrollArea}>
@@ -307,17 +304,7 @@ export function HistoryOverlay({
                             )}
                         </div>
 
-                        <div className={styles.footer}>
-                            <div className={styles.keyHint}>
-                                <span className={styles.key}>↑</span>
-                                <span className={styles.key}>↓</span>
-                                {t("to navigate")}
-                            </div>
-                            <div className={styles.keyHint}>
-                                <span className={styles.key}>↵</span>
-                                {t("to select")}
-                            </div>
-                        </div>
+
                     </motion.div>
                 </motion.div>
             )}

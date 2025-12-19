@@ -408,15 +408,15 @@ export function GrayDashboardView({
   const pulseContent = (
     <>
       {proactivityModal}
-      <DashboardHeader
-        activeTab={activeTab}
-        onSelectTab={onSelectTab}
-        className={headerClassName}
-        onUpgradeClick={onUpgradeClick}
-        showUpgradeButton={showUpgradeButton}
-        showTabs={!isScout}
-      />
       <div className={styles.dashboardViewScrollContainer}>
+        <DashboardHeader
+          activeTab={activeTab}
+          onSelectTab={onSelectTab}
+          className={headerClassName}
+          onUpgradeClick={onUpgradeClick}
+          showUpgradeButton={showUpgradeButton}
+          showTabs={!isScout}
+        />
         <DashboardPulseGrid
           currentDate={currentDate}
           viewerName={user?.full_name ?? null}
@@ -564,8 +564,8 @@ export function GrayDashboardView({
             className={dashboardSurfaceClassName}
             data-compact={isCompactLayout ? "true" : "false"}
           >
-          {surfaceContent}
-        </div>
+            {surfaceContent}
+          </div>
           {isCompactLayout || activeTab !== "calendar" ? null : (
             <div
               className={styles.dashboardCalendarResizeHandle}
