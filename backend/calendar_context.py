@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 from datetime import datetime, time, timedelta, timezone, tzinfo
-from typing import Any, Dict, Mapping, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from backend.database import calendars, calendar_events
@@ -64,8 +64,20 @@ def _resolve_timezone(user_timezone: Optional[str], time_context: Optional[str])
 
 
 def _row_get(row: Any, key: str) -> Any:
-    if isinstance(row, Mapping):
-        return row.get(key)
+    if row is None:
+        return None
+    getter = getattr(row, "get", None)
+    if callable(getter):
+        try:
+            return getter(key)
+        except Exception:
+            pass
+    mapping = getattr(row, "_mapping", None)
+    if mapping is not None:
+        try:
+            return mapping[key]
+        except (KeyError, TypeError):
+            return None
     try:
         return row[key]
     except (KeyError, IndexError, TypeError):
