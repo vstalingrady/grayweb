@@ -54,10 +54,6 @@ export default function LoginForm({
   const { t } = useI18n();
   const router = useRouter();
   const [isLightTheme, setIsLightTheme] = useState(false);
-  const [isMounted, setIsMounted] = useState(false);
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
 
   useEffect(() => {
     if (typeof document === "undefined") {

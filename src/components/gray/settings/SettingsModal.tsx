@@ -77,7 +77,7 @@ export function SettingsModal({
   contextUsage = null,
 }: SettingsModalProps) {
   const { t, locale: activeLocale, setLocale } = useI18n();
-  const { user, updateUser, refreshUser } = useUser();
+  const { user, updateUser } = useUser();
   const {
     autoWebSearchEnabled,
     setAutoWebSearchEnabled,

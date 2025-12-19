@@ -1,6 +1,6 @@
 "use client";
 
-import { Check } from "lucide-react";
+import { Check, Trash2 } from "lucide-react";
 import styles from "../SettingsStyles.module.css";
 import { SettingsToggle } from "@/components/gray/settings/components/SettingsToggle";
 import { SettingsSelect } from "@/components/gray/settings/components/SettingsSelect";

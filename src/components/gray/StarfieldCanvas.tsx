@@ -227,7 +227,7 @@ export function StarfieldCanvas({
         window.cancelAnimationFrame(state.animationFrameId);
       }
     };
-  }, [density, maxStars, minStars, speed, rgbTriplet, orbitMode, trailLength]);
+  }, [density, maxStars, minStars, speed, rgbTriplet, orbitMode, trailLength, respectReducedMotion]);
 
   return <canvas ref={canvasRef} className={className} aria-hidden="true" />;
 }

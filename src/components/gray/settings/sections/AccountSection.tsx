@@ -19,6 +19,46 @@ export type AccountSectionProps = {
   onDeleteAccount: () => void;
 };
 
+const parseExpiryDate = (value?: string | null): Date | null => {
+  if (!value) {
+    return null;
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+  const hasTimezone = /[zZ]$|[+-]\d{2}:\d{2}$/.test(trimmed);
+  const normalized = hasTimezone ? trimmed : `${trimmed}Z`;
+  const parsed = new Date(normalized);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const buildRenewalLabel = (currentUser: User | null): string => {
+  const expiresAt = parseExpiryDate(currentUser?.subscription_expires_at);
+  if (!expiresAt) {
+    return "Next payment date unavailable.";
+  }
+
+  const now = new Date();
+  const diffMs = expiresAt.getTime() - now.getTime();
+  const dayMs = 24 * 60 * 60 * 1000;
+  const daysRemaining = Math.ceil(diffMs / dayMs);
+
+  const formattedDate = new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(expiresAt);
+
+  if (daysRemaining <= 0) {
+    return `Renews today (${formattedDate}).`;
+  }
+  if (daysRemaining === 1) {
+    return `Renews in 1 day (${formattedDate}).`;
+  }
+  return `Renews in ${daysRemaining} days (${formattedDate}).`;
+};
+
 export function AccountSection({
   t,
   user,
@@ -30,46 +70,6 @@ export function AccountSection({
   onNavigateToPricing,
   onDeleteAccount,
 }: AccountSectionProps) {
-  const parseExpiryDate = (value?: string | null): Date | null => {
-    if (!value) {
-      return null;
-    }
-    const trimmed = value.trim();
-    if (!trimmed) {
-      return null;
-    }
-    const hasTimezone = /[zZ]$|[+-]\d{2}:\d{2}$/.test(trimmed);
-    const normalized = hasTimezone ? trimmed : `${trimmed}Z`;
-    const parsed = new Date(normalized);
-    return Number.isNaN(parsed.getTime()) ? null : parsed;
-  };
-
-  const buildRenewalLabel = (currentUser: User | null): string => {
-    const expiresAt = parseExpiryDate(currentUser?.subscription_expires_at);
-    if (!expiresAt) {
-      return "Next payment date unavailable.";
-    }
-
-    const now = Date.now();
-    const diffMs = expiresAt.getTime() - now;
-    const dayMs = 24 * 60 * 60 * 1000;
-    const daysRemaining = Math.ceil(diffMs / dayMs);
-
-    const formattedDate = new Intl.DateTimeFormat(undefined, {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    }).format(expiresAt);
-
-    if (daysRemaining <= 0) {
-      return `Renews today (${formattedDate}).`;
-    }
-    if (daysRemaining === 1) {
-      return `Renews in 1 day (${formattedDate}).`;
-    }
-    return `Renews in ${daysRemaining} days (${formattedDate}).`;
-  };
-
   return (
     <>
       <div className={styles.settingsPageHeader}>

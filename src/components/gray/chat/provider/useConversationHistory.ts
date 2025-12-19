@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, type MutableRefObject, type SetStateAction } from "react";
-import { usePathname } from "next/navigation";
 import { chatService } from "@/lib/api";
 import type { ChatSession } from "../types";
 import { buildGeneralConversationId, normalizeConversationIdValue } from "../utils";
@@ -24,7 +23,6 @@ export const useConversationHistory = ({
   persistSessions,
   userId,
 }: UseConversationHistoryOptions): UseConversationHistoryResult => {
-  const pathname = usePathname();
   const generalHistoryHydratedRef = useRef(false);
   const generalHistoryHydratingRef = useRef(false);
   const generalHistoryRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
