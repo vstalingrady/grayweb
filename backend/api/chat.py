@@ -201,7 +201,7 @@ async def chat_route(
 
         # If user requested reasoning but is not eligible, disable it silently (or we could raise 403)
         effective_reasoning_mode = chat_request.reasoning_mode
-        if effective_reasoning_mode and normalized_tier not in ("voyager", "pioneer"):
+        if effective_reasoning_mode and normalized_tier not in ("pathfinder", "voyager", "pioneer"):
             api_logger.info(f"Disabling reasoning mode for user {chat_request.user_id} (tier: {normalized_tier})")
             effective_reasoning_mode = False
 
@@ -445,7 +445,7 @@ async def chat_stream_route(
 
         effective_model, model_coerced = coerce_model_for_tier(chat_request.model, normalized_tier)
         effective_reasoning_mode = chat_request.reasoning_mode
-        if effective_reasoning_mode and normalized_tier not in ("voyager", "pioneer"):
+        if effective_reasoning_mode and normalized_tier not in ("pathfinder", "voyager", "pioneer"):
             effective_reasoning_mode = False
 
         async def event_stream() -> AsyncGenerator[str, None]:
