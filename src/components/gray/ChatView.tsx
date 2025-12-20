@@ -78,9 +78,9 @@ export function GrayChatView({
     webSearchEnabled,
     loadConversationMessages,
     sendGeneralMessage,
+    reasoningMode,
     modelTier,
     selectedModelId,
-    reasoningMode,
   } = useChatStore();
   // Use sessions state directly for reactivity.
   const session = useMemo(() => {
@@ -662,6 +662,7 @@ export function GrayChatView({
             handleEditMessage={handleEditMessage}
             shouldShowPendingStreamIndicator={shouldShowPendingStreamIndicator}
             scrollAnchorRef={scrollAnchorRef}
+            reasoningMode={reasoningMode}
             reasoningSeconds={reasoningSeconds}
             isResponding={session?.isResponding}
             isActivelyThinking={isActivelyThinking}

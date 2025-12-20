@@ -214,6 +214,7 @@ function GrayPageClientInner({
   const supportsInlineChat = variant !== "chat";
   const [currentChatId, setCurrentChatId] = useState<string | null>(() => activeChatId ?? null);
   const ensureSessionRef = useRef(ensureSession);
+  const generalOnboardingKickoffRef = useRef(false);
   const { deliveredKeys: deliveredProactivityKeys } = useProactivityNotifications();
   const lastDeletedChatIdStorageKey = "gray:lastDeletedChatId";
 
@@ -739,28 +740,42 @@ function GrayPageClientInner({
     return renderPrimaryView();
   };
 
-  const renderMobileChatSurface = () => (
-    <div
-      className={pageStyles.mainContent}
-      data-view="general"
-      data-compact={isCompactLayout ? "true" : "false"}
-    >
-      <div className={chatStyles.mobileWelcomeScreen} aria-hidden="true">
-        <div className={chatStyles.mobileWelcomeContent}>
-          <div className={chatStyles.mobileWelcomeLogo}>
-            <Image
-              src="/grayaiwhitenotspinning.svg"
-              alt=""
-              width={40}
-              height={40}
-              className="uiIconImage"
-            />
+  const renderMobileChatSurface = () => {
+    if (viewMode === "chat") {
+      return (
+        <div
+          className={pageStyles.mainContent}
+          data-view="chat"
+          data-compact={isCompactLayout ? "true" : "false"}
+        >
+          {renderPrimaryView()}
+        </div>
+      );
+    }
+
+    return (
+      <div
+        className={pageStyles.mainContent}
+        data-view="general"
+        data-compact={isCompactLayout ? "true" : "false"}
+      >
+        <div className={chatStyles.mobileWelcomeScreen} aria-hidden="true">
+          <div className={chatStyles.mobileWelcomeContent}>
+            <div className={chatStyles.mobileWelcomeLogo}>
+              <Image
+                src="/grayaiwhitenotspinning.svg"
+                alt=""
+                width={40}
+                height={40}
+                className="uiIconImage"
+              />
+            </div>
+            <p className={chatStyles.mobileWelcomeGreeting}>Ready when you are.</p>
           </div>
-          <p className={chatStyles.mobileWelcomeGreeting}>Ready when you are.</p>
         </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   useEffect(() => {
     if (!isMobileViewport && manualViewMode && manualViewMode !== "history") {
@@ -1002,6 +1017,43 @@ function GrayPageClientInner({
       setCurrentChatId(generalSessionId);
     }
   }, [activeNav, currentChatId, generalSessionId]);
+
+  useEffect(() => {
+    if (generalOnboardingKickoffRef.current) {
+      return;
+    }
+    if (!remoteConversationsLoaded || userLoading || isAnonymousUser || !user) {
+      return;
+    }
+    if (user.has_seen_general_chat || isUsageLimitReached) {
+      return;
+    }
+    if (viewMode !== "chat") {
+      return;
+    }
+    const generalSession = sessions.find((session) => session.scope === "general");
+    if (!generalSession) {
+      return;
+    }
+    if (currentChatId && generalSession.id !== currentChatId) {
+      return;
+    }
+    if (generalSession.isResponding || generalSession.messages.length > 0) {
+      return;
+    }
+    generalOnboardingKickoffRef.current = true;
+    void sendGeneralMessage("Let's get started.");
+  }, [
+    currentChatId,
+    isAnonymousUser,
+    isUsageLimitReached,
+    remoteConversationsLoaded,
+    sendGeneralMessage,
+    sessions,
+    user,
+    userLoading,
+    viewMode,
+  ]);
 
   /**
    * Synchronize currentChatId with /c/[chatId] when in full-page chat mode.

@@ -313,6 +313,7 @@ users = sqlalchemy.Table(
     sqlalchemy.Column("plan_tier", sqlalchemy.String, nullable=True),
     sqlalchemy.Column("subscription_expires_at", sqlalchemy.DateTime, nullable=True),  # When subscription expires
     sqlalchemy.Column("has_seen_general_chat", sqlalchemy.Boolean, default=False),
+    sqlalchemy.Column("onboarding_completed", sqlalchemy.Boolean, default=False),
     sqlalchemy.Column("daily_token_usage", sqlalchemy.Integer, default=0),
     sqlalchemy.Column("monthly_cost_usage", sqlalchemy.Float, default=0.0),
     sqlalchemy.Column("weekly_cost_usage", sqlalchemy.Float, default=0.0),

@@ -148,6 +148,17 @@ async def complete_onboarding(
 
     updates: Dict[str, Any] = {"updated_at": utcnow()}
     updates["has_seen_general_chat"] = True
+    
+    # Calculate if onboarding is fully complete (all personalization fields present)
+    def _is_present(value: Optional[str]) -> bool:
+        return bool((value or "").strip())
+
+    onboarding_complete = all(
+        _is_present(value) for value in (effective_nickname, effective_occupation, effective_about)
+    )
+    if onboarding_complete:
+        updates["onboarding_completed"] = True
+
     if nickname is not None:
         updates["personalization_nickname"] = nickname
     if occupation is not None:
@@ -244,12 +255,6 @@ async def complete_onboarding(
                         },
                     )
 
-    def _is_present(value: Optional[str]) -> bool:
-        return bool((value or "").strip())
-
-    onboarding_complete = all(
-        _is_present(value) for value in (effective_nickname, effective_occupation, effective_about)
-    )
     if onboarding_complete:
         return {"status": "success"}
 

@@ -118,7 +118,12 @@ def _resolve_plan_from_product_id(product_id: Optional[str]) -> Tuple[Optional[s
         parts = key.split("_")
         if len(parts) < 4:
             continue
-        return parts[2].lower(), parts[3].lower()
+        tier = parts[2].lower()
+        cycle = parts[3].lower()
+        if cycle == "monthly":
+            return tier, "monthly"
+        if cycle == "annual":
+            return tier, "annual"
     return None, None
 
 
@@ -319,9 +324,13 @@ async def _create_dodo_checkout(request: PaymentRequest, user: Dict[str, Any]) -
         "product_cart": [{"product_id": product_id, "quantity": 1}],
         "metadata": metadata,
         "allowed_payment_method_types": _get_dodo_allowed_payment_methods(),
+        "feature_flags": {
+            "allow_customer_editing_name": True,
+            "always_create_new_customer": True,
+        },
     }
     if email:
-        checkout_args["customer"] = {"email": email, "name": full_name or "User"}
+        checkout_args["customer"] = {"email": email}
     return_url = _get_dodo_return_url(request)
     if return_url:
         checkout_args["return_url"] = return_url
@@ -642,7 +651,23 @@ async def handle_dodo_webhook(request: Request, background_tasks: BackgroundTask
         )
         previous_status = existing_transaction["status"] if existing_transaction else None
 
-    if event_type in ("payment.succeeded", "payment.success"):
+    subscription_status = None
+    if event_type in ("subscription.updated", "subscription.created") and isinstance(data, dict):
+        subscription_status = (data.get("status") or "").strip().lower() or None
+
+    subscription_success_states = {"active", "trialing", "paid", "succeeded", "success"}
+    subscription_failure_states = {"failed", "canceled", "cancelled"}
+
+    is_subscription_success = (
+        event_type in ("subscription.updated", "subscription.created")
+        and subscription_status in subscription_success_states
+    )
+    is_subscription_failure = (
+        event_type in ("subscription.updated", "subscription.created")
+        and subscription_status in subscription_failure_states
+    )
+
+    if event_type in ("payment.succeeded", "payment.success") or is_subscription_success:
         new_status = "success"
         should_notify_success = previous_status != "success"
 
@@ -729,8 +754,16 @@ async def handle_dodo_webhook(request: Request, background_tasks: BackgroundTask
                 billing_cycle=billing_cycle,
             )
 
-    elif event_type in ("payment.failed", "payment.cancelled", "payment.canceled"):
+    elif event_type in (
+        "payment.failed",
+        "payment.cancelled",
+        "payment.canceled",
+        "subscription.canceled",
+        "subscription.cancelled",
+    ) or is_subscription_failure:
         status_value = "failed" if event_type == "payment.failed" else "cancelled"
+        if is_subscription_failure and subscription_status == "failed":
+            status_value = "failed"
         if order_id:
             await database.execute(
                 transactions.update()
@@ -742,8 +775,15 @@ async def handle_dodo_webhook(request: Request, background_tasks: BackgroundTask
             await audit.log(
                 AuditAction.PAYMENT_FAILED,
                 user_id=user_id_int,
-                details={"order_id": order_id, "status": status_value, "event_type": event_type},
+                details={
+                    "order_id": order_id,
+                    "status": status_value,
+                    "event_type": event_type,
+                    "subscription_id": data.get("subscription_id") if isinstance(data, dict) else None,
+                },
                 severity="warning",
             )
+    elif event_type in ("subscription.updated", "subscription.created"):
+        return {"status": "ignored"}
 
     return {"status": "ok"}

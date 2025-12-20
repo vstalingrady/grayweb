@@ -25,6 +25,7 @@ _USER_COLUMNS = [
     ("auth_user_id", "TEXT", None),
     ("subscription_expires_at", "DATETIME", None),
     ("has_seen_general_chat", "BOOLEAN", "0"),
+    ("onboarding_completed", "BOOLEAN", "0"),
     ("maps_enabled", "BOOLEAN", "0"),
     ("improve_model_for_everyone", "BOOLEAN", "0"),
     ("daily_token_usage", "INTEGER", "0"),

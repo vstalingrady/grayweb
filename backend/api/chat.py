@@ -46,6 +46,7 @@ from backend.compat_imports import (
     coerce_model_for_tier,
     _timezone_from_time_context,
 )
+from backend.onboarding_tools import ONBOARDING_TOOLS
 from backend.core.chat_starter_helpers import sse_event as _sse_event
 from backend.core.title_generator import generate_chat_title_inline as _generate_chat_title_inline
 
@@ -377,13 +378,16 @@ async def chat_stream_route(
         force_onboarding_mode = chat_request.system_prompt == "onboarding"
 
         effective_system_prompt = chat_request.system_prompt
-        if force_onboarding_mode:
+        if force_onboarding_mode or is_onboarding:
             effective_system_prompt = ONBOARDING_SYSTEM_PROMPT
         elif not effective_system_prompt:
              effective_system_prompt = DEFAULT_SYSTEM_PROMPT
 
         # Determine Tool List (Parallel)
         tool_list = get_default_chat_tools()
+        if is_onboarding or force_onboarding_mode:
+            # Add onboarding tools for new users so the AI can call complete_onboarding
+            tool_list = (tool_list or []) + ONBOARDING_TOOLS
 
         # Infer timezone from time_context if not explicitly provided
         if not chat_request.timezone and chat_request.time_context:

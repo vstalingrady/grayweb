@@ -35,6 +35,7 @@ export type ChatMessagesListProps = {
   handleEditMessage: (messageId: string, newContent: string) => void;
   shouldShowPendingStreamIndicator: boolean;
   scrollAnchorRef: RefObject<HTMLDivElement | null>;
+  reasoningMode?: boolean;
   reasoningSeconds?: number | null;
   isResponding?: boolean;
   isActivelyThinking?: boolean;
@@ -60,6 +61,7 @@ export const ChatMessagesList = memo(
     handleEditMessage,
     shouldShowPendingStreamIndicator,
     scrollAnchorRef,
+    reasoningMode = false,
     reasoningSeconds,
     isResponding,
     isActivelyThinking,
@@ -120,9 +122,20 @@ export const ChatMessagesList = memo(
 	          const isAssistant = !isUser;
 	          const rawContent = message.content ?? "";
 	          const assistantSections = isAssistant ? parseStructuredAssistantMessage(rawContent) : null;
-	          const thinkingText = isAssistant ? assistantSections?.thinking ?? null : null;
+	          const rawThinkingText = isAssistant ? assistantSections?.thinking ?? null : null;
 	          const aiText = isAssistant ? assistantSections?.ai ?? rawContent : rawContent;
-          const assistantTextCandidate = isAssistant ? aiText : rawContent;
+          const shouldSurfaceThinking = Boolean(reasoningMode);
+          const useThinkingAsAnswer =
+            !shouldSurfaceThinking &&
+            typeof rawThinkingText === "string" &&
+            rawThinkingText.trim().length > 0 &&
+            (!aiText || !aiText.trim());
+	          const thinkingText = shouldSurfaceThinking ? rawThinkingText : null;
+          const assistantTextCandidate = isAssistant
+            ? useThinkingAsAnswer
+              ? rawThinkingText ?? ""
+              : aiText
+            : rawContent;
           const sanitizedAssistantTextCandidate = stripGrayTitleMarkers(assistantTextCandidate);
           const assistantTextAfterRemovals = isAssistant
             ? sanitizedAssistantTextCandidate.replace(REMINDER_CODE_BLOCK_REGEX, "").trim()
