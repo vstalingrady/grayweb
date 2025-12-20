@@ -68,17 +68,22 @@ async function handleProxy(request: Request) {
         headers.delete('te');
         headers.delete('trailer');
 
-        let body: BodyInit | null | undefined;
-        if (request.method !== 'GET' && request.method !== 'HEAD') {
-            body = await request.blob();
-        }
+        const method = request.method.toUpperCase();
+        const hasBody = method !== 'GET' && method !== 'HEAD';
+        const body = hasBody ? request.body : null;
 
-        const response = await fetch(targetUrl, {
+        const init: RequestInit & { duplex?: "half" } = {
             method: request.method,
             headers,
-            body,
+            body: body ?? undefined,
             cache: "no-store",
-        });
+        };
+
+        if (body) {
+            init.duplex = "half";
+        }
+
+        const response = await fetch(targetUrl, init);
 
         const responseHeaders = new Headers(response.headers);
         const location = responseHeaders.get("location");

@@ -60,12 +60,29 @@ class ChatGptMemorySummary:
     title_count: int
 
 
+def _extract_text_from_part(part: Any) -> str:
+    if isinstance(part, str):
+        return part.strip()
+    if not isinstance(part, dict):
+        return ""
+    part_type = part.get("content_type")
+    if part_type in {"text", "input_text"}:
+        text = part.get("text")
+        return text.strip() if isinstance(text, str) else ""
+    text = part.get("text")
+    return text.strip() if isinstance(text, str) else ""
+
+
 def _extract_text_from_content(content: Dict[str, Any]) -> str:
     content_type = content.get("content_type")
     if content_type in {"text", "multimodal_text", "user_editable_context"}:
         parts = content.get("parts") or []
-        text_parts = [part for part in parts if isinstance(part, str) and part.strip()]
-        return "\n".join(text_parts).strip()
+        text_parts = [_extract_text_from_part(part) for part in parts]
+        text = "\n".join(part for part in text_parts if part)
+        if text:
+            return text.strip()
+        fallback = content.get("text")
+        return fallback.strip() if isinstance(fallback, str) else ""
     if content_type in {"code", "execution_output"}:
         text = content.get("text")
         return text.strip() if isinstance(text, str) else ""

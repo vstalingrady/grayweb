@@ -903,6 +903,7 @@ export function SettingsModal({
             <DataControlsSection
               t={t}
               userId={typeof user?.id === "number" ? user.id : null}
+              tierLevel={tierLevel}
               updateUser={updateUser}
               modelImprovementEnabled={modelImprovementEnabled}
               setModelImprovementEnabled={setModelImprovementEnabled}
@@ -916,6 +917,7 @@ export function SettingsModal({
               isDeletingAllConversations={isDeletingAllConversations}
               setIsDeletingAllConversations={setIsDeletingAllConversations}
               clearAllConversations={clearAllConversations}
+              onUpgradeClick={() => router.push("/pricing")}
             />
           )}
 

@@ -5,12 +5,14 @@ import { ChevronRight } from "lucide-react";
 import styles from "../SettingsStyles.module.css";
 import { chatService, utilityService, type UserUpdate } from "@/lib/api";
 import { SettingsToggle } from "@/components/gray/settings/components/SettingsToggle";
+import { PLAN_TIER_LEVELS } from "@/components/gray/utils/helperFunctions";
 
 type Translator = (message: string, vars?: Record<string, string | number>) => string;
 
 export type DataControlsSectionProps = {
   t: Translator;
   userId: number | null;
+  tierLevel: number;
   updateUser: (userData: UserUpdate) => Promise<void>;
   modelImprovementEnabled: boolean;
   setModelImprovementEnabled: Dispatch<SetStateAction<boolean>>;
@@ -24,11 +26,13 @@ export type DataControlsSectionProps = {
   isDeletingAllConversations: boolean;
   setIsDeletingAllConversations: Dispatch<SetStateAction<boolean>>;
   clearAllConversations: () => void;
+  onUpgradeClick: () => void;
 };
 
 export function DataControlsSection({
   t,
   userId,
+  tierLevel,
   updateUser,
   modelImprovementEnabled,
   setModelImprovementEnabled,
@@ -42,12 +46,18 @@ export function DataControlsSection({
   isDeletingAllConversations,
   setIsDeletingAllConversations,
   clearAllConversations,
+  onUpgradeClick,
 }: DataControlsSectionProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [isImporting, setIsImporting] = useState(false);
   const [importStatus, setImportStatus] = useState<string | null>(null);
+  const canImportChatGpt = tierLevel >= PLAN_TIER_LEVELS.voyager;
 
   const handleImportClick = () => {
+    if (!canImportChatGpt) {
+      onUpgradeClick();
+      return;
+    }
     fileInputRef.current?.click();
   };
 
@@ -159,6 +169,11 @@ export function DataControlsSection({
             <span className={styles.settingsItemDescription}>
               {t("Upload your ChatGPT export (.zip) to add memories to Gray.")}
             </span>
+            {!canImportChatGpt ? (
+              <span className={styles.settingsItemDescription}>
+                {t("Upgrade to Voyager or Pioneer to access.")}
+              </span>
+            ) : null}
             {importStatus ? (
               <span className={styles.settingsItemDescription}>{importStatus}</span>
             ) : null}
@@ -176,19 +191,30 @@ export function DataControlsSection({
                 {t("Disable")}
               </button>
             ) : null}
-            <button
-              type="button"
-              className={styles.settingsAction}
-              onClick={handleImportClick}
-              disabled={isImporting}
-            >
-              {isImporting ? t("Importing...") : t("Import")}
-            </button>
+            {canImportChatGpt ? (
+              <button
+                type="button"
+                className={styles.settingsAction}
+                onClick={handleImportClick}
+                disabled={isImporting}
+              >
+                {isImporting ? t("Importing...") : t("Import")}
+              </button>
+            ) : (
+              <button
+                type="button"
+                className={styles.settingsAction}
+                onClick={onUpgradeClick}
+              >
+                {t("Upgrade")}
+              </button>
+            )}
             <input
               ref={fileInputRef}
               type="file"
               accept=".zip,application/zip"
               onChange={handleImportChange}
+              disabled={!canImportChatGpt}
               style={{ display: "none" }}
             />
           </div>

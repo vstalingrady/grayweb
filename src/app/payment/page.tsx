@@ -332,11 +332,11 @@ function PaymentContent() {
                     return;
                 }
 
-                        const data: ChargeResponse = await res.json();
-                        const checkoutUrl = data.checkout_url;
-                        if (!checkoutUrl) {
-                            throw new Error("Checkout URL missing from payment gateway.");
-                        }
+                const data: ChargeResponse = await res.json();
+                const checkoutUrl = data.checkout_url;
+                if (!checkoutUrl) {
+                    throw new Error("Checkout URL missing from payment gateway.");
+                }
                 window.location.href = checkoutUrl;
                 return;
             }
@@ -444,7 +444,7 @@ function PaymentContent() {
                                     : "First step into paid: model choice and longer memory."}
                         </p>
                     </header>
-                    <div className={pricingStyles.priceBlock}>
+                    <div className={`${pricingStyles.priceBlock} ${pricingStyles.priceBlockStacked}`}>
                         <span className={pricingStyles.priceValue}>{currentPriceDisplay}</span>
                         <span className={pricingStyles.priceMeta}>/ {billingCycle === "annual" ? "month" : "month"}</span>
                     </div>
@@ -511,7 +511,7 @@ function PaymentContent() {
             };
             return [
                 bankSpecificFirstStep[bankCode] ||
-                    t("Open {bank} app or ATM and choose Virtual Account transfer.", { bank: bankLabel }),
+                t("Open {bank} app or ATM and choose Virtual Account transfer.", { bank: bankLabel }),
                 t("Enter the virtual account number shown below."),
                 t("Complete the transfer to activate your plan."),
             ];

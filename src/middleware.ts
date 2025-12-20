@@ -12,10 +12,8 @@ export function middleware(request: NextRequest) {
     const portSuffix = port ? `:${port}` : "";
 
     const defaultMain = isLocal ? `http://localhost${portSuffix}` : "https://gray.alignment.id";
-    const defaultPayment = isLocal ? `http://gray.localhost${portSuffix}` : "https://payment.alignment.id";
 
     const mainSiteUrl = process.env.NEXT_PUBLIC_MAIN_SITE_URL || defaultMain;
-    const paymentSiteUrl = process.env.NEXT_PUBLIC_PAYMENT_SITE_URL || defaultPayment;
 
     const noIndexPathPrefixes = [
         "/api",
@@ -48,33 +46,18 @@ export function middleware(request: NextRequest) {
         return response;
     };
 
-    // 1. Redirect /payment on main domain to payment subdomain (skip for local dev)
-    if (!isLocal && !isPaymentSubdomain && pathname.startsWith("/payment")) {
-        try {
-            const target = new URL(paymentSiteUrl);
-            const redirectUrl = new URL(`${pathname}${search}`, target.origin);
-            return applyRobotsHeader(NextResponse.redirect(redirectUrl));
-        } catch (e) {
-            console.error("Middleware redirect error (main -> payment):", e);
-        }
-    }
+    // 1. We no longer redirect /payment to a subdomain.
+    // All payment flows now happen on gray.alignment.id directly.
 
-    // 2. Redirect non-payment paths on payment subdomain to main domain
-    // We exclude paths starting with /payment, /api, /_next, and static assets
-    const isAllowedOnPayment =
-        pathname.startsWith("/payment") ||
-        pathname.startsWith("/login") ||
-        pathname.startsWith("/signup") ||
-        pathname.startsWith("/callback") ||
-        pathname.startsWith("/reset-password") ||
-        pathname.startsWith("/api") ||
-        pathname.startsWith("/_next") ||
-        pathname.includes(".");
-
-    if (isPaymentSubdomain && !isAllowedOnPayment) {
+    // 2. Redirect EVERYTHING on legacy payment subdomain to gray.alignment.id
+    if (isPaymentSubdomain) {
         try {
             const target = new URL(mainSiteUrl);
             const redirectUrl = new URL(`${pathname}${search}`, target.origin);
+            // Force the hostname to gray.alignment.id in production
+            if (!isLocal) {
+                redirectUrl.hostname = "gray.alignment.id";
+            }
             return applyRobotsHeader(NextResponse.redirect(redirectUrl));
         } catch (e) {
             console.error("Middleware redirect error (payment -> main):", e);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { forwardRef, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useUser } from "@/contexts/UserContext";
 import { useI18n } from "@/contexts/I18nContext";
@@ -20,7 +20,7 @@ import {
     Users,
     Zap,
 } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+import type { LucideIcon, LucideProps } from "lucide-react";
 import styles from "./page.module.css";
 
 type FeatureItem = {
@@ -31,6 +31,25 @@ type FeatureItem = {
     subtext?: string;
     subtextParens?: boolean;
 };
+
+const ChatGptIcon = forwardRef<SVGSVGElement, LucideProps>(
+    ({ color = "currentColor", size = 16, className, ...props }, ref) => (
+        <svg
+            ref={ref}
+            width={size}
+            height={size}
+            viewBox="0 0 21.999468 22.000338"
+            fill={color}
+            className={className}
+            aria-hidden="true"
+            {...props}
+        >
+            <path d="m 20.548781,9.0041619 a 5.416,5.416 0 0 0 -0.478,-4.501 c -1.217,-2.09 -3.662,-3.166 -6.05,-2.66 A 5.59,5.59 0 0 0 9.8297815,1.6190136e-4 C 7.3887815,-0.0048381 5.2227815,1.5461619 4.4717815,3.8381619 a 5.553,5.553 0 0 0 -3.71299999,2.658 5.487,5.487 0 0 0 0.69099999,6.5000001 5.416,5.416 0 0 0 0.477,4.502 c 1.217,2.09 3.662,3.165 6.05,2.66 a 5.586,5.586 0 0 0 4.1900005,1.842 c 2.442999,0.006 4.609999,-1.546 5.360999,-3.84 a 5.553,5.553 0 0 0 3.715,-2.66 5.488,5.488 0 0 0 -0.693,-6.4970001 v 10e-4 z M 12.167782,20.562162 a 4.199,4.199 0 0 1 -2.6750005,-0.954 c 0.034,-0.018 0.093,-0.05 0.132,-0.074 l 4.4399995,-2.53 a 0.71,0.71 0 0 0 0.364,-0.623 v -6.176 l 1.877,1.069 c 0.02,0.01 0.033,0.029 0.036,0.05 v 5.115 c -0.003,2.274 -1.87,4.118 -4.173999,4.123 z m -8.9770005,-3.782 a 4.059,4.059 0 0 1 -0.498,-2.763 c 0.032,0.02 0.09,0.055 0.131,0.078 l 4.44,2.53 c 0.225,0.13 0.504,0.13 0.73,0 l 5.4199995,-3.088 v 2.138 a 0.068,0.068 0 0 1 -0.027,0.057 l -4.4879995,2.556 c -1.999,1.136 -4.552,0.46 -5.707,-1.51 h -10e-4 z m -1.169,-9.5640001 a 4.15,4.15 0 0 1 2.175,-1.806 l -0.002,0.151 v 5.0600001 a 0.711,0.711 0 0 0 0.364,0.624 l 5.42,3.087 -1.876,1.07 a 0.067,0.067 0 0 1 -0.063,0.005 l -4.489,-2.559 c -1.995,-1.14 -2.67899999,-3.6580001 -1.53,-5.6300001 h 10e-4 z m 15.4169995,3.5400001 -5.419999,-3.0880001 1.875999,-1.068 a 0.067,0.067 0 0 1 0.063,-0.006 l 4.489,2.557 c 1.998,1.1400001 2.683,3.6620001 1.529,5.6330001 a 4.163,4.163 0 0 1 -2.174,1.807 v -5.211 a 0.71,0.71 0 0 0 -0.363,-0.623 z m 1.867,-2.7730001 a 6.04,6.04 0 0 0 -0.132,-0.078 l -4.44,-2.53 a 0.731,0.731 0 0 0 -0.729,0 l -5.4199995,3.088 v -2.138 a 0.068,0.068 0 0 1 0.027,-0.057 l 4.4869995,-2.555 c 2,-1.137 4.555,-0.46 5.707,1.513 0.487,0.833 0.664,1.809 0.499,2.757 z m -11.7409995,3.8100001 -1.877,-1.068 a 0.065,0.065 0 0 1 -0.036,-0.051 V 5.5591619 c 10e-4,-2.277 1.873,-4.122 4.181,-4.12 0.9760005,0 1.9200005,0.338 2.6710005,0.954 -0.034,0.018 -0.092,0.05 -0.131,0.073 l -4.4400005,2.53 a 0.71,0.71 0 0 0 -0.365,0.623 l -0.003,6.1730001 v 0.002 z m 1.02,-2.1680001 2.4140005,-1.375 2.413999,1.375 v 2.7500001 l -2.413999,1.375 -2.4150005,-1.375 V 9.6251619 Z" />
+        </svg>
+    )
+);
+
+ChatGptIcon.displayName = "ChatGptIcon";
 
 const FREE_FEATURES: FeatureItem[] = [
     {
@@ -88,6 +107,12 @@ export const VOYAGER_FEATURES: FeatureItem[] = [
         id: "calendar_access",
         label: "Calendar access",
         icon: Clock,
+    },
+    {
+        id: "chatgpt_export_compression",
+        label: "ChatGPT export compression",
+        icon: ChatGptIcon,
+        subtext: "Text-only + Grok 4.1 Fast",
     },
     {
         id: "integrations",
@@ -326,7 +351,7 @@ export function PricingPlansSection() {
                                 <p>{t("First step into paid: model choice and longer memory.")}</p>
                             </header>
                             <div className={styles.priceHeader}>
-                                <div className={styles.priceBlock}>
+                                <div className={`${styles.priceBlock} ${styles.priceBlockStacked}`}>
                                     <span className={styles.priceValue}>{pathfinderPrice}</span>
                                     <span className={styles.priceMeta}>/ {t(pathfinderCadence)}</span>
                                 </div>
@@ -370,7 +395,7 @@ export function PricingPlansSection() {
                                 <p>{t("For real daily use: more messages, longer memory, and calendar routines.")}</p>
                             </header>
                             <div className={styles.priceHeader}>
-                                <div className={styles.priceBlock}>
+                                <div className={`${styles.priceBlock} ${styles.priceBlockStacked}`}>
                                     <span className={styles.priceValue}>{voyagerPrice}</span>
                                     <span className={styles.priceMeta}>/ {t(voyagerCadence)}</span>
                                 </div>
@@ -418,7 +443,7 @@ export function PricingPlansSection() {
                                 <p>{t("For heavy users: top limits, top models, and early access to new features.")}</p>
                             </header>
                             <div className={styles.priceHeader}>
-                                <div className={styles.priceBlock}>
+                                <div className={`${styles.priceBlock} ${styles.priceBlockStacked}`}>
                                     <span className={styles.priceValue}>{pioneerPrice}</span>
                                     <span className={styles.priceMeta}>/ {t(pioneerCadence)}</span>
                                 </div>
