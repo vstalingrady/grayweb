@@ -374,19 +374,32 @@ async def chat_stream_route(
         # 5. Resolve System Prompt & Tier (Concurrent with User Fetch)
         user_record = await user_task
         user_plan_tier = _row_get(user_record, "plan_tier") or "scout"
-        is_onboarding = _row_get(user_record, "onboarding_completed") is False
+        
+        # Check if onboarding is truly complete based on personalization fields
+        # This is more robust than just checking the boolean flag which might be stale
+        has_nickname = bool(_row_get(user_record, "personalization_nickname"))
+        has_occupation = bool(_row_get(user_record, "personalization_occupation"))
+        has_about = bool(_row_get(user_record, "personalization_about"))
+        
+        # Profile is considered "minimal" if at least nickname and one other field is present
+        is_profile_minimal = has_nickname and (has_occupation or has_about)
+        is_onboarding_completed = _row_get(user_record, "onboarding_completed") is True
+        
+        # Only force onboarding prompt if explicitly requested or if profile is totally empty
         force_onboarding_mode = chat_request.system_prompt == "onboarding"
+        should_use_onboarding_prompt = force_onboarding_mode or (not is_onboarding_completed and not is_profile_minimal)
 
         effective_system_prompt = chat_request.system_prompt
-        if force_onboarding_mode or is_onboarding:
+        if should_use_onboarding_prompt:
             effective_system_prompt = ONBOARDING_SYSTEM_PROMPT
         elif not effective_system_prompt:
              effective_system_prompt = DEFAULT_SYSTEM_PROMPT
 
         # Determine Tool List (Parallel)
         tool_list = get_default_chat_tools()
-        if is_onboarding or force_onboarding_mode:
-            # Add onboarding tools for new users so the AI can call complete_onboarding
+        # Always provide onboarding tool if onboarding isn't fully completed, even if using default prompt
+        if force_onboarding_mode or not is_onboarding_completed:
+            # Add onboarding tools so the AI can call complete_onboarding whenever user provides info
             tool_list = (tool_list or []) + ONBOARDING_TOOLS
 
         # Infer timezone from time_context if not explicitly provided
