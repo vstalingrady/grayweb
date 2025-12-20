@@ -385,6 +385,38 @@ async def chat_stream_route(
         is_profile_minimal = has_nickname and (has_occupation or has_about)
         is_onboarding_completed = _row_get(user_record, "onboarding_completed") is True
         
+        # [AUTO-SYNC] If profile is complete (nickname, occupation, about) but flag is False, 
+        # sync it to the DB now to avoid further onboarding loops.
+        if not is_onboarding_completed and has_nickname and has_occupation and has_about:
+            async def _sync_onboarding_status():
+                try:
+                    from backend.database import database as db, users
+                    from backend.time_utils import utcnow
+                    from backend.core.cache import USER_CACHE
+                    from backend.auth import invalidate_user_cache, invalidate_user_cache_redis
+                    
+                    await db.execute(
+                        users.update().where(users.c.id == chat_request.user_id).values(
+                            onboarding_completed=True,
+                            has_seen_general_chat=True,
+                            updated_at=utcnow()
+                        )
+                    )
+                    await USER_CACHE.invalidate_global(f"user_{chat_request.user_id}")
+                    
+                    user_email = _row_get(user_record, "email")
+                    if user_email:
+                        normalized_email = user_email.strip().lower()
+                        invalidate_user_cache(normalized_email)
+                        await invalidate_user_cache_redis(normalized_email)
+                        
+                    api_logger.info("Auto-synced onboarding_completed=True", extra={"user_id": chat_request.user_id})
+                except Exception as e:
+                    api_logger.error(f"Failed to auto-sync onboarding status: {e}", extra={"user_id": chat_request.user_id})
+
+            create_logged_task(_sync_onboarding_status(), logger=api_logger, name="chat.auto_sync_onboarding")
+            is_onboarding_completed = True # Update local state for this request
+
         # Only force onboarding prompt if explicitly requested or if profile is totally empty
         force_onboarding_mode = chat_request.system_prompt == "onboarding"
         should_use_onboarding_prompt = force_onboarding_mode or (not is_onboarding_completed and not is_profile_minimal)
