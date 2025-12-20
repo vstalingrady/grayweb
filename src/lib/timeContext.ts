@@ -33,11 +33,10 @@ export const buildLocalTimeContextWithOverrides = (referenceDate?: Date, overrid
     hour: "2-digit",
     minute: "2-digit",
     timeZone,
-    timeZoneName: "short",
   });
   const labeledTime = formatter.format(now);
   // Include explicit timezone offset and ISO timestamp for accurate reminder scheduling
-  return `The user's local time is ${labeledTime} (timezone: ${tzLabel}, UTC${utcOffset}). ISO timestamp: ${isoTimestamp}. When creating reminders, output remind_at in ISO 8601 format with the user's timezone offset (e.g., 2024-12-11T21:00:00${utcOffset}). Avoid inferring or mentioning a specific city; refer to local time or the UTC offset only.`;
+  return `The user's local time is ${labeledTime}. Timezone metadata: ${tzLabel}, UTC${utcOffset}. ISO timestamp: ${isoTimestamp}. When creating reminders, output remind_at in ISO 8601 format with the user's timezone offset (e.g., 2024-12-11T21:00:00${utcOffset}). Do not mention the timezone or UTC offset unless the user asks. Avoid inferring or naming a specific city.`;
 };
 
 export default buildLocalTimeContext;

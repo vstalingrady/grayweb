@@ -41,6 +41,25 @@ type ProactivityNotificationProviderProps = {
   children: ReactNode;
 };
 
+const normalizeProactivityApiBase = (value: string) => {
+  const trimmed = value.replace(/\/+$/, "");
+  if (trimmed.endsWith("/api/p")) {
+    return trimmed;
+  }
+  if (trimmed.endsWith("/api")) {
+    return `${trimmed}/p`;
+  }
+  return trimmed;
+};
+
+const resolveProactivityApiBase = () => {
+  const explicit = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_BACKEND_URL;
+  if (explicit) {
+    return normalizeProactivityApiBase(explicit);
+  }
+  return resolveApiBaseUrl();
+};
+
 export function ProactivityNotificationProvider({ children }: ProactivityNotificationProviderProps) {
   const { t } = useI18n();
   const { user } = useUser();
@@ -135,7 +154,7 @@ export function ProactivityNotificationProvider({ children }: ProactivityNotific
         return;
       }
 
-      const url = resolveApiBaseUrl();
+      const url = resolveProactivityApiBase();
       // EventSource doesn't support custom headers, so we pass the token as a query parameter
       let eventSource: EventSource | null = null;
       try {
@@ -206,11 +225,17 @@ export function ProactivityNotificationProvider({ children }: ProactivityNotific
       const token = await getAuthToken();
       if (!token) return;
 
+      const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+      if (!vapidPublicKey) {
+        console.warn("[Proactivity] Missing NEXT_PUBLIC_VAPID_PUBLIC_KEY; push disabled.");
+        return;
+      }
+
       const registration = await navigator.serviceWorker.register("/sw-proactivity.js");
       const subscribeOptions = {
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(
-          process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "BNoW7-tQZ8XwYt7-tQZ8XwY"
+          vapidPublicKey
         ) as BufferSource,
       };
 
@@ -223,7 +248,7 @@ export function ProactivityNotificationProvider({ children }: ProactivityNotific
       const auth = subscription.getKey("auth");
       if (!p256dh || !auth) return;
 
-      const apiBase = resolveApiBaseUrl();
+      const apiBase = resolveProactivityApiBase();
       await fetch(`${apiBase}/users/${userId}/push/subscribe?token=${encodeURIComponent(token)}`, {
         method: "POST",
         headers: {

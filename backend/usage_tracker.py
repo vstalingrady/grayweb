@@ -3,7 +3,7 @@ Usage Tracker with Dynamic Model Pricing
 =========================================
 
 Fetches model pricing from OpenRouter API and tracks usage costs per user.
-Supports tier-based limits (Scout/Voyager/Pioneer) with monthly and 6-hour windows.
+Supports tier-based limits (Scout/Voyager/Pioneer) with monthly and 8-hour windows.
 """
 
 import datetime
@@ -169,23 +169,23 @@ LIMITS = {
     # Base: $0.30/month
     "scout": {
         "monthly_cost": 0.30,
-        "six_hour_cost": 0.0069,
+        "six_hour_cost": 0.0092,
     },
     # Pathfinder: 6x Scout credits
     "pathfinder": {
         "monthly_cost": 1.8,
-        "six_hour_cost": 0.0414,
+        "six_hour_cost": 0.0552,
     },
     # Voyager: 18x Scout credits
     "voyager": {
         "monthly_cost": 5.4,
-        "six_hour_cost": 0.1242,
+        "six_hour_cost": 0.1656,
     },
     # Pioneer: 36x Scout credits
     # NOTE: Premium models (Claude Opus, GPT Pro) burn credits faster
     "pioneer": {
         "monthly_cost": 10.8,
-        "six_hour_cost": 0.2484,
+        "six_hour_cost": 0.3312,
     },
 }
 
@@ -291,11 +291,11 @@ class UsageTracker:
             updates["monthly_cost_usage"] = 0.0
             updates["last_monthly_reset"] = now.isoformat()
 
-        # 6-Hour Reset
+        # 8-Hour Reset
         last_six_hour_dt = _coerce_datetime(usage_data.get("last_six_hour_reset"))
-        current_block_index = now.hour // 6
-        current_block_start = now.replace(hour=current_block_index * 6, minute=0, second=0, microsecond=0)
-        next_block_start = current_block_start + datetime.timedelta(hours=6)
+        current_block_index = now.hour // 8
+        current_block_start = now.replace(hour=current_block_index * 8, minute=0, second=0, microsecond=0)
+        next_block_start = current_block_start + datetime.timedelta(hours=8)
 
         should_reset_six_hour = (
             last_six_hour_dt is None
@@ -363,11 +363,11 @@ class UsageTracker:
             )
             raise UsageLimitExceeded("Monthly limit reached.", tier, next_reset)
 
-        # Check 6-Hour Limit
+        # Check 8-Hour Limit
         current_six_hour = usage_data["six_hour_cost_usage"] or 0.0
         if current_six_hour >= limits["six_hour_cost"]:
-            current_block = now.hour // 6
-            next_block_hour = (current_block + 1) * 6
+            current_block = now.hour // 8
+            next_block_hour = (current_block + 1) * 8
 
             next_reset_day = now.date()
             if next_block_hour >= 24:
@@ -384,7 +384,7 @@ class UsageTracker:
                 next_reset = now + datetime.timedelta(minutes=1)
 
             logger.warning(
-                "6-hour usage limit exceeded",
+                "8-hour usage limit exceeded",
                 extra={
                     "user_id": user_id,
                     "tier": tier,
@@ -392,7 +392,7 @@ class UsageTracker:
                     "limit": float(limits["six_hour_cost"]),
                 },
             )
-            raise UsageLimitExceeded("6-hour burst limit reached.", tier, next_reset)
+            raise UsageLimitExceeded("8-hour burst limit reached.", tier, next_reset)
 
     async def get_usage_status(self, user_id: int) -> Optional[Dict[str, Any]]:
         """Get current usage status for a user."""
@@ -438,8 +438,8 @@ class UsageTracker:
         six_hour_limit = limits["six_hour_cost"]
         is_six_hour_limit_reached = current_six_hour >= six_hour_limit
 
-        current_block = now.hour // 6
-        next_block_hour = (current_block + 1) * 6
+        current_block = now.hour // 8
+        next_block_hour = (current_block + 1) * 8
         next_reset_day = now.date()
         if next_block_hour >= 24:
             next_reset_day += datetime.timedelta(days=1)

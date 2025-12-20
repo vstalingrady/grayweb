@@ -239,6 +239,11 @@ export interface ChatMessage {
   timestamp?: number;
 }
 
+export interface ConversationHistoryPage {
+  messages: ChatMessage[];
+  hasMore: boolean;
+}
+
 export interface MediaUpload {
   id: number;
   user_id: number;

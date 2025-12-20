@@ -6,10 +6,8 @@ import type {
   ChatSession,
   ChatSessionScope,
   ChatTitleMode,
-  ConversationHistoryEntryPayload,
 } from "../types";
 import {
-  buildConversationHistoryPayload,
   buildSessionStorageKeyCandidates,
   coerceConversationIdForRequest,
   isGenericSessionTitle as isGenericTitle,
@@ -34,7 +32,6 @@ type UseSessionActionsOptions = {
   pendingHistorySyncRef: MutableRefObject<Set<string>>;
   pendingTitleSyncRef: MutableRefObject<Map<string, string>>;
   queueConversationTitleSync: (sessionId: string, title: string) => void;
-  enqueueHistorySync: (conversationId: string, payload: ConversationHistoryEntryPayload[]) => void;
   resetAutoStreamState: (sessionId?: string | null) => void;
   userId?: number;
   userEmail?: string;
@@ -80,7 +77,6 @@ export const useSessionActions = ({
   pendingHistorySyncRef,
   pendingTitleSyncRef,
   queueConversationTitleSync,
-  enqueueHistorySync,
   resetAutoStreamState,
   userId,
   userEmail,
@@ -234,9 +230,6 @@ export const useSessionActions = ({
 
   const deleteMessage = useCallback(
     (sessionId: string, messageId: string) => {
-      let historyPayload: ConversationHistoryEntryPayload[] | null = null;
-      let conversationIdForSync: string | undefined;
-
       setSessions((prev) => {
         let didUpdate = false;
         const next = prev.map((session) => {
@@ -253,11 +246,7 @@ export const useSessionActions = ({
           if (!normalizedConversationId && session.scope === "general") {
             normalizedConversationId = coerceConversationIdForRequest(generalConversationIdRef.current);
           }
-          const payload = buildConversationHistoryPayload(filtered);
-
           if (normalizedConversationId) {
-            conversationIdForSync = normalizedConversationId;
-            historyPayload = payload;
             pendingHistorySyncRef.current.delete(session.id);
           } else if (session.scope === "thread") {
             pendingHistorySyncRef.current.add(session.id);
@@ -276,12 +265,8 @@ export const useSessionActions = ({
         persistSessions(ordered);
         return ordered;
       });
-
-      if (conversationIdForSync && historyPayload) {
-        enqueueHistorySync(conversationIdForSync, historyPayload);
-      }
     },
-    [enqueueHistorySync, generalConversationIdRef, persistSessions, pendingHistorySyncRef, setSessions]
+    [generalConversationIdRef, persistSessions, pendingHistorySyncRef, setSessions]
   );
 
   const renameSession = useCallback(

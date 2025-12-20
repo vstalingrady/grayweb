@@ -39,6 +39,9 @@ export type ChatMessagesListProps = {
   isResponding?: boolean;
   isActivelyThinking?: boolean;
   thinkingStartTime?: number | null;
+  hasMoreHistory?: boolean;
+  isLoadingHistory?: boolean;
+  onLoadOlder?: () => void;
 };
 
 export const ChatMessagesList = memo(
@@ -61,6 +64,9 @@ export const ChatMessagesList = memo(
     isResponding,
     isActivelyThinking,
     thinkingStartTime,
+    hasMoreHistory,
+    isLoadingHistory = false,
+    onLoadOlder,
   }: ChatMessagesListProps) => {
     const { t } = useI18n();
     const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
@@ -99,6 +105,16 @@ export const ChatMessagesList = memo(
 
     return (
       <div className={styles.chatMessages} data-streaming={shouldShowPendingStreamIndicator ? "true" : undefined}>
+        {(hasMoreHistory || isLoadingHistory) && (
+          <button
+            type="button"
+            className={styles.chatHistoryLoadMore}
+            onClick={onLoadOlder}
+            disabled={isLoadingHistory || !onLoadOlder}
+          >
+            {isLoadingHistory ? t("Loading earlier messages...") : t("Load earlier messages")}
+          </button>
+        )}
         {messages.map((message, messageIndex) => {
 	          const isUser = message.role === "user";
 	          const isAssistant = !isUser;

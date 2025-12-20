@@ -173,17 +173,16 @@ class AIMessageGenerator:
                 raise RuntimeError(f"Usage limit exceeded: {e}")
 
         try:
-            # Give the model temporal context for the check-in in the user's local timezone.
+            # Give the model temporal context for the check-in without surfacing timezone details.
             tzinfo = self._resolve_timezone(timezone_str)
             now_local = datetime.now(tzinfo)
-            tz_label = self._format_utc_offset_label(now_local.utcoffset())
+            local_label = now_local.strftime("%A, %B %d at %I:%M %p")
             time_context = (
-                f"User's local time is {now_local.isoformat()} "
-                f"(timezone: {tz_label}, {tz_label}). "
+                f"User's local time is {local_label}. "
                 f"This proactive check-in is scheduled for their current local time "
                 f"based on cadence '{cadence or 'unspecified'}' and label '{label}'. "
-                "Respond as if it's that local time. If you reference the timezone, "
-                "use only the UTC offset and do not name a city."
+                "Respond as if it's that local time. Do not mention time zones or UTC offsets "
+                "unless the user explicitly asks."
             )
 
             # Use OpenRouter Grok (Lite tier) for proactive messaging
@@ -237,7 +236,22 @@ class AIMessageGenerator:
                 result = re.sub(pattern, "today", result, flags=re.IGNORECASE)
             return result
 
+        def _strip_timezone_mentions(value: str) -> str:
+            patterns = [
+                r"\(\s*timezone:\s*[^)]+\)",
+                r"\b(?:UTC|GMT)\s*[+-]\s*\d{1,2}(?::\d{2})?\b",
+                r"\bUTC\b",
+                r"\bGMT\b",
+            ]
+            result = value
+            for pattern in patterns:
+                result = re.sub(pattern, "", result, flags=re.IGNORECASE)
+            result = re.sub(r"\s{2,}", " ", result)
+            result = re.sub(r"\s+([,\.!?])", r"\1", result)
+            return result.strip()
+
         cleaned = _strip_explicit_dates(cleaned)
+        cleaned = _strip_timezone_mentions(cleaned)
 
         return label, cleaned
 

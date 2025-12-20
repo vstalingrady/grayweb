@@ -84,7 +84,6 @@ export const useChatProviderValue = (workspaceContext?: string): ChatContextValu
     pendingHistorySyncRef,
     pendingTitleSyncRef,
     queueConversationTitleSync,
-    enqueueHistorySync,
   } = useConversationSync({ sessions, sessionsRef, userId: user?.id });
   const {
     workspaceContext: workspaceContextValue,
@@ -206,7 +205,6 @@ export const useChatProviderValue = (workspaceContext?: string): ChatContextValu
     pendingHistorySyncRef,
     pendingTitleSyncRef,
     queueConversationTitleSync,
-    enqueueHistorySync,
     resetAutoStreamState,
     userId: user?.id,
     userEmail: user?.email,

@@ -41,6 +41,8 @@ export type ChatSession = {
     metadata?: Record<string, unknown>;
     pendingAutoStream?: boolean;
     isGeneratingTitle?: boolean;
+    historyCursor?: number | null;
+    historyHasMore?: boolean;
 };
 
 export type ConversationHistoryEntryPayload = {
@@ -123,6 +125,9 @@ export type ChatContextValue = {
             force?: boolean;
             touchUpdatedAt?: boolean;
             conversationIdOverride?: string | null;
+            mode?: "replace" | "prepend";
+            pageSize?: number;
+            before?: number | null;
         }
     ) => Promise<void>;
     reasoningMode: boolean;

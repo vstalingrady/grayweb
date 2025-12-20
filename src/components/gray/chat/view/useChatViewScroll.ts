@@ -15,6 +15,7 @@ type UseChatViewScrollOptions = {
   sessionKey: string | null;
   messages: ChatMessage[];
   activeStreamingMessageId: string | null;
+  suppressAutoScroll?: boolean;
 };
 
 type UseChatViewScrollResult = {
@@ -30,20 +31,36 @@ export const useChatViewScroll = ({
   sessionKey,
   messages,
   activeStreamingMessageId,
+  suppressAutoScroll = false,
 }: UseChatViewScrollOptions): UseChatViewScrollResult => {
   const chatViewportRef = useRef<HTMLDivElement>(null);
   const scrollAnchorRef = useRef<HTMLDivElement>(null);
   const composerDockRef = useRef<HTMLDivElement>(null);
   const isAtBottomRef = useRef(true);
   const [composerHeight, setComposerHeight] = useState(0);
+  const prevMessageCountRef = useRef(messages.length);
+  const prevSessionKeyRef = useRef<string | null>(sessionKey);
 
   useEffect(() => {
+    const shouldScroll =
+      prevSessionKeyRef.current !== sessionKey || prevMessageCountRef.current !== messages.length;
     if (!hasHydrated || !scrollAnchorRef.current) {
+      prevMessageCountRef.current = messages.length;
+      prevSessionKeyRef.current = sessionKey;
       return;
     }
-    // Always keep the newest message visible.
-    scrollAnchorRef.current.scrollIntoView({ behavior: "auto" });
-  }, [hasHydrated, messages.length, sessionKey]);
+    if (suppressAutoScroll) {
+      prevMessageCountRef.current = messages.length;
+      prevSessionKeyRef.current = sessionKey;
+      return;
+    }
+    if (shouldScroll) {
+      // Always keep the newest message visible.
+      scrollAnchorRef.current.scrollIntoView({ behavior: "auto" });
+    }
+    prevMessageCountRef.current = messages.length;
+    prevSessionKeyRef.current = sessionKey;
+  }, [hasHydrated, messages.length, sessionKey, suppressAutoScroll]);
 
   const streamingContentSignature = useMemo(() => {
     if (!activeStreamingMessageId) {

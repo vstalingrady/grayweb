@@ -211,14 +211,22 @@ async def _stream_openrouter_response_impl(
                             pending_tool_calls[idx]["arguments"].append(func["arguments"])
                 
                 # Handle reasoning content
-                if "reasoning" in chunk:
-                    reasoning_content = chunk["reasoning"]
+                chunk_type = chunk.get("type")
+                if chunk_type == "reasoning":
+                    reasoning_content = chunk.get("content")
                     if reasoning_content:
                         if not reasoning_started:
                             reasoning_started = True
                             yield ("delta", "<thinking>")
                         yield ("delta", reasoning_content)
                         continue
+                
+                # Handle encrypted reasoning indicator
+                if chunk_type == "reasoning_active":
+                    if not reasoning_started:
+                        reasoning_started = True
+                        yield ("delta", "<thinking>")
+                    continue
                 
                 # Handle text content
                 if "text" in chunk:

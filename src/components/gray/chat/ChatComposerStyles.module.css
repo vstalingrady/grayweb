@@ -542,6 +542,15 @@
   overflow-y: hidden;
 }
 
+.chatInput:disabled {
+  color: rgba(235, 235, 235, 0.4);
+  cursor: not-allowed;
+}
+
+.chatInput:disabled::placeholder {
+  color: rgba(235, 235, 235, 0.3);
+}
+
 .chatInput::placeholder {
   color: rgba(235, 235, 235, 0.45);
   letter-spacing: 0.08em;

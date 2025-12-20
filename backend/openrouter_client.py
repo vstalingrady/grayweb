@@ -180,7 +180,8 @@ class OpenRouterService:
         """Get or create shared HTTP client with connection pooling."""
         if self._client is None or self._client.is_closed:
             # Allow long streams without client-side truncation; provider-side limits still apply.
-            self._client = httpx.AsyncClient(timeout=600.0)
+            # Enable HTTP/2 for better streaming performance
+            self._client = httpx.AsyncClient(timeout=600.0, http2=True)
         return self._client
 
     async def close(self) -> None:
@@ -583,6 +584,11 @@ class OpenRouterService:
             provider_preferences["order"] = ["DeepSeek"]
         elif "moonshot" in resolved_lower or "kimi" in resolved_lower:
             provider_preferences["order"] = ["Novita", "DeepInfra"]
+        
+        # For premium models, prioritize throughput/latency over price to reduce TTFT
+        is_premium = any(p in resolved_lower for p in ["sonnet", "opus", "gpt-4", "gpt-5", "grok-4"])
+        if is_premium:
+            provider_preferences["sort"] = "throughput"
 
         if provider_routing:
             provider_preferences.update(provider_routing)

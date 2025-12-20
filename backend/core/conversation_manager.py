@@ -97,7 +97,13 @@ def _get_general_conversation_funcs():
     }
 
 
-async def load_conversation_history(conversation_id: str, user_id: int) -> List[Dict[str, Any]]:
+async def load_conversation_history(
+    conversation_id: str,
+    user_id: int,
+    *,
+    limit: Optional[int] = None,
+    before: Optional[int] = None,
+) -> List[Dict[str, Any]]:
     """Load a conversation's messages.
 
     General-chat IDs are handled via the local general_chat_messages store;
@@ -120,10 +126,19 @@ async def load_conversation_history(conversation_id: str, user_id: int) -> List[
                 extra={"event_type": "security_violation_general_chat"}
             )
             return []
-        return await load_general_conversation_history(general_user_id)
+        return await load_general_conversation_history(
+            general_user_id,
+            limit=limit,
+            before=before,
+        )
 
     # Thread conversations handled by shared chat_history module.
-    return await load_thread_history(conversation_id, user_id)
+    return await load_thread_history(
+        conversation_id,
+        user_id,
+        limit=limit,
+        before=before,
+    )
 
 
 async def get_or_create_conversation(

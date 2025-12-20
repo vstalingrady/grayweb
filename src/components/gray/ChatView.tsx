@@ -42,6 +42,7 @@ type GrayChatViewProps = {
   introContent?: ReactNode;
   onContextUsageChange?: (summary: ContextUsageSummary | null) => void;
   hideThinkingIndicator?: boolean;
+  isInputDisabled?: boolean;
 };
 
 export function GrayChatView({
@@ -49,6 +50,7 @@ export function GrayChatView({
   introContent,
   onContextUsageChange,
   hideThinkingIndicator = false,
+  isInputDisabled = false,
 }: GrayChatViewProps) {
   const { t } = useI18n();
   const {
@@ -110,6 +112,8 @@ export function GrayChatView({
   const [isActivelyThinking, setIsActivelyThinking] = useState(false);
   const [thinkingStartTime, setThinkingStartTime] = useState<number | null>(null);
   const [reasoningSeconds, setReasoningSeconds] = useState<number | null>(null);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const isLoadingHistoryRef = useRef(false);
 
   const attachmentInputRef = useRef<HTMLInputElement | null>(null);
   const handleAttachmentInputChange = useCallback(
@@ -186,12 +190,75 @@ export function GrayChatView({
     />
   ) : null;
 
-  const { chatViewportRef, scrollAnchorRef, composerDockRef, chatViewStyle, handleScroll } = useChatViewScroll({
+  const { chatViewportRef, scrollAnchorRef, composerDockRef, chatViewStyle, handleScroll: handleScrollBase } = useChatViewScroll({
     hasHydrated,
     sessionKey: session?.id ?? null,
     messages,
     activeStreamingMessageId,
+    suppressAutoScroll: isLoadingHistory,
   });
+
+  const handleLoadOlder = useCallback(async () => {
+    if (!session || !session.historyHasMore || session.isResponding) {
+      return;
+    }
+    if (isLoadingHistoryRef.current) {
+      return;
+    }
+    const fallbackBefore =
+      messages.length > 0 &&
+        typeof messages[0]?.createdAt === "number" &&
+        Number.isFinite(messages[0].createdAt) &&
+        messages[0].createdAt > 0
+        ? messages[0].createdAt
+        : null;
+    const before =
+      typeof session.historyCursor === "number" && Number.isFinite(session.historyCursor) && session.historyCursor > 0
+        ? session.historyCursor
+        : fallbackBefore;
+    if (!before) {
+      return;
+    }
+
+    const viewport = chatViewportRef.current;
+    const previousScrollHeight = viewport?.scrollHeight ?? 0;
+    const previousScrollTop = viewport?.scrollTop ?? 0;
+
+    isLoadingHistoryRef.current = true;
+    setIsLoadingHistory(true);
+    try {
+      await loadConversationMessages(session.id, { mode: "prepend", before });
+    } catch (error) {
+      console.warn("Failed to load older messages:", error);
+    } finally {
+      requestAnimationFrame(() => {
+        const nextViewport = chatViewportRef.current;
+        if (nextViewport) {
+          const nextScrollHeight = nextViewport.scrollHeight;
+          const diff = nextScrollHeight - previousScrollHeight;
+          if (diff > 0) {
+            nextViewport.scrollTop = previousScrollTop + diff;
+          }
+        }
+        isLoadingHistoryRef.current = false;
+        setIsLoadingHistory(false);
+      });
+    }
+  }, [chatViewportRef, loadConversationMessages, messages, session]);
+
+  const handleScroll = useCallback(() => {
+    handleScrollBase();
+    if (!session?.historyHasMore || isLoadingHistoryRef.current || messages.length === 0) {
+      return;
+    }
+    const viewport = chatViewportRef.current;
+    if (!viewport) {
+      return;
+    }
+    if (viewport.scrollTop <= 120) {
+      void handleLoadOlder();
+    }
+  }, [chatViewportRef, handleLoadOlder, handleScrollBase, messages.length, session?.historyHasMore]);
 
   useEffect(() => {
     // Reset submit state to prevent blocking after navigation
@@ -278,6 +345,7 @@ export function GrayChatView({
     updateSession,
     markAutoStreamTriggered,
     streamAssistantReply,
+    loadConversationMessages,
   });
 
   useEffect(() => {
@@ -390,6 +458,9 @@ export function GrayChatView({
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (isInputDisabled && !(session?.isResponding || activeStreamingMessageId)) {
+      return;
+    }
     const nextPrompt = draft.trim();
     // If a stream is in progress, allow a submit with content to interrupt + send in one step.
     // If there is no content, treat submit as "cancel".
@@ -561,6 +632,7 @@ export function GrayChatView({
 
   const shouldShowPendingStreamIndicator =
     !hideThinkingIndicator && (isResponding || sessionPendingAutoStream) && !isStreamingMessageInList;
+  const hasMoreHistory = Boolean(session?.historyHasMore) && messages.length > 0;
 
   return (
     <div className={styles.chatView} aria-live="polite" style={chatViewStyle}>
@@ -594,6 +666,9 @@ export function GrayChatView({
             isResponding={session?.isResponding}
             isActivelyThinking={isActivelyThinking}
             thinkingStartTime={thinkingStartTime}
+            hasMoreHistory={hasMoreHistory}
+            isLoadingHistory={isLoadingHistory}
+            onLoadOlder={handleLoadOlder}
           />
         )}
       </div>
@@ -611,6 +686,7 @@ export function GrayChatView({
           onChange={setDraft}
           onSubmit={handleSubmit}
           isSubmitDisabled={isSendDisabled}
+          isInputDisabled={isInputDisabled}
           isSubmitting={isResponding}
           onAddAttachment={openAttachmentPicker}
           attachmentTray={attachmentTrayNode}

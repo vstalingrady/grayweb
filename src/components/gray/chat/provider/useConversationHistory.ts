@@ -1,8 +1,13 @@
 import { useCallback, useEffect, useRef, type MutableRefObject, type SetStateAction } from "react";
 import { chatService } from "@/lib/api";
 import type { ChatSession } from "../types";
+import { CONVERSATION_HISTORY_PAGE_SIZE } from "../constants";
 import { buildGeneralConversationId, normalizeConversationIdValue } from "../utils";
-import { mergeConversationHistoryIntoSession, normalizeSessionsList } from "./sessionStore";
+import {
+  getHistoryCursorFromMessages,
+  mergeConversationHistoryIntoSession,
+  normalizeSessionsList,
+} from "./sessionStore";
 
 type SetSessions = (updater: SetStateAction<ChatSession[]>) => void;
 
@@ -20,6 +25,9 @@ type UseConversationHistoryResult = {
       force?: boolean;
       touchUpdatedAt?: boolean;
       conversationIdOverride?: string | null;
+      mode?: "replace" | "prepend";
+      pageSize?: number;
+      before?: number | null;
     }
   ) => Promise<void>;
 };
@@ -41,6 +49,9 @@ export const useConversationHistory = ({
         force?: boolean;
         touchUpdatedAt?: boolean;
         conversationIdOverride?: string | null;
+        mode?: "replace" | "prepend";
+        pageSize?: number;
+        before?: number | null;
       }
     ) => {
       const session = sessionsRef.current.find((candidate) => candidate.id === sessionId);
@@ -56,15 +67,42 @@ export const useConversationHistory = ({
       if (!normalizedConversationId) {
         return;
       }
-      if (!options?.force && session.messages.length > 0) {
+      const mode = options?.mode ?? "replace";
+      if (!options?.force && mode !== "prepend" && session.messages.length > 0) {
         return;
       }
 
       try {
-        const history = await chatService.getConversation(normalizedConversationId);
-        if (!Array.isArray(history) || history.length === 0) {
-          return;
+        const rawPageSize = options?.pageSize;
+        const pageSize =
+          typeof rawPageSize === "number" && Number.isFinite(rawPageSize) && rawPageSize > 0
+            ? rawPageSize
+            : CONVERSATION_HISTORY_PAGE_SIZE;
+        let before: number | undefined;
+        if (mode === "prepend") {
+          const explicitBefore =
+            typeof options?.before === "number" && Number.isFinite(options.before) && options.before > 0
+              ? options.before
+              : null;
+          const sessionCursor =
+            typeof session.historyCursor === "number" && Number.isFinite(session.historyCursor) && session.historyCursor > 0
+              ? session.historyCursor
+              : null;
+          const fallbackCursor = getHistoryCursorFromMessages(session.messages);
+          const resolvedBefore = explicitBefore ?? sessionCursor ?? fallbackCursor;
+          if (typeof resolvedBefore === "number" && Number.isFinite(resolvedBefore) && resolvedBefore > 0) {
+            before = resolvedBefore + 1;
+          } else {
+            return;
+          }
+        } else if (typeof options?.before === "number" && Number.isFinite(options.before) && options.before > 0) {
+          before = options.before;
         }
+
+        const { messages: history, hasMore } = await chatService.getConversationPage(normalizedConversationId, {
+          limit: pageSize,
+          before,
+        });
 
         setSessions((prev) => {
           const index = prev.findIndex((candidate) => candidate.id === sessionId);
@@ -79,6 +117,8 @@ export const useConversationHistory = ({
             {
               force: options?.force,
               touchUpdatedAt: options?.touchUpdatedAt,
+              mode,
+              hasMore,
             }
           );
           if (!updated) {

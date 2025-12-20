@@ -72,7 +72,44 @@ def normalize_conversation_history(
     return normalized
 
 
-async def load_thread_history(conversation_id: str, user_id: int) -> List[Dict[str, Any]]:
+def _timestamp_ms_to_datetime(value: Optional[int]) -> Optional[datetime]:
+    if value is None:
+        return None
+    try:
+        return datetime.fromtimestamp(int(value) / 1000, tz=timezone.utc)
+    except (ValueError, OSError, TypeError):
+        return None
+
+
+def _message_timestamp_ms(message: Dict[str, Any]) -> int:
+    value = message.get("timestamp")
+    if isinstance(value, (int, float)):
+        return int(value)
+    return 0
+
+
+def _slice_cached_history(
+    history: List[Dict[str, Any]],
+    *,
+    limit: Optional[int],
+    before: Optional[int],
+) -> List[Dict[str, Any]]:
+    if before is not None:
+        history = [message for message in history if _message_timestamp_ms(message) < before]
+    if limit is None:
+        return history
+    if limit <= 0:
+        return []
+    return history[-limit:]
+
+
+async def load_thread_history(
+    conversation_id: str,
+    user_id: int,
+    *,
+    limit: Optional[int] = None,
+    before: Optional[int] = None,
+) -> List[Dict[str, Any]]:
     """
     Load a non-general conversation's messages from local SQLite storage,
     enforcing ownership and using the shared conversation caches.
@@ -84,7 +121,10 @@ async def load_thread_history(conversation_id: str, user_id: int) -> List[Dict[s
     if str(cached_owner) == str(user_id):
         cached_history = CONVERSATION_HISTORY_CACHE.get(conversation_id)
         if cached_history is not None:
-            return [dict(message) for message in cached_history]
+            history_list = [dict(message) for message in cached_history]
+            if limit is None and before is None:
+                return history_list
+            return _slice_cached_history(history_list, limit=limit, before=before)
 
     # Verify ownership in local SQLite
     try:
@@ -102,11 +142,24 @@ async def load_thread_history(conversation_id: str, user_id: int) -> List[Dict[s
 
     # Load messages from local SQLite
     try:
-        query = (
-            user_chat_messages.select()
-            .where(user_chat_messages.c.thread_id == conversation_id)
-            .order_by(user_chat_messages.c.created_at.asc())
-        )
+        effective_limit = limit if limit is not None else None
+        if effective_limit is None and before is None:
+            query = (
+                user_chat_messages.select()
+                .where(user_chat_messages.c.thread_id == conversation_id)
+                .order_by(user_chat_messages.c.created_at.asc())
+            )
+        else:
+            before_dt = _timestamp_ms_to_datetime(before)
+            query = user_chat_messages.select().where(
+                user_chat_messages.c.thread_id == conversation_id
+            )
+            if before_dt is not None:
+                query = query.where(user_chat_messages.c.created_at < before_dt)
+            query = query.order_by(user_chat_messages.c.created_at.desc())
+            if effective_limit is None:
+                effective_limit = 50
+            query = query.limit(effective_limit)
         rows = await database.fetch_all(query)
 
         messages: List[Dict[str, Any]] = []
@@ -141,7 +194,11 @@ async def load_thread_history(conversation_id: str, user_id: int) -> List[Dict[s
             
             entry["timestamp"] = timestamp_ms if timestamp_ms > 0 else 0
             messages.append(entry)
-        cache_conversation_history(conversation_id, user_id, messages)
+        if effective_limit is None and before is None:
+            cache_conversation_history(conversation_id, user_id, messages)
+            return messages
+
+        messages.reverse()
         return messages
     except Exception as error:
         _handle_conversation_store_error(

@@ -563,6 +563,7 @@ function GrayPageClientInner({
           onContextUsageChange={setContextUsageSummary}
           hideThinkingIndicator={hideChatThinkingIndicator}
           introContent={null}
+          isInputDisabled={isUsageLimitReached}
         />
       );
     }
@@ -620,6 +621,7 @@ function GrayPageClientInner({
             onContextUsageChange={setContextUsageSummary}
             hideThinkingIndicator={hideChatThinkingIndicator}
             introContent={null}
+            isInputDisabled={isUsageLimitReached}
           />
         </div>
       );
@@ -1227,13 +1229,16 @@ function GrayPageClientInner({
   const handleThreadComposerSubmit = useCallback(
     (event: React.FormEvent<HTMLFormElement>) => {
       event.preventDefault();
+      if (isUsageLimitReached) {
+        return;
+      }
       const trimmed = threadComposerDraft.trim();
       if (!trimmed) {
         return;
       }
       void handleChatSubmit(trimmed, threadComposerControls);
     },
-    [handleChatSubmit, threadComposerControls, threadComposerDraft]
+    [handleChatSubmit, isUsageLimitReached, threadComposerControls, threadComposerDraft]
   );
 
   useEffect(() => {
@@ -1518,6 +1523,7 @@ function GrayPageClientInner({
                     showUnderline={false}
                     onAddAttachment={openAttachmentPicker}
                     onPasteFiles={handleAttachmentPaste}
+                    isInputDisabled={isUsageLimitReached}
                     {...(isUsageLimitReached ? { isSubmitDisabled: true } : {})}
                   />
                 </div>

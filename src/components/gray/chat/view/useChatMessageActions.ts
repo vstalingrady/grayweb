@@ -21,6 +21,17 @@ type UseChatMessageActionsOptions = {
   updateSession: (sessionId: string, partial: Partial<ChatSession>) => void;
   markAutoStreamTriggered: (sessionId: string, messageId?: string | null) => void;
   streamAssistantReply: StreamAssistantReply;
+  loadConversationMessages: (
+    sessionId: string,
+    options?: {
+      force?: boolean;
+      touchUpdatedAt?: boolean;
+      conversationIdOverride?: string | null;
+      mode?: "replace" | "prepend";
+      pageSize?: number;
+      before?: number | null;
+    }
+  ) => Promise<void>;
 };
 
 type UseChatMessageActionsResult = {
@@ -46,12 +57,14 @@ export const useChatMessageActions = ({
   updateSession,
   markAutoStreamTriggered,
   streamAssistantReply,
+  loadConversationMessages,
 }: UseChatMessageActionsOptions): UseChatMessageActionsResult => {
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const copyResetTimeoutRef = useRef<number | null>(null);
   const [regeneratingMessageId, setRegeneratingMessageId] = useState<string | null>(null);
   const pendingHistorySyncRef = useRef(false);
   const historySyncTimerRef = useRef<number | null>(null);
+  const historyHydrationRef = useRef(false);
 
   useEffect(() => {
     return () => {
@@ -86,6 +99,36 @@ export const useChatMessageActions = ({
       return;
     }
 
+    if (session.historyHasMore) {
+      const cursorCandidate =
+        typeof session.historyCursor === "number" && Number.isFinite(session.historyCursor) && session.historyCursor > 0
+          ? session.historyCursor
+          : typeof messages[0]?.createdAt === "number" && Number.isFinite(messages[0].createdAt) && messages[0].createdAt > 0
+            ? messages[0].createdAt
+            : null;
+      if (!cursorCandidate) {
+        pendingHistorySyncRef.current = false;
+        return;
+      }
+      if (historySyncTimerRef.current !== null) {
+        window.clearTimeout(historySyncTimerRef.current);
+        historySyncTimerRef.current = null;
+      }
+      if (historyHydrationRef.current) {
+        return;
+      }
+      historyHydrationRef.current = true;
+      void loadConversationMessages(session.id, { mode: "prepend", before: cursorCandidate })
+        .catch((error) => {
+          pendingHistorySyncRef.current = false;
+          console.warn("Failed to hydrate full history before sync:", error);
+        })
+        .finally(() => {
+          historyHydrationRef.current = false;
+        });
+      return;
+    }
+
     if (historySyncTimerRef.current !== null) {
       window.clearTimeout(historySyncTimerRef.current);
     }
@@ -102,7 +145,7 @@ export const useChatMessageActions = ({
         console.warn("Failed to sync conversation history:", error);
       });
     }, 250);
-  }, [activeStreamingMessageId, messages, session]);
+  }, [activeStreamingMessageId, loadConversationMessages, messages, session]);
 
   const getResponseDurationLabel = useCallback(
     (messageIndex: number) => {
@@ -178,12 +221,14 @@ export const useChatMessageActions = ({
           }
         }
         updateSession(session.id, { pendingAutoStream: false, isResponding: false });
+        requestHistorySync();
         return;
       }
       if (targetMessage.role === "user") {
         markAutoStreamTriggered(session.id, targetMessage.id);
         updateSession(session.id, { pendingAutoStream: false, isResponding: false });
       }
+      requestHistorySync();
     },
     [
       activeStreamingMessageId,
@@ -191,6 +236,7 @@ export const useChatMessageActions = ({
       deleteMessage,
       markAutoStreamTriggered,
       messages,
+      requestHistorySync,
       session,
       setActiveStreamingMessageId,
       updateSession,

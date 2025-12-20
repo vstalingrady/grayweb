@@ -41,8 +41,24 @@ export function createEmptyGeneralSession(timestamp?: number, conversationId?: s
     scope: "general",
     conversationId: conversationId ?? undefined,
     pendingAutoStream: false,
+    historyCursor: null,
+    historyHasMore: false,
   };
 }
+
+export const getHistoryCursorFromMessages = (messages: ChatMessage[]): number | null => {
+  let cursor: number | null = null;
+  for (const message of messages) {
+    const timestamp = message.createdAt;
+    if (typeof timestamp !== "number" || !Number.isFinite(timestamp) || timestamp <= 0) {
+      continue;
+    }
+    if (cursor === null || timestamp < cursor) {
+      cursor = timestamp;
+    }
+  }
+  return cursor;
+};
 
 const defaultSessions = () => [createEmptyGeneralSession()];
 
@@ -209,6 +225,8 @@ export function mapApiMessagesToChatMessages(
 type MergeHistoryOptions = {
   force?: boolean;
   touchUpdatedAt?: boolean;
+  mode?: "replace" | "prepend";
+  hasMore?: boolean;
 };
 
 const areChatMessagesEquivalent = (left: ChatMessage[], right: ChatMessage[]): boolean => {
@@ -227,8 +245,22 @@ const areChatMessagesEquivalent = (left: ChatMessage[], right: ChatMessage[]): b
     if ((leftMessage.content ?? "") !== (rightMessage.content ?? "")) {
       return false;
     }
+    if (leftMessage.createdAt !== rightMessage.createdAt) {
+      return false;
+    }
   }
   return true;
+};
+
+const buildMessageSignature = (message: ChatMessage): string => {
+  const timestamp =
+    typeof message.createdAt === "number" && Number.isFinite(message.createdAt) && message.createdAt > 0
+      ? message.createdAt
+      : null;
+  if (timestamp === null) {
+    return JSON.stringify([message.role, message.content ?? "", "unknown"]);
+  }
+  return JSON.stringify([message.role, timestamp]);
 };
 
 export function mergeConversationHistoryIntoSession(
@@ -237,32 +269,61 @@ export function mergeConversationHistoryIntoSession(
   conversationId: string,
   options?: MergeHistoryOptions
 ): ChatSession | null {
-  if (!Array.isArray(history) || history.length === 0) {
+  if (!Array.isArray(history)) {
     return null;
   }
-  const mapped = mapApiMessagesToChatMessages(history, conversationId, Date.now());
-  if (!mapped.length) {
-    return null;
-  }
-
   const localMessages = session.messages ?? [];
-  const force = Boolean(options?.force);
-  const shouldReplace =
-    localMessages.length === 0 ||
-    mapped.length > localMessages.length ||
-    (force && mapped.length >= localMessages.length);
+  const mapped = history.length > 0 ? mapApiMessagesToChatMessages(history, conversationId, Date.now()) : [];
+  const mode = options?.mode ?? "replace";
+  let nextMessages = localMessages;
+  let didChangeMessages = false;
 
-  if (!shouldReplace || areChatMessagesEquivalent(localMessages, mapped)) {
+  if (mode === "prepend") {
+    if (mapped.length > 0) {
+      const existing = new Set(localMessages.map(buildMessageSignature));
+      const uniqueOlder = mapped.filter((message) => !existing.has(buildMessageSignature(message)));
+      if (uniqueOlder.length > 0) {
+        nextMessages = [...uniqueOlder, ...localMessages];
+        didChangeMessages = true;
+      }
+    }
+  } else {
+    const force = Boolean(options?.force);
+    const shouldReplace =
+      force && mapped.length > 0
+        ? true
+        : localMessages.length === 0 || mapped.length > localMessages.length;
+    if (shouldReplace && mapped.length > 0 && !areChatMessagesEquivalent(localMessages, mapped)) {
+      nextMessages = mapped;
+      didChangeMessages = true;
+    }
+  }
+
+  const computedCursor = getHistoryCursorFromMessages(nextMessages);
+  const nextHistoryCursor = computedCursor ?? session.historyCursor ?? null;
+  const nextHistoryHasMore = options?.hasMore ?? session.historyHasMore;
+
+  const shouldTouchUpdatedAt = Boolean(options?.touchUpdatedAt);
+  const shouldUpdate =
+    didChangeMessages ||
+    session.conversationId !== conversationId ||
+    session.historyCursor !== nextHistoryCursor ||
+    session.historyHasMore !== nextHistoryHasMore ||
+    shouldTouchUpdatedAt;
+
+  if (!shouldUpdate) {
     return null;
   }
 
   const nextSession: ChatSession = {
     ...session,
     conversationId,
-    messages: mapped,
-    isResponding: false,
+    messages: nextMessages,
+    historyCursor: nextHistoryCursor,
+    historyHasMore: nextHistoryHasMore,
+    isResponding: didChangeMessages ? false : session.isResponding,
   };
-  if (options?.touchUpdatedAt) {
+  if (shouldTouchUpdatedAt) {
     nextSession.updatedAt = Date.now();
   }
 

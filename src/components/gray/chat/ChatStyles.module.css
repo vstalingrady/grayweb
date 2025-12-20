@@ -161,6 +161,34 @@
   margin: 0 auto;
 }
 
+.chatHistoryLoadMore {
+  align-self: center;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  padding: 8px 14px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+}
+
+.chatHistoryLoadMore:hover,
+.chatHistoryLoadMore:focus-visible {
+  border-color: rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.9);
+  transform: translateY(-1px);
+}
+
+.chatHistoryLoadMore:disabled {
+  opacity: 0.5;
+  cursor: default;
+  transform: none;
+}
+
 .chatIntro {
   display: flex;
   flex-direction: column;

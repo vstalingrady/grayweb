@@ -5,6 +5,7 @@ export const GENERAL_CHAT_SESSION_ID = GENERAL_SESSION_ID;
 export const GENERAL_SESSION_TITLE = "General Chat";
 export const SHARED_CHAT_PLACEHOLDER_TITLE = "New Chat";
 export const GENERAL_CONVERSATION_PREFIX = "general:";
+export const CONVERSATION_HISTORY_PAGE_SIZE = 40;
 
 // Timing constants
 export const FALLBACK_ASSISTANT_DELAY_MS = 150;

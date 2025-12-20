@@ -6,7 +6,7 @@ This router handles all conversation CRUD operations, compression, and usage sta
 
 import os
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import databases
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -25,6 +25,17 @@ from backend.token_utils import estimate_tokens
 router = APIRouter(tags=["conversations"])
 
 api_logger = create_logger("backend.api.conversations")
+
+DEFAULT_CONVERSATION_PAGE_SIZE = 40
+MAX_CONVERSATION_PAGE_SIZE = 200
+
+
+def _normalize_page_limit(limit: Optional[int]) -> Optional[int]:
+    if limit is None:
+        return None
+    if limit <= 0:
+        return None
+    return min(limit, MAX_CONVERSATION_PAGE_SIZE)
 
 
 def _get_conversation_helpers():
@@ -158,6 +169,8 @@ async def create_conversation_message(
 async def get_conversation(
     request: Request,
     conversation_id: str,
+    limit: Optional[int] = Query(None),
+    before: Optional[int] = Query(None),
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     """Get conversation history with Redis caching."""
@@ -192,22 +205,38 @@ async def get_conversation(
     
     try:
         await _require_conversation_owner(conversation_id, current_user)
-        
-        # Try Redis cache first
-        cached = await get_cached_messages(conversation_id)
+
+        page_limit = _normalize_page_limit(limit)
+        before_value = before if isinstance(before, int) and before > 0 else None
+        if page_limit is not None or before_value is not None:
+            page_size = page_limit or DEFAULT_CONVERSATION_PAGE_SIZE
+            effective_limit = min(page_size + 1, MAX_CONVERSATION_PAGE_SIZE + 1)
+            history = await _load_conversation_history(
+                conversation_id,
+                current_user["id"],
+                limit=effective_limit,
+                before=before_value,
+            )
+            has_more = len(history) > page_size
+            if has_more:
+                history = history[1:]
+            return {"messages": history, "has_more": has_more}
+
+        # Try Redis cache first (full history)
+        cached = await get_cached_messages(conversation_id, limit=0)
         if cached is not None:
             return cached
-        
+
         # Fetch from database
         history = await _load_conversation_history(conversation_id, current_user["id"])
-        
+
         # Cache the result
         try:
             if isinstance(history, list):
                 await cache_messages(conversation_id, history)
         except Exception as e:
             api_logger.debug(f"Cache write failed for {conversation_id}: {e}")
-        
+
         return history
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching conversation: {str(e)}")

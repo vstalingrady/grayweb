@@ -8,6 +8,7 @@ import type {
     ChatStreamEvent,
     ConversationSummary,
     ChatMessage,
+    ConversationHistoryPage,
     ConversationUpdatePayload,
     ConversationUsage
 } from "./types";
@@ -74,6 +75,37 @@ export class ChatService {
             method: 'POST',
             body: JSON.stringify(payload),
         });
+    }
+
+    async getConversationPage(
+        conversationId: string,
+        options?: { limit?: number; before?: number | null }
+    ): Promise<ConversationHistoryPage> {
+        const params = new URLSearchParams();
+        if (typeof options?.limit === "number" && Number.isFinite(options.limit) && options.limit > 0) {
+            params.set("limit", String(options.limit));
+        }
+        if (typeof options?.before === "number" && Number.isFinite(options.before) && options.before > 0) {
+            params.set("before", String(options.before));
+        }
+        const suffix = params.toString();
+        const url = `/api/conversation/${encodeURIComponent(conversationId)}${suffix ? `?${suffix}` : ""}`;
+        try {
+            const payload = await apiFetch<
+                ChatMessage[] | { messages?: ChatMessage[]; has_more?: boolean; hasMore?: boolean }
+            >(url);
+            if (Array.isArray(payload)) {
+                return { messages: payload, hasMore: false };
+            }
+            const messages = Array.isArray(payload?.messages) ? payload.messages : [];
+            const hasMore = Boolean(payload?.has_more ?? payload?.hasMore);
+            return { messages, hasMore };
+        } catch (error) {
+            if (error instanceof ApiError && error.status === 404) {
+                return { messages: [], hasMore: false };
+            }
+            throw error;
+        }
     }
 
     async getConversation(conversationId: string): Promise<ChatMessage[]> {

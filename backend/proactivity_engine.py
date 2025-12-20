@@ -565,7 +565,8 @@ class ProactivityEngine:
             return None
 
     async def _send_web_push_notification(self, user_id: int, title: str, message: str) -> None:
-        # Only attempt web push in production by default, or when explicitly enabled.
+        vapid_public = os.getenv("VAPID_PUBLIC_KEY")
+        vapid_private = os.getenv("VAPID_PRIVATE_KEY")
         enable_flag = os.getenv("ENABLE_WEB_PUSH")
         if enable_flag is not None:
             normalized = enable_flag.strip().lower()
@@ -574,6 +575,8 @@ class ProactivityEngine:
             node_env = os.getenv("NODE_ENV", "").strip().lower()
             environment = os.getenv("ENVIRONMENT", "").strip().lower()
             web_push_enabled = node_env == "production" or environment == "production"
+            if not web_push_enabled and vapid_public and vapid_private:
+                web_push_enabled = True
 
         if not web_push_enabled:
             logger.debug(
@@ -582,9 +585,11 @@ class ProactivityEngine:
             )
             return
 
-        vapid_public = os.getenv("VAPID_PUBLIC_KEY")
-        vapid_private = os.getenv("VAPID_PRIVATE_KEY")
         if not vapid_public or not vapid_private:
+            logger.warning(
+                "Web push disabled: missing VAPID keys",
+                extra={"event_type": "web_push_missing_vapid", "user_id": user_id},
+            )
             return
 
         await self._ensure_connection()
@@ -593,6 +598,10 @@ class ProactivityEngine:
             {"user_id": user_id},
         )
         if not rows:
+            logger.info(
+                "No push subscriptions registered for user",
+                extra={"event_type": "web_push_no_subscriptions", "user_id": user_id},
+            )
             return
 
         payload = json.dumps({

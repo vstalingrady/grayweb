@@ -21,6 +21,7 @@ export type GrayChatBarProps = {
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   placeholder?: string;
   isSubmitDisabled?: boolean;
+  isInputDisabled?: boolean;
   isSubmitting?: boolean;
   onAddAttachment?: () => void;
   isSearchEnabled?: boolean;
@@ -35,6 +36,7 @@ export function GrayChatBar({
   onSubmit,
   placeholder,
   isSubmitDisabled,
+  isInputDisabled = false,
   isSubmitting = false,
   onAddAttachment,
   isSearchEnabled = false,
@@ -44,8 +46,10 @@ export function GrayChatBar({
 }: GrayChatBarProps) {
   const { t } = useI18n();
   const resolvedPlaceholder = placeholder ?? t("Ask Gray");
+  const isInputBlocked = Boolean(isInputDisabled);
   const computedDisabled =
-    typeof isSubmitDisabled === "boolean" ? isSubmitDisabled : value.trim().length === 0;
+    (isInputBlocked && !isSubmitting) ||
+    (typeof isSubmitDisabled === "boolean" ? isSubmitDisabled : value.trim().length === 0);
 
   // We trigger a re-render/check on mount to ensure mobile detection if needed, 
   // but for TextareaAutosize we mainly just need the component.
@@ -64,6 +68,10 @@ export function GrayChatBar({
   }, []);
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (isInputBlocked) {
+      event.preventDefault();
+      return;
+    }
     if (event.key === "Enter" && !event.shiftKey) {
       if (!isMobile) {
         event.preventDefault();
@@ -81,6 +89,9 @@ export function GrayChatBar({
 
   const handlePaste = useCallback(
     (event: ReactClipboardEvent<HTMLTextAreaElement>) => {
+      if (isInputBlocked) {
+        return;
+      }
       if (!onPasteFiles) {
         return;
       }
@@ -90,11 +101,14 @@ export function GrayChatBar({
       }
       onPasteFiles(clipboardFiles);
     },
-    [onPasteFiles]
+    [isInputBlocked, onPasteFiles]
   );
 
   const handleDrop = useCallback(
     (event: React.DragEvent<HTMLTextAreaElement>) => {
+      if (isInputBlocked) {
+        return;
+      }
       if (!onPasteFiles) {
         return;
       }
@@ -105,7 +119,7 @@ export function GrayChatBar({
       }
       onPasteFiles(droppedFiles);
     },
-    [onPasteFiles]
+    [isInputBlocked, onPasteFiles]
   );
 
 
@@ -177,6 +191,7 @@ export function GrayChatBar({
             placeholder={resolvedPlaceholder}
             className={styles.chatInput}
             aria-label={resolvedPlaceholder}
+            disabled={isInputBlocked}
             rows={1}
             minRows={1}
             maxRows={5}

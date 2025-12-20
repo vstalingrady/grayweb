@@ -11,6 +11,8 @@ from importlib import import_module
 from importlib.util import find_spec
 from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
+from datetime import datetime, timezone
+
 if TYPE_CHECKING:
     import databases
 
@@ -63,7 +65,21 @@ from backend.core.conversation_store import ensure_user_data_record
 from backend.core.async_utils import create_logged_task
 
 
-async def load_general_conversation_history(user_id: int) -> List[Dict[str, Any]]:
+def _timestamp_ms_to_datetime(value: Optional[int]) -> Optional[datetime]:
+    if value is None:
+        return None
+    try:
+        return datetime.fromtimestamp(int(value) / 1000, tz=timezone.utc)
+    except (ValueError, OSError, TypeError):
+        return None
+
+
+async def load_general_conversation_history(
+    user_id: int,
+    *,
+    limit: Optional[int] = None,
+    before: Optional[int] = None,
+) -> List[Dict[str, Any]]:
     """Load general chat history from SQLite for given user."""
     database, general_chat_messages, _ = _get_database()
     logger = _get_logger()
@@ -76,9 +92,14 @@ async def load_general_conversation_history(user_id: int) -> List[Dict[str, Any]
         return []
     
     try:
+        effective_limit = limit if limit is not None else 100
         query = general_chat_messages.select().where(
             general_chat_messages.c.user_id == user_id_int
-        ).order_by(general_chat_messages.c.created_at.desc()).limit(100)
+        )
+        before_dt = _timestamp_ms_to_datetime(before)
+        if before_dt is not None:
+            query = query.where(general_chat_messages.c.created_at < before_dt)
+        query = query.order_by(general_chat_messages.c.created_at.desc()).limit(effective_limit)
         rows = await database.fetch_all(query)
         
         local_history = []
